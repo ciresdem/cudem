@@ -176,7 +176,104 @@ class xyz_dataset():
         for this_xyz in self.yield_xyz(**kwargs):
             this_xyz.dump(include_w = True if self.weight is not None else False, dst_port = dst_port, encode = False)            
 
+class mbs_parser:
+    """providing an mbsystem parser
+    """
 
+    def __init__(self, fn = None, epsg = None):
+        self.fn = fn
+        self.epsg = int_or(epsg)
+        self.infos = {}
+        
+    def inf(self):
+        pass
+
+    def parse(self):
+        pass
+
+    def yield_xyz(self):
+        pass
+    
+    def inf_parse(self):
+
+        self.infos['name'] = self.fn
+        self.infos['minmax'] = [0,0,0,0,0,0]
+        self.infos['hash'] = None
+        dims = []
+        this_row = 0
+
+        with open(self.fn) as iob:
+            for il in iob:
+                til = il.split()
+                if len(til) > 1:
+                    if til[0] == 'Swath':
+                        if til[2] == 'File:':
+                            self.infos['name'] = til[3]
+                    if til[0] == 'Number':
+                        if til[2] == 'Records:':
+                            self.infos['numpts'] = int_or(til[3])
+                    if til[0] == 'Minimum':
+                        if til[1] == 'Longitude:':
+                            self.infos['minmax'][0] = float_or(til[2])
+                            self.infos['minmax'][1] = float_or(til[5])
+                        elif til[1] == 'Latitude:':
+                            self.infos['minmax'][2] = float_or(til[2])
+                            self.infos['minmax'][3] = float_or(til[5])
+                        elif til[1] == 'Depth:':
+                            self.infos['minmax'][4] = float_or(til[5]) * -1
+                            self.infos['minmax'][5] = float_or(til[2]) * -1
+                    if til[0] == 'CM':
+                        if til[1] == 'dimensions:':
+                            dims = [int_or(til[2]), int_or(til[3])]
+                            cm_array = np.zeros((dims[0], dims[1]))
+                    if til[0] == 'CM:':
+                        for j in range(0, dims[0]):
+                            cm_array[this_row][j] = int_or(til[j+1])
+                        this_row += 1
+
+        mbs_region = region().from_list(self.infos['minmax'])
+        xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
+        yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
+
+        if abs(xinc) > 0 and abs(yinc) > 0:
+            xcount, ycount, dst_gt = mbs_region.geo_transform(x_inc = xinc, y_inc = yinc)
+
+            ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
+                         'geoT': dst_gt, 'proj': sr_wkt(self.epsg),
+                         'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
+
+            driver = gdal.GetDriverByName('MEM')
+            ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+            ds.SetGeoTransform(ds_config['geoT'])
+            ds.SetProjection(ds_config['proj'])
+            ds_band = ds.GetRasterBand(1)
+            ds_band.SetNoDataValue(ds_config['ndv'])
+            ds_band.WriteArray(cm_array)
+
+            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
+            tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
+            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+
+            gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
+
+            ## TODO: scan all features
+            multi = ogr.Geometry(ogr.wkbMultiPolygon)
+            for feat in tmp_layer:
+                feat.geometry().CloseRings()
+                wkt = feat.geometry().ExportToWkt()
+                multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+            wkt = multi.ExportToWkt()
+            #echo_msg(wkt)
+            # feat = tmp_layer.GetFeature(0)
+            # geom = feat.GetGeometryRef()
+            # wkt = geom.ExportToWkt()
+            tmp_ds = ds = None
+
+        else: wkt = mbs_region.export_as_wkt()
+
+        self.infos['wkt'] = wkt
+        return(self)
+    
 class datalist(xyz_dataset):
     """representing a datalist parser
     
