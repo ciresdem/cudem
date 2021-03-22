@@ -61,7 +61,7 @@ from cudem import utils
 from cudem import regions
 from cudem import dlim
 
-_version = '0.7.0'
+__version__ = '0.7.0'
 
 ## =============================================================================
 ##
@@ -69,15 +69,16 @@ _version = '0.7.0'
 ##
 ## Generic fetching and processing functions, etc.
 ##
-## The `fetch_results` class will fetch a list of fetch results [[url, file-name, data-type]...]
+## The `FetchResults` class will fetch a list of fetch results [[url, file-name, data-type]...]
 ## in a queue `fetch_queue` using 3 threads; set `p` and `s` as a fetch module object to processes
 ## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
 ##
 ## =============================================================================
-r_headers = { 'User-Agent': 'GeoMods: Fetches v%s' %(_version) }
+r_headers = { 'User-Agent': 'GeoMods: Fetches v%s' %(__version__) }
 
 def fetch_queue(q, fo, fg):
-    '''fetch queue `q` of fetch results'''
+    """fetch queue `q` of fetch results"""
+    
     while True:
         fetch_args = q.get()
         this_region = fetch_args[2]
@@ -99,13 +100,17 @@ def fetch_queue(q, fo, fg):
                     utils.echo_msg('processing local file: {}'.format(o_x_fn))
                     if not os.path.exists(o_x_fn):
                         with open(o_x_fn, 'w') as out_xyz:
-                            fetch_dump_xyz(fetch_args, module = fo, epsg = 4326, z_region = fg['z_region'], inc = fg['inc'], dst_port = out_xyz)
+                            fetch_dump_xyz(fetch_args, module=fo, epsg=4326,
+                                           z_region=fg['z_region'], inc=fg['inc'],
+                                           dst_port=out_xyz)
                         if os.stat(o_x_fn).st_size == 0: utils.remove_glob(o_x_fn)
-                else: fetch_dump_xyz(fetch_args, module = fo, epsg = 4326)
+                else: fetch_dump_xyz(fetch_args, module=fo, epsg=4326)
         q.task_done()
 
-def fetch_ftp_file(src_url, dst_fn, params = None, callback = None, datatype = None, overwrite = False, verbose = False):
-    '''fetch an ftp file via urllib'''
+def fetch_ftp_file(src_url, dst_fn, params=None, callback=None,
+                   datatype=None, overwrite=False, verbose=False):
+    """fetch an ftp file via urllib"""
+    
     status = 0
     f = None
     halt = callback
@@ -125,8 +130,10 @@ def fetch_ftp_file(src_url, dst_fn, params = None, callback = None, datatype = N
     if verbose: utils.echo_msg('fetched remote ftp file: {}.'.format(os.path.basename(src_url)))
     return(status)
 
-def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatype = None, overwrite = False, verbose = False, timeout = 140, read_timeout = 320):
-    '''fetch src_url and save to dst_fn'''
+def fetch_file(src_url, dst_fn, params=None, callback=lambda: False, datatype=None,
+               overwrite=False, verbose=False, timeout=140, read_timeout=320):
+    """fetch src_url and save to dst_fn"""
+    
     status = 0
     req = None
     halt = callback
@@ -138,12 +145,12 @@ def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatyp
         except: pass 
     if not os.path.exists(dst_fn) or overwrite:
         try:
-            with requests.get(src_url, stream = True, params = params, headers = r_headers, timeout=(timeout,read_timeout)) as req:
+            with requests.get(src_url, stream=True, params=params, headers=r_headers, timeout=(timeout, read_timeout)) as req:
                 req_h = req.headers
                 if req.status_code == 200:
                     curr_chunk = 0
                     with open(dst_fn, 'wb') as local_file:
-                        for chunk in req.iter_content(chunk_size = 8196):
+                        for chunk in req.iter_content(chunk_size=8196):
                             if halt(): break
                             if verbose: progress.update()
                             if chunk: local_file.write(chunk)
@@ -155,36 +162,42 @@ def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatyp
     if verbose: progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
     return(status)
 
-def fetch_req(src_url, params = None, tries = 5, timeout = 2, read_timeout = 10):
-    '''fetch src_url and return the requests object'''
+def fetch_req(src_url, params=None, tries=5, timeout=2, read_timeout=10):
+    """fetch src_url and return the requests object"""
+    
     if tries <= 0:
         utils.echo_error_msg('max-tries exhausted')
         return(None)
     try:
-        return(requests.get(src_url, stream = True, params = params, timeout = (timeout,read_timeout), headers = r_headers))
-    except: return(fetch_req(src_url, params = params, tries = tries - 1, timeout = timeout + 1, read_timeout = read_timeout + 10))
+        return(requests.get(src_url, stream=True, params=params, timeout=(timeout, read_timeout), headers=r_headers))
+    except: return(fetch_req(src_url, params=params, tries=(tries-1), timeout=(timeout+1), read_timeout=(read_timeout+10)))
 
-def fetch_nos_xml(src_url, timeout = 2, read_timeout = 10, verbose = False):
-    '''fetch src_url and return it as an XML object'''
+def fetch_nos_xml(src_url, timeout=2, read_timeout=10, verbose=False):
+    """fetch src_url and return it as an XML object"""
+    
     results = lxml.etree.fromstring('<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8'))
     try:
-        req = fetch_req(src_url, timeout = timeout, read_timeout = read_timeout)
+        req = fetch_req(src_url, timeout=timeout, read_timeout=read_timeout)
         results = lxml.etree.fromstring(req.text.encode('utf-8'))
     except:
         if verbose: utils.echo_error_msg('could not access {}'.format(src_url))
     return(results)
         
 def fetch_html(src_url):
-    '''fetch src_url and return it as an HTML object'''
-    req = fetch_req(src_url, timeout = 2)
+    """fetch src_url and return it as an HTML object"""
+    
+    req = fetch_req(src_url, timeout=2)
     if req:
         return(lh.document_fromstring(req.text))
     else: return(None)
 
-class fetch_results(threading.Thread):
-    '''fetch results gathered from a fetch module.
-    results is a list of URLs with data type'''
-    def __init__(self, results, region, out_dir, fetch_obj = None, fg = None, callback = lambda: False):
+class FetchResults(threading.Thread):
+    """fetch results gathered from a fetch module.
+
+    results is a list of URLs with data type
+    """
+    
+    def __init__(self, results, region, out_dir, fetch_obj=None, fg=None, callback=lambda: False):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.results = results
@@ -196,7 +209,7 @@ class fetch_results(threading.Thread):
         
     def run(self):
         for _ in range(3):
-            t = threading.Thread(target = fetch_queue, args = (self.fetch_q, self.fetch_obj, self.fg))
+            t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.fetch_obj, self.fg))
             t.daemon = True
             t.start()
         for row in self.results:
@@ -210,7 +223,8 @@ class fetch_results(threading.Thread):
 ##
 ## =============================================================================
 def xml2py(node):
-    '''parse an xml file into a python dictionary'''
+    """parse an xml file into a python dictionary"""
+    
     texts = {}
     if node is None: return(None)
     for child in list(node):
@@ -235,10 +249,10 @@ def xml2py(node):
             else: texts[child_key] = [child.text]
     return(texts)
 
-class iso_xml:
-    def __init__(self, xml_url, timeout = 2, read_timeout = 10):
+class IsoXml:
+    def __init__(self, xml_url, timeout=2, read_timeout=10):
         self.url = xml_url
-        self.xml_doc = self._fetch(timeout = timeout, read_timeout = read_timeout)
+        self.xml_doc = self.fetch(timeout=timeout, read_timeout=read_timeout)
         self.namespaces = {
             'gmd': 'http://www.isotc211.org/2005/gmd', 
             'gmi': 'http://www.isotc211.org/2005/gmi', 
@@ -248,14 +262,18 @@ class iso_xml:
             'wms': 'http://www.opengis.net/wms',
         }
         
-    def _fetch(self, timeout = 2, read_timeout = 10):
-        return(fetch_nos_xml(self.url, timeout = timeout, read_timeout = read_timeout))
+    def fetch(self, timeout=2, read_timeout=10):
+        
+        return(fetch_nos_xml(self.url, timeout=timeout, read_timeout=read_timeout))
 
     def title(self):
-        t = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString', namespaces = self.namespaces)
+        
+        t = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString',
+                              namespaces=self.namespaces)
         return(t.text if t is not None else 'Unknown')
         
     def bounds(self, geom = True):
+        
         wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces = self.namespaces)
         el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces = self.namespaces)
         sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces = self.namespaces)                            
@@ -266,9 +284,10 @@ class iso_xml:
             else: return(region)
         else: return(None)
 
-    def polygon(self, geom = True):
+    def polygon(self, geom=True):
+        
         opoly = []
-        polygon = self.xml_doc.find('.//{*}Polygon', namespaces = self.namespaces)
+        polygon = self.xml_doc.find('.//{*}Polygon', namespaces=self.namespaces)
         if polygon is not None:
             nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
             [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
@@ -277,50 +296,58 @@ class iso_xml:
         else: return(None)
         
     def date(self):
-        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces = self.namespaces)
+        
+        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces=self.namespaces)
         if dt is None:
-            dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces = self.namespaces)
+            dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces=self.namespaces)
         return(dt.text[:4] if dt is not None else '0000')
 
     def xml_date(self):
-        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
+        
+        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces=self.namespaces)
         return(utils.this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
-        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
+        
+        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces=self.namespaces)
         if ref_s is None or len(ref_s) == 0: return(None, None)
-        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
         if h_epsg is not None: h_epsg = h_epsg.text.split(':')[-1]
         if len(ref_s) > 1:
-            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
             if v_epsg is not None: v_epsg = v_epsg.text.split(':')[-1]
         else: v_epsg = None
             
         return(h_epsg, v_epsg)
 
     def abstract(self):
+        
         try:
-            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces = self.namespaces)
+            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces=self.namespaces)
             abstract = '' if abstract is None else abstract.text
         except: abstract = ''
         return(abstract)
 
     def linkages(self):
-        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces = self.namespaces)
+        
+        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces=self.namespaces)
         if linkage is not None: linkage = linkage.text
         return(linkage)
     
     def data_links(self):
+        
         dd = {}        
-        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces = self.namespaces)
-        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces =  self.namespaces)
+        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces=self.namespaces)
+        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces=self.namespaces)
         if dfs is not None:
             for i,j in enumerate(dfs):
                 dd[j.text] = dus[i].text
         return(dd)
 
 class WCS:
+    
     def __init__(self, url):
+        
         self.url = url
         self.namespaces = {
             'wms': 'http://www.opengis.net/wms', 'wcs': 'http://www.opengis.net/wcs/2.0',
@@ -330,37 +357,45 @@ class WCS:
         self._s_version = self._si()['ServiceTypeVersion'][0]
 
     def _get_capabilities(self):
+        
         _data = {'request': 'GetCapabilities', 'service': 'WCS'}
         c = fetch_req(self.url, params = _data)
         cx = lxml.etree.fromstring(c.text.encode('utf-8'))
-        self.service_provider = cx.find('.//ows:ServiceProvider', namespaces = self.namespaces)
-        self.service_identification = cx.find('.//ows:ServiceIdentification', namespaces = self.namespaces)
-        self.operations_metadata = cx.find('.//ows:OperationsMetadata', namespaces = self.namespaces)
-        self.service_metadata = cx.find('.//wcs:ServiceMetadata', namespaces = self.namespaces)
-        self.contents = cx.find('.//wcs:Contents', namespaces = self.namespaces)
+        self.service_provider = cx.find('.//ows:ServiceProvider', namespaces=self.namespaces)
+        self.service_identification = cx.find('.//ows:ServiceIdentification', namespaces=self.namespaces)
+        self.operations_metadata = cx.find('.//ows:OperationsMetadata', namespaces=self.namespaces)
+        self.service_metadata = cx.find('.//wcs:ServiceMetadata', namespaces=self.namespaces)
+        self.contents = cx.find('.//wcs:Contents', namespaces=self.namespaces)
 
     def _contents(self):
+        
         c = []
-        for coverage in self.contents.xpath('//wcs:CoverageSummary', namespaces = self.namespaces):
+        for coverage in self.contents.xpath('//wcs:CoverageSummary', namespaces=self.namespaces):
             c.append(xml2py(coverage))
         return(c)
 
     def _om(self):
+        
         return(xml2py(self.operations_metadata))
 
     def _sp(self):
+        
         return(xml2py(self.service_provider))
     
     def _si(self):
+        
         return(xml2py(self.service_identification))
     
     def fix_coverage_id(self, coverage):
+        
         return(':'.join(coverage.split('__')))
 
     def unfix_coverage_id(self, coverage):
+        
         return('__'.join(coverage.split(':')))
 
     def _describe_coverage(self, coverage):
+        
         c_d = {}
         valid = False
         c = self._contents()
@@ -380,11 +415,13 @@ class WCS:
         return(xml2py(d_r.find('.//wcs:CoverageDescription', namespaces = self.namespaces)))
 
     def _get_coverage_region(self, cov_desc):
+        
         uc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["upperCorner"][0].split()]
         lc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["lowerCorner"][0].split()]
         return([lc[1], uc[1], lc[0], uc[0]])
     
     def _get_coverage_url(self, coverage, region = None):
+        
         dl_coverage = self.fix_coverage_id(coverage)
         cov_desc = self._describe_coverage(coverage)
         fmt = cov_desc["ServiceParameters"]["nativeFormat"][0]        
@@ -404,8 +441,9 @@ class WCS:
         return('{}{}'.format(self.url, enc_data))
     
     def fetch_coverage(coverage, region = None):
+        
         c_url = self._get_coverage_url(coverage, region)
-        return(fetch_file(c_url, '{}_{}.tif'.format(coverage, regions.region_format(region, 'fn')), params = data, verbose = True))
+        return(fetch_file(c_url, '{}_{}.tif'.format(coverage, regions.region_format(region, 'fn')), params=data, verbose=True))
 
 # class fetches_dataset(dlim.xyz_dataset):
 #     """providing a fetches datalist
@@ -586,7 +624,7 @@ class WCS:
 #             ## dump_p will dump the xyz data from the fetch module to stdout
 #             ## proc_p will output the xyz data to file in _outdir
 #             ## ==============================================
-#             fr = fetch_results(fl._parse_results(**args_d), this_region, fl._outdir, fl, fg, lambda: stop_threads)
+#             fr = FetchResults(fl._parse_results(**args_d), this_region, fl._outdir, fl, fg, lambda: stop_threads)
 #             fr.daemon = True
 #             try:
 #                 fr.start()

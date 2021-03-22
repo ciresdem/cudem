@@ -25,7 +25,7 @@
 import sys
 from cudem import utils
 
-class xyz_point:
+class XYZPoint:
     """represnting an xyz data point
     
     Attributes:
@@ -38,8 +38,8 @@ class xyz_point:
       z_datum (str): vertical datum of the z_value
     """
     
-    def __init__(self, x = None, y = None, z = None, w = 1,
-                 epsg = 4326, z_units = 'm', z_datum = 'msl'):
+    def __init__(self, x=None, y=None, z=None, w=1,
+                 epsg=4326, z_units='m', z_datum='msl'):
         """
         Args:
           x (float): longitude/x
@@ -59,13 +59,14 @@ class xyz_point:
         #self.z_units = z_units
         #self.z_datum = z_datum
 
-    def _valid_p(self):
+    def valid_p(self):
+        
         if self.x is None: return(False)
         if self.y is None: return(False)
         if self.z is None: return(False)
         return(True)
     
-    def from_list(self, xyz_list, x_pos = 0, y_pos = 1, z_pos = 2, w_pos = 3):
+    def from_list(self, xyz_list, x_pos=0, y_pos=1, z_pos=2, w_pos=3):
         """load xyz data from a list
 
         Args:
@@ -85,7 +86,7 @@ class xyz_point:
             self.w = utils.float_or(xyz_list[w_pos])
         return(self)
     
-    def from_string(self, xyz_str, x_pos = 0, y_pos = 1, z_pos = 2, w_pos = 3, delim = " "):
+    def from_string(self, xyz_str, x_pos=0, y_pos=1, z_pos=2, w_pos=3, delim=" "):
         """load xyz data from a string
 
         Args:
@@ -98,7 +99,7 @@ class xyz_point:
         this_line = xyz_str.strip()
         return(self.from_list(this_line.split(delim), x_pos, y_pos, z_pos, w_pos))
         
-    def export_as_list(self, include_z = False, include_w = False):
+    def export_as_list(self, include_z=False, include_w=False):
         """export xyz as a list
 
         Args:
@@ -116,20 +117,20 @@ class xyz_point:
             xyz_list.append(self.w)
         return(xyz_list)
 
-    def export_as_string(self, delim, include_z = False, include_w = False):
+    def export_as_string(self, delim, include_z=False, include_w=False):
         """export xyz data as string
 
         Args:
           delim (str): the delimiter
         """
 
-        l = self.export_as_list(include_z = include_z, include_w = include_w)
+        l = self.export_as_list(include_z=include_z, include_w=include_w)
         return('{}\n'.format(delim.join([str(x) for x in l])))
 
     def export_as_wkt(self):
         return('POINT ({} {})'.format(self.x, self.y))
     
-    def dump(self, delim = ' ', include_z = True, include_w = False, encode = False, dst_port = sys.stdout):
+    def dump(self, delim=' ', include_z=True, include_w=False, encode=False, dst_port=sys.stdout):
         """dump xyz as a string to dst_port
 
         Args:
@@ -141,7 +142,7 @@ class xyz_point:
             files usually like unencoded...
         """
     
-        l = self.export_as_string(delim, include_z = include_z, include_w = include_w)
+        l = self.export_as_string(delim, include_z=include_z, include_w=include_w)
         if encode: l = l.encode('utf-8')
         dst_port.write(l)
 
@@ -162,7 +163,7 @@ class xyz_point:
 
         return(self)
         
-    def warp(self, warp_epsg = 4326):
+    def warp(self, warp_epsg=4326):
         """transform the x/y using the warp_epsg code
 
         Args:
@@ -191,7 +192,7 @@ class xyz_point:
         
         return(self)
 
-def xyz_line(xyz_line, dst_port = sys.stdout, encode = False):
+def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
     """write "xyz" `line` to `dst_port`
     `line` should be a list of xyz values [x, y, z, ...].
     

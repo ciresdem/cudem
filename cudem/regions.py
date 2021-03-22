@@ -42,7 +42,7 @@ _version = '0.1.0'
 ## the region class and associated functions.
 ##
 ## ==============================================
-class region:
+class Region:
     """Representing a geographic region.
     
     Attributes:
@@ -58,7 +58,7 @@ class region:
       epsg (int): the EPSG code representing the regions projection
 
     Methods:
-      _valid_p(): True if the region is valid else False
+      valid_p(): True if the region is valid else False
       buffer(bv = 0): buffer the region by buffer value
       center(): find the center point of the region
     """
@@ -96,7 +96,7 @@ class region:
         self.epsg = utils.int_or(epsg)
         self.wkt = wkt
         
-    def _valid_p(self, check_xy = False):
+    def valid_p(self, check_xy = False):
         """check the validity of a region
     
         Returns:
@@ -143,7 +143,7 @@ class region:
                     self.wmin = utils.float_or(region_list[6])
                     self.wmax = utils.float_or(region_list[7])
             if self.wkt is None:
-                if self._valid_p(check_xy = True):
+                if self.valid_p(check_xy = True):
                     self.wkt = self.export_as_wkt()
                 else: self.wkt = None
         return(self)
@@ -209,7 +209,7 @@ class region:
           str: the formatted region as str or None if region is invalid
         """
 
-        if self._valid_p():
+        if self.valid_p():
             if t == 'str': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
@@ -338,7 +338,7 @@ class region:
           region-object: self
         """
         
-        if self._valid:
+        if self.valid_p:
             if pct is not None:
                 ewp = (self.xmax - self.xmin) * (pctv * .01)
                 nsp = (self.ymax - self.ymin) * (pctv * .01)
@@ -357,7 +357,7 @@ class region:
           list: the center point [xc, yc]
         """
 
-        if self._valid_p():
+        if self.valid_p():
             return([self.xmin + (self.xmax - self.xmin / 2),
                     self.ymax + (self.ymax - self.ymin / 2)])
         else: return(None)
@@ -388,7 +388,7 @@ class region:
                 this_x_size = x_chunk - this_x_origin
                 this_y_size = y_chunk - this_y_origin
 
-                c_region = region()
+                c_region = Region()
                 
                 c_region.xmin = self.xmin + this_x_origin * inc
                 c_region.xmax = c_region.xmin + this_x_size * inc
@@ -453,7 +453,7 @@ def regions_reduce(region_a, region_b):
     """combine two regions and find their minimum combined region.
 
     if the regions don't overlap, will return an invalid region.
-    check the result with _valid_p()
+    check the result with valid_p()
     
     Args:
       region_a (region): a region object
@@ -462,8 +462,9 @@ def regions_reduce(region_a, region_b):
     Returns:
       region: the minimum region when combining `region_a` and `region_b`
     """
-    region_c = region()
-    if region_a._valid_p() and region_b._valid_p():
+    
+    region_c = Region()
+    if region_a.valid_p() and region_b.valid_p():
         if region_a.xmin is not None and region_b.xmin is not None:
             region_c.xmin = region_a.xmin if region_a.xmin > region_b.xmin else region_b.xmin
         if region_a.xmax is not None and region_b.xmax is not None:
@@ -493,8 +494,8 @@ def regions_merge(region_a, region_b):
       region: the maximum region [xmin, xmax, ymin, ymax] when combining `region_a` `and region_b`
     """
     
-    region_c = region()
-    if region_a._valid_p() and region_b._valid_p():
+    region_c = Region()
+    if region_a.valid_p() and region_b.valid_p():
         region_c.xmin = region_a.xmin if region_a.xmin < region_b.xmin else region_b.xmin
         region_c.xmax = region_a.xmax if region_a.xmax > region_b.xmax else region_b.xmax
         region_c.ymin = region_a.ymin if region_a.ymin < region_b.ymin else region_b.ymin
@@ -508,7 +509,7 @@ def regions_merge(region_a, region_b):
 def regions_intersect_p(region_a, region_b):
     """check if two regions intersect.
 
-    region_valid_p(regions_reduce(region_a, region_b))
+    region.valid_p(regions_reduce(region_a, region_b))
 
     Args:
       region_a (region): a region object
@@ -518,9 +519,9 @@ def regions_intersect_p(region_a, region_b):
       bool: True if `region_a` and `region_b` intersect else False
     """
 
-    if region_a._valid_p() and region_b._valid_p():
-        tmp_a = region()
-        tmp_b = region()
+    if region_a.valid_p() and region_b.valid_p():
+        tmp_a = Region()
+        tmp_b = Region()
         tmp_a.zmin = region_a.zmin
         tmp_a.zmax = region_a.zmax
         tmp_a.wmin = region_a.wmin
@@ -532,7 +533,7 @@ def regions_intersect_p(region_a, region_b):
 
         tmp_c = regions_reduce(tmp_a, tmp_b)
         if any(tmp_c.full_region()):
-            if not tmp_c._valid_p(): return(False)
+            if not tmp_c.valid_p(): return(False)
         if not regions_intersect_ogr_p(region_a, region_b): return(False)
         
     return(True)
@@ -550,7 +551,7 @@ def regions_intersect_ogr_p(region_a, region_b):
       bool: True if `region_a` and `region_b` intersect else False.
     """
 
-    if region_a._valid_p() and region_b._valid_p():
+    if region_a.valid_p() and region_b.valid_p():
         if region_a.export_as_geom().Intersects(region_b.export_as_geom()):
             return(True)
     return(False)
@@ -620,12 +621,18 @@ def gdal_ogr_regions(src_ds):
         poly = ogr.Open(src_ds)
         if poly is not None:
             p_layer = poly.GetLayer(0)
+            #multi = ogr.Geometry(ogr.wkbMultiPolygon)
+            #this_region = region()
             for pf in p_layer:
-                this_region = region()
+                this_region = Region()
+                #feat.geometry().CloseRings()
+                #wkt = feat.geometry().ExportToWkt()
+                #multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
                 pgeom = pf.GetGeometryRef()
                 pwkt = pgeom.ExportToWkt()
                 this_region.from_list(ogr.CreateGeometryFromWkt(pwkt).GetEnvelope())
                 these_regions.append(this_region)
+            wkt = multi.ExportToWkt()
         poly = None
     return(these_regions)
 
@@ -662,7 +669,7 @@ def ogr_wkts(src_ds):
             for pf in p_layer:
                 pgeom = pf.GetGeometryRef()
                 pwkt = pgeom.ExportToWkt()
-                r = region().from_string(pwkt)
+                r = Region().from_string(pwkt)
                 if len(src_s) > 1:
                     src_r = src_s[1].split('/')
                     if len(src_r) > 0: r.zmin = utils.float_or(src_r[0])
@@ -749,13 +756,13 @@ def regions_cli(argv = sys.argv):
         i = i + 1
 
     for i_region in i_regions:
-        tmp_region = region().from_string(i_region)
-        if tmp_region._valid_p():
+        tmp_region = Region().from_string(i_region)
+        if tmp_region.valid_p():
             these_regions.append(tmp_region)
         else:
             tmp_region = ogr_wkts(i_region)
             for i in tmp_region:
-                if i._valid_p():
+                if i.valid_p():
                     these_regions.append(i)
                     
     if len(these_regions) == 0:

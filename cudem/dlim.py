@@ -43,13 +43,14 @@ from cudem import xyzs
 from cudem import regions
 from cudem import fetches
 
-_version = '0.1.2'
+__version__ = '0.1.2'
 
-class xyz_dataset():
+class XYZDataset():
     """representing an xyz-able parser or a data-list entry
     """
 
-    def __init__(self, fn = None, data_format = None, weight = 1, epsg = 4326, name = "<xyz-dataset>", parent = None, src_region = None, warp = None, verbose = False, remote = False):
+    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<XYZDataset>",
+                 parent=None, src_region=None, warp=None, verbose=False, remote=False):
 
         self.name = name
         self.data_format = data_format
@@ -74,14 +75,13 @@ class xyz_dataset():
         if self.fn is None: return(False)
         if self.data_format is None: return(False)
         if self.fn is not None:
-            if self.fn not in dataset_factory().data_types[self.data_format]['fmts']:
-                #print(self.fn[:4])
-                if self.fn[:4] != 'http':
+            if self.fn not in DatasetFactory().data_types[self.data_format]['fmts']:
+                if not self.fn.startswith('http'):
                     if not os.path.exists(self.fn): return (False)
                     if os.stat(self.fn).st_size == 0: return(False)
         return(True)
         
-    def hash(self, sha1 = False):
+    def hash(self, sha1=False):
         """generate a hash of the xyz-dataset source file
 
         Returns:
@@ -133,7 +133,7 @@ class xyz_dataset():
                     self.infos = json.load(i_ob)
             except ValueError:
                 try:
-                    self.infos = mbs_parser(fn = inf_path, epsg = self.epsg).inf_parse().infos
+                    self.infos = MBSParser(fn = inf_path, epsg = self.epsg).inf_parse().infos
                 except:
                     utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
             except: utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
@@ -157,7 +157,7 @@ class xyz_dataset():
                             inf.write(json.dumps(self.infos))
                     except:
                         #if self.parent is not None:
-                        with open('{}_{}.inf'.format("dlim_tmp", self.region.format('fn')), 'w') as inf:
+                        with open('{}_{}.inf'.format('dlim_tmp', self.region.format('fn')), 'w') as inf:
                             inf.write(json.dumps(self.infos))
             if self.parent is not None:
                 utils.remove_glob('{}.inf'.format(self.parent.fn))
@@ -172,15 +172,15 @@ class xyz_dataset():
     def yield_xyz(self):
         pass
     
-    def dump_xyz(self, dst_port = sys.stdout, encode = False, **kwargs):
+    def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for this_xyz in self.yield_xyz(**kwargs):
-            this_xyz.dump(include_w = True if self.weight is not None else False, dst_port = dst_port, encode = False)            
+            this_xyz.dump(include_w=True if self.weight is not None else False,
+                          dst_port=dst_port, encode=False)
 
-class mbs_parser:
-    """providing an mbsystem parser
-    """
+class MBSPparser:
+    """providing an mbsystem parser"""
 
-    def __init__(self, fn = None, epsg = None):
+    def __init__(self, fn=None, epsg=None):
         self.fn = fn
         self.epsg = int_or(epsg)
         self.infos = {}
@@ -231,12 +231,12 @@ class mbs_parser:
                             cm_array[this_row][j] = int_or(til[j+1])
                         this_row += 1
 
-        mbs_region = region().from_list(self.infos['minmax'])
+        mbs_region = regions.Region().from_list(self.infos['minmax'])
         xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
         yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
 
         if abs(xinc) > 0 and abs(yinc) > 0:
-            xcount, ycount, dst_gt = mbs_region.geo_transform(x_inc = xinc, y_inc = yinc)
+            xcount, ycount, dst_gt = mbs_region.geo_transform(x_inc=xinc, y_inc=yinc)
 
             ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
                          'geoT': dst_gt, 'proj': sr_wkt(self.epsg),
@@ -256,25 +256,19 @@ class mbs_parser:
 
             gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
 
-            ## TODO: scan all features
             multi = ogr.Geometry(ogr.wkbMultiPolygon)
             for feat in tmp_layer:
                 feat.geometry().CloseRings()
                 wkt = feat.geometry().ExportToWkt()
                 multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
             wkt = multi.ExportToWkt()
-            #echo_msg(wkt)
-            # feat = tmp_layer.GetFeature(0)
-            # geom = feat.GetGeometryRef()
-            # wkt = geom.ExportToWkt()
             tmp_ds = ds = None
-
         else: wkt = mbs_region.export_as_wkt()
 
         self.infos['wkt'] = wkt
         return(self)
     
-class datalist(xyz_dataset):
+class Datalist(XYZDataset):
     """representing a datalist parser
     
     A datalist is an MB-System style datalist.
@@ -315,18 +309,19 @@ class datalist(xyz_dataset):
 
         for this_region in out_regions:
             if l == 0:
-                tmp_region = regions.region().from_list(this_region)
-                if tmp_region._valid_p():
-                    out_region = regions.region().from_list(this_region)
+                tmp_region = regions.Region().from_list(this_region)
+                if tmp_region.valid_p():
+                    out_region = regions.Region().from_list(this_region)
                     l += 1
             else:
-                tmp_region = regions.region().from_list(this_region)
-                if tmp_region._valid_p():
+                tmp_region = regions.Region().from_list(this_region)
+                if tmp_region.valid_p():
                     out_region = regions.regions_merge(out_region, tmp_region)
         if out_region is not None:
-            self.infos['minmax'] = out_region.export_as_list(include_z = True)
+            self.infos['minmax'] = out_region.export_as_list(include_z=True)
             self.infos['wkt'] = out_region.export_as_wkt()
         else: self.infos['minmax'] = None
+
         self.region = _region
         return(self.infos)
         
@@ -337,18 +332,18 @@ class datalist(xyz_dataset):
           datalist_parser: self
         """
         
-        _prog = utils._progress("parsing datalist {}".format(self.fn))
-        #self.inf()
+        _prog = utils._progress('parsing datalist {}'.format(self.fn))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as op:
                 for this_line in op:
                     _prog.update()
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
-                        data_set = dataset_factory(this_line, parent = self, src_region = self.region, warp = self.warp, verbose = self.verbose).acquire_dataset()
+                        data_set = DatasetFactory(this_line, parent=self, src_region=self.region,
+                                                  warp=self.warp, verbose=self.verbose).acquire_dataset()
                         if data_set.valid_p():
                             data_set.inf()
-                            if self.region is not None:
-                                inf_region = regions.region().from_string(data_set.infos['wkt'])
+                            if self.region is not None and self.region.valid_p(check_xy=True):
+                                inf_region = regions.Region().from_string(data_set.infos['wkt'])
                                 if regions.regions_intersect_p(inf_region, self.region):
                                     data_set.parse()
                                     for entry in data_set.data_entries:
@@ -358,7 +353,7 @@ class datalist(xyz_dataset):
                                 for entry in data_set.data_entries:
                                     self.data_entries.append(entry)
         else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
-        _prog.end(0, "parsed datalist {}".format(self.fn))
+        _prog.end(0, 'parsed datalist {}'.format(self.fn))
         return(self)
            
     def yield_xyz(self):
@@ -374,12 +369,13 @@ class datalist(xyz_dataset):
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
     
-class xyz_file(xyz_dataset):
+class XYZFile(XYZDataset):
     """representing an xyz dataset stream
     """
 
-    def __init__(self, delim = None, xpos = 0, ypos = 1, zpos = 2, skip = 0, x_scale = 1, y_scale = 1,
-                 z_scale = 1, x_offset = 0, y_offset = 0, **kwargs):
+    def __init__(self, delim=None, xpos=0, ypos=1, zpos=2, skip=0, x_scale=1, y_scale=1,
+                 z_scale=1, x_offset=0, y_offset=0, **kwargs):
+        
         super().__init__(**kwargs)
         self.delim = delim
         self.xpos = xpos
@@ -406,7 +402,7 @@ class xyz_file(xyz_dataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
-        this_region = regions.region()
+        this_region = regions.Region()
 
         for i, l in enumerate(self.yield_xyz()):
             if i == 0:
@@ -428,7 +424,7 @@ class xyz_file(xyz_dataset):
             try:
                 out_hull = [pts[i] for i in spatial.ConvexHull(pts, qhull_options='Qt').vertices]
                 out_hull.append(out_hull[0])
-                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos = 0, ypos = 1)
+                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
             except: self.infos['wkt'] = this_region.export_as_wkt()
         return(self.infos)
         
@@ -447,9 +443,10 @@ class xyz_file(xyz_dataset):
                 self.delim = delim
 
     def parse(self):
+        
         if self.region is not None:
             self.inf()
-            inf_region = regions.region().from_string(self.infos['wkt'])
+            inf_region = regions.Region().from_string(self.infos['wkt'])
             if regions.regions_intersect_p(inf_region, self.region):
                 self.data_entries = [self]
         else: self.data_entries = [self]
@@ -469,13 +466,13 @@ class xyz_file(xyz_dataset):
         else: self.src_data = sys.stdin
         
         sk = self.skip
-        this_xyz = xyzs.xyz_point(w = 1)
+        this_xyz = xyzs.XYZPoint(w = 1)
         if self.region is not None:
             if self.region.epsg != self.epsg:
                 if self.warp is not None:
                     if self.region.epsg != self.warp:
-                        self.region.warp(warp_epsg = self.epsg)
-                else: self.region.warp(warp_epsg = self.epsg)
+                        self.region.warp(warp_epsg=self.epsg)
+                else: self.region.warp(warp_epsg=self.epsg)
 
         warp_epsg = utils.int_or(self.warp)
         if warp_epsg is not  None and self.epsg is not None:
@@ -490,17 +487,19 @@ class xyz_file(xyz_dataset):
             except: pass
             dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         else: dst_trans = None
+        
         ln = 0
         for xyz_line in self.src_data:
             if ln >= sk:
                 if self.delim is None: self.line_delim(xyz_line)
-                this_xyz.from_string(xyz_line, delim = self.delim, x_pos = self.xpos, y_pos = self.ypos)
-                if this_xyz._valid_p():
-                    this_xyz.x = (this_xyz.x + self.x_offset) * self.x_scale
-                    this_xyz.y = (this_xyz.y + self.y_offset) * self.y_scale
+                this_xyz.from_string(xyz_line, delim=self.delim,
+                                     x_pos=self.xpos, y_pos=self.ypos)
+                if this_xyz.valid_p():
+                    this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
+                    this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                     this_xyz.z *= self.z_scale
                     this_xyz.w = self.weight
-                    if self.region is not None and self.region._valid_p():
+                    if self.region is not None and self.region.valid_p():
                         if regions.xyz_in_region_p(this_xyz, self.region):
                             if dst_trans is not None:
                                 this_xyz.transform(dst_trans)
@@ -515,11 +514,11 @@ class xyz_file(xyz_dataset):
         if self.verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         self.src_data.close()
 
-class raster_file(xyz_dataset):
+class RasterFile(XYZDataset):
     """providing a raster parser
     """
 
-    def __init__(self, mask = None, step = 1, **kwargs):
+    def __init__(self, mask=None, step=1, **kwargs):
         super().__init__(**kwargs)
         self.mask = mask
         self.step = 1
@@ -576,20 +575,20 @@ class raster_file(xyz_dataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self._open_ds()
-        if self.ds_open_p:
-            
-            this_region = regions.region().from_geo_transform(geoT = self.gt, x_count = self.x_count, y_count = self.y_count)
+        if self.ds_open_p:            
+            this_region = regions.Region().from_geo_transform(geoT=self.gt, x_count=self.x_count,
+                                                              y_count=self.y_count)
             try: zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except: zr = [None, None]
             this_region.zmin = zr[0]
             this_region.zmax = zr[1]
-            self.infos['minmax'] = this_region.export_as_list(include_z = True)
+            self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = self.x_count * self.y_count
             self.infos['wkt'] = this_region.export_as_wkt()
         self._close_ds()
         return(self.infos)
     
-    def gather_infos(self, scan = False):
+    def gather_infos(self, scan=False):
         """gather information from `src_ds` GDAL dataset
 
         Returns:
@@ -598,11 +597,11 @@ class raster_file(xyz_dataset):
 
         if self.ds_open_p:
             gt = self.src_ds.GetGeoTransform()
-            if self.region is not None and self.region._valid_p(check_xy = True):
+            if self.region is not None and self.region.valid_p(check_xy = True):
                 self.srcwin = self.region.srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
             else: self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
             src_band = self.src_ds.GetRasterBand(1)
-            self.gt = (gt[0] + (self.srcwin[0] * gt[1]), gt[1], 0., gt[3] + (self.srcwin[1] * gt[5]), 0., gt[5])
+            self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
 
             proj = self.src_ds.GetProjectionRef()
             src_srs = osr.SpatialReference()
@@ -627,9 +626,10 @@ class raster_file(xyz_dataset):
         return(self)
 
     def parse(self):
+        
         if self.region is not None:
             self.inf()
-            inf_region = regions.region().from_list(self.infos['minmax'])
+            inf_region = regions.Region().from_list(self.infos['minmax'])
             if regions.regions_intersect_p(inf_region, self.region):
                 self.data_entries = [self]
         else: self.data_entries = [self]
@@ -643,7 +643,7 @@ class raster_file(xyz_dataset):
         """
 
         self._open_ds()
-        out_xyz = xyzs.xyz_point(w = 1)
+        out_xyz = xyzs.XYZPoint(w = 1)
         if self.src_ds is not None:
             ln = 0
             band = self.src_ds.GetRasterBand(1)
@@ -689,7 +689,7 @@ class raster_file(xyz_dataset):
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
-                        if self.region is not None and self.region._valid_p():
+                        if self.region is not None and self.region.valid_p():
                             if regions.xyz_in_region_p(out_xyz, self.region):
                                 ln += 1
                                 if dst_trans is not None: out_xyz.transform(dst_trans)
@@ -704,9 +704,8 @@ class raster_file(xyz_dataset):
             if self.verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         self._close_ds()
 
-class gmrt(xyz_dataset):
-    """represnting the remote raster data from the GMRT
-    """
+class GMRT(XYZDataset):
+    """represnting the remote raster data from the GMRT"""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -732,26 +731,26 @@ class gmrt(xyz_dataset):
         
         self.infos['name'] = self.fn
         self.infos['hash'] = None
-        this_region = regions.region().from_list([-179,179,-89,89])
+        this_region = regions.Region().from_list([-179,179,-89,89])
         self.infos['minmax'] = this_region.export_as_list()
         self.infos['numpts'] = 0
         self.infos['wkt'] = this_region.export_as_wkt()
         return(self.infos)        
 
-    def parse(self, fmt = 'geotiff', res = 'max', layer = 'topo'):
-        """Parse the gmrt module for urls
-        """
+    def parse(self, fmt='geotiff', res='max', layer='topo'):
+        """Parse the gmrt module for urls """
 
         if self.region is not None:
             self.inf()
             if layer != 'topo' and layer != 'topo-mask': layer = 'topo'
-            inf_region = regions.region().from_list(self.infos['minmax'])
+            inf_region = regions.Region().from_list(self.infos['minmax'])
             if regions.regions_intersect_p(inf_region, self.region):
                 _data = {'north':self.region.ymax, 'west':self.region.xmin,
                          'south':self.region.ymin, 'east':self.region.xmax,
                          'mformat':'json', 'resolution':res, 'format':fmt}
 
-                _req = fetches.fetch_req(self._gmrt_grid_urls_url, params = _data, tries = 10, timeout = 2)
+                _req = fetches.fetch_req(self._gmrt_grid_urls_url, params=_data,
+                                         tries=10, timeout=2)
                 if _req is not None and _req.status_code == 200:
                     gmrt_urls = _req.json()
                     for url in gmrt_urls:
@@ -765,7 +764,8 @@ class gmrt(xyz_dataset):
                             url_enc = urllib.urlencode(opts)
                         except: url_enc = urllib.parse.urlencode(opts)
                         this_url = '{}?{}'.format(url_base, url_enc)
-                        url_region = regions.region().from_list([float(opts['west']), float(opts['east']), float(opts['south']), float(opts['north'])])
+                        url_region = regions.Region().from_list([float(opts['west']), float(opts['east']),
+                                                                 float(opts['south']), float(opts['north'])])
                         outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
                         self.fn = this_url
                         self._fn = outf
@@ -777,43 +777,46 @@ class gmrt(xyz_dataset):
     def yield_xyz(self):
         for i, entry in enumerate(self.data_entries):
             utils.echo_msg('>{}<'.format(self.region.format('fn')))
-            gmrt_ds = dataset_factory(fn = self._fn, data_format = 200, weight = self.weight, src_region = self.region, epsg = self.epsg, warp = self.warp, verbose = self.verbose)
+            gmrt_ds = DatasetFactory(fn=self._fn, data_format=200, weight=self.weight, src_region=self.region,
+                                     epsg=self.epsg, warp=self.warp, verbose=self.verbose)
             if fetches.fetch_file(entry.fn, entry._fn, verbose = entry.verbose) == 0:
                 for xyz in gmrt_ds.acquire_raster_file().parse().yield_xyz():
                     yield(xyz)
             else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(self.fn))
             utils.remove_glob(self.fn)
         
-class dataset_factory:
+class DatasetFactory:
 
     data_types = {
         -1: {'name': 'datalist',
              'fmts': ['datalist', 'mb-1'],
-             'class': lambda k: datalist(**k),
+             'class': lambda k: Datalist(**k),
              },
         167: {'name': 'yxz',
               'fmts': ['yxz'],
-              'class': lambda k: xyz_file(**k),
+              'class': lambda k: XYZFile(**k),
               },
         168: {'name': 'xyz',
               'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'],
-              'class': lambda k: xyz_file(**k),
+              'class': lambda k: XYZFile(**k),
               },
         200: {'name': 'raster',
               'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
-              'class': lambda k: raster_file(**k),
+              'class': lambda k: RasterFile(**k),
               },
         201: {'name': 'remote-raster',
               'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
-              'class': lambda k: raster_file(**k),
+              'class': lambda k: RasterFile(**k),
               },
         -11: {'name': 'gmrt',
               'fmts': ['gmrt'],
-              'class': gmrt,
+              'class': lambda k: GMRT(**k),
               },
     }
     
-    def __init__(self, fn = None, data_format = None, weight = 1, epsg = 4326, name = "<xyz-dataset>", parent = None, src_region = None, warp = None, verbose = False):
+    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<xyz-dataset>",
+                 parent=None, src_region=None, warp=None, verbose=False):
+        
         self.name = name
         self.data_format = data_format
         self.epsg = epsg
@@ -875,34 +878,35 @@ class dataset_factory:
             self.data_types[key] = type_def[key]
 
     def acquire_datalist(self, **kwargs):
-        return(datalist(fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                        epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
+        return(Datalist(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+                        epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
                         **kwargs))
 
     def acquire_xyz_file(self, **kwargs):
-        return(xyz_file(fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                        epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
-                        xpos = 0, ypos = 1, zpos = 2, **kwargs))
+        return(XYZFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+                       epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+                       xpos=0, ypos=1, zpos=2, **kwargs))
 
     def acquire_raster_file(self, **kwargs):
-        return(raster_file(fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                           epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
-                           **kwargs))
+        return(RasterFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+                          epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+                          **kwargs))
 
     def acquire_remote_raster_file(self, **kwargs):
-        return(raster_file(fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                           epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
-                           remote = True, **kwargs))
+        return(RasterFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+                          epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+                          remote=True, **kwargs))
 
     def acquire_gmrt(self, **kwargs):
-        return(gmrt(fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                    epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
+        return(GMRT(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+                    epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
                     **kwargs))
 
     def acquire(self, **kwargs):
-        return(self.data_types[self.data_format]['class'](fn = self.fn, data_format = self.data_format, weight = self.weight, src_region = self.region,
-                                                          epsg = self.epsg, warp = self.warp, name = self.name, parent = self.parent, verbose = self.verbose,
-                                                          **kwargs))
+        return(self.data_types[self.data_format]['class'](
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            **kwargs))
     
     def acquire_dataset(self, **kwargs):
         if self.data_format == -1:
@@ -925,8 +929,8 @@ class dataset_factory:
 ## datalists cli
 ##
 ## ==============================================
-_datalist_fmts_short_desc = lambda: '\n  '.join(['{}:\t{}'.format(key, dataset_factory().data_types[key]['name']) for key in dataset_factory().data_types])
-datalists_usage = '''{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
+_datalist_fmts_short_desc = lambda: '\n  '.join(['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
+datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
 usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST ...
 
@@ -957,9 +961,9 @@ Examples:
   % {cmd} -R my_region.shp my_data.xyz -w -s_epsg 4326 -t_epsg 3565 > my_data_3565.xyz
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
-'''.format(cmd =  os.path.basename(sys.argv[0]), 
-           dl_version = _version,
-           dl_formats =  _datalist_fmts_short_desc())
+""".format(cmd= os.path.basename(sys.argv[0]), 
+           dl_version=__version__,
+           dl_formats=_datalist_fmts_short_desc())
 
 def datalists_cli(argv = sys.argv):
     """run datalists from command-line
@@ -1009,7 +1013,7 @@ def datalists_cli(argv = sys.argv):
             print(datalists_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), datalists_version))
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
             sys.exit(1)
         elif arg[0] == '-':
             print(datalists_usage)
@@ -1018,21 +1022,21 @@ def datalists_cli(argv = sys.argv):
         i = i + 1
 
     if want_glob:
-        for key in dataset_factory().data_types.keys():
+        for key in DatasetFactory().data_types.keys():
             if key != -1:
-                for f in dataset_factory().data_types[key]['fmts']:
+                for f in DatasetFactory().data_types[key]['fmts']:
                     globs = glob.glob('*.{}'.format(f))
                     [sys.stdout.write('{}\n'.format(' '.join([x, str(key), '1']))) for x in globs]
         sys.exit(0)
 
     for i_region in i_regions:
-        tmp_region = regions.region().from_string(i_region)
-        if tmp_region._valid_p():
+        tmp_region = regions.Region().from_string(i_region)
+        if tmp_region.valid_p():
             these_regions.append(tmp_region)
         else:
             tmp_region = regions.ogr_wkts(i_region)
             for i in tmp_region:
-                if i._valid_p():
+                if i.valid_p():
                     these_regions.append(i)
                     
     if len(these_regions) == 0:
@@ -1043,8 +1047,9 @@ def datalists_cli(argv = sys.argv):
     for rn, this_region in enumerate(these_regions):
         if len(dls) == 0:
             print(datalists_usage)
-            utils.echo_error_msg("you must specify some type of data")
-        xdls = [dataset_factory(fn = " ".join(["-" if x == "" else x for x in dl.split(":")]), src_region = this_region, verbose = want_verbose, epsg = epsg, warp = warp).acquire_dataset() for dl in dls]
+            utils.echo_error_msg('you must specify some type of data')
+        xdls = [DatasetFactory(fn=" ".join(['-' if x == "" else x for x in dl.split(":")]), src_region=this_region,
+                               verbose=want_verbose, epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
         
         for xdl in xdls:
             
