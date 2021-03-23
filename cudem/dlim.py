@@ -43,7 +43,7 @@ from cudem import xyzs
 from cudem import regions
 from cudem import fetches
 
-__version__ = '0.1.2'
+__version__ = '0.1.3'
 
 class XYZDataset():
     """representing an xyz-able parser or a data-list entry
@@ -133,17 +133,22 @@ class XYZDataset():
                     self.infos = json.load(i_ob)
             except ValueError:
                 try:
-                    self.infos = MBSParser(fn = inf_path, epsg = self.epsg).inf_parse().infos
+                    self.infos = MBSParser(
+                        fn = inf_path, epsg = self.epsg).inf_parse().infos
                 except:
                     utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
-            except: utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
-        else: self.infos = {}
+            except:
+                utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
+        else:
+            self.infos = {}
         
         if check_hash:
             if 'hash' in self.infos.keys():
                 gen_inf = self.hash() != self.infos['hash']
-            else: gen_inf = True
-        else: gen_inf = 'hash' not in self.infos.keys()
+            else:
+                gen_inf = True
+        else:
+            gen_inf = 'hash' not in self.infos.keys()
         
         if gen_inf:
             utils.echo_msg("generating inf for {}".format(self.fn))
@@ -157,7 +162,8 @@ class XYZDataset():
                             inf.write(json.dumps(self.infos))
                     except:
                         #if self.parent is not None:
-                        with open('{}_{}.inf'.format('dlim_tmp', self.region.format('fn')), 'w') as inf:
+                        with open('{}_{}.inf'.format(
+                                'dlim_tmp', self.region.format('fn')), 'w') as inf:
                             inf.write(json.dumps(self.infos))
             if self.parent is not None:
                 utils.remove_glob('{}.inf'.format(self.parent.fn))
@@ -177,12 +183,12 @@ class XYZDataset():
             this_xyz.dump(include_w=True if self.weight is not None else False,
                           dst_port=dst_port, encode=False)
 
-class MBSPparser:
+class MBSParser:
     """providing an mbsystem parser"""
 
     def __init__(self, fn=None, epsg=None):
         self.fn = fn
-        self.epsg = int_or(epsg)
+        self.epsg = utils.int_or(epsg)
         self.infos = {}
         
     def inf(self):
@@ -211,24 +217,24 @@ class MBSPparser:
                             self.infos['name'] = til[3]
                     if til[0] == 'Number':
                         if til[2] == 'Records:':
-                            self.infos['numpts'] = int_or(til[3])
+                            self.infos['numpts'] = utils.int_or(til[3])
                     if til[0] == 'Minimum':
                         if til[1] == 'Longitude:':
-                            self.infos['minmax'][0] = float_or(til[2])
-                            self.infos['minmax'][1] = float_or(til[5])
+                            self.infos['minmax'][0] = utils.float_or(til[2])
+                            self.infos['minmax'][1] = utils.float_or(til[5])
                         elif til[1] == 'Latitude:':
-                            self.infos['minmax'][2] = float_or(til[2])
-                            self.infos['minmax'][3] = float_or(til[5])
+                            self.infos['minmax'][2] = utils.float_or(til[2])
+                            self.infos['minmax'][3] = utils.float_or(til[5])
                         elif til[1] == 'Depth:':
-                            self.infos['minmax'][4] = float_or(til[5]) * -1
-                            self.infos['minmax'][5] = float_or(til[2]) * -1
+                            self.infos['minmax'][4] = utils.float_or(til[5]) * -1
+                            self.infos['minmax'][5] = utils.float_or(til[2]) * -1
                     if til[0] == 'CM':
                         if til[1] == 'dimensions:':
-                            dims = [int_or(til[2]), int_or(til[3])]
+                            dims = [utils.int_or(til[2]), utils.int_or(til[3])]
                             cm_array = np.zeros((dims[0], dims[1]))
                     if til[0] == 'CM:':
                         for j in range(0, dims[0]):
-                            cm_array[this_row][j] = int_or(til[j+1])
+                            cm_array[this_row][j] = utils.int_or(til[j+1])
                         this_row += 1
 
         mbs_region = regions.Region().from_list(self.infos['minmax'])
@@ -239,7 +245,7 @@ class MBSPparser:
             xcount, ycount, dst_gt = mbs_region.geo_transform(x_inc=xinc, y_inc=yinc)
 
             ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
-                         'geoT': dst_gt, 'proj': sr_wkt(self.epsg),
+                         'geoT': dst_gt, 'proj': utils.sr_wkt(self.epsg),
                          'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
 
             driver = gdal.GetDriverByName('MEM')
@@ -263,7 +269,8 @@ class MBSPparser:
                 multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
             wkt = multi.ExportToWkt()
             tmp_ds = ds = None
-        else: wkt = mbs_region.export_as_wkt()
+        else:
+            wkt = mbs_region.export_as_wkt()
 
         self.infos['wkt'] = wkt
         return(self)
@@ -320,7 +327,8 @@ class Datalist(XYZDataset):
         if out_region is not None:
             self.infos['minmax'] = out_region.export_as_list(include_z=True)
             self.infos['wkt'] = out_region.export_as_wkt()
-        else: self.infos['minmax'] = None
+        else:
+            self.infos['minmax'] = None
 
         self.region = _region
         return(self.infos)
@@ -332,14 +340,15 @@ class Datalist(XYZDataset):
           datalist_parser: self
         """
         
-        _prog = utils._progress('parsing datalist {}'.format(self.fn))
+        _prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as op:
                 for this_line in op:
                     _prog.update()
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
-                        data_set = DatasetFactory(this_line, parent=self, src_region=self.region,
-                                                  warp=self.warp, verbose=self.verbose).acquire_dataset()
+                        data_set = DatasetFactory(
+                            this_line, parent=self, src_region=self.region,
+                            warp=self.warp, verbose=self.verbose).acquire_dataset()
                         if data_set.valid_p():
                             data_set.inf()
                             if self.region is not None and self.region.valid_p(check_xy=True):
@@ -409,12 +418,18 @@ class XYZFile(XYZDataset):
                 this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
             else:
                 try:
-                    if l.x < this_region.xmin: this_region.xmin = l.x
-                    elif l.x > this_region.xmax:  this_region.xmax = l.x
-                    if l.y < this_region.ymin: this_region.ymin = l.y
-                    elif l.y > this_region.ymax: this_region.ymax = l.y
-                    if l.z < this_region.zmin: this_region.zmin = l.z
-                    elif l.z > this_region.zmax: this_region.zmax = l.z
+                    if l.x < this_region.xmin:
+                        this_region.xmin = l.x
+                    elif l.x > this_region.xmax:
+                        this_region.xmax = l.x
+                    if l.y < this_region.ymin:
+                        this_region.ymin = l.y
+                    elif l.y > this_region.ymax:
+                        this_region.ymax = l.y
+                    if l.z < this_region.zmin:
+                        this_region.zmin = l.z
+                    elif l.z > this_region.zmax:
+                        this_region.zmax = l.z
                 except: pass
             pts.append(l.export_as_list(include_z = True))
             self.infos['numpts'] = i
@@ -425,7 +440,8 @@ class XYZFile(XYZDataset):
                 out_hull = [pts[i] for i in spatial.ConvexHull(pts, qhull_options='Qt').vertices]
                 out_hull.append(out_hull[0])
                 self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
-            except: self.infos['wkt'] = this_region.export_as_wkt()
+            except:
+                self.infos['wkt'] = this_region.export_as_wkt()
         return(self.infos)
         
     def line_delim(self, xyz_line):
@@ -462,8 +478,10 @@ class XYZFile(XYZDataset):
         if self.fn is not None:
             if os.path.exists(str(self.fn)):
                 self.src_data = open(self.fn, "r")
-            else: self.src_data = sys.stdin
-        else: self.src_data = sys.stdin
+            else:
+                self.src_data = sys.stdin
+        else:
+            self.src_data = sys.stdin
         
         sk = self.skip
         this_xyz = xyzs.XYZPoint(w = 1)
@@ -484,7 +502,8 @@ class XYZFile(XYZDataset):
             try:
                 src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
                 dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            except: pass
+            except:
+                pass
             dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         else: dst_trans = None
         
@@ -543,14 +562,18 @@ class RasterFile(XYZDataset):
             if os.path.exists(str(self.fn)):
                 try:
                     self.src_ds = gdal.Open(self.fn)
-                except: self.src_ds = None
-            else: self.src_ds = None
-        else: self.src_ds = None
+                except:
+                    self.src_ds = None
+            else:
+                self.src_ds = None
+        else:
+            self.src_ds = None
 
         if self.src_ds is not None:
             self.gather_infos()
             self.ds_open_p = True
-        else: self.ds_open_p = False
+        else:
+            self.ds_open_p = False
         return(self)
 
     def _close_ds(self):
@@ -576,10 +599,12 @@ class RasterFile(XYZDataset):
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self._open_ds()
         if self.ds_open_p:            
-            this_region = regions.Region().from_geo_transform(geoT=self.gt, x_count=self.x_count,
-                                                              y_count=self.y_count)
-            try: zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
-            except: zr = [None, None]
+            this_region = regions.Region().from_geo_transform(
+                geoT=self.gt, x_count=self.x_count, y_count=self.y_count)
+            try:
+                zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
+            except:
+                zr = [None, None]
             this_region.zmin = zr[0]
             this_region.zmax = zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
@@ -659,9 +684,11 @@ class RasterFile(XYZDataset):
                 try:
                     src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
                     dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                except: pass
+                except:
+                    pass
                 dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-            else: dst_trans = None
+            else:
+                dst_trans = None
                         
             msk_band = None
             if self.mask is not None:
@@ -669,7 +696,8 @@ class RasterFile(XYZDataset):
                 msk_band = src_mask.GetRasterBand(1)
 
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-            if self.ndv is not None: nodata.append('{:g}'.format(self.ndv))
+            if self.ndv is not None:
+                nodata.append('{:g}'.format(self.ndv))
             for y in range(self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1):
                 band_data = band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
                 if self.region is not None:
@@ -701,7 +729,8 @@ class RasterFile(XYZDataset):
             band = None
             src_mask = None
             msk_band = None
-            if self.verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
+            if self.verbose:
+                utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         self._close_ds()
 
 class GMRT(XYZDataset):
@@ -742,7 +771,8 @@ class GMRT(XYZDataset):
 
         if self.region is not None:
             self.inf()
-            if layer != 'topo' and layer != 'topo-mask': layer = 'topo'
+            if layer != 'topo' and layer != 'topo-mask':
+                layer = 'topo'
             inf_region = regions.Region().from_list(self.infos['minmax'])
             if regions.regions_intersect_p(inf_region, self.region):
                 _data = {'north':self.region.ymax, 'west':self.region.xmin,
@@ -762,27 +792,32 @@ class GMRT(XYZDataset):
                         opts['layer'] = layer
                         try:
                             url_enc = urllib.urlencode(opts)
-                        except: url_enc = urllib.parse.urlencode(opts)
+                        except:
+                            url_enc = urllib.parse.urlencode(opts)
                         this_url = '{}?{}'.format(url_base, url_enc)
-                        url_region = regions.Region().from_list([float(opts['west']), float(opts['east']),
-                                                                 float(opts['south']), float(opts['north'])])
+                        url_region = regions.Region().from_list(
+                            [float(opts['west']), float(opts['east']),
+                             float(opts['south']), float(opts['north'])])
                         outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
                         self.fn = this_url
                         self._fn = outf
                         self.data_format = 201
                         self.data_entries.append(self)
-        else: utils.echo_error_msg('you must supply a region to use the gmrt datalist')
+        else:
+            utils.echo_error_msg('you must supply a region to use the gmrt datalist')
         return(self)
     
     def yield_xyz(self):
         for i, entry in enumerate(self.data_entries):
             utils.echo_msg('>{}<'.format(self.region.format('fn')))
-            gmrt_ds = DatasetFactory(fn=self._fn, data_format=200, weight=self.weight, src_region=self.region,
-                                     epsg=self.epsg, warp=self.warp, verbose=self.verbose)
+            gmrt_ds = DatasetFactory(
+                fn=self._fn, data_format=200, weight=self.weight, src_region=self.region,
+                epsg=self.epsg, warp=self.warp, verbose=self.verbose)
             if fetches.fetch_file(entry.fn, entry._fn, verbose = entry.verbose) == 0:
                 for xyz in gmrt_ds.acquire_raster_file().parse().yield_xyz():
                     yield(xyz)
-            else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(self.fn))
+            else:
+                utils.echo_error_msg('failed to fetch remote file, {}...'.format(self.fn))
             utils.remove_glob(self.fn)
         
 class DatasetFactory:
@@ -837,7 +872,8 @@ class DatasetFactory:
         
         this_entry = self.fn.rstrip().split()
         try:
-            entry = [x if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else x for n, x in enumerate(this_entry)]
+            entry = [x if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else x \
+                     for n, x in enumerate(this_entry)]
         except Exception as e:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
             return(self)
@@ -855,7 +891,8 @@ class DatasetFactory:
             
         if len(entry) < 3: entry.append(self.weight)
 
-        self.fn = entry[0] if self.parent is None else os.path.join(os.path.dirname(self.parent.fn), entry[0])
+        self.fn = entry[0] if self.parent is None \
+            else os.path.join(os.path.dirname(self.parent.fn), entry[0])
         
         self.data_format = entry[1]
         if self.data_format is None:
@@ -878,29 +915,34 @@ class DatasetFactory:
             self.data_types[key] = type_def[key]
 
     def acquire_datalist(self, **kwargs):
-        return(Datalist(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
-                        epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-                        **kwargs))
+        return(Datalist(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            **kwargs))
 
     def acquire_xyz_file(self, **kwargs):
-        return(XYZFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
-                       epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-                       xpos=0, ypos=1, zpos=2, **kwargs))
+        return(XYZFile(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            xpos=0, ypos=1, zpos=2, **kwargs))
 
     def acquire_raster_file(self, **kwargs):
-        return(RasterFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
-                          epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-                          **kwargs))
+        return(RasterFile(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            **kwargs))
 
     def acquire_remote_raster_file(self, **kwargs):
-        return(RasterFile(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
-                          epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-                          remote=True, **kwargs))
+        return(RasterFile(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            remote=True, **kwargs))
 
     def acquire_gmrt(self, **kwargs):
-        return(GMRT(fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
-                    epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-                    **kwargs))
+        return(GMRT(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            **kwargs))
 
     def acquire(self, **kwargs):
         return(self.data_types[self.data_format]['class'](
@@ -929,7 +971,8 @@ class DatasetFactory:
 ## datalists cli
 ##
 ## ==============================================
-_datalist_fmts_short_desc = lambda: '\n  '.join(['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
+_datalist_fmts_short_desc = lambda: '\n  '.join(
+    ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
 usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST ...
@@ -1048,8 +1091,10 @@ def datalists_cli(argv = sys.argv):
         if len(dls) == 0:
             print(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
-        xdls = [DatasetFactory(fn=" ".join(['-' if x == "" else x for x in dl.split(":")]), src_region=this_region,
-                               verbose=want_verbose, epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
+        xdls = [DatasetFactory(
+            fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
+            src_region=this_region, verbose=want_verbose,
+            epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
         
         for xdl in xdls:
             

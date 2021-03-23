@@ -349,7 +349,7 @@ echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]),
 echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
 echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
 
-class _progress:
+class CliProgress:
     """geomods minimal progress indicator
     """
 
@@ -400,52 +400,5 @@ class _progress:
         if status != 0:
             sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {:40}\n'.format('fail', end_msg))
         else: sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {:40}\n'.format('ok', end_msg))
-
-## ==============================================
-##
-## Fetching functions
-##
-## ==============================================
-_version = '0.1.0'
-r_headers = { 'User-Agent': 'CUDEM: fetches v%s' %(_version) }
-        
-def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatype = None, overwrite = False, verbose = False, timeout = 140, read_timeout = 320):
-    '''fetch src_url and save to dst_fn'''
-    status = 0
-    req = None
-    halt = callback
-
-    if verbose: progress = _progress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
-    if not os.path.exists(os.path.dirname(dst_fn)):
-        try:
-            os.makedirs(os.path.dirname(dst_fn))
-        except: pass 
-    if not os.path.exists(dst_fn) or overwrite:
-        try:
-            with requests.get(src_url, stream = True, params = params, headers = r_headers, timeout=(timeout,read_timeout)) as req:
-                req_h = req.headers
-                if req.status_code == 200:
-                    curr_chunk = 0
-                    with open(dst_fn, 'wb') as local_file:
-                        for chunk in req.iter_content(chunk_size = 8196):
-                            if halt(): break
-                            if verbose: progress.update()
-                            if chunk: local_file.write(chunk)
-                else: echo_error_msg('server returned: {}'.format(req.status_code))
-        except Exception as e:
-            echo_error_msg(e)
-            status = -1
-    if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0: status = -1
-    if verbose: progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
-    return(status)
-
-def fetch_req(src_url, params = None, tries = 5, timeout = 2, read_timeout = 10):
-    '''fetch src_url and return the requests object'''
-    if tries <= 0:
-        echo_error_msg('max-tries exhausted')
-        return(None)
-    try:
-        return(requests.get(src_url, stream = True, params = params, timeout = (timeout,read_timeout), headers = r_headers))
-    except: return(fetch_req(src_url, params = params, tries = tries - 1, timeout = timeout + 1, read_timeout = read_timeout + 10))
     
 ### End
