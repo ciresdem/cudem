@@ -27,17 +27,12 @@ import sys
 import json
 import glob
 import hashlib
-
-## ==============================================
-## import gdal/numpy
-## ==============================================
 import gdal
 import ogr
 import osr
 import numpy as np
 from scipy import spatial
 import urllib
-
 from cudem import utils
 from cudem import xyzs
 from cudem import regions
@@ -612,7 +607,31 @@ class RasterFile(XYZDataset):
             self.infos['wkt'] = this_region.export_as_wkt()
         self._close_ds()
         return(self.infos)
-    
+
+    def set_epsg(self, epsg = 4326):
+        if self.ds_open_p:
+            self.src_ds.SetProjection(sr_wkt(int(epsg)))
+
+    def cut(self):
+        if self.ds_open_p:
+            ds_config = self.gdal_gather_infos()
+            gt = ds_config['geoT']
+            srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
+            
+            ds_arr = self.src_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = self.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, ds_config['proj'], ds_config['dt'], ds_config['ndv'], ds_config['fmt'])
+
+            return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
+        else: return(None, -1)
+        
+    def set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
+        """set a datasource config dictionary
+            
+        returns gdal_config dict."""
+        
+        return({'nx': nx, 'ny': ny, 'nb': nb, 'geoT': geoT, 'proj': proj, 'dt': dt, 'ndv': ndv, 'fmt': fmt})
+        
     def gather_infos(self, scan=False):
         """gather information from `src_ds` GDAL dataset
 
@@ -1004,7 +1023,7 @@ Examples:
   % {cmd} -R my_region.shp my_data.xyz -w -s_epsg 4326 -t_epsg 3565 > my_data_3565.xyz
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
-""".format(cmd= os.path.basename(sys.argv[0]), 
+""".format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=__version__,
            dl_formats=_datalist_fmts_short_desc())
 

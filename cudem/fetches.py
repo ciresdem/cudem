@@ -138,7 +138,7 @@ def fetch_file(src_url, dst_fn, params=None, callback=lambda: False, datatype=No
     req = None
     halt = callback
 
-    if verbose: progress = utils._progress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
+    if verbose: progress = utils.CliProgress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
     if not os.path.exists(os.path.dirname(dst_fn)):
         try:
             os.makedirs(os.path.dirname(dst_fn))

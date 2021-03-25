@@ -209,5 +209,5 @@ def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
     l = '{}\n'.format(delim.join(['{:.7f}'.format(x) for x in xyz_line]))
     if encode: l = l.encode('utf-8')
     dst_port.write(l)
-
+    
 ### End

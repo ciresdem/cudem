@@ -190,6 +190,16 @@ class Region:
         if self.wkt is None:
             self.wkt = self.export_as_wkt()
         return(self)
+
+    def from_region(self, i_region):
+        self.xmin = i_region.xmin
+        self.xmax = i_region.xmax
+        self.ymin = i_region.ymin
+        self.ymax = i_region.ymax
+        self.wkt = i_region.wkt
+        self.epsg = i_region.epsg
+
+        return(self)
     
     def format(self, t = 'gmt'):
         """format region to string, defined by `t`

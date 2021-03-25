@@ -51,6 +51,7 @@ setuptools.setup(
         'console_scripts': [
             'dlim = cudem.dlim:datalists_cli',
             'regions = cudem.regions:regions_cli',
+            'waffles = cudem.waffles:waffles_cli',
         ],
     },
     #scripts = [
