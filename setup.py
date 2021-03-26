@@ -57,6 +57,7 @@ setuptools.setup(
     scripts = [
         'scripts/gdal_null.py',
         'scripts/gdal_outliers.py',
+        'scripts/gdal_nan2null.py',
         'scripts/xyz_clip.py',
         'scripts/clip_xyz.sh',
         'scripts/create_datalist.sh',
