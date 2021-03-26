@@ -23,6 +23,8 @@
 ### Code:
 
 import sys
+from osgeo import gdal
+from osgeo import ogr
 from cudem import utils
 
 class XYZPoint:
@@ -127,8 +129,11 @@ class XYZPoint:
         l = self.export_as_list(include_z=include_z, include_w=include_w)
         return('{}\n'.format(delim.join([str(x) for x in l])))
 
-    def export_as_wkt(self):
-        return('POINT ({} {})'.format(self.x, self.y))
+    def export_as_wkt(self, include_z=False):
+        if include_z:
+            return('POINT ({} {} {})'.format(self.x, self.y, self.z))
+        else:
+            return('POINT ({} {})'.format(self.x, self.y))
     
     def dump(self, delim=' ', include_z=True, include_w=False, encode=False, dst_port=sys.stdout):
         """dump xyz as a string to dst_port
@@ -209,5 +214,38 @@ def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
     l = '{}\n'.format(delim.join(['{:.7f}'.format(x) for x in xyz_line]))
     if encode: l = l.encode('utf-8')
     dst_port.write(l)
+
+def xyz2gdal_ds(src_xyz, dst_ogr):
+    """Make a point vector OGR DataSet Object from src_xyz
+
+    returns the in-memory GDAL data-source (don't forget to close it)
+    """
+    
+    ds = gdal.GetDriverByName('Memory').Create('', 0, 0, 0, gdal.GDT_Unknown)
+    layer = ds.CreateLayer(dst_ogr, geom_type = ogr.wkbPoint25D)
+    fd = ogr.FieldDefn('long', ogr.OFTReal)
+    fd.SetWidth(10)
+    fd.SetPrecision(8)
+    layer.CreateField(fd)
+    fd = ogr.FieldDefn('lat', ogr.OFTReal)
+    fd.SetWidth(10)
+    fd.SetPrecision(8)
+    layer.CreateField(fd)
+    fd = ogr.FieldDefn('elev', ogr.OFTReal)
+    fd.SetWidth(12)
+    fd.SetPrecision(12)
+    layer.CreateField(fd)
+    f = ogr.Feature(feature_def = layer.GetLayerDefn())
+    for this_xyz in src_xyz:
+        f.SetField(0, this_xyz.x)
+        f.SetField(1, this_xyz.y)
+        f.SetField(2, this_xyz.z)
+        #wkt = 'POINT({:.8f} {:.8f} {:.10f})'.format(this_xyz.x, this_xyz.y, this_xyz.z)
+        wkt = this_xyz.export_as_wkt(include_z=True)
+        #utils.echo_error_msg(wkt)
+        g = ogr.CreateGeometryFromWkt(wkt)
+        f.SetGeometryDirectly(g)
+        layer.CreateFeature(f)
+    return(ds)
     
 ### End

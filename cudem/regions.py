@@ -715,7 +715,7 @@ Examples:
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 '''.format(cmd =  os.path.basename(sys.argv[0]), 
-           version = _version)
+           version = __version__)
 
 def regions_cli(argv = sys.argv):
     """run datalists from command-line
@@ -752,7 +752,7 @@ def regions_cli(argv = sys.argv):
             print(datalists_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), datalists_version))
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
             sys.exit(1)
         elif arg[0] == '-':
             print(datalists_usage)

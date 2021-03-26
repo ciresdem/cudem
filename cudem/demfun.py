@@ -113,7 +113,7 @@ def set_epsg(src_dem, epsg = 4326):
         return(0)
     else: return(None)
 
-def set_nodata(src_dem, nodata=-9999):
+def set_nodata(src_dem, nodata=-9999, convert_array=False):
     """set the nodata value of gdal file src_dem
 
     returns 0
@@ -126,14 +126,17 @@ def set_nodata(src_dem, nodata=-9999):
         ds_config = gather_infos(ds)
         curr_nodata = ds_config['ndv']
         band = ds.GetRasterBand(1)
-        arr = band.ReadAsArray()
-        if np.isnan(curr_nodata):
-            arr[np.isnan(arr)]=nodata
+        if convert_array:
+            arr = band.ReadAsArray()
+            if np.isnan(curr_nodata):
+                arr[np.isnan(arr)]=nodata
+            else:
+                arr[arr == curr_nodata] = nodata
+            band.SetNoDataValue(nodata)
+            ds_config['ndv'] = nodata
+            band.WriteArray(arr)
         else:
-            arr[arr == curr_nodata] = nodata
-        band.SetNoDataValue(nodata)
-        ds_config['ndv'] = nodata
-        band.WriteArray(arr)
+            band.SetNoDataValue(nodata)
         ds = None
         return(0)
     else: return(None)

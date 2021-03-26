@@ -39,7 +39,7 @@ __version__ = '0.10.0'
 def waffles_append_fn(bn, src_region, inc):
     return('{}{}_{}_{}v1'.format(bn, utils.inc2str(inc), src_region.format('fn'), utils.this_year()))
 
-def xyz_block(src_xyz, src_region, inc, weights = False, verbose = False):
+def xyz_block(src_xyz, src_region, inc, weights=False, verbose=False):
     """block the src_xyz data to the mean block value
 
     Args:
@@ -64,9 +64,9 @@ def xyz_block(src_xyz, src_region, inc, weights = False, verbose = False):
         if regions.xyz_in_region_p(this_xyz, src_region):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
             try:
-                sumArray[ypos, xpos] += z
+                sumArray[ypos, xpos] += this_xyz.z
                 ptArray[ypos, xpos] += 1
-                if weights: wtArray[ypos, xpos] += this_xyz[3]
+                if weights: wtArray[ypos, xpos] += this_xyz.w
             except: pass
             
     ptArray[ptArray == 0] = np.nan
@@ -166,7 +166,7 @@ class WaffledRaster(Waffled):
             
     def process(self):
 
-        demfun.set_nodata(self.fn, -9999)
+        demfun.set_nodata(self.fn, nodata=-9999, convert_array=True)
         
         if len(self.filters) > 0:
             for f in self.filters:
@@ -381,7 +381,7 @@ class GMTSurface(Waffle):
                  self.inc, self.name, self.tension, self.relaxation, self.lower_limit, self.upper_limit))
         out, status = utils.run_cmd(dem_surf_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
         
-        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region, filters=self.fltr).process()
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region, filters=self.fltr).process()
         
 ## ==============================================
 ## Waffles GMT triangulate module
@@ -406,7 +406,7 @@ class GMTTriangulate(Waffle):
         dem_tri_cmd = ('gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(self.p_region.format('gmt'), self.inc, self.name))
         out, status = utils.run_cmd(dem_tri_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
 
-        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region, filters=self.fltr).process()
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.d_region, filters=self.fltr).process()
 
 ## ==============================================
 ## Waffles 'NUM grid' module
@@ -440,11 +440,94 @@ class WafflesNum(Waffle):
             out, status = utils.run_cmd(dem_xyz2grd_cmd, verbose=self.verbose, data_fun=lambda p: self.dump_xyz(dst_port=p, encode=True))
         else:
             dly = self.yield_xyz()
-            
-            if self.weights: dly = xyz_block(dly, self.p_region, self.inc, weights = True)
+            if self.weights: dly = xyz_block(dly, self.p_region, self.inc, weights=True)
             out, status = xyz2gdal(dly, '{}.tif'.format(self.name), self.p_region, self.inc, dst_format=self.fmt, mode=self.mode, verbose=self.verbose)
 
-        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region).process()        
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
+
+## ==============================================
+## Waffles GDAL_GRID module
+## see gdal_grid for gridding algorithms
+## ==============================================
+class WafflesGDALGrid(Waffle):
+    
+    def __init__(self, **kwargs):
+        """run gdal grid using alg_str
+
+        parse the data through xyzfun.xyz_block to get weighted mean before
+        building the GDAL dataset to pass into gdal_grid
+        
+        Args: 
+          alg_str (str): the gdal_grid algorithm string
+        """
+        
+        super().__init__(**kwargs)
+        
+        self.alg_str = 'linear:radius=-1'
+        self.mod = self.alg_str.split(':')[0]
+        
+    def run(self):
+        
+        _prog = utils.CliProgress('running GDAL GRID {} algorithm @ {}...\
+        '.format(self.alg_str.split(':')[0], self.p_region.format('fn')))
+        _prog_update = lambda x, y, z: _prog.update()
+        dly = xyz_block(self.yield_xyz(), self.p_region, self.inc, weights = True if self.weights is not None else False, verbose=self.verbose)
+        ds = xyzfun.xyz2gdal_ds(dly, '{}'.format(self.name))
+        
+        if ds.GetLayer().GetFeatureCount() == 0:
+            utils.echo_error_msg('no input data')
+            
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        
+        gd_opts = gdal.GridOptions(outputType = gdal.GDT_Float32, noData = -9999, format = 'GTiff', width = xcount,
+                                   height = ycount, algorithm = self.alg_str, callback = _prog_update if self.verbose else None,
+                                   outputBounds = [self.p_region.xmin, self.p_region.ymax, self.p_region.xmax, self.p_region.ymin])
+        
+        gdal.Grid('{}.tif'.format(self.name), ds, options = gd_opts)
+        ds = None
+        demfun.set_nodata('{}.tif'.format(self.name, nodata=-9999, convert_array=False))
+        _prog.end(0, 'ran GDAL GRID {} algorithm @ {}.'.format(self.alg_str.split(':')[0], self.p_region.format('fn')))
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region, filters=self.fltr).process()
+
+class WafflesLinear(WafflesGDALGrid):
+
+    def __init__(self, radius=None, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)
+        
+        radius = self.inc * 4 if radius is None else utils.str2inc(radius)
+        self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
+
+class WafflesInvDst(WafflesGDALGrid):
+
+    def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
+                   max_points = 0, min_points = 0, nodata = -9999, **kwargs):
+        super().__init__(**kwargs)
+
+        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'invdist:power={}:smoothing={}:radius1={}:radius2={}:angle={}:max_points={}:min_points={}:nodata={}'\
+            .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
+
+class WafflesMovingAverage(WafflesGDALGrid):
+
+    def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)
+
+        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'average:radius1={}:radius2={}:angle={}:min_points={}:nodata={}'\
+            .format(radius1, radius2, angle, min_points, nodata)
+        
+class WafflesNearest(WafflesGDALGrid):
+
+    def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)
+
+        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
+            .format(radius1, radius2, angle, min_points, nodata)
+        
         
 class WaffleFactory:
 
@@ -472,14 +555,57 @@ Generate a DEM using GMT's triangulate command.
         'num': {
             'name': 'num',
             'datalist-p': True,
-            'description': '''Uninterpolated DEM populated by <mode>.\n
+            'description': """Uninterpolated DEM populated by <mode>.\n
 Generate an uninterpolated DEM using <mode> option.
 Using mode of 'A<mode>' uses GMT's xyz2grd command, 
 see gmt xyz2grd --help for more info.
 
 < num:mode=n >
  :mode=[key] - specify mode of grid population: 
-  keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)''',
+  keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)""",
+        },
+        'linear': {
+            'name': 'linear',
+            'datalist-p': True,
+            'description': """LINEAR DEM via gdal_grid\n
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< linear:radius=-1 >
+ :radius=[val] - search radius""",
+        },
+        'nearest': {
+            'name': 'nearest',
+            'datalist-p': True,
+            'description': """NEAREST DEM via gdal_grid\n
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
+ :radius1=[val] - search radius
+ :radius2=[val] - search radius""",
+        },
+        'average': {
+            'name': 'average',
+            'datalist-p': True,
+            'description': """Moving AVERAGE DEM via gdal_grid\n
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< nearest:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
+ :radius1=[val] - search radius
+ :radius2=[val] - search radius""",
+        },
+        'invdst': {
+            'name': 'invdst',
+            'datalist-p': True,
+            'description': """INVERSE DISTANCE DEM via gdal_grid\n
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< nearest:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
+ :radius1=[val] - search radius
+ :radius2=[val] - search radius""",
         },
     }
     
@@ -525,6 +651,30 @@ see gmt xyz2grd --help for more info.
                           fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
                           archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
+    def acquire_linear(self, **kwargs):
+        return(WafflesLinear(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                             fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                             fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                             archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+
+    def acquire_average(self, **kwargs):
+        return(WafflesMovingAverage(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                                    fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                                    fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                                    archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+
+    def acquire_invdst(self, **kwargs):
+        return(WafflesInvDst(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                             fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                             fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                             archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+    
+    def acquire_nearest(self, **kwargs):
+        return(WafflesNearest(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                              fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                              fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                              archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+    
     def acquire_module_by_name(self, mod_name, **kwargs):
         if mod_name == 'surface':
             return(self.acquire_surface(**kwargs))
@@ -532,7 +682,15 @@ see gmt xyz2grd --help for more info.
             return(self.acquire_triangulate(**kwargs))
         if mod_name == 'num':
             return(self.acquire_num(**kwargs))
-
+        if mod_name == 'linear':
+            return(self.acquire_linear(**kwargs))
+        if mod_name == 'average':
+            return(self.acquire_average(**kwargs))
+        if mod_name == 'nearest':
+            return(self.acquire_nearest(**kwargs))
+        if mod_name == 'invdst':
+            return(self.acquire_invdst(**kwargs))
+        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
