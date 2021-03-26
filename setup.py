@@ -66,6 +66,7 @@ setuptools.setup(
         'scripts/usace_interp.sh',
         'scripts/spatial-meta.sh',
         'scripts/hillshade.sh',
+        'scripts/colortable.py',
     ],
     python_requires = '>=2.7',
     project_urls = {
