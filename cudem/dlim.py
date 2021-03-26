@@ -34,9 +34,10 @@ import numpy as np
 from scipy import spatial
 import urllib
 from cudem import utils
-from cudem import xyzs
 from cudem import regions
 from cudem import fetches
+from cudem import xyzfun
+from cudem import demfun
 
 __version__ = '0.1.3'
 
@@ -148,7 +149,7 @@ class XYZDataset():
         if gen_inf:
             utils.echo_msg("generating inf for {}".format(self.fn))
             self.infos = self.generate_inf()
-            print(self.infos)
+            #print(self.infos)
             self.infos['format'] = self.data_format
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
@@ -479,7 +480,7 @@ class XYZFile(XYZDataset):
             self.src_data = sys.stdin
         
         sk = self.skip
-        this_xyz = xyzs.XYZPoint(w = 1)
+        this_xyz = xyzfun.XYZPoint(w = 1)
         if self.region is not None:
             if self.region.epsg != self.epsg:
                 if self.warp is not None:
@@ -614,7 +615,7 @@ class RasterFile(XYZDataset):
 
     def cut(self):
         if self.ds_open_p:
-            ds_config = self.gdal_gather_infos()
+            ds_config = demfun.gather_infos()
             gt = ds_config['geoT']
             srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
             
@@ -687,7 +688,7 @@ class RasterFile(XYZDataset):
         """
 
         self._open_ds()
-        out_xyz = xyzs.XYZPoint(w = 1)
+        out_xyz = xyzfun.XYZPoint(w = 1)
         if self.src_ds is not None:
             ln = 0
             band = self.src_ds.GetRasterBand(1)
@@ -990,8 +991,10 @@ class DatasetFactory:
 ## datalists cli
 ##
 ## ==============================================
-_datalist_fmts_short_desc = lambda: '\n  '.join(
+_datalist_fmts_long_desc = lambda: '\n  '.join(
     ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
+_datalist_fmts_short_desc = lambda: ',  '.join(
+    ['{} ({})'.format(DatasetFactory().data_types[key]['name'], key) for key in DatasetFactory().data_types])
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
 usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST ...

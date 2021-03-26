@@ -28,16 +28,16 @@ import json
 import gdal
 import ogr
 import osr
-
 from cudem import dlim
 from cudem import regions
 from cudem import utils
-from cudem import xyzs
+from cudem import xyzfun
+from cudem import demfun
 
 __version__ = '0.10.0'
 
 def waffles_append_fn(bn, src_region, inc):
-    return('{}{}_{}_{}v1'.format(bn, utils.inc2str_inc(inc), src_region.format('fn'), utils.this_year()))
+    return('{}{}_{}_{}v1'.format(bn, utils.inc2str(inc), src_region.format('fn'), utils.this_year()))
 
 def xyz_block(src_xyz, src_region, inc, weights = False, verbose = False):
     """block the src_xyz data to the mean block value
@@ -83,7 +83,7 @@ def xyz_block(src_xyz, src_region, inc, weights = False, verbose = False):
     for y in range(0, ycount):
         for x in range(0, xcount):
             geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-            out_xyz = xyzs.XYZPoint(x=geo_x, y=geo_y, z=outarray[y,x])
+            out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=outarray[y,x])
             if out_xyz.z != -9999:
                 yield(out_xyz)
 
@@ -103,7 +103,7 @@ def xyz2gdal(src_xyz, dst_gdal, src_region, inc, dst_format = 'GTiff', mode = 'n
         sumArray = np.zeros((ycount, xcount))
     gdt = gdal.GDT_Float32
     ptArray = np.zeros((ycount, xcount))
-    ds_config = utils.gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, utils.sr_wkt(epsg), gdt, -9999, dst_format)
+    ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, dst_gt, utils.sr_wkt(epsg), gdt, -9999, dst_format)
     for this_xyz in src_xyz:
         if regions.xyz_in_region_p(this_xyz, src_region):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
@@ -147,228 +147,28 @@ class WaffledRaster(Waffled):
     
     def __init__(self, sample_inc=None, filters=[], node='pixel', **kwargs):
         super().__init__(**kwargs)
-
         self.src_ds = None
         self.ds_open_p = False
         self.node = node
         self.sample_inc = sample_inc
         self.filters = filters
-        
-    def open(self, update=False):
-        try:
-            if update:
-                self.src_ds = gdal.Open(self.fn, gdal.GA_Update)
-            else:
-                self.src_ds = gdal.Open(self.fn)
-
-            gt = self.src_ds.GetGeoTransform()
-
-            if self.region is not None and self.region.valid_p(check_xy = True):
-                self.srcwin = self.region.srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-            else: self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-
-            self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
-
-            self.ds_open_p = True
-        except:
-            utils.echo_error_msg('could not open raster file {}'.format(self.fn))
-            self.src_ds = None
-            self.ds_open_p = False
-        return(self)
-
-    def close(self):
-        self.src_ds = None
-        self.ds_open_p = False
-
-    def gather_infos(self, scan=False):
-        """gather information from `src_ds` GDAL dataset
-
-        Returns:
-          raster_parser: self
-        """
-
-        if self.ds_open_p:
-            src_band = self.src_ds.GetRasterBand(1)
-            self.x_count = self.srcwin[2]
-            self.y_count = self.srcwin[3]
-            self.dt = src_band.DataType
-            self.dtn = gdal.GetDataTypeName(src_band.DataType)
-            self.ndv = src_band.GetNoDataValue()
-            if self.ndv is None: self.ndv = -9999
-            self.fmt = self.src_ds.GetDriver().ShortName
-            self.zr = None
-
-            if scan:
-                src_arr = src_band.ReadAsArray(srcwin[0], self.srcwin[1], self.srcwin[2], self.srcwin[3])
-                self.zr = (np.amin(src_arr), np.amax(src_arr))
-                src_arr = None
-        return(self)
-
-    def set_nodata(self, nodata=-9999):
-        """set the nodata value of gdal file src_fn
-        
-        returns 0
-        """
-        
-        if self.ds_open_p:
-            band = self.src_ds.GetRasterBand(1)
-            band.SetNoDataValue(nodata)
-            self.ndv = nodata
-    
-    def set_epsg(self):
-        if self.ds_open_p:
-            proj = self.src_ds.GetProjectionRef()
-            src_srs = osr.SpatialReference()
-            src_srs.ImportFromWkt(proj)
-            src_srs.AutoIdentifyEPSG()
-            srs_auth = src_srs.GetAuthorityCode(None)
-            epsg = utils.int_or(srs_auth)
-            if epsg is None:
-                self.src_ds.SetProjection(utils.sr_wkt(int(self.epsg)))
-            else: self.epsg = epsg
-
-    def set_infos(self):
-        """set a datasource config dictionary
             
-        returns gdal_config dict."""
-        if self.ds_open_p:
-            src_band = self.src_ds.GetRasterBand(1)
-            return({'nx': self.srcwin[2], 'ny': self.srcwin[3], 'nb': self.srcwin[2] * self.srcwin[3], 'geoT': self.gt,
-                    'proj': self.src_ds.GetProjectionRef(), 'dt': src_band.DataType, 'ndv': src_band.GetNoDataValue(),
-                    'fmt': self.src_ds.GetDriver().ShortName})
-        else: return(None)
-    
-    def set_metadata(self, cudem=False):
-        """add metadata to the waffled raster
-    
-        Args: 
-          cudem (bool): add CUDEM metadata
-        """
-
-        if self.ds_open_p:
-            md = self.src_ds.GetMetadata()
-            if self.node == 'pixel':
-                md['AREA_OR_POINT'] = 'Area'
-            else: md['AREA_OR_POINT'] = 'Point'
-            md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
-            if cudem:
-                md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
-                md['TIFFTAG_IMAGEDESCRIPTION'] = 'Topography-Bathymetry; NAVD88'
-            self.src_ds.SetMetadata(md)
-        else: utils.echo_error_msg('failed to set metadata')
-
     def valid_p(self):
         if not os.path.exists(self.fn): return(False)
-        self.open()
-        gdi = self.gather_infos(this_dem, scan = True)
-        self.close()
+        gdi = demfun.infos(this_dem, scan=True)
         
         if gdi is not None:
             if np.isnan(gdi['zr'][0]):
-                #utils.remove_glob(self.fn)
                 return(False)
         else:
             return(False)
         return(True)
-
-    def filter_(self, fltr=1, fltr_val=None, split_val=None, mask=None):
-        """filter raster using smoothing factor `fltr`; optionally
-        only smooth bathymetry (sub-zero) using a split_val of 0.
-
-        Args: 
-          fltr (int): the filter to use, 1, 2 or 3
-          flt_val (varies): the filter value, varies by filter.
-          split_val (float): an elevation value (only filter below this value)
-
-        Returns:
-          0 for success or -1 for failure
-        """
-
-        was_open = False
-        if self.ds_open_p:
-            self.close()
-            was_open = True
-
-        if os.path.exists(self.fn):
-            if split_val is not None:
-                dem_u, dem_l = gdalfun.gdal_split(self.fn, split_val)
-            else: dem_l = self.fn
-
-            if int(fltr) == 1: out, status = utils.gdal_blur(dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
-            elif int(fltr) == 2: out, status = utils.gmt_grdfilter(dem_l, 'tmp_fltr.tif=gd+n-9999:GTiff',
-                                                                    dist = fltr_val if fltr_val is not None else '1s',
-                                                                    node = node, verbose = False)
-            elif int(fltr) == 3: out, status = utils.gdal_filter_outliers(dem_l, 'tmp_fltr.tif',
-                                                                            fltr_val if fltr_val is not None else 10)
-            else: out, status = utils.gdal_blur(dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
-            if status != 0: return(status)
-
-            if split_val is not None:
-                ds = gdal.Open(self.fn)
-                ds_config = utils.gdal_gather_infos(ds)
-                msk_arr = ds.GetRasterBand(1).ReadAsArray()
-                msk_arr[msk_arr != ds_config['ndv']] = 1
-                msk_arr[msk_arr == ds_config['ndv']] = np.nan
-                ds = None
-                u_ds = gdal.Open(dem_u)
-                if u_ds is not None:
-                    l_ds = gdal.Open('tmp_fltr.tif')
-                    if l_ds is not None:
-                        u_arr = u_ds.GetRasterBand(1).ReadAsArray()
-                        l_arr = l_ds.GetRasterBand(1).ReadAsArray()
-                        u_arr[u_arr == ds_config['ndv']] = 0
-                        l_arr[l_arr == ds_config['ndv']] = 0
-                        ds_arr = (u_arr + l_arr) * msk_arr
-                        ds_arr[np.isnan(ds_arr)] = ds_config['ndv']
-                        utils.gdal_write(ds_arr, 'merged.tif', ds_config)
-                        l_ds = None
-                        utils.remove_glob(dem_l)
-                    u_ds = None
-                    utils.remove_glob(dem_u)
-                os.rename('merged.tif', 'tmp_fltr.tif')
-            os.rename('tmp_fltr.tif', self.fn)
-            if was_open:
-                self.open()
-            return(0)
-        else: return(-1)
-
-    
-    def sample(self):
-        was_open = False
-        if self.ds_open_p:
-            self.close()
-            was_open = True
-
-        out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} __tmp__.tif\
-        '.format(self.sample_inc, self.sample_inc, self.fn, self.region.format('te')))
-
-        if status == 0:
-            os.rename('__tmp__.tif', '{}'.format(self.fn))
-                                    
-        if was_open:
-            self.open()
             
-    def clip(self):
-        pass
-
-    def cut(self, dst_fn):
-        if self.ds_open_p:
-            ds_arr = self.src_ds.GetRasterBand(1).ReadAsArray(self.srcwin[0], self.srcwin[1], self.srcwin[2], self.srcwin[3])
-            out_ds_config = self.set_infos()
-            return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
-        else: return(None, -1)
-
-    def translate(self):
-        #if self.fmt is not None:
-        #    pass
-        pass
-
     def process(self):
 
-        self.open()
+        demfun.set_nodata(self.fn, -9999)
         
         if len(self.filters) > 0:
-            utils.echo_msg('filtering')
             for f in self.filters:
                 fltr_val = None
                 split_val = None
@@ -378,36 +178,34 @@ class WaffledRaster(Waffled):
                     fltr_val = fltr_opts[1]
                 if len(fltr_opts) > 2:
                     split_val= fltr_opts[2]
-                    
-                self.filter_(fltr=fltr, fltr_val=fltr_val)
+
+                if demfun.filter_(self.fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val) == 0:
+                    os.rename('__tmp_fltr.tif', self.fn)
             
         if self.sample_inc is not None:
-            self.sample()
+            if demfun.sample(self.fn, '__tmp_sample.tif', self.inc, self.region)[1] == 0:
+                os.rename('__tmp_sample.tif', self.fn)
             
         if self.clip_poly is not None:
-            self.clip()
-            
-        if self.srcwin[0] != 0 or self.srcwin[1] != 0 or self.srcwin[2] != self.src_ds.RasterXSize or self.srcwin[3] != self.src_ds.RasterYSize:
-            self.cut('__tmp_cut__.tif')
-            self.close()
+            if demfun.clip(self.fn, src_ply=self.clip_poly)[1] == 0:
+                os.rename('__tmp_cut__.tif', '{}'.format(self.fn))
+                
+        if demfun.cut(self.fn, self.region, '__tmp_cut__.tif')[1] == 0:
             os.rename('__tmp_cut__.tif', '{}'.format(self.fn))
-        else:
-            self.close()
             
-        self.open(update=True)
-
-        self.set_nodata()
-        self.set_epsg()
-        self.set_metadata(cudem=self.cudem)
-        self.close()
+        demfun.set_metadata(self.fn, node=self.node, cudem=self.cudem)
+        demfun.set_epsg(self.fn, self.epsg)
         
         if self.fmt != 'GTiff':
-            self.translate()
+            out_dem = utils.gdal2gdal(self.fn, dst_fmt=self.fmt)
+            if out_dem is not None:
+                utils.remove_glob(self.fn)
             
 class WaffledVector(Waffled):
     """Providing a waffled VECTOR file processor."""
     
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         pass
 
     def set_metadata(self):
@@ -442,7 +240,6 @@ class Waffle:
         self.mask = mask
         self.clobber = clobber
         self.verbose = verbose
-
         self.gc = utils.config_check()
 
         if self.node == 'grid':
@@ -455,12 +252,13 @@ class Waffle:
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
             epsg=self.epsg).acquire_dataset() for dl in self.data]
 
+        self.data = [d for d in self.data if d is not None]
+        
         for d in self.data:
             d.parse()
 
         self.waffle_out = {}
         self.waffled = False
-
         out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
         
     def proc_region(self):
@@ -483,14 +281,6 @@ class Waffle:
             WaffledRaster(fn='{}_m.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region).process()
         self.waffled = True
 
-        # for out in self.waffle_out:
-        #     out.fmt = self.fmt
-        #     out.sample_inc = self.sample
-        #     out.filters = self.fltr
-        #     out.region = self.region
-        #     utils.echo_msg('processing {}'.format(out.fn))
-        #     out.process()
-                    
     def xyz_archive(self, src_xyz):
         ## update to new methods...!!
         if self.region is None:
@@ -523,7 +313,7 @@ class Waffle:
 
         xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.inc)
         ptArray = np.zeros((ycount, xcount))
-        ds_config = utils.gdal_set_infos(
+        ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
             gdal.GDT_Float32, -9999, 'GTiff')
         for this_xyz in src_xyz:
@@ -591,7 +381,7 @@ class GMTSurface(Waffle):
                  self.inc, self.name, self.tension, self.relaxation, self.lower_limit, self.upper_limit))
         out, status = utils.run_cmd(dem_surf_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
         
-        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region).process()
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region, filters=self.fltr).process()
         
 ## ==============================================
 ## Waffles GMT triangulate module
@@ -611,11 +401,12 @@ class GMTTriangulate(Waffle):
         
     def run(self):
         
-        dem_tri_cmd = ('gmt blockmean {} -I{:.10f}{} -V -r | gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r\
-        '.format(self.p_region.format('gmt'), self.inc, ' -Wi' if self.weights else '', self.p_region.format('gmt'), self.inc, self.name))
+        #dem_tri_cmd = ('gmt blockmean {} -I{:.10f}{} -V -r | gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r\
+        #'.format(self.p_region.format('gmt'), self.inc, ' -Wi' if self.weights else '', self.p_region.format('gmt'), self.inc, self.name))
+        dem_tri_cmd = ('gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(self.p_region.format('gmt'), self.inc, self.name))
         out, status = utils.run_cmd(dem_tri_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
 
-        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region).process()
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region, filters=self.fltr).process()
 
 ## ==============================================
 ## Waffles 'NUM grid' module
@@ -661,14 +452,34 @@ class WaffleFactory:
         'surface': {
             'name': 'surface',
             'datalist-p': True,
+            'description': '''SPLINE DEM via GMT surface\n
+Generate a DEM using GMT's surface command
+        
+< surface:tension=.35:relaxation=1.2:lower_limit=d:upper_limit=d >
+ :tension=[0-1] - Spline tension.
+ :relaxation=[val] - Spline relaxation factor.
+ :lower_limit=[val] - Constrain interpolation to lower limit.
+ :upper_limit=[val] - Constrain interpolation to upper limit.''',
         },
         'triangulate': {
             'name': 'triangulate',
-            'datalist-p': True
+            'datalist-p': True,
+            'description': '''TRIANGULATION DEM via GMT triangulate\n
+Generate a DEM using GMT's triangulate command.
+        
+< triangulate >''',
         },
         'num': {
             'name': 'num',
-            'datalist-p': True
+            'datalist-p': True,
+            'description': '''Uninterpolated DEM populated by <mode>.\n
+Generate an uninterpolated DEM using <mode> option.
+Using mode of 'A<mode>' uses GMT's xyz2grd command, 
+see gmt xyz2grd --help for more info.
+
+< num:mode=n >
+ :mode=[key] - specify mode of grid population: 
+  keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)''',
         },
     }
     
@@ -714,7 +525,6 @@ class WaffleFactory:
                           fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
                           archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
-    
     def acquire_module_by_name(self, mod_name, **kwargs):
         if mod_name == 'surface':
             return(self.acquire_surface(**kwargs))
@@ -731,8 +541,8 @@ class WaffleFactory:
 ## ==============================================
 _waffles_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in WaffleFactory()._modules])
-#_waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
-#_waffles_module_short_desc = lambda x: ', '.join(['{}'.format(key) for key in x])
+_waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
+    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
 
 waffles_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
 
@@ -747,7 +557,7 @@ Options:
   -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
 \t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s:.1111111s
   -F, --format\t\tOutput grid FORMAT. [GTiff]
-  -M, --module\t\tDesired DEM MODULE and options. (see available Modules below)
+  -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tsyntax is -M module:mod_opt=mod_val:mod_opt1=mod_val1:...
   -O, --output-name\tBASENAME for all outputs.
   -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
@@ -760,15 +570,9 @@ Options:
 \t\t\t3: Spike Filter at -T3:<stand-dev. threshhold>.
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
-\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry using Gaussian filter
-  -Z, --z-region\t\tRestrict data processing to records that fall within the z-region
-\t\t\tUse '-' to indicate no bounding range; e.g. -Z-/0 will restrict processing to data
-\t\t\trecords whose z value is below zero.
+\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
   -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
   -K, --chunk\t\tProcess the region in CHUNKs. -K<chunk-level>
-  -W, --w-region\tRestrict data processing to records that fall within the w-region (weight).
-\t\t\tUse '-' to indicate no bounding range; e.g. -W1/- will restrict processing to data
-\t\t\trecords whose weight value is at least 1.
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tgenerate a waffles_config JSON file using the --config flag.
 
@@ -813,11 +617,13 @@ def waffles_cli(argv = sys.argv):
     these_regions = []
     module = None
     wg_user = None
+    want_prefix = False
     status = 0
     i = 1
     wg = {}
     wg['verbose'] = True
     wg['sample'] = None
+    wg['fltr'] = []
     
     while i < len(argv):
         arg = argv[i]
@@ -831,13 +637,13 @@ def waffles_cli(argv = sys.argv):
         elif arg[:2] == '-M': module = str(arg[2:])
         elif arg == '--increment' or arg == '-E':
             incs = argv[i + 1].split(':')
-            wg['inc'] = utils.gmt_inc2inc(incs[0])
-            if len(incs) > 1: wg['sample'] = utils.gmt_inc2inc(incs[1])
+            wg['inc'] = utils.str2inc(incs[0])
+            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
             i = i + 1
         elif arg[:2] == '-E':
             incs = arg[2:].split(':')
-            wg['inc'] = utils.gmt_inc2inc(arg[2:].split(':')[0])
-            if len(incs) > 1: wg['sample'] = utils.gmt_inc2inc(incs[1])
+            wg['inc'] = utils.str2inc(arg[2:].split(':')[0])
+            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
         elif arg == '--outname' or arg == '-O':
             wg['name'] = argv[i + 1]
             i += 1
@@ -888,10 +694,10 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--config': want_config = True
         elif arg == '--modules' or arg == '-m':
             try:
-                if argv[i + 1] in _waffles_modules.keys():
-                    sys.stderr.write(_waffles_module_long_desc({k: _waffles_modules[k] for k in (argv[i + 1],)}))
-                else: sys.stderr.write(_waffles_module_long_desc(_waffles_modules))
-            except: sys.stderr.write(_waffles_module_long_desc(_waffles_modules))
+                if argv[i + 1] in WaffleFactory()._modules.keys():
+                    sys.stderr.write(_waffles_module_long_desc({k: WaffleFactory()._modules[k] for k in (argv[i + 1],)}))
+                else: sys.stderr.write(_waffles_module_long_desc(WaffleFactory()._modules))
+            except: sys.stderr.write(_waffles_module_long_desc(WaffleFactory()._modules))
             sys.exit(0)
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(waffles_cli_usage)

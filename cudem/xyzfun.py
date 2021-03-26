@@ -1,8 +1,8 @@
-### xyzs.py - CUDEM utilities and functions
+### xyzfun.py - CUDEM utilities and functions
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
-## xyzs.py is part of CUDEM
+## xyzfun.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
