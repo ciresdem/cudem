@@ -61,6 +61,8 @@ setuptools.setup(
         'scripts/gdal_findreplace.py',
         'scripts/gdal_query.py',
         'scripts/gdal_crop.py',
+        'scripts/gdal_cut.py',
+        'scripts/gdal_clip.py',
         'scripts/xyz_clip.py',
         'scripts/clip_xyz.sh',
         'scripts/create_datalist.sh',
