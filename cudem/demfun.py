@@ -330,7 +330,98 @@ def blur(src_dem, dst_dem, sf = 1):
         return(utils.gdal_write(smooth_array, dst_dem, ds_config))
     else: return([], -1)
 
-def filter_outliers(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
+def filter_outliers(src_gdal, dst_gdal, threshhold = None, chunk_size = None, chunk_step = None):
+    """scan a src_gdal file for outliers and remove them"""
+    
+    try:
+        ds = gdal.Open(src_gdal)
+    except: ds = None
+
+    if ds is not None:
+        tnd = 0
+        
+        ds_config = demfungather_infos(ds)
+        ds_band = ds.GetRasterBand(1)
+        ds_array = ds_band.ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
+        gt = ds_config['geoT']
+        if threshhold is None:
+            ds_std = np.std(ds_array)
+        else: ds_std = threshhold
+
+        driver = gdal.GetDriverByName('MEM')
+        mem_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+        mem_ds.SetGeoTransform(gt)
+        mem_ds.SetProjection(ds_config['proj'])
+        band = mem_ds.GetRasterBand(1)
+        band.SetNoDataValue(ds_config['ndv'])
+        band.WriteArray(ds_array)
+
+        ds = None
+        if chunk_size is None:
+            n_chunk = int(ds_config['nx'] * .005)
+            n_chunk = 10 if n_chunk < 10 else n_chunk
+        else: n_chunk = chunk_size
+        if chunk_step is None:
+            n_step = int(n_chunk/2)
+        else: n_step = chunk_step
+
+        utils.echo_msg('scanning {} for spikes with {}@{} MAX {}...'.format(src_gdal, n_chunk, n_step, ds_std))
+        for srcwin in demfun.yield_srcwin(src_gdal, n_chunk = n_chunk, step = n_step):
+            band_data = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            band_data[band_data == ds_config['ndv']] = np.nan
+            this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
+            dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
+
+            dst_config = demfun.copy_infos(ds_config)
+            dst_config['nx'] = srcwin[2]
+            dst_config['ny'] = srcwin[3]
+            dst_config['geoT'] = dst_gt
+            
+            if not np.all(band_data == band_data[0,:]):
+                while True:
+                    nd = 0
+                    srcwin_std = np.nanstd(band_data)
+                    if srcwin_std < ds_std: break
+                    
+                    srcwin_perc75 = np.nanpercentile(band_data, 75)
+                    srcwin_perc25 = np.nanpercentile(band_data, 25)
+                    iqr_p = (srcwin_perc75 - srcwin_perc25) * 1.5
+                    upper_limit = srcwin_perc75 + iqr_p
+                    lower_limit = srcwin_perc25 - iqr_p
+                    
+                    for i in range(0, srcwin[2]):
+                        for j in range(0, srcwin[3]):
+                            bandz = band_data[j][i]
+                            if bandz > upper_limit or bandz < lower_limit:
+                                ds_array[j+srcwin[1]][i+srcwin[0]] = ds_config['ndv']
+                                band.WriteArray(ds_array)
+                                band_data[j][i] = np.nan
+                                nd += 1
+                    tnd += nd
+                    if nd == 0: break
+                band_data = None
+                
+        utils.echo_msg('filtering {} spikes...'.format(tnd))
+        if tnd > 0:
+            driver = gdal.GetDriverByName('MEM')
+            tmp_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+            tmp_ds.SetGeoTransform(ds_config['geoT'])
+            tmp_ds.SetProjection(ds_config['proj'])
+            ds_band = tmp_ds.GetRasterBand(1)
+            ds_band.SetNoDataValue(ds_config['ndv'])
+            ds_band.WriteArray(ds_array)
+            result = gdal.FillNodata(targetBand=ds_band, maskBand=None, maxSearchDist=100,
+                                     smoothingIterations=4, callback=gdal.TermProgress)
+        
+            ds_array = ds_band.ReadAsArray()
+            tmp_ds = None
+
+        out, status = utils.gdal_write(ds_array, dst_gdal, ds_config)
+        mem_ds = None
+        return(out, status)
+    else: return(None)    
+    
+def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
                         chunk_size=None, chunk_step=None, slp=False):
     """scan a src_dem file for outliers and remove them"""
     

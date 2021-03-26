@@ -1,4 +1,4 @@
-### regions.py - DataLists IMproved
+### regions.py
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -24,17 +24,12 @@
 
 import os
 import sys
-
-## ==============================================
-## import gdal/numpy
-## ==============================================
 import ogr
 import osr
 import numpy as np
-
 from cudem import utils
 
-_version = '0.1.0'        
+__version__ = '0.1.0'
 
 ## ==============================================
 ##

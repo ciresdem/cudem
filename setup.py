@@ -54,10 +54,21 @@ setuptools.setup(
             'waffles = cudem.waffles:waffles_cli',
         ],
     },
-    #scripts = [
-    #],
-    #python_requires = '>=2.7, <3',
-    #project_urls = {
-    #    'Source': 'https://github.com/ciresdem/cudem',
-    #},
+    scripts = [
+        'scripts/gdal_null.py',
+        'scripts/gdal_outliers.py',
+        'scripts/xyz_clip.py',
+        'scripts/clip_xyz.sh',
+        'scripts/create_datalist.sh',
+        'scripts/create_outliers.sh',
+        'scripts/percentiles_minmax.py',
+        'scripts/outliers_shp.sh',
+        'scripts/usace_interp.sh',
+        'scripts/spatial-meta.sh',
+        'scripts/hillshade.sh',
+    ],
+    python_requires = '>=2.7',
+    project_urls = {
+        'Source': 'https://github.com/ciresdem/cudem',
+    },
 )
