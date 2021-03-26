@@ -886,7 +886,11 @@ def waffles_cli(argv = sys.argv):
         for key in mod_opts.keys():
             mod_opts[key] = [None if x == '' else x for x in mod_opts[key]]
         mod = opts[0]
-        mod_args = utils.args2dict(tuple(mod_opts[mod]))
+        try:
+            mod_args = utils.args2dict(tuple(mod_opts[mod]))
+        except:
+            utils.echo_error_msg('invalid module string: "{}"'.format(module))
+            sys.exit(-1)
     else: 
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a waffles -M module.''')
