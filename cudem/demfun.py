@@ -189,7 +189,10 @@ def split(src_dem, split_value = 0):
     
     dst_upper = os.path.join(os.path.dirname(src_dem), '{}_u.tif'.format(os.path.basename(src_dem)[:-4]))
     dst_lower = os.path.join(os.path.dirname(src_dem), '{}_l.tif'.format(os.path.basename(src_dem)[:-4]))
-    src_ds = gdal.Open(src_dem)
+    try:
+        src_ds = gdal.Open(src_dem)
+    except:
+        src_ds = None
     if src_ds is not None:
         src_config = gather_infos(src_ds)
         dst_config = copy_infos(src_config)
@@ -199,6 +202,7 @@ def split(src_dem, split_value = 0):
         utils.gdal_write(ua, dst_upper, dst_config)
         utils.gdal_write(la, dst_lower, dst_config)
         ua = la = ds_arr = src_ds = None
+        src_ds = None
         return([dst_upper, dst_lower])
     else: return(None)
 

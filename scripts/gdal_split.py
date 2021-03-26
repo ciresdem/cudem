@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-### gdal_clip.py
+### gdal_split.py
 ##
-## Copyright (c) 2018 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2018 - 2021 CIRES DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -20,69 +20,72 @@
 ##
 ### Commentary:
 ##
-## clip a gdal grid using ogr polygon
+## Split a gdal grid by value.
 ##
 ### Code:
 
 import os
 import sys
+import numpy as np
+from gdalconst import *
+from osgeo import osr
 from osgeo import gdal
 from cudem import utils
 from cudem import demfun
 
-_version = '0.0.6'
-_usage = '''gdal_clip.py ({}): clip a gdal grid using vector file.
+_version = "0.1.1"
 
-usage: gdal_clip.py [ src_gdal src_ogr [ OPTIONS ] ]
+_usage = '''gdal_split.py: Split the topo from a gdal file (>0)
 
-  src_gdal\t\tThe input raster file-name
-  src_ogr\t\tThe input vector file-name
+usage: gdal_split.py [ -s [ args ] ] [ file ]
 
- Options:
+Options:
+  file\t\tThe input DEM file-name
 
-  -i, --invert\tInvert the clip
-  --help\tPrint the usage text
-  --version\tPrint the version information
+  -split\tValue to split [0]
+  -help\t\tPrint the usage text
+  -version\tPrint the version information
 
- Examples:
- % gdal_clip.py input.tif clip.shp
+Example:
+gdal_split.py input.tif
+gdal_split.py input.tif -split -1
 
-CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
+gdal_split.py v.{}
 '''.format(_version)
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
+    
     elev = None
-    src_ply = None
-    want_invert = False
+    split_value = 0
+    outFormat = 'GTiff'
+    
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        elif arg == '-i' or arg == '--invert':  want_invert = True
+        if arg == '-s' or arg == '-split' or arg == '--split':
+            split_value = float(sys.argv[i+1])
+            i = i + 1
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
-            sys.stderr.write('{}\n'.format(_version))
+            sys.stderr.write('gdal_split.py v.{}'.format(_version))
             sys.exit(1)
-        elif elev is None: elev = arg
-        elif src_ply is None: src_ply = arg
+        elif elev is None:
+            elev = arg
         else:
             sys.stderr.write(_usage)
             sys.exit(1)
+
         i = i + 1
 
-    if elev is None or not os.path.exists(elev):
+    if elev is None:
         sys.stderr.write(_usage)
-        utils.echo_error_msg('you must enter a valid input raster file')
-        sys.exit(1)
-    else:
-        output_name = elev[:-4] + '_cut.tif'
-
-    if src_ply is None or not os.path.exists(src_ply):
-        sys.stderr.write(_usage)
-        utils.echo_error_msg('you must enter a valid input vector file')
+        utils.echo_error_msg('you must enter an input file')
         sys.exit(1)
 
-    out, status = demfun.clip(elev, output_name, src_ply=src_ply, invert=want_invert)
-    
+    if not os.path.exists(elev):
+        utils.echo_error_msg("{} is not a valid file".format(elev))
+    else: demfun.split(elev, split_value)
+
 ### End
