@@ -289,6 +289,38 @@ def sample(src_dem, dst_dem, sample_inc, src_region):
 
     return(out, status)
 
+def chunks(src_dem, n_chunk):
+    """split `src_fn` GDAL file into chunks with `n_chunk` cells squared.
+
+    returns a list of chunked filenames.
+    """
+    
+    o_chunks = []
+    try:
+        src_ds = gdal.Open(src_dem)
+    except: src_ds = None
+    if src_ds is not None:
+        ds_config = gdal_gather_infos(src_ds)
+        band = src_ds.GetRasterBand(1)
+        gt = ds_config['geoT']
+        c_n = 0
+        for srcwin in yield_srcwin(src_fn, n_chunk = n_chunk, step = n_chunk):
+            this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
+            dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
+            band_data = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            if not np.all(band_data == band_data[0,:]):
+                dst_config = gdal_cpy_infos(ds_config)
+                dst_config['nx'] = srcwin[2]
+                dst_config['ny'] = srcwin[3]
+                dst_config['geoT'] = dst_gt
+                this_region = regions.gt2region(dst_config)
+                o_chunk = '{}_chnk{}.tif'.format(os.path.basename(src_fn).split('.')[0], c_n)
+                dst_fn = os.path.join(os.path.dirname(src_fn), o_chunk)
+                o_chunks.append(dst_fn)
+                utils.gdal_write(band_data, dst_fn, dst_config)
+                c_n += 1                
+    return(o_chunks)
+
 def yield_srcwin(src_dem, n_chunk = 10, step = 5):
     """yield source windows in n_chunks at step"""
     

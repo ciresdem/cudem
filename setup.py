@@ -60,6 +60,7 @@ setuptools.setup(
         'scripts/gdal_nan2null.py',
         'scripts/gdal_findreplace.py',
         'scripts/gdal_query.py',
+        'scripts/gdal_chunk.py',
         'scripts/gdal_crop.py',
         'scripts/gdal_cut.py',
         'scripts/gdal_clip.py',
