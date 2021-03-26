@@ -57,7 +57,7 @@ if __name__ == '__main__':
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        elif arg == '-i' or arg == '--invert':  want_invert = True
+        if arg == '-i' or arg == '--invert':  want_invert = True
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
