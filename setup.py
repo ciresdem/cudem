@@ -68,6 +68,8 @@ setuptools.setup(
         'scripts/spatial-meta.sh',
         'scripts/hillshade.sh',
         'scripts/colortable.py',
+        'scripts/coastline2xyz.sh',
+        'scripts/mk-povray-template.sh',
     ],
     python_requires = '>=2.7',
     project_urls = {
