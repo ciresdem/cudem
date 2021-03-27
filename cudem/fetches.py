@@ -1334,6 +1334,21 @@ def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, warp = N
     src_mask = None
     msk_band = None
     if verbose: echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+    
+def gdal_get_epsg(src_ds):
+    '''returns the EPSG of the given gdal data-source'''
+    
+    ds_config = gdal_gather_infos(src_ds)
+    ds_region = gt2region(ds_config)
+    src_srs = osr.SpatialReference()
+    try:
+        src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    except: pass
+    src_srs.ImportFromWkt(ds_config['proj'])
+    src_srs.AutoIdentifyEPSG()
+    srs_auth = src_srs.GetAuthorityCode(None)
+
+    return(srs_auth)
 
 ## =============================================================================
 ## xyzfun (old)
@@ -2541,7 +2556,7 @@ class dc:
                 src_ds = None
             
             if src_ds is not None:
-                srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
+                srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
                 for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = True, z_region = z_region):
                     yield(xyz)
             src_ds = None
@@ -2693,18 +2708,17 @@ class nos:
                 #[remove_glob(x) for x in nos_fns]
 
             elif dt == 'grid_bag':
-                src_bags = p_unzip(src_nos, ['gdal', 'tif', 'img', 'bag', 'asc'])
-
+                src_bags = p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:
                     nos_f = '{}.tmp'.format(os.path.basename(src_bag).split('.')[0])
-                    try:
-                        src_ds = gdal.Open(src_bag)
-                        srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
-                        with open(nos_f, 'w') as cx:
-                            for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, z_region = z_region):
-                                yield(xyz)
-                        src_ds = None
-                    except: pass
+                    #try:
+                    src_ds = gdal.Open(src_bag)
+                    srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
+                    with open(nos_f, 'w') as cx:
+                        for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, z_region = z_region):
+                            yield(xyz)
+                    src_ds = None
+                    #except: pass
                 remove_glob(*src_bags)
         remove_glob(src_nos)
         
@@ -2967,7 +2981,7 @@ community preparedness.'''
             src_ds = None
 
         if src_ds is not None:
-            srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_getEPSG(src_ds)))
+            srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
             for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                 yield(xyz)
         src_ds = None
@@ -3523,7 +3537,7 @@ and deliver topographic information for the Nation.'''
                     try:
                         src_ds = gdal.Open(src_tnm)
                         if src_ds is not None:
-                            srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_getEPSG(src_ds)))
+                            srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
                             for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                                 if xyz[2] != 0:
                                     yield(xyz)
@@ -4079,7 +4093,7 @@ class hrdem():
             src_ds = None
 
         if src_ds is not None:
-            srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_getEPSG(src_ds)))
+            srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
             for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                 yield(xyz)
         src_ds = None
