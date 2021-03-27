@@ -67,6 +67,7 @@ setuptools.setup(
         'scripts/gdal_split.py',
         'scripts/gdal_percentile.py',
         'scripts/gdal_histogram.py',
+        'scripts/gdal_minmax.py',
         'scripts/ddms.py',
         'scripts/has_nulls.py',
         'scripts/xyz_clip.py',

@@ -704,6 +704,9 @@ Options:
 \t\t\tAppend :zmin/zmax/[ wmin/wmax ] to the file path to extended REGION.
   -P, --s_epsg\t\tSet the projection EPSG code of the datalist
   -W, --t_epsg\t\tSet the output warp projection EPSG code
+  -B, --buffer\t\tBuffer the region with a buffer-value.
+  -e, --echo\t\tEcho the <processed> region
+  -n, --name\t\tPrint the region as a name
 
   --quiet\t\tLower the verbosity to a quiet
 
@@ -718,16 +721,19 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
            version = __version__)
 
 def regions_cli(argv = sys.argv):
-    """run datalists from command-line
+    """run regions from command-line
 
-    See `datalists_cli_usage` for full cli options.
+    See `regions_usage` for full cli options.
     """
 
     epsg = None
     warp = None
     i_regions = []
     these_regions = []
-    want_verbose = True    
+    want_verbose = True
+    echo = False
+    echo_name = False
+    bv = None
     
     ## ==============================================
     ## parse command line arguments.
@@ -746,6 +752,13 @@ def regions_cli(argv = sys.argv):
         elif arg == '-t_epsg' or arg == '--t_epsg' or arg == '-W':
             warp = argv[i + 1]
             i = i + 1
+        elif arg == '-B' or arg == '--buffer':
+            bv = utils.int_or(argv[i+1])
+            i = i + 1
+        elif arg == '-e' or arg == '--echo' or arg == '-ee':
+            echo = True
+        elif arg == '-n' or arg == '--name':
+            echo_fn = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
@@ -755,7 +768,7 @@ def regions_cli(argv = sys.argv):
             print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
             sys.exit(1)
         elif arg[0] == '-':
-            print(datalists_usage)
+            print(regions_usage)
             sys.exit(0)
         else: dls.append(arg)
         i = i + 1
@@ -778,6 +791,15 @@ def regions_cli(argv = sys.argv):
         if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
     
     for rn, this_region in enumerate(these_regions):
-        this_region.export_as_ogr('test.shp')
+        if bv is not None:
+            this_region.buffer(bv)
+            
+        if echo:
+            print(this_region.format('gmt'))
+        elif echo_fn:
+            print(this_region.format('fn'))
+
+        else:
+            this_region.export_as_ogr('test.shp')
         
 ### End
