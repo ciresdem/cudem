@@ -33,7 +33,7 @@ setuptools.setup(
     author = 'CIRES Coastal DEM Team',
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
     packages = setuptools.find_packages(),#['cudem'],  #same as name
-    #package_data = {'cudem': ['data/*.geojson']},
+    package_data = {'cudem': ['data/*.geojson']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',
@@ -52,6 +52,7 @@ setuptools.setup(
             'dlim = cudem.dlim:datalists_cli',
             'regions = cudem.regions:regions_cli',
             'waffles = cudem.waffles:waffles_cli',
+            'fetches = cudem.fetches:fetches_cli',
         ],
     },
     scripts = [
