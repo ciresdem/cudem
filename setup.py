@@ -65,6 +65,7 @@ setuptools.setup(
         'scripts/gdal_cut.py',
         'scripts/gdal_clip.py',
         'scripts/gdal_split.py',
+        'scripts/gdal_percentile.py',
         'scripts/xyz_clip.py',
         'scripts/clip_xyz.sh',
         'scripts/percentiles_minmax.py',
@@ -77,6 +78,7 @@ setuptools.setup(
         'scripts/create_datalist.sh',
         'scripts/create_outliers.sh',
         'scripts/create_povray_template.sh',
+        'scripts/tif2chunks2xyz.sh',
     ],
     python_requires = '>=2.7',
     project_urls = {

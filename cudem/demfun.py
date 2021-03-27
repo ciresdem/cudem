@@ -692,4 +692,26 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None):
         return(0)
     else: return(-1)
 
+def percentile(src_gdal, perc = 95):
+    """calculate the `perc` percentile of src_fn gdal file.
+
+    return the calculated percentile"""
+    
+    try:
+        ds = gdal.Open(src_gdal)
+    except: ds = None
+    if ds is not None:
+        ds_array = np.array(ds.GetRasterBand(1).ReadAsArray())
+        x_dim = ds_array.shape[0]
+        ds_array_flat = ds_array.flatten()
+        ds_array = ds_array_flat[ds_array_flat != 0]
+        if len(ds_array) > 0:
+            p = np.percentile(ds_array, perc)
+            #percentile = 2 if p < 2 else p
+        else: p = 2
+        ds = ds_array = ds_array_flat = None
+        return(p)
+    else: return(None)
+
+    
 ### End
