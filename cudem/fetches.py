@@ -26,43 +26,583 @@
 import os
 import sys
 import time
+import datetime
 import copy
-
-## ==============================================
-## networking/etc
-## ==============================================
+import glob
+import math
+import subprocess
+import zipfile
+import gzip
 import requests
 import ftplib
 import urllib
 import lxml.html as lh
 import lxml.etree
 import json
-
-## ==============================================
-## queues and threading
-## ==============================================
 import threading
+from osgeo import osr
+from osgeo import ogr
+from osgeo import gdal
+import numpy as np
 try:
     import Queue as queue
 except: import queue as queue
 
-## ==============================================
-## import gdal/numpy
-## ==============================================
-import osr
-import ogr
-import gdal
-import numpy as np
+_version = '0.7.0-standalone'
+
+## =============================================================================
+## utils (old)
+## =============================================================================
+def inc2str_inc(inc):
+    """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
+
+    Args:
+      inc (float): a gridding increment
+
+    Returns:
+      str: a str representation of float(inc)
+    """
+    
+    import fractions
+    return(str(fractions.Fraction(str(inc * 3600)).limit_denominator(10)).replace('/', ''))
+
+def this_date():
+    """get current data
+
+    Returns:
+      str: the current date
+    """
+    
+    return(datetime.datetime.now().strftime('%Y%m%d%H%M%S'))
+
+def this_year():
+    """get the current year
+    
+    Returns
+      str: the current year
+    """
+    
+    return(datetime.datetime.now().strftime('%Y'))
+
+def base_name(instr, extension):
+    """get the filename basename
+
+    Args:
+      instr (str): the pathname string
+      extension (str): the pathname extension
+
+    Returns:
+      str: the basename of a file-string
+    """
+    
+    return(instr[:-len(extension)])
+
+def args2dict(args, dict_args={}):
+    """convert list of arg strings to dict.
+    
+    Args:
+      args (list): a list of ['key=val'] pairs
+      dict_args (dict): a dict to append to
+
+    Returns:
+      dict: a dictionary of the key/values
+    """
+    
+    for arg in args:
+        p_arg = arg.split('=')
+        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else True if p_arg[1].lower() == 'true' else None if p_arg[1].lower() == 'none' else p_arg[1]
+    return(dict_args)
+
+def int_or(val, or_val = None):
+    """return val if val is integer
+
+    Args:
+      val (?): input value to test
+      or_val (?): value to return if val is not an int
+
+    Returns:
+      ?: val as int otherwise returns or_val
+    """
+    
+    try:
+        return(int(val))
+    except: return(or_val)
+
+def float_or(val, or_val = None):
+    """return val if val is integer
+
+    Args:
+      val (?): input value to test
+      or_val (?): value to return if val is not an int
+
+    Returns:
+      ?: val as int otherwise returns or_val
+    """
+    
+    try:
+        return(float(val))
+    except: return(or_val)
+
+def gdal_fext(src_drv_name):
+    """find the common file extention given a GDAL driver name
+    older versions of gdal can't do this, so fallback to known standards.
+
+    Args:
+      src_drv_name (str): a source GDAL driver name
+
+    Returns:
+      list: a list of known file extentions or None
+    """
+    
+    fexts = None
+    try:
+        drv = gdal.GetDriverByName(src_drv_name)
+        if drv.GetMetadataItem(gdal.DCAP_RASTER): fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+        if fexts is not None: return(fexts.split()[0])
+        else: return(None)
+    except:
+        if src_drv_name.lower() == 'gtiff': fext = 'tif'
+        elif src_drv_name == 'HFA': fext = 'img'
+        elif src_drv_name == 'GMT': fext = 'grd'
+        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
+        else: fext = 'gdal'
+        return(fext)
+
+def remove_glob(*args):
+    """glob `glob_str` and os.remove results, pass if error
+    
+    Args:
+      *args (str): any number of pathname or dirname strings
+
+    Returns:
+      int: 0
+    """
+    
+    for glob_str in args:
+        try:
+            globs = glob.glob(glob_str)
+            for g in globs:
+                if os.path.isdir(g):
+                    remove_globs('{}/*'.format(g))
+                    os.removedirs(g)
+                else: os.remove(g)
+        except: pass
+    return(0)
+
+def p_unzip(src_file, exts=None):
+    """unzip/gunzip src_file based on `exts`
+    
+    Args:
+      src_file (str): a zip/gzip filename string
+      exts (list): a list of extensions to extract
+
+    Returns:
+      list: a list of the extracted files
+    """
+    
+    src_procs = []
+    if src_file.split('.')[-1].lower() == 'zip':
+        with zipfile.ZipFile(src_file) as z:
+            zfs = z.namelist()
+            for ext in exts:
+                for zf in zfs:
+                    if ext == zf.split('.')[-1]:
+                        #if ext in zf:
+                        src_procs.append(os.path.basename(zf))
+                        with open(os.path.basename(zf), 'wb') as f:
+                            f.write(z.read(zf))
+    elif src_file.split('.')[-1] == 'gz':
+        tmp_proc = gunzip(src_file)
+        if tmp_proc is not None:
+            for ext in exts:
+                if ext == tmp_proc.split('.')[-1]:
+                    src_procs.append(os.path.basename(tmp_proc))
+                    break
+                else: remove_glob(tmp_proc)
+    else:
+        for ext in exts:
+            if ext == src_file.split('.')[-1]:
+                src_procs.append(src_file)
+                break
+    return(src_procs)
+
+def euc_dst(pnt0, pnt1):
+    """return the distance between pnt0 and pnt1,
+    using the euclidean formula.
+
+    `pnts` are geographic and result is in meters.
+
+    Args:
+      pnt0 (list): an xyz data list
+      pnt1 (list): an xyz data list
+
+    Returns:
+      float: the distance beteween pnt0 and pnt1
+    """
+    
+    rad_m = 637100
+    distance = math.sqrt(sum([(a-b) ** 2 for a, b in zip(pnt0, pnt1)]))
+    return(rad_m * distance)
+
+def _geo2pixel(geo_x, geo_y, geoTransform):
+    """convert a geographic x,y value to a pixel location of geoTransform
+
+    Args:
+      geo_x (float): geographic x coordinate
+      geo_y (float): geographic y coordinate
+      geoTransform (list): a geo-transform list describing a raster
+
+    Returns:
+      list: a list of the pixel values [pixel-x, pixel-y]
+    """
+    
+    if geoTransform[2] + geoTransform[4] == 0:
+        pixel_x = ((geo_x-geoTransform[0]) / geoTransform[1])#w + .5
+        pixel_y = ((geo_y-geoTransform[3]) / geoTransform[5])# + .5
+    else: pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geoTransform))
+    return(int(pixel_x), int(pixel_y))
+
+def _geo2pixel_affine(geo_x, geo_y, geoTransform):
+    """convert a geographic x,y value to a pixel location of geoTransform
+
+    note: use _geo2pixel instead
+
+    Args:
+      geo_x (float): geographic x coordinate
+      geo_y (float): geographic y coordinate
+      geoTransform (list): a geo-transform list describing a raster
+
+    Returns:
+      list: a list of the pixel values [pixel-x, pixel-y]
+    """
+    
+    import affine
+    forward_transform = affine.Affine.from_gdal(*geoTransform)
+    reverse_transform = ~forward_transform
+    pixel_x, pixel_y = reverse_transform * (geo_x, geo_y)
+    pixel_x, pixel_y = int(pixel_x + 0.5), int(pixel_y + 0.5)
+    return(pixel_x, pixel_y)
+
+def _pixel2geo(pixel_x, pixel_y, geoTransform):
+    """convert a pixel location to geographic coordinates given geoTransform
+
+    Args:
+      pixel_x (int): the x pixel value
+      pixel_y (int): the y pixel value
+      geoTransform (list): a geo-transform list describing a raster
+    
+    Returns:
+      list: [geographic-x, geographic-y]
+    """
+    
+    geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geoTransform)
+    return(geo_x, geo_y)
+
+def _apply_gt(in_x, in_y, geoTransform):
+    """apply geotransform to in_x,in_y
+    
+    Args:
+      in_x (int): the x pixel value
+      in_y (int): the y pixel value
+      geoTransform (list): a geo-transform list describing a raster
+
+    Returns:
+      list: [geographic-x, geographic-y]
+    """
+    
+    out_x = geoTransform[0] + (int(in_x + 0.5)*geoTransform[1]) + (int(in_y + 0.5)*geoTransform[2])
+    out_y = geoTransform[3] + (int(in_x + 0.5)*geoTransform[4]) + (int(in_y + 0.5)*geoTransform[5])
+
+    return(out_x, out_y)
+
+def _invert_gt(geoTransform):
+    """invert the geotransform
+    
+    Args:
+      geoTransform (list): a geo-transform list describing a raster
+
+    Returns:
+      list: a geo-transform list describing a raster
+    """
+    
+    det = (geoTransform[1]*geoTransform[5]) - (geoTransform[2]*geoTransform[4])
+    if abs(det) < 0.000000000000001: return
+    invDet = 1.0 / det
+    outGeoTransform = [0, 0, 0, 0, 0, 0]
+    outGeoTransform[1] = geoTransform[5] * invDet
+    outGeoTransform[4] = -geoTransform[4] * invDet
+    outGeoTransform[2] = -geoTransform[2] * invDet
+    outGeoTransfrom[5] = geoTransform[1] * invDet
+    outGeoTransform[0] = (geoTransform[2] * geoTransform[3] - geoTransform[0] * geoTransform[5]) * invDet
+    outGeoTransform[3] = (-geoTransform[1] * geoTransform[3] + geoTransform[0] * geoTransform[4]) * invDet
+    return(outGeoTransform)
+
+def geoms_intersect_p(geom_a, geom_b):
+    """check if OGR geometries `geom_a` and `geom_b` intersect
+
+    Args:
+      geom_a (ogr-geom): an ogr geometry
+      geom_b (ogr-geom): an ogr geometry
+
+    Returns:
+      bool: True for intersection
+    """
+    
+    if geom_a is not None and geom_b is not None:
+        if geom_a.Intersects(geom_b):
+            return(True)
+        else: return(False)
+    else: return(True)
+
+def create_wkt_polygon(coords, xpos=1, ypos=0):
+    """convert coords to Wkt
+
+    Args:
+      coords (list): x/y geographic coords
+      xpos (int): the position of the x value in coords
+      ypos (int): the position of the y value in corrds
+
+    Returns:
+      wkt: polygon as wkt
+    """
+    
+    ring = ogr.Geometry(ogr.wkbLinearRing)
+    for coord in coords: ring.AddPoint(coord[xpos], coord[ypos])
+    poly = ogr.Geometry(ogr.wkbPolygon)
+    poly.AddGeometry(ring)
+    poly_wkt = poly.ExportToWkt()
+    poly = None
+    return(poly_wkt)
+
+def wkt2geom(wkt):
+    """transform a wkt to an ogr geometry
+    
+    Args:
+      wkt (wkt): a wkt geometry
+
+    Returns:
+      ogr-geom: the ogr geometry
+    """
+    
+    return(ogr.CreateGeometryFromWkt(wkt))
+
+def sr_wkt(epsg, esri = False):
+    """convert an epsg code to wkt
+
+    Returns:
+      (str): wkt or None
+    """
+    
+    try:
+        sr = osr.SpatialReference()
+        sr.ImportFromEPSG(int(epsg))
+        if esri: sr.MorphToESRI()
+        return(sr.ExportToWkt())
+    except: return(None)
 
 ## ==============================================
-## import cudem
+##
+## system cmd verification and configs.
+##
+## run_cmd - run a system command as a subprocess
+## and return the return code and output
+##
+## yield_cmd - run a system command as a subprocess
+## and yield the output
+##
 ## ==============================================
-from cudem import utils
-#from cudem import regions
-#from cudem import demfun
-#from cudem import xyzfun
+cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in os.environ['PATH'].split(os.pathsep))
 
-_version = '0.6.5'
+def run_cmd(cmd, data_fun=None, verbose=False):
+    """Run a system command while optionally passing data.
+
+    `data_fun` should be a function to write to a file-port:
+    >> data_fun = lambda p: datalist_dump(wg, dst_port = p, ...)
+
+    Args:
+      cmd (str): a system command to run
+      data_fun (lambda): a lambda function taking an output port as arg.
+      verbose (bool): increase verbosity
+
+    Returns:
+      list: [command-output, command-return-code]
+    """
+    
+    if verbose: _prog = _progress('running cmd: {}...'.format(cmd.rstrip()[:72]))
+    if data_fun is not None:
+        pipe_stdin = subprocess.PIPE
+    else: pipe_stdin = None
+    if verbose:
+        p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True)
+    else: p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+
+    if data_fun is not None:
+        if verbose: echo_msg('piping data to cmd subprocess...')
+        data_fun(p.stdin)
+        p.stdin.close()
+    
+    while p.poll() is None:
+        if verbose:
+            time.sleep(2)
+            _prog.update()
+
+    out = p.stdout.read()
+    if not verbose: p.stderr.close()
+    p.stdout.close()
+    if verbose: _prog.end(p.returncode, 'ran cmd: {}... and returned {}.'.format(cmd.rstrip()[:72], p.returncode))
+    return(out, p.returncode)
+
+def yield_cmd(cmd, data_fun=None, verbose=False):
+    """Run a system command while optionally passing data.
+
+    `data_fun` should be a function to write to a file-port:
+    >> data_fun = lambda p: datalist_dump(wg, dst_port = p, ...)
+
+    Args:
+      cmd (str): a system command to run
+      data_fun (lambda): a lambda function taking an output port as arg.
+      verbose (bool): increase verbosity
+
+    Yields:
+      str: each line of output from the cmd
+    """
+    
+    if verbose: echo_msg('running cmd: {}...'.format(cmd.rstrip()))    
+    if data_fun is not None:
+        pipe_stdin = subprocess.PIPE
+    else: pipe_stdin = None
+    p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True)
+    
+    if data_fun is not None:
+        if verbose: echo_msg('piping data to cmd subprocess...')
+        data_fun(p.stdin)
+        p.stdin.close()
+
+    while p.poll() is None:
+        line = p.stdout.readline().decode('utf-8')
+        if not line: break
+        else: yield(line)
+    line = p.stdout.read().decode('utf-8')
+    p.stdout.close()
+    if verbose: echo_msg('ran cmd: {} and returned {}.'.format(cmd.rstrip(), p.returncode))
+
+## ==============================================
+##
+## stderr messaging and simple progress indicator
+##
+## ==============================================
+def echo_warning_msg2(msg, prefix='waffles'):
+    """echo warning msg to stderr using `prefix`
+
+    >> echo_warning_msg2('message', 'test')
+    test: warning, message
+    
+    Args:
+      msg (str): a message
+      prefix (str): a prefix for the message
+    """
+    
+    sys.stderr.flush()
+    sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('{}: \033[31m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+
+def echo_error_msg2(msg, prefix='waffles'):
+    """echo error msg to stderr using `prefix`
+
+    >> echo_error_msg2('message', 'test')
+    test: error, message
+
+    Args:
+      msg (str): a message
+      prefix (str): a prefix for the message
+    """
+    
+    sys.stderr.flush()
+    sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+
+def echo_msg2(msg, prefix='waffles', nl=True):
+    """echo `msg` to stderr using `prefix`
+
+    >> echo_msg2('message', 'test')
+    test: message
+    
+    Args:
+      msg (str): a message
+      prefix (str): a prefix for the message
+      nl (bool): append a newline to the message
+    """
+    
+    sys.stderr.flush()
+    sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+    sys.stderr.flush()
+
+## ==============================================
+## echo message `m` to sys.stderr using
+## auto-generated prefix
+## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
+## ==============================================
+echo_msg = lambda m: echo_msg2(m, prefix=os.path.basename(sys.argv[0]))
+echo_msg_inline = lambda m: echo_msg2(m, prefix=os.path.basename(sys.argv[0]), nl = False)
+
+## ==============================================
+## echo error message `m` to sys.stderr using
+## auto-generated prefix
+## ==============================================
+echo_error_msg = lambda m: echo_error_msg2(m, prefix=os.path.basename(sys.argv[0]))
+echo_warning_msg = lambda m: echo_warning_msg2(m, prefix=os.path.basename(sys.argv[0]))
+
+class _progress:
+    """geomods minimal progress indicator"""
+
+    def __init__(self, message=None):
+        self.tw = 7
+        self.count = 0
+        self.pc = self.count % self.tw
+        self.opm = message
+        self.add_one = lambda x: x + 1
+        self.sub_one = lambda x: x - 1
+        self.spin_way = self.add_one
+        self.spinner = ['*     ', '**    ', '***   ', ' ***  ', '  *** ', '   ***', '    **', '     *']
+        
+        self.perc = lambda p: ((p[0]/p[1]) * 100.)
+        
+        if self.opm is not None:
+            self._clear_stderr()
+            sys.stderr.write('\r {}  {:40}\n'.format(" " * (self.tw - 1), self.opm))
+        
+    def _switch_way(self):
+        self.spin_way = self.sub_one if self.spin_way == self.add_one else self.add_one
+
+    def _clear_stderr(self, slen = 79):
+        sys.stderr.write('\x1b[2K\r')
+        sys.stderr.flush()
+
+    def update_perc(self, p, msg=None):
+        if len(p) == 2:
+            self._clear_stderr()
+            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {:40}\r'.format(self.perc(p), msg if msg is not None else self.opm))
+        else: self.update()
+        
+    def update(self, msg=None):
+
+        self.pc = (self.count % self.tw)
+        self.sc = (self.count % (self.tw + 1))
+            
+        self._clear_stderr()
+        sys.stderr.write('\r[\033[36m{:6}\033[m] {:40}\r'.format(self.spinner[self.sc], msg if msg is not None else self.opm))
+        
+        if self.count == self.tw: self.spin_way = self.sub_one
+        if self.count == 0: self.spin_way = self.add_one
+        self.count = self.spin_way(self.count)
+
+    def end(self, status, end_msg=None):
+        self._clear_stderr()
+        if end_msg is None: end_msg = self.opm
+        if status != 0:
+            sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {:40}\n'.format('fail', end_msg))
+        else: sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {:40}\n'.format('ok', end_msg))
 
 ## =============================================================================
 ## regions (old)
@@ -121,7 +661,7 @@ def str2region(region_str):
     except ValueError:
         this_region = gdal_ogr_multi_poly(region_str)
     except Exception as e:
-        utils.echo_error_msg('failed to parse region(s), {}'.format(e))
+        echo_error_msg('failed to parse region(s), {}'.format(e))
         this_region = None
 
     if this_region is None:
@@ -346,20 +886,20 @@ def regions_sort(trainers, t_num=25, verbose=False):
         np.random.shuffle(train)
         train_total = len(train)
         while True:
-            if verbose: utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
+            if verbose: echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
             if len(train) == 0: break
             this_center = region_center(train[0][0])
             train_d.append(train[0])
             train = train[1:]
             if len(train_d) > t_num or len(train) == 0: break
-            dsts = [utils.euc_dst(this_center, region_center(x[0])) for x in train]
+            dsts = [euc_dst(this_center, region_center(x[0])) for x in train]
             min_dst = np.percentile(dsts, 50)
-            d_t = lambda t: utils.euc_dst(this_center, region_center(t[0])) > min_dst
+            d_t = lambda t: euc_dst(this_center, region_center(t[0])) > min_dst
             np.random.shuffle(train)
             train.sort(reverse=True, key=d_t)
-        if verbose: utils.echo_msg(' '.join([region_format(x[0], 'gmt') for x in train_d[:t_num]]))
+        if verbose: echo_msg(' '.join([region_format(x[0], 'gmt') for x in train_d[:t_num]]))
         train_sorted.append(train_d)
-    if verbose: utils.echo_msg_inline('sorting training tiles [OK]\n')
+    if verbose: echo_msg_inline('sorting training tiles [OK]\n')
     return(train_sorted)
 
 def z_region_valid_p(z_region):
@@ -431,8 +971,8 @@ def region2gt(region, inc, y_inc=None):
         y_inc = inc * -1.
         
     dst_gt = (region[0], inc, 0, region[3], 0, y_inc)    
-    this_origin = utils._geo2pixel(region[0], region[3], dst_gt)
-    this_end = utils._geo2pixel(region[1], region[2], dst_gt)
+    this_origin = _geo2pixel(region[0], region[3], dst_gt)
+    this_end = _geo2pixel(region[1], region[2], dst_gt)
     this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
     return(this_size[0], this_size[1], dst_gt)
 
@@ -643,8 +1183,8 @@ def gdal_srcwin(src_ds, region):
     ds_config = gdal_gather_infos(src_ds)
     geoT = ds_config['geoT']
 
-    this_origin = [0 if x < 0 else x for x in utils._geo2pixel(region[0], region[3], geoT)]
-    this_end = [0 if x < 0 else x for x in utils._geo2pixel(region[1], region[2], geoT)]
+    this_origin = [0 if x < 0 else x for x in _geo2pixel(region[0], region[3], geoT)]
+    this_end = [0 if x < 0 else x for x in _geo2pixel(region[1], region[2], geoT)]
     this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
     if this_size[0] > ds_config['nx'] - this_origin[0]: this_size[0] = ds_config['nx'] - this_origin[0]
     if this_size[1] > ds_config['ny'] - this_origin[1]: this_size[1] = ds_config['ny'] - this_origin[1]
@@ -709,7 +1249,7 @@ def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, warp = N
             z = band_data[x_i]
             if '{:g}'.format(z) not in nodata:
                 ln += 1
-                geo_x,geo_y = utils._pixel2geo(x, y, gt)
+                geo_x,geo_y = _pixel2geo(x, y, gt)
                 if warp is not None:
                     point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
                     point.Transform(dst_trans)
@@ -720,7 +1260,7 @@ def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, warp = N
     band = None
     src_mask = None
     msk_band = None
-    if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+    if verbose: echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
 
 ## xyzfun (old)
 
@@ -794,10 +1334,10 @@ def xyz_parse_line(xyz_line, xyz_c = _xyz_config):
     try:
         this_line = xyz_line.strip()
     except AttributeError as e:
-        utils.echo_error_msg('input is list, should be xyz-line: {}'.format(e))
+        echo_error_msg('input is list, should be xyz-line: {}'.format(e))
         return(None)
     except Exception as e:
-        utils.echo_error_msg(e)
+        echo_error_msg(e)
         return(None)
     if xyz_c['delim'] is None:
         xyz_c['delim'] = xyz_line_delim(this_line)
@@ -807,10 +1347,10 @@ def xyz_parse_line(xyz_line, xyz_c = _xyz_config):
                  float(this_xyz[xyz_c['ypos']]),
                  float(this_xyz[xyz_c['zpos']]) * float(xyz_c['z-scale'])]
     except IndexError as e:
-        if xyz_c['verbose']: utils.echo_error_msg(e)
+        if xyz_c['verbose']: echo_error_msg(e)
         return(None)
     except Exception as e:
-        if xyz_c['verbose']: utils.echo_error_msg(e)
+        if xyz_c['verbose']: echo_error_msg(e)
         return(None)
     return(o_xyz)
    
@@ -882,7 +1422,7 @@ def xyz_parse(src_xyz, xyz_c = _xyz_config, region = None, verbose = False):
         else:
             status = 0
             
-        utils.echo_msg('parsed {} data records from {}'.format(ln, xyz_c['name']))
+        echo_msg('parsed {} data records from {}'.format(ln, xyz_c['name']))
 
 def xyz_dump(src_xyz, xyz_c = _xyz_config, region = None, verbose = False, dst_port = sys.stdout):
     """dump the xyz data from the xyz datalist entry to dst_port
@@ -930,7 +1470,7 @@ def xyz_block(src_xyz, region, inc, weights = False, verbose = False):
     gdt = gdal.GDT_Float32
     ptArray = np.zeros((ycount, xcount))
     if weights: wtArray = np.zeros((ycount, xcount))
-    if verbose: utils.echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
+    if verbose: echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
     for this_xyz in src_xyz:
         x = this_xyz[0]
         y = this_xyz[1]
@@ -940,7 +1480,7 @@ def xyz_block(src_xyz, region, inc, weights = False, verbose = False):
         #z = z * w
         if x > region[0] and x < region[1]:
             if y > region[2] and y < region[3]:
-                xpos, ypos = utils._geo2pixel(x, y, dst_gt)
+                xpos, ypos = _geo2pixel(x, y, dst_gt)
                 try:
                     sumArray[ypos, xpos] += z
                     ptArray[ypos, xpos] += 1
@@ -959,7 +1499,7 @@ def xyz_block(src_xyz, region, inc, weights = False, verbose = False):
     
     for y in range(0, ycount):
         for x in range(0, xcount):
-            geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+            geo_x, geo_y = _pixel2geo(x, y, dst_gt)
             z = outarray[y,x]
             if z != -9999:
                 yield([geo_x, geo_y, z])
@@ -1068,7 +1608,7 @@ def xyz_inf_entry(entry):
     
     with open(entry[0]) as infile:
         try:
-            minmax = mbsfun.mb_inf(infile)
+            minmax = mb_inf(infile)
         except: minmax = xyz_inf(infile)
     return(minmax)        
 
@@ -1110,6 +1650,37 @@ def xyz_dump_entry(entry, dst_port = sys.stdout, region = None, verbose = False,
     for xyz in xyz_yield_entry(entry, region, verbose, z_region, epsg):
         xyz_line(xyz, dst_port, True, None)        
 
+def mb_inf(src_xyz, src_fmt = 168):
+    """generate an info (.inf) file from a src_xyz file using MBSystem.
+
+    Args:
+      src_xyz (port): an open xyz port or generator
+      src_fmt (int): the datalists format of the source data
+
+    Returns:
+      dict: xyz infos dictionary mb_inf_parse(inf_file)
+    """
+
+    utils.run_cmd('mbdatalist -O -F{} -I{}'.format(src_fmt, src_xyz), verbose = False)
+    return(mb_inf_parse('{}.inf'.format(src_xyz)))
+
+def mb_inf_data_format(src_inf):
+    """extract the data format from the mbsystem inf file.
+    
+    Args:
+      stc_inf (str): the source mbsystem .inf file pathname
+
+    Returns:
+      str: the mbsystem datalist format number
+    """
+    
+    with open(src_inf) as iob:
+        for il in iob:
+            til = il.split()
+            if len(til) > 1:
+                if til[0] == 'MBIO':
+                    return(til[4])
+        
 ## =============================================================================
 ##
 ## Fetching Functions
@@ -1144,11 +1715,11 @@ def fetch_queue(q, fo, fg):
                         except: pass
                     #o_x_fn = '.'.join(fetch_args[1].split('.')[:-1]) + '.xyz'
                     o_x_fn = fetch_args[1] + '.xyz'
-                    utils.echo_msg('processing local file: {}'.format(o_x_fn))
+                    echo_msg('processing local file: {}'.format(o_x_fn))
                     if not os.path.exists(o_x_fn):
                         with open(o_x_fn, 'w') as out_xyz:
                             fetch_dump_xyz(fetch_args, module = fo, epsg = 4326, z_region = fg['z_region'], inc = fg['inc'], dst_port = out_xyz)
-                        if os.stat(o_x_fn).st_size == 0: utils.remove_glob(o_x_fn)
+                        if os.stat(o_x_fn).st_size == 0: remove_glob(o_x_fn)
                 else: fetch_dump_xyz(fetch_args, module = fo, epsg = 4326)
         q.task_done()
 
@@ -1158,7 +1729,7 @@ def fetch_ftp_file(src_url, dst_fn, params = None, callback = None, datatype = N
     f = None
     halt = callback
     
-    if verbose: utils.echo_msg('fetching remote ftp file: {}...'.format(src_url[:20]))
+    if verbose: echo_msg('fetching remote ftp file: {}...'.format(src_url[:20]))
     if not os.path.exists(os.path.dirname(dst_fn)):
         try:
             os.makedirs(os.path.dirname(dst_fn))
@@ -1170,7 +1741,7 @@ def fetch_ftp_file(src_url, dst_fn, params = None, callback = None, datatype = N
     if f is not None:
         with open(dst_fn, 'wb') as local_file:
              local_file.write(f.read())
-    if verbose: utils.echo_msg('fetched remote ftp file: {}.'.format(os.path.basename(src_url)))
+    if verbose: echo_msg('fetched remote ftp file: {}.'.format(os.path.basename(src_url)))
     return(status)
 
 def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatype = None, overwrite = False, verbose = False, timeout = 140, read_timeout = 320):
@@ -1179,7 +1750,7 @@ def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatyp
     req = None
     halt = callback
 
-    if verbose: progress = utils.CliProgress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
+    if verbose: progress = _progress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
     if not os.path.exists(os.path.dirname(dst_fn)):
         try:
             os.makedirs(os.path.dirname(dst_fn))
@@ -1195,9 +1766,9 @@ def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatyp
                             if halt(): break
                             if verbose: progress.update()
                             if chunk: local_file.write(chunk)
-                else: utils.echo_error_msg('server returned: {}'.format(req.status_code))
+                else: echo_error_msg('server returned: {}'.format(req.status_code))
         except Exception as e:
-            utils.echo_error_msg(e)
+            echo_error_msg(e)
             status = -1
     if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0: status = -1
     if verbose: progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
@@ -1206,7 +1777,7 @@ def fetch_file(src_url, dst_fn, params = None, callback = lambda: False, datatyp
 def fetch_req(src_url, params = None, tries = 5, timeout = 2, read_timeout = 10):
     '''fetch src_url and return the requests object'''
     if tries <= 0:
-        utils.echo_error_msg('max-tries exhausted')
+        echo_error_msg('max-tries exhausted')
         return(None)
     try:
         return(requests.get(src_url, stream = True, params = params, timeout = (timeout,read_timeout), headers = r_headers))
@@ -1219,7 +1790,7 @@ def fetch_nos_xml(src_url, timeout = 2, read_timeout = 10, verbose = False):
         req = fetch_req(src_url, timeout = timeout, read_timeout = read_timeout)
         results = lxml.etree.fromstring(req.text.encode('utf-8'))
     except:
-        if verbose: utils.echo_error_msg('could not access {}'.format(src_url))
+        if verbose: echo_error_msg('could not access {}'.format(src_url))
     return(results)
         
 def fetch_html(src_url):
@@ -1320,7 +1891,7 @@ class iso_xml:
         if polygon is not None:
             nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
             [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
-            if geom: return(wkt2geom(utils.create_wkt_polygon(opoly)))
+            if geom: return(wkt2geom(create_wkt_polygon(opoly)))
             else: return(opoly)
         else: return(None)
         
@@ -1332,7 +1903,7 @@ class iso_xml:
 
     def xml_date(self):
         mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
-        return(utils.this_date() if mddate is None else mddate.text)
+        return(this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
         ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
@@ -1478,7 +2049,7 @@ class FRED:
         elif os.path.exists(os.path.join(self.fetchdata, self.fetch_v)):
             self.FREDloc = os.path.join(self.fetchdata, self.fetch_v)
         else: self.FREDloc = self.fetch_v
-        if self._verbose: utils.echo_msg('using {}'.format(self.FREDloc))
+        if self._verbose: echo_msg('using {}'.format(self.FREDloc))
         self.ds = None
         self.layer = None
         self.open_p = False
@@ -1489,7 +2060,7 @@ class FRED:
                         'VerticalDatum', 'LastUpdate', 'Etcetra', 'Info']
         
     def _create_ds(self):
-        utils.remove_glob(self.FREDloc)
+        remove_glob(self.FREDloc)
         self.ds = self.driver.CreateDataSource(self.FREDloc)        
         self.layer = self.ds.CreateLayer('FRED', None, ogr.wkbMultiPolygon)
         ldfn = self.layer.GetLayerDefn()
@@ -1524,7 +2095,7 @@ class FRED:
                  'IndexLink': IndexLink, 'Link': Link, 'DataType': DataType,
                  'DataSource': DataSource, 'Resolution': Resolution,
                  'HorizontalDatum': HorizontalDatum, 'VerticalDatum': VerticalDatum,
-                 'LastUpdate': utils.this_date(), 'Etcetra': Etcetra, 'Info': Info},
+                 'LastUpdate': this_date(), 'Etcetra': Etcetra, 'Info': Info},
                 geom.ExportToJson()
             ])
             [self.layer.SetFeature(ff) for ff in self.layer]
@@ -1596,9 +2167,9 @@ class FRED:
 
     def _get_region(self, where = [], layers = []):
         out_regions = []
-        if self._verbose: _progress = utils.CliProgress('gathering regions from {}...'.format(self.FREDloc))
+        if self._verbose: _prog = _progress('gathering regions from {}...'.format(self.FREDloc))
         for i, layer in enumerate(layers):
-            if self._verbose: _progress.update_perc((i, len(layers)))
+            if self._verbose: _prog.update_perc((i, len(layers)))
             this_layer = self.layer
             this_layer.SetAttributeFilter("DataSource = '{}'".format(layer))
             [this_layer.SetAttributeFilter('{}'.format(filt)) for filt in where]
@@ -1627,17 +2198,17 @@ class FRED:
             _boundsGeom = region2geom(region)
         else: _boundsGeom = None
 
-        if self._verbose: _progress = utils.CliProgress('filtering {}...'.format(self.FREDloc))
+        if self._verbose: _prog = _progress('filtering {}...'.format(self.FREDloc))
         if not self.open_p:
             self._open_ds()
             close_p = True
         else: close_p = False
 
         for i, layer in enumerate(layers):
-            if self._verbose: _progress.update_perc((i, len(layers)))
+            if self._verbose: _prog.update_perc((i, len(layers)))
             this_layer = self.layer
             where.append("DataSource = '{}'".format(layer))
-            if self._verbose: utils.echo_msg('FRED filter: {}'.format(where))
+            if self._verbose: echo_msg('FRED filter: {}'.format(where))
             self._attribute_filter(where = where)
             for feat in this_layer:
                 if _boundsGeom is not None:
@@ -1656,7 +2227,7 @@ class FRED:
                         
             this_layer = None
         if close_p: self._close_ds()
-        if self._verbose: _progress.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
+        if self._verbose: _prog.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
         return(_results)
 
 ## ==============================================
@@ -1664,7 +2235,7 @@ class FRED:
 ## ==============================================
 _filter_FRED = lambda mod: mod.FRED._filter(mod.region, mod.where, [mod._name])
 _update_FRED = lambda mod, s: mod.FRED._add_surveys(s)
-_filter_FRED_index = lambda mod: [utils.echo_msg(json.dumps(f, indent = 2)) for f in _filter_FRED(mod)]
+_filter_FRED_index = lambda mod: [echo_msg(json.dumps(f, indent = 2)) for f in _filter_FRED(mod)]
 
 ## heaps of thanks to https://github.com/fitnr/stateplane
 FIPS_TO_EPSG = {
@@ -1761,7 +2332,7 @@ def fetches_config(name = 'fetches', mods = ['gmrt'], region = None, where = [],
 class dc:
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading DC fetch module...')
+        if self._verbose: echo_msg('loading DC fetch module...')
         
         ## ==============================================
         ## Digital Coast urls and directories
@@ -1805,7 +2376,7 @@ class dc:
             if len(tr) <= 0: continue
             [cols.append(i.text_content()) for i in tr[0]]
             
-            if self._verbose: _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(tr), ld))
+            if self._verbose: _prog = _progress('scanning {} datasets in {}...'.format(len(tr), ld))
             for i in range(1, len(tr)):
                 if self._stop(): break
                 if self._verbose: _prog.update_perc((i, len(tr))) #dc['ID #']))
@@ -1835,7 +2406,7 @@ class dc:
             self.FRED._add_surveys(surveys)
             if self._verbose:
                 _prog.end(0, 'scanned {} datasets in {}.'.format(len(tr), ld))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), ld))
+                echo_msg('added {} surveys from {}'.format(len(surveys), ld))
         self.FRED._close_ds()
 
     def _parse_results(self):
@@ -1843,7 +2414,7 @@ class dc:
             if self._stop(): break
             surv_shp_zip = os.path.basename(surv['IndexLink'])
             if fetch_file(surv['IndexLink'], surv_shp_zip, callback = self._stop, verbose = self._verbose) == 0:
-                v_shps = utils.p_unzip(surv_shp_zip, ['.shp', '.shx', '.dbf', '.prj'])
+                v_shps = p_unzip(surv_shp_zip, ['.shp', '.shx', '.dbf', '.prj'])
                 v_shp = None
                 for v in v_shps:
                     if v.split('.')[-1] == '.shp': v_shp = v
@@ -1857,7 +2428,7 @@ class dc:
                             yield([sf1.GetField('URL').strip(), '{}/{}'.format(surv['ID'], tile_url.split('/')[-1]), surv['DataType']])
                     v_ds = slay1 = None
                 except: pass
-                utils.remove_glob(surv_shp_zip, *v_shps)
+                remove_glob(surv_shp_zip, *v_shps)
 
     ## ==============================================
     ## Process results to xyz
@@ -1873,7 +2444,7 @@ class dc:
         else: dt = None
         if dt == 'lidar':
             if fetch_file(entry[0], src_dc, callback = self._stop, verbose = self._verbose) == 0:
-                xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
+                xyz_dat = yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
                 '.format(region_format(self.region, 'te'), '2 29', src_dc), verbose = False)
                 xyzc = copy.deepcopy(_xyz_config)
                 xyzc['name'] = src_dc
@@ -1892,10 +2463,10 @@ class dc:
                 try:
                     src_ds = gdal.Open(src_dc)
                 except Exception as e:
-                    utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                    echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
                     src_ds = None
             except Exception as e:
-                utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
                 src_ds = None
             
             if src_ds is not None:
@@ -1903,7 +2474,7 @@ class dc:
                 for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = True, z_region = z_region):
                     yield(xyz)
             src_ds = None
-        utils.remove_glob(src_dc)
+        remove_glob(src_dc)
 
 ## =============================================================================
 ##
@@ -1920,7 +2491,7 @@ class nos:
     '''Fetch NOS BAG and XYZ sounding data from NOAA'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading NOS fetch module...')
+        if self._verbose: echo_msg('loading NOS fetch module...')
 
         ## ==============================================
         ## NOS urls and directories
@@ -1966,7 +2537,7 @@ class nos:
             xml_catalog = self._nos_xml_url(nosdir)
             page = fetch_html(xml_catalog)
             rows = page.xpath('//a[contains(@href, ".xml")]/@href')
-            if self._verbose: _prog = utils.CliProgress('scanning {} surveys in {}...'.format(len(rows), nosdir))
+            if self._verbose: _prog = _progress('scanning {} surveys in {}...'.format(len(rows), nosdir))
 
             for i, survey in enumerate(rows):
                 if self._stop(): break
@@ -1992,7 +2563,7 @@ class nos:
                                         'VerticalDatum': v_epsg, 'Info': this_xml.abstract(), 'geom': geom})
             if self._verbose:
                 _prog.end(0, 'scanned {} surveys in {}.'.format(len(rows), nosdir))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), nosdir))
+                echo_msg('added {} surveys from {}'.format(len(surveys), nosdir))
             self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
     
@@ -2024,7 +2595,7 @@ class nos:
                 else: dt = None
             else: dt = None
             if dt == 'geodas_xyz':
-                nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
+                nos_fns = p_unzip(src_nos, ['xyz', 'dat'])
                 xyzc['delim'] = ','
                 xyzc['skip'] = 1
                 xyzc['xpos'] = 2
@@ -2042,11 +2613,11 @@ class nos:
                         with open(nos_f_r, 'r') as in_n:
                             for xyz in xyz_parse(in_n, xyz_c = xyzc, region = self.region, verbose = self._verbose):
                                 yield(xyz)
-                utils.remove_glob(*nos_fns)
-                #[utils.remove_glob(x) for x in nos_fns]
+                remove_glob(*nos_fns)
+                #[remove_glob(x) for x in nos_fns]
 
             elif dt == 'grid_bag':
-                src_bags = utils.p_unzip(src_nos, ['gdal', 'tif', 'img', 'bag', 'asc'])
+                src_bags = p_unzip(src_nos, ['gdal', 'tif', 'img', 'bag', 'asc'])
 
                 nos_f = '{}.tmp'.format(os.path.basename(src_bag).split('.')[0])
                 for src_bag in src_bags:
@@ -2058,8 +2629,8 @@ class nos:
                                 yield(xyz)
                         src_ds = None
                     except: pass
-                utils.remove_glob(*src_bags)
-        utils.remove_glob(src_nos)
+                remove_glob(*src_bags)
+        remove_glob(src_nos)
         
 ## =============================================================================
 ##
@@ -2072,7 +2643,7 @@ class charts():
     '''Fetch digital chart data from NOAA'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading CHARTS fetch module...')
+        if self._verbose: echo_msg('loading CHARTS fetch module...')
 
         ## ==============================================
         ## Chart URLs and directories
@@ -2111,7 +2682,7 @@ class charts():
             surveys = []
             this_xml = iso_xml(self._dt_xml[dt], timeout = 1000, read_timeout = 2000)
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
-            _prog = utils.CliProgress('scanning {} surveys in {}.'.format(len(charts), dt))
+            _prog = _progress('scanning {} surveys in {}.'.format(len(charts), dt))
             for i, chart in enumerate(charts):
                 this_xml.xml_doc = chart
                 title = this_xml.title()
@@ -2130,7 +2701,7 @@ class charts():
             self.FRED._add_surveys(surveys)
             if self._verbose:
                 _prog.end(0, 'scanned {} surveys in {}'.format(len(charts), dt))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), dt))
+                echo_msg('added {} surveys from {}'.format(len(surveys), dt))
         self.FRED._close_ds()
         
     def _parse_results(self):
@@ -2156,7 +2727,7 @@ class charts():
         
         if fetch_file(entry[0], src_zip, callback = self._stop, verbose = self._verbose) == 0:
             if entry[-1].lower() == 'enc':
-                src_encs = utils.p_unzip(src_zip, ['000'])
+                src_encs = p_unzip(src_zip, ['000'])
                 for src_ch in src_encs:
                     dst_xyz = src_ch.split('.')[0] + '.xyz'
                     try:
@@ -2174,8 +2745,8 @@ class charts():
                         with open(dst_xyz, 'r') as in_c:
                             for xyz in xyz_parse(in_c, xyz_c = xyzc, verbose = self._verbose):
                                 yield(xyz)
-                utils.remove_glob(dst_xyz, *src_encs)
-        utils.remove_glob(src_zip)
+                remove_glob(dst_xyz, *src_encs)
+        remove_glob(src_zip)
         
 ## =============================================================================
 ##
@@ -2186,7 +2757,7 @@ class ncei_thredds:
     '''Fetch DEMs from NCEI THREDDS Catalog'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading NCEI_THREDDS fetch module...')
+        if self._verbose: echo_msg('loading NCEI_THREDDS fetch module...')
         
         ## ==============================================
         ## NOS urls and directories
@@ -2236,7 +2807,7 @@ community preparedness.'''
         ntCatXml = iso_xml(catalog_url)
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
-        if self._verbose: _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(this_ds), this_ds[0].attrib['name']))
+        if self._verbose: _prog = _progress('scanning {} datasets in {}...'.format(len(this_ds), this_ds[0].attrib['name']))
         for i, node in enumerate(this_ds):
             surveys = []
             this_title = node.attrib['name']
@@ -2281,7 +2852,7 @@ community preparedness.'''
         self.FRED._add_surveys(surveys)
         if self._verbose:
             _prog.end(0, 'scanned {} datasets in {}.'.format(len(this_ds), this_ds[0].attrib['name']))
-            utils.echo_msg('added {} surveys from {}'.format(len(surveys), this_ds[0].attrib['name']))
+            echo_msg('added {} surveys from {}'.format(len(surveys), this_ds[0].attrib['name']))
         
     def _update(self):
         self.FRED._open_ds(1)
@@ -2313,10 +2884,10 @@ community preparedness.'''
             try:
                 src_ds = gdal.Open(src_dc)
             except Exception as e:
-                utils.echo_error_msg('could not read raster file: {}, {}'.format(entry[0], e))
+                echo_error_msg('could not read raster file: {}, {}'.format(entry[0], e))
                 src_ds = None
         except Exception as e:
-            utils.echo_error_msg('could not read raster file: {}, {}'.format(entry[0], e))
+            echo_error_msg('could not read raster file: {}, {}'.format(entry[0], e))
             src_ds = None
 
         if src_ds is not None:
@@ -2324,7 +2895,7 @@ community preparedness.'''
             for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                 yield(xyz)
         src_ds = None
-        utils.remove_glob(src_dc)
+        remove_glob(src_dc)
             
 ## =============================================================================
 ##
@@ -2338,7 +2909,7 @@ class mb:
     '''Fetch multibeam bathymetry from NOAA'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading Multibeam fetch module...')
+        if self._verbose: echo_msg('loading Multibeam fetch module...')
 
         ## ==============================================
         ## NCEI MB URLs and directories 
@@ -2377,8 +2948,8 @@ hydrographic multibeam survey data from NOAA's National Ocean Service (NOS).'''
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('MB-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'NOAA Multibeam', ID = 'MB-1', Agency = 'NOAA', Date = utils.this_year(),
-                                  MetadataLink = self._mb_metadata_url, MetadataDate = utils.this_year(),
+            self.FRED._add_survey(Name = 'NOAA Multibeam', ID = 'MB-1', Agency = 'NOAA', Date = this_year(),
+                                  MetadataLink = self._mb_metadata_url, MetadataDate = this_year(),
                                   DataLink = self._mb_search_url, DataType = 'multibeam', DataSource = 'mb',
                                   HorizontalDatum = 4326, VerticalDatum = 1092, Info = self._info,
                                   geom = region2geom([-180,180,-90,90]))
@@ -2405,7 +2976,7 @@ hydrographic multibeam survey data from NOAA's National Ocean Service (NOS).'''
                             these_surveys[survey][version].append([data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb'])
                         else: these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
                     else: these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
-            else: utils.echo_error_msg('{}'.format(_req.reason))
+            else: echo_error_msg('{}'.format(_req.reason))
                     
         for key in these_surveys.keys():
             if processed:
@@ -2434,12 +3005,12 @@ hydrographic multibeam survey data from NOAA's National Ocean Service (NOS).'''
             #src_xyz = os.path.basename(src_mb).split('.')[0] + '.xyz'
             src_xyz = os.path.basename(src_mb) + '.xyz'
             
-            out, status = utils.run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_mb, src_xyz), verbose = False)
+            out, status = run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_mb, src_xyz), verbose = False)
             if status != 0:
                 if fetch_file('{}.inf'.format(entry[0]), '{}.inf'.format(src_mb), callback = self._stop, verbose = self._verbose) == 0:
-                    mb_fmt = mbsfun.mb_inf_data_format('{}.inf'.format(src_mb))
-                    utils.remove_glob('{}.inf'.format(entry[0]))
-                out, status = utils.run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_mb, src_xyz), verbose = False)
+                    mb_fmt = mb_inf_data_format('{}.inf'.format(src_mb))
+                    remove_glob('{}.inf'.format(entry[0]))
+                out, status = run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_mb, src_xyz), verbose = False)
             if status == 0:
                 xyzc['name'] = src_mb
                 xyzc['z-scale'] = 1
@@ -2454,21 +3025,21 @@ hydrographic multibeam survey data from NOAA's National Ocean Service (NOS).'''
                     xyz_func = lambda p: xyz_dump(in_m, xyz_c = xyzc, region = self.region, verbose = False, dst_port = p)
                     if inc is not None:
                         xyzc['delim'] = None
-                        out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
-                        for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(inc, region_format(self.region, 'gmt')), verbose = self._verbose, data_fun = xyz_func):
+                        out, status = run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
+                        for xyz in yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(inc, region_format(self.region, 'gmt')), verbose = self._verbose, data_fun = xyz_func):
                             yield([float(x) for x in xyz.split()])
 
                     else:
                         for xyz in xyz_parse(in_m, xyz_c = xyzc, region = self.region, verbose = self._verbose):
                             yield(xyz)
-                utils.remove_glob(src_mb, src_xyz)
+                remove_glob(src_mb, src_xyz)
             else:
-                utils.echo_error_msg('failed to process local file, {} [{}]...'.format(src_mb, entry[0]))
+                echo_error_msg('failed to process local file, {} [{}]...'.format(src_mb, entry[0]))
                 with open('{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self._name, region_format(self.region, 'fn')))), 'a') as mb_err:
                     mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
                 os.rename(src_mb, os.path.join(self._outdir, src_mb))
-                utils.remove_glob(src_xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_mb))
+                remove_glob(src_xyz)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(src_mb))
         
 ## =============================================================================
 ##
@@ -2481,7 +3052,7 @@ class usace:
     '''Fetch USACE bathymetric surveys'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading USACE fetch module...')
+        if self._verbose: echo_msg('loading USACE fetch module...')
 
         ## ==============================================
         ## USACE eHydro URLs and directories
@@ -2517,7 +3088,7 @@ may or may not be accurate.'''
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('USACE-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'USACE E-Hydro', ID = 'USACE-1', Agency = 'USACE', Date = utils.this_year(),
+            self.FRED._add_survey(Name = 'USACE E-Hydro', ID = 'USACE-1', Agency = 'USACE', Date = this_year(),
                                   DataLink = self._usace_gs_api_url, IndexLink = self._usace_gj_url, DataType = 'xyz',
                                   DataSource = 'usace', Info = self._info, geom = region2geom([-162,-60,16,73]))
         self.FRED._close_ds()
@@ -2535,7 +3106,7 @@ may or may not be accurate.'''
                         if feature['attributes']['SURVEYTYPE'].lower() == stype.lower():
                             yield([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
                     else: yield([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
-            else: utils.echo_error_msg('{}'.format(_req.reason))
+            else: echo_error_msg('{}'.format(_req.reason))
             
     ## ==============================================
     ## Process results to xyz
@@ -2549,7 +3120,7 @@ may or may not be accurate.'''
         xyzc['warp'] = epsg
         
         if fetch_file(entry[0], src_zip, callback = self._stop, verbose = self._verbose) == 0:
-            src_xmls = utils.p_unzip(src_zip, ['.xml', '.XML'])
+            src_xmls = p_unzip(src_zip, ['.xml', '.XML'])
             for src_xml in src_xmls:
                 this_xml = lxml.etree.parse(src_xml)
                 if this_xml is not None:
@@ -2560,17 +3131,17 @@ may or may not be accurate.'''
                         s = this_xml.find('.//southbc').text
                         this_xml_region = [float(w), float(e), float(s), float(n)]
                     except:
-                        utils.echo_error_msg('could not determine survey bb from {}'.format(src_xml))
+                        echo_error_msg('could not determine survey bb from {}'.format(src_xml))
                         this_xml_region = self.region
                     try:
                         prj = this_xml.find('.//gridsysn').text
                         szone = this_xml.find('.//spcszone').text
-                        utils.echo_msg('zone: {}'.format(szone))                        
+                        echo_msg('zone: {}'.format(szone))                        
                         xyzc['epsg'] = int(FIPS_TO_EPSG[szone])
                     except:
-                        utils.echo_error_msg('could not determine state plane zone from {}'.format(src_xml))
+                        echo_error_msg('could not determine state plane zone from {}'.format(src_xml))
                         xyzc['epsg'] = None
-                utils.remove_glob(src_xml)
+                remove_glob(src_xml)
 
             if xyzc['epsg'] is None:
                 this_geom = region2geom(this_xml_region)
@@ -2586,7 +3157,7 @@ may or may not be accurate.'''
                     sp = None
                 except: pass
                         
-            src_usaces = utils.p_unzip(src_zip, ['.XYZ', '.xyz', '.dat'])
+            src_usaces = p_unzip(src_zip, ['.XYZ', '.xyz', '.dat'])
             for src_usace in src_usaces:
                 if os.path.exists(src_usace):
                     with open(src_usace, 'r') as in_c:
@@ -2596,10 +3167,10 @@ may or may not be accurate.'''
                             xyzc['lower_limit'] = z_region[0]
                         for xyz in xyz_parse(in_c, xyz_c = xyzc, verbose = self._verbose):
                             yield(xyz)
-                    utils.remove_glob(src_usace)
+                    remove_glob(src_usace)
                     
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
-        utils.remove_glob(src_zip)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
+        remove_glob(src_zip)
 
 ## =============================================================================
 ##
@@ -2613,7 +3184,7 @@ class tnm:
     '''Fetch elevation data from The National Map'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading The National Map fetch module...')
+        if self._verbose: echo_msg('loading The National Map fetch module...')
         
         ## ==============================================
         ## TNM URLs and directories
@@ -2678,7 +3249,7 @@ and deliver topographic information for the Nation.'''
                                 _datasets = ds
                                 break
             except Exception as e:
-                utils.echo_error_msg('try again, {}'.format(e))
+                echo_error_msg('try again, {}'.format(e))
         else: _datasets = None
         return(_datasets)
     
@@ -2706,10 +3277,10 @@ and deliver topographic information for the Nation.'''
             except: url_enc = urllib.parse.urlencode({'datasets': ds['sbDatasetTag']})
             try:
                 pubDate = ds['lastPublishedDate']
-            except: pubDate = utils.this_year()
+            except: pubDate = this_year()
             try:
                 metadataDate = ds['lastUpdatedDate']
-            except: metadataDate = utils.this_year()            
+            except: metadataDate = this_year()            
             if geom is not None:
                 self.FRED._add_survey(Name = ds['sbDatasetTag'], ID = ds['id'], Agency = 'USGS', Date = pubDate[-4:],
                                       MetadataLink = ds['infoUrl'], MetadataDate = metadataDate,
@@ -2726,7 +3297,7 @@ and deliver topographic information for the Nation.'''
         '''Update FRED with each dataset in TNM'''
         datasets = self._datasets()
         self.FRED._open_ds(1)
-        if self._verbose: _prog = utils.CliProgress('scanning {} datasets from TNM...'.format(len(datasets)))
+        if self._verbose: _prog = _progress('scanning {} datasets from TNM...'.format(len(datasets)))
         for i, ds in enumerate(datasets):
             if self._verbose: _prog.update_perc((i, len(datasets)))
             for fmt in ds['formats']:
@@ -2767,8 +3338,8 @@ and deliver topographic information for the Nation.'''
                     try:
                         _dataset_results = _req.json()
                         total = _dataset_results['total']
-                    except ValueError: utils.echo_error_msg('tnm server error, try again')
-                    except Exception as e: utils.echo_error_msg('error, {}'.format(e))
+                    except ValueError: echo_error_msg('tnm server error, try again')
+                    except Exception as e: echo_error_msg('error, {}'.format(e))
                 
                 if len(_dataset_results) > 0:
                     for item in _dataset_results['items']:
@@ -2807,14 +3378,14 @@ and deliver topographic information for the Nation.'''
         '''updated FRED with each product file available from TNM'''
         for dsTag in self._elev_ds:
             offset = 0
-            utils.echo_msg('processing TNM dataset {}...'.format(dsTag))
+            echo_msg('processing TNM dataset {}...'.format(dsTag))
             _req = fetch_req(self._tnm_product_url, params = {'max': 1, 'datasets': dsTag})
             try:
                 _dsTag_results = _req.json()
-            except ValueError: utils.echo_error_msg('tnm server error, try again')
-            except Exception as e: utils.echo_error_msg('error, {}'.format(e))
+            except ValueError: echo_error_msg('tnm server error, try again')
+            except Exception as e: echo_error_msg('error, {}'.format(e))
             total = _dsTag_results['total']
-            if self._verbose: _prog = utils.CliProgress('gathering {} products from {}...'.format(total, dsTag))
+            if self._verbose: _prog = _progress('gathering {} products from {}...'.format(total, dsTag))
             
             ds = self._datasets(dataset = dsTag)
             this_xml = iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
@@ -2825,8 +3396,8 @@ and deliver topographic information for the Nation.'''
                 _req = fetch_req(self._tnm_product_url, params = _data)
                 try:
                     _dsTag_results = _req.json()
-                except ValueError: utils.echo_error_msg('tnm server error, try again')
-                except Exception as e: utils.echo_error_msg('error, {}'.format(e))
+                except ValueError: echo_error_msg('tnm server error, try again')
+                except Exception as e: echo_error_msg('error, {}'.format(e))
                 if self._verbose: _prog.update_perc((offset,total), msg = 'gathering {} products from {}...'.format(total, dsTag))
                 
                 for i, item in enumerate(_dsTag_results['items']):
@@ -2871,7 +3442,7 @@ and deliver topographic information for the Nation.'''
         if fetch_file(entry[0], entry[1], callback = self._stop, verbose = self._verbose) == 0:
             datatype = entry[-1]
             if datatype == 'raster':
-                src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
+                src_tnms = p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     try:
                         src_ds = gdal.Open(src_tnm)
@@ -2882,10 +3453,10 @@ and deliver topographic information for the Nation.'''
                                     yield(xyz)
                         src_ds = None
                     except:
-                        utils.echo_error_msg('could not read tnm data: {}'.format(src_tnm))
+                        echo_error_msg('could not read tnm data: {}'.format(src_tnm))
                         src_ds = None
-                    utils.remove_glob(src_tnm)
-        utils.remove_glob(entry[1])
+                    remove_glob(src_tnm)
+        remove_glob(entry[1])
             
 ## =============================================================================
 ##
@@ -2899,7 +3470,7 @@ class gmrt:
     '''Fetch raster data from the GMRT'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading GMRT fetch module...')
+        if self._verbose: echo_msg('loading GMRT fetch module...')
 
         ## ==============================================
         ## GMRT URLs and directories
@@ -2939,8 +3510,8 @@ the global and coastal oceans.'''
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('GMRT-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'GMRT', ID = 'GMRT-1', Date = utils.this_year(),
-                                  MetadataLink = self._gmrt_grid_metadata_url, MetadataDate = utils.this_year(),
+            self.FRED._add_survey(Name = 'GMRT', ID = 'GMRT-1', Date = this_year(),
+                                  MetadataLink = self._gmrt_grid_metadata_url, MetadataDate = this_year(),
                                   DataLink = self._gmrt_grid_urls_url, DataType = 'raster', DataSource = 'gmrt',
                                   HorizontalDatum = 3857, VerticalDatum = 1092, Info = self._info,
                                   geom = region2geom([-180,180,-90,90]))
@@ -2969,7 +3540,7 @@ the global and coastal oceans.'''
                     except: url_enc = urllib.parse.urlencode(opts)
                     this_url = '{}?{}'.format(url_base, url_enc)
                     url_region = [float(opts['west']), float(opts['east']), float(opts['south']), float(opts['north'])]
-                    outf = 'gmrt_{}_{}.{}'.format(opts['layer'], region_format(url_region, 'fn'), utils.gdal_fext(opts['format']))
+                    outf = 'gmrt_{}_{}.{}'.format(opts['layer'], region_format(url_region, 'fn'), gdal_fext(opts['format']))
                     yield([this_url, outf, 'gmrt'])
 
     ## ==============================================
@@ -2989,8 +3560,8 @@ the global and coastal oceans.'''
                 for xyz in gdal_parse(src_ds, srcwin = srcwin, verbose = self._verbose, warp = epsg, z_region = z_region):
                     yield(xyz)
             src_ds = None
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_gmrt))
-        utils.remove_glob(src_gmrt)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(src_gmrt))
+        remove_glob(src_gmrt)
 
 ## =============================================================================
 ##
@@ -3006,7 +3577,7 @@ class mar_grav:
     '''Fetch mar_grav sattelite altimetry topography'''    
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading mar_grav fetch module...')
+        if self._verbose: echo_msg('loading mar_grav fetch module...')
 
         ## ==============================================
         ## marine gravity URLs and directories
@@ -3039,8 +3610,8 @@ class mar_grav:
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('MAR_GRAV-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'MAR_GRAV', ID = 'MAR_GRAV-1', Date = utils.this_year(),
-                                  MetadataLink = self._mar_grav_info_url, MetadataDate = utils.this_year(),
+            self.FRED._add_survey(Name = 'MAR_GRAV', ID = 'MAR_GRAV-1', Date = this_year(),
+                                  MetadataLink = self._mar_grav_info_url, MetadataDate = this_year(),
                                   DataLink = self._mar_grav_url, DataType = 'xyz', DataSource = 'mar_grav',
                                   HorizontalDatum = 4326, VerticalDatum = 1092, Info = self._info,
                                   geom = region2geom([-180,180,-90,90]))
@@ -3078,7 +3649,7 @@ class mar_grav:
             with open(os.path.basename(entry[1]), 'r') as xyzf:
                 for xyz in xyz_parse(xyzf, xyz_c = xyzc, verbose = self._verbose):
                     yield(xyz)
-        utils.remove_glob(os.path.basename(entry[1]))
+        remove_glob(os.path.basename(entry[1]))
     
 ## =============================================================================
 ##
@@ -3093,7 +3664,7 @@ class srtm_plus:
     '''Fetch SRTM15+ data'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading SRTM+ fetch module...')
+        if self._verbose: echo_msg('loading SRTM+ fetch module...')
 
         ## ==============================================
         ## SRTM URLs and directories
@@ -3126,8 +3697,8 @@ class srtm_plus:
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('SRTM-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'SRTM15+', ID = 'SRTM-1', Date = utils.this_year(),
-                                  MetadataLink = self._srtm_info_url, MetadataDate = utils.this_year(),
+            self.FRED._add_survey(Name = 'SRTM15+', ID = 'SRTM-1', Date = this_year(),
+                                  MetadataLink = self._srtm_info_url, MetadataDate = this_year(),
                                   DataLink = self._srtm_url, DataType = 'xyz', DataSource = 'srtm_plus',
                                   HorizontalDatum = 4326, VerticalDatum = 1092, Info = self._info,
                                   geom = region2geom([-180,180,-90,90]))
@@ -3164,7 +3735,7 @@ class srtm_plus:
             with open(os.path.basename(entry[1]), 'r') as xyzf:
                 for xyz in xyz_parse(xyzf, xyz_c = xyzc, verbose = self._verbose):
                     yield(xyz)
-        utils.remove_glob(os.path.basename(entry[1]))
+        remove_glob(os.path.basename(entry[1]))
         
 ## =============================================================================
 ##
@@ -3178,7 +3749,7 @@ class emodnet:
     '''Fetch raster data from the EMODNET DTM'''    
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading EMODNET fetch module...')
+        if self._verbose: echo_msg('loading EMODNET fetch module...')
 
         ## ==============================================
         ## EMODNET URLs and directories
@@ -3212,7 +3783,7 @@ class emodnet:
         self.FRED._open_ds(1)
         emod_wcs = WCS(self._emodnet_grid_url)
         contents = emod_wcs._contents()
-        if self._verbose: _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._emodnet_grid_url))
+        if self._verbose: _prog = _progress('Scanning {} WCS coverages from {}...'.format(len(contents), self._emodnet_grid_url))
         for i, layer in enumerate(contents):
             if self._verbose: _prog.update_perc((i, len(contents)))
             self.FRED._attribute_filter(["ID = '{}'".format(layer['CoverageId'][0])])
@@ -3222,8 +3793,8 @@ class emodnet:
                     ds_region = emod_wcs._get_coverage_region(d)
                     geom = region2geom(ds_region)
                     url = emod_wcs._get_coverage_url(layer['CoverageId'][0], region = ds_region)
-                    self.FRED._add_survey(Name = d['name'][0], ID = layer['CoverageId'][0], Date = utils.this_year(), MetadataLink = layer['Metadata'],
-                                          MetadataDate = utils.this_year(), DataLink = url, DataType = 'raster',
+                    self.FRED._add_survey(Name = d['name'][0], ID = layer['CoverageId'][0], Date = this_year(), MetadataLink = layer['Metadata'],
+                                          MetadataDate = this_year(), DataLink = url, DataType = 'raster',
                                           DataSource = 'emodnet', HorizontalDatum = 4326, VerticalDatum = 1092,
                                           Info = layer['Abstract'], geom = geom)
         if self._verbose: _prog.end(0, 'Scanned {} WCS coverages from {}'.format(len(contents), self._emodnet_grid_url))
@@ -3256,8 +3827,8 @@ class emodnet:
                 for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                     yield(xyz)
                 src_ds = None
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_emodnet))
-        utils.remove_glob(src_emodnet)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(src_emodnet))
+        remove_glob(src_emodnet)
 
 ## =============================================================================
 ##
@@ -3271,7 +3842,7 @@ class hrdem():
     '''Fetch HRDEM data from Canada (NRCAN)'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading HRDEM fetch module...')
+        if self._verbose: echo_msg('loading HRDEM fetch module...')
 
         ## ==============================================
         ## Reference vector and directories
@@ -3308,7 +3879,7 @@ class hrdem():
         self.FRED._open_ds()
         v_zip = os.path.basename(self._hrdem_footprints_url)
         status = fetch_ftp_file(self._hrdem_footprints_url, v_zip, verbose = True)
-        v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
+        v_shps = p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
         v_shp = None
         for v in v_shps:
             if '.shp' in v: v_shp = v
@@ -3322,17 +3893,17 @@ class hrdem():
         
         self.FRED._attribute_filter(["ID = '{}'".format('HRDEM-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'High-Resolution DEM (Canada)', ID = 'HRDEM-1', Agency = 'NRCAN', Date = utils.this_year(),
-                                  MetadataLink = self._hrdem_info_url, MetadataDate = utils.this_year(),
+            self.FRED._add_survey(Name = 'High-Resolution DEM (Canada)', ID = 'HRDEM-1', Agency = 'NRCAN', Date = this_year(),
+                                  MetadataLink = self._hrdem_info_url, MetadataDate = this_year(),
                                   DataLink = self._hrdem_footprints_url, IndexLink = self._hrdem_footprints_url,
                                   DataType = 'raster', DataSource = 'hrdem', Info = 'Canada Only', geom = geom)
-        utils.remove_glob(v_zip, *v_shps)
+        remove_glob(v_zip, *v_shps)
         self.FRED._close_ds()
 
     def _parse_results(self):
         for surv in _filter_FRED(self):
             status = fetch_ftp_file(surv['IndexLink'], v_zip, verbose = self._verbose)
-            v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
+            v_shps = p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
             v_shp = None
             for v in v_shps:
                 if v.split('.')[-1] == 'shp':
@@ -3356,7 +3927,7 @@ class hrdem():
                         if geom.Intersects(region2geom(self.region)):
                             data_link = feature.GetField('Ftp_dtm').replace('http', 'ftp')
                             yield([data_link, data_link.split('/')[-1], surv['DataType']])
-            utils.remove_glob(v_zip, *v_shps)
+            remove_glob(v_zip, *v_shps)
                                 
     ## ==============================================
     ## _update_all() and _parse_results_all() will update FRED with all the data
@@ -3369,7 +3940,7 @@ class hrdem():
         self.FRED._open_ds(1)
         v_zip = os.path.basename(self._hrdem_footprints_url)
         status = fetch_ftp_file(self._hrdem_footprints_url, v_zip, verbose = True)
-        v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
+        v_shps = p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
         v_shp = None
         for v in v_shps:
             if '.shp' in v: v_shp = v
@@ -3381,7 +3952,7 @@ class hrdem():
         if v_ds is not None:
             layer = v_ds.GetLayer()
             fcount = layer.GetFeatureCount()
-            if self._verbose: _prog = utils.CliProgress('scanning {} datasets...'.format(fcount))
+            if self._verbose: _prog = _progress('scanning {} datasets...'.format(fcount))
             for f in range(0, fcount):
                 feature = layer[f]
                 name = feature.GetField('Tile_name')
@@ -3393,14 +3964,14 @@ class hrdem():
                     data_link = feature.GetField('Ftp_dtm')
                     if data_link is not None:
                         geom = feature.GetGeometryRef()
-                        self.FRED._add_survey(Name = name, ID = feature.GetField('Project'), Agency = 'NRCAN', Date = utils.this_year(),
-                                              MetadataLink = feature.GetField('Meta_dtm'), MetadataDate = utils.this_year(),
+                        self.FRED._add_survey(Name = name, ID = feature.GetField('Project'), Agency = 'NRCAN', Date = this_year(),
+                                              MetadataLink = feature.GetField('Meta_dtm'), MetadataDate = this_year(),
                                               DataLink = data_link.replace('http', 'ftp'), IndexLink = self._hrdem_footprints_url,
                                               DataType = 'raster', DataSource = 'hrdem', HorizontalDatum = feature.GetField('Coord_Sys').split(':')[-1],
                                               Info = feature.GetField('Provider'), geom = geom)
 
             if self._verbose: _prog.end('scanned {} datasets.'.format(fcount))
-        utils.remove_glob(v_zip, *v_shps)
+        remove_glob(v_zip, *v_shps)
         self.FRED._close_ds()
 
     def _parse_results_all(self):
@@ -3425,10 +3996,10 @@ class hrdem():
             try:
                 src_ds = gdal.Open(src_dc)
             except Exception as e:
-                utils.echo_error_msg('could not read hrdem raster file: {}, {}'.format(entry[0], e))
+                echo_error_msg('could not read hrdem raster file: {}, {}'.format(entry[0], e))
                 src_ds = None
         except Exception as e:
-            utils.echo_error_msg('could not read hrdem raster file: {}, {}'.format(entry[0], e))
+            echo_error_msg('could not read hrdem raster file: {}, {}'.format(entry[0], e))
             src_ds = None
 
         if src_ds is not None:
@@ -3436,7 +4007,7 @@ class hrdem():
             for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                 yield(xyz)
         src_ds = None
-        utils.remove_glob(src_dc)
+        remove_glob(src_dc)
 
 ## =============================================================================
 ##
@@ -3453,7 +4024,7 @@ class chs:
     
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading CHS fetch module...')
+        if self._verbose: echo_msg('loading CHS fetch module...')
 
         ## ==============================================
         ## CHS URLs and directories
@@ -3489,7 +4060,7 @@ class chs:
         self.FRED._open_ds(1)
         chs_wcs = WCS(self._chs_url)
         contents = chs_wcs._contents()
-        if self._verbose: _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._chs_url))
+        if self._verbose: _prog = _progress('Scanning {} WCS coverages from {}...'.format(len(contents), self._chs_url))
         for i, layer in enumerate(contents):
             if self._verbose: _prog.update_perc((i, len(contents)))
             if 'Tiles' not in layer['CoverageId'][0]:
@@ -3509,8 +4080,8 @@ class chs:
                     try:
                         info = layer['Abstract']
                     except: info = None
-                    self.FRED._add_survey(Name = name, ID = layer['CoverageId'][0], Date = utils.this_year(), MetadataLink = meta,
-                                          MetadataDate = utils.this_year(), DataLink = url, DataType = 'raster',
+                    self.FRED._add_survey(Name = name, ID = layer['CoverageId'][0], Date = this_year(), MetadataLink = meta,
+                                          MetadataDate = this_year(), DataLink = url, DataType = 'raster',
                                           DataSource = 'chs', HorizontalDatum = 4326, VerticalDatum = 1092,
                                           Info = info, geom = geom)
         if self._verbose: _prog.end(0, 'Scanned {} WCS coverages from {}'.format(len(contents), self._chs_url))
@@ -3543,8 +4114,8 @@ class chs:
                 for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = self._verbose, z_region = z_region):
                     yield(xyz)
                 src_ds = None
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
-        utils.remove_glob(src_chs)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
+        remove_glob(src_chs)
             
 ## =============================================================================
 ##
@@ -3557,7 +4128,7 @@ class ngs:
     '''Fetch NGS monuments from NOAA'''
     def __init__(self, extent = None, where = [], callback = None, verbose = True):
         self._verbose = verbose
-        if self._verbose: utils.echo_msg('loading NGS Monument fetch module...')
+        if self._verbose: echo_msg('loading NGS Monument fetch module...')
 
         ## ==============================================
         ## NGS URLs and directories
@@ -3593,8 +4164,8 @@ class ngs:
         self.FRED._open_ds(1)
         self.FRED._attribute_filter(["ID = '{}'".format('NGS-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'NGS Monuments', ID = 'NGS-1', Agency = 'NGS', Date = utils.this_year(),
-                                  MetadataDate = utils.this_year(), DataLink = self._ngs_search_url,
+            self.FRED._add_survey(Name = 'NGS Monuments', ID = 'NGS-1', Agency = 'NGS', Date = this_year(),
+                                  MetadataDate = this_year(), DataLink = self._ngs_search_url,
                                   DataType = 'raster', DataSource = self._name, Info = self._info,
                                   geom = region2geom([-162, -60, 16, 73]))
         self.FRED._close_ds()
@@ -3616,8 +4187,8 @@ class ngs:
         if fetch_file(entry[0], src_ngs, callback = self._stop, verbose = self._verbose) == 0:
             with open(src_ngs, 'r') as json_file: r = json.load(json_file)
             for mm in r: yield([mm['lon'], mm['lat'], mm['geoidHt']])
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_ngs))
-        utils.remove_glob(src_ngs)
+        else: echo_error_msg('failed to fetch remote file, {}...'.format(src_ngs))
+        remove_glob(src_ngs)
 
 ## =============================================================================
 ##
@@ -3631,7 +4202,7 @@ class osm:
     '''Fetch OSM data'''
     def __init__(self, extent = None, where = [], callback = None):
         self._verbose = True
-        if self._verbose: utils.echo_msg('loading OSM fetch module...')
+        if self._verbose: echo_msg('loading OSM fetch module...')
 
         ## ==============================================
         ## OSM URLs and directories
@@ -3686,7 +4257,7 @@ class osm:
         osm_data = fetch_req(self._osm_api, params = {'data': osm_q}, timeout=3600)
         osm_json = osm_data.json()
 
-        if self._verbose: utils.echo_msg('found {} {} elements'.format(len(osm_json['elements']), osm_type))
+        if self._verbose: echo_msg('found {} {} elements'.format(len(osm_json['elements']), osm_type))
         
         if proc:
             if not os.path.exists(self._outdir):
@@ -3701,7 +4272,7 @@ class osm:
             dst_gmt.write('# FEATURE_DATA\n')
 
         for el_n, el in enumerate(osm_json['elements']):
-            utils.echo_msg_inline('fetching osm {} data [{}%]'.format(osm_type, float(el_n) / len(osm_json['elements']) * 100))
+            echo_msg_inline('fetching osm {} data [{}%]'.format(osm_type, float(el_n) / len(osm_json['elements']) * 100))
             if el['type'] == 'way':
 
                 osm_node_q = '''
@@ -3726,11 +4297,11 @@ class osm:
                                 if el_node['id'] == node:
                                     xyz_line([el_node['lon'], el_node['lat']], dst_gmt)
                                     
-        if self._verbose: utils.echo_msg_inline('fetching osm {} data [OK]\n'.format(osm_type))
+        if self._verbose: echo_msg_inline('fetching osm {} data [OK]\n'.format(osm_type))
         
         if proc:
             dst_gmt.close()
-            utils.run_cmd('ogr2ogr {}.shp {}.gmt'.format(os.path.join(self._outdir, out_fn), os.path.join(self._outdir, out_fn)), verbose = False)
+            run_cmd('ogr2ogr {}.shp {}.gmt'.format(os.path.join(self._outdir, out_fn), os.path.join(self._outdir, out_fn)), verbose = False)
             
 ## ==============================================
 ## fetches processing (datalists fmt: -4)
@@ -3758,7 +4329,7 @@ def fetch_yield_entry(entry = ['nos:datatype=xyz'], region = None, warp = None, 
     print(region)
     region = region_warp(region, src_epsg = warp, dst_epsg = 4326)
     fl = _fetch_modules[fetch_mod](region_buffer(region, 5, pct = True), [], lambda: False, verbose)
-    args_d = utils.args2dict(fetch_args, {})
+    args_d = args2dict(fetch_args, {})
 
     for e in fl._parse_results():
         for xyz in fl._yield_xyz(e, epsg = warp, z_region = z_region):
@@ -3790,7 +4361,7 @@ def fetch(fg):
     out_results = []
     stop_threads = False
     if fg is None:
-        utils.echo_error_msg('invalid configuration, {}'.format(fg))
+        echo_error_msg('invalid configuration, {}'.format(fg))
         sys.exit(-1)
         
     for fetch_mod in fg['mods'].keys():
@@ -3802,8 +4373,8 @@ def fetch(fg):
             this_region = None
         else: this_region = region_buffer(fg['region'], 5, pct = True)
         fl = _fetch_modules[fetch_mod](this_region, fg['where'], lambda: stop_threads, fg['verbose'])
-        args_d = utils.args2dict(args)
-        if fg['verbose']: _prog = utils.CliProgress('running FETCHES module < {} > with {} [{}]...'.format(fetch_mod, args, args_d))
+        args_d = args2dict(args)
+        if fg['verbose']: _prog = _progress('running FETCHES module < {} > with {} [{}]...'.format(fetch_mod, args, args_d))
 
         ## ==============================================
         ## Run update in a thread to cleanly close FRED
@@ -3819,11 +4390,11 @@ def fetch(fg):
                     if not t.is_alive():
                         break
             except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                echo_error_msg('user breakage...please wait while fetches exits.')
                 stop_threads = True
                 status = -1
             except Exception as e:
-                utils.echo_error_msg(e)
+                echo_error_msg(e)
                 stop_threads = True
                 status = -1
             t.join()
@@ -3852,7 +4423,7 @@ def fetch(fg):
                     if not fr.is_alive():
                         break
             except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('user breakage...please wait for while fetches exits.')
+                echo_error_msg('user breakage...please wait for while fetches exits.')
                 stop_threads = True
                 status = -1
                 while not fr.fetch_q.empty():
@@ -3863,7 +4434,7 @@ def fetch(fg):
             except Exception as e:
                 stop_threads = True
                 status = -1
-                utils.echo_error_msg(e)
+                echo_error_msg(e)
             fr.join()
         if fg['verbose']: _prog.end(status, 'ran FETCHES module < {} > with {} [{}]...'.format(fetch_mod, args, fg))
         
@@ -3997,7 +4568,7 @@ def fetches_cli(argv = sys.argv):
             opts = arg.split(':')
             if opts[0] in _fetch_modules.keys():
                 mod_opts[opts[0]] = list(opts[1:])
-            else: utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
+            else: echo_error_msg('invalid module name `{}`'.format(opts[0]))
         i = i + 1
 
     ## ==============================================
@@ -4013,10 +4584,10 @@ def fetches_cli(argv = sys.argv):
                     sys.exit(0)
             except Exception as e:
                 fg = fetches_config(**fg)
-                utils.echo_error_msg(e)
+                echo_error_msg(e)
                 sys.exit(-1)
         else:
-            utils.echo_error_msg('specified json file does not exist, {}'.format(fg_user))
+            echo_error_msg('specified json file does not exist, {}'.format(fg_user))
             sys.exit(0)
         
     ## ==============================================
@@ -4026,7 +4597,7 @@ def fetches_cli(argv = sys.argv):
         for key in _fetch_modules.keys():
             mod_opts[key] = ''
         sys.stderr.write(_usage)
-        utils.echo_error_msg('you must select at least one fetch module')
+        echo_error_msg('you must select at least one fetch module')
         sys.exit(1)
         
     for key in mod_opts.keys():
@@ -4044,9 +4615,9 @@ def fetches_cli(argv = sys.argv):
         if len(these_regions) == 0: status = -1
         for this_region in these_regions:
             if not region_valid_p(this_region): status = -1
-        utils.echo_msg('loaded {} region(s)'.format(len(these_regions)))
+        echo_msg('loaded {} region(s)'.format(len(these_regions)))
     else: these_regions = [None]
-    if len(these_regions) == 0: utils.echo_error_msg('failed to parse region(s), {}'.format(region))
+    if len(these_regions) == 0: echo_error_msg('failed to parse region(s), {}'.format(region))
 
     ## ==============================================
     ## fetch some data in each of the input regions
@@ -4056,14 +4627,14 @@ def fetches_cli(argv = sys.argv):
         tfg = fetches_config(**fg)
         if this_region is None: tfg['fetch_p'] = False
         tfg['region'] = this_region
-        tfg['name'] = 'fetches_{}_{}'.format('' if this_region is None else region_format(this_region, 'fn'), utils.this_year())
+        tfg['name'] = 'fetches_{}_{}'.format('' if this_region is None else region_format(this_region, 'fn'), this_year())
         tfg = fetches_config(**tfg)
         if want_config:
             if tfg is not None:
-                utils.echo_msg(json.dumps(tfg, indent = 2, sort_keys = True))
+                echo_msg(json.dumps(tfg, indent = 2, sort_keys = True))
                 with open('{}.json'.format(tfg['name']), 'w') as fg_json:
-                    utils.echo_msg('generating fetches config file: {}.json'.format(tfg['name']))
+                    echo_msg('generating fetches config file: {}.json'.format(tfg['name']))
                     fg_json.write(json.dumps(tfg, indent = 2, sort_keys = True))
-            else: utils.echo_error_msg('could not parse config.')
+            else: echo_error_msg('could not parse config.')
         else: fetch(tfg)
 ### End
