@@ -189,6 +189,47 @@ def remove_glob(*args):
         except: pass
     return(0)
 
+def unzip(zip_file):
+    """unzip (extract) `zip_file`
+
+    Args:
+      zip_file (str): a zip file pathname string
+
+    Returns:
+      list: a list of extracted file names.
+    """
+    
+    zip_ref = zipfile.ZipFile(zip_file)
+    zip_files = zip_ref.namelist()
+    zip_ref.extractall()
+    zip_ref.close()
+    return(zip_files)
+
+def gunzip(gz_file):
+    """gunzip `gz_file`
+
+    Args:
+      gz_file (str): a gzip file pathname string.
+
+    Returns:
+      str: the extracted file name.
+    """
+    
+    if os.path.exists(gz_file):
+        gz_split = gz_file.split('.')[:-1]
+        guz_file = '{}.{}'.format(gz_split[0], gz_split[1])
+        with gzip.open(gz_file, 'rb') as in_gz, \
+             open(guz_file, 'wb') as f:
+            while True:
+                block = in_gz.read(65536)
+                if not block:
+                    break
+                else: f.write(block)
+    else:
+        echo_error_msg('{} does not exist'.format(gz_file))
+        guz_file = None
+    return(guz_file)
+
 def p_unzip(src_file, exts=None):
     """unzip/gunzip src_file based on `exts`
     
@@ -1041,7 +1082,7 @@ def gdal_ogr_regions(src_ds):
                 pgeom = pf.GetGeometryRef()
                 pwkt = pgeom.ExportToWkt()
                 penv = ogr.CreateGeometryFromWkt(pwkt).GetEnvelope()
-                these_append(penv)
+                these_regions.append(penv)
                 
         poly = None
         
@@ -1058,7 +1099,7 @@ def gdal_ogr_polys(src_ds):
             for pf in p_layer:
                 pgeom = pf.GetGeometryRef()
                 pwkt = pgeom.ExportToWkt()
-                these_append(pwkt)
+                these_regions.append(pwkt)
                 
         poly = None
     return(these_regions)
@@ -1692,7 +1733,7 @@ def mb_inf_data_format(src_inf):
 ## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
 ##
 ## =============================================================================
-r_headers = { 'User-Agent': 'GeoMods: Fetches v%s' %(_version) }
+r_headers = { 'User-Agent': 'Fetches v%s' %(_version) }
 
 def fetch_queue(q, fo, fg):
     """fetch queue `q` of fetch results"""
@@ -2571,7 +2612,12 @@ class nos:
         '''Search the NOS reference vector and append the results
         to the results list.'''
         for surv in _filter_FRED(self):
-            yield([self._data_urls.append([i, i.split('/')[-1], surv['DataType']]) if i != '' else None for i in surv['DataLink'].split(',')])
+            for i in surv['DataLink'].split(','):
+                if i != '':
+                    yield([i, i.split('/')[-1], surv['DataType']])
+
+            #yield([surv.GetField('URL').strip(), '{}/{}'.format(surv['ID'], tile_url.split('/')[-1]), surv['DataType']])
+            #yield([self._data_urls.append([i, i.split('/')[-1], surv['DataType']]) if i != '' else None for i in surv['DataLink'].split(',')])
             
     ## ==============================================
     ## Process results to xyz
