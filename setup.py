@@ -83,6 +83,7 @@ setuptools.setup(
         'scripts/create_outliers.sh',
         'scripts/create_povray_template.sh',
         'scripts/tif2chunks2xyz.sh',
+        'scripts/bag2tif2chunks2xyz.sh',
     ],
     python_requires = '>=2.7',
     project_urls = {
