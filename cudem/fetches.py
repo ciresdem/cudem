@@ -19,7 +19,15 @@
 ##
 ### Commentary:
 ##
+## Fetch and optionally process to XYZ various elevation data sources.
+##
 ## current fetch modules: dc, nos, mb, charts, usace, srtm_cgiar, srtm_plus, tnm, gmrt, emodnet, mar_grav, osm
+##
+## This is the standalone version. External programs needed for data processing:
+## - GDAL
+## - LASTOOLS
+## - MBSYSTEM
+## - GMT
 ##
 ### Code:
 
@@ -40,19 +48,45 @@ import lxml.html as lh
 import lxml.etree
 import json
 import threading
+try:
+    import Queue as queue
+except: import queue as queue
 from osgeo import osr
 from osgeo import ogr
 from osgeo import gdal
 import numpy as np
-try:
-    import Queue as queue
-except: import queue as queue
 
 _version = '0.7.0-standalone'
 
 ## =============================================================================
 ## utils (old)
 ## =============================================================================
+def gmt_inc2inc(inc_str):
+    """convert a GMT-style `inc_str` (6s) to geographic units
+
+    c/s - arc-seconds
+    m - arc-minutes
+
+    Args:
+      inc_str (str): GMT style increment string
+
+    Returns:
+      float: increment value.
+    """
+    
+    if inc_str is None or inc_str.lower() == 'none': return(None)
+    units = inc_str[-1]
+    if units == 'c': inc = float(inc_str[:-1]) / 3600.
+    elif units == 's': inc = float(inc_str[:-1]) / 3600.
+    elif units == 'm': inc = float(inc_str[:-1]) / 360.
+    else:
+        try:
+            inc = float(inc_str)
+        except ValueError as e:
+            echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
+            return(None)
+    return(inc)
+
 def inc2str_inc(inc):
     """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
 
@@ -1150,11 +1184,9 @@ def gdal_region_warp(region, s_warp=4326, t_warp=4326):
         region = [pointA.GetX(), pointB.GetX(), pointA.GetY(), pointB.GetY()]
     return(region)
 
+## =============================================================================
 ## gdalfun (old)
-
-## ==============================================
-## GDAL gather/set infos on a gdal file/datasource
-## ==============================================
+## =============================================================================
 def gdal_infos(src_fn, region = None, scan = False):
     '''scan gdal file src_fn and gather region info.
 
@@ -1303,11 +1335,9 @@ def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, warp = N
     msk_band = None
     if verbose: echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
 
+## =============================================================================
 ## xyzfun (old)
-
-## ==============================================
-## xyz processing (datalists fmt:168)
-## ==============================================
+## =============================================================================
 _xyz_config = {
     'delim': None,
     'xpos': 0,
@@ -2665,8 +2695,8 @@ class nos:
             elif dt == 'grid_bag':
                 src_bags = p_unzip(src_nos, ['gdal', 'tif', 'img', 'bag', 'asc'])
 
-                nos_f = '{}.tmp'.format(os.path.basename(src_bag).split('.')[0])
                 for src_bag in src_bags:
+                    nos_f = '{}.tmp'.format(os.path.basename(src_bag).split('.')[0])
                     try:
                         src_ds = gdal.Open(src_bag)
                         srcwin = gdal_srcwin(src_ds, region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
@@ -4566,9 +4596,9 @@ def fetches_cli(argv = sys.argv):
             fg['where'].append(argv[i + 1])
             i = i + 1
         elif arg == '--increment' or arg == '-E':
-            fg['inc'] = gmtfun.gmt_inc2inc(argv[i+1])
+            fg['inc'] = gmt_inc2inc(argv[i+1])
             i = i + 1
-        elif arg[:2] == '-E': fg['inc'] = gmtfun.gmt_inc2inc(arg[2:].split(':')[0])
+        elif arg[:2] == '-E': fg['inc'] = gmt_inc2inc(arg[2:].split(':')[0])
         elif arg == '--z-range' or arg == '-Z':
             zr = argv[i + 1].split('/')
             if len(zr) > 1:
