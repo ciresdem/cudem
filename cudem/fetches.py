@@ -3189,7 +3189,7 @@ may or may not be accurate.'''
             _data = {'geometry': region_format(self.region, 'bbox'), 'inSR':4326, 'outSR':4326, 'f':'pjson'}
             _req = fetch_req(surv['DataLink'], params = _data)
             if _req is not None and _req.status_code == 200:
-                survey_list = self._req.json()
+                survey_list = _req.json()
                 for feature in survey_list['features']:
                     fetch_fn = feature['attributes']['SOURCEDATALOCATION']
                     if stype is not None:

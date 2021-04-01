@@ -39,6 +39,9 @@ __version__ = '0.10.0'
 def waffles_append_fn(bn, src_region, inc):
     return('{}{}_{}_{}v1'.format(bn, utils.inc2str(inc), src_region.format('fn'), utils.this_year()))
 
+## ==============================================
+## Waffles XYZ blocking
+## ==============================================        
 def xyz_block(src_xyz, src_region, inc, weights=False, verbose=False):
     """block the src_xyz data to the mean block value
 
@@ -126,6 +129,60 @@ def xyz2gdal(src_xyz, dst_gdal, src_region, inc, dst_format = 'GTiff', mode = 'n
     outarray[np.isnan(outarray)] = -9999
     if verbose: progress.end(0, 'generated uninterpolated num grid {} @ {}/{}'.format(mode, ycount, xcount))
     return(utils.gdal_write(outarray, dst_gdal, ds_config))
+
+def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
+    '''`union` a `src_layer`'s features based on `src_field` where
+    `src_field` holds a value of 0 or 1. optionally, specify
+    an output layer defn for the unioned feature.
+
+    returns the output feature class'''
+    
+    if dst_defn is None: dst_defn = src_layer.GetLayerDefn()
+    multi = ogr.Geometry(ogr.wkbMultiPolygon)
+    feats = len(src_layer)
+    utils.echo_msg('unioning {} features'.format(feats))
+    for n, f in enumerate(src_layer):
+        gdal.TermProgress_nocb((n+1 / feats) * 100)
+        if f.GetField(src_field) == 0:
+            src_layer.DeleteFeature(f.GetFID())
+        elif f.GetField(src_field) == 1:
+            f.geometry().CloseRings()
+            wkt = f.geometry().ExportToWkt()
+            multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+            src_layer.DeleteFeature(f.GetFID())
+    #union = multi.UnionCascaded() ## slow on large multi...
+    out_feat = ogr.Feature(dst_defn)
+    out_feat.SetGeometryDirectly(multi)
+    #union = multi = None
+    return(out_feat)
+
+def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
+    driver = ogr.GetDriverByName(dn)
+    ds = driver.Open(src_ogr, 0)
+    layer = ds.GetLayer()
+
+    clip_region.export_as_ogr('tmp_clip.shp')
+    c_ds = driver.Open('tmp_clip.shp', 0)
+    c_layer = c_ds.GetLayer()
+    
+    dst_ds = driver.CreateDataSource(dst_ogr)
+    dst_layer = dst_ds.CreateLayer(dst_ogr.split('.')[0], geom_type=ogr.wkbMultiPolygon)
+
+    layer.Clip(c_layer, dst_layer)
+
+    ds = c_ds = dst_ds = None
+
+def ogr_empty_p(src_ogr):
+    driver = ogr.GetDriverByName('ESRI Shapefile')
+    ds = driver.Open(src_ogr, 0)
+
+    if ds is not None:
+        layer = ds.GetLayer()
+        fc = layer.GetFeatureCount()
+        if fc == 0:
+            return(True)
+        else: return(False)
+    else: return(True)
 
 class Waffled:
     """Providing a waffled object."""
@@ -219,7 +276,7 @@ class Waffle:
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_dem',
                  node='pixel', fmt='GTiff', extend=0, extend_proc=20, weights=None,
                  fltr=[], sample=None, clip=None, chunk=None, epsg=4326,
-                 verbose=False, archive=False, mask=False, clobber=True):
+                 verbose=False, archive=False, mask=False, spat=False, clobber=True):
 
         self.data = data
         self.region = src_region
@@ -241,12 +298,13 @@ class Waffle:
         self.clobber = clobber
         self.verbose = verbose
         self.gc = utils.config_check()
-
+        self.spat = spat
+        
         if self.node == 'grid':
             self.region = self.region.buffer(self.inc*.5)
         self.p_region = self.proc_region()
         self.d_region = self.dist_region()
-
+        
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
@@ -268,8 +326,8 @@ class Waffle:
 
     def dist_region(self):
             
-        pr = regions.Region().from_region(self.region)
-        return(pr.buffer((self.inc*self.extend)))
+        dr = regions.Region().from_region(self.region)
+        return(dr.buffer((self.inc*self.extend)))
 
     def run(self):
         pass
@@ -325,11 +383,71 @@ class Waffle:
                 except:
                     pass
         out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
+
+    def spat_meta(self, yxyz=False, **kwargs):
+        self.dst_layer = '{}_sm'.format(self.name)
+        self.dst_vector = self.dst_layer + '.shp'
+        self.v_fields = ['Name', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
+        self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
+                         ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString]
+        utils.remove_glob('{}.*'.format(self.dst_layer))
+        utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
+        sm_inc = self.inc if self.inc >= utils.str2inc('.3333333s') else utils.str2inc('.3333333s')
         
-    def yield_xyz(self, **kwargs):
+        self.ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(self.dst_vector)
+        if self.ds is not None: 
+            self.layer = self.ds.CreateLayer('{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon)
+            [self.layer.CreateField(ogr.FieldDefn('{}'.format(f), self.t_fields[i])) for i, f in enumerate(self.v_fields)]
+            [self.layer.SetFeature(feature) for feature in self.layer]
+        else: self.layer = None
 
         for xdl in self.data:
-            xyz_yield = xdl.yield_xyz()
+            #xdl.parse()
+            for x in xdl.data_lists.keys():
+                xdl.data_entries = xdl.data_lists[x]
+                dl_name = x
+                o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+                defn = None if self.layer is None else self.layer.GetLayerDefn()
+                for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), sm_inc):
+                    if yxyz:
+                        yield(xyz)
+                    else:
+                        pass
+
+                if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
+                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(dl_name))
+                    if tmp_ds is not None:
+                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(dl_name), None, ogr.wkbMultiPolygon)
+                        tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                        demfun.polygonize('{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose)
+
+                        if len(tmp_layer) > 1:
+                            if defn is None: defn = tmp_layer.GetLayerDefn()
+                            out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+                            [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
+                            self.layer.CreateFeature(out_feat)
+                    tmp_ds = None
+                    utils.remove_glob('{}_poly.*'.format(dl_name), '{}.tif'.format(dl_name))
+        self.ds = None
+        
+        dr = regions.Region().from_region(self.region)
+        dr.buffer((sm_inc*self.extend))
+        #print(dr.format('gmt'))
+        #ogr_clip('{}'.format(self.dst_vector), '__tmp_clip.shp', clip_region = dr)
+        utils.run_cmd('ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), self.dst_vector), verbose=True)
+        utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(self.dst_vector), verbose=True)
+        utils.remove_glob('__tmp_clip.*')
+        utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+        '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
+                 
+    def yield_xyz(self, **kwargs):
+        """yields the xyz data"""
+        
+        for xdl in self.data:
+            if self.spat:
+                xyz_yield = self.spat_meta(yxyz=True)
+            else:
+                xyz_yield = xdl.yield_xyz()
             if self.mask:
                 xyz_yield = self.xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
             if self.archive:
@@ -351,7 +469,7 @@ class Waffle:
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for xyz in self.yield_xyz(**kwargs):
             xyz.dump(include_w = True if self.weights is not None else False, dst_port=dst_port, encode=encode, **kwargs)
-
+            
 ## ==============================================
 ## Waffles GMT surface module
 ## ==============================================
@@ -447,7 +565,7 @@ class WafflesNum(Waffle):
 
 ## ==============================================
 ## Waffles GDAL_GRID module
-## see gdal_grid for gridding algorithms
+## see gdal_grid for more info and gridding algorithms
 ## ==============================================
 class WafflesGDALGrid(Waffle):
     
@@ -612,7 +730,7 @@ see gdal_grid --help for more info
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_dem',
                  node='pixel', fmt='GTiff', extend=0, extend_proc=20, weights=None,
                  fltr=[], sample = None, clip=None, chunk=None, epsg=4326,
-                 verbose = False, archive=False, mask=False, clobber=True):
+                 verbose = False, archive=False, mask=False, spat=False, clobber=True):
 
         self.data = data
         self.region = src_region
@@ -630,6 +748,7 @@ see gdal_grid --help for more info
         self.epsg = utils.int_or(epsg)
         self.archive = archive
         self.mask = mask
+        self.spat = spat
         self.clobber = clobber
         self.verbose = verbose
         
@@ -637,43 +756,43 @@ see gdal_grid --help for more info
         return(GMTSurface(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                           fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                           fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                          archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                          archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_triangulate(self, **kwargs):
         return(GMTTriangulate(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                               fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                               fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                              archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                              archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_num(self, **kwargs):
         return(WafflesNum(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                           fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                           fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                          archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                          archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_linear(self, **kwargs):
         return(WafflesLinear(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                              fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                              fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                             archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                             archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_average(self, **kwargs):
         return(WafflesMovingAverage(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                                     fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                                     fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                                    archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                                    archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_invdst(self, **kwargs):
         return(WafflesInvDst(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                              fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                              fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                             archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                             archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_nearest(self, **kwargs):
         return(WafflesNearest(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                               fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                               fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
-                              archive=self.archive, mask=self.mask, clobber=self.clobber, verbose=self.verbose, **kwargs))
+                              archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_module_by_name(self, mod_name, **kwargs):
         if mod_name == 'surface':
@@ -740,6 +859,7 @@ Options:
 
   -a, --archive\t\tArchive the datalist to the given region.
   -m, --mask\t\tGenerate a data mask raster.
+  -s, --spat\t\tGenerate spatial metadata.
   -c, --continue\tDon't clobber existing files.
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
 
@@ -845,6 +965,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '-p' or arg == '--prefix': want_prefix = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
         elif arg == '-m' or arg == '--mask': wg['mask'] = True
+        elif arg == '-s' or arg == '--spat': wg['spat'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
 

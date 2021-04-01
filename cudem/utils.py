@@ -293,9 +293,12 @@ def _apply_gt(in_x, in_y, geoTransform):
     Returns:
       list: [geographic-x, geographic-y]
     """
-    
-    out_x = geoTransform[0] + int(in_x + 0.5) * geoTransform[1] + int(in_y + 0.5) * geoTransform[2]
-    out_y = geoTransform[3] + int(in_x + 0.5) * geoTransform[4] + int(in_y + 0.5) * geoTransform[5]
+
+    out_x = geoTransform[0] + (int(in_x + 0.5)*geoTransform[1]) + (int(in_y + 0.5)*geoTransform[2])
+    out_y = geoTransform[3] + (int(in_x + 0.5)*geoTransform[4]) + (int(in_y + 0.5)*geoTransform[5])
+
+    #out_x = geoTransform[0] + int(in_x + 0.5) * geoTransform[1] + int(in_y + 0.5) * geoTransform[2]
+    #out_y = geoTransform[3] + int(in_x + 0.5) * geoTransform[4] + int(in_y + 0.5) * geoTransform[5]
 
     return(out_x, out_y)
 
@@ -309,7 +312,7 @@ def _invert_gt(geoTransform):
       list: a geo-transform list describing a raster
     """
     
-    det = geoTransform[1] * geoTransform[5] - geoTransform[2] * geoTransform[4]
+    det = (geoTransform[1]*geoTransform[5]) - (geoTransform[2]*geoTransform[4])
     if abs(det) < 0.000000000000001: return
     invDet = 1.0 / det
     outGeoTransform = [0, 0, 0, 0, 0, 0]
@@ -335,6 +338,16 @@ def sr_wkt(epsg, esri = False):
         return(sr.ExportToWkt())
     except: return(None)
 
+def gdal_prj_file(dst_fn, epsg):
+    """generate a .prj file given an epsg code
+
+    returns 0
+    """
+    
+    with open(dst_fn, 'w') as out:
+        out.write(sr_wkt(int(epsg), True))
+    return(0)
+    
 def gdal_fext(src_drv_name):
     """find the common file extention given a GDAL driver name
     older versions of gdal can't do this, so fallback to known standards.

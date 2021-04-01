@@ -353,6 +353,8 @@ class Region:
             self.xmax += bv
             self.ymin -= bv
             self.ymax += bv
+
+            self.wkt = self.export_as_wkt()
         return(self)
 
     def center(self):
@@ -600,6 +602,7 @@ def xyz_in_region_p(xyz, this_region):
     xyz_wkt = xyz.export_as_wkt()
     p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
     r_geom = this_region.export_as_geom()
+
     if r_geom is not None:
         pass_d = p_geom.Within(r_geom)
 

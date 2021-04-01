@@ -57,6 +57,7 @@ class XYZDataset():
         self.verbose = verbose
         self.fn = fn
         self.data_entries = []
+        self.data_lists = {}
         self.region = src_region
         self.warp = utils.int_or(warp)
         self.remote = remote
@@ -100,8 +101,7 @@ class XYZDataset():
         except: return('0')
     
     def echo(self, **kwargs):
-        """print self as a datalist entry string.
-        """
+        """print self as a datalist entry string."""
 
         for entry in self.data_entries:
             l = [entry.fn, entry.data_format]
@@ -144,8 +144,8 @@ class XYZDataset():
             else:
                 gen_inf = True
         else:
-            gen_inf = 'hash' not in self.infos.keys()
-        
+            gen_inf = 'hash' not in self.infos.keys() or 'wkt' not in self.infos.keys()
+
         if gen_inf:
             utils.echo_msg("generating inf for {}".format(self.fn))
             self.infos = self.generate_inf()
@@ -170,10 +170,84 @@ class XYZDataset():
 
     def parse(self):
         pass
-    
+
+    def parse_data_lists(self):
+        for e in self.data_entries:
+            if e.parent.name in self.data_lists.keys():
+                self.data_lists[e.parent.name].append(e)
+            else:
+                self.data_lists[e.parent.name] = [e]
+        return(self)
+                
     def yield_xyz(self):
         pass
+
+    def mask_xyz(self,dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
+
+        yields the xyz data
+        """
+
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
+        ptArray = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
+            gdal.GDT_Float32, -9999, 'GTiff')
+        for this_xyz in self.yield_xyz(**kwargs):
+            yield(this_xyz)
+            if regions.xyz_in_region_p(this_xyz, self.region):
+                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                try:
+                    ptArray[ypos, xpos] = 1
+                except:
+                    pass
+        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
+
+    # def spatial_metadata(self, dst_sm, dst_inc, **kwargs):
+    #     """generate spatial-metadata """
+
+    #     self.dst_layer = '{}_sm'.format(self.name)
+    #     self.dst_vector = self.dst_layer + '.shp'
+    #     self.v_fields = ['Name', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
+    #     self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
+    #                      ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString]
+    #     utils.remove_glob('{}.*'.format(self.dst_layer))
+    #     utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
     
+    #     self.ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(self.dst_vector)
+    #     if self.ds is not None: 
+    #         self.layer = self.ds.CreateLayer('{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon)
+    #         [self.layer.CreateField(ogr.FieldDefn('{}'.format(f), self.t_fields[i])) for i, f in enumerate(self.v_fields)]
+    #         [self.layer.SetFeature(feature) for feature in self.layer]
+    #     else: self.layer = None
+        
+    #     #if len(this_entry[3]) == 8:
+    #     #    o_v_fields = this_entry[3]
+    #     #else:
+    #     o_v_fields = [self.name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+    #     defn = None if self.layer is None else self.layer.GetLayerDefn()
+    #     #for xyz in xdl.mask_xyz('tmp.tif', self.inc):
+
+    #     for xyz in self.mask_xyz('tmp.tif', utils.str2inc('1s')):
+    #         yield(xyz)
+
+    #     if demfun.infos('tmp.tif', scan=True)['zr'][1] == 1:
+    #         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(self.name))
+    #         if tmp_ds is not None:
+    #             tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(self.name), None, ogr.wkbMultiPolygon)
+    #             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    #             demfun.polygonize('tmp.tif', tmp_layer, verbose=self.verbose)
+
+    #             if len(tmp_layer) > 1:
+    #                 if defn is None: defn = tmp_layer.GetLayerDefn()
+    #                 out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+    #                 [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
+    #                 self.layer.CreateFeature(out_feat)
+    #         tmp_ds = None
+    #         utils.remove_glob('{}_poly.*'.format(self.name), 'tmp.tif')
+    #     self.ds = None
+        
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for this_xyz in self.yield_xyz(**kwargs):
             this_xyz.dump(include_w=True if self.weight is not None else False,
@@ -277,11 +351,10 @@ class Datalist(XYZDataset):
     A datalist is an MB-System style datalist.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, fmt=None, **kwargs):
         super().__init__(**kwargs)
+        self.name = os.path.basename('.'.join(self.fn.split('.')[:-1]))
         
-        self.name = '.'.join(self.fn.split('.')[:-1])
-
     def generate_inf(self):
         """return the region of the datalist and generate
         an associated `.inf` file if `inf_file` is True.
@@ -328,7 +401,7 @@ class Datalist(XYZDataset):
 
         self.region = _region
         return(self.infos)
-        
+    
     def parse(self):
         """import a datalist entry from a string
     
@@ -345,19 +418,21 @@ class Datalist(XYZDataset):
                         data_set = DatasetFactory(
                             this_line, parent=self, src_region=self.region,
                             warp=self.warp, verbose=self.verbose).acquire_dataset()
-                        if data_set.valid_p():
+                        if data_set is not None and data_set.valid_p():
                             data_set.inf()
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                                inf_region = regions.Region().from_string(data_set.infos['wkt'])
-                                if regions.regions_intersect_p(inf_region, self.region):
-                                    data_set.parse()
-                                    for entry in data_set.data_entries:
-                                        self.data_entries.append(entry)
+                                if data_set.infos['minmax'] is not None:
+                                    inf_region = regions.Region().from_string(data_set.infos['wkt'])
+                                    if regions.regions_intersect_p(inf_region, self.region):
+                                        data_set.parse()
+                                        for entry in data_set.data_entries:
+                                            self.data_entries.append(entry)
                             else:
                                 data_set.parse()
                                 for entry in data_set.data_entries:
                                     self.data_entries.append(entry)
         else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
+        self.parse_data_lists()
         _prog.end(0, 'parsed datalist {}'.format(self.fn))
         return(self)
            
@@ -409,24 +484,26 @@ class XYZFile(XYZDataset):
         self.infos['numpts'] = 0
         this_region = regions.Region()
 
+        region_ = self.region
+        self.region = None
         for i, l in enumerate(self.yield_xyz()):
             if i == 0:
                 this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
             else:
-                try:
-                    if l.x < this_region.xmin:
-                        this_region.xmin = l.x
-                    elif l.x > this_region.xmax:
-                        this_region.xmax = l.x
-                    if l.y < this_region.ymin:
-                        this_region.ymin = l.y
-                    elif l.y > this_region.ymax:
-                        this_region.ymax = l.y
-                    if l.z < this_region.zmin:
-                        this_region.zmin = l.z
-                    elif l.z > this_region.zmax:
-                        this_region.zmax = l.z
-                except: pass
+                #try:
+                if l.x < this_region.xmin:
+                    this_region.xmin = l.x
+                elif l.x > this_region.xmax:
+                    this_region.xmax = l.x
+                if l.y < this_region.ymin:
+                    this_region.ymin = l.y
+                elif l.y > this_region.ymax:
+                    this_region.ymax = l.y
+                if l.z < this_region.zmin:
+                    this_region.zmin = l.z
+                elif l.z > this_region.zmax:
+                    this_region.zmax = l.z
+                #except: pass
             pts.append(l.export_as_list(include_z = True))
             self.infos['numpts'] = i
 
@@ -438,6 +515,7 @@ class XYZFile(XYZDataset):
                 self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
             except:
                 self.infos['wkt'] = this_region.export_as_wkt()
+        self.region = region_
         return(self.infos)
         
     def line_delim(self, xyz_line):
@@ -594,9 +672,11 @@ class RasterFile(XYZDataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self._open_ds()
+        gt = self.src_ds.GetGeoTransform()
+        #srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
         if self.ds_open_p:            
             this_region = regions.Region().from_geo_transform(
-                geoT=self.gt, x_count=self.x_count, y_count=self.y_count)
+                geoT=gt, x_count=self.src_ds.RasterXSize, y_count=self.src_ds.RasterYSize)
             try:
                 zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except:
@@ -604,7 +684,7 @@ class RasterFile(XYZDataset):
             this_region.zmin = zr[0]
             this_region.zmax = zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
-            self.infos['numpts'] = self.x_count * self.y_count
+            self.infos['numpts'] = self.src_ds.RasterXSize * self.src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
         self._close_ds()
         return(self.infos)
@@ -641,13 +721,14 @@ class RasterFile(XYZDataset):
         """
 
         if self.ds_open_p:
-            gt = self.src_ds.GetGeoTransform()
+            self.gt = self.src_ds.GetGeoTransform()
             if self.region is not None and self.region.valid_p(check_xy = True):
-                self.srcwin = self.region.srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+                self.srcwin = self.region.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
             else: self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
             src_band = self.src_ds.GetRasterBand(1)
-            self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
-
+            #self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
+            #self.gt = gt
+            
             proj = self.src_ds.GetProjectionRef()
             src_srs = osr.SpatialReference()
             src_srs.ImportFromWkt(proj)
@@ -1006,8 +1087,9 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tIf a vector file is supplied, will use each region found therein.
 \t\t\tAppend :zmin/zmax/[ wmin/wmax ] to the file path to extended REGION.
-  -P, --s_epsg\t\tSet the projection EPSG code of the datalist
-  -W, --t_epsg\t\tSet the output warp projection EPSG code
+  -P, --s_epsg\t\tSet the projection EPSG code of the datalist.
+  -W, --t_epsg\t\tSet the output warp projection EPSG code.
+  -F, --format\t\tOnly process the given data format.
 
   --glob\t\tGLOB the datasets in the current directory to stdout
   --info\t\tGenerate and return an INFO dictionary of the dataset
@@ -1039,6 +1121,7 @@ def datalists_cli(argv = sys.argv):
     dls = []
     epsg = None
     warp = None
+    fmt = None
     i_regions = []
     these_regions = []
     want_weights = False
@@ -1063,6 +1146,9 @@ def datalists_cli(argv = sys.argv):
             i = i + 1
         elif arg == '-t_epsg' or arg == '--t_epsg' or arg == '-W':
             warp = argv[i + 1]
+            i = i + 1
+        elif arg == '--format' or arg == '-F':
+            fmt = utils.int_or(argv[i + 1])
             i = i + 1
         elif arg == '--weights' or arg == '-w':
             want_weights = True
@@ -1118,8 +1204,7 @@ def datalists_cli(argv = sys.argv):
             src_region=this_region, verbose=want_verbose,
             epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
         
-        for xdl in xdls:
-            
+        for xdl in xdls:            
             if xdl is not None and xdl.valid_p():
                 xdl.parse()
                 if not want_weights: xdl.weight = None

@@ -288,7 +288,21 @@ def crop(src_dem, dst_dem):
         return(utils.gdal_write(ds_arr, dst_dem, ds_config))
     else:
         return(None, -1)
+    
+def polygonize(src_gdal, dst_layer, verbose=False):
+    '''run gdal.Polygonize on src_ds and add polygon to dst_layer'''
 
+    try:
+        ds = gdal.Open('{}'.format(src_gdal))
+    except: ds = None
+    if ds is not None:
+        ds_arr = ds.GetRasterBand(1)
+        if verbose: utils.echo_msg('polygonizing {}'.format(src_gdal))
+        status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
+        ds = ds_arr = None
+        return(0, 0)
+    else: return(-1, -1)
+    
 def sample(src_dem, dst_dem, sample_inc, src_region):
 
     out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\

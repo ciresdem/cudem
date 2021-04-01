@@ -56,6 +56,7 @@ setuptools.setup(
         ],
     },
     scripts = [
+        'scripts/spatial_metadata.py',
         'scripts/gdal_null.py',
         'scripts/gdal_outliers.py',
         'scripts/gdal_nan2null.py',
