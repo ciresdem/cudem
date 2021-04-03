@@ -53,10 +53,10 @@ setuptools.setup(
             'regions = cudem.regions:regions_cli',
             'waffles = cudem.waffles:waffles_cli',
             'fetches = cudem.fetches:fetches_cli',
+            'spatial_metadata = cudem.metadata:spat_meta_cli',
         ],
     },
     scripts = [
-        'scripts/spatial_metadata.py',
         'scripts/gdal_null.py',
         'scripts/gdal_outliers.py',
         'scripts/gdal_nan2null.py',

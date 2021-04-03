@@ -36,9 +36,6 @@ from cudem import demfun
 
 __version__ = '0.10.0'
 
-def waffles_append_fn(bn, src_region, inc):
-    return('{}{}_{}_{}v1'.format(bn, utils.inc2str(inc), src_region.format('fn'), utils.this_year()))
-
 ## ==============================================
 ## Waffles XYZ blocking
 ## ==============================================        
@@ -434,6 +431,8 @@ class Waffle:
         dr.buffer((sm_inc*self.extend))
         #print(dr.format('gmt'))
         #ogr_clip('{}'.format(self.dst_vector), '__tmp_clip.shp', clip_region = dr)
+        utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+        '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
         utils.run_cmd('ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), self.dst_vector), verbose=True)
         utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(self.dst_vector), verbose=True)
         utils.remove_glob('__tmp_clip.*')
@@ -1055,7 +1054,7 @@ def waffles_cli(argv = sys.argv):
     for i, this_region in enumerate(these_regions):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
-            wg['name'] = waffles_append_fn(wg['name'], wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
+            wg['name'] = utils.append_fn(wg['name'], wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
 
         wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
 ### End

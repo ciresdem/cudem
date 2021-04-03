@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-### spatial_metadata
+### metadata.py
 ##
 ## Copyright (c) 2019 - 2021 CIRES Coastal DEM Team
 ##
@@ -31,9 +30,9 @@ from osgeo import gdal
 from cudem import utils
 from cudem import dlim
 from cudem import regions
-from cudem import metadata
+from cudem import demfun
 
-_version = '0.0.1'
+_version = '0.0.2'
 
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
@@ -104,8 +103,8 @@ class SpatialMetadata: #(waffles.Waffle):
         """
         
         #super().__init__(**kwargs)
-        self.inc = utils.int_or(inc)
-        self.epsg = utils.int_or(inc)
+        self.inc = utils.float_or(inc)
+        self.epsg = utils.int_or(epsg)
         self.warp = utils.int_or(warp)
         self.extend = extend
         self.node = node
@@ -157,7 +156,7 @@ class SpatialMetadata: #(waffles.Waffle):
                 dl_name = x
                 o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
-                [x for x in xdl.mask_xyz('{}.tif'.format(dl_name), sm_inc)]
+                [x for x in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc)]
 
                 if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
                     tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(dl_name))
@@ -178,6 +177,35 @@ class SpatialMetadata: #(waffles.Waffle):
         utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
         '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
 
+    def yield_xyz(self):
+        for xdl in self.data:
+            for x in xdl.data_lists.keys():
+                xdl.data_entries = xdl.data_lists[x]
+                dl_name = x
+                o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+                defn = None if self.layer is None else self.layer.GetLayerDefn()
+                for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc):
+                    yield(xyz)
+
+                if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
+                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(dl_name))
+                    if tmp_ds is not None:
+                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(dl_name), None, ogr.wkbMultiPolygon)
+                        tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                        demfun.polygonize('{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose)
+
+                        if len(tmp_layer) > 1:
+                            if defn is None: defn = tmp_layer.GetLayerDefn()
+                            out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+                            [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
+                            self.layer.CreateFeature(out_feat)
+                    tmp_ds = None
+                    utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
+        self.ds = None
+
+        utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+        '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
+        
 _usage = '''spatial_metadata.py ({}): generate spatial metadata from a datalist
 
 usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
@@ -196,7 +224,8 @@ usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 '''.format(_version)
 
-if __name__ == '__main__':
+
+def spat_meta_cli(argv = sys.argv):
     i = 1
     dls = []
     i_regions = []
@@ -236,6 +265,7 @@ if __name__ == '__main__':
             extend = utils.int_or(arg[2:], 0)
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
         elif arg == '-p' or arg == '--prefix': want_prefix = True
+        elif arg == '--quiet' or arg == '-q': want_verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
@@ -269,6 +299,6 @@ if __name__ == '__main__':
                 name = utils.append_fn(name, this_region, inc)
             #[x for x in waffles.Waffle(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg, node=node, name=name, verbose=want_verbose).spat_meta(yxyz=False)]
             SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
-                            node=node, name=name, verbose=want_verbose)
+                            node=node, name=name, verbose=want_verbose).run()
         
 ### End

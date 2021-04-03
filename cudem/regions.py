@@ -735,7 +735,7 @@ def regions_cli(argv = sys.argv):
     these_regions = []
     want_verbose = True
     echo = False
-    echo_name = False
+    echo_fn = False
     bv = None
     
     ## ==============================================
@@ -755,7 +755,7 @@ def regions_cli(argv = sys.argv):
         elif arg == '-t_epsg' or arg == '--t_epsg' or arg == '-W':
             warp = argv[i + 1]
             i = i + 1
-        elif arg == 'b' or arg == '-B' or arg == '--buffer':
+        elif arg == '-b' or arg == '-B' or arg == '--buffer':
             bv = utils.int_or(argv[i+1])
             i = i + 1
         elif arg == '-e' or arg == '--echo' or arg == '-ee':

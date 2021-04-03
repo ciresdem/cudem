@@ -203,50 +203,6 @@ class XYZDataset():
                 except:
                     pass
         out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
-
-    # def spatial_metadata(self, dst_sm, dst_inc, **kwargs):
-    #     """generate spatial-metadata """
-
-    #     self.dst_layer = '{}_sm'.format(self.name)
-    #     self.dst_vector = self.dst_layer + '.shp'
-    #     self.v_fields = ['Name', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
-    #     self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
-    #                      ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString]
-    #     utils.remove_glob('{}.*'.format(self.dst_layer))
-    #     utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
-    
-    #     self.ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(self.dst_vector)
-    #     if self.ds is not None: 
-    #         self.layer = self.ds.CreateLayer('{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon)
-    #         [self.layer.CreateField(ogr.FieldDefn('{}'.format(f), self.t_fields[i])) for i, f in enumerate(self.v_fields)]
-    #         [self.layer.SetFeature(feature) for feature in self.layer]
-    #     else: self.layer = None
-        
-    #     #if len(this_entry[3]) == 8:
-    #     #    o_v_fields = this_entry[3]
-    #     #else:
-    #     o_v_fields = [self.name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
-    #     defn = None if self.layer is None else self.layer.GetLayerDefn()
-    #     #for xyz in xdl.mask_xyz('tmp.tif', self.inc):
-
-    #     for xyz in self.mask_xyz('tmp.tif', utils.str2inc('1s')):
-    #         yield(xyz)
-
-    #     if demfun.infos('tmp.tif', scan=True)['zr'][1] == 1:
-    #         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(self.name))
-    #         if tmp_ds is not None:
-    #             tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(self.name), None, ogr.wkbMultiPolygon)
-    #             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-    #             demfun.polygonize('tmp.tif', tmp_layer, verbose=self.verbose)
-
-    #             if len(tmp_layer) > 1:
-    #                 if defn is None: defn = tmp_layer.GetLayerDefn()
-    #                 out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-    #                 [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
-    #                 self.layer.CreateFeature(out_feat)
-    #         tmp_ds = None
-    #         utils.remove_glob('{}_poly.*'.format(self.name), 'tmp.tif')
-    #     self.ds = None
         
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for this_xyz in self.yield_xyz(**kwargs):
