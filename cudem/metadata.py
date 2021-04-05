@@ -103,6 +103,7 @@ class SpatialMetadata: #(waffles.Waffle):
         """
         
         #super().__init__(**kwargs)
+        self.data = data
         self.inc = utils.float_or(inc)
         self.epsg = utils.int_or(epsg)
         self.warp = utils.int_or(warp)
@@ -115,7 +116,16 @@ class SpatialMetadata: #(waffles.Waffle):
         self.name = name
         self.verbose = verbose
 
-        self.data = data
+        self._init_data()
+        self._init_vector()
+
+    def dist_region(self):
+            
+        dr = regions.Region().from_region(self.region)
+        return(dr.buffer((self.inc*self.extend)))
+
+    def _init_data(self):
+
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
             src_region=self.d_region, verbose=self.verbose,
@@ -124,15 +134,8 @@ class SpatialMetadata: #(waffles.Waffle):
         self.data = [d for d in self.data if d is not None]
         
         for d in self.data:
-            d.parse()
-            
-        self._init_vector()
-
-    def dist_region(self):
-            
-        dr = regions.Region().from_region(self.region)
-        return(dr.buffer((self.inc*self.extend)))
-        
+            d.parse()        
+    
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.shp'
@@ -174,8 +177,8 @@ class SpatialMetadata: #(waffles.Waffle):
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
         self.ds = None
 
-        utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-        '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
+        utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+        '.format(self.dst_layer, self.dst_vector), verbose=True)
 
     def yield_xyz(self):
         for xdl in self.data:

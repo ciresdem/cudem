@@ -33,6 +33,7 @@ from cudem import regions
 from cudem import utils
 from cudem import xyzfun
 from cudem import demfun
+from cudem import metadata
 
 __version__ = '0.10.0'
 
@@ -444,7 +445,9 @@ class Waffle:
         
         for xdl in self.data:
             if self.spat:
-                xyz_yield = self.spat_meta(yxyz=True)
+                xyz_yield = metadata.SpatialMetadata(
+                    data=self.data, src_regtion=self.p_region, inc=self.inc, extend=self.extend, epsg=self.epsg,
+                    node=self.node, name=self.name, verbose=self.verbose).yield_xyz()
             else:
                 xyz_yield = xdl.yield_xyz()
             if self.mask:
@@ -454,6 +457,13 @@ class Waffle:
         
             for xyz in xyz_yield:
                 yield(xyz)
+
+        if self.spat:
+            dst_layer = '{}_sm'.format(self.name)
+            dst_vector = dst_layer + '.shp'
+            utils.run_cmd('ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), dst_vector), verbose=True)
+            utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector), verbose=True)
+            utils.remove_glob('__tmp_clip.*')
                 
         if self.archive:
             a_dl = os.path.join('archive', '{}.datalist'.format(self.name))
