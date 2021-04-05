@@ -238,7 +238,7 @@ class WaffledRaster(Waffled):
                     os.rename('__tmp_fltr.tif', self.fn)
             
         if self.sample_inc is not None:
-            if demfun.sample(self.fn, '__tmp_sample.tif', self.inc, self.region)[1] == 0:
+            if demfun.sample(self.fn, '__tmp_sample.tif', self.sample_inc, self.region)[1] == 0:
                 os.rename('__tmp_sample.tif', self.fn)
             
         if self.clip_poly is not None:

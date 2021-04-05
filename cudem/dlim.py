@@ -958,6 +958,9 @@ class DatasetFactory:
         if self.weight is not None:
             self.weight *= entry[2]
 
+        if len(entry) > 3:
+            self.meta = entry[3:].split(',')
+            
         return(self)
 
     def guess_data_format(self):
