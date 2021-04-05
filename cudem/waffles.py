@@ -551,7 +551,7 @@ class WafflesNum(Waffle):
             utils.echo_error_msg('GMT must be installed to use the TRIANGULATE module')
             return(None, -1)
         
-        self.mod = 'triangulate'
+        self.mod = 'num'
         self.mode = mode
         
     def run(self):
@@ -561,9 +561,8 @@ class WafflesNum(Waffle):
                 utils.echo_error_msg('GMT must be installed to use the Mode `A` with the NUM module')
                 return(None, -1)
 
-            dem_xyz2grd_cmd = ('gmt xyz2grd -{} -V {} -I{:.10f} -G{}.tif=gd:GTiff -r\
-            '.format(self.p_region.format('gmt'), self.inc, ' -Wi' if self.weights else '',
-                     self.mode, self.p_region.format('gmt'), self.inc, self.name))
+            dem_xyz2grd_cmd = ('gmt xyz2grd -{} -V {} -I{:.10f} -G{}.tif=gd:GTiff -r{}'.format(
+                self.mode, self.p_region.format('gmt'), self.inc, self.name, ' -Wi' if self.weights else '',))
             out, status = utils.run_cmd(dem_xyz2grd_cmd, verbose=self.verbose, data_fun=lambda p: self.dump_xyz(dst_port=p, encode=True))
         else:
             dly = self.yield_xyz()
