@@ -110,7 +110,7 @@ class Vdatum:
             os.removedirs(self.result_dir)
         except: pass
     
-    def run_vdatum(self.src_fn):
+    def run_vdatum(self, src_fn):
         """run vdatum on src_fn which is an XYZ file
         use vd_config to set vdatum parameters.
 
@@ -125,4 +125,61 @@ class Vdatum:
             return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
         else: return([], -1)
 
+## ==============================================
+## Waffles VDATUM 'conversion grid' module
+## U.S. Only
+## ==============================================
+def waffles_vdatum(wg, ivert = 'navd88', overt = 'mhw',
+                   region = '3', jar = None):
+    """generate a 'conversion-grid' with vdatum.
+    
+    output will be the differences (surfaced) between 
+    `ivert` and `overt` for the region
+
+    Args: 
+      wg (dict): a waffles config dictionary
+      ivert (str): input vertical datum string
+      overt (str): output vertical datum string
+      region (str): vdatum grid region
+      jar (path): path to vdatum .jar file
+    
+    Returns:
+      list: [{'dem': ['dem-fn', 'raster']}, status]
+    """
+    
+    vc = vdatumfun._vd_config
+    if jar is None:
+        vc['jar'] = vdatumfun.vdatum_locate_jar()[0]
+    else: vc['jar'] = jar
+    vc['ivert'] = ivert
+    vc['overt'] = overt
+    vc['region'] = region
+
+    gdalfun.gdal_null('empty.tif', waffles_proc_region(wg), 0.00083333, nodata = 0)
+    with open('empty.xyz', 'w') as mt_xyz:
+        for xyz in gdalfun.gdal_yield_entry(['empty.tif', 200, 1]):
+            xyzfun.xyz_line(xyz, mt_xyz, False)
+    
+    vdatumfun.run_vdatum('empty.xyz', vc)
+    
+    if os.path.exists('result/empty.xyz') and os.stat('result/empty.xyz').st_size != 0:
+        with open('result/empty.xyz') as infile:
+            empty_infos = xyzfun.xyz_inf(infile)
+        print(empty_infos)
+
+        ll = 'd' if empty_infos['minmax'][4] < 0 else '0'
+        lu = 'd' if empty_infos['minmax'][5] > 0 else '0'
+        wg['data'] = ['result/empty.xyz']
+        wg['spat'] = False
+        wg['unc'] = False
+        wg = waffles_config(**wg)
+        vd_out, status = waffles_gmt_surface(wg, tension = 0, upper_limit = lu, lower_limit = ll)
+    else:
+        utils.echo_error_msg('failed to generate VDatum grid, check settings')
+        vd_out = {}
+        status = -1
+        
+    utils.remove_glob('empty.*', 'result/*', '.mjr.datalist', 'result')
+    return(vd_out, status)
+        
 ### End

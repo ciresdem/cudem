@@ -34,6 +34,7 @@ from cudem import utils
 from cudem import xyzfun
 from cudem import demfun
 from cudem import metadata
+from cudem import vdatumfun
 
 __version__ = '0.10.0'
 
@@ -572,6 +573,76 @@ class WafflesNum(Waffle):
         WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
 
 ## ==============================================
+## Waffles 'Vdatum conversion grid' module
+## vertical datum transformation grid;
+## note: U.S. Only
+## ==============================================
+class WafflesVdatum(Waffle):
+    
+    def __init__(self, ivert='navd88', overt='mhw', region='3', jar=None, **kwargs):
+        """generate a 'conversion-grid' with vdatum.
+        
+        output will be the differences (surfaced) between 
+        `ivert` and `overt` for the region
+        
+        Args: 
+          ivert (str): input vertical datum string
+          overt (str): output vertical datum string
+          region (str): vdatum grid region
+          jar (path): path to vdatum .jar file
+        
+        Returns:
+          list: [{'dem': ['dem-fn', 'raster']}, status]
+        """
+
+        super().__init__(**kwargs)
+        
+        #if self.gc['VDATUM'] is None:
+        #    utils.echo_error_msg('VDatum must be installed to use the VDATUM module')
+        #    return(None, -1)
+        
+        self.mod = 'vdatum'
+        self.vdc = vdatumfun.Vdatum(ivert=ivert, overt=overt, region=region, jar=jar)
+
+    def create_null(self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
+        """create a nodata grid"""
+        
+        xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
+        ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326), gdal.GDT_Float32, nodata, outformat)
+        nullArray = np.zeros( (ycount, xcount) )
+        nullArray[nullArray==0]=nodata
+        utils.gdal_write(nullArray, outfile, ds_config)
+        
+    def run(self):
+
+        self.create_null('empty.tif', self.p_region, 0.00083333, 0, 'GTiff', self.verbose, True)
+        demfun.set_nodata('empty.tif')
+        empty = dlim.RasterFile(fn='empty.tif', data_format=200, src_region=self.region, epsg=self.epsg,
+                                name=self.name, verbose=self.verbose)
+
+        empty.parse()
+        with open('empty.xyz', 'w') as mt_xyz:
+            empty.dump_xyz(mt_xyz)
+        self.vdc.run_vdatum('empty.xyz')
+
+        if os.path.exists('result/empty.xyz') and os.stat('result/empty.xyz').st_size != 0:
+            empty_xyz = dlim.XYZFile(fn='result/empty.xyz', data_format=168, src_region=self.region, epsg=self.epsg,
+                                     name=self.name, verbose=self.verbose)
+            empty_infos = empty_xyz.inf()
+            
+            ll = 'd' if empty_infos['minmax'][4] < 0 else '0'
+            lu = 'd' if empty_infos['minmax'][5] > 0 else '0'
+
+            GMTSurface(data=['result/empty.xyz'], name=self.name, src_region=self.region, inc=self.inc, epsg=self.epsg, verbose=self.verbose, tension=0, upper_limit=lu, lower_limit=ll).generate()
+        else:
+            utils.echo_error_msg('failed to generate VDatum grid, check settings')
+            vd_out = {}
+            status = -1
+
+        utils.remove_glob('empty.*', 'result/*', 'result')        
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
+
+## ==============================================
 ## Waffles GDAL_GRID module
 ## see gdal_grid for more info and gridding algorithms
 ## ==============================================
@@ -733,6 +804,12 @@ see gdal_grid --help for more info
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
         },
+        'vdatum': {
+            'name': 'vdatum',
+            'datalist-p': False,
+            'description': """VDATUM conversion grid.
+            """
+        },
     }
     
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_dem',
@@ -801,6 +878,12 @@ see gdal_grid --help for more info
                               fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                               fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
                               archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
+
+    def acquire_vdatum(self, **kwargs):
+        return(WafflesVdatum(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                             fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                             fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                             archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_module_by_name(self, mod_name, **kwargs):
         if mod_name == 'surface':
@@ -817,6 +900,8 @@ see gdal_grid --help for more info
             return(self.acquire_nearest(**kwargs))
         if mod_name == 'invdst':
             return(self.acquire_invdst(**kwargs))
+        if mod_name == 'vdatum':
+            return(self.acquire_vdatum(**kwargs))
         
 ## ==============================================
 ## Command-line Interface (CLI)
