@@ -31,6 +31,7 @@ setuptools.setup(
     long_description_content_type = 'text/markdown',
     license = 'MIT',
     author = 'CIRES Coastal DEM Team',
+    author_email = 'matthew.love@colorado.edu',
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
     packages = setuptools.find_packages(),#['cudem'],  #same as name
     package_data = {'cudem': ['data/*.geojson']},

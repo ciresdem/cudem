@@ -17,17 +17,9 @@
 ##
 ### Code:
 
-## Modules
-
-#import geomods.waffles
-#import geomods.fetches
-#import geomods.procs
-#from waffles import *
-#from fetches import *
-#from geomods import waffles
-#from geomods import fetches
-#from geomods import fetches
-#from geomods import *
+__version__ = "1.0.0"
+__author__ = "Matthew Love"
+__credits__ = "CIRES"
 
 #from archook import locate_arcgis, get_arcpy
 
