@@ -32,8 +32,11 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-_version = '0.0.2'
+_version = '0.0.3'
 
+## ==============================================
+## OGR vector processing
+## ==============================================
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
@@ -208,7 +211,13 @@ class SpatialMetadata: #(waffles.Waffle):
 
         utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
         '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
-        
+
+## ==============================================
+## Command-line Interface (CLI)
+## $ spatial_metadata
+##
+## spatial_metadata cli
+## ==============================================
 _usage = '''spatial_metadata.py ({}): generate spatial metadata from a datalist
 
 usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
@@ -240,7 +249,6 @@ usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 '''.format(_version)
-
 
 def spat_meta_cli(argv = sys.argv):
     i = 1
