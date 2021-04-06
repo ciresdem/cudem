@@ -247,5 +247,8 @@ def xyz2gdal_ds(src_xyz, dst_ogr):
         f.SetGeometryDirectly(g)
         layer.CreateFeature(f)
     return(ds)
-    
+
+def xyz_chunks():
+    pass
+
 ### End

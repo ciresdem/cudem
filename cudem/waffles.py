@@ -110,7 +110,7 @@ def xyz2gdal(src_xyz, dst_gdal, src_region, inc, dst_format = 'GTiff', mode = 'n
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
             try:
                 if mode == 'm' or mode == 'w':
-                    sumArray[ypos, xpos] += z
+                    sumArray[ypos, xpos] += this_xyz.z
                 if mode == 'n' or mode == 'm':
                     ptArray[ypos, xpos] += 1
                 else: ptArray[ypos, xpos] = 1
@@ -861,7 +861,7 @@ Options:
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tgenerate a waffles_config JSON file using the --config flag.
 
-  -p, --prefix\t\tSet BASENAME to PREFIX (append inc/region/year info to output BASENAME).
+  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 

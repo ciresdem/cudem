@@ -217,7 +217,21 @@ usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
 
  Options:
 
-  -o, --name\toutput name
+  -R, --region\t\tSpecifies the desired REGION;
+\t\t\tThis can either be a GMT-style region ( -R xmin/xmax/ymin/ymax )
+\t\t\tor an OGR-compatible vector file with regional polygons. 
+\t\t\tIf a vector file is supplied it will search each region found therein.
+\t\t\tIf omitted, use the region gathered from the data in DATALIST.
+  -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
+\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s:.1111111s
+  -O, --output-name\tBASENAME for all outputs.
+  -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
+  -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
+\t\t\tappend :<num> to extend the processing region: -X6:12
+
+  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
+  -r, --grid-node\tUse grid-node registration, default is pixel-node
+  -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
   --help\tPrint the usage text
   --version\tPrint the version information
 
