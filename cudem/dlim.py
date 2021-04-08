@@ -188,7 +188,6 @@ class XYZDataset():
     def parse_data_lists(self):
         for e in self.data_entries:
             if e.parent.name in self.data_lists.keys():
-                #self.data_lists[e.parent.name].append(e)
                 self.data_lists[e.parent.name]['data'].append(e)
             else:
                 self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}

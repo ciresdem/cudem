@@ -942,7 +942,6 @@ Options:
 \t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
 \t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
   -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
-  -K, --chunk\t\tProcess the region in CHUNKs. -K<chunk-level>
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tgenerate a waffles_config JSON file using the --config flag.
 

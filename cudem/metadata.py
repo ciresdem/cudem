@@ -143,8 +143,8 @@ class SpatialMetadata: #(waffles.Waffle):
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.shp'
-        self.v_fields = ['Name', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
-        self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
+        self.v_fields = ['Name', 'Title', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
+        self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
                          ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString]
         utils.remove_glob('{}.*'.format(self.dst_layer))
         utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
@@ -161,7 +161,7 @@ class SpatialMetadata: #(waffles.Waffle):
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
-                o_v_fields = [p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
+                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 [x for x in xdl.mask_xyz('{}.tif'.format(x), self.inc)]
 
