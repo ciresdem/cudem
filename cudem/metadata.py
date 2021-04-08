@@ -98,7 +98,7 @@ def ogr_empty_p(src_ogr):
 class SpatialMetadata: #(waffles.Waffle):
 
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_sm', epsg=4326,
-                 warp=None, extend=0, node='pixel', verbose=False):
+                 warp=None, extend=0, node='pixel', make_valid=False, verbose=False):
         """generate spatial-metadata
 
         Args:
@@ -117,6 +117,7 @@ class SpatialMetadata: #(waffles.Waffle):
         self.d_region = self.dist_region()
         
         self.name = name
+        self.make_valid = make_valid
         self.verbose = verbose
 
         self._init_data()
@@ -158,18 +159,18 @@ class SpatialMetadata: #(waffles.Waffle):
     def run(self):
         for xdl in self.data:
             for x in xdl.data_lists.keys():
-                xdl.data_entries = xdl.data_lists[x]
-                dl_name = x
-                o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+                xdl.data_entries = xdl.data_lists[x]['data']
+                p = xdl.data_lists[x]['parent']
+                o_v_fields = [p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
-                [x for x in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc)]
+                [x for x in xdl.mask_xyz('{}.tif'.format(x), self.inc)]
 
-                if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
-                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(dl_name))
+                if demfun.infos('{}.tif'.format(x), scan=True)['zr'][1] == 1:
+                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(x))
                     if tmp_ds is not None:
-                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(dl_name), None, ogr.wkbMultiPolygon)
+                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(x), None, ogr.wkbMultiPolygon)
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                        demfun.polygonize('{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose)
+                        demfun.polygonize('{}.tif'.format(x), tmp_layer, verbose=self.verbose)
 
                         if len(tmp_layer) > 1:
                             if defn is None: defn = tmp_layer.GetLayerDefn()
@@ -177,16 +178,17 @@ class SpatialMetadata: #(waffles.Waffle):
                             [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = None
-                    utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
+                    utils.remove_glob('{}_poly.*'.format(x), 'tmp.tif')
         self.ds = None
 
-        utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-        '.format(self.dst_layer, self.dst_vector), verbose=True)
+        if self.make_valid:
+            utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+            '.format(self.dst_layer, self.dst_vector), verbose=True)
 
     def yield_xyz(self):
         for xdl in self.data:
             for x in xdl.data_lists.keys():
-                xdl.data_entries = xdl.data_lists[x]
+                xdl.data_entries = xdl.data_lists[x]['data']
                 dl_name = x
                 o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
                 defn = None if self.layer is None else self.layer.GetLayerDefn()

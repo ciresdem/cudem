@@ -33,7 +33,8 @@ setuptools.setup(
     author = 'CIRES Coastal DEM Team',
     author_email = 'matthew.love@colorado.edu',
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
-    packages = setuptools.find_packages(),#['cudem'],  #same as name
+    #packages = setuptools.find_packages(),#['cudem'],  #same as name
+    packages = ['cudem'],
     package_data = {'cudem': ['data/*.geojson']},
     classifiers = [
         'Programming Language :: Python :: 3',

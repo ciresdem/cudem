@@ -20,10 +20,16 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## A datalist is similar to an MBSystem datalist; it is a space-delineated file containing the following columns:
+## data-path data-format data-weight data-name data-source data-date data-resolution data-type data-horz data-vert data-url
+## Minimally, data-path is all that is needed.
+##
 ### Code:
 
 import os
 import sys
+import re
 import json
 import glob
 import hashlib
@@ -45,13 +51,21 @@ class XYZDataset():
     """representing an xyz-able parser or a data-list entry
     """
 
-    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<XYZDataset>",
+    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<XYZDataset>", title=None,
+                 source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
                  parent=None, src_region=None, warp=None, verbose=False, remote=False):
 
         self.name = name
+        self.title = title
         self.data_format = data_format
         self.epsg = utils.int_or(epsg)
         self.infos = {}
+        self.source = source
+        self.date = date
+        self.data_type = data_type
+        self.resolution = resolution
+        self.vdatum = vdatum
+        self.url = url
         self.parent = parent
         self.weight = weight
         self.verbose = verbose
@@ -174,9 +188,10 @@ class XYZDataset():
     def parse_data_lists(self):
         for e in self.data_entries:
             if e.parent.name in self.data_lists.keys():
-                self.data_lists[e.parent.name].append(e)
+                #self.data_lists[e.parent.name].append(e)
+                self.data_lists[e.parent.name]['data'].append(e)
             else:
-                self.data_lists[e.parent.name] = [e]
+                self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
         return(self)
                 
     def yield_xyz(self):
@@ -300,7 +315,7 @@ class MBSParser:
 
         self.infos['wkt'] = wkt
         return(self)
-    
+
 class Datalist(XYZDataset):
     """representing a datalist parser
     
@@ -372,7 +387,8 @@ class Datalist(XYZDataset):
                     _prog.update()
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
-                            this_line, parent=self, src_region=self.region,
+                            this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
+                            data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url, title=self.title,
                             warp=self.warp, verbose=self.verbose).acquire_dataset()
                         if data_set is not None and data_set.valid_p():
                             data_set.inf()
@@ -868,8 +884,10 @@ class GMRT(XYZDataset):
         for i, entry in enumerate(self.data_entries):
             utils.echo_msg('>{}<'.format(self.region.format('fn')))
             gmrt_ds = DatasetFactory(
-                fn=self._fn, data_format=200, weight=self.weight, src_region=self.region,
-                epsg=self.epsg, warp=self.warp, verbose=self.verbose)
+                fn=self._fn, name=self.name, data_format=200, weight=self.weight, src_region=self.region,
+                title=self.title, epsg=self.epsg, source=self.source, date=self.date, data_type=self.data_type,
+                resolution=self.resolution, vdatum=self.vdatum, url=self.url, warp=self.warp,
+                verbose=self.verbose)
             if fetches.fetch_file(entry.fn, entry._fn, verbose = entry.verbose) == 0:
                 for xyz in gmrt_ds.acquire_raster_file().parse().yield_xyz():
                     yield(xyz)
@@ -905,17 +923,29 @@ class DatasetFactory:
               'class': lambda k: GMRT(**k),
               },
     }
+
+    datalist_cols = ['path', 'format', 'weight', 'name', 'source',
+                     'date', 'type', 'resolution', 'horz', 'vert',
+                     'url']
     
-    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<xyz-dataset>",
+    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<xyz-dataset>", title=None,
+                 source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
                  parent=None, src_region=None, warp=None, verbose=False):
         
         self.name = name
+        self.title = title
         self.data_format = data_format
+        self.weight = weight
+        self.source = source
+        self.date = date
+        self.data_type = data_type
+        self.resolution = resolution
         self.epsg = epsg
+        self.vdatum = vdatum
+        self.url = url
         self.warp = warp
         self.region = src_region
         self.parent = parent
-        self.weight = weight
         self.verbose = verbose
         self.fn = fn
         self.parse_fn()
@@ -926,15 +956,15 @@ class DatasetFactory:
 
         if self.fn is None: return(self)
         if os.path.exists(self.fn): return(self.fn)
-        
-        this_entry = self.fn.rstrip().split()
+
+        this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
         try:
             entry = [x if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else x \
                      for n, x in enumerate(this_entry)]
         except Exception as e:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
             return(self)
-        
+
         if len(entry) < 2:
             for key in self.data_types.keys():
                 se = entry[0].split('.')
@@ -946,8 +976,33 @@ class DatasetFactory:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
             
-        if len(entry) < 3: entry.append(self.weight)
-
+        if len(entry) < 3:
+            entry.append(self.weight)
+        if len(entry) < 4:
+            entry.append(self.title)
+        else: self.title = entry[3]
+        if len(entry) < 5:
+            entry.append(self.source)
+        else: self.source = entry[4]
+        if len(entry) < 6:
+            entry.append(self.date)
+        else: self.date = entry[5]
+        if len(entry) < 7:
+            entry.append(self.data_type)
+        else: self.data_type = entry[6]
+        if len(entry) < 8:
+            entry.append(self.resolution)
+        else: self.resolution = entry[7]
+        if len(entry) < 9:
+            entry.append(self.epsg)
+        else: self.epsg = entry[8]
+        if len(entry) < 10:
+            entry.append(self.vdatum)
+        else: self.vdatum = entry[9]
+        if len(entry) < 11:
+            entry.append(self.url)
+        else: self.url = entry[10]
+        
         self.fn = entry[0] if self.parent is None \
             else os.path.join(os.path.dirname(self.parent.fn), entry[0])
         
@@ -958,9 +1013,6 @@ class DatasetFactory:
         if self.weight is not None:
             self.weight *= entry[2]
 
-        if len(entry) > 3:
-            self.meta = entry[3:].split(',')
-            
         return(self)
 
     def guess_data_format(self):
@@ -976,37 +1028,43 @@ class DatasetFactory:
 
     def acquire_datalist(self, **kwargs):
         return(Datalist(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
     def acquire_xyz_file(self, **kwargs):
         return(XYZFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             xpos=0, ypos=1, zpos=2, **kwargs))
 
     def acquire_raster_file(self, **kwargs):
         return(RasterFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
     def acquire_remote_raster_file(self, **kwargs):
         return(RasterFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             remote=True, **kwargs))
 
     def acquire_gmrt(self, **kwargs):
         return(GMRT(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
     def acquire(self, **kwargs):
         return(self.data_types[self.data_format]['class'](
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region,
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
     
