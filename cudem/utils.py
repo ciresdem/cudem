@@ -84,6 +84,12 @@ FIPS_TO_EPSG = {
 def append_fn(bn, src_region, inc, version=1):
     return('{}{}_{}_{}v{}'.format(bn, inc2str(inc), src_region.format('fn'), this_year(), version))
 
+def fn_basename(fn, ext):
+    if '.' in ext:
+        return(fn[:-len(ext)])
+    else:
+        return(fn[:-(len(ext)+1)])
+
 def inc2str(inc):
     """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
 

@@ -187,16 +187,54 @@ class XYZDataset():
 
     def parse_data_lists(self):
         for e in self.data_entries:
-            if e.parent.name in self.data_lists.keys():
-                self.data_lists[e.parent.name]['data'].append(e)
+            if e.parent is not None:
+                if e.parent.name in self.data_lists.keys():
+                    self.data_lists[e.parent.name]['data'].append(e)
+                else:
+                    self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
             else:
-                self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
+                self.data_lists[e.name] = {'data': [e], 'parent': e}
         return(self)
                 
     def yield_xyz(self):
         pass
 
-    def mask_xyz(self,dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+    def archive_xyz(self, **kwargs):
+
+        def xdl2dir(xdl):
+            this_dir = []
+            while True:
+                if xdl.parent is None:
+                    break
+                this_dir.append(xdl.parent.name)
+                xdl = xdl.parent
+            this_dir.reverse()
+            return(this_dir)
+        
+        if self.region is None:
+            a_name = self.name
+        else:
+            a_name = '{}_{}_{}'.format(
+                self.name, self.region.format('fn'), utils.this_year())
+
+        self.parse_data_lists()
+
+        for x in self.data_lists.keys():
+            a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
+            this_dir = xdl2dir(self.data_lists[x]['parent'])
+            this_dir.append(a_dir)
+            this_dir = os.path.join(os.getcwd(), *this_dir)
+            for xyz_dataset in self.data_lists[x]['data']:
+                if not os.path.exists(this_dir):
+                    os.makedirs(this_dir)
+                this_xyz_path = os.path.join(this_dir, '.'.join(
+                    [utils.fn_basename(os.path.basename(xyz_dataset.fn),
+                                       xyz_dataset.fn.split('.')[-1]),
+                     'xyz']))
+                with open(this_xyz_path, 'w') as xp:
+                    xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
+            
+    def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
 
@@ -819,6 +857,7 @@ class GMRT(XYZDataset):
         self._gmrt_grid_metadata_url = "https://www.gmrt.org/services/GridServer/metadata?"
         self._outdir = os.path.join(os.getcwd(), 'gmrt')
 
+        self.name = 'gmrt'
         self.src_gmrt = 'gmrt_{}.tif'.format(self.region.format('fn'))
         self._fn = self.fn
         #self.fn = self.src_gmrt
@@ -927,7 +966,7 @@ class DatasetFactory:
                      'date', 'type', 'resolution', 'horz', 'vert',
                      'url']
     
-    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<xyz-dataset>", title=None,
+    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="xyz_dataset", title=None,
                  source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
                  parent=None, src_region=None, warp=None, verbose=False):
         
@@ -1107,6 +1146,7 @@ Options:
   -W, --t_epsg\t\tSet the output warp projection EPSG code.
   -F, --format\t\tOnly process the given data format.
 
+  --archive\t\tARCHIVE the datalist to the given REGION
   --glob\t\tGLOB the datasets in the current directory to stdout
   --info\t\tGenerate and return an INFO dictionary of the dataset
   --weights\t\tOutput WEIGHT values along with xyz
@@ -1144,6 +1184,7 @@ def datalists_cli(argv = sys.argv):
     want_inf = False
     want_list = False
     want_glob = False
+    want_archive = False
     want_verbose = True    
     
     ## ==============================================
@@ -1166,6 +1207,8 @@ def datalists_cli(argv = sys.argv):
         elif arg == '--format' or arg == '-F':
             fmt = utils.int_or(argv[i + 1])
             i = i + 1
+        elif arg == '--archive' or arg == '-a':
+            want_archive = True
         elif arg == '--weights' or arg == '-w':
             want_weights = True
         elif arg == '--info' or arg == '-i':
@@ -1209,7 +1252,8 @@ def datalists_cli(argv = sys.argv):
     if len(these_regions) == 0:
         these_regions = [None]
     else:
-        if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
+        if want_verbose:
+            utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 
     for rn, this_region in enumerate(these_regions):
         if len(dls) == 0:
@@ -1223,8 +1267,13 @@ def datalists_cli(argv = sys.argv):
         for xdl in xdls:            
             if xdl is not None and xdl.valid_p():
                 xdl.parse()
-                if not want_weights: xdl.weight = None
-                if want_inf: print(xdl.inf())
-                elif want_list:xdl.echo()
+                if not want_weights:
+                    xdl.weight = None
+                if want_inf:
+                    print(xdl.inf())
+                elif want_list:
+                    xdl.echo()
+                elif want_archive:
+                    xdl.archive_xyz()
                 else: xdl.dump_xyz()
 ### End

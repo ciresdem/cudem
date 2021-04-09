@@ -343,6 +343,11 @@ class Waffle:
         if self.region is None:
             a_name = self.name
         else: a_name = '{}_{}_{}'.format(self.name, self.region.format('fn'), utils.this_year())
+
+        for xdl in self.data:
+            for x in xdl.data_lists.keys():
+                xdl.data_entries = xdl.data_lists[x]
+                
         i_dir = os.path.dirname(entry[0])
         i_xyz = os.path.basename(entry[0]).split('.')[0]
         i_xyz = ''.join(x for x in i_xyz if x.isalnum())
