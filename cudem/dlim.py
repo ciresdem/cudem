@@ -254,6 +254,7 @@ class XYZDataset():
                         
                         with open(this_xyz_path, 'w') as xp:
                             xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
+        Datalist(fn='{}.datalist'.format(a_name)).parse()
             
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid
