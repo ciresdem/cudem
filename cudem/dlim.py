@@ -218,21 +218,30 @@ class XYZDataset():
                 self.name, self.region.format('fn'), utils.this_year())
 
         self.parse_data_lists()
+        with open('{}.datalist'.format(a_name), 'w') as dlf:
 
-        for x in self.data_lists.keys():
-            a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
-            this_dir = xdl2dir(self.data_lists[x]['parent'])
-            this_dir.append(a_dir)
-            this_dir = os.path.join(os.getcwd(), *this_dir)
-            for xyz_dataset in self.data_lists[x]['data']:
+            for x in self.data_lists.keys():
+                a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
+                this_dir = xdl2dir(self.data_lists[x]['parent'])
+                this_dir.append(a_dir)
+                tmp_dir = this_dir
+                dlf.write('{}.datalist\n'.format(os.path.join(*this_dir, this_dir[-1])))
+                this_dir = os.path.join(os.getcwd(), *this_dir)
                 if not os.path.exists(this_dir):
                     os.makedirs(this_dir)
-                this_xyz_path = os.path.join(this_dir, '.'.join(
-                    [utils.fn_basename(os.path.basename(xyz_dataset.fn),
-                                       xyz_dataset.fn.split('.')[-1]),
-                     'xyz']))
-                with open(this_xyz_path, 'w') as xp:
-                    xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
+                with open(os.path.join(this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w') as sub_dlf:
+                    for xyz_dataset in self.data_lists[x]['data']:
+                        sub_xyz_path = '.'.join(
+                            [utils.fn_basename(os.path.basename(xyz_dataset.fn),
+                                               xyz_dataset.fn.split('.')[-1]),
+                             'xyz'])
+                        this_xyz_path = os.path.join(this_dir, '.'.join(
+                            [utils.fn_basename(os.path.basename(xyz_dataset.fn),
+                                               xyz_dataset.fn.split('.')[-1]),
+                             'xyz']))
+                        sub_dlf.write('{}\n'.format(sub_xyz_path))
+                        with open(this_xyz_path, 'w') as xp:
+                            xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
             
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid
