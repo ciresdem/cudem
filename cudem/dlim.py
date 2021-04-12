@@ -113,6 +113,19 @@ class XYZDataset():
                     
             return(this_hash.hexdigest())
         except: return('0')
+
+    def echo_(self, **kwargs):
+        """print self as a datalist entry string"""
+
+        return(' '.join(self.fn, self.data_format, self.weight, self.title, self.source,
+                        self.date, self.data_type, self.resolution, self.epsg, self.vdatum,
+                        self.url))
+
+    def format_metadata(self, **kwargs):
+        return('{} {} {} {} {} {} {} {} {} {}'.format(
+            self.data_format, self.weight, self.title, self.source,
+            self.date, self.data_type, self.resolution, self.epsg, self.vdatum,
+            self.url))
     
     def echo(self, **kwargs):
         """print self as a datalist entry string."""
@@ -218,14 +231,15 @@ class XYZDataset():
                 self.name, self.region.format('fn'), utils.this_year())
 
         self.parse_data_lists()
+        
         with open('{}.datalist'.format(a_name), 'w') as dlf:
-
             for x in self.data_lists.keys():
                 a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
                 this_dir = xdl2dir(self.data_lists[x]['parent'])
                 this_dir.append(a_dir)
                 tmp_dir = this_dir
-                dlf.write('{}.datalist\n'.format(os.path.join(*this_dir, this_dir[-1])))
+                #dlf.write('{}.datalist -1 {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].weight))
+                dlf.write('{}.datalist {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].format_metadata()))
                 this_dir = os.path.join(os.getcwd(), *this_dir)
                 if not os.path.exists(this_dir):
                     os.makedirs(this_dir)
@@ -235,11 +249,9 @@ class XYZDataset():
                             [utils.fn_basename(os.path.basename(xyz_dataset.fn),
                                                xyz_dataset.fn.split('.')[-1]),
                              'xyz'])
-                        this_xyz_path = os.path.join(this_dir, '.'.join(
-                            [utils.fn_basename(os.path.basename(xyz_dataset.fn),
-                                               xyz_dataset.fn.split('.')[-1]),
-                             'xyz']))
-                        sub_dlf.write('{}\n'.format(sub_xyz_path))
+                        this_xyz_path = os.path.join(this_dir, sub_xyz_path)
+                        sub_dlf.write('{} 168\n'.format(sub_xyz_path))
+                        
                         with open(this_xyz_path, 'w') as xp:
                             xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
             
