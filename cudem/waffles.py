@@ -337,34 +337,6 @@ class Waffle:
         if self.mask:
             WaffledRaster(fn='{}_m.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region = self.region).process()
         self.waffled = True
-
-    def xyz_archive(self, src_xyz):
-        ## update to new methods...!!
-        if self.region is None:
-            a_name = self.name
-        else: a_name = '{}_{}_{}'.format(self.name, self.region.format('fn'), utils.this_year())
-
-        for xdl in self.data:
-            for x in xdl.data_lists.keys():
-                xdl.data_entries = xdl.data_lists[x]
-                
-        i_dir = os.path.dirname(entry[0])
-        i_xyz = os.path.basename(entry[0]).split('.')[0]
-        i_xyz = ''.join(x for x in i_xyz if x.isalnum())
-        a_dir = os.path.join(dirname, a_name, 'data', entry[-1])
-        a_xyz_dir = os.path.join(a_dir, 'xyz')
-        a_xyz = os.path.join(a_xyz_dir, i_xyz + '.xyz')
-        a_dl = os.path.join(a_xyz_dir, '{}.datalist'.format(entry[-1]))
-        if not os.path.exists(a_dir):
-            os.makedirs(a_dir)
-        if not os.path.exists(a_xyz_dir):
-            os.makedirs(a_xyz_dir)
-        with open(a_xyz, 'w') as fob:
-            for xyz in src_xyz:
-                xyz.dump(fob)
-                yield(xyz)
-        inf = utils.mb_inf(a_xyz)
-        datalist_append_entry([i_xyz + '.xyz', 168, entry[2] if entry[2] is not None else 1], a_dl)
     
     def xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
         """Create a num grid mask of xyz data. The output grid
@@ -454,12 +426,12 @@ class Waffle:
                 xyz_yield = metadata.SpatialMetadata(
                     data=self.data, src_regtion=self.p_region, inc=self.inc, extend=self.extend, epsg=self.epsg,
                     node=self.node, name=self.name, verbose=self.verbose).yield_xyz()
+            elif self.archive:
+                xyz_yield = xdl.archive_xyz()
             else:
                 xyz_yield = xdl.yield_xyz()
             if self.mask:
                 xyz_yield = self.xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
-            if self.archive:
-                xyz_yield = self.xyz_archive(xyz_yield)
         
             for xyz in xyz_yield:
                 yield(xyz)
@@ -471,15 +443,15 @@ class Waffle:
             utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector), verbose=True)
             utils.remove_glob('__tmp_clip.*')
                 
-        if self.archive:
-            a_dl = os.path.join('archive', '{}.datalist'.format(self.name))
+        # if self.archive:
+        #     a_dl = os.path.join('archive', '{}.datalist'.format(self.name))
             
-            for dir_, _, files in os.walk('archive'):
-                for f in files:
-                    if '.datalist' in f:
-                        rel_dir = os.path.relpath(dir_, 'archive')
-                        rel_file = os.path.join(rel_dir, f)
-                        datalists.datalist_append_entry([rel_file, -1, 1], a_dl)
+        #     for dir_, _, files in os.walk('archive'):
+        #         for f in files:
+        #             if '.datalist' in f:
+        #                 rel_dir = os.path.relpath(dir_, 'archive')
+        #                 rel_file = os.path.join(rel_dir, f)
+        #                 datalists.datalist_append_entry([rel_file, -1, 1], a_dl)
                     
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for xyz in self.yield_xyz(**kwargs):
@@ -954,9 +926,9 @@ Options:
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 
-  -a, --archive\t\tArchive the datalist to the given region.
-  -m, --mask\t\tGenerate a data mask raster.
-  -s, --spat\t\tGenerate spatial metadata.
+  -a, --archive\t\tARCHIVE the datalist to the given region.
+  -m, --mask\t\tGenerate a data MASK raster.
+  -s, --spat\t\tGenerate SPATIAL-METADATA.
   -c, --continue\tDon't clobber existing files.
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
 

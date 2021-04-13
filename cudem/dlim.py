@@ -253,7 +253,12 @@ class XYZDataset():
                         sub_dlf.write('{} 168\n'.format(sub_xyz_path))
                         
                         with open(this_xyz_path, 'w') as xp:
-                            xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
+                            for this_xyz in xyz_dataset.yield_xyz(**kwargs):
+                                yield(this_xyz)
+                                this_xyz.dump(include_w=True if self.weight is not None else False,
+                                              dst_port=xp, encode=False)
+
+                                #xyz_dataset.dump_xyz(dst_port=xp, **kwargs)
         Datalist(fn='{}.datalist'.format(a_name)).parse()
             
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
@@ -1296,6 +1301,6 @@ def datalists_cli(argv = sys.argv):
                 elif want_list:
                     xdl.echo()
                 elif want_archive:
-                    xdl.archive_xyz()
+                    [x for x in xdl.archive_xyz()]
                 else: xdl.dump_xyz()
 ### End
