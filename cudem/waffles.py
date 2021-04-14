@@ -442,17 +442,7 @@ class Waffle:
             utils.run_cmd('ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), dst_vector), verbose=True)
             utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector), verbose=True)
             utils.remove_glob('__tmp_clip.*')
-                
-        # if self.archive:
-        #     a_dl = os.path.join('archive', '{}.datalist'.format(self.name))
-            
-        #     for dir_, _, files in os.walk('archive'):
-        #         for f in files:
-        #             if '.datalist' in f:
-        #                 rel_dir = os.path.relpath(dir_, 'archive')
-        #                 rel_file = os.path.join(rel_dir, f)
-        #                 datalists.datalist_append_entry([rel_file, -1, 1], a_dl)
-                    
+
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         for xyz in self.yield_xyz(**kwargs):
             xyz.dump(include_w = True if self.weights is not None else False, dst_port=dst_port, encode=encode, **kwargs)
