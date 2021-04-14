@@ -39,17 +39,70 @@ import osr
 import numpy as np
 from scipy import spatial
 import urllib
+import requests
 from cudem import utils
 from cudem import regions
 from cudem import fetches
 from cudem import xyzfun
 from cudem import demfun
 
-__version__ = '0.1.3'
+__version__ = '0.1.4'
+
+r_headers = { 'User-Agent': 'DLIM v%s' %(__version__) }
+
+def fetch_req(src_url, params=None, tries=5, timeout=2, read_timeout=10):
+    """fetch src_url and return the requests object"""
+    
+    if tries <= 0:
+        utils.echo_error_msg('max-tries exhausted')
+        return(None)
+    try:
+        return(requests.get(src_url, stream=True, params=params, timeout=(timeout,read_timeout), headers=r_headers))
+    except:
+        return(fetch_req(src_url, params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
+
+def fetch_file(src_url, dst_fn, params=None, callback=lambda: False, datatype=None, overwrite=False,
+               verbose=False, timeout=140, read_timeout=320):
+    """fetch src_url and save to dst_fn"""
+    
+    status = 0
+    halt = callback
+    req = None
+
+    if verbose:
+        progress = utils.CliProgress('fetching remote file: {}...'.format(os.path.basename(src_url)[:20]))
+    if not os.path.exists(os.path.dirname(dst_fn)):
+        try:
+            os.makedirs(os.path.dirname(dst_fn))
+        except: pass 
+    if not os.path.exists(dst_fn) or overwrite:
+        try:
+            with requests.get(src_url, stream=True, params=params, headers=r_headers,
+                              timeout=(timeout,read_timeout)) as req:
+                req_h = req.headers
+                if req.status_code == 200:
+                    curr_chunk = 0
+                    with open(dst_fn, 'wb') as local_file:
+                        for chunk in req.iter_content(chunk_size = 8196):
+                            if halt():
+                                break
+                            if verbose:
+                                progress.update()
+                            if chunk:
+                                local_file.write(chunk)
+                else:
+                    utils.echo_error_msg('server returned: {}'.format(req.status_code))
+        except Exception as e:
+            utils.echo_error_msg(e)
+            status = -1
+    if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
+        status = -1
+    if verbose:
+        progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
+    return(status)
 
 class XYZDataset():
-    """representing an xyz-able parser or a data-list entry
-    """
+    """representing an xyz-able parser or a data-list entry."""
 
     def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<XYZDataset>", title=None,
                  source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
@@ -122,8 +175,8 @@ class XYZDataset():
                         self.url))
 
     def format_metadata(self, **kwargs):
-        return('{} {} {} {} {} {} {} {} {} {}'.format(
-            self.data_format, self.weight, self.title, self.source,
+        return('{} {} {} {} {} {} {} {} {}'.format(
+            self.weight, self.title, self.source,
             self.date, self.data_type, self.resolution, self.epsg, self.vdatum,
             self.url))
     
@@ -239,16 +292,17 @@ class XYZDataset():
                 this_dir.append(a_dir)
                 tmp_dir = this_dir
                 #dlf.write('{}.datalist -1 {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].weight))
-                dlf.write('{}.datalist {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].format_metadata()))
+                dlf.write('{}.datalist -1 {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].format_metadata()))
                 this_dir = os.path.join(os.getcwd(), *this_dir)
                 if not os.path.exists(this_dir):
                     os.makedirs(this_dir)
                 with open(os.path.join(this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w') as sub_dlf:
                     for xyz_dataset in self.data_lists[x]['data']:
                         sub_xyz_path = '.'.join(
-                            [utils.fn_basename(os.path.basename(xyz_dataset.fn),
+                            [utils.fn_basename(os.path.basename(utils.slugify(xyz_dataset.fn)),
                                                xyz_dataset.fn.split('.')[-1]),
                              'xyz'])
+                        
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
                         sub_dlf.write('{} 168\n'.format(sub_xyz_path))
                         
@@ -657,8 +711,10 @@ class RasterFile(XYZDataset):
         self.ds_open_p = True
 
         if self.remote:
-            outf = '_tmp_dlim_raster_{}.tif'.format(self.region.format('fn'))
-            if fetches.fetch_file(self.fn, outf, verbose = self.verbose) == 0:
+            if self.region is not None:
+                outf = '_tmp_dlim_raster_{}.tif'.format(self.region.format('fn'))
+            else: outf = '_tmp_dlim_raster.tif'
+            if fetch_file(self.fn, outf, verbose = self.verbose) == 0:
                 self.fn = outf
             
     def _open_ds(self):
@@ -917,8 +973,8 @@ class GMRT(XYZDataset):
                          'south':self.region.ymin, 'east':self.region.xmax,
                          'mformat':'json', 'resolution':res, 'format':fmt}
 
-                _req = fetches.fetch_req(self._gmrt_grid_urls_url, params=_data,
-                                         tries=10, timeout=2)
+                _req = fetch_req(self._gmrt_grid_urls_url, params=_data,
+                                 tries=10, timeout=2)
                 if _req is not None and _req.status_code == 200:
                     gmrt_urls = _req.json()
                     for url in gmrt_urls:
@@ -953,7 +1009,7 @@ class GMRT(XYZDataset):
                 title=self.title, epsg=self.epsg, source=self.source, date=self.date, data_type=self.data_type,
                 resolution=self.resolution, vdatum=self.vdatum, url=self.url, warp=self.warp,
                 verbose=self.verbose)
-            if fetches.fetch_file(entry.fn, entry._fn, verbose = entry.verbose) == 0:
+            if fetch_file(entry.fn, entry._fn, verbose = entry.verbose) == 0:
                 for xyz in gmrt_ds.acquire_raster_file().parse().yield_xyz():
                     yield(xyz)
             else:
@@ -1043,6 +1099,8 @@ class DatasetFactory:
             
         if len(entry) < 3:
             entry.append(self.weight)
+        elif entry[2] is None:
+            entry[2] = self.weight
         if len(entry) < 4:
             entry.append(self.title)
         else: self.title = entry[3]
@@ -1074,7 +1132,7 @@ class DatasetFactory:
         self.data_format = entry[1]
         if self.data_format is None:
             self.guess_data_format()
-        
+        print(entry)
         if self.weight is not None:
             self.weight *= entry[2]
 

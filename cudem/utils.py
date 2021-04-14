@@ -30,16 +30,14 @@ import time
 import datetime
 import requests
 import subprocess
-
-## ==============================================
-## import gdal/numpy
-## ==============================================
+import unicodedata
+import re
 import numpy as np
-import gdal
-import ogr
-import osr
+from osgeo import gdal
+from osgeo import ogr
+from osgeo import osr
 
-__version__ = '0.5.0'
+__version__ = '0.5.1'
 ## ==============================================
 ##
 ## General Utility Functions, definitions, etc.
@@ -206,6 +204,22 @@ def remove_glob(*args):
                 else: os.remove(g)
         except: pass
     return(0)
+
+def slugify(value, allow_unicode=False):
+    """Taken from https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value.lower())
+    return(re.sub(r'[-\s]+', '-', value).strip('-_'))
 
 def int_or(val, or_val = None):
     """return val if val is integer
