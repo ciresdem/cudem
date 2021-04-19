@@ -26,6 +26,7 @@ import os
 import sys
 import hashlib
 import glob
+import math
 import time
 import datetime
 import requests
@@ -251,6 +252,49 @@ def float_or(val, or_val = None):
         return(float(val))
     except: return(or_val)
 
+def euc_dst(pnt0, pnt1):
+    """return the distance between pnt0 and pnt1,
+    using the euclidean formula.
+
+    `pnts` are geographic and result is in meters.
+
+    Args:
+      pnt0 (list): an xyz data list
+      pnt1 (list): an xyz data list
+
+    Returns:
+      float: the distance beteween pnt0 and pnt1
+    """
+    
+    rad_m = 637100
+    distance = math.sqrt(sum([(a-b) ** 2 for a, b in zip(pnt0, pnt1)]))
+    return(rad_m * distance)
+    
+def hav_dst(pnt0, pnt1):
+    """return the distance between pnt0 and pnt1,
+    using the haversine formula.
+
+    `pnts` are geographic and result is in meters.
+
+    Args:
+      pnt0 (list): an xyz data list
+      pnt1 (list): an xyz data list
+
+    Returns:
+      float: the distance beteween pnt0 and pnt1
+    """
+    
+    x0 = float(pnt0[0])
+    y0 = float(pnt0[1])
+    x1 = float(pnt1[0])
+    y1 = float(pnt1[1])
+    rad_m = 637100
+    dx = math.radians(x1 - x0)
+    dy = math.radians(y1 - y0)
+    a = math.sin(dx / 2) * math.sin(dx / 2) + math.cos(math.radians(x0)) * math.cos(math.radians(x1)) * math.sin(dy / 2) * math.sin(dy / 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    return(rad_m * c)
+    
 def _geo2pixel(geo_x, geo_y, geoTransform):
     """convert a geographic x,y value to a pixel location of geoTransform
 

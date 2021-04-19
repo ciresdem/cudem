@@ -89,6 +89,41 @@ def xyz_block(src_xyz, src_region, inc, weights=False, verbose=False):
             if out_xyz.z != -9999:
                 yield(out_xyz)
 
+def xyz_block_t(src_xyz, src_region, inc, verbose=False):
+    """block the src_xyz data to the mean block value
+
+    Args:
+      src_xyz (generataor): list/generator of xyz data
+      region (list): a `region` list [xmin, xmax, ymin, ymax]
+      inc (float): blocking increment, in native units
+      weights (bool): block using weights
+      verbose (bool): increase verbosity    
+
+    Yields:
+      list: xyz data for each block with data
+    """
+
+    xcount, ycount, dst_gt = src_region.geo_transform(x_inc=inc)
+    blkArray = np.empty((ycount, xcount), dtype=object)
+    for y in range(0, ycount):
+        for x in range(0, xcount):
+            blkArray[y,x] = []
+    xyzArray = []
+    
+    gdt = gdal.GDT_Float32
+
+    if verbose: utils.echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
+    it = 0
+    for this_xyz in src_xyz:
+        if regions.xyz_in_region_p(this_xyz, src_region):
+            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+            if xpos<xcount and ypos<ycount:
+                xyzArray.append(xyzfun.XYZPoint().from_list(this_xyz.export_as_list(include_z=True, include_w=True)))
+                blkArray[ypos,xpos].append(it)
+                it+=1
+            
+    return(blkArray, xyzArray)
+                
 def xyz2gdal(src_xyz, dst_gdal, src_region, inc, dst_format = 'GTiff', mode = 'n', epsg = 4326, verbose = False):
     '''Create a GDAL supported grid from xyz data 
     `mode` of `n` generates a num grid
@@ -128,7 +163,7 @@ def xyz2gdal(src_xyz, dst_gdal, src_region, inc, dst_format = 'GTiff', mode = 'n
     outarray[np.isnan(outarray)] = -9999
     if verbose: progress.end(0, 'generated uninterpolated num grid {} @ {}/{}'.format(mode, ycount, xcount))
     return(utils.gdal_write(outarray, dst_gdal, ds_config))
-
+        
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
@@ -303,7 +338,9 @@ class Waffle:
             self.region = self.region.buffer(self.inc*.5)
         self.p_region = self.proc_region()
         self.d_region = self.dist_region()
-        
+
+
+        self.data_ = data
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
@@ -424,7 +461,7 @@ class Waffle:
         for xdl in self.data:
             if self.spat:
                 xyz_yield = metadata.SpatialMetadata(
-                    data=self.data, src_regtion=self.p_region, inc=self.inc, extend=self.extend, epsg=self.epsg,
+                    data=[xdl.fn], src_region=self.p_region, inc=self.inc, extend=self.extend, epsg=self.epsg,
                     node=self.node, name=self.name, verbose=self.verbose).yield_xyz()
             elif self.archive:
                 xyz_yield = xdl.archive_xyz()
@@ -539,6 +576,168 @@ class WafflesNum(Waffle):
 
         WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
 
+class WafflesIDW(Waffle):
+    def __init__(self, radius='1', power=2, **kwargs):
+
+        super().__init__(**kwargs)
+        self.radius = utils.str2inc(radius)
+        #self.radius = utils.int_or(radius)
+        self.power = power
+        self.mod = 'IDW'
+
+    def distance(self, pnt0, pnt1):
+        return(math.sqrt(sum([(a-b) ** 2 for a, b in zip(pnt0, pnt1)])))
+    
+    # def run(self):
+    #     from multiprocessing import Pool
+    #     pool = Pool(4)
+    #     pool.map(self.IDW, )
+    #     pool.close()
+    #     pool.join()
+
+    def run(self):
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, dst_gt,
+                                     utils.sr_wkt(self.epsg), gdal.GDT_Float32,
+                                     -9999, self.fmt)
+
+        outArray = np.empty((ycount, xcount))
+        outArray[:] = np.nan
+
+        if self.verbose:
+            progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
+            i=0
+
+        hash_t, xyz_t = xyz_block_t(self.yield_xyz(), self.p_region, self.inc)
+            
+        for y in range(0, ycount):
+            if self.verbose:
+                i+=1
+                progress.update_perc((i, ycount))
+                
+            for x in range(0, xcount):
+                z_list = []
+                dw_list = []
+                if self.weights:
+                    ww_list = []
+
+                xyz_bucket = []
+                    
+                xg, yg = utils._pixel2geo(x, y, dst_gt)
+                block_region = regions.Region(xmin=xg-self.radius, xmax=xg+self.radius, ymin=yg-self.radius, ymax=yg+self.radius)
+                srcwin = block_region.srcwin(dst_gt, xcount, ycount)
+                
+                for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+                    for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
+                        xyz_s = hash_t[y_i, x_i]
+                        [xyz_bucket.append(xyz_t[b]) for b in xyz_s]
+
+                #print(srcwin)
+                for this_xyz in xyz_bucket:
+                    #print(this_xyz.z)
+                    #d = self.distance([this_xyz.x, this_xyz.y], [xg, yg])
+                    d = utils.euc_dst([this_xyz.x, this_xyz.y], [xg, yg])
+                    #print(xg, yg, d, this_xyz.z)
+                    z_list.append(this_xyz.z)                    
+                    dw_list.append(1./(d**self.power))
+                    
+                    if self.weights:
+                        w = this_xyz.w
+                        ww_list.append(1./(w**self.power))
+
+                if len(dw_list) > 0:
+                    dwt = np.transpose(dw_list)
+                    if self.weights:
+                        wwt = np.transpose(ww_list)
+                        outArray[y,x] = np.dot(z_list, (np.array(dwt)*np.array(wwt)))/sum(np.array(dw_list)*np.array(ww_list))
+                    else:
+                        outArray[y,x] = np.dot(z_list, dwt)/sum(dw_list)
+                        #print(outArray[y,x])
+                        #print(z_list)
+        ds = None
+        
+        if self.verbose:
+            progress.end(0, 'generated IDW grid {}/{}'.format(ycount, xcount))
+            
+        outArray[np.isnan(outArray)] = -9999
+        out, status = utils.gdal_write(outArray, '{}.tif'.format(self.name), ds_config)
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
+    
+    def run2(self):
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, dst_gt,
+                                     utils.sr_wkt(self.epsg), gdal.GDT_Float32,
+                                     -9999, self.fmt)
+
+        outArray = np.empty((ycount, xcount))
+        outArray[:] = np.nan
+
+        if self.verbose:
+            progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
+            i=0
+
+            
+        ds = xyzfun.xyz2gdal_ds(
+            xyz_block(self.yield_xyz(), self.p_region, self.inc, weights = True if self.weights is not None else False),
+            '{}'.format(self.name),
+            weights = True if self.weights is not None else False)
+        ds_layer = ds.GetLayer(0)
+        
+        if ds_layer.GetFeatureCount() == 0:
+            utils.echo_error_msg('no input data')
+            
+        for y in range(0, ycount):
+            if self.verbose:
+                i+=1
+                progress.update_perc((i, ycount))
+                
+            for x in range(0, xcount):
+                z_list = []
+                dw_list = []
+                if self.weights:
+                    ww_list = []
+                    
+                xg, yg = utils._pixel2geo(x, y, dst_gt)
+                block_region = regions.Region(xmin=xg-self.radius, xmax=xg+self.radius, ymin=yg-self.radius, ymax=yg+self.radius).export_as_wkt()
+                ds_layer.SetSpatialFilter(ogr.CreateGeometryFromWkt(block_region))
+
+                #print(len(ds_layer))
+                for feature in ds_layer:
+                    point = feature.GetGeometryRef()
+                    gx, gy, gz = point.GetPoint()
+                    d = self.distance([gx, gy], [xg, yg])
+                    z_list.append(gz)
+                    
+                    if d > 0:
+                        dw_list.append(1./(d**self.power))
+                    else: dw_list.append(0)
+                    
+                    if self.weights:
+                        w = feature.GetField('weight')
+                        ww_list.append(1./(w**self.power))
+
+                if len(dw_list) > 0:
+                    if 0 in dw_list:
+                        idx = dw_list.index(0)
+                        outArray[y,x] = z_list[idx]
+                    else:
+                        dwt = np.transpose(dw_list)
+                        if self.weights:
+                            wwt = np.transpose(ww_list)
+                            outArray[y,x] = np.dot(z_list, (np.array(dwt)*np.array(wwt)))/sum(np.array(dw_list)*np.array(ww_list))
+                        else:
+                            outArray[y,x] = np.dot(z_list, dwt)/sum(dw_list)                        
+        ds = None
+        
+        if self.verbose:
+            progress.end(0, 'generated IDW grid {}/{}'.format(ycount, xcount))
+            
+        outArray[np.isnan(outArray)] = -9999
+        out, status = utils.gdal_write(outArray, '{}.tif'.format(self.name), ds_config)
+        WaffledRaster(fn='{}.tif'.format(self.name), epsg=self.epsg, fmt=self.fmt, sample_inc=self.sample, src_region=self.d_region).process()        
+    
 ## ==============================================
 ## Waffles 'Vdatum conversion grid' module
 ## vertical datum transformation grid;
@@ -691,8 +890,7 @@ class WafflesNearest(WafflesGDALGrid):
         radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, min_points, nodata)
-        
-        
+            
 class WaffleFactory:
 
     _modules = {
@@ -767,9 +965,15 @@ see gdal_grid --help for more info
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< nearest:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
+< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
+        },
+        'IDW': {
+            'name': 'IDW',
+            'datalist-p': True,
+            'description': """INVERSE DISTANCE WEIGHTED DEM\n
+            """,
         },
         'vdatum': {
             'name': 'vdatum',
@@ -846,6 +1050,12 @@ see gdal_grid --help for more info
                               fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
                               archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
 
+    def acquire_IDW(self, **kwargs):
+        return(WafflesIDW(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
+                          fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                          fltr=self.fltr, sample=self.sample, clip=self.clip, chunk=self.chunk, epsg=self.epsg,
+                          archive=self.archive, mask=self.mask, spat=self.spat, clobber=self.clobber, verbose=self.verbose, **kwargs))
+    
     def acquire_vdatum(self, **kwargs):
         return(WafflesVdatum(data=self.data, src_region=self.region, inc=self.inc, name=self.name, node=self.node,
                              fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
@@ -867,6 +1077,8 @@ see gdal_grid --help for more info
             return(self.acquire_nearest(**kwargs))
         if mod_name == 'invdst':
             return(self.acquire_invdst(**kwargs))
+        if mod_name == 'IDW':
+            return(self.acquire_IDW(**kwargs))
         if mod_name == 'vdatum':
             return(self.acquire_vdatum(**kwargs))
         
@@ -1110,7 +1322,7 @@ def waffles_cli(argv = sys.argv):
         utils.echo_error_msg('failed to parse region(s), {}'.format(i_regions))
     else:
         if wg['verbose']: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-
+    
     for i, this_region in enumerate(these_regions):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:

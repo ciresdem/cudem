@@ -215,7 +215,7 @@ def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
     if encode: l = l.encode('utf-8')
     dst_port.write(l)
 
-def xyz2gdal_ds(src_xyz, dst_ogr):
+def xyz2gdal_ds(src_xyz, dst_ogr, weights=False):
     """Make a point vector OGR DataSet Object from src_xyz
 
     returns the in-memory GDAL data-source (don't forget to close it)
@@ -235,11 +235,18 @@ def xyz2gdal_ds(src_xyz, dst_ogr):
     fd.SetWidth(12)
     fd.SetPrecision(12)
     layer.CreateField(fd)
+    if weights:
+        fd = ogr.FieldDefn('weight', ogr.OFTReal)
+        fd.SetWidth(6)
+        fd.SetPrecision(6)
+        layer.CreateField(fd)
     f = ogr.Feature(feature_def = layer.GetLayerDefn())
     for this_xyz in src_xyz:
         f.SetField(0, this_xyz.x)
         f.SetField(1, this_xyz.y)
         f.SetField(2, this_xyz.z)
+        if weights:
+            f.SetField(3, this_xyz.w)
         #wkt = 'POINT({:.8f} {:.8f} {:.10f})'.format(this_xyz.x, this_xyz.y, this_xyz.z)
         wkt = this_xyz.export_as_wkt(include_z=True)
         #utils.echo_error_msg(wkt)

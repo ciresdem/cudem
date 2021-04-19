@@ -288,6 +288,9 @@ class Region:
           ogr-geom: an ogr polygon geometry
         """
 
+        if self.wkt is None:
+            self.wkt = self.export_as_wkt()
+            
         if self.wkt is not None:
             return(ogr.CreateGeometryFromWkt(self.wkt))
         else: return(None)

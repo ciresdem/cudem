@@ -498,16 +498,16 @@ class Datalist(XYZDataset):
           datalist_parser: self
         """
         
-        _prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
+        if self.verbose: _prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as op:
                 for this_line in op:
-                    _prog.update()
+                    if self.verbose: _prog.update()
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
                             data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url, title=self.title,
-                            warp=self.warp, verbose=self.verbose).acquire_dataset()
+                            warp=self.warp, weight=self.weight, verbose=self.verbose).acquire_dataset()
                         if data_set is not None and data_set.valid_p():
                             data_set.inf()
                             if self.region is not None and self.region.valid_p(check_xy=True):
@@ -523,7 +523,7 @@ class Datalist(XYZDataset):
                                     self.data_entries.append(entry)
         else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
         self.parse_data_lists()
-        _prog.end(0, 'parsed datalist {}'.format(self.fn))
+        if self.verbose: _prog.end(0, 'parsed datalist {}'.format(self.fn))
         return(self)
            
     def yield_xyz(self):
@@ -1096,7 +1096,8 @@ class DatasetFactory:
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
-            
+
+
         if len(entry) < 3:
             entry.append(self.weight)
         elif entry[2] is None:
@@ -1132,7 +1133,7 @@ class DatasetFactory:
         self.data_format = entry[1]
         if self.data_format is None:
             self.guess_data_format()
-        print(entry)
+
         if self.weight is not None:
             self.weight *= entry[2]
 
