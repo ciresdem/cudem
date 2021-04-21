@@ -102,7 +102,7 @@ def fetch_file(src_url, dst_fn, params=None, callback=lambda: False, datatype=No
     return(status)
 
 class XYZDataset():
-    """representing an xyz-able parser or a data-list entry."""
+    """representing an Elevation Dataset"""
 
     def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="<XYZDataset>", title=None,
                  source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
@@ -342,6 +342,13 @@ class XYZDataset():
             this_xyz.dump(include_w=True if self.weight is not None else False,
                           dst_port=dst_port, encode=False)
 
+    def export_xyz_as_list(self, **kwargs):
+        xyz_l = []
+        for this_xyz in self.yield_xyz(**kwargs):
+            xyz_l.append(xyzfun.XYZPoint().from_list(this_xyz.export_as_list(include_z=True, include_w=True)))
+            
+        return(xyz_l)
+            
 class MBSParser:
     """providing an mbsystem parser"""
 
@@ -704,7 +711,7 @@ class RasterFile(XYZDataset):
     def __init__(self, mask=None, step=1, **kwargs):
         super().__init__(**kwargs)
         self.mask = mask
-        self.step = 1
+        self.step = step
 
         self.src_ds = None
         self.ds_config = None

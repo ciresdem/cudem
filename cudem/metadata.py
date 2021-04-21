@@ -99,11 +99,7 @@ class SpatialMetadata: #(waffles.Waffle):
 
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_sm', epsg=4326,
                  warp=None, extend=0, node='pixel', make_valid=False, verbose=False):
-        """generate spatial-metadata
-
-        Args:
-          geojson(bool): generate a geojson output
-        """
+        """generate spatial-metadata"""
         
         #super().__init__(**kwargs)
         self.data = data
