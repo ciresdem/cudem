@@ -36,7 +36,7 @@ from cudem import demfun
 from cudem import metadata
 from cudem import vdatumfun
 
-__version__ = '0.10.0'
+__version__ = '0.10.1'
 
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -128,7 +128,8 @@ class Waffle:
             if regions.xyz_in_region_p(this_xyz, self.p_region):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
                 if xpos < xcount and ypos < ycount:
-                    self.block_t[ypos,xpos].append(xyzfun.XYZPoint().from_list(this_xyz.export_as_list(include_z=True, include_w=True)))
+                    self.block_t[ypos,xpos].append(xyzfun.XYZPoint().from_list(
+                        this_xyz.export_as_list(include_z=True, include_w=True)))
 
     def xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz"""
@@ -255,15 +256,18 @@ class Waffle:
                 xyz_yield = self.xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
             if block:
                 xyz_yield = self.xyz_block(xyz_yield)
-                #dly = xyz_block(self.yield_xyz(), self.p_region, self.inc, weights = True if self.weights is not None else False, verbose=self.verbose)        
             for xyz in xyz_yield:
                 yield(xyz)
 
         if self.spat:
             dst_layer = '{}_sm'.format(self.name)
             dst_vector = dst_layer + '.shp'
-            utils.run_cmd('ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), dst_vector), verbose=True)
-            utils.run_cmd('ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector), verbose=True)
+            utils.run_cmd(
+                'ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), dst_vector),
+                verbose=True)
+            utils.run_cmd(
+                'ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector),
+                verbose=True)
             utils.remove_glob('__tmp_clip.*')
 
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
@@ -398,8 +402,9 @@ class GMTTriangulate(Waffle):
         self.mod = 'triangulate'
         
     def run(self):
-        dem_tri_cmd = ('gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(self.p_region.format('gmt'), self.inc, self.name))
-        out, status = utils.run_cmd(dem_tri_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
+        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(self.p_region.format('gmt'), self.inc, self.name)
+        out, status = utils.run_cmd(dem_tri_cmd, verbose = self.verbose,
+                                    data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
         return(self)
 
 ## ==============================================
@@ -602,7 +607,8 @@ class WafflesVdatum(Waffle):
         """create a nodata grid"""
         
         xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
-        ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326), gdal.GDT_Float32, nodata, outformat)
+        ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326),
+                                     gdal.GDT_Float32, nodata, outformat)
         nullArray = np.zeros( (ycount, xcount) )
         nullArray[nullArray==0]=nodata
         utils.gdal_write(nullArray, outfile, ds_config)
@@ -627,7 +633,8 @@ class WafflesVdatum(Waffle):
             ll = 'd' if empty_infos['minmax'][4] < 0 else '0'
             lu = 'd' if empty_infos['minmax'][5] > 0 else '0'
 
-            GMTSurface(data=['result/empty.xyz'], name=self.name, src_region=self.region, inc=self.inc, epsg=self.epsg, verbose=self.verbose, tension=0, upper_limit=lu, lower_limit=ll).generate()
+            GMTSurface(data=['result/empty.xyz'], name=self.name, src_region=self.region, inc=self.inc,
+                       epsg=self.epsg, verbose=self.verbose, tension=0, upper_limit=lu, lower_limit=ll).generate()
         else:
             utils.echo_error_msg('failed to generate VDatum grid, check settings')
             vd_out = {}
@@ -837,67 +844,76 @@ see gdal_grid --help for more info
         self.verbose = verbose
         
     def acquire_surface(self, **kwargs):
-        return(GMTSurface(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                          node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                          weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                          chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                          clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(GMTSurface(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_triangulate(self, **kwargs):
-        return(GMTTriangulate(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                              node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                              weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                              chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                              clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(GMTTriangulate(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_num(self, **kwargs):
-        return(WafflesNum(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                          node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                          weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                          chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                          clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesNum(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_linear(self, **kwargs):
-        return(WafflesLinear(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                             clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesLinear(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_average(self, **kwargs):
-        return(WafflesMovingAverage(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                                    node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                                    weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                                    chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                                    clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesMovingAverage(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_invdst(self, **kwargs):
-        return(WafflesInvDst(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                             clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesInvDst(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_nearest(self, **kwargs):
-        return(WafflesNearest(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                              node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                              weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                              chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                              clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesNearest(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
 
     def acquire_IDW(self, **kwargs):
-        return(WafflesIDW(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                          node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                          weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                          chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                          clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesIDW(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_vdatum(self, **kwargs):
-        return(WafflesVdatum(data=self.data, src_region=self.region, inc=self.inc, name=self.name,
-                             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
-                             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
-                             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-                             clobber=self.clobber, verbose=self.verbose, **kwargs))
+        return(WafflesVdatum(
+            data=self.data, src_region=self.region, inc=self.inc, name=self.name,
+            node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
+            weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
+            chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
+            clobber=self.clobber, verbose=self.verbose, **kwargs))
     
     def acquire_module_by_name(self, mod_name, **kwargs):
         if mod_name == 'surface':
