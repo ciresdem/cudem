@@ -32,7 +32,7 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-_version = '0.0.3'
+__version__ = '0.0.3'
 
 ## ==============================================
 ## OGR vector processing
@@ -246,7 +246,7 @@ usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
   % spatial_metadata.py my_data.datalist
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
-'''.format(_version)
+'''.format(__version__)
 
 def spat_meta_cli(argv = sys.argv):
     i = 1
@@ -323,5 +323,5 @@ def spat_meta_cli(argv = sys.argv):
             #[x for x in waffles.Waffle(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg, node=node, name=name, verbose=want_verbose).spat_meta(yxyz=False)]
             SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
                             node=node, name=name, verbose=want_verbose).run()
-        
+
 ### End

@@ -29,7 +29,7 @@ import osr
 import numpy as np
 from cudem import utils
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 ## ==============================================
 ##
@@ -804,8 +804,6 @@ def regions_cli(argv = sys.argv):
             print(this_region.format('gmt'))
         elif echo_fn:
             print(this_region.format('fn'))
-
         else:
             this_region.export_as_ogr('test.shp')
-        
 ### End

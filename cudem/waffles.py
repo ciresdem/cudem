@@ -22,12 +22,10 @@
 
 import sys
 import os
-import numpy as np
 import math
-import json
-import gdal
-import ogr
-import osr
+import numpy as np
+from osgeo import gdal
+from osgeo import ogr
 from cudem import dlim
 from cudem import regions
 from cudem import utils
@@ -934,7 +932,7 @@ see gdal_grid --help for more info
             return(self.acquire_IDW(**kwargs))
         if mod_name == 'vdatum':
             return(self.acquire_vdatum(**kwargs))
-        
+
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
@@ -985,7 +983,7 @@ Options:
   -m, --mask\t\tGenerate a data MASK raster.
   -s, --spat\t\tGenerate SPATIAL-METADATA.
   -c, --continue\tDon't clobber existing files.
-  -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
+  -q, --quiet\t\tLower verbosity to a quiet.
 
   --help\t\tPrint the usage text
   --config\t\tSave the waffles config JSON and major datalist
@@ -1184,4 +1182,5 @@ def waffles_cli(argv = sys.argv):
         wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
         utils.echo_msg(wf)
         #utils.echo_msg(wf['dem'].mod)
+
 ### End

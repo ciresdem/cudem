@@ -20,6 +20,10 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+## General utility functions and classes used in other modules...
+## includes, generic gdal functions, fetching classes, progress indicators,
+## system command interfaces, etc...
+##
 ### Code:
 
 import os
@@ -33,12 +37,18 @@ import requests
 import subprocess
 import unicodedata
 import re
+import requests
+import urllib
+import threading
+try:
+    import Queue as queue
+except: import queue as queue
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
 
-__version__ = '0.5.1'
+__version__ = '0.5.2'
 ## ==============================================
 ##
 ## General Utility Functions, definitions, etc.
@@ -89,6 +99,13 @@ def fn_basename(fn, ext):
     else:
         return(fn[:-(len(ext)+1)])
 
+def fn_url_p(fn):
+    url_sw = ['http://', 'https://', 'ftp://', 'ftps://']
+    for u in url_sw:
+        if fn.startswith(u):
+            return(True)
+    return(False)
+    
 def inc2str(inc):
     """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
 
@@ -751,5 +768,182 @@ class CliProgress:
         if status != 0:
             sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {:40}\n'.format('fail', end_msg))
         else: sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {:40}\n'.format('ok', end_msg))
+
+## =============================================================================
+##
+## Fetching Functions
+##
+## Generic fetching and processing functions, etc.
+##
+## The `fetch_results` class will fetch a list of fetch results [[url, file-name, data-type]...]
+## in a queue `fetch_queue` using 3 threads; set `p` and `s` as a fetch module object to processes
+## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
+##
+## =============================================================================
+r_headers = { 'User-Agent': 'Fetches v%s' %(__version__) }
+
+def urlencode(opts):
+    try:
+        url_enc = utils.urlencode(opts)
+    except:
+        url_enc = urllib.parse.urlencode(opts)
+    return(url_enc)
+
+def fetch_queue(q, r):
+    """fetch queue `q` of fetch results\
+    each fetch queue should be a list of the following:
+    [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
+    if region is defined, will prompt the queue to process the data to the given region.
+    """
     
+    while True:
+        fetch_args = q.get()
+        this_region = fetch_args[2]
+        
+        if not fetch_args[3]():
+            if not os.path.exists(os.path.dirname(fetch_args[1])):
+                try:
+                    os.makedirs(os.path.dirname(fetch_args[1]))
+                except: pass
+            
+            #if this_region is None:
+            if fetch_args[0].split(':')[0] == 'ftp':
+                Fetch(url=fetch_args[0], callback=fetch_args[3]).fetch_ftp_file(fetch_args[1])
+            else:
+                Fetch(url=fetch_args[0], callback=fetch_args[3]).fetch_file(fetch_args[1])
+            # else:
+            #     o_x_fn = fetch_args[1] + '.xyz'
+            #     echo_msg('processing local file: {}'.format(o_x_fn))
+            #     if not os.path.exists(o_x_fn):
+            #         with open(o_x_fn, 'w') as out_xyz:
+            #             fetch_args[4].dump_xyz()
+            #         if os.stat(o_x_fn).st_size == 0:
+            #             remove_glob(o_x_fn)
+        q.task_done()
+
+class fetch_results(threading.Thread):
+    """fetch results gathered from a fetch module.
+    results is a list of URLs with data type
+    e.g. results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
+    """
+    
+    def __init__(self, results, out_dir, region=None, callback=lambda: False):
+        threading.Thread.__init__(self)
+        self.fetch_q = queue.Queue()
+        self.results = results
+        self.region = region
+        self.outdir_ = out_dir
+        self.stop_threads = callback
+        
+    def run(self):
+        for _ in range(3):
+            t = threading.Thread(target=fetch_queue, args=(self.fetch_q))
+            t.daemon = True
+            t.start()
+        for row in self.results:
+            self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), self.region, self.stop_threads, row[2]])
+        self.fetch_q.join()
+
+class Fetch:
+
+    def __init__(self, url=None, callback=lambda: False, verbose=None):
+        self.url = url
+        self.callback = callback
+        self.verbose = verbose
+
+    def fetch_req(self, params=None, tries=5, timeout=2, read_timeout=10):
+        """fetch src_url and return the requests object"""
+        
+        if tries <= 0:
+            echo_error_msg('max-tries exhausted')
+            return(None)
+        try:
+            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=r_headers))
+        except:
+            return(fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
+            
+    def fetch_as_html(self, timeout=2):
+        """fetch src_url and return it as an HTML object"""
+    
+        req = self.fetch_req(timeout=timeout)
+        if req:
+            return(lh.document_fromstring(req.text))
+        else:
+            return(None)
+
+    def fetch_xml(self, timeout=2, read_timeout=10):
+        """fetch src_url and return it as an XML object"""
+    
+        results = lxml.etree.fromstring('<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8'))
+        try:
+            req = fetch_req(src_url, timeout=timeout, read_timeout=read_timeout)
+            results = lxml.etree.fromstring(req.text.encode('utf-8'))
+        except:
+            echo_error_msg('could not access {}'.format(self.url))
+        return(results)
+
+    def fetch_file(self, dst_fn, params=None, datatype=None, overwrite=False, timeout=140, read_timeout=320):
+        """fetch src_url and save to dst_fn"""
+    
+        status = 0
+        req = None
+
+        if self.verbose:
+            progress = CliProgress('fetching remote file: {}...'.format(os.path.basename(self.url)[:20]))
+        if not os.path.exists(os.path.dirname(dst_fn)):
+            try:
+                os.makedirs(os.path.dirname(dst_fn))
+            except: pass 
+        if not os.path.exists(dst_fn) or overwrite:
+            try:
+                with requests.get(self.url, stream=True, params=params, headers=r_headers,
+                                  timeout=(timeout,read_timeout)) as req:
+                    req_h = req.headers
+                    if req.status_code == 200:
+                        curr_chunk = 0
+                        with open(dst_fn, 'wb') as local_file:
+                            for chunk in req.iter_content(chunk_size = 8196):
+                                if self.callback():
+                                    break
+                                if self.verbose:
+                                    progress.update()
+                                if chunk:
+                                    local_file.write(chunk)
+                    else:
+                        echo_error_msg('server returned: {}'.format(req.status_code))
+            except Exception as e:
+                echo_error_msg(e)
+                status = -1
+        if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
+            status = -1
+        if self.verbose:
+            progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
+        return(status)
+
+    def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):
+        """fetch an ftp file via urllib"""
+
+        status = 0
+        f = None
+
+        if self.verbose:
+            echo_msg('fetching remote ftp file: {}...'.format(self.url[:20]))
+        if not os.path.exists(os.path.dirname(dst_fn)):
+            try:
+                os.makedirs(os.path.dirname(dst_fn))
+            except:
+                pass 
+        try:
+            f = urllib.request.urlopen(self.url)
+        except:
+            f = None
+            status - 1
+
+        if f is not None:
+            with open(dst_fn, 'wb') as local_file:
+                 local_file.write(f.read())
+            if self.verbose:
+                echo_msg('fetched remote ftp file: {}.'.format(os.path.basename(self.url)))
+        return(status)
+        
 ### End
