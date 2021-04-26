@@ -99,7 +99,8 @@ class XYZDataset():
             self.remote = True
 
         if self.valid_p():
-            self.inf()
+            if not self.remote:
+                self.inf()
             
     def fetch(self):
         for entry in self.data_entries:
@@ -386,7 +387,6 @@ class MBSParser(XYZDataset):
     def generate_inf(self):
         self.infos['name'] = self.fn
         self.infos['hash'] = None
-
         try:
             utils.run_cmd('mbdatalist -O -V -I{}'.format(self.fn))
             self.inf_parse()
@@ -715,7 +715,7 @@ class RasterFile(XYZDataset):
 
     def cut(self):
         if self.ds_open_p:
-            ds_config = demfun.gather_infos()
+            ds_config = demfun.gather_infos(self.src_ds)
             gt = ds_config['geoT']
             srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
             
