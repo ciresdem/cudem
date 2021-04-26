@@ -363,7 +363,7 @@ class XYZDataset():
         
         for this_xyz in self.yield_xyz(**kwargs):
             this_xyz.dump(include_w=True if self.weight is not None else False,
-                          dst_port=dst_port, encode=False)
+                          dst_port=dst_port, encode=encode)
 
     def export_xyz_as_list(self, **kwargs):
         """return the XYZ data from the dataset as python list"""
