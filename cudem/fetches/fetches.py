@@ -75,7 +75,7 @@ class Fetch:
         try:
             return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=r_headers))
         except:
-            return(fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
+            return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
             
     def fetch_as_html(self, timeout=2):
         """fetch src_url and return it as an HTML object"""
@@ -274,7 +274,7 @@ class MB(FetchModule):
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
         self.name = 'mb'
         self.processed_p = processed
-        self.inc = inc
+        self.inc = utils.str2inc(inc)
         super().__init__(**kwargs)
 
     def mb_inf_data_format(self, src_inf):
@@ -343,8 +343,8 @@ class MB(FetchModule):
                                        name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose, remote=True)
 
                 if self.inc is not None:
-                    xyz_fun = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                    xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
                         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
                     
                 for xyz in _ds.yield_xyz():
@@ -575,16 +575,16 @@ the global and coastal oceans."""},
 
     def acquire(self, **kwargs):
         if self.mod == 'mb':
-            return(self.acquire_mb(**kwargs, **self.mod_args))
+            return(self.acquire_mb(**kwargs))
         
         if self.mod == 'gmrt':
-            return(self.acquire_gmrt(**kwargs, **self.mod_args))
+            return(self.acquire_gmrt(**kwargs))
 
         if self.mod == 'srtm_plus':
-            return(self.acquire_srtm_plus(**kwargs, **self.mod_args))
+            return(self.acquire_srtm_plus(**kwargs))
         
         if self.mod == 'mar_grav':
-            return(self.acquire_mar_grav(**kwargs, **self.mod_args))
+            return(self.acquire_mar_grav(**kwargs))
 
 _fetches_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in FetchesFactory().mods])
