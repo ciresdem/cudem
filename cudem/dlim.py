@@ -132,7 +132,7 @@ class Datalist(datasets.XYZDataset):
         else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
         #self.parse_data_lists()
         if self.verbose: _prog.end(0, 'parsed datalist {}'.format(self.fn))
-        return(self)
+        #return(self)
            
     def yield_xyz(self):
         """parse the data from the datalist

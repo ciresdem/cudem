@@ -35,6 +35,7 @@ except: import queue as queue
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import xyzfun
 
 __version__ = '0.1.0'
 
@@ -179,9 +180,9 @@ def fetch_queue(q, m, p=False):
             #if this_region is None:
             if not p:
                 if fetch_args[0].split(':')[0] == 'ftp':
-                    Fetch(url=fetch_args[0], callback=m.callback).fetch_ftp_file(fetch_args[1])
+                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose).fetch_ftp_file(fetch_args[1])
                 else:
-                    Fetch(url=fetch_args[0], callback=m.callback).fetch_file(fetch_args[1])
+                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose).fetch_file(fetch_args[1])
             else:
                 o_x_fn = fetch_args[1] + '.xyz'
                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
@@ -220,13 +221,14 @@ class fetch_results(threading.Thread):
 
 class FetchModule:
 
-    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True):
+    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, warp=None):
         self.region = src_region
         self.callback = callback
         self.weight = weight
         self.verbose = verbose
         self.status = 0
         self.results = []
+        self.warp=warp
         self.name=None
 
     def run(self):
@@ -251,7 +253,113 @@ class FetchModule:
         for xyz in self.yield_results_to_xyz(**kwargs):
             xyz.dump(include_w=True if self.weight is not None else False,
                      dst_port=dst_port, encode=False)
-    
+
+## =============================================================================
+##
+## MB Fetch
+##
+## Fetch Multibeam bathymetric surveys from NOAA
+## MBSystem is required to process the resulting data
+##
+## =============================================================================
+class MB(FetchModule):
+
+    def __init__(self, processed=False, inc=None, **kwargs):
+        self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
+        self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
+        self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
+        self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
+        self._mb_html = "https://www.ngdc.noaa.gov/"
+        self._outdir = os.path.join(os.getcwd(), 'mb')
+        self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
+        self.name = 'mb'
+        self.processed_p = processed
+        self.inc = inc
+        super().__init__(**kwargs)
+
+    def mb_inf_data_format(self, src_inf):
+        """extract the data format from the mbsystem inf file.
+
+        Args:
+          src_inf (str): the source mbsystem .inf file pathname
+
+        Returns:
+          str: the mbsystem datalist format number
+        """
+
+        with open(src_inf) as iob:
+            for il in iob:
+                til = il.split()
+                if len(til) > 1:
+                    if til[0] == 'MBIO':
+                        return(til[4])
+        
+    def run(self):
+        these_surveys = {}
+        these_versions = {}
+        if self.region is None: return([])
+        _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': self.region.format('bbox')}, timeout=20)
+        if _req is not None and _req.status_code == 200:
+            survey_list = _req.text.split('\n')[:-1]
+            for r in survey_list:
+                dst_pfn = r.split(' ')[0]
+                dst_fn = dst_pfn.split('/')[-1:][0]
+                survey = dst_pfn.split('/')[6]
+                dn = r.split(' ')[0].split('/')[:-1]
+                version = dst_pfn.split('/')[9][-1]
+                data_url = self._mb_data_url + '/'.join(r.split('/')[3:])
+                if survey in these_surveys.keys():
+                    if version in these_surveys[survey].keys():
+                        these_surveys[survey][version].append([data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb'])
+                    else: these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
+                else: these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
+        else: utils.echo_error_msg('{}'.format(_req.reason))
+                    
+        for key in these_surveys.keys():
+            if self.processed_p:
+                if '2' in these_surveys[key].keys():
+                    for v2 in these_surveys[key]['2']:
+                        self.results.append(v2)
+                else:
+                    for v1 in these_surveys[key]['1']:
+                        self.results.append(v1)
+            else:
+                for keys in these_surveys[key].keys():
+                    for survs in these_surveys[key][keys]:
+                        self.results.append(survs)
+
+    def yield_xyz(self, entry):
+        src_data = os.path.basename(entry[1])
+        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+            src_xyz = os.path.basename(src_data) + '.xyz'
+            out, status = utils.run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_data, src_xyz), verbose=False)
+            if status != 0:
+                if Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_data)) == 0:
+                    mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
+                    remove_glob('{}.inf'.format(entry[0]))
+                    out, status = run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)
+            if status == 0:
+                _ds = datasets.XYZFile(fn=src_xyz, delim='\t', data_format=168, epsg=4326, warp=self.warp,
+                                       name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose, remote=True)
+
+                if self.inc is not None:
+                    xyz_fun = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                        yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                    
+                for xyz in _ds.yield_xyz():
+                    yield(xyz)
+
+                utils.remove_glob(src_data, src_xyz)
+            else:
+                echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
+                with open('{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self._name, region_format(self.region, 'fn')))), 'a') as mb_err:
+                    mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
+                os.rename(src_data, os.path.join(self._outdir, src_data))
+                utils.remove_glob(src_xyz)
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                        
 ## =============================================================================
 ##
 ## GMRT Fetch
@@ -302,14 +410,14 @@ class GMRT(FetchModule):
         return(self)
 
     def yield_xyz(self, entry):
-        src_gmrt = 'gmrt_tmp.tif'
-        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_gmrt) == 0:
-            gmrt_ds = datasets.RasterFile(fn=src_gmrt, data_format=200, epsg=4326, warp=self.epsg,
-                                          name=src_gmrt, src_region=self.region, verbose=self.verbose)
+        src_data = 'gmrt_tmp.tif'
+        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+            gmrt_ds = datasets.RasterFile(fn=src_data, data_format=200, epsg=4326, warp=self.warp,
+                                          name=src_data, src_region=self.region, verbose=self.verbose)
             for xyz in gmrt_ds.yield_xyz():
                 yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_gmrt))
-        utils.remove_glob('{}*'.format(src_gmrt))
+        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+        utils.remove_glob('{}*'.format(src_data))
 
 ## =============================================================================
 ##
@@ -328,6 +436,7 @@ class MarGrav(FetchModule):
         super().__init__(**kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
         self._outdir = os.path.join(os.getcwd(), 'mar_grav')
+        self.name = 'mar_grav'
 
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -342,19 +451,20 @@ class MarGrav(FetchModule):
         }
         _req = Fetch(self._mar_grav_url).fetch_req(params=self.data, tries=10, timeout=2)
         if _req is not None:
-            url = self._req.url
-            outf = 'mar_grav_{}.xyz'.format(regions.region_format(self.region, 'fn'))
+            url = _req.url
+            outf = 'mar_grav_{}.xyz'.format(self.region.format('fn'))
             self.results.append([url, outf, 'mar_grav'])
         return(self)
         
     def yield_xyz(self, entry):
-        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(os.path.basename(entry[1])) == 0:
-            _ds = datasets.XYZFile(fn=entry[1], data_format=168, skip=1, x_offset=-360, epsg=4326, warp=self.epsg,
-                                   name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose)
-
+        src_data = 'mar_grav_tmp.xyz'
+        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+            _ds = datasets.XYZFile(fn=src_data, data_format=168, skip=1, x_offset=-360, epsg=4326, warp=self.warp,
+                                   name=src_data, src_region=self.region, verbose=self.verbose, remote=True)
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        utils.remove_glob(os.path.basename(entry[1]))
+        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+        utils.remove_glob('{}*'.format(src_data))                
                 
 ## =============================================================================
 ##
@@ -372,6 +482,7 @@ class SRTMPlus(FetchModule):
         super().__init__(**kwargs) 
         self._srtm_url = 'https://topex.ucsd.edu/cgi-bin/get_srtm15.cgi'
         self._outdir = os.path.join(os.getcwd(), 'srtm_plus')
+        self.name = 'srtm_plus'
 
     def run(self):
         '''Run the SRTM fetching module.'''
@@ -385,21 +496,23 @@ class SRTMPlus(FetchModule):
             'east':self.region.xmax,
         }
 
-        self._req = fetch_req(self._srtm_url, params = self.data, tries = 10, timeout = 2)
-        if self._req is not None:
-            url = self._req.url
-            outf = 'srtm_{}.xyz'.format(regions.region_format(self.region, 'fn'))
-            self._results.append([url, outf, 'srtm'])
-        return(self._results)
+        _req = Fetch(self._srtm_url).fetch_req(params=self.data, tries=10, timeout=2)
+        if _req is not None:
+            url = _req.url
+            outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
+            self.results.append([url, outf, 'srtm'])
+        return(self)
 
     def yield_xyz(self, entry):
-        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(os.path.basename(entry[1])) == 0:
-            _ds = datasets.XYZFile(fn=entry[1], data_format=168, skip=1, epsg=4326, warp=self.epsg,
-                                   name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose)
+        src_data = 'srtm_plus_tmp.xyz'
+        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+            _ds = datasets.XYZFile(fn=src_data, data_format=168, skip=1, epsg=4326, warp=self.warp,
+                                   name=src_data, src_region=self.region, verbose=self.verbose, remote=True)
 
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        utils.remove_glob(os.path.basename(entry[1]))
+        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+        utils.remove_glob('{}*'.format(src_data))
         
 ## ==============================================
 ## Fetches Module Parser
@@ -415,6 +528,7 @@ to include multibeam bathymetry data from the Southern Ocean, and now includes b
 the global and coastal oceans."""},
         'srtm_plus': {'description': """"""},
         'mar_grav': {'description': """"""},
+        'mb': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -443,6 +557,10 @@ the global and coastal oceans."""},
         for key in type_def.keys():
             self.mods[key] = type_def[key]
 
+    def acquire_mb(self, **kwargs):
+        return(MB(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+            
     def acquire_gmrt(self, **kwargs):
         return(GMRT(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
@@ -456,6 +574,9 @@ the global and coastal oceans."""},
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire(self, **kwargs):
+        if self.mod == 'mb':
+            return(self.acquire_mb(**kwargs, **self.mod_args))
+        
         if self.mod == 'gmrt':
             return(self.acquire_gmrt(**kwargs, **self.mod_args))
 
@@ -597,13 +718,16 @@ def fetches_cli(argv = sys.argv):
             else:
                 fr = fetch_results(x_f, want_proc=want_proc)
                 fr.daemon = True
+                _p = utils.CliProgress('fetching {} remote data files'.format(len(x_f.results)))
                 try:
                     fr.start()
                     while True:
                         time.sleep(2)
                         sys.stderr.write('\x1b[2K\r')
                         perc = float((len(x_f.results) - fr.fetch_q.qsize())) / len(x_f.results) * 100 if len(x_f.results) > 0 else 1
-                        if want_verbose: sys.stderr.write('fetches: fetching remote data files [{}%]'.format(perc))
+                        #if want_verbose: sys.stderr.write('fetches: fetching remote data files [{}%]'.format(perc))
+                        if want_verbose:
+                            _p.update_perc((len(x_f.results) - fr.fetch_q.qsize(), len(x_f.results)))
                         sys.stderr.flush()
                         if not fr.is_alive():
                             break
@@ -617,6 +741,8 @@ def fetches_cli(argv = sys.argv):
                         except Empty: continue
                         fr.fetch_q.task_done()
                 fr.join()
-            if want_verbose: utils.echo_msg('ran fetch module {} on region {}...\
+                _p.end(x_f.status, 'fetched {} remote data files'.format(len(x_f.results)))
+            if want_verbose:
+                utils.echo_msg('ran fetch module {} on region {}...\
             '.format(x_f.name, this_region.format('str')))
 ### End

@@ -268,8 +268,6 @@ class XYZDataset():
         else:
             self.data_entries.append(self)
             yield(self)
-            
-        return(self)
 
     def parse_data_lists(self):
         """parse the data into a datalist dictionary"""
@@ -485,7 +483,6 @@ class XYZFile(XYZDataset):
     def __init__(self, delim=None, xpos=0, ypos=1, zpos=2, skip=0, x_scale=1, y_scale=1,
                  z_scale=1, x_offset=0, y_offset=0, **kwargs):
         
-        super().__init__(**kwargs)
         self.delim = delim
         self.xpos = xpos
         self.ypos = ypos
@@ -499,7 +496,8 @@ class XYZFile(XYZDataset):
         
         self._known_delims = [',', '/', ':']
         self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
-
+        super().__init__(**kwargs)
+        
     def generate_inf(self):
         """generate a infos dictionary from the xyz dataset
 
@@ -515,6 +513,7 @@ class XYZFile(XYZDataset):
 
         region_ = self.region
         self.region = None
+
         for i, l in enumerate(self.yield_xyz()):
             if i == 0:
                 this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
@@ -634,7 +633,7 @@ class RasterFile(XYZDataset):
     """
 
     def __init__(self, mask=None, step=1, outf=None, **kwargs):
-        super().__init__(**kwargs)
+
         self.mask = mask
         self.step = step
 
@@ -643,7 +642,8 @@ class RasterFile(XYZDataset):
         self.ds_open_p = False
 
         self.outf = outf
-            
+        super().__init__(**kwargs)
+        
     def _open_ds(self):
         """open the gdal datasource and gather infos 
 
@@ -715,7 +715,7 @@ class RasterFile(XYZDataset):
 
     def cut(self):
         if self.ds_open_p:
-            ds_config = demfun.gather_infos(self.src_ds)
+            ds_config = self.gather_infos()
             gt = ds_config['geoT']
             srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
             
