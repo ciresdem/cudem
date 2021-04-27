@@ -243,10 +243,10 @@ class FetchModule:
                      dst_port=dst_port, encode=False)
             
     def yield_results_to_xyz(self, **kwargs):
-        if len(self.results == 0):
+        if len(self.results) == 0:
             self.run()
         for entry in self.results:
-            for xyz in self.yield_xyz(**kwargs):
+            for xyz in self.yield_xyz(entry, **kwargs):
                 yield(xyz)
                 
     def dump_results_to_xyz(self, dst_port=sys.stdout, **kwargs):

@@ -300,11 +300,11 @@ class DatasetFactory:
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
-    def acquire_gmrt(self, **kwargs):
-        return(gmrt.GMRT(
+    def acquire_fetcher(self, **kwargs):
+        return(fetches.Fetcher(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
             source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose, remote=True,
             **kwargs))
 
     def acquire(self, **kwargs):
@@ -325,7 +325,7 @@ class DatasetFactory:
             return(self.acquire_raster_file(**kwargs))#.parse())
         
         if self.data_format == -11:
-            return(self.acquire_gmrt(**kwargs))#.parse())
+            return(self.acquire_fetcher(**kwargs))#.parse())
 
 _datalist_fmts_long_desc = lambda: '\n  '.join(
     ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])

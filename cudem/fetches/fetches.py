@@ -27,6 +27,7 @@ import sys
 import time
 from cudem import utils
 from cudem import regions
+from cudem import datasets
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.multibeam as mb
@@ -115,6 +116,30 @@ the global and coastal oceans."""},
         if self.mod == 'mar_grav':
             return(self.acquire_mar_grav(**kwargs))
 
+class Fetcher(datasets.XYZDataset):
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.fetch_module = FetchesFactory(mod=self.fn, src_region=self.region, verbose=self.verbose).acquire(warp=4326)
+        
+    def generate_inf(self):
+        """generate a infos dictionary from the multibeam dataset
+
+        Returns:
+          dict: a data-entry infos dictionary
+        """
+
+        self.infos['name'] = self.fn
+        self.infos['hash'] = None
+        self.infos['minmax'] = self.region.export_as_list()
+        self.infos['numpts'] = 0
+        self.infos['wkt'] = self.region.export_as_wkt()
+        return(self.infos)
+
+    def yield_xyz(self):
+        for xyz in self.fetch_module.yield_results_to_xyz():
+            yield(xyz)
+        
 _fetches_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in FetchesFactory().mods])
 _fetches_module_long_desc = lambda x: 'fetches modules:\n% fetches ... <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
