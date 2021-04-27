@@ -41,6 +41,7 @@ import cudem.fetches.digital_coast as digital_coast
 import cudem.fetches.ncei_thredds as ncei_thredds
 import cudem.fetches.tnm as tnm
 import cudem.fetches.emodnet as emodnet
+import cudem.fetches.chs as chs
         
 ## ==============================================
 ## Fetches Module Parser
@@ -65,6 +66,7 @@ the global and coastal oceans."""},
         'ncei_thredds': {'description': """"""},
         'tnm': {'description': """"""},
         'emodnet': {'description': """"""},
+        'chs': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -139,6 +141,10 @@ the global and coastal oceans."""},
 
     def acquire_emodnet(self, **kwargs):
         return(emodnet.EMODNet(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+    
+    def acquire_chs(self, **kwargs):
+        return(chs.CHS(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
     
     def acquire(self, **kwargs):
@@ -178,6 +184,10 @@ the global and coastal oceans."""},
         if self.mod == 'emodnet':
             return(self.acquire_emodnet(**kwargs))
 
+        if self.mod == 'chs':
+            return(self.acquire_chs(**kwargs))
+
+        
         
 class Fetcher(datasets.XYZDataset):
     
