@@ -48,13 +48,13 @@ class DigitalCoast(f_utils.FetchModule):
         self._dc_url = 'https://coast.noaa.gov'
         self._dc_htdata_url = 'https://coast.noaa.gov/htdata/'
         self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
-        self._outdir = os.path.join(os.getcwd(), 'dc')
+        self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.where = where
         self.FRED = FRED.FRED(verbose = self.verbose)
         self.name = 'dc'
         self._info = '''Lidar and Raster data from NOAA's Digital Coast'''
         self._title = '''NOAA Digital Coast'''
-        self._usage = '''< dc >'''
+        self._usage = '''< digital_coast >'''
         self._urls = [self._dc_url, self._dc_htdata_url]
         self._update_if_not_in_FRED()
         
@@ -181,10 +181,6 @@ class DigitalCoast(f_utils.FetchModule):
                 _ds.ds_open_p = True
                 for xyz in _ds.yield_xyz():
                     yield(xyz)
-                
-                #srcwin = gdal_srcwin(src_ds, gdal_region_warp(self.region, s_warp = epsg, t_warp = gdal_get_epsg(src_ds)))
-                #for xyz in gdal_parse(src_ds, srcwin = srcwin, warp = epsg, verbose = True, z_region = z_region):
-                #    yield(xyz)
             src_ds = None
         remove_glob(src_dc)    
 ### End

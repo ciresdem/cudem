@@ -38,6 +38,7 @@ import cudem.fetches.ngs as ngs
 import cudem.fetches.nos as nos
 import cudem.fetches.charts as charts
 import cudem.fetches.digital_coast as digital_coast
+import cudem.fetches.ncei_thredds as ncei_thredds
         
 ## ==============================================
 ## Fetches Module Parser
@@ -58,7 +59,8 @@ the global and coastal oceans."""},
         'ngs': {'description': """"""},
         'nos': {'description': """"""},
         'charts': {'description': """"""},
-        'dc': {'description': """"""},
+        'digital_coast': {'description': """"""},
+        'ncei_thredds': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -119,12 +121,16 @@ the global and coastal oceans."""},
         return(charts.NauticalCharts(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
 
-    def acquire_dc(self, **kwargs):
+    def acquire_digital_coast(self, **kwargs):
         return(digital_coast.DigitalCoast(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    def acquire_ncei_thredds(self, **kwargs):
+        return(ncei_thredds.NCEIThreddsCatalog(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
     
     def acquire(self, **kwargs):
-        if self.mod == 'mb':
+        if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
 
         if self.mod == 'usace':
@@ -148,8 +154,11 @@ the global and coastal oceans."""},
         if self.mod == 'charts':
             return(self.acquire_charts(**kwargs))
 
-        if self.mod == 'dc':
-            return(self.acquire_dc(**kwargs))
+        if self.mod == 'digital_coast':
+            return(self.acquire_digital_coast(**kwargs))
+
+        if self.mod == 'ncei_thredds':
+            return(self.acquire_ncei_thredds(**kwargs))
 
         
 class Fetcher(datasets.XYZDataset):
