@@ -47,6 +47,16 @@ __version__ = '0.1.1'
 ##
 ## =============================================================================
 r_headers = { 'User-Agent': 'Fetches v%s' %(__version__) }
+namespaces = {
+    'gmd': 'http://www.isotc211.org/2005/gmd', 
+    'gmi': 'http://www.isotc211.org/2005/gmi', 
+    'gco': 'http://www.isotc211.org/2005/gco',
+    'gml': 'http://www.isotc211.org/2005/gml',
+}
+
+thredds_namespaces = {
+    'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
+}
 
 def urlencode(opts):
     try:

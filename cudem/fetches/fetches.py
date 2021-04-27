@@ -40,6 +40,7 @@ import cudem.fetches.charts as charts
 import cudem.fetches.digital_coast as digital_coast
 import cudem.fetches.ncei_thredds as ncei_thredds
 import cudem.fetches.tnm as tnm
+import cudem.fetches.emodnet as emodnet
         
 ## ==============================================
 ## Fetches Module Parser
@@ -63,6 +64,7 @@ the global and coastal oceans."""},
         'digital_coast': {'description': """"""},
         'ncei_thredds': {'description': """"""},
         'tnm': {'description': """"""},
+        'emodnet': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -135,6 +137,10 @@ the global and coastal oceans."""},
         return(tnm.TheNationalMap(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    def acquire_emodnet(self, **kwargs):
+        return(emodnet.EMODNet(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+    
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -168,6 +174,9 @@ the global and coastal oceans."""},
         
         if self.mod == 'tnm':
             return(self.acquire_tnm(**kwargs))
+
+        if self.mod == 'emodnet':
+            return(self.acquire_emodnet(**kwargs))
 
         
 class Fetcher(datasets.XYZDataset):
@@ -320,6 +329,7 @@ def fetches_cli(argv = sys.argv):
             #r = x_f.run().results
             x_f.run()
             utils.echo_msg('found {} data files.'.format(len(x_f.results)))
+            if len(x_f.results) == 0: break
             if want_list:
                 for result in x_f.results:
                     print(result[0])

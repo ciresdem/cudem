@@ -209,7 +209,7 @@ class WCS:
     def _get_coverage_region(self, cov_desc):
         uc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["upperCorner"][0].split()]
         lc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["lowerCorner"][0].split()]
-        return([lc[1], uc[1], lc[0], uc[0]])
+        return(regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]]))
     
     def _get_coverage_url(self, coverage, region = None):
         dl_coverage = self.fix_coverage_id(coverage)
@@ -218,13 +218,13 @@ class WCS:
         hl = [float(x) for x in cov_desc["domainSet"]["RectifiedGrid"]["limits"]["GridEnvelope"]['high'][0].split()]
         uc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["upperCorner"][0].split()]
         lc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["lowerCorner"][0].split()]
-        ds_region = [lc[1], uc[1], lc[0], uc[0]]
+        ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
         resx = (uc[1] - lc[1]) / hl[0]
         resy = (uc[0] - lc[0]) / hl[1]
         data = {'request': 'GetCoverage', 'version': '1.0.0', 'service': 'WCS',
                 'resx': resx, 'resy': resy, 'crs': 'EPSG:4326', 'format': fmt,
                 'coverage': coverage, 'Identifier': coverage}
-        if region is not None: data['bbox'] = region_format(region, 'bbox')        
+        if region is not None: data['bbox'] = region.format('bbox')        
         try:
             enc_data = urllib.urlencode(data)
         except: enc_data = urllib.parse.urlencode(data)
