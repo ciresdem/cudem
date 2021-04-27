@@ -72,7 +72,7 @@ class NOS(f_utils.FetchModule):
         self.FRED._attribute_filter(["DataSource = '{}'".format(self.name)])
         if len(self.FRED.layer) == 0:
             self.FRED._close_ds()
-            self._update()
+            self.update()
         self.FRED._close_ds()
         
     def update(self):

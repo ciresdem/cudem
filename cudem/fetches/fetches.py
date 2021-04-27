@@ -28,7 +28,6 @@ import time
 from cudem import utils
 from cudem import regions
 from cudem import datasets
-
 import cudem.fetches.utils as f_utils
 import cudem.fetches.multibeam as mb
 import cudem.fetches.usace as usace
@@ -37,6 +36,7 @@ import cudem.fetches.srtm as srtm
 import cudem.fetches.mar_grav as mar_grav
 import cudem.fetches.ngs as ngs
 import cudem.fetches.nos as nos
+import cudem.fetches.charts as charts
         
 ## ==============================================
 ## Fetches Module Parser
@@ -56,6 +56,7 @@ the global and coastal oceans."""},
         'usace': {'description': """"""},
         'ngs': {'description': """"""},
         'nos': {'description': """"""},
+        'charts': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -112,6 +113,10 @@ the global and coastal oceans."""},
         return(nos.NOS(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
 
+    def acquire_charts(self, **kwargs):
+        return(charts.NauticalCharts(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+    
     def acquire(self, **kwargs):
         if self.mod == 'mb':
             return(self.acquire_mb(**kwargs))
@@ -134,6 +139,10 @@ the global and coastal oceans."""},
         if self.mod == 'nos':
             return(self.acquire_nos(**kwargs))
 
+        if self.mod == 'charts':
+            return(self.acquire_charts(**kwargs))
+
+        
 class Fetcher(datasets.XYZDataset):
     
     def __init__(self, **kwargs):
