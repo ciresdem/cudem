@@ -644,7 +644,7 @@ def gdal_ogr_regions(src_ds):
                 pwkt = pgeom.ExportToWkt()
                 this_region.from_list(ogr.CreateGeometryFromWkt(pwkt).GetEnvelope())
                 these_regions.append(this_region)
-            wkt = multi.ExportToWkt()
+            #wkt = multi.ExportToWkt()
         poly = None
     return(these_regions)
 

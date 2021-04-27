@@ -111,7 +111,7 @@ class iso_xml:
 
     def xml_date(self):
         mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
-        return(this_date() if mddate is None else mddate.text)
+        return(utils.this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
         ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
@@ -303,7 +303,7 @@ class FRED:
                  'IndexLink': IndexLink, 'Link': Link, 'DataType': DataType,
                  'DataSource': DataSource, 'Resolution': Resolution,
                  'HorizontalDatum': HorizontalDatum, 'VerticalDatum': VerticalDatum,
-                 'LastUpdate': this_date(), 'Etcetra': Etcetra, 'Info': Info},
+                 'LastUpdate': utils.this_date(), 'Etcetra': Etcetra, 'Info': Info},
                 geom.ExportToJson()
             ])
             [self.layer.SetFeature(ff) for ff in self.layer]
