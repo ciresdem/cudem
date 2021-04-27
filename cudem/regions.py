@@ -454,6 +454,7 @@ class Region:
         self.ymin = pointA.GetY()
         self.ymax = pointB.GetY()
         self.epsg = warp_epsg
+        #print(self.format('gmt'))
         return(self)
     
 ## ==============================================

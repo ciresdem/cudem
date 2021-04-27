@@ -34,6 +34,8 @@ import math
 import time
 import datetime
 import subprocess
+import zipfile
+import gzip
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
@@ -451,6 +453,89 @@ def gdal_fext(src_drv_name):
         else: fext = 'gdal'
         return(fext)
 
+## ==============================================
+##
+## Archives (zip/gzip/etc.)
+##
+## ==============================================
+def unzip(zip_file):
+    """unzip (extract) `zip_file`
+
+    Args:
+      zip_file (str): a zip file pathname string
+
+    Returns:
+      list: a list of extracted file names.
+    """
+    
+    zip_ref = zipfile.ZipFile(zip_file)
+    zip_files = zip_ref.namelist()
+    zip_ref.extractall()
+    zip_ref.close()
+    return(zip_files)
+
+def gunzip(gz_file):
+    """gunzip `gz_file`
+
+    Args:
+      gz_file (str): a gzip file pathname string.
+
+    Returns:
+      str: the extracted file name.
+    """
+    
+    if os.path.exists(gz_file):
+        gz_split = gz_file.split('.')[:-1]
+        guz_file = '{}.{}'.format(gz_split[0], gz_split[1])
+        with gzip.open(gz_file, 'rb') as in_gz, \
+             open(guz_file, 'wb') as f:
+            while True:
+                block = in_gz.read(65536)
+                if not block:
+                    break
+                else: f.write(block)
+    else:
+        echo_error_msg('{} does not exist'.format(gz_file))
+        guz_file = None
+    return(guz_file)
+    
+def p_unzip(src_file, exts=None):
+    """unzip/gunzip src_file based on `exts`
+    
+    Args:
+      src_file (str): a zip/gzip filename string
+      exts (list): a list of extensions to extract
+
+    Returns:
+      list: a list of the extracted files
+    """
+    
+    src_procs = []
+    if src_file.split('.')[-1].lower() == 'zip':
+        with zipfile.ZipFile(src_file) as z:
+            zfs = z.namelist()
+            for ext in exts:
+                for zf in zfs:
+                    if ext == zf.split('.')[-1]:
+                        #if ext in zf:
+                        src_procs.append(os.path.basename(zf))
+                        with open(os.path.basename(zf), 'wb') as f:
+                            f.write(z.read(zf))
+    elif src_file.split('.')[-1] == 'gz':
+        tmp_proc = gunzip(src_file)
+        if tmp_proc is not None:
+            for ext in exts:
+                if ext == tmp_proc.split('.')[-1]:
+                    src_procs.append(os.path.basename(tmp_proc))
+                    break
+                else: remove_glob(tmp_proc)
+    else:
+        for ext in exts:
+            if ext == src_file.split('.')[-1]:
+                src_procs.append(src_file)
+                break
+    return(src_procs)
+    
 ## ==============================================
 ## Write an array to a gdal file
 ## ==============================================

@@ -78,6 +78,7 @@ class XYZDataset():
         self.name = name
         self.title = title
         self.epsg = utils.int_or(epsg)
+        self.warp = utils.int_or(warp)
         self.source = source
         self.date = date
         self.data_type = data_type
@@ -92,7 +93,6 @@ class XYZDataset():
         self.infos = {}
         self.data_entries = []
         self.data_lists = {}
-        self.warp = utils.int_or(warp)
         
         self.remote = remote
         if utils.fn_url_p(self.fn):
@@ -583,7 +583,7 @@ class XYZFile(XYZDataset):
                     if self.region.epsg != self.warp:
                         self.region.warp(warp_epsg=self.epsg)
                 else: self.region.warp(warp_epsg=self.epsg)
-
+                                
         warp_epsg = utils.int_or(self.warp)
         if warp_epsg is not  None and self.epsg is not None:
             src_srs = osr.SpatialReference()
@@ -788,7 +788,7 @@ class RasterFile(XYZDataset):
             gt = self.gt
             warp_epsg = self.warp
             
-            if warp_epsg is not  None and self.epsg is not None:
+            if warp_epsg is not None and self.epsg is not None:
                 src_srs = osr.SpatialReference()
                 src_srs.ImportFromEPSG(self.epsg)
 

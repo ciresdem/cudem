@@ -28,16 +28,20 @@ import re
 import time
 import requests
 import urllib
+import lxml.etree
 import threading
 try:
     import Queue as queue
 except: import queue as queue
+from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
 
 __version__ = '0.1.0'
+this_dir, this_filename = os.path.split(__file__)
+fetchdata = os.path.join(this_dir, 'data')
 
 ## =============================================================================
 ##
@@ -228,8 +232,8 @@ class FetchModule:
         self.verbose = verbose
         self.status = 0
         self.results = []
-        self.warp=warp
-        self.name=None
+        self.warp = warp
+        self.name = None
 
     def run(self):
         raise(NotImplementedError)
@@ -359,7 +363,100 @@ class MB(FetchModule):
                 utils.remove_glob(src_xyz)
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
-                        
+
+## =============================================================================
+##
+## USACE Fetch
+##
+## Fetch USACE bathymetric surveys via eHydro
+##
+## =============================================================================
+class USACE(FetchModule):
+    '''Fetch USACE bathymetric surveys'''
+    
+    def __init__(self, s_type=None, inc=None, **kwargs):
+        self._usace_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
+        self._usace_gs_api_url = 'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0/query?outFields=*&where=1%3D1'
+        self._outdir = os.path.join(os.getcwd(), 'usace')
+        self.name = 'usace'
+        self.s_type = s_type
+        self.inc = utils.str2inc(inc)
+        super().__init__(**kwargs)
+
+    def run(self):
+        '''Run the USACE fetching module'''
+        
+        if self.region is None: return([])
+        _data = {
+            'geometry': self.region.format('bbox'),
+            'inSR':4326,
+            'outSR':4326,
+            'f':'pjson',
+        }
+        _req = Fetch(self._usace_gs_api_url).fetch_req(params=_data)
+        if _req is not None:
+            survey_list = _req.json()
+            for feature in survey_list['features']:
+                fetch_fn = feature['attributes']['SOURCEDATALOCATION']
+                if self.s_type is not None:
+                    if feature['attributes']['SURVEYTYPE'].lower() == self.s_type.lower():
+                        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
+                else: self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
+        return(self)
+
+    def yield_xyz(self, entry):
+        src_zip = os.path.basename(entry[1])
+        src_epsg = None
+        src_region = None
+        #xyzc['warp'] = epsg
+        
+        if Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
+            src_xmls = utils.p_unzip(src_zip, ['xml', 'XML'])
+            for src_xml in src_xmls:
+                if src_region is None:
+                    this_xml = lxml.etree.parse(src_xml)
+                    if this_xml is not None:
+                        try:
+                            w = this_xml.find('.//westbc').text
+                            e = this_xml.find('.//eastbc').text
+                            n = this_xml.find('.//northbc').text
+                            s = this_xml.find('.//southbc').text
+                            src_region = regions.Region().from_list([float(w), float(e), float(s), float(n)])
+                        except:
+                            utils.echo_warning_msg('could not determine survey bb from {}'.format(src_xml))
+                if src_epsg is None:
+                    try:
+                        prj = this_xml.find('.//gridsysn').text
+                        szone = this_xml.find('.//spcszone').text
+                        utils.echo_msg('zone: {}'.format(szone))                        
+                        src_epsg = int(utils.FIPS_TO_EPSG[szone])
+                    except:
+                        utils.echo_warning_msg('could not determine state plane zone from {}'.format(src_xml))
+                utils.remove_glob(src_xml)
+                
+            if src_epsg is None:
+                this_geom = src_region.export_as_geom()
+                sp_fn = os.path.join(fetchdata, 'stateplane.geojson')
+                try:
+                    sp = ogr.Open(sp_fn)
+                    layer = sp.GetLayer()
+                
+                    for feature in layer:
+                        geom = feature.GetGeometryRef()
+                        if this_geom.Intersects(geom):
+                            src_epsg = feature.GetField('EPSG')
+                    sp = None
+                except: pass
+
+            src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
+            for src_usace in src_usaces:
+                _dl = datasets.XYZFile(fn=src_usace, epsg=src_epsg, warp=self.warp, src_region=src_region, name=src_usace, verbose=self.verbose, remote=True)
+                for xyz in _dl.yield_xyz():
+                    yield(xyz)
+                utils.remove_glob(src_usace)
+        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
+        utils.remove_glob(src_zip)
+            
 ## =============================================================================
 ##
 ## GMRT Fetch
@@ -529,6 +626,7 @@ the global and coastal oceans."""},
         'srtm_plus': {'description': """"""},
         'mar_grav': {'description': """"""},
         'mb': {'description': """"""},
+        'usace': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -560,7 +658,11 @@ the global and coastal oceans."""},
     def acquire_mb(self, **kwargs):
         return(MB(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-            
+
+    def acquire_usace(self, **kwargs):
+        return(USACE(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
     def acquire_gmrt(self, **kwargs):
         return(GMRT(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
@@ -576,6 +678,9 @@ the global and coastal oceans."""},
     def acquire(self, **kwargs):
         if self.mod == 'mb':
             return(self.acquire_mb(**kwargs))
+
+        if self.mod == 'usace':
+            return(self.acquire_usace(**kwargs))
         
         if self.mod == 'gmrt':
             return(self.acquire_gmrt(**kwargs))
@@ -704,7 +809,7 @@ def fetches_cli(argv = sys.argv):
 
     for rn, this_region in enumerate(these_regions):
         if stop_threads: return
-        x_fs = [FetchesFactory(mod=mod, src_region=this_region, verbose=want_verbose).acquire() for mod in mods]
+        x_fs = [FetchesFactory(mod=mod, src_region=this_region, verbose=want_verbose).acquire(warp=4326) for mod in mods]
         for x_f in x_fs:
             utils.echo_msg('running fetch module {} on region {}...\
             '.format(x_f.name, this_region.format('str')))

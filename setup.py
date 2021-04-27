@@ -35,7 +35,7 @@ setuptools.setup(
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
     #packages = setuptools.find_packages(),#['cudem'],  #same as name
     packages = ['cudem', 'cudem/fetches'],
-    package_data = {'cudem': ['data/*.geojson']},
+    package_data = {'cudem': ['fetches/data/*.geojson']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',
