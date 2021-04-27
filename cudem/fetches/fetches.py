@@ -39,6 +39,7 @@ import cudem.fetches.nos as nos
 import cudem.fetches.charts as charts
 import cudem.fetches.digital_coast as digital_coast
 import cudem.fetches.ncei_thredds as ncei_thredds
+import cudem.fetches.tnm as tnm
         
 ## ==============================================
 ## Fetches Module Parser
@@ -61,6 +62,7 @@ the global and coastal oceans."""},
         'charts': {'description': """"""},
         'digital_coast': {'description': """"""},
         'ncei_thredds': {'description': """"""},
+        'tnm': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -128,7 +130,11 @@ the global and coastal oceans."""},
     def acquire_ncei_thredds(self, **kwargs):
         return(ncei_thredds.NCEIThreddsCatalog(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-    
+
+    def acquire_tnm(self, **kwargs):
+        return(tnm.TheNationalMap(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -159,6 +165,9 @@ the global and coastal oceans."""},
 
         if self.mod == 'ncei_thredds':
             return(self.acquire_ncei_thredds(**kwargs))
+        
+        if self.mod == 'tnm':
+            return(self.acquire_tnm(**kwargs))
 
         
 class Fetcher(datasets.XYZDataset):
