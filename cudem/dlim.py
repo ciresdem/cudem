@@ -34,10 +34,9 @@ import glob
 from cudem import utils
 from cudem import regions
 from cudem import datasets
-from cudem.fetches import gmrt
+import cudem.fetches.fetches as fetches
 
 __version__ = '0.1.4'
-
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
@@ -170,7 +169,7 @@ class DatasetFactory:
               'class': lambda k: datasets.RasterFile(**k),
               },
         -11: {'name': 'fetches',
-              'fmts': ['gmrt'],
+              'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus'],
               'class': lambda k: fetches.FetchFactory(**k),
               },
     }
