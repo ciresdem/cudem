@@ -77,6 +77,7 @@ class Waffle:
         self.d_region = self.dist_region()
 
         self.data_ = data
+
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
@@ -816,11 +817,13 @@ see gdal_grid --help for more info
         },
     }
     
-    def __init__(self, data=[], src_region=None, inc=None, name='waffles_dem',
+    def __init__(self, mod=None, data=[], src_region=None, inc=None, name='waffles_dem',
                  node='pixel', fmt='GTiff', extend=0, extend_proc=20, weights=None,
                  fltr=[], sample = None, clip=None, chunk=None, epsg=4326,
                  verbose = False, archive=False, mask=False, spat=False, clobber=True):
 
+        self.mod = mod
+        self.mod_args = ()
         self.data = data
         self.region = src_region
         self.inc = inc
@@ -840,6 +843,19 @@ see gdal_grid --help for more info
         self.spat = spat
         self.clobber = clobber
         self.verbose = verbose
+
+        if self.mod is not None:
+            self.parse_mod()
+            
+    def parse_mod(self):
+        opts = self.mod.split(':')
+        if opts[0] in WaffleFactory()._modules.keys():
+            if len(opts) > 1:
+                self.mod_args = utils.args2dict(list(opts[1:]))
+            self.mod = opts[0]
+        else:
+            utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
+        return(self)
         
     def acquire_surface(self, **kwargs):
         return(GMTSurface(
@@ -847,7 +863,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_triangulate(self, **kwargs):
         return(GMTTriangulate(
@@ -855,7 +871,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_num(self, **kwargs):
         return(WafflesNum(
@@ -863,7 +879,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_linear(self, **kwargs):
         return(WafflesLinear(
@@ -871,7 +887,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_average(self, **kwargs):
         return(WafflesMovingAverage(
@@ -879,7 +895,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_invdst(self, **kwargs):
         return(WafflesInvDst(
@@ -887,7 +903,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
     
     def acquire_nearest(self, **kwargs):
         return(WafflesNearest(
@@ -895,7 +911,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
 
     def acquire_IDW(self, **kwargs):
         return(WafflesIDW(
@@ -903,7 +919,7 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
     
     def acquire_vdatum(self, **kwargs):
         return(WafflesVdatum(
@@ -911,27 +927,47 @@ see gdal_grid --help for more info
             node=self.node, fmt=self.fmt, extend=self.extend, extend_proc=self.extend_proc,
             weights=self.weights, fltr=self.fltr, sample=self.sample, clip=self.clip,
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
-            clobber=self.clobber, verbose=self.verbose, **kwargs))
-    
-    def acquire_module_by_name(self, mod_name, **kwargs):
-        if mod_name == 'surface':
+            clobber=self.clobber, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    def acquire(self, **kwargs):
+        if self.mod == 'surface':
             return(self.acquire_surface(**kwargs))
-        if mod_name == 'triangulate':
+        if self.mod == 'triangulate':
             return(self.acquire_triangulate(**kwargs))
-        if mod_name == 'num':
+        if self.mod == 'num':
             return(self.acquire_num(**kwargs))
-        if mod_name == 'linear':
+        if self.mod == 'linear':
             return(self.acquire_linear(**kwargs))
-        if mod_name == 'average':
+        if self.mod == 'average':
             return(self.acquire_average(**kwargs))
-        if mod_name == 'nearest':
+        if self.mod == 'nearest':
             return(self.acquire_nearest(**kwargs))
-        if mod_name == 'invdst':
+        if self.mod == 'invdst':
             return(self.acquire_invdst(**kwargs))
-        if mod_name == 'IDW':
+        if self.mod == 'IDW':
             return(self.acquire_IDW(**kwargs))
-        if mod_name == 'vdatum':
+        if self.mod == 'vdatum':
             return(self.acquire_vdatum(**kwargs))
+    
+    # def acquire_module_by_name(self, mod_name, **kwargs):
+    #     if mod_name == 'surface':
+    #         return(self.acquire_surface(**kwargs))
+    #     if mod_name == 'triangulate':
+    #         return(self.acquire_triangulate(**kwargs))
+    #     if mod_name == 'num':
+    #         return(self.acquire_num(**kwargs))
+    #     if mod_name == 'linear':
+    #         return(self.acquire_linear(**kwargs))
+    #     if mod_name == 'average':
+    #         return(self.acquire_average(**kwargs))
+    #     if mod_name == 'nearest':
+    #         return(self.acquire_nearest(**kwargs))
+    #     if mod_name == 'invdst':
+    #         return(self.acquire_invdst(**kwargs))
+    #     if mod_name == 'IDW':
+    #         return(self.acquire_IDW(**kwargs))
+    #     if mod_name == 'vdatum':
+    #         return(self.acquire_vdatum(**kwargs))
 
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -1113,37 +1149,16 @@ def waffles_cli(argv = sys.argv):
         else: dls.append(arg)
         i += 1
 
-    ## ==============================================
-    ## Otherwise run from cli options...
-    ## set the dem module
-    ## ==============================================
-    if module is not None:
-        mod_opts = {}
-        opts = module.split(':')
-        if opts[0] in WaffleFactory()._modules.keys():
-            mod_opts[opts[0]] = list(opts[1:])
-        else:
-            utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
-            sys.exit(-1)
-
-        for key in mod_opts.keys():
-            mod_opts[key] = [None if x == '' else x for x in mod_opts[key]]
-        mod = opts[0]
-        try:
-            mod_args = utils.args2dict(tuple(mod_opts[mod]))
-        except:
-            utils.echo_error_msg('invalid module string: "{}"'.format(module))
-            sys.exit(-1)
-    else: 
+    if module is None:
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a waffles -M module.''')
         sys.exit(-1)
-        
-    if WaffleFactory()._modules[mod]['datalist-p']:
-        if len(dls) == 0:
-            sys.stderr.write(waffles_cli_usage)
-            utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
-            sys.exit(-1)
+                
+    # if WaffleFactory()._modules[mod]['datalist-p']:
+    #     if len(dls) == 0:
+    #         sys.stderr.write(waffles_cli_usage)
+    #         utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
+    #         sys.exit(-1)
 
     ## ==============================================
     ## check the increment
@@ -1179,7 +1194,8 @@ def waffles_cli(argv = sys.argv):
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(wg['name'], wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
 
-        wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
+        #wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
+        wf = WaffleFactory(mod=module, **wg).acquire().generate()
         utils.echo_msg(wf)
         #utils.echo_msg(wf['dem'].mod)
 

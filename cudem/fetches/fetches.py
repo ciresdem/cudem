@@ -55,22 +55,22 @@ the global and coastal oceans."""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
-        self.mod=mod
-        self.mod_args=()
+        self.mod = mod
+        self.mod_args = {}
         self.region = src_region
         self.callback = callback
         self.weight = weight
         self.verbose = verbose
         self.status = 0
         self.results = []
-
         if self.mod is not None:
             self.parse_mod()
-        
+            
     def parse_mod(self):
         opts = self.mod.split(':')
         if opts[0] in FetchesFactory.mods.keys():
-            self.mod_args = utils.args2dict(list(opts[1:]))
+            if len(opts) > 1:
+                self.mod_args = utils.args2dict(list(opts[1:]))
             self.mod = opts[0]
         else:
             utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
