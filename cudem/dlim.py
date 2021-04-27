@@ -116,7 +116,8 @@ class Datalist(datasets.XYZDataset):
                             this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
                             data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url, title=self.title,
                             warp=self.warp, weight=self.weight, verbose=self.verbose).acquire_dataset()
-                        if data_set is not None and data_set.valid_p():
+
+                        if data_set is not None and data_set.valid_p(fmts=DatasetFactory.data_types[data_set.data_format]['fmts']):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:
                                     inf_region = regions.Region().from_string(data_set.infos['wkt'])
@@ -170,7 +171,7 @@ class DatasetFactory:
               },
         -11: {'name': 'fetches',
               'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus'],
-              'class': lambda k: fetches.FetchFactory(**k),
+              'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
     }
 

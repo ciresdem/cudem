@@ -99,8 +99,8 @@ class XYZDataset():
             self.remote = True
 
         if self.valid_p():
-            if not self.remote:
-                self.inf()
+            #if not self.remote:
+            self.inf()
             
     def fetch(self):
         for entry in self.data_entries:
@@ -128,8 +128,9 @@ class XYZDataset():
         if self.fn is not None:
             if self.fn not in fmts:
                 if not utils.fn_url_p(self.fn):
-                    if not os.path.exists(self.fn): return (False)
-                    if os.stat(self.fn).st_size == 0: return(False)
+                    if self.data_format != -11:
+                        if not os.path.exists(self.fn): return (False)
+                        if os.stat(self.fn).st_size == 0: return(False)
         return(True)
         
     def hash(self, sha1=False):
