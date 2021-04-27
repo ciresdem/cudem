@@ -37,6 +37,7 @@ import cudem.fetches.mar_grav as mar_grav
 import cudem.fetches.ngs as ngs
 import cudem.fetches.nos as nos
 import cudem.fetches.charts as charts
+import cudem.fetches.digital_coast as digital_coast
         
 ## ==============================================
 ## Fetches Module Parser
@@ -57,6 +58,7 @@ the global and coastal oceans."""},
         'ngs': {'description': """"""},
         'nos': {'description': """"""},
         'charts': {'description': """"""},
+        'dc': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -116,6 +118,10 @@ the global and coastal oceans."""},
     def acquire_charts(self, **kwargs):
         return(charts.NauticalCharts(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    def acquire_dc(self, **kwargs):
+        return(digital_coast.DigitalCoast(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
     
     def acquire(self, **kwargs):
         if self.mod == 'mb':
@@ -141,6 +147,9 @@ the global and coastal oceans."""},
 
         if self.mod == 'charts':
             return(self.acquire_charts(**kwargs))
+
+        if self.mod == 'dc':
+            return(self.acquire_dc(**kwargs))
 
         
 class Fetcher(datasets.XYZDataset):

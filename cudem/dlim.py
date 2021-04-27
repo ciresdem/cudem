@@ -170,7 +170,7 @@ class DatasetFactory:
               'class': lambda k: datasets.RasterFile(**k),
               },
         -11: {'name': 'fetches',
-              'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus', 'ngs', 'nos', 'charts'],
+              'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus', 'ngs', 'nos', 'charts', 'dc'],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
     }

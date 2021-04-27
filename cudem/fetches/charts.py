@@ -28,6 +28,7 @@ from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
@@ -85,6 +86,10 @@ class NauticalCharts(f_utils.FetchModule):
                     _prog.update_perc((i, len(charts)))
                 self.FRED._attribute_filter(["ID = '{}'".format(title)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
+
+
+
+
                     h_epsg, v_epsg = this_xml.reference_system()
                     this_data = this_xml.linkages()
                     geom = this_xml.polygon(geom=True)
@@ -107,7 +112,7 @@ class NauticalCharts(f_utils.FetchModule):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, i.split('/')[-1], surv['DataType']])
 
-    def yield_xyz(self, entry, epsg = None, z_region = None, inc = None):
+    def yield_xyz(self, entry):
         src_zip = os.path.basename(entry[1])
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
             if entry[2].lower() == 'enc':

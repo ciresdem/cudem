@@ -571,7 +571,7 @@ class XYZFile(XYZDataset):
             if os.path.exists(str(self.fn)):
                 self.src_data = open(self.fn, "r")
             else:
-                self.src_data = sys.stdin
+                self.src_data = self.fn
         else:
             self.src_data = sys.stdin
         
@@ -650,23 +650,24 @@ class RasterFile(XYZDataset):
         Returns:
           raster_parser: self
         """
-        
-        if self.fn is not None:
-            if os.path.exists(str(self.fn)):
-                try:
-                    self.src_ds = gdal.Open(self.fn)
-                except:
+
+        if not self.ds_open_p:
+            if self.fn is not None:
+                if os.path.exists(str(self.fn)):
+                    try:
+                        self.src_ds = gdal.Open(self.fn)
+                    except:
+                        self.src_ds = None
+                else:
                     self.src_ds = None
             else:
                 self.src_ds = None
-        else:
-            self.src_ds = None
 
-        if self.src_ds is not None:
-            self.ds_open_p = True
-            self.gather_infos()
-        else:
-            self.ds_open_p = False
+            if self.src_ds is not None:
+                self.ds_open_p = True
+                self.gather_infos()
+            else:
+                self.ds_open_p = False
         return(self)
 
     def _close_ds(self):
