@@ -43,6 +43,7 @@ import cudem.fetches.tnm as tnm
 import cudem.fetches.emodnet as emodnet
 import cudem.fetches.chs as chs
 import cudem.fetches.hrdem as hrdem
+import cudem.fetches.osm as osm
         
 ## ==============================================
 ## Fetches Module Parser
@@ -69,6 +70,7 @@ the global and coastal oceans."""},
         'emodnet': {'description': """"""},
         'chs': {'description': """"""},
         'hrdem': {'description': """"""},
+        'osm': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -152,7 +154,11 @@ the global and coastal oceans."""},
     def acquire_hrdem(self, **kwargs):
         return(hrdem.HRDEM(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-    
+
+    def acquire_osm(self, **kwargs):
+        return(osm.OpenStreetMap(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -195,7 +201,10 @@ the global and coastal oceans."""},
 
         if self.mod == 'hrdem':
             return(self.acquire_hrdem(**kwargs))
-        
+
+        if self.mod == 'osm':
+            return(self.acquire_osm(**kwargs))
+
                 
 class Fetcher(datasets.XYZDataset):
     
