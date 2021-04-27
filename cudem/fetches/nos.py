@@ -27,6 +27,7 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
 
 ## =============================================================================
 ##
@@ -58,7 +59,7 @@ class NOS(f_utils.FetchModule):
 
         self.where = where
 
-        self.FRED = f_utils.FRED(verbose = self.verbose)
+        self.FRED = FRED.FRED(verbose = self.verbose)
         self.name = 'nos'
         self._info = '''Bathymetry surveys and data (xyz & BAG)'''
         self._title = '''NOAA NOS Bathymetric Data'''
@@ -93,7 +94,7 @@ class NOS(f_utils.FetchModule):
                     _prog.update_perc((i, len(rows)))
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    this_xml = f_utils.iso_xml(xml_catalog + survey)
+                    this_xml = FRED.iso_xml(xml_catalog + survey)
                     h_epsg, v_epsg = this_xml.reference_system()
                     this_data = this_xml.data_links()
                     d_links = []
@@ -119,7 +120,7 @@ class NOS(f_utils.FetchModule):
         """Search the NOS reference vector and append the results
         to the results list."""
         
-        for surv in f_utils._filter_FRED(self):
+        for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 if i != '':
                     self.results.append([i, i.split('/')[-1], surv['DataType']])

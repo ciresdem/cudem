@@ -27,6 +27,7 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
 
 ## =============================================================================
 ##
@@ -100,7 +101,7 @@ class USACE(f_utils.FetchModule):
                 
             if src_epsg is None:
                 this_geom = src_region.export_as_geom()
-                sp_fn = os.path.join(f_utils.fetchdata, 'stateplane.geojson')
+                sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
                 try:
                     sp = ogr.Open(sp_fn)
                     layer = sp.GetLayer()
