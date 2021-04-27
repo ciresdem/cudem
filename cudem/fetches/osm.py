@@ -89,7 +89,7 @@ class OpenStreetMap(f_utils.FetchModule):
             dst_gmt = open('{}.gmt'.format(os.path.join(self._outdir, out_fn)), 'w')
             dst_gmt.write('# @VGMT1.0 @G{} @Nid\n'.format(self.osm_types[osm_type][0]))
             dst_gmt.write('# @Tdouble\n')
-            dst_gmt.write('# @R{}\n'.format(self.region.format('str'))
+            dst_gmt.write('# @R{}\n'.format(self.region.format('str')))
             dst_gmt.write('# FEATURE_DATA\n')
 
         for el_n, el in enumerate(osm_json['elements']):

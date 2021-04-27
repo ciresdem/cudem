@@ -27,9 +27,8 @@ import sys
 import ogr
 import osr
 import numpy as np
+import cudem
 from cudem import utils
-
-__version__ = '0.1.1'
 
 ## ==============================================
 ##
@@ -725,7 +724,7 @@ Examples:
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 '''.format(cmd =  os.path.basename(sys.argv[0]), 
-           version = __version__)
+           version = cudem.__version__)
 
 def regions_cli(argv = sys.argv):
     """run regions from command-line
@@ -772,7 +771,7 @@ def regions_cli(argv = sys.argv):
             print(datalists_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
             sys.exit(1)
         elif arg[0] == '-':
             print(regions_usage)

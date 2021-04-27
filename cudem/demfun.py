@@ -29,8 +29,6 @@ import numpy as np
 from cudem import utils
 from cudem import regions
 
-__version__ = '0.1.0'
-
 def infos(src_dem, region = None, scan = False):
     """scan gdal file src_fn and gather region info.
 

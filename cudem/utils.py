@@ -40,10 +40,11 @@ import numpy as np
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+import cudem
 
-__version__ = '0.5.2'
 ## ==============================================
 ##
+
 ## General Utility Functions, definitions, etc.
 ##
 ## ==============================================
@@ -726,7 +727,7 @@ def config_check(chk_vdatum=False, verbose=False):
     _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
     _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
     _waff_co['LASTOOLS'] = cmd_check('las2txt{}'.format(ae), 'las2txt -version 2>&1 | awk \'{print $5}\'').decode()
-    _waff_co['GEOMODS'] = str(__version__)
+    _waff_co['GEOMODS'] = str(cudem.__version__)
     return(_waff_co)
     
 ## ==============================================

@@ -26,6 +26,7 @@ import math
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
+import cudem
 from cudem import dlim
 from cudem import regions
 from cudem import utils
@@ -33,8 +34,6 @@ from cudem import xyzfun
 from cudem import demfun
 from cudem import metadata
 from cudem import vdatumfun
-
-__version__ = '0.10.1'
 
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -1040,7 +1039,7 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
            dl_formats=dlim._datalist_fmts_short_desc(),
            modules=_waffles_module_short_desc(),
-           wf_version=__version__)
+           wf_version=cudem.__version__)
 
 def waffles_cli(argv = sys.argv):
     """run waffles from command-line
@@ -1140,7 +1139,7 @@ def waffles_cli(argv = sys.argv):
             sys.stderr.write(waffles_cli_usage)
             sys.exit(0)
         elif arg == '--version' or arg == '-v':
-            sys.stdout.write('{}\n'.format(__version__))
+            sys.stdout.write('{}\n'.format(cudem.__version__))
             sys.exit(0)
         elif arg[0] == '-':
             print(waffles_cli_usage)

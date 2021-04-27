@@ -31,12 +31,12 @@ import os
 import sys
 import re
 import glob
+import cudem
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 import cudem.fetches.fetches as fetches
 
-__version__ = '0.1.4'
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
@@ -375,7 +375,7 @@ Examples:
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 """.format(cmd=os.path.basename(sys.argv[0]), 
-           dl_version=__version__,
+           dl_version=cudem.__version__,
            dl_formats=_datalist_fmts_short_desc())
 
 def datalists_cli(argv = sys.argv):
@@ -433,7 +433,7 @@ def datalists_cli(argv = sys.argv):
             print(datalists_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
             sys.exit(1)
         elif arg[0] == '-':
             print(datalists_usage)

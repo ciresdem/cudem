@@ -32,9 +32,8 @@ try:
     import Queue as queue
 except: import queue as queue
 from cudem import utils
+from cudem import fetches
 
-__version__ = '0.1.1'
-    
 ## =============================================================================
 ##
 ## Fetching Functions
@@ -46,7 +45,7 @@ __version__ = '0.1.1'
 ## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
 ##
 ## =============================================================================
-r_headers = { 'User-Agent': 'Fetches v%s' %(__version__) }
+r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 namespaces = {
     'gmd': 'http://www.isotc211.org/2005/gmd', 
     'gmi': 'http://www.isotc211.org/2005/gmi', 

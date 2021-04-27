@@ -28,6 +28,7 @@ import time
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import fetches
 import cudem.fetches.utils as f_utils
 import cudem.fetches.multibeam as mb
 import cudem.fetches.usace as usace
@@ -266,7 +267,7 @@ Supported FETCHES modules:
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]), 
-           f_version=f_utils.__version__,
+           f_version=fetches.__version__,
            f_formats=_fetches_module_short_desc())
 
 def fetches_cli(argv = sys.argv):
@@ -308,7 +309,7 @@ def fetches_cli(argv = sys.argv):
             sys.stderr.write(fetches_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), __version__))
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), fetches.__version__))
             sys.exit(1)
         elif arg == '--modules' or arg == '-m':
             try:
