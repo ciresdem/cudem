@@ -24,7 +24,6 @@
 
 import os
 import sys
-import json
 import requests
 import urllib
 import lxml.etree
@@ -34,7 +33,7 @@ try:
 except: import queue as queue
 from cudem import utils
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
     
 ## =============================================================================
 ##
