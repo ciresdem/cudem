@@ -36,6 +36,7 @@ import cudem.fetches.gmrt as gmrt
 import cudem.fetches.srtm as srtm
 import cudem.fetches.mar_grav as mar_grav
 import cudem.fetches.ngs as ngs
+import cudem.fetches.nos as nos
         
 ## ==============================================
 ## Fetches Module Parser
@@ -54,6 +55,7 @@ the global and coastal oceans."""},
         'multibeam': {'description': """"""},
         'usace': {'description': """"""},
         'ngs': {'description': """"""},
+        'nos': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -106,6 +108,10 @@ the global and coastal oceans."""},
         return(ngs.NGS(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
 
+    def acquire_nos(self, **kwargs):
+        return(nos.NOS(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
     def acquire(self, **kwargs):
         if self.mod == 'mb':
             return(self.acquire_mb(**kwargs))
@@ -124,6 +130,9 @@ the global and coastal oceans."""},
         
         if self.mod == 'ngs':
             return(self.acquire_ngs(**kwargs))
+
+        if self.mod == 'nos':
+            return(self.acquire_nos(**kwargs))
 
 class Fetcher(datasets.XYZDataset):
     
