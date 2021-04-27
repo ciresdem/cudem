@@ -26,6 +26,7 @@ import os
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -110,8 +111,8 @@ class Multibeam(f_utils.FetchModule):
             if status != 0:
                 if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_data)) == 0:
                     mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
-                    remove_glob('{}.inf'.format(entry[0]))
-                    out, status = run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)
+                    utils.remove_glob('{}.inf'.format(entry[0]))
+                    out, status = utils.run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)
             if status == 0:
                 _ds = datasets.XYZFile(fn=src_xyz, delim='\t', data_format=168, epsg=4326, warp=self.warp,
                                        name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose, remote=True)
