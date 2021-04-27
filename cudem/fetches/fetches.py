@@ -35,6 +35,7 @@ import cudem.fetches.usace as usace
 import cudem.fetches.gmrt as gmrt
 import cudem.fetches.srtm as srtm
 import cudem.fetches.mar_grav as mar_grav
+import cudem.fetches.ngs as ngs
         
 ## ==============================================
 ## Fetches Module Parser
@@ -52,6 +53,7 @@ the global and coastal oceans."""},
         'mar_grav': {'description': """"""},
         'multibeam': {'description': """"""},
         'usace': {'description': """"""},
+        'ngs': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -100,6 +102,10 @@ the global and coastal oceans."""},
         return(mar_grav.MarGrav(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
 
+    def acquire_ngs(self, **kwargs):
+        return(ngs.NGS(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
     def acquire(self, **kwargs):
         if self.mod == 'mb':
             return(self.acquire_mb(**kwargs))
@@ -112,9 +118,12 @@ the global and coastal oceans."""},
 
         if self.mod == 'srtm_plus':
             return(self.acquire_srtm_plus(**kwargs))
-        
+       
         if self.mod == 'mar_grav':
             return(self.acquire_mar_grav(**kwargs))
+        
+        if self.mod == 'ngs':
+            return(self.acquire_ngs(**kwargs))
 
 class Fetcher(datasets.XYZDataset):
     
@@ -270,7 +279,7 @@ def fetches_cli(argv = sys.argv):
                 for result in x_f.results:
                     print(result[0])
             else:
-                fr = fetch_results(x_f, want_proc=want_proc)
+                fr = f_utils.fetch_results(x_f, want_proc=want_proc)
                 fr.daemon = True
                 _p = utils.CliProgress('fetching {} remote data files'.format(len(x_f.results)))
                 try:

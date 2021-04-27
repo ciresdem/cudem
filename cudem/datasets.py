@@ -99,7 +99,6 @@ class XYZDataset():
             self.remote = True
 
         if self.valid_p():
-            #if not self.remote:
             self.inf()
             
     def fetch(self):
