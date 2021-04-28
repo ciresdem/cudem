@@ -89,7 +89,7 @@ class iso_xml:
         nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces = self.namespaces)                           
         if wl is not None and el is not None and sl is not None and nl is not None:
             region = [float(wl.text), float(el.text), float(sl.text), float(nl.text)]
-            if geom: return(region2geom([float(wl.text), float(el.text), float(sl.text), float(nl.text)]))
+            if geom: return(regions.Region.from_list([float(wl.text), float(el.text), float(sl.text), float(nl.text)]).export_as_geom())
             else: return(region)
         else: return(None)
 

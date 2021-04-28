@@ -27,6 +27,7 @@ import sys
 import requests
 import urllib
 import lxml.etree
+import lxml.html as lh
 import threading
 try:
     import Queue as queue
@@ -82,7 +83,7 @@ class Fetch:
         except:
             return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
             
-    def fetch_as_html(self, timeout=2):
+    def fetch_html(self, timeout=2):
         """fetch src_url and return it as an HTML object"""
     
         req = self.fetch_req(timeout=timeout)
