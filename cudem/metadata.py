@@ -151,7 +151,8 @@ class SpatialMetadata: #(waffles.Waffle):
 
     def run(self):
         for xdl in self.data:
-            xdl.parse_data_lists()
+            [x for x in xdl.parse()]
+            #xdl.parse_data_lists()
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
@@ -182,12 +183,16 @@ class SpatialMetadata: #(waffles.Waffle):
 
     def yield_xyz(self):
         for xdl in self.data:
-            xdl.parse_data_lists()
+            [x for x in xdl.parse()]
+            #xdl.parse_data_lists()
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
-                dl_name = x
-                o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+                p = xdl.data_lists[x]['parent']
+                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
+                dl_name = x
+                # o_v_fields = [dl_name, 'Unknown', '0', 'xyz_elevation', 'Unknown', 'WGS84', 'NAVD88', 'URL']
+                # defn = None if self.layer is None else self.layer.GetLayerDefn()
                 for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc):
                     yield(xyz)
 
@@ -209,7 +214,7 @@ class SpatialMetadata: #(waffles.Waffle):
         self.ds = None
 
         utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-        '.format(dr.format('ul_lr'), self.dst_layer, self.dst_vector))
+        '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector))
 
 ## ==============================================
 ## Command-line Interface (CLI)

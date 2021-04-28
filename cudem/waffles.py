@@ -258,7 +258,7 @@ class Waffle:
             dst_layer = '{}_sm'.format(self.name)
             dst_vector = dst_layer + '.shp'
             utils.run_cmd(
-                'ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(dr.format('ul_lr'), dst_vector),
+                'ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(self.d_region.format('ul_lr'), dst_vector),
                 verbose=True)
             utils.run_cmd(
                 'ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector),

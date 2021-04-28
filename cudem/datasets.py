@@ -264,12 +264,14 @@ class XYZDataset():
             inf_region = regions.Region().from_string(self.infos['wkt'])
             if regions.regions_intersect_p(inf_region, self.region):
                 self.data_entries.append(self)
+                self.parse_data_lists()
                 yield(self)
         else:
             self.data_entries.append(self)
+            self.parse_data_lists()
             yield(self)
 
-    def parse_data_lists(self):
+    def parse_data_lists_(self):
         """parse the data into a datalist dictionary"""
 
         #print(self.data_entries)
@@ -282,6 +284,21 @@ class XYZDataset():
                     self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
             else:
                 self.data_lists[e.name] = {'data': [e], 'parent': e}
+        return(self)
+
+    def parse_data_lists(self):
+        """parse the data into a datalist dictionary"""
+
+        #print(self.data_entries)
+        #for e in self.data_entries:
+        #for e in self.parse():
+        if self.parent is not None:
+            if self.parent.name in self.data_lists.keys():
+                self.data_lists[self.parent.name]['data'].append(self)
+            else:
+                self.data_lists[self.parent.name] = {'data': [self], 'parent': self.parent}
+        else:
+            self.data_lists[self.name] = {'data': [self], 'parent': self}
         return(self)
 
     ## ==============================================
@@ -310,7 +327,7 @@ class XYZDataset():
         else:
             a_name = '{}_{}_{}'.format(
                 self.name, self.region.format('fn'), utils.this_year())
-        self.parse_data_lists()
+        #self.parse_data_lists()
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
                 a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())

@@ -124,10 +124,12 @@ class Datalist(datasets.XYZDataset):
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
+                                            self.parse_data_lists()
                                             yield(ds)
                             else:
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
+                                    self.parse_data_lists()
                                     yield(ds)
         else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
         #self.parse_data_lists()
