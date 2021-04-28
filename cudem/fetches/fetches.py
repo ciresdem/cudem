@@ -211,7 +211,7 @@ class Fetcher(datasets.XYZDataset):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fetch_module = FetchesFactory(mod=self.fn, src_region=self.region, verbose=self.verbose).acquire(warp=4326)
+        self.fetch_module = FetchesFactory(mod=self.fn, src_region=self.region, verbose=self.verbose).acquire(warp=self.warp)
         
     def generate_inf(self):
         """generate a infos dictionary from the multibeam dataset

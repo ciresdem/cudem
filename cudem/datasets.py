@@ -671,6 +671,8 @@ class RasterFile(XYZDataset):
                 self.gather_infos()
             else:
                 self.ds_open_p = False
+        else:
+            self.gather_infos()
         return(self)
 
     def _close_ds(self):
@@ -761,7 +763,8 @@ class RasterFile(XYZDataset):
             src_srs.AutoIdentifyEPSG()
             srs_auth = src_srs.GetAuthorityCode(None)
 
-            self.epsg = utils.int_or(srs_auth)
+            if srs_auth is not None:
+                self.epsg = utils.int_or(srs_auth)
             self.x_count = self.srcwin[2]
             self.y_count = self.srcwin[3]
             self.dt = src_band.DataType
