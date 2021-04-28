@@ -122,7 +122,8 @@ class Vdatum:
         if self.jar is not None:
             vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -file:txt:{},{},skip{}:{}:{} region:{}\
             '.format(self.ihorz, self.ivert, self.ohorz, self.overt, self.delim, self.xyzl, self.skip, src_fn, self.result_dir, self.region)
-            return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
+            #return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
+            return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
         else: return([], -1)
 
 ## ==============================================

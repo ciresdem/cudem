@@ -672,7 +672,7 @@ class WafflesVdatum(Waffle):
         #    return(None, -1)
         
         self.mod = 'vdatum'
-        self.vdc = vdatumfun.Vdatum(ivert=ivert, overt=overt, region=region, jar=jar)
+        self.vdc = vdatumfun.Vdatum(ivert=ivert, overt=overt, region=region, jar=jar, verbose=True)
 
     def create_null(self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
         """create a nodata grid"""
@@ -691,7 +691,7 @@ class WafflesVdatum(Waffle):
         empty = datasets.RasterFile(fn='empty.tif', data_format=200, src_region=self.region, epsg=self.epsg,
                                     name=self.name, verbose=self.verbose)
 
-        empty.parse()
+        #empty.parse()
         with open('empty.xyz', 'w') as mt_xyz:
             empty.dump_xyz(mt_xyz)
         self.vdc.run_vdatum('empty.xyz')
@@ -711,7 +711,7 @@ class WafflesVdatum(Waffle):
             vd_out = {}
             status = -1
 
-        utils.remove_glob('empty.*', 'result/*', 'result')
+        #utils.remove_glob('empty.*', 'result/*', 'result')
         return(self)
 
 ## ==============================================
