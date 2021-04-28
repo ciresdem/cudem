@@ -84,9 +84,6 @@ class Waffle:
 
         self.data = [d for d in self.data if d is not None]
         
-        for d in self.data:
-            d.parse()
-
         self.fn = '{}.tif'.format(self.name)            
         self.waffled = False
 

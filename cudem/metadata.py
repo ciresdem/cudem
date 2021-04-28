@@ -133,9 +133,6 @@ class SpatialMetadata: #(waffles.Waffle):
 
         self.data = [d for d in self.data if d is not None]
         
-        #for d in self.data:
-        #    #d.parse()        
-    
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.shp'
@@ -176,6 +173,7 @@ class SpatialMetadata: #(waffles.Waffle):
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = None
                     utils.remove_glob('{}_poly.*'.format(x), 'tmp.tif')
+                utils.remove_glob('{}.tif'.format(x))
         self.ds = None
 
         if self.make_valid:
@@ -207,6 +205,7 @@ class SpatialMetadata: #(waffles.Waffle):
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
+                utils.remove_glob('{}.tif'.format(x))
         self.ds = None
 
         utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
