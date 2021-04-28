@@ -66,15 +66,16 @@ class Datalist(datasets.XYZDataset):
 
         _region = self.region
         self.region = None
-        self.parse()
+        #self.parse()
         out_regions = []
         out_region = None
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        for entry in self.data_entries:
+        for entry in self.parse():
             out_regions.append(entry.infos['minmax'])
-            self.infos['numpts'] += entry.infos['numpts']
+            if 'numpts' in self.infos.keys():
+                self.infos['numpts'] += entry.infos['numpts']
 
         l = 0
 
@@ -116,7 +117,6 @@ class Datalist(datasets.XYZDataset):
                             this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
                             data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url, title=self.title,
                             warp=self.warp, weight=self.weight, verbose=self.verbose).acquire_dataset()
-
                         if data_set is not None and data_set.valid_p(fmts=DatasetFactory.data_types[data_set.data_format]['fmts']):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:

@@ -271,8 +271,10 @@ class XYZDataset():
 
     def parse_data_lists(self):
         """parse the data into a datalist dictionary"""
-        
-        for e in self.data_entries:
+
+        #print(self.data_entries)
+        #for e in self.data_entries:
+        for e in self.parse():
             if e.parent is not None:
                 if e.parent.name in self.data_lists.keys():
                     self.data_lists[e.parent.name]['data'].append(e)
@@ -308,7 +310,7 @@ class XYZDataset():
         else:
             a_name = '{}_{}_{}'.format(
                 self.name, self.region.format('fn'), utils.this_year())
-        
+        self.parse_data_lists()
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
                 a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
@@ -334,7 +336,7 @@ class XYZDataset():
                                 yield(this_xyz)
                                 this_xyz.dump(include_w=True if self.weight is not None else False,
                                               dst_port=xp, encode=False)
-        Datalist(fn='{}.datalist'.format(a_name)).parse()
+        #Datalist(fn='{}.datalist'.format(a_name)).parse()
             
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid

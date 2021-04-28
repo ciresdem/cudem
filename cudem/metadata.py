@@ -133,8 +133,8 @@ class SpatialMetadata: #(waffles.Waffle):
 
         self.data = [d for d in self.data if d is not None]
         
-        for d in self.data:
-            d.parse()        
+        #for d in self.data:
+        #    #d.parse()        
     
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
@@ -154,6 +154,7 @@ class SpatialMetadata: #(waffles.Waffle):
 
     def run(self):
         for xdl in self.data:
+            xdl.parse_data_lists()
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
@@ -183,6 +184,7 @@ class SpatialMetadata: #(waffles.Waffle):
 
     def yield_xyz(self):
         for xdl in self.data:
+            xdl.parse_data_lists()
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 dl_name = x
