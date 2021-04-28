@@ -17,7 +17,7 @@ except ImportError:
 cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in os.environ['PATH'].split(os.pathsep))
 
 if not cmd_exists('gmt'):
-    raise(""" WARNING: Could not find GMT on the system.
+    print(""" WARNING: Could not find GMT on the system.
               Some functionality of CUDEM will be unavailable without it.
               On Debian based systems you can install it with this command:
               apt install GMT
@@ -25,12 +25,12 @@ if not cmd_exists('gmt'):
               dnf install GMT""")
 
 if not cmd_exists('mblist'):
-    raise(""" WARNING: Could not find MB-System on the system.
+    print(""" WARNING: Could not find MB-System on the system.
               Some functionality of CUDEM will be unavailable without it.
               Get the latest from ...""")
 
 if not cmd_exists('las2txt'):
-    raise(""" WARNING: Could not find LASTools on the system.
+    print(""" WARNING: Could not find LASTools on the system.
               Some functionality of CUDEM will be unavailable without it.
               Get the latest from ...""")
 
