@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import sys
 
 try:
     from osgeo import gdal
@@ -12,9 +13,6 @@ except ImportError:
                dnf install gdal gdal-devel python3-gdal 
                On windows, either use `OSGEO4W` or install GDAL via ...""") 
 
-clone_and_install = False
-pull_and_install = False
-pip_install = True
 
 cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in os.environ['PATH'].split(os.pathsep))
 
@@ -36,11 +34,20 @@ if not cmd_exists('las2txt'):
               Some functionality of CUDEM will be unavailable without it.
               Get the latest from ...""")
 
-if clone_and_install:
-    os.system('git clone https://github.com/ciresdem/cudem.git')
-    os.system('pip install --user --upgrade ./cudem')    
-elif pull_and_install:
-    os.system('git pull')
-    os.system('pip install --user --upgrade ./')
-elif pip_install:
-    os.system('pip install --user --upgrade ./')
+if __name__ == '__main__':
+    clone = False
+    pull = False
+    install = True
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '--pull' or arg == '-p':
+            pull = True
+        i = i + 1
+
+    if clone:
+        os.system('git clone https://github.com/ciresdem/cudem.git')
+    if pull:
+        os.system('git pull')
+    if install:
+        os.system('pip install --user --upgrade ./')
