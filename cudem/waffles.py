@@ -234,7 +234,8 @@ class Waffle:
                 except:
                     pass
         out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
-                 
+
+    ## TODO: allow spat-meta and archive at same time...
     def yield_xyz(self, block=False, **kwargs):
         """yields the xyz data"""
         

@@ -271,27 +271,9 @@ class XYZDataset():
             self.parse_data_lists()
             yield(self)
 
-    def parse_data_lists_(self):
-        """parse the data into a datalist dictionary"""
-
-        #print(self.data_entries)
-        #for e in self.data_entries:
-        for e in self.parse():
-            if e.parent is not None:
-                if e.parent.name in self.data_lists.keys():
-                    self.data_lists[e.parent.name]['data'].append(e)
-                else:
-                    self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
-            else:
-                self.data_lists[e.name] = {'data': [e], 'parent': e}
-        return(self)
-
     def parse_data_lists(self):
         """parse the data into a datalist dictionary"""
 
-        #print(self.data_entries)
-        #for e in self.data_entries:
-        #for e in self.parse():
         if self.parent is not None:
             if self.parent.name in self.data_lists.keys():
                 self.data_lists[self.parent.name]['data'].append(self)
@@ -327,7 +309,9 @@ class XYZDataset():
         else:
             a_name = '{}_{}_{}'.format(
                 self.name, self.region.format('fn'), utils.this_year())
-        #self.parse_data_lists()
+            
+        [x for x in self.parse()]
+            
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
                 a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
