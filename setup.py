@@ -42,7 +42,6 @@ setuptools.setup(
         'Operating System :: OS Independent',
     ],
     install_requires = [
-        'GDAL',
         'numpy',
         'scipy',
         'requests',
