@@ -24,8 +24,8 @@
 
 import os
 import sys
-import ogr
-import osr
+from osgeo import ogr
+from osgeo import osr
 import numpy as np
 import cudem
 from cudem import utils
