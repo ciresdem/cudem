@@ -24,7 +24,7 @@
 
 import os
 import shutil
-import gdal
+from osgeo import gdal
 import numpy as np
 from cudem import utils
 from cudem import regions
