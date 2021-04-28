@@ -28,6 +28,7 @@ from osgeo import gdal
 from osgeo import ogr
 import cudem
 from cudem import dlim
+from cudem import datasets
 from cudem import regions
 from cudem import utils
 from cudem import xyzfun
@@ -687,8 +688,8 @@ class WafflesVdatum(Waffle):
 
         self.create_null('empty.tif', self.p_region, 0.00083333, 0, 'GTiff', self.verbose, True)
         demfun.set_nodata('empty.tif')
-        empty = dlim.RasterFile(fn='empty.tif', data_format=200, src_region=self.region, epsg=self.epsg,
-                                name=self.name, verbose=self.verbose)
+        empty = datasets.RasterFile(fn='empty.tif', data_format=200, src_region=self.region, epsg=self.epsg,
+                                    name=self.name, verbose=self.verbose)
 
         empty.parse()
         with open('empty.xyz', 'w') as mt_xyz:
@@ -696,7 +697,7 @@ class WafflesVdatum(Waffle):
         self.vdc.run_vdatum('empty.xyz')
 
         if os.path.exists('result/empty.xyz') and os.stat('result/empty.xyz').st_size != 0:
-            empty_xyz = dlim.XYZFile(fn='result/empty.xyz', data_format=168, src_region=self.region, epsg=self.epsg,
+            empty_xyz = datasets.XYZFile(fn='result/empty.xyz', data_format=168, src_region=self.region, epsg=self.epsg,
                                      name=self.name, verbose=self.verbose)
             empty_infos = empty_xyz.inf()
             
