@@ -99,7 +99,7 @@ class iso_xml:
         if polygon is not None:
             nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
             [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
-            if geom: return(wkt2geom(create_wkt_polygon(opoly)))
+            if geom: return(utils.wkt2geom(regions.create_wkt_polygon(opoly)))
             else: return(opoly)
         else: return(None)
         
@@ -268,7 +268,7 @@ class FRED:
                         'VerticalDatum', 'LastUpdate', 'Etcetra', 'Info']
         
     def _create_ds(self):
-        remove_glob(self.FREDloc)
+        utils.remove_glob(self.FREDloc)
         self.ds = self.driver.CreateDataSource(self.FREDloc)        
         self.layer = self.ds.CreateLayer('FRED', None, ogr.wkbMultiPolygon)
         ldfn = self.layer.GetLayerDefn()
@@ -314,8 +314,11 @@ class FRED:
             try:
                 self.ds = self.driver.Open(self.FREDloc, mode)
             except: self.ds = None
-            if self.ds is None:
+
+            if self.ds is None or len(self.ds.GetLayer()) == 0:
+                self.ds = None
                 self._create_ds()
+                
             self.layer = self.ds.GetLayer()
             self.open_p = True
             return(0)

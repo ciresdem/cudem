@@ -96,7 +96,7 @@ class Fetch:
     
         results = lxml.etree.fromstring('<?xml version="1.0"?><!DOCTYPE _[<!ELEMENT _ EMPTY>]><_/>'.encode('utf-8'))
         try:
-            req = fetch_req(src_url, timeout=timeout, read_timeout=read_timeout)
+            req = self.fetch_req(timeout=timeout, read_timeout=read_timeout)
             results = lxml.etree.fromstring(req.text.encode('utf-8'))
         except:
             utils.echo_error_msg('could not access {}'.format(self.url))

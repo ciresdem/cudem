@@ -146,7 +146,7 @@ class XYZPoint:
             sys.stdout, etc prefer encoded data, while
             files usually like unencoded...
         """
-    
+
         l = self.export_as_string(delim, include_z=include_z, include_w=include_w)
         if encode: l = l.encode('utf-8')
         dst_port.write(l)

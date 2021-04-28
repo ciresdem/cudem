@@ -44,9 +44,11 @@ class NauticalCharts(f_utils.FetchModule):
 
     def __init__(self, where=[], **kwargs):
         super().__init__(**kwargs)
-        self._charts_url = 'http://www.charts.noaa.gov/'
-        self._enc_data_catalog = 'http://www.charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
-        self._rnc_data_catalog = 'http://www.charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
+        self._charts_url = 'https://www.charts.noaa.gov/'
+        self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
+        self._rnc_data_catalog = 'https://charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
+        # self._enc_data_catalog = 'https://www.charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
+        # self._rnc_data_catalog = 'https://www.charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
         self._outdir = os.path.join(os.getcwd(), 'charts')
         self._dt_xml = { 'ENC':self._enc_data_catalog,
                          'RNC':self._rnc_data_catalog }
@@ -86,10 +88,6 @@ class NauticalCharts(f_utils.FetchModule):
                     _prog.update_perc((i, len(charts)))
                 self.FRED._attribute_filter(["ID = '{}'".format(title)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
-
-
-
-
                     h_epsg, v_epsg = this_xml.reference_system()
                     this_data = this_xml.linkages()
                     geom = this_xml.polygon(geom=True)
@@ -127,10 +125,11 @@ class NauticalCharts(f_utils.FetchModule):
                                 for f in layer_s:
                                     g = json.loads(f.GetGeometryRef().ExportToJson())
                                     for xyz in g['coordinates']:
-                                        xyzfun.XYZPoint().from_list([float(x) for x in xyz]).dump(o_xyz, encode=False)
+                                        xyzfun.XYZPoint().from_list([float(x) for x in xyz]).dump(dst_port=o_xyz, encode=False)
                                         #xyz_line([float(x) for x in xyz], o_xyz, False)
                         ds_ogr = layer_s = None
-                    except: pass
+                    except:
+                        utils.echo_warning_msg('could not parse {}'.format(src_ch))
 
                     _ds = datasets.XYZFile(fn=dst_xyz, data_format=168, z_scale=-1, epsg=4326, warp=self.warp,
                                            name=dst_xyz, src_region=self.region, verbose=self.verbose, remote=True)

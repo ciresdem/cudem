@@ -405,6 +405,18 @@ def _invert_gt(geoTransform):
     outGeoTransform[3] = (-geoTransform[1] * geoTransform[3] + geoTransform[0] * geoTransform[4]) * invDet
     return(outGeoTransform)
 
+def wkt2geom(wkt):
+    """transform a wkt to an ogr geometry
+    
+    Args:
+      wkt (wkt): a wkt geometry
+
+    Returns:
+      ogr-geom: the ogr geometry
+    """
+    
+    return(ogr.CreateGeometryFromWkt(wkt))
+
 def sr_wkt(epsg, esri = False):
     """convert an epsg code to wkt
 
