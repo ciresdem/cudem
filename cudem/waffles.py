@@ -73,8 +73,8 @@ class Waffle:
         
         if self.node == 'grid':
             self.region = self.region.buffer(self.inc*.5)
-        self.p_region = self.proc_region()
-        self.d_region = self.dist_region()
+        self.p_region = self._proc_region()
+        self.d_region = self._dist_region()
 
         self.data_ = data
 
@@ -94,12 +94,12 @@ class Waffle:
     ## proc_region - processing region (extended by self.extend and self.extend_proc
     ## dist_region - distribution region (extended by self.extend)
     ## ==============================================
-    def proc_region(self):
+    def _proc_region(self):
         
         pr = regions.Region().from_region(self.region)
         return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
 
-    def dist_region(self):
+    def _dist_region(self):
             
         dr = regions.Region().from_region(self.region)
         return(dr.buffer((self.inc*self.extend)))
@@ -110,7 +110,7 @@ class Waffle:
     ## xyz_block_t - grid the xyz data into data buckets
     ## xyz_ds - generate an OGR in-memory vector dataset
     ## ==============================================
-    def xyz_block_t(self, src_xyz):
+    def _xyz_block_t(self, src_xyz):
         """block the src_xyz data for fast lookup"""
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
@@ -127,7 +127,7 @@ class Waffle:
                     self.block_t[ypos,xpos].append(xyzfun.XYZPoint().from_list(
                         this_xyz.export_as_list(include_z=True, include_w=True)))
 
-    def xyz_ds(self, src_xyz):
+    def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz"""
 
         dst_ogr = '{}'.format(self.name)
@@ -171,7 +171,7 @@ class Waffle:
     ## xyz_mask - mask and yield the xyz data
     ## yield_xyz - yield the xyz data
     ## ============================================== 
-    def xyz_block(self, src_xyz):
+    def _xyz_block(self, src_xyz):
         """block the src_xyz data to the mean block value
 
         Yields:
@@ -214,7 +214,7 @@ class Waffle:
                 if out_xyz.z != -9999:
                     yield(out_xyz)
                         
-    def xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
+    def _xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
 
@@ -250,9 +250,9 @@ class Waffle:
             else:
                 xyz_yield = xdl.yield_xyz()
             if self.mask:
-                xyz_yield = self.xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
+                xyz_yield = self._xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
             if block:
-                xyz_yield = self.xyz_block(xyz_yield)
+                xyz_yield = self._xyz_block(xyz_yield)
             for xyz in xyz_yield:
                 yield(xyz)
 
@@ -279,10 +279,7 @@ class Waffle:
     ## generate - run and process the WAFFLES module
     ## valid_p - check if the output WAFFLES DEM is valid
     ## ============================================== 
-    def run(self):
-        pass
-
-    def process(self, fn=None, filter_=False):
+    def _process(self, fn=None, filter_=False):
         if fn is None:
             fn = self.fn
         
@@ -326,9 +323,9 @@ class Waffle:
     def generate(self):
         self.run()
         if self.mask:
-            self.process(fn='{}_m.tif'.format(self.name), filter_=False)
+            self._process(fn='{}_m.tif'.format(self.name), filter_=False)
         self.waffled = True
-        return(self.process(filter_=True))
+        return(self._process(filter_=True))
 
     def valid_p(self):
         if not os.path.exists(self.fn): return(False)
@@ -340,7 +337,10 @@ class Waffle:
         else:
             return(False)
         return(True)            
-            
+
+    def run(self):
+        raise(NotImplementedError)
+    
 ## ==============================================
 ## Waffles GMT surface module
 ## ==============================================
@@ -421,7 +421,7 @@ class WafflesMBGrid(Waffle):
         self.mod = 'mbgird'
 
     def run(self):
-        pass
+        raise(NotImplementedError)
         
 # def waffles_mbgrid(wg, dist = '10/3', tension = 35, use_datalists = False):
 #     """Generate a DEM with MBSystem's mbgrid program.
@@ -500,7 +500,7 @@ class WafflesNum(Waffle):
         self.mode = mode
         self.mod = 'num'
 
-    def xyz_num(self, src_xyz):
+    def _xyz_num(self, src_xyz):
         """Create a GDAL supported grid from xyz data """
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
@@ -550,7 +550,7 @@ class WafflesNum(Waffle):
             out, status = utils.run_cmd(dem_xyz2grd_cmd, verbose=self.verbose,
                                         data_fun=lambda p: self.dump_xyz(dst_port=p, encode=True))
         else:
-            self.xyz_num(self.yield_xyz(block=True))
+            self._xyz_num(self.yield_xyz(block=True))
             
         return(self)
 
@@ -567,7 +567,7 @@ class WafflesIDW(Waffle):
         self.power = power
         self.mod = 'IDW'
 
-    def distance(self, pnt0, pnt1):
+    def _distance(self, pnt0, pnt1):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
     
     def run(self):
@@ -582,7 +582,7 @@ class WafflesIDW(Waffle):
             progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
             i=0
 
-        self.xyz_block_t(self.yield_xyz())
+        self._xyz_block_t(self.yield_xyz())
         #hash_t, xyz_t = xyz_block_t(self.yield_xyz(), self.p_region, self.inc)
             
         for y in range(0, ycount):
@@ -608,7 +608,7 @@ class WafflesIDW(Waffle):
                             xyz_bucket.append(b)
 
                 for this_xyz in xyz_bucket:
-                    d = self.distance([this_xyz.x, this_xyz.y], [xg, yg])
+                    d = self._distance([this_xyz.x, this_xyz.y], [xg, yg])
                     #d = utils.euc_dst([this_xyz.x, this_xyz.y], [xg, yg])
                     z_list.append(this_xyz.z)
                     if d > 0:
@@ -674,7 +674,7 @@ class WafflesVdatum(Waffle):
         self.mod = 'vdatum'
         self.vdc = vdatumfun.Vdatum(ivert=ivert, overt=overt, region=region, jar=jar, verbose=True)
 
-    def create_null(self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
+    def _create_null(self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
         """create a nodata grid"""
         
         xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
@@ -686,12 +686,11 @@ class WafflesVdatum(Waffle):
         
     def run(self):
 
-        self.create_null('empty.tif', self.p_region, 0.00083333, 0, 'GTiff', self.verbose, True)
+        self._create_null('empty.tif', self.p_region, 0.00083333, 0, 'GTiff', self.verbose, True)
         demfun.set_nodata('empty.tif')
         empty = datasets.RasterFile(fn='empty.tif', data_format=200, src_region=self.region, epsg=self.epsg,
                                     name=self.name, verbose=self.verbose)
 
-        #empty.parse()
         with open('empty.xyz', 'w') as mt_xyz:
             empty.dump_xyz(mt_xyz)
         self.vdc.run_vdatum('empty.xyz')
@@ -711,7 +710,7 @@ class WafflesVdatum(Waffle):
             vd_out = {}
             status = -1
 
-        #utils.remove_glob('empty.*', 'result/*', 'result')
+        utils.remove_glob('empty.*', 'result/*', 'result')
         return(self)
 
 ## ==============================================
@@ -740,7 +739,7 @@ class WafflesGDALGrid(Waffle):
         _prog = utils.CliProgress('running GDAL GRID {} algorithm @ {}...\
         '.format(self.alg_str.split(':')[0], self.p_region.format('fn')))
         _prog_update = lambda x, y, z: _prog.update()
-        ds = self.xyz_ds(self.yield_xyz(block=self.block_p))
+        ds = self._xyz_ds(self.yield_xyz(block=self.block_p))
         
         if ds.GetLayer().GetFeatureCount() == 0:
             utils.echo_error_msg('no input data')

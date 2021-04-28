@@ -66,7 +66,6 @@ class Datalist(datasets.XYZDataset):
 
         _region = self.region
         self.region = None
-        #self.parse()
         out_regions = []
         out_region = None
         self.infos['name'] = self.fn
@@ -131,10 +130,10 @@ class Datalist(datasets.XYZDataset):
                                     self.data_entries.append(ds)
                                     self.parse_data_lists()
                                     yield(ds)
-        else: echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
-        #self.parse_data_lists()
-        if self.verbose: _prog.end(0, 'parsed datalist {}'.format(self.fn))
-        #return(self)
+        else:
+            utils.echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
+        if self.verbose:
+            _prog.end(0, 'parsed datalist {}'.format(self.fn))
            
     def yield_xyz(self):
         """parse the data from the datalist
