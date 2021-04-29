@@ -434,7 +434,7 @@ class WafflesMBGrid(Waffle):
         #     wg['archive'] = archive
         
         mb_region = self.p_region
-        mb_region = mb_region.buffer(region, self.inc * -.5)
+        mb_region = mb_region.buffer(self.inc * -.5)
         xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
         
         mbgrid_cmd = ('mbgrid -I{} {} -D{}/{} -O{} -A2 -G100 -F1 -N -C{} -S0 -X0.1 -T{} {} \
