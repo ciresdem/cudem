@@ -724,6 +724,5 @@ def percentile(src_gdal, perc = 95):
         ds = ds_array = ds_array_flat = None
         return(p)
     else: return(None)
-
     
 ### End

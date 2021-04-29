@@ -406,6 +406,8 @@ class GMTTriangulate(Waffle):
 
 ## ==============================================
 ## Waffles MBGrid module
+## Does not use internal datalists processing,
+## datalists must be compatible with MB-SYSTEM.
 ## ==============================================
 class WafflesMBGrid(Waffle):
     def __init__(self, dist='10/3', tension=35, use_datalists=False, **kwargs):
@@ -421,63 +423,39 @@ class WafflesMBGrid(Waffle):
         self.mod = 'mbgird'
 
     def run(self):
-        raise(NotImplementedError)
+        #raise(NotImplementedError)
+
+        # if use_datalists:
+        #     #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
+        #     archive = wg['archive']
+        #     wg['archive'] = True
+        #     for xyz in waffles_yield_datalist(wg): pass
+        #     wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
+        #     wg['archive'] = archive
         
-# def waffles_mbgrid(wg, dist = '10/3', tension = 35, use_datalists = False):
-#     """Generate a DEM with MBSystem's mbgrid program.
-    
-#     Args:
-#       wg (dict): a waffles config dictionary
-#       dist (str): mbgrid -C switch
-#       tension (float): spline tension while gridding
-#       use_datalists (bool): use geomods datalists to parse data
-    
-#     if `use_datalists` is True, will parse the datalist through
-#     waffles instead of mbsystem.
-#     Note: without `use_datalists` as True, only mbsystem supported data formats may be used.
+        mb_region = self.p_region
+        mb_region = mb_region.buffer(region, self.inc * -.5)
+        xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
+        
+        mbgrid_cmd = ('mbgrid -I{} {} -D{}/{} -O{} -A2 -G100 -F1 -N -C{} -S0 -X0.1 -T{} {} \
+        '.format(self.data[0].fn, mb_region.format('gmt'), xsize, ysize, self.name, self.dist, self.tension, '-M' if self.mask else ''))
+        for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose): sys.stderr.write('{}'.format(out))
+        #out, status = utils.run_cmd(mbgrid_cmd, verbose = wg['verbose'])
 
-#     Returns:
-#       list: [{'dem': ['dem-fn', 'raster']}, status]    
-#     """
-    
-#     if wg['gc']['MBGRID'] is None:
-#         utils.echo_error_msg('MBSystem must be installed to use the MBGRID module')
-#         return(None, -1)
-#     if wg['gc']['GMT'] is None:
-#         utils.echo_error_msg('GMT must be installed to use the MBGRID module')
-#         return(None, -1)
+        gmtfun.gmt_grd2gdal('{}.grd'.format(self.name))
+        utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
+        if self.use_datalists and not self.archive:
+            utils.remove_glob('archive')
 
-#     if use_datalists:
-#         #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
-#         archive = wg['archive']
-#         wg['archive'] = True
-#         for xyz in waffles_yield_datalist(wg): pass
-#         wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
-#         wg['archive'] = archive
-
-#     region = waffles_proc_region(wg)
-#     region = regions.region_buffer(region, wg['inc'] * -.5)
-#     xsize, ysize, gt = regions.region2gt(waffles_proc_region(wg), wg['inc'])
-    
-#     if len(dist.split('/')) == 1: dist = dist + '/2'
-#     mbgrid_cmd = ('mbgrid -I{} {} -D{}/{} -O{} -A2 -G100 -F1 -N -C{} -S0 -X0.1 -T{} {} \
-#     '.format(wg['datalist'], regions.region_format(region, 'gmt'), xsize, ysize, wg['name'], dist, tension, '-M' if wg['mask'] else ''))
-#     for out in utils.yield_cmd(mbgrid_cmd, verbose = wg['verbose']): sys.stderr.write('{}'.format(out))
-#     #out, status = utils.run_cmd(mbgrid_cmd, verbose = wg['verbose'])
-
-#     gmtfun.gmt_grd2gdal('{}.grd'.format(wg['name']))
-#     utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(wg['name']))
-#     if use_datalists and not wg['archive']: utils.remove_glob('archive')
-
-#     if wg['mask']:
-#         num_grd = '{}_num.grd'.format(wg['name'])
-#         dst_msk = '{}_msk.tif=gd+n-9999:GTiff'.format(wg['name'])
-#         out, status = gmtfun.gmt_num_msk(num_grd, dst_msk, verbose = wg['verbose'])
-#         utils.remove_glob(num_grd, '*_sd.grd')
-#     if not use_datalists:
-#         if wg['spat'] or wg['archive']:
-#             for xyz in waffles_yield_datalist(wg): pass
-#     return({'dem': ['{}.tif'.format(wg['name']), 'raster']}, 0)
+        if self.mask:
+            num_grd = '{}_num.grd'.format(self.name)
+            dst_msk = '{}_msk.tif=gd+n-9999:GTiff'.format(self.name)
+            out, status = gmtfun.gmt_num_msk(num_grd, dst_msk, verbose=self.verbose)
+            utils.remove_glob(num_grd, '*_sd.grd')
+        if not self.use_datalists:
+            if self.spat or self.archive:
+                [x for x in self.yield_xyz()]
+        return(self)
     
 ## ==============================================
 ## Waffles 'NUM grid' module
