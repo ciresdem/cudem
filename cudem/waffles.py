@@ -40,6 +40,13 @@ class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
     See WaffleFactory for module specifications and generation.
+
+    Procedures:
+      yield_xyz() - yield the xyz data from self.data
+      dump_xyz() - dump the xyz data from self.data to port
+      run() - run the WAFFLES module (function set via module sub-class)
+      generate() - run and process the WAFFLES module
+
     """
     
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_dem',
@@ -88,28 +95,18 @@ class Waffle:
         self.fn = '{}.tif'.format(self.name)            
         self.waffled = False
 
-    ## ==============================================
-    ## Waffles REGIONS
-    ##
-    ## proc_region - processing region (extended by self.extend and self.extend_proc
-    ## dist_region - distribution region (extended by self.extend)
-    ## ==============================================
     def _proc_region(self):
+        """processing region (extended by self.extend and self.extend_proc."""
         
         pr = regions.Region().from_region(self.region)
         return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
 
     def _dist_region(self):
-            
+        """distribution region (extended by self.extend)."""
+        
         dr = regions.Region().from_region(self.region)
         return(dr.buffer((self.inc*self.extend)))
 
-    ## ==============================================
-    ## XYZ Spatial Indexing
-    ##
-    ## xyz_block_t - grid the xyz data into data buckets
-    ## xyz_ds - generate an OGR in-memory vector dataset
-    ## ==============================================
     def _xyz_block_t(self, src_xyz):
         """block the src_xyz data for fast lookup"""
 
@@ -164,13 +161,6 @@ class Waffle:
             layer.CreateFeature(f)
         return(self.ogr_ds)
 
-    ## ==============================================
-    ## XYZ data yield functions
-    ##
-    ## xyz_block - block and yield the xyz data
-    ## xyz_mask - mask and yield the xyz data
-    ## yield_xyz - yield the xyz data
-    ## ============================================== 
     def _xyz_block(self, src_xyz):
         """block the src_xyz data to the mean block value
 
@@ -268,18 +258,14 @@ class Waffle:
             utils.remove_glob('__tmp_clip.*')
 
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
+        """dump the xyz data to dst_port"""
+        
         for xyz in self.yield_xyz(**kwargs):
             xyz.dump(include_w = True if self.weights is not None else False, dst_port=dst_port, encode=encode, **kwargs)
 
-    ## ==============================================
-    ## DEM generation
-    ##
-    ## run - run the WAFFLES module (set via module class)
-    ## process - process the outpt WAFFLES DEM (filter, clip, cut, set)
-    ## generate - run and process the WAFFLES module
-    ## valid_p - check if the output WAFFLES DEM is valid
-    ## ============================================== 
     def _process(self, fn=None, filter_=False):
+        """process the outpt WAFFLES DEM (filter, clip, cut, set)."""
+        
         if fn is None:
             fn = self.fn
         
@@ -321,6 +307,8 @@ class Waffle:
         return(self)
     
     def generate(self):
+        """run and process the WAFFLES module"""
+        
         self.run()
         if self.mask:
             self._process(fn='{}_m.tif'.format(self.name), filter_=False)
@@ -328,6 +316,8 @@ class Waffle:
         return(self._process(filter_=True))
 
     def valid_p(self):
+        """check if the output WAFFLES DEM is valid"""
+        
         if not os.path.exists(self.fn): return(False)
         gdi = demfun.infos(self.fn, scan=True)
         
@@ -339,13 +329,13 @@ class Waffle:
         return(True)            
 
     def run(self):
+        """run the WAFFLES module (set via sub-module class)."""
+        
         raise(NotImplementedError)
     
-## ==============================================
-## Waffles GMT surface module
-## ==============================================
 class GMTSurface(Waffle):
-    """Grid the data using GMT 'surface'.
+    """Waffles GMT surface module.
+    Grid the data using GMT 'surface'.
     Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
     """
     
@@ -375,14 +365,9 @@ class GMTSurface(Waffle):
         out, status = utils.run_cmd(dem_surf_cmd, verbose = self.verbose, data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
         return(self)
 
-## ==============================================
-## Waffles GMT triangulate module
-## ==============================================
 class GMTTriangulate(Waffle):
-    """Grid the data using GMT 'triangulate'.
-
-    Returns:
-      self: Waffle Object
+    """Waffles GMT triangulate module
+    Grid the data using GMT 'triangulate'.
     """
     
     def __init__(self, **kwargs):
@@ -404,12 +389,12 @@ class GMTTriangulate(Waffle):
                                     data_fun = lambda p: self.dump_xyz(dst_port=p, encode=True))
         return(self)
 
-## ==============================================
-## Waffles MBGrid module
-## Does not use internal datalists processing,
-## datalists must be compatible with MB-SYSTEM.
-## ==============================================
 class WafflesMBGrid(Waffle):
+    """Waffles MBGrid module
+    Does not use internal datalists processing,
+    input datalist must be compatible with MB-SYSTEM.
+    """
+    
     def __init__(self, dist='10/3', tension=35, use_datalists=False, **kwargs):
         super().__init__(**kwargs)
 
@@ -495,9 +480,6 @@ class WafflesMBGrid(Waffle):
                     [x for x in self.yield_xyz()]
         return(self)
     
-## ==============================================
-## Waffles 'NUM grid' module
-## ==============================================
 class WafflesNum(Waffle):
     """Generate an Uninterpolated grid from XYZ data;
     num methods include: mask, mean, num, landmask and any gmt grd2xyz -A option.
@@ -658,12 +640,10 @@ class WafflesIDW(Waffle):
         out, status = utils.gdal_write(outArray, '{}.tif'.format(self.name), ds_config)
         return(self)
             
-## ==============================================
-## Waffles 'Vdatum conversion grid' module
-## note: U.S. Only
-## ==============================================
 class WafflesVdatum(Waffle):
-    """vertical datum transformation grid via NOAA's VDATUM."""
+    """vertical datum transformation grid via NOAA's VDATUM.
+    U.S. and territories only.
+    """
     
     def __init__(self, ivert='navd88', overt='mhw', region='3', jar=None, **kwargs):
         """generate a 'conversion-grid' with vdatum.
@@ -729,11 +709,10 @@ class WafflesVdatum(Waffle):
         utils.remove_glob('empty.*', 'result/*', 'result')
         return(self)
 
-## ==============================================
-## Waffles GDAL_GRID module
-## see gdal_grid for more info and gridding algorithms
-## ==============================================
 class WafflesGDALGrid(Waffle):
+    """Waffles GDAL_GRID module.
+    see gdal_grid for more info and gridding algorithms
+    """
     
     def __init__(self, block=False, **kwargs):
         """run gdal grid using alg_str
