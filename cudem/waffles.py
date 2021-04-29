@@ -417,11 +417,49 @@ class WafflesMBGrid(Waffle):
             utils.echo_error_msg('MB-System must be installed to use the MBGRID module')
             return(None, -1)
 
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg('GMT must be installed to use the MBGRID module')
+            return(None, -1)
+
         self.dist = dist
         self.tension = tension
         self.use_datalists = use_datalists
         self.mod = 'mbgird'
 
+    def _gmt_num_msk(self, num_grd, dst_msk):
+        """generate a num-msk from a NUM grid using GMT grdmath
+
+        Args:
+          num_grd (str): pathname to a source `num` grid file
+          dst_msk (str): pathname to a destination `msk` grid file
+
+        Returns:
+          list: [cmd-output, cmd-return-code]
+        """
+
+        num_msk_cmd = ('gmt grdmath -V {} 0 MUL 1 ADD 0 AND = {}\
+        '.format(num_grd, dst_msk))
+        return(utils.run_cmd(num_msk_cmd, verbose=self.verbose))
+
+    def _gmt_grd2gdal(self, src_grd, dst_fmt='GTiff'):
+        """convert the grd file to tif using GMT
+
+        Args:
+          src_grd (str): a pathname to a grid file
+          dst_fmt (str): the output GDAL format string
+
+        Returns:
+          str: the gdal file name or None
+        """
+
+        dst_gdal = '{}.{}'.format(os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt))
+        grd2gdal_cmd = ('gmt grdconvert {} {}=gd+n-9999:{} -V\
+        '.format(src_grd, dst_gdal, dst_fmt))
+        out, status = utils.run_cmd(grd2gdal_cmd, verbose=self.verbose)
+        if status == 0:
+            return(dst_gdal)
+        else: return(None)
+    
     def run(self):
         #raise(NotImplementedError)
 
@@ -442,7 +480,7 @@ class WafflesMBGrid(Waffle):
         for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose): sys.stderr.write('{}'.format(out))
         #out, status = utils.run_cmd(mbgrid_cmd, verbose = wg['verbose'])
 
-        gmtfun.gmt_grd2gdal('{}.grd'.format(self.name))
+        self._gmt_grd2gdal('{}.grd'.format(self.name))
         utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
         if self.use_datalists and not self.archive:
             utils.remove_glob('archive')
@@ -450,11 +488,11 @@ class WafflesMBGrid(Waffle):
         if self.mask:
             num_grd = '{}_num.grd'.format(self.name)
             dst_msk = '{}_msk.tif=gd+n-9999:GTiff'.format(self.name)
-            out, status = gmtfun.gmt_num_msk(num_grd, dst_msk, verbose=self.verbose)
+            out, status = self._gmt_num_msk(num_grd, dst_msk, verbose=self.verbose)
             utils.remove_glob(num_grd, '*_sd.grd')
-        if not self.use_datalists:
-            if self.spat or self.archive:
-                [x for x in self.yield_xyz()]
+            if not self.use_datalists:
+                if self.spat or self.archive:
+                    [x for x in self.yield_xyz()]
         return(self)
     
 ## ==============================================
