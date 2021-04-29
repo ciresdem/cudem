@@ -211,7 +211,7 @@ def remove_glob(*args):
             globs = glob.glob(glob_str)
             for g in globs:
                 if os.path.isdir(g):
-                    remove_globs('{}/*'.format(g))
+                    remove_glob('{}/*'.format(g))
                     os.removedirs(g)
                 else: os.remove(g)
         except: pass

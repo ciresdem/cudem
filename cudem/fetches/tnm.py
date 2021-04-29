@@ -23,6 +23,7 @@
 ### Code:
 
 import os
+import sys
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -40,7 +41,7 @@ import cudem.fetches.FRED as FRED
 class TheNationalMap(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
-    def __init__(self, where=[], **kwargs):
+    def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
         super().__init__(**kwargs)
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
@@ -55,7 +56,7 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
-        self.where = where
+        self.where = [where]
         self.FRED = FRED.FRED(verbose = self.verbose)
 
         self.name = 'tnm'
@@ -66,6 +67,10 @@ and deliver topographic information for the Nation.'''
         self._usage = '''< tnm:formats=fmt,fmt:extents=ext,ext >'''
         self._urls = [self._tnm_api_url]
         self.update_if_not_in_FRED()
+
+        self.formats = formats
+        self.extents = extents
+        self.q = q
         
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -122,15 +127,13 @@ and deliver topographic information for the Nation.'''
             elif 'LAS' in fmt or 'LAZ' in fmt:
                 datatype = 'lidar'
             else: datatype = 'tnm'
-            try:
-                url_enc = urllib.urlencode({'datasets': ds['sbDatasetTag']})
-            except: url_enc = urllib.parse.urlencode({'datasets': ds['sbDatasetTag']})
+            url_enc = f_utils.urlencode({'datasets': ds['sbDatasetTag']})
             try:
                 pubDate = ds['lastPublishedDate']
-            except: pubDate = this_year()
+            except: pubDate = utils.this_year()
             try:
                 metadataDate = ds['lastUpdatedDate']
-            except: metadataDate = this_year()            
+            except: metadataDate = utils.this_year()            
             if geom is not None:
                 self.FRED._add_survey(Name = ds['sbDatasetTag'], ID = ds['id'], Agency = 'USGS', Date = pubDate[-4:],
                                       MetadataLink = ds['infoUrl'], MetadataDate = metadataDate,
@@ -149,7 +152,7 @@ and deliver topographic information for the Nation.'''
         datasets = self._datasets()
         self.FRED._open_ds(1)
         if self.verbose:
-            _prog = _progress('scanning {} datasets from TNM...'.format(len(datasets)))
+            _prog = utils.CliProgress('scanning {} datasets from TNM...'.format(len(datasets)))
         for i, ds in enumerate(datasets):
             if self.verbose:
                 _prog.update_perc((i, len(datasets)))
@@ -157,7 +160,9 @@ and deliver topographic information for the Nation.'''
                 if 'isDefault' in fmt.keys():
                     fmt = fmt['value']
                     break
+                #print(ds)
             this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+            this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
             geom = this_xml.bounds(geom = True)
             h_epsg, v_epsg = this_xml.reference_system()
             tags = ds['tags']
@@ -169,13 +174,14 @@ and deliver topographic information for the Nation.'''
             _prog.end(0, 'scanned {} datasets from TNM'.format(len(datasets)))
         self.FRED._close_ds()
 
-    def run(self, f = None, e = None, q = None):
+    def run(self):#, f = None, e = None, q = None):
         """parse the tnm results from FRED"""
         
-        e = e.split(',') if e is not None else None
-        f = f.split(',') if f is not None else None
+        e = self.extents.split(',') if self.extents is not None else None
+        f = self.formats.split(',') if self.formats is not None else None
+        q = self.q
         for surv in FRED._filter_FRED(self):
-            print(surv)
+            #print(surv)
             offset = 0
             total = 0
             while True:
@@ -221,7 +227,7 @@ and deliver topographic information for the Nation.'''
                             self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
                 offset += 100
                 if offset >= total: break
-
+        return(self)
     ## ==============================================
     ## _update_prods() and _parse_prods_results() will update FRED with every product as a feature, rather than
     ## the default of each feature being a TNM dataset. _update_prods() takes much longer time to gather the
@@ -321,12 +327,12 @@ and deliver topographic information for the Nation.'''
 ## NED, 3DEP, Etc.
 ##
 ## TODO: Break up search regions on large regions 
-##
+## THIS IS THE OLD/DEPRECIATED CLASS (DOESNT CURRENTLY WORK WITH NEW TNM
 ## =============================================================================
-class TNM:
+class TNM(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
-    def __init__(self, index = False, ds = 1, sub_ds = None, formats = None, extent = None, q = None, **kwargs):
+    def __init__(self, index=False, ds=1, sub_ds=None, formats=None, extent=None, q=None, **kwargs):
         super().__init__(**kwargs)
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
@@ -335,6 +341,14 @@ class TNM:
         self._dataset_results = {}
         self._tnm_ds = []
         self._tnm_df = []
+        self.name = 'tnm'
+
+        self.index = index
+        self.ds = ds
+        self.sub_ds = sub_ds
+        self.formats = formats
+        self.extent = extent
+        self.q = q
 
     def run(self):
         '''Run the TNM (National Map) fetching module.'''
@@ -350,16 +364,16 @@ class TNM:
         else: self.status = -1
 
         if self.status == 0:
-            if index:
+            if self.index:
                 self.print_dataset_index()
                 sys.exit()
 
-            this_ds = [int(ds)]
-            if sub_ds is not None: this_ds.append(int(sub_ds))
+            this_ds = [int(self.ds)]
+            if self.sub_ds is not None: this_ds.append(int(self.sub_ds))
             self._tnm_ds = [this_ds]
-            self._tnm_df = [] if formats is None else [x.strip() for x in formats.split(',')]
-            self._extents = [] if extent is None else [x.strip() for x in extent.split(',')]
-            self.filter_datasets(q)
+            self._tnm_df = [] if self.formats is None else [x.strip() for x in self.formats.split(',')]
+            self._extents = [] if self.extent is None else [x.strip() for x in self.extent.split(',')]
+            self.filter_datasets(self.q)
         return(self)
 
     def filter_datasets(self, q = None):
@@ -384,6 +398,7 @@ class TNM:
                 if len(dtags) == 0:
                     sbDTags.append( self._datasets[ds[0]]['sbDatasetTag'])
                 else:
+                    print(dtags)
                     for dtag in list(dtags.keys()):
                         sbDTag = self._datasets[ds[0]]['tags'][dtag]['sbDatasetTag']
                         if all_formats:
@@ -446,8 +461,14 @@ class TNM:
             try: exts = ', '.join(j['extents'])
             except: exts = ''
             print('%s: %s [ %s ]' %(i, j['title'], fmts))
-            for m,n in enumerate(j['tags']):
-                print('\t%s: %s [ %s ] [ %s ]' %(m, n, ", ".join(j['tags'][n]['formats']), ", ".join(j['tags'][n]['extents'])))
+            for m, n in enumerate(j['tags']):
+                #print(m, n)
+                #print(j['formats'])
+                #print(j['tags'][n]['formats'])
+                #print(j['tags'][n]['extents'])
+                #print('\t{}" {} [ {} ] [ {} ]'.format(m, n, ', '.join(j['tags'][n]['formats']), ', '.join(j['tags'][n]['extents'])))
+                print('\t{}: {} [ {} ] [ {} ]'.format(m, n['title'], j['formats'][0]['value'], ', '.join(n['extents'])))
+                #print('\t%s: %s [ %s ] [ %s ]' %(m, n, ", ".join(j['tags'][n]['formats']), ", ".join(j['tags'][n]['extents'])))
 
     def yield_xyz(self, entry):
         """yield the xyz data from the tnm fetch module"""

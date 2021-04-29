@@ -224,10 +224,11 @@ class WCS:
         data = {'request': 'GetCoverage', 'version': '1.0.0', 'service': 'WCS',
                 'resx': resx, 'resy': resy, 'crs': 'EPSG:4326', 'format': fmt,
                 'coverage': coverage, 'Identifier': coverage}
-        if region is not None: data['bbox'] = region.format('bbox')        
-        try:
-            enc_data = urllib.urlencode(data)
-        except: enc_data = urllib.parse.urlencode(data)
+        if region is not None: data['bbox'] = region.format('bbox')
+        enc_data = f_utils.urlencode(data)
+        #try:
+        #    enc_data = urllib.urlencode(data)
+        #except: enc_data = urllib.parse.urlencode(data)
         return('{}{}'.format(self.url, enc_data))
     
     def fetch_coverage(coverage, region = None):

@@ -243,6 +243,13 @@ class FetchModule:
     def yield_xyz(self, **kwargs):
         raise(NotImplementedError)
 
+    def fetch(self, entry):
+        Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+
+    def fetch_results(self):
+        for entry in self.results:
+            self.fetch(entry)
+            
     def dump_xyz(self, entry, dst_port=sys.stdout, **kwargs):
         for xyz in self.yield_xyz(entry, **kwargs):
             xyz.dump(include_w=True if self.weight is not None else False,

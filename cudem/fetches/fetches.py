@@ -144,6 +144,10 @@ the global and coastal oceans."""},
         return(tnm.TheNationalMap(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    # def acquire_tnm(self, **kwargs):
+    #     return(tnm.TNM(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+    
     def acquire_emodnet(self, **kwargs):
         return(emodnet.EMODNet(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
@@ -351,8 +355,7 @@ def fetches_cli(argv = sys.argv):
         if stop_threads: return
         x_fs = [FetchesFactory(mod=mod, src_region=this_region, verbose=want_verbose).acquire(warp=4326) for mod in mods]
         for x_f in x_fs:
-            utils.echo_msg('running fetch module {} on region {}...\
-            '.format(x_f.name, this_region.format('str')))
+            utils.echo_msg('running fetch module {} on region {}...'.format(x_f.name, this_region.format('str')))
             
             #r = x_f.run().results
             x_f.run()
