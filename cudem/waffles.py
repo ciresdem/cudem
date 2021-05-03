@@ -311,9 +311,13 @@ class Waffle:
         
         self.run()
         if self.mask:
-            self._process(fn='{}_m.tif'.format(self.name), filter_=False)
+            if os.path.exists('{}_m.tif'.format(self.name)):
+                self._process(fn='{}_m.tif'.format(self.name), filter_=False)
         self.waffled = True
-        return(self._process(filter_=True))
+        if self.valid_p():
+            return(self._process(filter_=True))
+        else:
+            return(self)
 
     def valid_p(self):
         """check if the output WAFFLES DEM is valid"""

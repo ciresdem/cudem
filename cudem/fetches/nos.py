@@ -43,7 +43,7 @@ import cudem.fetches.FRED as FRED
 class NOS(f_utils.FetchModule):
     """Fetch NOS BAG and XYZ sounding data from NOAA"""
 
-    def __init__(self, where=[], **kwargs):
+    def __init__(self, where=[], datatype=None, **kwargs):
         super().__init__(**kwargs)
         self._nos_url = 'https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html'
         self._nos_xml_url = lambda nd: 'https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/NOS/%siso_u/xml/' %(nd)
@@ -54,12 +54,17 @@ class NOS(f_utils.FetchModule):
             "H12001-H14000/", "L00001-L02000/", "L02001-L04000/", \
             "T00001-T02000/", "W00001-W02000/" \
         ]
+
         self._outdir = os.path.join(os.getcwd(), 'nos')
         self._nos_fmts = ['.xyz.gz', '.bag.gz', '.bag']
 
         self.where = where
+        self.datatype = datatype
 
-        self.FRED = FRED.FRED(verbose = self.verbose)
+        if self.datatype is not None:
+            self.where.append("DataType LIKE '%{}%'".format(self.datatype.upper()))
+        
+        self.FRED = FRED.FRED(name='nos',verbose=self.verbose)
         self.name = 'nos'
         self._info = '''Bathymetry surveys and data (xyz & BAG)'''
         self._title = '''NOAA NOS Bathymetric Data'''
@@ -99,15 +104,16 @@ class NOS(f_utils.FetchModule):
                     this_data = this_xml.data_links()
                     d_links = []
                     d_types = []
-                    
+
                     for key in this_data.keys():
                         if key in ['GEODAS_XYZ', 'BAG', 'GRID_BAG']:
                             d_links.append(this_data[key])
                             d_types.append(key)
+
                     geom = this_xml.bounds(geom=True)
                     if geom is not None:
                         surveys.append({'Name': this_xml.title(), 'ID': sid, 'Agency': 'NOAA/NOS', 'Date': this_xml.date(),
-                                        'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(), 'DataLink': ','.join(list(set(d_links))),
+                                        'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(), 'DataLink': ','.join([','.join(x) for x in d_links]),
                                         'DataType': ','.join(list(set(d_types))), 'DataSource': 'nos', 'HorizontalDatum': h_epsg,
                                         'VerticalDatum': v_epsg, 'Info': this_xml.abstract(), 'geom': geom})
             if self.verbose:
@@ -115,7 +121,23 @@ class NOS(f_utils.FetchModule):
                 utils.echo_msg('added {} surveys from {}'.format(len(surveys), nosdir))
             self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
-    
+
+    def _data_type(self, src_nos):
+        src_ext = os.path.basename(src_nos).split('.')
+        if len(src_ext) > 2:
+            if src_ext[-2] == 'bag': dt = 'grid_bag'
+            elif src_ext[-2] == 'xyz': dt = 'geodas_xyz'
+            else: dt = None
+        elif len(src_ext) == 2:
+            if src_ext[-1] == 'bag': dt = 'grid_bag'
+            elif src_ext[-1] == 'xyz': dt = 'geodas_xyz'
+            else: dt = None
+        else:
+            dt = None
+            #print(src_nos)
+            #print(dt)
+        return(dt)
+        
     def run(self):
         """Search the NOS reference vector and append the results
         to the results list."""
@@ -123,22 +145,28 @@ class NOS(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 if i != '':
-                    self.results.append([i, i.split('/')[-1], surv['DataType']])
+                    dt = self._data_type(i)
+                    if self.datatype is not None:
+                        if self.datatype.lower() in dt:
+                            self.results.append([i, i.split('/')[-1], surv['DataType']])
+                    else:
+                        self.results.append([i, i.split('/')[-1], surv['DataType']])
 
     def yield_xyz(self, entry):
         src_nos = os.path.basename(entry[1])
         dt = None
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
-            src_ext = src_nos.split('.')
-            if len(src_ext) > 2:
-                if src_ext[-2] == 'bag': dt = 'grid_bag'
-                elif src_ext[-2] == 'xyz': dt = 'geodas_xyz'
-                else: dt = None
-            elif len(src_ext) == 2:
-                if src_ext[-1] == 'bag': dt = 'grid_bag'
-                elif src_ext[-1] == 'xyz': dt = 'geodas_xyz'
-                else: dt = None
-            else: dt = None
+            dt = self._data_type(src_nos)
+            # src_ext = src_nos.split('.')
+            # if len(src_ext) > 2:
+            #     if src_ext[-2] == 'bag': dt = 'grid_bag'
+            #     elif src_ext[-2] == 'xyz': dt = 'geodas_xyz'
+            #     else: dt = None
+            # elif len(src_ext) == 2:
+            #     if src_ext[-1] == 'bag': dt = 'grid_bag'
+            #     elif src_ext[-1] == 'xyz': dt = 'geodas_xyz'
+            #     else: dt = None
+            # else: dt = None
             if dt == 'geodas_xyz':
                 nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
                 for nos_f_r in nos_fns:

@@ -230,7 +230,8 @@ class XYZDataset():
             gen_inf = 'hash' not in self.infos.keys() or 'wkt' not in self.infos.keys()
 
         if gen_inf:
-            utils.echo_msg("generating inf for {}".format(self.fn))
+            if self.verbose:
+                utils.echo_msg("generating inf for {}".format(self.fn))
             self.infos = self.generate_inf()
             self.infos['format'] = self.data_format
             if 'minmax' in self.infos:
@@ -625,7 +626,8 @@ class XYZFile(XYZDataset):
                         ln +=1
                         yield(this_xyz)        
             else: sk -= 1
-        if self.verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
+        if self.verbose:
+            utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         self.src_data.close()
         
 ## ==============================================

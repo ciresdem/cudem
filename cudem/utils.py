@@ -193,7 +193,7 @@ def args2dict(args, dict_args={}):
     
     for arg in args:
         p_arg = arg.split('=')
-        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else True if p_arg[1].lower() == 'true' else None if p_arg[1].lower() == 'none' else p_arg[1]
+        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else True if p_arg[1].lower() == 'true' else None if p_arg[1].lower() == 'none' else '='.join(p_arg[1:]) if len(p_arg) > 2 else p_arg[1]
     return(dict_args)
 
 def remove_glob(*args):

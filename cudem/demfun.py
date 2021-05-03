@@ -706,6 +706,39 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None):
         return(0)
     else: return(-1)
 
+def slope(src_gdal, dst_gdal, s = 111120):
+    '''generate a slope grid with GDAL
+
+    return cmd output and status'''
+    
+    gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
+    return(utils.run_cmd(gds_cmd))
+    
+def proximity(src_fn, dst_fn):
+    '''compute a proximity grid via GDAL
+
+    return 0 if success else None'''    
+    prog_func = None
+    dst_ds = None
+    try:
+        src_ds = gdal.Open(src_fn)
+    except: src_ds = None
+    if src_ds is not None:
+        src_band = src_ds.GetRasterBand(1)
+        ds_config = gather_infos(src_ds)
+
+        if dst_ds is None:
+            drv = gdal.GetDriverByName('GTiff')
+            dst_ds = drv.Create(dst_fn, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])
+        dst_ds.SetGeoTransform(ds_config['geoT'])
+        dst_ds.SetProjection(ds_config['proj'])
+        dst_band = dst_ds.GetRasterBand(1)
+        dst_band.SetNoDataValue(ds_config['ndv'])
+        gdal.ComputeProximity(src_band, dst_band, ['DISTUNITS=PIXEL'], callback = prog_func)
+        dst_band = src_band = dst_ds = src_ds = None
+        return(0)
+    else: return(None)
+    
 def percentile(src_gdal, perc = 95):
     """calculate the `perc` percentile of src_fn gdal file.
 
@@ -800,5 +833,52 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, warp=None, verbose=
     src_mask = None
     msk_band = None
     if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+
+def yield_query(src_xyz, src_grd, out_form):
+    '''query a gdal-compatible grid file with xyz data.
+    out_form dictates return values
+
+    yields out_form results'''
+    try:
+        ds = gdal.Open(src_grd)
+    except: ds = None
+    if ds is not None:
+        ds_config = gather_infos(ds)
+        ds_band = ds.GetRasterBand(1)
+        ds_gt = ds_config['geoT']
+        ds_nd = ds_config['ndv']
+        tgrid = ds_band.ReadAsArray()
+        dsband = ds = None
+        
+        for xyz in src_xyz:
+            x = xyz[0]
+            y = xyz[1]
+            try: 
+                z = xyz[2]
+            except: z = ds_nd
+
+            if x > ds_gt[0] and y < float(ds_gt[3]):
+                xpos, ypos = utils._geo2pixel(x, y, ds_gt)
+                try: 
+                    g = tgrid[ypos, xpos]
+                except: g = ds_nd
+                d = c = m = s = ds_nd
+                if g != ds_nd:
+                    d = z - g
+                    m = z + g
+                    outs = []
+                    for i in out_form:
+                        outs.append(vars()[i])
+                    yield(outs)
+
+def query(src_xyz, src_grd, out_form):
+    '''query a gdal-compatible grid file with xyz data.
+    out_form dictates return values
+
+    returns array of values'''
+    xyzl = []
+    for out_q in yield_query(src_xyz, src_grd, out_form):
+        xyzl.append(np.array(out_q))
+    return(np.array(xyzl))
     
 ### End

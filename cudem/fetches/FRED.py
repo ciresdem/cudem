@@ -141,9 +141,13 @@ class iso_xml:
         dd = {}        
         dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces = self.namespaces)
         dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces =  self.namespaces)
+
         if dfs is not None:
             for i,j in enumerate(dfs):
-                dd[j.text] = dus[i].text
+                if j.text in dd.keys():
+                    dd[j.text].append(dus[i].text)
+                else:
+                    dd[j.text] = [dus[i].text]
         return(dd)
 
 class WCS:
@@ -246,11 +250,11 @@ this_dir, this_filename = os.path.split(__file__)
 fetchdata = os.path.join(this_dir, 'data')
 
 class FRED:
-    def __init__(self, verbose = False, local = False):
+    def __init__(self, name='FRED', verbose=False, local=False):
         self._verbose = verbose
         self.fetchdata = os.path.join(this_dir, 'data')
         self.driver = ogr.GetDriverByName('GeoJSON')
-        self.fetch_v = 'FRED.geojson'
+        self.fetch_v = '{}.geojson'.format(name)
         if local:
             self.FREDloc = self.fetch_v
         elif os.path.exists(self.fetch_v):
