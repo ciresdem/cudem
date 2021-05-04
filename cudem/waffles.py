@@ -69,8 +69,10 @@ class Waffle:
         self.chunk = chunk
         self.epsg = utils.int_or(epsg)
         self.mod = None
+        self.mod_args = {}
         self.archive = archive
         self.mask = mask
+        #self.data_mask = None
         self.clobber = clobber
         self.verbose = verbose
         self.gc = utils.config_check()
@@ -92,7 +94,8 @@ class Waffle:
 
         self.data = [d for d in self.data if d is not None]
         
-        self.fn = '{}.tif'.format(self.name)            
+        self.fn = '{}.tif'.format(self.name)
+        self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
 
     def _proc_region(self):
@@ -240,7 +243,7 @@ class Waffle:
             else:
                 xyz_yield = xdl.yield_xyz()
             if self.mask:
-                xyz_yield = self._xyz_mask(xyz_yield, '{}_m.tif'.format(self.name))
+                xyz_yield = self._xyz_mask(xyz_yield, self.mask_fn)#'{}_m.tif'.format(self.name))
             if block:
                 xyz_yield = self._xyz_block(xyz_yield)
             for xyz in xyz_yield:
@@ -311,8 +314,8 @@ class Waffle:
         
         self.run()
         if self.mask:
-            if os.path.exists('{}_m.tif'.format(self.name)):
-                self._process(fn='{}_m.tif'.format(self.name), filter_=False)
+            if os.path.exists(self.mask_fn):#'{}_m.tif'.format(self.name)):
+                self._process(fn=self.mask_fn, filter_=False)
         self.waffled = True
         if self.valid_p():
             return(self._process(filter_=True))
@@ -321,8 +324,10 @@ class Waffle:
 
     def valid_p(self):
         """check if the output WAFFLES DEM is valid"""
-        
+
         if not os.path.exists(self.fn): return(False)
+        if self.mask:
+            if not os.path.exists(self.mask_fn): return(False)
         gdi = demfun.infos(self.fn, scan=True)
         
         if gdi is not None:
@@ -361,6 +366,7 @@ class GMTSurface(Waffle):
         out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
         
         self.mod = 'surface'
+        self.mod_args = {'tension': self.tension, 'relaxation': self.relaxation, 'lower_limit': self.lower_limit, 'upper_limit': self.upper_limit}
         
     def run(self):        
         dem_surf_cmd = ('gmt blockmean {} -I{:.10f}{} -V -r | gmt surface -V {} -I{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r\
@@ -386,6 +392,7 @@ class GMTTriangulate(Waffle):
         out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
         
         self.mod = 'triangulate'
+        self.mod_args = {}
         
     def run(self):
         dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(self.p_region.format('gmt'), self.inc, self.name)
@@ -414,7 +421,8 @@ class WafflesMBGrid(Waffle):
         self.tension = tension
         self.use_datalists = use_datalists
         self.mod = 'mbgird'
-
+        self.mod_args = {'dist': self.dist, 'tension': self.tension, 'use_datalists': self.use_datalists}
+        
     def _gmt_num_msk(self, num_grd, dst_msk):
         """generate a num-msk from a NUM grid using GMT grdmath
 
@@ -476,7 +484,8 @@ class WafflesMBGrid(Waffle):
 
         if self.mask:
             num_grd = '{}_num.grd'.format(self.name)
-            dst_msk = '{}_msk.tif=gd+n-9999:GTiff'.format(self.name)
+            dst_msk = '{}_m.tif=gd+n-9999:GTiff'.format(self.name)
+            self.mask_fn = dst_msk
             out, status = self._gmt_num_msk(num_grd, dst_msk, verbose=self.verbose)
             utils.remove_glob(num_grd, '*_sd.grd')
             if not self.use_datalists:
@@ -501,6 +510,7 @@ class WafflesNum(Waffle):
         super().__init__(**kwargs)        
         self.mode = mode
         self.mod = 'num'
+        self.mod_args = {'mode': self.mode}
 
     def _xyz_num(self, src_xyz):
         """Create a GDAL supported grid from xyz data """
@@ -568,6 +578,7 @@ class WafflesIDW(Waffle):
         self.radius = utils.str2inc(radius)
         self.power = power
         self.mod = 'IDW'
+        self.mod_args = {'radius':self.radius, 'power':self.power}
 
     def _distance(self, pnt0, pnt1):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
@@ -672,6 +683,7 @@ class WafflesVdatum(Waffle):
         #    return(None, -1)
         
         self.mod = 'vdatum'
+        self.mod_args = {'ivert': ivert, 'overt': overt, 'region': region, 'jar': jar}
         self.vdc = vdatumfun.Vdatum(ivert=ivert, overt=overt, region=region, jar=jar, verbose=True)
 
     def _create_null(self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
@@ -732,6 +744,7 @@ class WafflesGDALGrid(Waffle):
         self.block_p = block
         self.alg_str = 'linear:radius=-1'
         self.mod = self.alg_str.split(':')[0]
+        self.mod_args = {}
         
     def run(self):
         
@@ -762,6 +775,7 @@ class WafflesLinear(WafflesGDALGrid):
         
         radius = self.inc * 4 if radius is None else utils.str2inc(radius)
         self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
+        self.mod_args = {'radius':radius, 'nodata':nodata}
 
 class WafflesInvDst(WafflesGDALGrid):
 
@@ -774,6 +788,8 @@ class WafflesInvDst(WafflesGDALGrid):
         self.alg_str = 'invdist:power={}:smoothing={}:radius1={}:radius2={}:angle={}:max_points={}:min_points={}:nodata={}'\
             .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
 
+        self.mod_args = {'power':power, 'smoothing':smoothing, 'radius1':radius1, 'radius2': radius2, 'angle': angle, 'max_points': max_points, 'min_points': min_points, 'nodata':nodata}
+        
 class WafflesMovingAverage(WafflesGDALGrid):
 
     def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
@@ -783,6 +799,7 @@ class WafflesMovingAverage(WafflesGDALGrid):
         radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'average:radius1={}:radius2={}:angle={}:min_points={}:nodata={}'\
             .format(radius1, radius2, angle, min_points, nodata)
+        self.mod_args = {'radius1':radius1, 'radius2': radius2, 'angle': angle, 'min_points': min_points, 'nodata':nodata}
         
 class WafflesNearest(WafflesGDALGrid):
 
@@ -793,6 +810,7 @@ class WafflesNearest(WafflesGDALGrid):
         radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, min_points, nodata)
+        self.mod_args = {'radius1':radius1, 'radius2': radius2, 'angle': angle, 'nodata':nodata}
 
 class WafflesCoastline(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, **kwargs):
@@ -821,6 +839,8 @@ class WafflesCoastline(Waffle):
 
         self.f_region = self.p_region
         self.f_region.buffer(self.inc*10)
+        self.mod = 'coastline'
+        self.mod_args = {'want_nhd': want_nhd, 'want_gmrt': want_gmrt}
 
     def run(self):
         self._burn_region()
@@ -1445,7 +1465,7 @@ def waffles_cli(argv = sys.argv):
             sys.stdout.write('{}\n'.format(cudem.__version__))
             sys.exit(0)
         elif arg[0] == '-':
-            print(waffles_cli_usage)
+            sys.stderr.write(waffles_cli_usage)
             utils.echo_error_msg('{} is not a valid waffles cli switch'.format(arg))
             sys.exit(0)
         else: dls.append(arg)

@@ -64,12 +64,12 @@ class NOS(f_utils.FetchModule):
         if self.datatype is not None:
             self.where.append("DataType LIKE '%{}%'".format(self.datatype.upper()))
         
-        self.FRED = FRED.FRED(name='nos',verbose=self.verbose)
         self.name = 'nos'
         self._info = '''Bathymetry surveys and data (xyz & BAG)'''
         self._title = '''NOAA NOS Bathymetric Data'''
         self._usage = '''< nos >'''
         self._urls = [self._nos_url]
+        self.FRED = FRED.FRED(name=self.name,verbose=self.verbose)
         self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):

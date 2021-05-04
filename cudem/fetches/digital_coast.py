@@ -50,12 +50,12 @@ class DigitalCoast(f_utils.FetchModule):
         self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.where = where
-        self.FRED = FRED.FRED(verbose = self.verbose)
         self.name = 'dc'
         self._info = '''Lidar and Raster data from NOAA's Digital Coast'''
         self._title = '''NOAA Digital Coast'''
         self._usage = '''< digital_coast >'''
         self._urls = [self._dc_url, self._dc_htdata_url]
+        self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self._update_if_not_in_FRED()
         
     def _update_if_not_in_FRED(self):
@@ -71,7 +71,7 @@ class DigitalCoast(f_utils.FetchModule):
         the relevant metadata from Digital Coast.
         """
         
-        self.FRED = FRED(verbose=self.verbose, local=True)
+        #self.FRED = FRED(verbose=self.verbose, local=True)
         self.FRED._open_ds(1)
         for ld in self._dc_dirs:
             cols = []

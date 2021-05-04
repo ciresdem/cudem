@@ -55,6 +55,7 @@ setuptools.setup(
             'waffles = cudem.waffles:waffles_cli',
             'fetches = cudem.fetches.fetches:fetches_cli',
             'spatial_metadata = cudem.metadata:spat_meta_cli',
+            'uncertainties = cudem.uncertainties:uncertainties_cli',
         ],
     },
     scripts = [
