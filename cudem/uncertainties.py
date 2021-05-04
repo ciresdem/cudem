@@ -351,11 +351,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## ==============================================
                         ## generate the random-sample DEM
                         ## ==============================================
-                        wf = waffles.WaffleFactory(mod=self.dem.mod, data=[s_outer, sub_xyz_head], src_region=this_region,
+                        waff = waffles.WaffleFactory(mod=self.dem.mod, data=[s_outer, sub_xyz_head], src_region=this_region,
                                                    inc=self.dem.inc, name='sub_{}'.format(n), node=self.dem.node, fmt=self.dem.fmt,
                                                    extend=self.dem.extend, extend_proc=self.dem.extend_proc, weights=self.dem.weights,
                                                    sample=self.dem.sample, clip=self.dem.clip, chunk=None, epsg=self.dem.epsg,
-                                                   mask=True, verbose=True, clobber=True).acquire().generate()
+                                                   mask=True, verbose=True, clobber=True)
+                        waff.mod_args = self.dem.mod_args
+                        wf = waff.acquire().generate()
+                        
                         if wf.valid_p():
                             ## ==============================================
                             ## generate the random-sample data PROX and SLOPE
@@ -776,8 +779,8 @@ def uncertainties_cli(argv = sys.argv):
         if not wf.valid_p():
             wf.generate()
 
-        print(wf.mod)
-        print(wf.mod_args)
+        #print(wf.mod)
+        #print(wf.mod_args)
         i = InterpolationUncertainty(dem=wf).run()
         utils.echo_msg(wf)
     

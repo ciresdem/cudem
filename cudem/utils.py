@@ -125,6 +125,11 @@ def str2inc(inc_str):
     Returns:
       float: increment value.
     """
+
+    try:
+        inc_str = str(inc_str)
+    except:
+        return(None)
     
     if inc_str is None or inc_str.lower() == 'none': return(None)
     units = inc_str[-1]

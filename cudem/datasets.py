@@ -319,7 +319,7 @@ class XYZDataset():
                 this_dir = xdl2dir(self.data_lists[x]['parent'])
                 this_dir.append(a_dir)
                 tmp_dir = this_dir
-                dlf.write('{}.datalist -1 {}\n'.format(os.path.join(*this_dir, this_dir[-1]), self.data_lists[x]['parent'].format_metadata()))
+                dlf.write('{}.datalist -1 {}\n'.format(os.path.join(*(this_dir + [this_dir[-1]]), self.data_lists[x]['parent'].format_metadata()))
                 this_dir = os.path.join(os.getcwd(), *this_dir)
                 if not os.path.exists(this_dir):
                     os.makedirs(this_dir)
