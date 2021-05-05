@@ -180,8 +180,8 @@ class NOS(f_utils.FetchModule):
                 src_bags = utils.p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:
 
-                    _ds = datasets.RasterFile(fn=src_data, data_format=200, warp=self.warp,
-                                              name=src_data, src_region=self.region, verbose=self.verbose)
+                    _ds = datasets.RasterFile(fn=src_bag, data_format=200, warp=self.warp,
+                                              name=src_bag, src_region=self.region, verbose=self.verbose)
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
                 utils.remove_glob(*src_bags)
