@@ -540,7 +540,11 @@ def p_unzip(src_file, exts=None):
                         with open(os.path.basename(zf), 'wb') as f:
                             f.write(z.read(zf))
     elif src_file.split('.')[-1] == 'gz':
-        tmp_proc = gunzip(src_file)
+        try:
+            tmp_proc = gunzip(src_file)
+        except:
+            echo_error_msg('unable to gunzip {}'.format(src_file))
+            tmp_proc = None
         if tmp_proc is not None:
             for ext in exts:
                 if ext == tmp_proc.split('.')[-1]:
