@@ -98,8 +98,10 @@ class XYZDataset():
         if utils.fn_url_p(self.fn):
             self.remote = True
 
+        self.dst_trans = None
         if self.valid_p():
             self.inf()
+            self.set_transform()
             
     def fetch(self):
         for entry in self.data_entries:
@@ -251,6 +253,23 @@ class XYZDataset():
         self.infos['format'] = self.data_format
         return(self.infos)
 
+    def set_transform(self):
+        if self.warp is not None and self.epsg is not None:
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromEPSG(self.epsg)
+
+            dst_srs = osr.SpatialReference()
+            dst_srs.ImportFromEPSG(self.warp)
+            try:
+                src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            except:
+                pass
+            
+            self.dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
+        else:
+            self.dst_trans = None
+    
     ## ==============================================
     ## dataset parsing
     ## ==============================================
@@ -644,11 +663,12 @@ class RasterFile(XYZDataset):
 
         self.src_ds = None
         self.ds_config = None
+        
         self.ds_open_p = False
 
         self.outf = outf
         super().__init__(**kwargs)
-        
+
     def _open_ds(self):
         """open the gdal datasource and gather infos 
 
@@ -720,7 +740,7 @@ class RasterFile(XYZDataset):
     def set_epsg(self, epsg = 4326):
         if self.ds_open_p:
             self.src_ds.SetProjection(sr_wkt(int(epsg)))
-
+            
     def cut(self):
         if self.ds_open_p:
             ds_config = self.gather_infos()
@@ -752,9 +772,19 @@ class RasterFile(XYZDataset):
 
         if self.ds_open_p:
             self.gt = self.src_ds.GetGeoTransform()
-            if self.region is not None and self.region.valid_p(check_xy = True):
-                self.srcwin = self.region.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-            else: self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+
+            if self.region is not None:
+                rr = regions.Region().from_list(self.region.export_as_list())
+                if self.dst_trans is not None:
+                    rr.epsg = self.warp
+                    rr.warp(self.epsg)
+                if rr is not None and rr.valid_p(check_xy = True):
+                    self.srcwin = rr.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+                    #self.region = rr
+                else:
+                    self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+            else:
+                self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
             src_band = self.src_ds.GetRasterBand(1)
             #self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
             #self.gt = gt
@@ -796,21 +826,21 @@ class RasterFile(XYZDataset):
             band = self.src_ds.GetRasterBand(1)
             gt = self.gt
             warp_epsg = self.warp
-            
-            if warp_epsg is not None and self.epsg is not None:
-                src_srs = osr.SpatialReference()
-                src_srs.ImportFromEPSG(self.epsg)
+            #utils.echo_msg('{}-->{}'.format(self.epsg, warp_epsg))
+            # if warp_epsg is not None and self.epsg is not None:
+            #     src_srs = osr.SpatialReference()
+            #     src_srs.ImportFromEPSG(self.epsg)
 
-                dst_srs = osr.SpatialReference()
-                dst_srs.ImportFromEPSG(warp_epsg)
-                try:
-                    src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                    dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                except:
-                    pass
-                dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-            else:
-                dst_trans = None
+            #     dst_srs = osr.SpatialReference()
+            #     dst_srs.ImportFromEPSG(warp_epsg)
+            #     try:
+            #         src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            #         dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            #     except:
+            #         pass
+            #     dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
+            # else:
+            #     dst_trans = None
                         
             msk_band = None
             if self.mask is not None:
@@ -820,6 +850,7 @@ class RasterFile(XYZDataset):
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
             if self.ndv is not None:
                 nodata.append('{:g}'.format(self.ndv))
+            #print(self.srcwin)            
             for y in range(self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1):
                 band_data = band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
                 if self.region is not None:
@@ -839,14 +870,17 @@ class RasterFile(XYZDataset):
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
+                        if self.dst_trans is not None:
+                            out_xyz.transform(self.dst_trans)
+                         
                         if self.region is not None and self.region.valid_p():
                             if regions.xyz_in_region_p(out_xyz, self.region):
                                 ln += 1
-                                if dst_trans is not None: out_xyz.transform(dst_trans)
                                 yield(out_xyz)
                         else:
                             ln += 1
-                            if dst_trans is not None: out_xyz.transform(dst_trans)
+                            #if self.dst_trans is not None:
+                            #    out_xyz.transform(self.dst_trans)
                             yield(out_xyz)
             band = None
             src_mask = None

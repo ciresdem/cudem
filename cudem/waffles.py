@@ -1510,11 +1510,12 @@ def waffles_cli(argv = sys.argv):
         utils.echo_error_msg('failed to parse region(s), {}'.format(i_regions))
     else:
         if wg['verbose']: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-    
+
+    name = wg['name']
     for i, this_region in enumerate(these_regions):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
-            wg['name'] = utils.append_fn(wg['name'], wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
+            wg['name'] = utils.append_fn(name, wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
 
         #wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
         wf = WaffleFactory(mod=module, **wg).acquire().generate()
