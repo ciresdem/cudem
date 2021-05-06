@@ -231,7 +231,7 @@ class Region:
         """
 
         if self.valid_p():
-            if t == 'str': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
+            if t == 'str': return('/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))

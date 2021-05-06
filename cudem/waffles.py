@@ -107,7 +107,7 @@ class Waffle:
         self._config = {
             self.mod: {
                 'data': self.data_,
-                'src_region': self.region.export_as_list() if self.region is not None else None,
+                'src_region': self.region.export_as_list(include_z=True, include_w=True) if self.region is not None else None,
                 'inc': self.inc,
                 'name': self.name,
                 'node': self.node,
@@ -1224,7 +1224,7 @@ see gdal_grid --help for more info
         self._config = {
             'mod': self.mod,
             'data': self.data,
-            'src_region': self.region.export_as_list() if self.region is not None else None,
+            'src_region': self.region.export_as_list(include_z=True, include_w=True) if self.region is not None else None,
             'inc': self.inc,
             'name': self.name,
             'node': self.node,
@@ -1636,13 +1636,17 @@ def waffles_cli(argv = sys.argv):
 
     for i_region in i_regions:
         tmp_region = regions.Region().from_string(i_region)
-        if tmp_region.valid_p():
+        if tmp_region.valid_p(check_xy=True):
             these_regions.append(tmp_region)
         else:
-            tmp_region = regions.ogr_wkts(i_region)
+            i_region_s = i_region.split(':')
+            tmp_region = regions.ogr_wkts(i_region_s[0])
             for i in tmp_region:
                 if i.valid_p():
-                    these_regions.append(i)
+                    if len(i_region_s) > 1:
+                        these_regions.append(regions.Region().from_string('/'.join([i.format('str'), i_region_s[1]])))
+                    else:
+                        these_regions.append(i)
                     
     if len(these_regions) == 0:
         these_regions = []
