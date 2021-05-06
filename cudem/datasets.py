@@ -98,11 +98,15 @@ class XYZDataset():
         self.dst_trans = None
         self.trans_region = None
         if self.valid_p():
+            #if self.region is not None:
             if self.data_format == -1:
                 self.inf(check_hash=True)
             else:
                 self.inf()
             self.set_transform()
+
+    def __str__(self):
+        return(self.echo_())
             
     def fetch(self):
         for entry in self.data_entries:
@@ -235,8 +239,8 @@ class XYZDataset():
 
         if gen_inf:
             if self.verbose:
-                utils.echo_msg("generating inf for {}".format(self.fn))
-            self.infos = self.generate_inf()
+                _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
+            self.infos = self.generate_inf(_prog.update)
             self.infos['format'] = self.data_format
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
@@ -248,11 +252,15 @@ class XYZDataset():
                         with open('{}_{}.inf'.format(
                                 'dlim_tmp', self.region.format('fn')), 'w') as inf:
                             inf.write(json.dumps(self.infos))
-            if self.parent is not None:
-                utils.echo_warning_msg('removing {}.inf'.format(self.parent.fn))
-                utils.remove_glob('{}.inf'.format(self.parent.fn))
-                self.parent.infos = {}
             self.infos['epsg'] = self.epsg
+            #if self.parent is not None:
+            #    #self.parent.infos = {}
+            #    self.parent.inf(check_hash=True)
+            #    #utils.echo_warning_msg('removing {}.inf'.format(self.parent.fn))
+            #    #utils.remove_glob('{}.inf'.format(self.parent.fn))
+            #    #self.parent.infos = {}
+            if self.verbose:
+                _prog.end(0, 'generated inf for {}'.format(self.fn))
         self.infos['format'] = self.data_format
         return(self.infos)
 
@@ -424,7 +432,7 @@ class XYZFile(XYZDataset):
         self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
         super().__init__(**kwargs)
         
-    def generate_inf(self):
+    def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the xyz dataset
 
         Returns:
@@ -587,7 +595,7 @@ class RasterFile(XYZDataset):
         self.ds_open_p = False
         return(self)
 
-    def generate_inf(self):
+    def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset
 
         Returns:
@@ -755,7 +763,7 @@ class MBSParser(XYZDataset):
         super().__init__(**kwargs)
         self.infos = {}
         
-    def generate_inf(self):
+    def generate_inf(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = None
         try:

@@ -50,7 +50,7 @@ class Datalist(datasets.XYZDataset):
         super().__init__(**kwargs)
         self.name = os.path.basename('.'.join(self.fn.split('.')[:-1]))
         
-    def generate_inf(self):
+    def generate_inf(self, callback=lambda: False):
         """return the region of the datalist and generate
         an associated `.inf` file if `inf_file` is True.
 
@@ -63,7 +63,7 @@ class Datalist(datasets.XYZDataset):
         Returns:
           list: the region [xmin, xmax, ymin, ymax]
         """
-
+        
         _region = self.region
         self.region = None
         out_regions = []
@@ -72,6 +72,9 @@ class Datalist(datasets.XYZDataset):
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         for entry in self.parse():
+            if self.verbose:
+                callback()
+            #print(entry.infos)
             out_regions.append(entry.infos['minmax'])
             if 'numpts' in self.infos.keys():
                 self.infos['numpts'] += entry.infos['numpts']
