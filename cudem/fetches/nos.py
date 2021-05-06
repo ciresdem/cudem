@@ -157,16 +157,7 @@ class NOS(f_utils.FetchModule):
         dt = None
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
             dt = self._data_type(src_nos)
-            # src_ext = src_nos.split('.')
-            # if len(src_ext) > 2:
-            #     if src_ext[-2] == 'bag': dt = 'grid_bag'
-            #     elif src_ext[-2] == 'xyz': dt = 'geodas_xyz'
-            #     else: dt = None
-            # elif len(src_ext) == 2:
-            #     if src_ext[-1] == 'bag': dt = 'grid_bag'
-            #     elif src_ext[-1] == 'xyz': dt = 'geodas_xyz'
-            #     else: dt = None
-            # else: dt = None
+            
             if dt == 'geodas_xyz':
                 nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
                 for nos_f_r in nos_fns:

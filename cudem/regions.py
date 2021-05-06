@@ -86,9 +86,14 @@ class Region:
         self.zmax = utils.float_or(zmax)
         self.wmin = utils.float_or(wmin)
         self.wmax = utils.float_or(wmax)
-
         self.epsg = utils.int_or(epsg)
         self.wkt = wkt
+
+    def __repr__(self):
+        return(self.format('gmt'))
+        
+    def __str__(self):
+        return(self.format('gmt'))
         
     def valid_p(self, check_xy = False):
         """check the validity of a region
@@ -115,6 +120,18 @@ class Region:
         if not any(self.full_region()): return(False)
         return(True)
 
+    def copy(self):
+        return(Region(xmin = self.xmin,
+                      xmax = self.xmax,
+                      ymin = self.ymin,
+                      ymax = self.ymax,
+                      zmin = self.zmin,
+                      zmax = self.zmax,
+                      wmin = self.wmin,
+                      wmax = self.wmax,
+                      epsg = self.epsg,
+                      wkt = self.wkt))
+    
     def from_list(self, region_list):
         """import a region from a region list 
 
@@ -241,7 +258,8 @@ class Region:
           list: [xcount, ycount, geot]
         """
 
-        if y_inc is None: y_inc = x_inc * -1.
+        if y_inc is None:
+            y_inc = x_inc * -1.
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)    
         this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt)
         this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt)
@@ -443,6 +461,14 @@ class Region:
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
+        self.epsg = warp_epsg
+        return(self.transform(dst_trans))
+
+    def transform(self, dst_trans=None):
+        """transform the region using dst_trans transformation."""
+
+        if dst_trans is None:
+            return(self)
 
         pointA = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(self.xmin, self.ymin))
         pointB = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(self.xmax, self.ymax))
@@ -452,8 +478,6 @@ class Region:
         self.xmax = pointB.GetX()
         self.ymin = pointA.GetY()
         self.ymax = pointB.GetY()
-        self.epsg = warp_epsg
-        #print(self.format('gmt'))
         return(self)
     
 ## ==============================================

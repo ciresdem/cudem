@@ -61,6 +61,9 @@ class XYZPoint:
         #self.z_units = z_units
         #self.z_datum = z_datum
 
+    def copy(self):
+        return(XYZPoint(x=self.x, y=self.y, z=self.z, w=self.w))
+        
     def valid_p(self):
         
         if self.x is None: return(False)

@@ -36,9 +36,6 @@ from cudem import regions
 from cudem import xyzfun
 from cudem import demfun
 
-## ==============================================
-## XYZDataset object, holding xyz-able Elevation data
-## ==============================================
 class XYZDataset():
     """representing an Elevation Dataset
 
@@ -99,8 +96,12 @@ class XYZDataset():
             self.remote = True
 
         self.dst_trans = None
+        self.trans_region = None
         if self.valid_p():
-            self.inf()
+            if self.data_format == -1:
+                self.inf(check_hash=True)
+            else:
+                self.inf()
             self.set_transform()
             
     def fetch(self):
@@ -118,7 +119,7 @@ class XYZDataset():
     ## validity checks
     ## ==============================================
     def valid_p(self, fmts=[]):
-        """check if self appears to be a valid datalist entry
+        """check if self appears to be a valid dataset entry
 
         Returns:
           bools: True if dataset is valid else False
@@ -130,8 +131,10 @@ class XYZDataset():
             if self.fn not in fmts:
                 if not utils.fn_url_p(self.fn):
                     if self.data_format != -11:
-                        if not os.path.exists(self.fn): return (False)
-                        if os.stat(self.fn).st_size == 0: return(False)
+                        if not os.path.exists(self.fn):
+                            return (False)
+                        if os.stat(self.fn).st_size == 0:
+                            return(False)
         return(True)
         
     def hash(self, sha1=False):
@@ -206,7 +209,8 @@ class XYZDataset():
         """
         
         inf_path = '{}.inf'.format(self.fn)
-
+        self.infos = {}
+        
         if os.path.exists(inf_path):
             try:
                 with open(inf_path) as i_ob:
@@ -220,8 +224,6 @@ class XYZDataset():
                     utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
             except:
                 utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
-        else:
-            self.infos = {}
         
         if check_hash:
             if 'hash' in self.infos.keys():
@@ -247,6 +249,7 @@ class XYZDataset():
                                 'dlim_tmp', self.region.format('fn')), 'w') as inf:
                             inf.write(json.dumps(self.infos))
             if self.parent is not None:
+                utils.echo_warning_msg('removing {}.inf'.format(self.parent.fn))
                 utils.remove_glob('{}.inf'.format(self.parent.fn))
                 self.parent.infos = {}
             self.infos['epsg'] = self.epsg
@@ -257,7 +260,6 @@ class XYZDataset():
         if self.warp is not None and self.epsg is not None:
             src_srs = osr.SpatialReference()
             src_srs.ImportFromEPSG(self.epsg)
-
             dst_srs = osr.SpatialReference()
             dst_srs.ImportFromEPSG(self.warp)
             try:
@@ -269,6 +271,12 @@ class XYZDataset():
             self.dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         else:
             self.dst_trans = None
+
+        if self.region is not None:
+            if self.dst_trans is not None:
+                trans_region = self.region.copy()
+                trans_region.epsg = self.warp
+                trans_region.transform(self.dst_trans)
     
     ## ==============================================
     ## dataset parsing
@@ -393,10 +401,352 @@ class XYZDataset():
         
         xyz_l = []
         for this_xyz in self.yield_xyz(**kwargs):
-            xyz_l.append(xyzfun.XYZPoint().from_list(this_xyz.export_as_list(include_z=True, include_w=True)))
-            
+            xyz_l.append(this_xyz.copy())
         return(xyz_l)
             
+class XYZFile(XYZDataset):
+    """representing an ASCII xyz dataset stream."""
+
+    def __init__(self, delim=None, xpos=0, ypos=1, zpos=2, skip=0, x_scale=1, y_scale=1,
+                 z_scale=1, x_offset=0, y_offset=0, **kwargs):
+        
+        self.delim = delim
+        self.xpos = xpos
+        self.ypos = ypos
+        self.zpos = zpos
+        self.skip = skip
+        self.x_scale = x_scale
+        self.y_scale = y_scale
+        self.z_scale = z_scale
+        self.x_offset = x_offset
+        self.y_offset = y_offset        
+        self._known_delims = [',', '/', ':']
+        self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
+        super().__init__(**kwargs)
+        
+    def generate_inf(self):
+        """generate a infos dictionary from the xyz dataset
+
+        Returns:
+          dict: a data-entry infos dictionary
+        """
+                
+        pts = []
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['numpts'] = 0
+        this_region = regions.Region()
+
+        region_ = self.region
+        self.region = None
+
+        for i, l in enumerate(self.yield_xyz()):
+            if i == 0:
+                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
+            else:
+                if l.x < this_region.xmin:
+                    this_region.xmin = l.x
+                elif l.x > this_region.xmax:
+                    this_region.xmax = l.x
+                if l.y < this_region.ymin:
+                    this_region.ymin = l.y
+                elif l.y > this_region.ymax:
+                    this_region.ymax = l.y
+                if l.z < this_region.zmin:
+                    this_region.zmin = l.z
+                elif l.z > this_region.zmax:
+                    this_region.zmax = l.z
+            pts.append(l.export_as_list(include_z = True))
+            self.infos['numpts'] = i
+
+        self.infos['minmax'] = this_region.export_as_list(include_z = True)
+        if self.infos['numpts'] > 0:
+            try:
+                out_hull = [pts[i] for i in spatial.ConvexHull(pts, qhull_options='Qt').vertices]
+                out_hull.append(out_hull[0])
+                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
+            except:
+                self.infos['wkt'] = this_region.export_as_wkt()
+        self.region = region_
+        return(self.infos)
+        
+    def line_delim(self, xyz_line):
+        """guess a line delimiter
+        Args:
+          xyz_line (str): a string representing delimited data.
+
+        Returns:
+          str: delimiter (or None)
+        """
+
+        for delim in self._known_delims:
+            this_xyz = xyz_line.split(delim)
+            if len(this_xyz) > 1:
+                self.delim = delim
+                
+    def yield_xyz(self):
+        """xyz file parsing generator
+
+        Yields:
+          xyz: xyz data
+        """
+        
+        if self.fn is not None:
+            if os.path.exists(str(self.fn)):
+                self.src_data = open(self.fn, "r")
+            else:
+                self.src_data = self.fn
+        else:
+            self.src_data = sys.stdin
+        
+        sk = self.skip
+        this_xyz = xyzfun.XYZPoint(w = 1)
+        
+        ln = 0
+        for xyz_line in self.src_data:
+            if ln >= sk:
+                if self.delim is None: self.line_delim(xyz_line)
+                this_xyz.from_string(xyz_line, delim=self.delim,
+                                     x_pos=self.xpos, y_pos=self.ypos)
+                if this_xyz.valid_p():
+                    this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
+                    this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
+                    this_xyz.z *= self.z_scale
+                    this_xyz.w = self.weight
+
+                    if self.dst_trans is not None:
+                        this_xyz.transform(self.dst_trans)
+                        
+                    if self.region is not None and self.region.valid_p():
+                        if regions.xyz_in_region_p(this_xyz, self.region):
+                            ln += 1
+                            yield(this_xyz)
+                    else:
+                        ln += 1
+                        yield(this_xyz)
+            else: sk -= 1
+        if self.verbose:
+            utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
+        self.src_data.close()
+        
+class RasterFile(XYZDataset):
+    """providing a GDAL raster dataset parser."""
+
+    def __init__(self, mask=None, step=1, outf=None, **kwargs):
+        self.mask = mask
+        self.step = step
+        self.src_ds = None
+        self.ds_config = None
+        self.ds_open_p = False
+        self.outf = outf
+        super().__init__(**kwargs)
+
+        if self.epsg is None:
+            self._open_ds()
+            self.get_epsg()
+            self._close_ds()
+            self.set_transform()
+
+    def _open_ds(self):
+        """open the gdal datasource and gather infos 
+
+        Returns:
+          raster_parser: self
+        """
+
+        if not self.ds_open_p:
+            if self.fn is not None:
+                if os.path.exists(str(self.fn)):
+                    try:
+                        self.src_ds = gdal.Open(self.fn)
+                    except:
+                        self.src_ds = None
+                else:
+                    self.src_ds = None
+            else:
+                self.src_ds = None
+
+            if self.src_ds is not None:
+                self.ds_open_p = True
+                self.gather_infos()
+            else:
+                self.ds_open_p = False
+        else:
+            self.gather_infos()
+        return(self)
+
+    def _close_ds(self):
+        """close the gdal datasource
+
+        Returns:
+          raster_parser: self
+        """
+        
+        self.src_ds = None
+        self.ds_config = None
+        self.ds_open_p = False
+        return(self)
+
+    def generate_inf(self):
+        """generate a infos dictionary from the raster dataset
+
+        Returns:
+          dict: a data-entry infos dictionary
+        """
+            
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self._open_ds()
+
+        if self.ds_open_p:
+            gt = self.src_ds.GetGeoTransform()
+            this_region = regions.Region().from_geo_transform(
+                geoT=gt, x_count=self.src_ds.RasterXSize, y_count=self.src_ds.RasterYSize)
+            try:
+                zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
+            except:
+                zr = [None, None]
+            this_region.zmin = zr[0]
+            this_region.zmax = zr[1]
+            self.infos['minmax'] = this_region.export_as_list(include_z=True)
+            self.infos['numpts'] = self.src_ds.RasterXSize * self.src_ds.RasterYSize
+            self.infos['wkt'] = this_region.export_as_wkt()
+        self._close_ds()
+        return(self.infos)
+
+    def get_epsg(self):
+        if self.ds_open_p:
+            proj = self.src_ds.GetProjectionRef()
+            src_srs = osr.SpatialReference()
+            src_srs.ImportFromWkt(proj)
+            src_srs.AutoIdentifyEPSG()
+            srs_auth = src_srs.GetAuthorityCode(None)
+            if srs_auth is not None:
+                self.epsg = utils.int_or(srs_auth)
+        
+    def set_epsg(self, epsg = 4326):
+        if self.ds_open_p:
+            self.src_ds.SetProjection(sr_wkt(int(epsg)))
+            
+    def cut(self):
+        if self.ds_open_p:
+            ds_config = self.gather_infos()
+            gt = ds_config['geoT']
+            srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
+            
+            ds_arr = self.src_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = self.set_infos(
+                srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, ds_config['proj'], ds_config['dt'],
+                ds_config['ndv'], ds_config['fmt'])
+
+            return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
+        else: return(None, -1)
+        
+    def set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
+        """set a datasource config dictionary
+            
+        returns gdal_config dict."""
+        
+        return({'nx': nx, 'ny': ny, 'nb': nb, 'geoT': geoT,
+                'proj': proj, 'dt': dt, 'ndv': ndv, 'fmt': fmt})
+    
+    def gather_infos(self, scan=False):
+        """gather information from `src_ds` GDAL dataset
+
+        Returns:
+          raster_parser: self
+        """
+
+        if self.ds_open_p:
+            self.gt = self.src_ds.GetGeoTransform()
+
+            if self.region is not None:
+                if self.dst_trans is not None:
+                    if self.trans_region is not None and self.trans_region.valid_p(check_xy = True):
+                        self.srcwin = self.trans_region.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+                    else:
+                        self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+                else:
+                    self.srcwin = self.region.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+            else:
+                self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+            src_band = self.src_ds.GetRasterBand(1)
+            
+            self.get_epsg()
+            
+            self.x_count = self.srcwin[2]
+            self.y_count = self.srcwin[3]
+            self.dt = src_band.DataType
+            self.dtn = gdal.GetDataTypeName(src_band.DataType)
+            self.ndv = src_band.GetNoDataValue()
+            if self.ndv is None: self.ndv = -9999
+            self.fmt = self.src_ds.GetDriver().ShortName
+            self.zr = None
+
+            if scan:
+                src_arr = src_band.ReadAsArray(srcwin[0], self.srcwin[1], self.srcwin[2], self.srcwin[3])
+                self.zr = (np.amin(src_arr), np.amax(src_arr))
+                src_arr = None
+        return(self)
+    
+    def yield_xyz(self):
+        """parse the data from gdal dataset src_ds (first band only)
+
+        Yields:
+          xyz: the parsed xyz data
+        """
+
+        self._open_ds()
+        out_xyz = xyzfun.XYZPoint(w = 1)
+        if self.src_ds is not None:
+            ln = 0
+            band = self.src_ds.GetRasterBand(1)
+            gt = self.gt
+            
+            msk_band = None
+            if self.mask is not None:
+                src_mask = gdal.Open(self.mask)
+                msk_band = src_mask.GetRasterBand(1)
+
+            nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
+            if self.ndv is not None:
+                nodata.append('{:g}'.format(self.ndv))
+
+            for y in range(self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1):
+                band_data = band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
+                if self.region is not None:
+                    z_region = self.region.z_region()
+                    if z_region[0] is not None:
+                        band_data[band_data < z_region[0]] = -9999
+                    if z_region[1] is not None:
+                        band_data[band_data > z_region[1]] = -9999
+                if msk_band is not None:
+                   msk_data = msk_band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
+                   band_data[msk_data==0]=-9999
+                band_data = np.reshape(band_data, (self.srcwin[2], ))
+                for x_i in range(0, self.srcwin[2], 1):
+                    x = x_i + self.srcwin[0]
+                    z = band_data[x_i]
+                    if '{:g}'.format(z) not in nodata:
+                        out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
+                        out_xyz.z = z
+                        out_xyz.w = self.weight
+                        if self.dst_trans is not None:
+                            out_xyz.transform(self.dst_trans)
+                         
+                        if self.region is not None and self.region.valid_p():
+                            if regions.xyz_in_region_p(out_xyz, self.region):
+                                ln += 1
+                                yield(out_xyz)
+                        else:
+                            ln += 1
+                            yield(out_xyz)
+            band = src_mask = msk_band = None
+            if self.verbose:
+                utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
+        self._close_ds()
+
 class MBSParser(XYZDataset):
     """providing an mbsystem parser"""
 
@@ -495,398 +845,5 @@ class MBSParser(XYZDataset):
 
         self.infos['wkt'] = wkt
         return(self)
-
-## ==============================================
-## XYZFile class - ASCII XYZ data
-## ==============================================
-class XYZFile(XYZDataset):
-    """representing an xyz dataset stream
-    """
-
-    def __init__(self, delim=None, xpos=0, ypos=1, zpos=2, skip=0, x_scale=1, y_scale=1,
-                 z_scale=1, x_offset=0, y_offset=0, **kwargs):
         
-        self.delim = delim
-        self.xpos = xpos
-        self.ypos = ypos
-        self.zpos = zpos
-        self.skip = skip
-        self.x_scale = x_scale
-        self.y_scale = y_scale
-        self.z_scale = z_scale
-        self.x_offset = x_offset
-        self.y_offset = y_offset
-        
-        self._known_delims = [',', '/', ':']
-        self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
-        super().__init__(**kwargs)
-        
-    def generate_inf(self):
-        """generate a infos dictionary from the xyz dataset
-
-        Returns:
-          dict: a data-entry infos dictionary
-        """
-                
-        pts = []
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['numpts'] = 0
-        this_region = regions.Region()
-
-        region_ = self.region
-        self.region = None
-
-        for i, l in enumerate(self.yield_xyz()):
-            if i == 0:
-                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
-            else:
-                #try:
-                if l.x < this_region.xmin:
-                    this_region.xmin = l.x
-                elif l.x > this_region.xmax:
-                    this_region.xmax = l.x
-                if l.y < this_region.ymin:
-                    this_region.ymin = l.y
-                elif l.y > this_region.ymax:
-                    this_region.ymax = l.y
-                if l.z < this_region.zmin:
-                    this_region.zmin = l.z
-                elif l.z > this_region.zmax:
-                    this_region.zmax = l.z
-                #except: pass
-            pts.append(l.export_as_list(include_z = True))
-            self.infos['numpts'] = i
-
-        self.infos['minmax'] = this_region.export_as_list(include_z = True)
-        if self.infos['numpts'] > 0:
-            try:
-                out_hull = [pts[i] for i in spatial.ConvexHull(pts, qhull_options='Qt').vertices]
-                out_hull.append(out_hull[0])
-                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
-            except:
-                self.infos['wkt'] = this_region.export_as_wkt()
-        self.region = region_
-        return(self.infos)
-        
-    def line_delim(self, xyz_line):
-        """guess a line delimiter
-        Args:
-          xyz_line (str): a string representing delimited data.
-
-        Returns:
-          str: delimiter (or None)
-        """
-
-        for delim in self._known_delims:
-            this_xyz = xyz_line.split(delim)
-            if len(this_xyz) > 1:
-                self.delim = delim
-                
-    def yield_xyz(self):
-        """xyz file parsing generator
-
-        Yields:
-          xyz: xyz data
-        """
-        
-        if self.fn is not None:
-            if os.path.exists(str(self.fn)):
-                self.src_data = open(self.fn, "r")
-            else:
-                self.src_data = self.fn
-        else:
-            self.src_data = sys.stdin
-        
-        sk = self.skip
-        this_xyz = xyzfun.XYZPoint(w = 1)
-        if self.region is not None:
-            if self.region.epsg != self.epsg:
-                if self.warp is not None:
-                    if self.region.epsg != self.warp:
-                        self.region.warp(warp_epsg=self.epsg)
-                else: self.region.warp(warp_epsg=self.epsg)
-                                
-        warp_epsg = utils.int_or(self.warp)
-        if warp_epsg is not  None and self.epsg is not None:
-            src_srs = osr.SpatialReference()
-            src_srs.ImportFromEPSG(self.epsg)
-
-            dst_srs = osr.SpatialReference()
-            dst_srs.ImportFromEPSG(warp_epsg)
-            try:
-                src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            except:
-                pass
-            dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-        else: dst_trans = None
-        
-        ln = 0
-        for xyz_line in self.src_data:
-            if ln >= sk:
-                if self.delim is None: self.line_delim(xyz_line)
-                this_xyz.from_string(xyz_line, delim=self.delim,
-                                     x_pos=self.xpos, y_pos=self.ypos)
-                if this_xyz.valid_p():
-                    this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
-                    this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
-                    this_xyz.z *= self.z_scale
-                    this_xyz.w = self.weight
-                    if self.region is not None and self.region.valid_p():
-                        if regions.xyz_in_region_p(this_xyz, self.region):
-                            if dst_trans is not None:
-                                this_xyz.transform(dst_trans)
-                            ln += 1
-                            yield(this_xyz)
-                    else:
-                        if dst_trans is not None:
-                            this_xyz.transform(dst_trans)
-                        ln +=1
-                        yield(this_xyz)        
-            else: sk -= 1
-        if self.verbose:
-            utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
-        self.src_data.close()
-        
-## ==============================================
-## RasterFile Class - GDAL supported raster data
-## ==============================================
-class RasterFile(XYZDataset):
-    """providing a raster dataset parser
-    """
-
-    def __init__(self, mask=None, step=1, outf=None, **kwargs):
-
-        self.mask = mask
-        self.step = step
-
-        self.src_ds = None
-        self.ds_config = None
-        
-        self.ds_open_p = False
-
-        self.outf = outf
-        super().__init__(**kwargs)
-
-    def _open_ds(self):
-        """open the gdal datasource and gather infos 
-
-        Returns:
-          raster_parser: self
-        """
-
-        if not self.ds_open_p:
-            if self.fn is not None:
-                if os.path.exists(str(self.fn)):
-                    try:
-                        self.src_ds = gdal.Open(self.fn)
-                    except:
-                        self.src_ds = None
-                else:
-                    self.src_ds = None
-            else:
-                self.src_ds = None
-
-            if self.src_ds is not None:
-                self.ds_open_p = True
-                self.gather_infos()
-            else:
-                self.ds_open_p = False
-        else:
-            self.gather_infos()
-        return(self)
-
-    def _close_ds(self):
-        """close the gdal datasource
-
-        Returns:
-          raster_parser: self
-        """
-        
-        self.src_ds = None
-        self.ds_config = None
-        self.ds_open_p = False
-        return(self)
-
-    def generate_inf(self):
-        """generate a infos dictionary from the raster dataset
-
-        Returns:
-          dict: a data-entry infos dictionary
-        """
-            
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self._open_ds()
-
-        if self.ds_open_p:
-            gt = self.src_ds.GetGeoTransform()
-            #srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-            this_region = regions.Region().from_geo_transform(
-                geoT=gt, x_count=self.src_ds.RasterXSize, y_count=self.src_ds.RasterYSize)
-            try:
-                zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
-            except:
-                zr = [None, None]
-            this_region.zmin = zr[0]
-            this_region.zmax = zr[1]
-            self.infos['minmax'] = this_region.export_as_list(include_z=True)
-            self.infos['numpts'] = self.src_ds.RasterXSize * self.src_ds.RasterYSize
-            self.infos['wkt'] = this_region.export_as_wkt()
-        self._close_ds()
-        return(self.infos)
-
-    def set_epsg(self, epsg = 4326):
-        if self.ds_open_p:
-            self.src_ds.SetProjection(sr_wkt(int(epsg)))
-            
-    def cut(self):
-        if self.ds_open_p:
-            ds_config = self.gather_infos()
-            gt = ds_config['geoT']
-            srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
-            
-            ds_arr = self.src_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-            out_ds_config = self.set_infos(
-                srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, ds_config['proj'], ds_config['dt'],
-                ds_config['ndv'], ds_config['fmt'])
-
-            return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
-        else: return(None, -1)
-        
-    def set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
-        """set a datasource config dictionary
-            
-        returns gdal_config dict."""
-        
-        return({'nx': nx, 'ny': ny, 'nb': nb, 'geoT': geoT, 'proj': proj, 'dt': dt, 'ndv': ndv, 'fmt': fmt})
-        
-    def gather_infos(self, scan=False):
-        """gather information from `src_ds` GDAL dataset
-
-        Returns:
-          raster_parser: self
-        """
-
-        if self.ds_open_p:
-            self.gt = self.src_ds.GetGeoTransform()
-
-            if self.region is not None:
-                rr = regions.Region().from_list(self.region.export_as_list())
-                if self.dst_trans is not None:
-                    rr.epsg = self.warp
-                    rr.warp(self.epsg)
-                if rr is not None and rr.valid_p(check_xy = True):
-                    self.srcwin = rr.srcwin(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-                    #self.region = rr
-                else:
-                    self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-            else:
-                self.srcwin = (0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize)
-            src_band = self.src_ds.GetRasterBand(1)
-            #self.gt = (gt[0] + (self.srcwin[0]*gt[1]), gt[1], 0., gt[3] + (self.srcwin[1]*gt[5]), 0., gt[5])
-            #self.gt = gt
-            
-            proj = self.src_ds.GetProjectionRef()
-            src_srs = osr.SpatialReference()
-            src_srs.ImportFromWkt(proj)
-            src_srs.AutoIdentifyEPSG()
-            srs_auth = src_srs.GetAuthorityCode(None)
-
-            if srs_auth is not None:
-                self.epsg = utils.int_or(srs_auth)
-            self.x_count = self.srcwin[2]
-            self.y_count = self.srcwin[3]
-            self.dt = src_band.DataType
-            self.dtn = gdal.GetDataTypeName(src_band.DataType)
-            self.ndv = src_band.GetNoDataValue()
-            if self.ndv is None: self.ndv = -9999
-            self.fmt = self.src_ds.GetDriver().ShortName
-            self.zr = None
-
-            if scan:
-                src_arr = src_band.ReadAsArray(srcwin[0], self.srcwin[1], self.srcwin[2], self.srcwin[3])
-                self.zr = (np.amin(src_arr), np.amax(src_arr))
-                src_arr = None
-        return(self)
-    
-    def yield_xyz(self):
-        """parse the data from gdal dataset src_ds (first band only)
-
-        Yields:
-          xyz: the parsed xyz data
-        """
-
-        self._open_ds()
-        out_xyz = xyzfun.XYZPoint(w = 1)
-        if self.src_ds is not None:
-            ln = 0
-            band = self.src_ds.GetRasterBand(1)
-            gt = self.gt
-            warp_epsg = self.warp
-            #utils.echo_msg('{}-->{}'.format(self.epsg, warp_epsg))
-            # if warp_epsg is not None and self.epsg is not None:
-            #     src_srs = osr.SpatialReference()
-            #     src_srs.ImportFromEPSG(self.epsg)
-
-            #     dst_srs = osr.SpatialReference()
-            #     dst_srs.ImportFromEPSG(warp_epsg)
-            #     try:
-            #         src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            #         dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            #     except:
-            #         pass
-            #     dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-            # else:
-            #     dst_trans = None
-                        
-            msk_band = None
-            if self.mask is not None:
-                src_mask = gdal.Open(self.mask)
-                msk_band = src_mask.GetRasterBand(1)
-
-            nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-            if self.ndv is not None:
-                nodata.append('{:g}'.format(self.ndv))
-            #print(self.srcwin)            
-            for y in range(self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1):
-                band_data = band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
-                if self.region is not None:
-                    z_region = self.region.z_region()
-                    if z_region[0] is not None:
-                        band_data[band_data < z_region[0]] = -9999
-                    if z_region[1] is not None:
-                        band_data[band_data > z_region[1]] = -9999
-                if msk_band is not None:
-                   msk_data = msk_band.ReadAsArray(self.srcwin[0], y, self.srcwin[2], 1)
-                   band_data[msk_data==0]=-9999
-                band_data = np.reshape(band_data, (self.srcwin[2], ))
-                for x_i in range(0, self.srcwin[2], 1):
-                    x = x_i + self.srcwin[0]
-                    z = band_data[x_i]
-                    if '{:g}'.format(z) not in nodata:
-                        out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
-                        out_xyz.z = z
-                        out_xyz.w = self.weight
-                        if self.dst_trans is not None:
-                            out_xyz.transform(self.dst_trans)
-                         
-                        if self.region is not None and self.region.valid_p():
-                            if regions.xyz_in_region_p(out_xyz, self.region):
-                                ln += 1
-                                yield(out_xyz)
-                        else:
-                            ln += 1
-                            #if self.dst_trans is not None:
-                            #    out_xyz.transform(self.dst_trans)
-                            yield(out_xyz)
-            band = None
-            src_mask = None
-            msk_band = None
-            if self.verbose:
-                utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
-        self._close_ds()
-
 ### End

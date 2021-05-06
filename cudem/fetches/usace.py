@@ -23,6 +23,8 @@
 ### Code:
 
 import os
+import sys
+import lxml.etree
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -98,7 +100,9 @@ class USACE(f_utils.FetchModule):
                     except:
                         utils.echo_warning_msg('could not determine state plane zone from {}'.format(src_xml))
                 utils.remove_glob(src_xml)
-                
+
+            if src_region is None:
+                sys.exit()
             if src_epsg is None:
                 this_geom = src_region.export_as_geom()
                 sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')

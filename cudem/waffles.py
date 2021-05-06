@@ -97,6 +97,8 @@ class Waffle:
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
+        self._set_config()
+        utils.echo_msg(self.waffles_config)
 
     def _proc_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
@@ -124,8 +126,7 @@ class Waffle:
             if regions.xyz_in_region_p(this_xyz, self.p_region):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
                 if xpos < xcount and ypos < ycount:
-                    self.block_t[ypos,xpos].append(xyzfun.XYZPoint().from_list(
-                        this_xyz.export_as_list(include_z=True, include_w=True)))
+                    self.block_t[ypos,xpos].append(this_xyz.copy())
 
     def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz"""
@@ -322,6 +323,37 @@ class Waffle:
         else:
             return(self)
 
+    def _set_config(self, opts={}):
+        """export the waffles config info as a dictionary"""
+        
+        self.waffles_config = {
+            'data': self.data_,
+            'src_region': self.region,
+            'inc': self.inc,
+            'name': self.name,
+            'node': self.node,
+            'fmt': self.fmt,
+            'extend': self.extend,
+            'extend_proc': self.extend_proc,
+            'weights': self.weights,
+            'fltr': self.fltr,
+            'sample': self.sample,
+            'clip': self.clip,
+            'chunk': self.chunk,
+            'epsg': self.epsg,
+            'verbose': self.verbose,
+            'archive': self.archive,
+            'mask': self.mask,
+            'spat': self.spat,
+            'clobber': self.clobber,
+        }
+
+        for key in opts.keys():
+            if key not in self.waffles_config.keys():
+                self.waffles_config[key] = opts[key]
+
+        return(self.waffles_config)
+        
     def valid_p(self):
         """check if the output WAFFLES DEM is valid"""
 
@@ -596,8 +628,6 @@ class WafflesIDW(Waffle):
             i=0
 
         self._xyz_block_t(self.yield_xyz())
-        #hash_t, xyz_t = xyz_block_t(self.yield_xyz(), self.p_region, self.inc)
-            
         for y in range(0, ycount):
             if self.verbose:
                 i+=1
@@ -622,7 +652,6 @@ class WafflesIDW(Waffle):
 
                 for this_xyz in xyz_bucket:
                     d = self._distance([this_xyz.x, this_xyz.y], [xg, yg])
-                    #d = utils.euc_dst([this_xyz.x, this_xyz.y], [xg, yg])
                     z_list.append(this_xyz.z)
                     if d > 0:
                         dw_list.append(1./(d**self.power))
@@ -1519,7 +1548,9 @@ def waffles_cli(argv = sys.argv):
 
         #wf = WaffleFactory(**wg).acquire_module_by_name(mod, **mod_args).generate()
         wf = WaffleFactory(mod=module, **wg).acquire().generate()
-        utils.echo_msg(wf)
+        utils.echo_msg(wf.export_config(opts=wg))
+        #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
+        #utils.echo_msg(wf)
         #utils.echo_msg(wf['dem'].mod)
 
 ### End

@@ -104,13 +104,15 @@ class Datalist(datasets.XYZDataset):
           datalist_parser: self
         """
         
-        if self.verbose: _prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
+        #if self.verbose:
+        #_prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
-                    if self.verbose: _prog.update_perc((l, count))
+                    #if self.verbose:
+                    #_prog.update_perc((l, count))
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
@@ -132,8 +134,8 @@ class Datalist(datasets.XYZDataset):
                                     yield(ds)
         else:
             utils.echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
-        if self.verbose:
-            _prog.end(0, 'parsed datalist {}'.format(self.fn))
+        #if self.verbose:
+        #    _prog.end(0, 'parsed datalist {}'.format(self.fn))
            
     def yield_xyz(self):
         """parse the data from the datalist
