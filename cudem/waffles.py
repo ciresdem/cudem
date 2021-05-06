@@ -23,6 +23,7 @@
 import sys
 import os
 import math
+import json
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
@@ -106,7 +107,7 @@ class Waffle:
         self._config = {
             self.mod: {
                 'data': self.data_,
-                'src_region': self.region,
+                'src_region': self.region.export_as_list() if self.region is not None else None,
                 'inc': self.inc,
                 'name': self.name,
                 'node': self.node,
@@ -1074,6 +1075,7 @@ Generate a DEM using GMT's surface command
  :relaxation=[val] - Spline relaxation factor.
  :lower_limit=[val] - Constrain interpolation to lower limit.
  :upper_limit=[val] - Constrain interpolation to upper limit.''',
+            'class': lambda k: GMTSurface(**k),
         },
         'triangulate': {
             'name': 'triangulate',
@@ -1082,6 +1084,7 @@ Generate a DEM using GMT's surface command
 Generate a DEM using GMT's triangulate command.
         
 < triangulate >''',
+            'class': lambda k: GMTTriangulate(**k),
         },
         'num': {
             'name': 'num',
@@ -1095,6 +1098,7 @@ see gmt xyz2grd --help for more info.
  :mode=[key] - specify mode of grid population: 
   keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)""",
         },
+        'class': lambda k: WafflesNum(**k),
         'linear': {
             'name': 'linear',
             'datalist-p': True,
@@ -1105,6 +1109,7 @@ see gdal_grid --help for more info
 < linear:radius=-1 >
  :radius=[val] - search radius""",
         },
+        'class': lambda k: WafflesLinear(**k),
         'nearest': {
             'name': 'nearest',
             'datalist-p': True,
@@ -1116,6 +1121,7 @@ see gdal_grid --help for more info
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
         },
+        'class': lambda k: WafflesNearest(**k),
         'average': {
             'name': 'average',
             'datalist-p': True,
@@ -1127,6 +1133,7 @@ see gdal_grid --help for more info
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
         },
+        'class': lambda k: WafflesMovingAverage(**k),
         'invdst': {
             'name': 'invdst',
             'datalist-p': True,
@@ -1138,29 +1145,34 @@ see gdal_grid --help for more info
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
         },
+        'class': lambda k: WafflesInvDst(**k),
         'IDW': {
             'name': 'IDW',
             'datalist-p': True,
             'description': """INVERSE DISTANCE WEIGHTED DEM\n
             """,
+            'class': lambda k: WafflesIDW(**k),
         },
         'vdatum': {
             'name': 'vdatum',
             'datalist-p': False,
             'description': """VDATUM conversion grid.
-            """
+            """,
+            'class': lambda k: WafflesVDatum(**k),
         },
         'mbgrid': {
             'name': 'mbgrid',
             'datalist-p': True,
             'description': """SPLINE grid via MB-System's mbgrid.
-            """
+            """,
+            'class': lambda k: WafflesMBGrid(**k),
         },
         'coastline': {
             'name': 'coastline',
             'datalist-p': False,
             'description': """COASTLINE generation.
-            """
+            """,
+            'class': lambda k: WafflesCoastline(**k),
         },
     }
     
@@ -1212,7 +1224,7 @@ see gdal_grid --help for more info
         self._config = {
             'mod': self.mod,
             'data': self.data,
-            'src_region': self.region,
+            'src_region': self.region.export_as_list() if self.region is not None else None,
             'inc': self.inc,
             'name': self.name,
             'node': self.node,
@@ -1326,7 +1338,7 @@ see gdal_grid --help for more info
             chunk=self.chunk, epsg=self.epsg, archive=self.archive, mask=self.mask, spat=self.spat,
             clobber=self.clobber, verbose=self.verbose, **kwargs))
 
-    def acquire(self, **kwargs):
+    def acquire(self):
         if self.mod_name == 'surface':
             return(self.acquire_surface(**self.mod_args))
         if self.mod_name == 'triangulate':
@@ -1350,9 +1362,9 @@ see gdal_grid --help for more info
         if self.mod_name == 'coastline':
             return(self.acquire_coastline(**self.mod_args))
     
-    def acquire_module_by_name(self, mod):
+    def acquire_module_by_name(self, mod_name, **mod_args):
 
-        mod_name, mod_args = self._parse_mod(mod)
+        #mod_name, mod_args = self._parse_mod(mod)
         
         if mod_name == 'surface':
             return(self.acquire_surface(**mod_args))
@@ -1377,6 +1389,17 @@ see gdal_grid --help for more info
         if mod_name == 'coastline':
             return(self.acquire_coastline(**mod_args))
 
+    def acquire_from_config(self, config):
+        def waffles_config(wc):
+            print(wc)
+            if wc['src_region'] is not None:
+                wc['src_region'] = regions.Region().from_list(wc['src_region'])
+            return(wc)
+        
+        mod_name = list(config.keys())[0]
+        args = waffles_config(config[mod_name])
+        return(self._modules[mod_name]['class'](args))
+    
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
@@ -1559,6 +1582,34 @@ def waffles_cli(argv = sys.argv):
         else: dls.append(arg)
         i += 1
 
+    ## ==============================================
+    ## load the user wg json and run waffles with that.
+    ## ==============================================
+    if wg_user is not None:
+        if os.path.exists(wg_user):
+            try:
+                with open(wg_user, 'r') as wgj:
+                    wg = json.load(wgj)
+
+                    for key in wg.keys():
+                        #this_waffle = WaffleFactory()._modules[key]['class'](wg[key])
+                        this_waffle = WaffleFactory().acquire_from_config(wg)
+                        this_waffle.generate()
+
+                    sys.exit(0)
+            except Exception as e:
+                utils.echo_error_msg(e)
+                sys.exit(-1)
+        else:
+            utils.echo_error_msg('specified waffles config file does not exist, {}'.format(wg_user))
+            sys.stderr.write(waffles_cli_usage)
+            sys.exit(-1)
+
+    ## ==============================================
+    ## Otherwise run from cli options...
+    ## set the dem module
+    ## ==============================================
+        
     if module is None:
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a waffles -M module.''')
@@ -1607,9 +1658,15 @@ def waffles_cli(argv = sys.argv):
 
         this_waffle = WaffleFactory(mod=module, **wg).acquire()
             
+        
         if want_config:
-            print(this_waffle._config)
-
+            this_wg = this_waffle._config
+            
+            utils.echo_msg(json.dumps(this_wg, indent = 4, sort_keys = True))
+            with open('{}.json'.format(this_waffle.name), 'w') as wg_json:
+                utils.echo_msg('generating waffles config file: {}.json'.format(this_waffle.name))
+                wg_json.write(json.dumps(this_wg, indent = 4, sort_keys = True))
+                
         this_waffle.generate()
         
         #this_waffle = WaffleFactory(mod=module, **wg).acquire().generate()
