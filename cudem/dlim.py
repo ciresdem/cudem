@@ -128,13 +128,15 @@ class Datalist(datasets.XYZDataset):
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
-                                            self.parse_data_lists()
+                                            #print(self.name)
+                                            #self.parse_data_lists()
                                             yield(ds)
                             else:
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
-                                    self.parse_data_lists()
+                                    #self.parse_data_lists()
                                     yield(ds)
+            #self.parse_data_lists()
         else:
             utils.echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
         #if self.verbose:
@@ -153,6 +155,20 @@ class Datalist(datasets.XYZDataset):
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
 
+    def yield_xyz_from_entries(self):
+        """parse the data from the datalist
+
+        Yields:
+          xyz: the parsed xyz data
+        """
+
+        for this_entry in self.data_entries:
+            #for this_entry in self.parse():
+            for xyz in this_entry.yield_xyz():
+                yield(xyz)
+            if this_entry.remote:
+                utils.remove_glob('{}*'.format(this_entry.fn))
+                
 ## ==============================================
 ## Dataset generator
 ## ==============================================

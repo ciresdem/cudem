@@ -149,40 +149,45 @@ class SpatialMetadata: #(waffles.Waffle):
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
 
+    # def run(self):
+    #     for xdl in self.data:
+    #         [x for x in xdl.parse()]
+    #         xdl.parse_data_lists()
+    #         for x in xdl.data_lists.keys():
+    #             xdl.data_entries = xdl.data_lists[x]['data']
+    #             p = xdl.data_lists[x]['parent']
+    #             o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
+    #             defn = None if self.layer is None else self.layer.GetLayerDefn()
+    #             [x for x in xdl.mask_xyz('{}.tif'.format(x), self.inc)]
+
+    #             if demfun.infos('{}.tif'.format(x), scan=True)['zr'][1] == 1:
+    #                 tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(x))
+    #                 if tmp_ds is not None:
+    #                     tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(x), None, ogr.wkbMultiPolygon)
+    #                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    #                     demfun.polygonize('{}.tif'.format(x), tmp_layer, verbose=self.verbose)
+
+    #                     if len(tmp_layer) > 1:
+    #                         if defn is None: defn = tmp_layer.GetLayerDefn()
+    #                         out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+    #                         [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
+    #                         self.layer.CreateFeature(out_feat)
+    #                 tmp_ds = None
+    #                 utils.remove_glob('{}_poly.*'.format(x), 'tmp.tif')
+    #             utils.remove_glob('{}.tif'.format(x))
+    #     self.ds = None
+
+    #     if self.make_valid:
+    #         utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+    #         '.format(self.dst_layer, self.dst_vector), verbose=True)
+
     def run(self):
-        for xdl in self.data:
-            [x for x in xdl.parse()]
-            for x in xdl.data_lists.keys():
-                xdl.data_entries = xdl.data_lists[x]['data']
-                p = xdl.data_lists[x]['parent']
-                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
-                defn = None if self.layer is None else self.layer.GetLayerDefn()
-                [x for x in xdl.mask_xyz('{}.tif'.format(x), self.inc)]
-
-                if demfun.infos('{}.tif'.format(x), scan=True)['zr'][1] == 1:
-                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(x))
-                    if tmp_ds is not None:
-                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(x), None, ogr.wkbMultiPolygon)
-                        tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                        demfun.polygonize('{}.tif'.format(x), tmp_layer, verbose=self.verbose)
-
-                        if len(tmp_layer) > 1:
-                            if defn is None: defn = tmp_layer.GetLayerDefn()
-                            out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-                            [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
-                            self.layer.CreateFeature(out_feat)
-                    tmp_ds = None
-                    utils.remove_glob('{}_poly.*'.format(x), 'tmp.tif')
-                utils.remove_glob('{}.tif'.format(x))
-        self.ds = None
-
-        if self.make_valid:
-            utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-            '.format(self.dst_layer, self.dst_vector), verbose=True)
-
+        [s for s in self.yield_xyz()]
+            
     def yield_xyz(self):
         for xdl in self.data:
             [x for x in xdl.parse()]
+            xdl.parse_data_lists()
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
@@ -209,8 +214,9 @@ class SpatialMetadata: #(waffles.Waffle):
                 utils.remove_glob('{}.tif'.format(x))
         self.ds = None
 
-        utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-        '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector))
+        if self.make_valid:
+            utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
+            '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector))
 
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -302,28 +308,33 @@ def spat_meta_cli(argv = sys.argv):
 
     for i_region in i_regions:
         tmp_region = regions.Region().from_string(i_region)
-        if tmp_region.valid_p():
+        if tmp_region.valid_p(check_xy=True):
             these_regions.append(tmp_region)
         else:
-            tmp_region = regions.ogr_wkts(i_region)
+            i_region_s = i_region.split(':')
+            tmp_region = regions.ogr_wkts(i_region_s[0])
             for i in tmp_region:
                 if i.valid_p():
-                    these_regions.append(i)
-                    
+                    if len(i_region_s) > 1:
+                        these_regions.append(regions.Region().from_string('/'.join([i.format('str'), i_region_s[1]])))
+                    else:
+                        these_regions.append(i)
+
     if len(these_regions) == 0:
         these_regions = [None]
     else:
         if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 
+    name_ = name
     for rn, this_region in enumerate(these_regions):
         if len(dls) == 0:
             sys.stderr.write(_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
             if want_prefix or len(these_regions) > 1:
-                name = utils.append_fn(name, this_region, inc)
+                name_ = utils.append_fn(name, this_region, inc)
             #[x for x in waffles.Waffle(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg, node=node, name=name, verbose=want_verbose).spat_meta(yxyz=False)]
             SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
-                            node=node, name=name, verbose=want_verbose).run()
+                            node=node, name=name_, verbose=want_verbose).run()
 
 ### End

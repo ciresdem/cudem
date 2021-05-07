@@ -300,24 +300,36 @@ class XYZDataset():
             inf_region = regions.Region().from_string(self.infos['wkt'])
             if regions.regions_intersect_p(inf_region, self.region):
                 self.data_entries.append(self)
-                self.parse_data_lists()
+                #self.parse_data_lists()
                 yield(self)
         else:
             self.data_entries.append(self)
-            self.parse_data_lists()
+            #self.parse_data_lists()
             yield(self)
 
     def parse_data_lists(self):
         """parse the data into a datalist dictionary"""
 
-        if self.parent is not None:
-            if self.parent.name in self.data_lists.keys():
-                self.data_lists[self.parent.name]['data'].append(self)
+        #for e in self.data_entries:
+        for e in self.parse():
+            if e.parent is not None:
+                if e.parent.name in self.data_lists.keys():
+                    self.data_lists[e.parent.name]['data'].append(e)
+                else:
+                    self.data_lists[e.parent.name] = {'data': [e], 'parent': e.parent}
             else:
-                self.data_lists[self.parent.name] = {'data': [self], 'parent': self.parent}
-        else:
-            self.data_lists[self.name] = {'data': [self], 'parent': self}
+                self.data_lists[e.name] = {'data': [e], 'parent': e}
         return(self)
+
+        # if self.parent is not None:
+        #     if self.parent.name in self.data_lists.keys():
+        #         self.data_lists[self.parent.name]['data'].append(self)
+        #     else:
+        #         self.data_lists[self.parent.name] = {'data': [self], 'parent': self.parent}
+        # else:
+        #     self.data_lists[self.name] = {'data': [self], 'parent': self}
+        #     #print(self.data_lists)
+        # return(self)
 
     ## ==============================================
     ## XYZ parsing
@@ -327,6 +339,11 @@ class XYZDataset():
         
         raise(NotImplementedError)
 
+    def yield_xyz_from_entries(self):
+        """define this in sub-class"""
+        
+        raise(NotImplementedError)
+    
     def archive_xyz(self, **kwargs):
         """Archive data data from the dataset to XYZ in the given dataset region."""
         
@@ -387,7 +404,8 @@ class XYZDataset():
         ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
             gdal.GDT_Float32, -9999, 'GTiff')
-        for this_xyz in self.yield_xyz(**kwargs):
+        #for this_xyz in self.yield_xyz(**kwargs):
+        for this_xyz in self.yield_xyz_from_entries(**kwargs):
             yield(this_xyz)
             if regions.xyz_in_region_p(this_xyz, self.region):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
