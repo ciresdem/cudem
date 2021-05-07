@@ -272,7 +272,7 @@ class Waffle:
             if self.spat:
                 xyz_yield = metadata.SpatialMetadata(
                     data=[xdl.fn], src_region=self.p_region, inc=self.inc, extend=self.extend, epsg=self.epsg,
-                    node=self.node, name=self.name, verbose=self.verbose).yield_xyz()
+                    node=self.node, name=self.name, verbose=self.verbose, make_valid=True).yield_xyz()
             elif self.archive:
                 xyz_yield = xdl.archive_xyz()
             else:
