@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
+## waffles.py is part of CUDEM
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -98,8 +100,6 @@ class Waffle:
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
-        #self._set_config(self.mod_args)
-        #utils.echo_msg(self._config)
 
     def _set_config(self):
         """export the waffles config info as a dictionary"""
@@ -1659,24 +1659,15 @@ def waffles_cli(argv = sys.argv):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(name, wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
-
         this_waffle = WaffleFactory(mod=module, **wg).acquire()
-            
-        
         if want_config:
             this_wg = this_waffle._config
-            
             utils.echo_msg(json.dumps(this_wg, indent = 4, sort_keys = True))
             with open('{}.json'.format(this_waffle.name), 'w') as wg_json:
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_waffle.name))
                 wg_json.write(json.dumps(this_wg, indent = 4, sort_keys = True))
                 
         this_waffle.generate()
-        
-        #this_waffle = WaffleFactory(mod=module, **wg).acquire().generate()
-        #utils.echo_msg(this_waffle._config)#export_config(opts=wg))
         #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
-        #utils.echo_msg(wf)
-        #utils.echo_msg(wf['dem'].mod)
 
 ### End

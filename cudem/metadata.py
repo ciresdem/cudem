@@ -2,6 +2,8 @@
 ##
 ## Copyright (c) 2019 - 2021 CIRES Coastal DEM Team
 ##
+## metadata.py is part of CUDEM
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
 ## in the Software without restriction, including without limitation the rights 
@@ -32,11 +34,8 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-__version__ = '0.0.3'
+__version__ = '0.0.4'
 
-## ==============================================
-## OGR vector processing
-## ==============================================
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
@@ -91,11 +90,10 @@ def ogr_empty_p(src_ogr):
         else: return(False)
     else: return(True)
 
-## ==============================================
-## Waffles Spatial Metadata
-## Polygonize each datalist entry into vector data source
-## ==============================================
 class SpatialMetadata: #(waffles.Waffle):
+    """Waffles Spatial Metadata
+    Polygonize each datalist entry into vector data source.
+    """
 
     def __init__(self, data=[], src_region=None, inc=None, name='waffles_sm', epsg=4326,
                  warp=None, extend=0, node='pixel', make_valid=False, verbose=False):
@@ -148,41 +146,6 @@ class SpatialMetadata: #(waffles.Waffle):
             [self.layer.CreateField(ogr.FieldDefn('{}'.format(f), self.t_fields[i])) for i, f in enumerate(self.v_fields)]
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
-
-    # def run(self):
-    #     for xdl in self.data:
-    #         [x for x in xdl.parse()]
-    #         xdl.parse_data_lists()
-    #         for x in xdl.data_lists.keys():
-    #             xdl.data_entries = xdl.data_lists[x]['data']
-    #             p = xdl.data_lists[x]['parent']
-    #             o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
-    #             defn = None if self.layer is None else self.layer.GetLayerDefn()
-    #             [x for x in xdl.mask_xyz('{}.tif'.format(x), self.inc)]
-
-    #             if demfun.infos('{}.tif'.format(x), scan=True)['zr'][1] == 1:
-    #                 tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(x))
-    #                 if tmp_ds is not None:
-    #                     tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(x), None, ogr.wkbMultiPolygon)
-    #                     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-    #                     demfun.polygonize('{}.tif'.format(x), tmp_layer, verbose=self.verbose)
-
-    #                     if len(tmp_layer) > 1:
-    #                         if defn is None: defn = tmp_layer.GetLayerDefn()
-    #                         out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-    #                         [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
-    #                         self.layer.CreateFeature(out_feat)
-    #                 tmp_ds = None
-    #                 utils.remove_glob('{}_poly.*'.format(x), 'tmp.tif')
-    #             utils.remove_glob('{}.tif'.format(x))
-    #     self.ds = None
-
-    #     if self.make_valid:
-    #         utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-    #         '.format(self.dst_layer, self.dst_vector), verbose=True)
-
-    def run(self):
-        [s for s in self.yield_xyz()]
             
     def yield_xyz(self):
         for xdl in self.data:
@@ -215,9 +178,13 @@ class SpatialMetadata: #(waffles.Waffle):
         self.ds = None
 
         if self.make_valid:
+            utils.echo_msg('validating spatial geometries...')
             utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-            '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector))
+            '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector), verbose=self.verbose)
 
+    def run(self):
+        [s for s in self.yield_xyz()]
+            
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ spatial_metadata
@@ -333,7 +300,6 @@ def spat_meta_cli(argv = sys.argv):
         else:
             if want_prefix or len(these_regions) > 1:
                 name_ = utils.append_fn(name, this_region, inc)
-            #[x for x in waffles.Waffle(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg, node=node, name=name, verbose=want_verbose).spat_meta(yxyz=False)]
             SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
                             node=node, name=name_, verbose=want_verbose).run()
 
