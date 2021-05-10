@@ -235,6 +235,7 @@ def spat_meta_cli(argv = sys.argv):
     extend = 0
     want_verbose = True
     want_prefix = False
+    want_valid = False
 
     argv = sys.argv
     while i < len(argv):
@@ -263,6 +264,7 @@ def spat_meta_cli(argv = sys.argv):
             extend = utils.int_or(arg[2:], 0)
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
         elif arg == '-p' or arg == '--prefix': want_prefix = True
+        elif arg == '-v' or arg == '--validate': want_valid = True
         elif arg == '--quiet' or arg == '-q': want_verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
@@ -301,6 +303,6 @@ def spat_meta_cli(argv = sys.argv):
             if want_prefix or len(these_regions) > 1:
                 name_ = utils.append_fn(name, this_region, inc)
             SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
-                            node=node, name=name_, verbose=want_verbose).run()
+                            node=node, name=name_, verbose=want_verbose, make_valid=want_valid).run()
 
 ### End

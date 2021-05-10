@@ -347,6 +347,10 @@ class Waffle:
     def generate(self):
         """run and process the WAFFLES module"""
         
+        if os.path.exists(self.fn):
+            if not self.clobber:
+                utils.echo_msg('DEM {} already exists, skipping...'.format(self.fn))
+                return(self)
         self.run()
         if self.mask:
             if os.path.exists(self.mask_fn):#'{}_m.tif'.format(self.name)):
