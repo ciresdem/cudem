@@ -542,7 +542,6 @@ class XYZFile(XYZDataset):
 
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
-                        
                     if self.region is not None and self.region.valid_p():
                         if regions.xyz_in_region_p(this_xyz, self.region):
                             ln += 1

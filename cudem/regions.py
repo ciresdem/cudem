@@ -207,9 +207,13 @@ class Region:
         self.xmax = i_region.xmax
         self.ymin = i_region.ymin
         self.ymax = i_region.ymax
+        self.zmin = i_region.zmin
+        self.zmax = i_region.zmax
+        self.wmin = i_region.wmin
+        self.wmax = i_region.wmax
         self.wkt = i_region.wkt
         self.epsg = i_region.epsg
-
+        
         return(self)
     
     def format(self, t = 'gmt'):
@@ -635,9 +639,11 @@ def xyz_in_region_p(xyz, this_region):
 
     if pass_d:
         if this_region.zmin is not None:
-            if xyz.z < this_region.zmin: pass_d = False
+            if xyz.z < this_region.zmin:
+                pass_d = False
         if this_region.zmax is not None:
-            if xyz.z > this_region.zmax: pass_d = False
+            if xyz.z > this_region.zmax:
+                pass_d = False
 
     return(pass_d)
 

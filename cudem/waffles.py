@@ -560,7 +560,7 @@ class WafflesNum(Waffle):
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
         if self.verbose:
-            progress = utils.CliProgress('generating uninterpolated num grid {} @ {}/{}'.format(self.mode, ycount, xcount))
+            progress = utils.CliProgress('generating uninterpolated NUM grid {} @ {}/{}'.format(self.mode, ycount, xcount))
         if self.mode == 'm' or self.mode == 'w':
             sumArray = np.zeros((ycount, xcount))
         gdt = gdal.GDT_Float32
@@ -1628,10 +1628,15 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## check the increment
     ## ==============================================
-    if wg['inc'] is None:
+    if 'inc' in wg.keys():
+        if wg['inc'] is None:
+            sys.stderr.write(waffles_cli_usage)
+            utils.echo_error_msg('''must specify a gridding increment.''')
+            sys.exit(-1)
+    else:
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a gridding increment.''')
-        sys.exit(-1)
+        sys.exit(-1)      
     
     ## ==============================================
     ## set the datalists and names
