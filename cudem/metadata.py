@@ -167,7 +167,7 @@ class SpatialMetadata: #(waffles.Waffle):
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                         demfun.polygonize('{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose)
 
-                        if len(tmp_layer) > 1:
+                        if len(tmp_layer) > 0:
                             if defn is None: defn = tmp_layer.GetLayerDefn()
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
                             [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
