@@ -102,7 +102,7 @@ class Multibeam(f_utils.FetchModule):
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
                         self.results.append(survs)
-
+                
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:

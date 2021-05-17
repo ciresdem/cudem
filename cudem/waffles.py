@@ -207,40 +207,52 @@ class Waffle:
         """
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
-        sumArray = np.zeros((ycount, xcount))
         gdt = gdal.GDT_Float32
-        ptArray = np.zeros((ycount, xcount))
+        sum_array = np.zeros((ycount, xcount))
+        count_array = np.zeros((ycount, xcount))
         if self.weights:
-            wtArray = np.zeros((ycount, xcount))
+            weight_array = np.zeros((ycount, xcount))
         if self.verbose:
             utils.echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
+            
         for this_xyz in src_xyz:
-            if self.weights: this_xyz.z = this_xyz.z * this_xyz.w
             if regions.xyz_in_region_p(this_xyz, self.p_region):
+
+                if self.weights:
+                    this_z = this_xyz.z * this_xyz.w
+                else:
+                    this_z = this_xyz.z
+                
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
                 try:
-                    sumArray[ypos, xpos] += this_xyz.z
-                    ptArray[ypos, xpos] += 1
-                    if weights: wtArray[ypos, xpos] += this_xyz.w
+                    sum_array[ypos, xpos] += this_z
+                    count_array[ypos, xpos] += 1
+                    if self.weights:
+                        weight_array[ypos, xpos] += this_xyz.w
                 except: pass
 
-        ptArray[ptArray == 0] = np.nan
+        count_array[count_array == 0] = np.nan
         if self.weights:
-            wtArray[wtArray == 0] = 1
-            outarray = (sumArray / wtArray) / ptArray
-        else: outarray = sumArray / ptArray
-
-        sumArray = ptArray = None
-        if self.weights: wtArray = None
-
-        outarray[np.isnan(outarray)] = -9999
-
+            weight_array[weight_array == 0] = np.nan
+            out_weight_array = (weight_array/count_array)
+            out_array = (sum_array/out_weight_array)/count_array
+        else:
+            out_array = (sum_array/count_array)
+            out_weight_array = np.ones((ycount, xcount))
+            
+        sum_array = count_array = None
+        if self.weights:
+            weight_array = None
+            
         for y in range(0, ycount):
             for x in range(0, xcount):
-                geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-                out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=outarray[y,x])
-                if out_xyz.z != -9999:
+                z = out_array[y,x]
+                if not np.isnan(z):
+                    geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                    out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x])
                     yield(out_xyz)
+
+        out_array = out_weight_array = None
                         
     def _xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
         """Create a num grid mask of xyz data. The output grid
@@ -562,35 +574,36 @@ class WafflesNum(Waffle):
         if self.verbose:
             progress = utils.CliProgress('generating uninterpolated NUM grid {} @ {}/{}'.format(self.mode, ycount, xcount))
         if self.mode == 'm' or self.mode == 'w':
-            sumArray = np.zeros((ycount, xcount))
+            sum_array = np.zeros((ycount, xcount))
+        count_array = np.zeros((ycount, xcount))
         gdt = gdal.GDT_Float32
-        ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, dst_gt, utils.sr_wkt(self.epsg), gdt, -9999, 'GTiff')
         for this_xyz in src_xyz:
+            #this_xyz = t.copy()
             if regions.xyz_in_region_p(this_xyz, self.p_region):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
                 try:
                     if self.mode == 'm' or self.mode == 'w':
-                        sumArray[ypos, xpos] += this_xyz.z
-                    if self.mode == 'n' or self.mode == 'm':
-                        ptArray[ypos, xpos] += 1
-                    else: ptArray[ypos, xpos] = 1
+                        sum_array[ypos, xpos] += this_xyz.z
+                    if self.mode == 'n' or self.mode == 'm' or self.mode == 'w':
+                        count_array[ypos, xpos] += 1
+                    else:
+                        count_array[ypos, xpos] = 1
                 except Exception as e:
                     pass
         if self.mode == 'm' or self.mode == 'w':
-            ptArray[ptArray == 0] = np.nan
-            outarray = sumArray / ptArray
+            count_array[count_array == 0] = np.nan
+            out_array = (sum_array/count_array)
             if self.mode == 'w':
-                outarray[outarray >= 0] = 1
-                outarray[outarray < 0] = 0
-        elif self.mode == 'n':
-            outarray = ptArray
+                out_array[out_array >= 0] = 1
+                out_array[out_array < 0] = 0
         else:
-            outarray = ptArray
-        outarray[np.isnan(outarray)] = -9999
+            out_array = count_array
+
+        out_array[np.isnan(out_array)] = -9999
         if self. verbose:
             progress.end(0, 'generated uninterpolated num grid {} @ {}/{}'.format(self.mode, ycount, xcount))
-        utils.gdal_write(outarray, self.fn, ds_config)
+        utils.gdal_write(out_array, self.fn, ds_config)
         
     def run(self):
         if self.mode.startswith('A'):
@@ -616,14 +629,16 @@ class WafflesIDW(Waffle):
     https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
-    def __init__(self, radius='1', power=2, **kwargs):
+    def __init__(self, radius='1', power=2, block=True, **kwargs):
         super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
         self.power = power
+        self.block_p = block
         self.mod = 'IDW'
         self.mod_args = {
             'radius':self.radius,
             'power':self.power,
+            'block':self.block_p,
         }
         self._set_config()
         
@@ -642,7 +657,7 @@ class WafflesIDW(Waffle):
             progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
             i=0
 
-        self._xyz_block_t(self.yield_xyz())
+        self._xyz_block_t(self.yield_xyz(block=self.block_p))
         for y in range(0, ycount):
             if self.verbose:
                 i+=1
@@ -675,7 +690,7 @@ class WafflesIDW(Waffle):
                     if self.weights:
                         w = this_xyz.w
                         if w > 0:
-                            ww_list.append(1./(w**self.power))
+                            ww_list.append(w**self.power)
                         else: ww_list.append(0)
 
                 if len(dw_list) > 0:
@@ -1591,19 +1606,19 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
-            try:
-                with open(wg_user, 'r') as wgj:
-                    wg = json.load(wgj)
+            #try:
+            with open(wg_user, 'r') as wgj:
+                wg = json.load(wgj)
 
-                    for key in wg.keys():
-                        #this_waffle = WaffleFactory()._modules[key]['class'](wg[key])
-                        this_waffle = WaffleFactory().acquire_from_config(wg)
-                        this_waffle.generate()
+                for key in wg.keys():
+                    #this_waffle = WaffleFactory()._modules[key]['class'](wg[key])
+                    this_waffle = WaffleFactory().acquire_from_config(wg)
+                    this_waffle.generate()
 
-                    sys.exit(0)
-            except Exception as e:
-                utils.echo_error_msg(e)
-                sys.exit(-1)
+                sys.exit(0)
+            # except Exception as e:
+            #     utils.echo_error_msg(e)
+            #     sys.exit(-1)
         else:
             utils.echo_error_msg('specified waffles config file does not exist, {}'.format(wg_user))
             sys.stderr.write(waffles_cli_usage)
