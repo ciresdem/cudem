@@ -191,6 +191,10 @@ class DatasetFactory:
               'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
               'class': lambda k: datasets.RasterFile(**k),
               },
+        300: {'name': 'las',
+              'fmts': ['las', 'laz'],
+              'class': lambda k: datasets.LASFile(**k),
+              },
         -11: {'name': 'fetches',
               'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus',
                        'ngs', 'nos', 'charts', 'digital_coast', 'ncei_thredds',
@@ -318,6 +322,13 @@ class DatasetFactory:
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             xpos=0, ypos=1, zpos=2, **kwargs))
 
+    def acquire_las_file(self, **kwargs):
+        return(datasets.LASFile(
+            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
+            classes=[2,29], **kwargs))    
+    
     def acquire_raster_file(self, **kwargs):
         return(datasets.RasterFile(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
@@ -342,13 +353,12 @@ class DatasetFactory:
     def acquire_dataset(self, **kwargs):
         if self.data_format == -1:
             return(self.acquire_datalist(**kwargs))#.parse())
-        
         if self.data_format == 168:
             return(self.acquire_xyz_file(**kwargs))#.parse())
-       
         if self.data_format == 200:
             return(self.acquire_raster_file(**kwargs))#.parse())
-        
+        if self.data_format == 300:
+            return(self.acquire_las_file(**kwargs))#.parse())
         if self.data_format == -11:
             return(self.acquire_fetcher(**kwargs))#.parse())
 

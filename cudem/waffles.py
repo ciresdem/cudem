@@ -914,6 +914,7 @@ class WafflesCoastline(Waffle):
         self._load_nhd()
         self._load_background()
         self._write_coast_array()
+        self._write_coast_poly()
         return(self)
         
     def _burn_region(self):

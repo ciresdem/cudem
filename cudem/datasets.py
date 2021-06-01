@@ -554,6 +554,97 @@ class XYZFile(XYZDataset):
             utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         self.src_data.close()
         
+class LASFile(XYZDataset):
+    """representing an LAS/LAZ dataset."""
+
+    def __init__(self, classes=[2,29], **kwargs):
+
+        self.classes = classes
+        self._known_fmts = ['las', 'laz']
+        super().__init__(**kwargs)
+
+    def generate_inf(self, callback=lambda: False):
+        """generate a infos dictionary from the LAS dataset
+
+        Returns:
+          dict: a data-entry infos dictionary
+        """
+
+        pts = []
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['numpts'] = 0
+        this_region = regions.Region()
+
+        region_ = self.region
+        self.region = None
+
+        for i, l in enumerate(self.yield_xyz()):
+            if i == 0:                
+                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
+            else:
+                if l.x < this_region.xmin:
+                    this_region.xmin = l.x
+                elif l.x > this_region.xmax:
+                    this_region.xmax = l.x
+                if l.y < this_region.ymin:
+                    this_region.ymin = l.y
+                elif l.y > this_region.ymax:
+                    this_region.ymax = l.y
+                if l.z < this_region.zmin:
+                    this_region.zmin = l.z
+                elif l.z > this_region.zmax:
+                    this_region.zmax = l.z
+            pts.append(l.export_as_list(include_z = True))
+            self.infos['numpts'] = i
+
+        self.infos['minmax'] = this_region.export_as_list(include_z = True)
+        if self.infos['numpts'] > 0:
+            try:
+                out_hull = [pts[i] for i in spatial.ConvexHull(pts, qhull_options='Qt').vertices]
+                out_hull.append(out_hull[0])
+                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
+            except:
+                self.infos['wkt'] = this_region.export_as_wkt()
+        self.region = region_
+        return(self.infos)
+
+    def yield_xyz(self):
+        """LAS file parsing generator
+
+        Yields:
+          xyz: xyz data
+        """
+
+        ln = 0
+        if self.region is not None and self.region.valid_p():
+            min_z = None if self.region.zmin is None else self.region.zmin
+            max_z = None if self.region.zmax is None else self.region.zmax
+        else:
+            min_z = max_z = None
+            
+        this_xyz = xyzfun.XYZPoint(w = 1)
+        
+        for line in utils.yield_cmd('las2txt -parse xyz -stdout {} -i {} {} {} {}'.format(
+                '' if self.classes is None else '-keep_class {}'.format(' '.join([str(x) for x in self.classes])), self.fn,
+                '' if self.region is None else '-keep_xy {}'.format(self.region.format('te')),
+                '' if min_z is None else '-drop_z_below {}'.format(min_z),
+                '' if max_z is None else '-drop_z_above {}'.format(max_z)), data_fun = None, verbose = True):
+            this_xyz.from_string(line, delim=' ', x_pos=0, y_pos=1)
+            if this_xyz.valid_p():
+                this_xyz.w = self.weight
+                if self.dst_trans is not None:
+                    this_xyz.transform(self.dst_trans)
+                if self.region is not None and self.region.valid_p():
+                    if regions.xyz_in_region_p(this_xyz, self.region):
+                        ln += 1
+                        yield(this_xyz)
+                else:
+                    ln += 1
+                    yield(this_xyz)
+        if self.verbose:
+            utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
+        
 class RasterFile(XYZDataset):
     """providing a GDAL raster dataset parser."""
 
