@@ -47,6 +47,7 @@ import cudem.fetches.hrdem as hrdem
 import cudem.fetches.osm as osm
 import cudem.fetches.globalelus as globalelus
 import cudem.fetches.copernicus as copernicus
+import cudem.fetches.nasadem as nasadem
         
 ## ==============================================
 ## Fetches Module Parser
@@ -76,6 +77,7 @@ the global and coastal oceans."""},
         'osm': {'description': """"""},
         'globalelus': {'description': """"""},
         'copernicus': {'description': """"""},
+        'nasadem': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -176,6 +178,10 @@ the global and coastal oceans."""},
         return(copernicus.CopernicusDEM(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    def acquire_nasadem(self, **kwargs):
+        return(nasadem.NASADEM(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -227,7 +233,10 @@ the global and coastal oceans."""},
 
         if self.mod == 'copernicus':
             return(self.acquire_copernicus(**kwargs))
-                
+
+        if self.mod == 'nasadem':
+            return(self.acquire_nasadem(**kwargs))
+
 class Fetcher(datasets.XYZDataset):
     
     def __init__(self, **kwargs):

@@ -44,7 +44,6 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         self._ngdc_url = "https://www.ngdc.noaa.gov"
         self._outdir = os.path.join(os.getcwd(), 'ncei_thredds')        
         self.where = where
-        self.FRED = FRED.FRED(verbose = self.verbose)
 
         self.name = 'ncei_thredds'
         self._info = '''NOAA NCEI THREDDS DEM Catalog Access.
@@ -58,6 +57,7 @@ community preparedness.'''
         self._title = '''NCEI THREDDS'''
         self._usage = '''< ncei_thredds >'''
         self._urls = [self._nt_catalog, self._ngdc_url]
+        self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):
@@ -69,7 +69,7 @@ community preparedness.'''
         self.FRED._close_ds()
         
     def _parse_catalog(self, catalog_url):
-        ntCatalog = iso_xml(catalog_url)
+        ntCatalog = FRED.iso_xml(catalog_url)
         ntCatRefs = ntCatalog.xml_doc.findall('.//th:catalogRef', namespaces = ntCatalog.namespaces)
         for ntCatRef in ntCatRefs:
             ntCatHref =ntCatRef.attrib['{http://www.w3.org/1999/xlink}href']
