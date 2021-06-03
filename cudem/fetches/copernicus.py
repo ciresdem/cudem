@@ -149,8 +149,7 @@ class CopernicusDEM(f_utils.FetchModule):
             
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                if i != '':
-                    self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
+                self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
         return(self)
 
     def yield_xyz(self, entry):

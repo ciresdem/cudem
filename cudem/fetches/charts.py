@@ -42,7 +42,7 @@ import cudem.fetches.FRED as FRED
 class NauticalCharts(f_utils.FetchModule):
     """Fetch digital chart data from NOAA"""
 
-    def __init__(self, where=[], **kwargs):
+    def __init__(self, where=[], datatype=None, **kwargs):
         super().__init__(**kwargs)
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
@@ -54,12 +54,13 @@ class NauticalCharts(f_utils.FetchModule):
                          'RNC':self._rnc_data_catalog }
 
         self.where = where
-        self.FRED = FRED.FRED(verbose = self.verbose)
+        self.datatype = datatype
         self.name = 'charts'
         self._info = '''Raster and Vector U.S. Nautical Charts'''
         self._title = '''NOAA Nautical CHARTS (RNC & ENC)'''
         self._usage = '''< charts >'''
         self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
+        self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):
@@ -105,6 +106,9 @@ class NauticalCharts(f_utils.FetchModule):
         
     def run(self):
         """Search for data in the reference vector file"""
+
+        if self.datatype is not None:
+            self.where.append("DataType = '{}'".format(self.datatype))
         
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
