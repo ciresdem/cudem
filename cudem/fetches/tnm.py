@@ -309,7 +309,7 @@ and deliver topographic information for the Nation.'''
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
             datatype = entry[-1]
             if datatype == 'raster':
-                src_tnms = p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
+                src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     _ds = datasets.RasterFile(fn=src_tnm, data_format=200, epsg=4326, warp=self.warp,
                                               name=src_tnm, src_region=self.region, verbose=self.verbose)

@@ -98,7 +98,7 @@ class CopernicusDEM(f_utils.FetchModule):
         """yield the xyz data from the copernicus fetch module"""
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
-            src_cop_dems = p_unzip(entry[1], ['tif'])
+            src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
                 _ds = datasets.RasterFile(fn=src_cop_dem, data_format=200, epsg=4326, warp=self.warp,
                                           name=src_cop_dem, src_region=self.region, verbose=self.verbose)
