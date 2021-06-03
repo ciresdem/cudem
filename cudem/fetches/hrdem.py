@@ -47,12 +47,12 @@ class HRDEM(f_utils.FetchModule):
         self._hrdem_info_url = 'https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6'
         self._outdir = os.path.join(os.getcwd(), 'hrdem')
         self.where = where
-        self.FRED = FRED.FRED(verbose = self.verbose)
         self.name = 'hrdem'
         self._info = '''Collection of lidar-derived DTMs across Canada.'''
         self._title = '''High Resolution DEMs from NCAR'''
         self._usage = '''< hrdem >'''
         self._urls = [self._hrdem_info_url, self._hrdem_footprints_url]
+        self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):

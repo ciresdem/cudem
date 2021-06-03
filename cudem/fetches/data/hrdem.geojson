@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "FRED",
+"features": [
+{ "type": "Feature", "properties": { "Name": "High-Resolution DEM (Canada)", "ID": "HRDEM-1", "Date": 2021, "Agency": "NRCAN", "MetadataLink": "https:\/\/open.canada.ca\/data\/en\/dataset\/957782bf-847c-4644-a757-e383c0057995#wb-auto-6", "MetadataDate": "2021", "DataLink": "ftp:\/\/ftp.maps.canada.ca\/pub\/elevation\/dem_mne\/highresolution_hauteresolution\/Datasets_Footprints.zip", "IndexLink": "ftp:\/\/ftp.maps.canada.ca\/pub\/elevation\/dem_mne\/highresolution_hauteresolution\/Datasets_Footprints.zip", "Link": null, "DataType": "raster", "DataSource": "hrdem", "Resolution": null, "HorizontalDatum": null, "VerticalDatum": null, "LastUpdate": "20210603162853", "Etcetra": null, "Info": "Canada Only" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -142.275004957888996, 41.627631449577798, 0.0 ], [ -58.2405199151872, 41.627631449577798, 0.0 ], [ -58.2405199151872, 83.594158149295694, 0.0 ], [ -142.275004957888996, 83.594158149295694, 0.0 ], [ -142.275004957888996, 41.627631449577798, 0.0 ] ] ] } }
+]
+}
