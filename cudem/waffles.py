@@ -188,9 +188,10 @@ class Waffle:
         f = ogr.Feature(feature_def = layer.GetLayerDefn())
         
         for this_xyz in self.yield_xyz():#src_xyz:
+            #print(this_xyz.x, this_xyz.y, this_xyz.z)
             f.SetField(0, this_xyz.x)
             f.SetField(1, this_xyz.y)
-            f.SetField(2, this_xyz.z)
+            f.SetField(2, float(this_xyz.z))
             if self.weights:
                 f.SetField(3, this_xyz.w)
             wkt = this_xyz.export_as_wkt(include_z=True)
