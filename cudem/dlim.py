@@ -198,7 +198,7 @@ class DatasetFactory:
         -11: {'name': 'fetches',
               'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus',
                        'ngs', 'nos', 'charts', 'digital_coast', 'ncei_thredds',
-                       'tnm', 'emodnet', 'chs', 'hrdem'],
+                       'tnm', 'emodnet', 'chs', 'hrdem', 'copernicus'],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
     }
