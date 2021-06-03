@@ -91,7 +91,7 @@ class Waffle:
         self.data_ = data
 
         self.data = [dlim.DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
+            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
             epsg=self.epsg).acquire_dataset() for dl in self.data]
 

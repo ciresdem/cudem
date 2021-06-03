@@ -375,7 +375,7 @@ _datalist_fmts_short_desc = lambda: ',  '.join(
 ## ==============================================
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
-usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST ...
+usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -506,7 +506,7 @@ def datalists_cli(argv = sys.argv):
             print(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         xdls = [DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
+            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=this_region, verbose=want_verbose,
             epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
 
