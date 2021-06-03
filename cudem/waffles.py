@@ -873,7 +873,7 @@ class WafflesNearest(WafflesGDALGrid):
         radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
         radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
-            .format(radius1, radius2, angle, min_points, nodata)
+            .format(radius1, radius2, angle, nodata)
         self.mod_args = {'radius1':radius1, 'radius2': radius2, 'angle': angle, 'nodata':nodata}
         self._set_config()
         
