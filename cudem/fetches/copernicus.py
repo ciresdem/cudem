@@ -75,7 +75,6 @@ class CopernicusDEM(f_utils.FetchModule):
             y = int(spat.split('x')[0].split('y')[-1])
             this_region = regions.Region().from_list([x, x + 10, y, y + 10])
 
-            #geom = this_xml.bounds(geom=True)
             geom = this_region.export_as_geom()
             if geom is not None:
                 surveys.append({'Name': row.split('.')[0], 'ID': row.split('.')[0], 'Agency': 'EU', 'Date': utils.this_date(),

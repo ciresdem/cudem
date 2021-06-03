@@ -1513,6 +1513,7 @@ def waffles_cli(argv = sys.argv):
     wg['verbose'] = True
     wg['sample'] = None
     wg['fltr'] = []
+    wg['name'] = 'waffles'
     
     while i < len(argv):
         arg = argv[i]
