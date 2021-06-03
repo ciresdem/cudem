@@ -95,7 +95,18 @@ class CopernicusDEM(f_utils.FetchModule):
         return(self)
 
     def yield_xyz(self, entry):
-        raise(NotImplementedError)
+        """yield the xyz data from the copernicus fetch module"""
+        
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
+            src_cop_dems = p_unzip(entry[1], ['tif'])
+            for src_cop_dem in src_cop_dems:
+                _ds = datasets.RasterFile(fn=src_cop_dem, data_format=200, epsg=4326, warp=self.warp,
+                                          name=src_cop_dem, src_region=self.region, verbose=self.verbose)
+                for xyz in _ds.yield_xyz():
+                    if xyz.z != 0:
+                        yield(xyz)
+                utils.remove_glob(src_cop_dem)
+        utils.remove_glob(entry[1])
 
 if __name__ == '__main__':
     cop_dem = CopernicusDEM()
