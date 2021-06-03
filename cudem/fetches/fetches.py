@@ -45,6 +45,7 @@ import cudem.fetches.emodnet as emodnet
 import cudem.fetches.chs as chs
 import cudem.fetches.hrdem as hrdem
 import cudem.fetches.osm as osm
+import cudem.fetches.globalelus as globalelus
         
 ## ==============================================
 ## Fetches Module Parser
@@ -72,6 +73,7 @@ the global and coastal oceans."""},
         'chs': {'description': """"""},
         'hrdem': {'description': """"""},
         'osm': {'description': """"""},
+        'globalelus': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -164,6 +166,10 @@ the global and coastal oceans."""},
         return(osm.OpenStreetMap(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    def acquire_globalelus(self, **kwargs):
+        return(globalelus.GlobalELUS(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -209,6 +215,9 @@ the global and coastal oceans."""},
 
         if self.mod == 'osm':
             return(self.acquire_osm(**kwargs))
+        
+        if self.mod == 'globalelus':
+            return(self.acquire_globalelus(**kwargs))
 
                 
 class Fetcher(datasets.XYZDataset):

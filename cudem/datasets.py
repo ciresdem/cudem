@@ -225,9 +225,11 @@ class XYZDataset():
                         fn=self.fn, epsg=self.epsg).inf_parse().infos
                     self.check_hash = False
                 except:
-                    utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
+                    if self.verbose:
+                        utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
             except:
-                utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
+                if self.verbose:
+                    utils.echo_error_msg('failed to parse inf {}'.format(inf_path))
         
         if check_hash:
             if 'hash' in self.infos.keys():
@@ -564,6 +566,33 @@ class LASFile(XYZDataset):
         super().__init__(**kwargs)
 
     def generate_inf(self, callback=lambda: False):
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['numpts'] = 0
+        this_region = regions.Region()
+
+        #region_ = self.region
+        #self.region = None
+        
+        out, status = utils.run_cmd('lasinfo -nc -nv -stdout -i {}'.format(self.fn), verbose=False)
+        for i in out.split(b'\n'):
+            #print(i)
+            if b'number of point records' in i:
+                #print(i)
+                #print(i.split(':')[1].strip())
+                self.infos['numpts'] = int(i.split(b':')[1].strip())
+            if b'min x y z' in i:
+                xyz_min = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
+            if b'max x y z' in i:
+                xyz_max = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
+        this_region.from_list([xyz_min[0], xyz_max[0], xyz_min[1], xyz_max[1], xyz_min[2], xyz_max[2]])
+        self.infos['minmax'] = this_region.export_as_list(include_z=True)
+        self.infos['wkt'] = this_region.export_as_wkt()
+        #self.region = region_
+        #print(this_region)        
+        return(self.infos)
+        
+    def generate_inf2(self, callback=lambda: False):
         """generate a infos dictionary from the LAS dataset
 
         Returns:
@@ -576,8 +605,8 @@ class LASFile(XYZDataset):
         self.infos['numpts'] = 0
         this_region = regions.Region()
 
-        region_ = self.region
-        self.region = None
+        #region_ = self.region
+        #self.region = None
 
         for i, l in enumerate(self.yield_xyz()):
             if i == 0:                
@@ -606,7 +635,8 @@ class LASFile(XYZDataset):
                 self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
             except:
                 self.infos['wkt'] = this_region.export_as_wkt()
-        self.region = region_
+        #self.region = region_
+
         return(self.infos)
 
     def yield_xyz(self):
@@ -623,13 +653,13 @@ class LASFile(XYZDataset):
         else:
             min_z = max_z = None
             
-        this_xyz = xyzfun.XYZPoint(w = 1)
+        this_xyz = xyzfun.XYZPoint(w=1)
         
         for line in utils.yield_cmd('las2txt -parse xyz -stdout {} -i {} {} {} {}'.format(
                 '' if self.classes is None else '-keep_class {}'.format(' '.join([str(x) for x in self.classes])), self.fn,
                 '' if self.region is None else '-keep_xy {}'.format(self.region.format('te')),
                 '' if min_z is None else '-drop_z_below {}'.format(min_z),
-                '' if max_z is None else '-drop_z_above {}'.format(max_z)), data_fun = None, verbose = True):
+                '' if max_z is None else '-drop_z_above {}'.format(max_z)), data_fun=None, verbose=False):
             this_xyz.from_string(line, delim=' ', x_pos=0, y_pos=1)
             if this_xyz.valid_p():
                 this_xyz.w = self.weight
