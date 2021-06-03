@@ -242,7 +242,7 @@ class FetchModule:
 
     def yield_xyz(self, **kwargs):
         raise(NotImplementedError)
-
+    
     def fetch(self, entry):
         Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
 

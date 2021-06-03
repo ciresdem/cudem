@@ -69,7 +69,7 @@ class NOS(f_utils.FetchModule):
         self._title = '''NOAA NOS Bathymetric Data'''
         self._usage = '''< nos >'''
         self._urls = [self._nos_url]
-        self.FRED = FRED.FRED(name=self.name,verbose=self.verbose)
+        self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):
