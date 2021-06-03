@@ -67,10 +67,11 @@ def urlencode(opts):
 
 class Fetch:
 
-    def __init__(self, url=None, callback=lambda: False, verbose=None):
+    def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers):
         self.url = url
         self.callback = callback
         self.verbose = verbose
+        self.headers = headers
 
     def fetch_req(self, params=None, tries=5, timeout=2, read_timeout=10):
         """fetch src_url and return the requests object"""
@@ -79,7 +80,7 @@ class Fetch:
             utils.echo_error_msg('max-tries exhausted')
             return(None)
         try:
-            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=r_headers))
+            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers))
         except:
             return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
             
@@ -117,7 +118,7 @@ class Fetch:
             except: pass 
         if not os.path.exists(dst_fn) or overwrite:
             try:
-                with requests.get(self.url, stream=True, params=params, headers=r_headers,
+                with requests.get(self.url, stream=True, params=params, headers=self.headers,
                                   timeout=(timeout,read_timeout)) as req:
                     req_h = req.headers
                     if req.status_code == 200:
@@ -186,9 +187,9 @@ def fetch_queue(q, m, p=False):
             #if this_region is None:
             if not p:
                 if fetch_args[0].split(':')[0] == 'ftp':
-                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose).fetch_ftp_file(fetch_args[1])
+                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose, headers=m.headers).fetch_ftp_file(fetch_args[1])
                 else:
-                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose).fetch_file(fetch_args[1])
+                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose, headers=m.headers).fetch_file(fetch_args[1])
             else:
                 o_x_fn = fetch_args[1] + '.xyz'
                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
@@ -236,6 +237,7 @@ class FetchModule:
         self.results = []
         self.warp = warp
         self.name = None
+        self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 
     def run(self):
         raise(NotImplementedError)
