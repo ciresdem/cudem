@@ -119,7 +119,7 @@ class Datalist(datasets.XYZDataset):
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
-                            data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url, title=self.title,
+                            data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url, title=self.title,
                             warp=self.warp, weight=self.weight, verbose=self.verbose).acquire_dataset()
                         if data_set is not None and data_set.valid_p(fmts=DatasetFactory.data_types[data_set.data_format]['fmts']):
                             if self.region is not None and self.region.valid_p(check_xy=True):
@@ -208,7 +208,7 @@ class DatasetFactory:
                      'url']
     
     def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="xyz_dataset", title=None,
-                 source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
+                 source=None, date=None, data_type=None, resolution=None, hdatum=None, vdatum=None, url=None,
                  parent=None, src_region=None, warp=None, verbose=False):
         
         self.name = name
@@ -220,6 +220,7 @@ class DatasetFactory:
         self.data_type = data_type
         self.resolution = resolution
         self.epsg = epsg
+        self.hdatum = hdatum
         self.vdatum = vdatum
         self.url = url
         self.warp = warp
@@ -255,7 +256,6 @@ class DatasetFactory:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
 
-
         if len(entry) < 3:
             entry.append(self.weight)
         elif entry[2] is None:
@@ -276,8 +276,8 @@ class DatasetFactory:
             entry.append(self.resolution)
         else: self.resolution = entry[7]
         if len(entry) < 9:
-            entry.append(self.epsg)
-        else: self.epsg = entry[8]
+            entry.append(self.hdatum)
+        else: self.hdatum = entry[8]
         if len(entry) < 10:
             entry.append(self.vdatum)
         else: self.vdatum = entry[9]
@@ -311,42 +311,42 @@ class DatasetFactory:
     def acquire_datalist(self, **kwargs):
         return(Datalist(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
     def acquire_xyz_file(self, **kwargs):
         return(datasets.XYZFile(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             xpos=0, ypos=1, zpos=2, **kwargs))
 
     def acquire_las_file(self, **kwargs):
         return(datasets.LASFile(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             classes=[2,29], **kwargs))    
     
     def acquire_raster_file(self, **kwargs):
         return(datasets.RasterFile(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
 
     def acquire_fetcher(self, **kwargs):
         return(fetches.Fetcher(
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose, remote=True,
             **kwargs))
 
     def acquire(self, **kwargs):
         return(self.data_types[self.data_format]['class'](
             fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, vdatum=self.vdatum, url=self.url,
+            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
             epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
             **kwargs))
     

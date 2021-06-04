@@ -125,7 +125,7 @@ class SpatialMetadata: #(waffles.Waffle):
     def _init_data(self):
 
         self.data = [dlim.DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(":")]),
+            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.d_region, verbose=self.verbose,
             epsg=self.epsg).acquire_dataset() for dl in self.data]
 
@@ -154,7 +154,7 @@ class SpatialMetadata: #(waffles.Waffle):
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
-                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.epsg, p.vdatum, p.url]
+                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.hdatum, p.vdatum, p.url]
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
                 for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc):

@@ -66,9 +66,9 @@ class XYZDataset():
     """
 
     def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="XYZDataset", title=None,
-                 source=None, date=None, data_type=None, resolution=None, vdatum=None, url=None,
+                 source=None, date=None, data_type=None, resolution=None, hdatum=None, vdatum=None, url=None,
                  parent=None, src_region=None, warp=None, verbose=False, remote=None):
-
+        
         self.fn = fn
         self.data_format = data_format
         self.weight = weight
@@ -80,6 +80,7 @@ class XYZDataset():
         self.date = date
         self.data_type = data_type
         self.resolution = resolution
+        self.hdatum = hdatum
         self.vdatum = vdatum
         self.url = url
         self.parent = parent
@@ -171,7 +172,7 @@ class XYZDataset():
 
         return(' '.join(
             [str(x) for x in [self.fn, self.data_format, self.weight, self.title, self.source,
-                              self.date, self.data_type, self.resolution, self.epsg, self.vdatum,
+                              self.date, self.data_type, self.resolution, self.hdatum, self.vdatum,
                               self.url]]))
     
     def echo(self, **kwargs):
@@ -187,7 +188,7 @@ class XYZDataset():
         
         return('{} {} {} {} {} {} {} {} {}'.format(
             self.weight, self.title, self.source,
-            self.date, self.data_type, self.resolution, self.epsg, self.vdatum,
+            self.date, self.data_type, self.resolution, self.hdatum, self.vdatum,
             self.url))
 
     ## ==============================================
