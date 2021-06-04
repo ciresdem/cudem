@@ -124,7 +124,7 @@ class NASADEM(f_utils.FetchModule):
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
             _ds = datasets.RasterFile(fn=entry[1], data_format=200, epsg=4326, warp=self.warp,
-                                      name=src_cop_dem, src_region=self.region, verbose=self.verbose)
+                                      name=entry[1], src_region=self.region, verbose=self.verbose)
             for xyz in _ds.yield_xyz():
                 if xyz.z != 0:
                     yield(xyz)
