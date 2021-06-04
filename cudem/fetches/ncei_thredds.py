@@ -1,4 +1,4 @@
-### ncei_thredds.py - NOAA Digital Coast fetch
+### ncei_thredds.py - NOAA NCEI THREDDS DEM fetch
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -84,9 +84,9 @@ community preparedness.'''
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         if self.verbose:
             _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(this_ds), this_ds[0].attrib['name']))
-            
+        surveys = []
+        
         for i, node in enumerate(this_ds):
-            surveys = []
             this_title = node.attrib['name']
             this_id = node.attrib['ID']
             if self.verbose:

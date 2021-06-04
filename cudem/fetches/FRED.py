@@ -422,11 +422,11 @@ class FRED:
 
         for i, layer in enumerate(layers):
             if self._verbose: _prog.update_perc((i, len(layers)))
-            this_layer = self.layer
+            #this_layer = self.layer
             where.append("DataSource = '{}'".format(layer))
             if self._verbose: utils.echo_msg('FRED filter: {}'.format(where))
             self._attribute_filter(where = where)
-            for feat in this_layer:
+            for feat in self.layer:
                 if _boundsGeom is not None:
                     geom = feat.GetGeometryRef()
                     if geom is not None:
@@ -441,7 +441,7 @@ class FRED:
                     for key in f_j['properties'].keys():
                         _results[-1][key] = feat.GetField(key)
                         
-            this_layer = None
+            #this_layer = None
         if close_p: self._close_ds()
         if self._verbose: _prog.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
         return(_results)
