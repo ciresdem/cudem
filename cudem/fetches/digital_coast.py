@@ -58,6 +58,7 @@ class DigitalCoast(f_utils.FetchModule):
         self._title = '''NOAA Digital Coast'''
         self._usage = '''< digital_coast >'''
         self._urls = [self._dc_url, self._dc_htdata_url]
+        if self.warp is None: self.warp = 4326
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self._update_if_not_in_FRED()
         
@@ -160,8 +161,7 @@ class DigitalCoast(f_utils.FetchModule):
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
                 '.format(region_format(self.region, 'te'), '2 29', src_dc), verbose = False)
-
-                _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, epsg=4326, warp=self.warp,
+                _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, warp=self.warp,
                                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
 
                 # if self.inc is not None:
@@ -194,7 +194,7 @@ class DigitalCoast(f_utils.FetchModule):
             
             if src_ds is not None:
 
-                _ds = datasets.RasterFile(fn=src_dc, data_format=200, epsg=4326, warp=self.warp,
+                _ds = datasets.RasterFile(fn=src_dc, data_format=200, warp=self.warp,
                                           name=src_dc, src_region=self.region, verbose=self.verbose)
                 _ds.src_ds = src_ds
                 _ds.ds_open_p = True

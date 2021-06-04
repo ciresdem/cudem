@@ -132,7 +132,7 @@ class CopernicusDEM(f_utils.FetchModule):
                 if geom is not None:
                     surveys.append({'Name': fn.text.split('.')[0].split('/')[-1], 'ID': sid, 'Agency': 'EU', 'Date': utils.this_date(),
                                     'MetadataLink': '', 'MetadataDate': utils.this_date(), 'DataLink': self.cop30_url + fn.text.split('/')[-1] + '?token=',
-                                    'DataType': '1', 'DataSource': 'copernicus', 'HorizontalDatum': 4326,
+                                    'DataType': '1', 'DataSource': 'copernicus', 'HorizontalDatum': 4326, 'Etcetra': self.cop30_rurl,
                                     'VerticalDatum': 'msl', 'Info': '', 'geom': geom})
 
         if self.verbose:

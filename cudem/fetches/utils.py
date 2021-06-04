@@ -246,7 +246,7 @@ class FetchModule:
         raise(NotImplementedError)
     
     def fetch(self, entry):
-        Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+        Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1])
 
     def fetch_results(self):
         for entry in self.results:
