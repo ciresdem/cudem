@@ -58,7 +58,6 @@ class DigitalCoast(f_utils.FetchModule):
         self._title = '''NOAA Digital Coast'''
         self._usage = '''< digital_coast >'''
         self._urls = [self._dc_url, self._dc_htdata_url]
-        if self.warp is None: self.warp = 4326
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self._update_if_not_in_FRED()
         
