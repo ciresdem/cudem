@@ -96,7 +96,7 @@ the global and coastal oceans."""},
         opts = self.mod.split(':')
         if opts[0] in FetchesFactory.mods.keys():
             if len(opts) > 1:
-                self.mod_args = utils.args2dict(list(opts[1:]))
+                self.mod_args = utils.args2dict(list(opts[1:]), {})
             self.mod = opts[0]
         else:
             utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))

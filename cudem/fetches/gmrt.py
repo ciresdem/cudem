@@ -39,7 +39,7 @@ import cudem.fetches.utils as f_utils
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
-    def __init__(self, res='max', fmt='geotiff', **kwargs):
+    def __init__(self, res='max', fmt='geotiff', bathy_only=False, **kwargs):
         super().__init__(**kwargs) 
         #if self.verbose: utils.echo_msg('loading GMRT fetch module...')
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -49,6 +49,7 @@ class GMRT(f_utils.FetchModule):
         self.name = 'gmrt'
         self.res = res
         self.fmt = fmt
+        self.bathy_only = bathy_only
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -82,8 +83,13 @@ class GMRT(f_utils.FetchModule):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             gmrt_ds = datasets.RasterFile(fn=src_data, data_format=200, epsg=4326, warp=self.warp,
                                           name=src_data, src_region=self.region, verbose=self.verbose)
-            for xyz in gmrt_ds.yield_xyz():
-                yield(xyz)
+            if self.bathy_only:
+                for xyz in gmrt_ds.yield_xyz():
+                    if xyz.z < 0:
+                        yield(xyz)
+            else:
+                for xyz in gmrt_ds.yield_xyz():
+                    yield(xyz)
         else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
         utils.remove_glob('{}*'.format(src_data))
     
