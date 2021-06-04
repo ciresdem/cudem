@@ -43,13 +43,14 @@ import cudem.fetches.FRED as FRED
 ## =============================================================================
 class DigitalCoast(f_utils.FetchModule):
 
-    def __init__(self, where=[], **kwargs):
+    def __init__(self, where=[], datatype=None,**kwargs):
         super().__init__(**kwargs)
         self._dc_url = 'https://coast.noaa.gov'
         self._dc_htdata_url = 'https://coast.noaa.gov/htdata/'
         self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.where = where
+        self.datatype = datatype
         self.name = 'dc'
         self._info = '''Lidar and Raster data from NOAA's Digital Coast'''
         self._title = '''NOAA Digital Coast'''
@@ -122,24 +123,29 @@ class DigitalCoast(f_utils.FetchModule):
         self.FRED._close_ds()
 
     def run(self):
+        
+        if self.datatype is not None:
+            self.where.append("DataType = '{}'".format(self.datatype))
+        
         for surv in FRED._filter_FRED(self):
             if self.callback(): break
             surv_shp_zip = os.path.basename(surv['IndexLink'])
             if f_utils.Fetch(surv['IndexLink'], callback=self.callback, verbose=self.verbose).fetch_file(surv_shp_zip) == 0:
-                v_shps = utils.p_unzip(surv_shp_zip, ['.shp', '.shx', '.dbf', '.prj'])
+                v_shps = utils.p_unzip(surv_shp_zip, ['shp', 'shx', 'dbf', 'prj'])
                 v_shp = None
                 for v in v_shps:
-                    if v.split('.')[-1] == '.shp': v_shp = v
-                try:
-                    v_ds = ogr.Open(v_shp)
-                    slay1 = v_ds.GetLayer(0)
-                    for sf1 in slay1:
-                        if self._stop(): break
-                        geom = sf1.GetGeometryRef()
-                        if geom.Intersects(region2geom(self.region)):
-                            self.results.append([sf1.GetField('URL').strip(), '{}/{}'.format(surv['ID'], tile_url.split('/')[-1]), surv['DataType']])
-                    v_ds = slay1 = None
-                except: pass
+                    if v.split('.')[-1] == 'shp':
+                        v_shp = v
+                #try:
+                v_ds = ogr.Open(v_shp)
+                slay1 = v_ds.GetLayer(0)
+                for sf1 in slay1:
+                    geom = sf1.GetGeometryRef()
+                    if geom.Intersects(self.region.export_as_geom()):
+                        tile_url = sf1.GetField('URL').strip()
+                        self.results.append([tile_url, '{}/{}'.format(surv['ID'], tile_url.split('/')[-1]), surv['DataType']])
+                v_ds = slay1 = None
+                #except: pass
                 utils.remove_glob(surv_shp_zip, *v_shps)
 
     def yield_xyz(self):
