@@ -56,7 +56,7 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
-        self.where = [where]
+        self.where = where
 
         self.name = 'tnm'
         self._info = '''Various datasets from USGS's National Map. The National Map is a 
@@ -255,7 +255,8 @@ and deliver topographic information for the Nation.'''
                 _prog = utils.CliProgress('gathering {} products from {}...'.format(total, dsTag))
             
             ds = self._datasets(dataset = dsTag)
-            this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+            #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+            this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
             h_epsg, v_epsg = this_xml.reference_system()
             
             while True:
