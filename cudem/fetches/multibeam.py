@@ -121,9 +121,9 @@ class Multibeam(f_utils.FetchModule):
                     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
                     for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
                         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-                    
-                for xyz in _ds.yield_xyz():
-                    yield(xyz)
+                else:
+                    for xyz in _ds.yield_xyz():
+                        yield(xyz)
 
                 utils.remove_glob(src_data, src_xyz)
             else:

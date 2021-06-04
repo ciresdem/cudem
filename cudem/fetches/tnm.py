@@ -57,7 +57,6 @@ class TheNationalMap(f_utils.FetchModule):
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
         self.where = [where]
-        self.FRED = FRED.FRED(verbose = self.verbose)
 
         self.name = 'tnm'
         self._info = '''Various datasets from USGS's National Map. The National Map is a 
@@ -66,6 +65,7 @@ and deliver topographic information for the Nation.'''
         self._title = '''The National Map (TNM) from USGS'''
         self._usage = '''< tnm:formats=fmt,fmt:extents=ext,ext >'''
         self._urls = [self._tnm_api_url]
+        self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
 
         self.formats = formats

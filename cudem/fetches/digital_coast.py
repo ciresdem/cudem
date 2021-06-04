@@ -24,6 +24,7 @@
 
 import os
 from osgeo import ogr
+from osgeo import gdal
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -43,7 +44,7 @@ import cudem.fetches.FRED as FRED
 ## =============================================================================
 class DigitalCoast(f_utils.FetchModule):
 
-    def __init__(self, where=[], datatype=None,**kwargs):
+    def __init__(self, where=[], datatype=None, inc=None, **kwargs):
         super().__init__(**kwargs)
         self._dc_url = 'https://coast.noaa.gov'
         self._dc_htdata_url = 'https://coast.noaa.gov/htdata/'
@@ -51,6 +52,7 @@ class DigitalCoast(f_utils.FetchModule):
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.where = where
         self.datatype = datatype
+        self.inc = utils.str2inc(inc)
         self.name = 'dc'
         self._info = '''Lidar and Raster data from NOAA's Digital Coast'''
         self._title = '''NOAA Digital Coast'''
@@ -125,7 +127,7 @@ class DigitalCoast(f_utils.FetchModule):
     def run(self):
         
         if self.datatype is not None:
-            self.where.append("DataType = '{}'".format(self.datatype))
+            self.where.append("DataType LIKE '%{}%'".format(self.datatype))
         
         for surv in FRED._filter_FRED(self):
             if self.callback(): break
@@ -148,7 +150,7 @@ class DigitalCoast(f_utils.FetchModule):
                 #except: pass
                 utils.remove_glob(surv_shp_zip, *v_shps)
 
-    def yield_xyz(self):
+    def yield_xyz(self, entry):
         src_dc = os.path.basename(entry[1])
         src_ext = src_dc.split('.')[-1].lower()
         if src_ext == 'laz' or src_ext == 'las': dt = 'lidar'
@@ -161,9 +163,20 @@ class DigitalCoast(f_utils.FetchModule):
 
                 _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, epsg=4326, warp=self.warp,
                                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
-                for xyz in _ds.yield_xyz():
-                    yield(xyz)
 
+                # if self.inc is not None:
+                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                #     for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                # else:
+                #     for xyz in _ds.yield_xyz():
+                #         yield(xyz)
+
+                y = _ds.block_xyz if self.inc is not None else _ds.yield_xyz
+
+                for xyz in y():
+                    yield(xyz)
+                        
         elif dt == 'raster':
             try:
                 src_ds = gdal.Open(entry[0])
@@ -173,10 +186,10 @@ class DigitalCoast(f_utils.FetchModule):
                 try:
                     src_ds = gdal.Open(src_dc)
                 except Exception as e:
-                    echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                    utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
                     src_ds = None
             except Exception as e:
-                echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
                 src_ds = None
             
             if src_ds is not None:
@@ -185,8 +198,9 @@ class DigitalCoast(f_utils.FetchModule):
                                           name=src_dc, src_region=self.region, verbose=self.verbose)
                 _ds.src_ds = src_ds
                 _ds.ds_open_p = True
-                for xyz in _ds.yield_xyz():
+
+                for xyz in _ds.block_xyz(self.inc) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
             src_ds = None
-        remove_glob(src_dc)    
+        utils.remove_glob(src_dc)    
 ### End

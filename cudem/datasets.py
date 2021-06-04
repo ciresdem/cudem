@@ -393,7 +393,53 @@ class XYZDataset():
                                 this_xyz.dump(include_w=True if self.weight is not None else False,
                                               dst_port=xp, encode=False)
         #Datalist(fn='{}.datalist'.format(a_name)).parse()
+
+    def block_xyz(self, inc=1):
+        """block the src_xyz data to the mean block value
+
+        Yields:
+          list: xyz data for each block with data
+        """
+
+        #b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
+        b_region = self.region
+        
+        xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
+        gdt = gdal.GDT_Float32
+        sum_array = np.zeros((ycount, xcount))
+        count_array = np.zeros((ycount, xcount))
+        weight_array = np.zeros((ycount, xcount))
+        
+        if self.verbose:
+            utils.echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
             
+        for this_xyz in self.yield_xyz():
+            if regions.xyz_in_region_p(this_xyz, b_region):
+                this_z = this_xyz.z * this_xyz.w
+                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                try:
+                    sum_array[ypos, xpos] += this_z
+                    count_array[ypos, xpos] += 1
+                    weight_array[ypos, xpos] += this_xyz.w
+                except: pass
+
+        count_array[count_array == 0] = np.nan
+        weight_array[weight_array == 0] = np.nan
+        out_weight_array = (weight_array/count_array)
+        out_array = (sum_array/out_weight_array)/count_array
+            
+        sum_array = count_array = weight_array = None
+            
+        for y in range(0, ycount):
+            for x in range(0, xcount):
+                z = out_array[y,x]
+                if not np.isnan(z):
+                    geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                    out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x])
+                    yield(out_xyz)
+
+        out_array = out_weight_array = None
+        
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
