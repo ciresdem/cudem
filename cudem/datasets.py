@@ -734,17 +734,11 @@ class RasterFile(XYZDataset):
         self.outf = outf
         super().__init__(**kwargs)
         
-        print(self.epsg)
-        
         if self.epsg is None:
             self._open_ds()
-            print('hi')
             self.get_epsg()
-            print(self.epsg)
             self._close_ds()
             self.set_transform()
-        print(self.epsg)
-        #print(self.warp)
 
     def _open_ds(self):
         """open the gdal datasource and gather infos 
@@ -814,7 +808,6 @@ class RasterFile(XYZDataset):
         return(self.infos)
 
     def get_epsg(self):
-        print(self.ds_open_p)
         if self.ds_open_p:
             proj = self.src_ds.GetProjectionRef()
             src_srs = osr.SpatialReference()
@@ -822,8 +815,6 @@ class RasterFile(XYZDataset):
             src_srs.AutoIdentifyEPSG()
             srs_auth = src_srs.GetAuthorityCode(None)
             if srs_auth is not None:
-                #print(srs_auth)
-                #print(utils.int_or(srs_auth))
                 self.epsg = utils.int_or(srs_auth)
         
     def set_epsg(self, epsg = 4326):
