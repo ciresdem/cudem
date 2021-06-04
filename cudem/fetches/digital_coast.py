@@ -193,7 +193,7 @@ class DigitalCoast(f_utils.FetchModule):
             
             if src_ds is not None:
 
-                _ds = datasets.RasterFile(fn=src_dc, data_format=200, warp=self.warp,
+                _ds = datasets.RasterFile(fn=src_dc, data_format=200, warp=self.warp, epsg=None,
                                           name=src_dc, src_region=self.region, verbose=self.verbose)
                 _ds.src_ds = src_ds
                 _ds.ds_open_p = True
