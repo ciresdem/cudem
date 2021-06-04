@@ -24,6 +24,7 @@
 
 import os
 from osgeo import ogr
+from osgeo import gdal
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -118,9 +119,12 @@ community preparedness.'''
                 zv = this_xml.xml_doc.findall('.//gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString', namespaces = this_xml.namespaces)
                 if zv is not None:
                     for zvs in zv:
+                        #print(zvs.text)
                         if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
                             zvar = zvs.text
-                        else: zvar = 'z'
+                            break
+                        else:
+                            zvar = 'z'
                 geom = this_xml.bounds(geom=True)
                 if geom is not None:
                     surveys.append({'Name': title, 'ID': this_id, 'Agency': 'NOAA', 'Date': this_xml.date(),
@@ -128,7 +132,7 @@ community preparedness.'''
                                     'DataLink': http_url, 'IndexLink': wcs_url, 'Link': self._nt_catalog,
                                     'DataType': 'raster', 'DataSource': 'ncei_thredds', 'HorizontalDatum': h_epsg,
                                     'VerticalDatum': v_epsg, 'Etcetra': zvar, 'Info': this_xml.abstract(), 'geom': geom})
-        self.FRED._add_surveys(surveys)
+        self.FRED._add_surveys(surveys) 
         if self.verbose:
             _prog.end(0, 'scanned {} datasets in {}.'.format(len(this_ds), this_ds[0].attrib['name']))
             utils.echo_msg('added {} surveys from {}'.format(len(surveys), this_ds[0].attrib['name']))
@@ -142,52 +146,39 @@ community preparedness.'''
         """Search for data in the reference vector file"""
         
         for surv in FRED._filter_FRED(self):
-            #wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=NetCDF3"\
-            #    .format(surv['IndexLink'], surv['DataType'], region_format(self.region, 'bbox'))
-            for d in surv['DataLink'].split(','):
-                if d != '':
-                    self.results.append([d, d.split('/')[-1], surv['DataType']])
+            wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=NetCDF3"\
+                .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
+            print(wcs_url)
+            self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
+            #for d in surv['DataLink'].split(','):
+            #    if d != '':
+            #        self.results.append([d, d.split('/')[-1], surv['DataType']])
 
-    def yield_xyz(self):
-        src_dc = os.path.basename(entry[1])
-        src_ext = src_dc.split('.')[-1].lower()
-        if src_ext == 'laz' or src_ext == 'las': dt = 'lidar'
-        elif src_ext == 'tif' or src_ext == 'img': dt = 'raster'
-        else: dt = None
-        if dt == 'lidar':
-            if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
-                xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
-                '.format(region_format(self.region, 'te'), '2 29', src_dc), verbose = False)
-
-                _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, epsg=4326, warp=self.warp,
-                                       name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
-                for xyz in _ds.yield_xyz():
-                    yield(xyz)
-
-        elif dt == 'raster':
-            try:
-                src_ds = gdal.Open(entry[0])
-                src_dc = entry[0]
-            except Exception as e:
-                f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc)
-                try:
-                    src_ds = gdal.Open(src_dc)
-                except Exception as e:
-                    echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
-                    src_ds = None
-            except Exception as e:
-                echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
-                src_ds = None
-            
-            if src_ds is not None:
-
-                _ds = datasets.RasterFile(fn=src_dc, data_format=200, epsg=4326, warp=self.warp,
-                                          name=src_dc, src_region=self.region, verbose=self.verbose)
-                _ds.src_ds = src_ds
-                _ds.ds_open_p = True
-                for xyz in _ds.yield_xyz():
-                    yield(xyz)
+    def yield_xyz(self, entry):
+        src_ncei = os.path.basename(entry[1])
+        #try:
+        #    src_ds = gdal.Open(entry[0])
+        #    src_dc = entry[0]
+        #except Exception as e:
+        f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_ncei)
+        try:
+            src_ds = gdal.Open(src_ncei)
+        except Exception as e:
+            utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
             src_ds = None
-        remove_glob(src_dc)    
+        #except Exception as e:
+        #    utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
+        #    src_ds = None
+            
+        if src_ds is not None:
+
+            _ds = datasets.RasterFile(fn=src_ncei, data_format=200, epsg=4326, warp=self.warp,
+                                      name=src_ncei, src_region=self.region, verbose=self.verbose)
+            _ds.src_ds = src_ds
+            _ds.ds_open_p = True
+            for xyz in _ds.yield_xyz():
+                yield(xyz)
+        src_ds = None
+        utils.remove_glob(src_ncei)    
                     
 ### End
