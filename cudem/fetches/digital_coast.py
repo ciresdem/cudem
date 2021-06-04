@@ -177,29 +177,29 @@ class DigitalCoast(f_utils.FetchModule):
                     yield(xyz)
                         
         elif dt == 'raster':
-            try:
-                src_ds = gdal.Open(entry[0])
-                src_dc = entry[0]
-            except Exception as e:
-                f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc)
-                try:
-                    src_ds = gdal.Open(src_dc)
-                except Exception as e:
-                    utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
-                    src_ds = None
-            except Exception as e:
-                utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
-                src_ds = None
-            
-            if src_ds is not None:
-
+            #try:
+            #    src_ds = gdal.Open(entry[0])
+            #    src_dc = entry[0]
+            #except Exception as e:
+            if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
+                #try:
+                #    src_ds = gdal.Open(src_dc)
+                #except Exception as e:
+                #    utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                #    src_ds = None
+                #except Exception as e:
+                #    utils.echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
+                #    src_ds = None
+                
+                #if src_ds is not None:
+                #src_ds = None
                 _ds = datasets.RasterFile(fn=src_dc, data_format=200, warp=self.warp, epsg=None,
                                           name=src_dc, src_region=self.region, verbose=self.verbose)
-                _ds.src_ds = src_ds
-                _ds.ds_open_p = True
+                #_ds.src_ds = src_ds
+                #_ds.ds_open_p = True
 
                 for xyz in _ds.block_xyz(self.inc) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
-            src_ds = None
-        utils.remove_glob(src_dc)    
+                #src_ds = None
+                utils.remove_glob(src_dc)    
 ### End

@@ -814,6 +814,7 @@ class RasterFile(XYZDataset):
         return(self.infos)
 
     def get_epsg(self):
+        print(self.ds_open_p)
         if self.ds_open_p:
             proj = self.src_ds.GetProjectionRef()
             src_srs = osr.SpatialReference()
