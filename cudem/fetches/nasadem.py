@@ -102,7 +102,7 @@ class NASADEM(f_utils.FetchModule):
                 if geom is not None:
                     surveys.append({'Name': fn.text.split('.')[0].split('/')[-1], 'ID': sid, 'Agency': 'NASA', 'Date': utils.this_date(),
                                     'MetadataLink': '', 'MetadataDate': utils.this_date(), 'DataLink': self.nasadem_url + fn.text.split('/')[-1] + '?token=',
-                                    'DataType': '1', 'DataSource': 'nasadem', 'HorizontalDatum': 4326,
+                                    'DataType': '1', 'DataSource': 'nasadem', 'HorizontalDatum': 4326, 'Etcetra': self.nasadem_rurl,
                                     'VerticalDatum': 'msl', 'Info': '', 'geom': geom})
 
         if self.verbose:
