@@ -402,8 +402,10 @@ class XYZDataset():
           list: xyz data for each block with data
         """
 
-        #b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
-        b_region = self.region
+        b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
+        if not b_region.valid_p():
+            b_region = self.region
+        utils.echo_msg('using region: {} @ {}'.format(b_region.format('gmt'), inc))
         
         xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
         gdt = gdal.GDT_Float32
