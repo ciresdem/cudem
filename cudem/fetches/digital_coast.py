@@ -159,7 +159,7 @@ class DigitalCoast(f_utils.FetchModule):
         if dt == 'lidar':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
-                '.format(region_format(self.region, 'te'), '2 29', src_dc), verbose = False)
+                '.format(self.region.format('te'), '2 29', src_dc), verbose = False)
                 _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, warp=self.warp,
                                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
 

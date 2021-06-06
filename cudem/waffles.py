@@ -93,7 +93,7 @@ class Waffle:
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region, verbose=self.verbose, weight=self.weights,
-            epsg=self.epsg).acquire_dataset() for dl in self.data]
+            warp=self.epsg).acquire_dataset() for dl in self.data]
 
         self.data = [d for d in self.data if d is not None]
         

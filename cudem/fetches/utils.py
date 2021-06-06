@@ -191,7 +191,9 @@ def fetch_queue(q, m, p=False):
                 else:
                     Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose, headers=m.headers).fetch_file(fetch_args[1])
             else:
-                o_x_fn = fetch_args[1] + '.xyz'
+                if m.region is not None:
+                    o_x_fn = fetch_args[1] + m.region.format('fn') + '.xyz'
+                else: o_x_fn = fetch_args[1] + '.xyz'
                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
                 if not os.path.exists(o_x_fn):
                     with open(o_x_fn, 'w') as out_xyz:
