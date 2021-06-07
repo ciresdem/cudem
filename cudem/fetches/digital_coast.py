@@ -158,10 +158,14 @@ class DigitalCoast(f_utils.FetchModule):
         else: dt = None
         if dt == 'lidar':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
-                xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
-                '.format(self.region.format('te'), '2 29', src_dc), verbose = False)
-                _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, warp=self.warp,
-                                       name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
+                # xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
+                # '.format(self.region.format('te'), '2 29', src_dc), verbose = False)
+                # _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, warp=self.warp,
+                #                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
+                #xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
+                #'.format(self.region.format('te'), '2 29', src_dc), verbose = False)
+                _ds = datasets.LASFile(fn=src_dc, data_format=400, warp=self.warp,
+                                       name=src_dc, src_region=self.region, verbose=self.verbose, remote=True)
 
                 # if self.inc is not None:
                 #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)

@@ -96,8 +96,10 @@ def fn_basename(fn, ext):
 def fn_url_p(fn):
     url_sw = ['http://', 'https://', 'ftp://', 'ftps://']
     for u in url_sw:
-        if fn.startswith(u):
-            return(True)
+        try:
+            if fn.startswith(u):
+                return(True)
+        except: return(False)
     return(False)
     
 def inc2str(inc):
