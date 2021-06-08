@@ -342,7 +342,7 @@ class Waffle:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
-            if demfun.clip(fn, src_ply=self.clip)[1] == 0:
+            if demfun.clip(fn, '__tmp_cut__.tif', src_ply=self.clip)[1] == 0:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
                 
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
