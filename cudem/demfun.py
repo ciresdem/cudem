@@ -238,7 +238,7 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False):
     """
 
     gi = infos(src_dem)
-    g_region = regions.Region().from_geotransform(geoT=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
+    g_region = regions.Region().from_geo_transform(geoT=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
     tmp_ply = '__tmp_clp_ply.shp'
     
     utils.run_cmd('ogr2ogr {} {} -clipsrc {}'.format(tmp_ply, src_ply, g_region.format('ul_lr'), verbose=True))
@@ -249,7 +249,7 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False):
         else:
             shutil.copyfile(src_dem, dst_dem)
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
-                .format(gi['ndv'], os.path.basename(src_ply).split('.')[0], tmp_ply, dst_dem)
+                .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_dem)
             out, status = utils.run_cmd(gr_cmd, verbose=True)
         utils.remove_glob('__tmp_clp_ply.*')
     else: return(None, -1)
@@ -662,7 +662,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None):
             out, status = filter_outliers(
                 dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
         else:
-            out, status = blur(dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
+            out, status = blur(dem_l, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
         if status != 0: return(status)
 
         if split_val is not None:
