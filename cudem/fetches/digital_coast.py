@@ -175,10 +175,12 @@ class DigitalCoast(f_utils.FetchModule):
                 #     for xyz in _ds.yield_xyz():
                 #         yield(xyz)
 
-                y = _ds.block_xyz if self.inc is not None else _ds.yield_xyz
-
-                for xyz in y():
+                for xyz in _ds.block_xyz(self.inc) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
+                #y = _ds.block_xyz if self.inc is not None else _ds.yield_xyz
+
+                #for xyz in y():
+                #    yield(xyz)
                         
         elif dt == 'raster':
             #try:

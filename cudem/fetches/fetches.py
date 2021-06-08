@@ -244,7 +244,7 @@ class Fetcher(datasets.XYZDataset):
         self.fetch_module = FetchesFactory(mod=self.fn, src_region=self.region, verbose=self.verbose).acquire(warp=self.warp)
         
     def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the multibeam dataset
+        """generate a infos dictionary from the Fetches dataset
 
         Returns:
           dict: a data-entry infos dictionary
@@ -252,8 +252,11 @@ class Fetcher(datasets.XYZDataset):
 
         self.infos['name'] = self.fn
         self.infos['hash'] = None
-        self.infos['minmax'] = self.region.export_as_list()
         self.infos['numpts'] = 0
+        if self.region is None:
+            #self.region = self.fetch_module.region
+            self.region = regions.Region().from_list([-180,180,-90,90])
+        self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
         return(self.infos)
 

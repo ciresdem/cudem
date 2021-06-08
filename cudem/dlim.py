@@ -284,9 +284,11 @@ class DatasetFactory:
         if len(entry) < 11:
             entry.append(self.url)
         else: self.url = entry[10]
-        
-        self.fn = entry[0] if self.parent is None \
-            else os.path.join(os.path.dirname(self.parent.fn), entry[0])
+
+        if self.parent is None or entry[1] == -11:
+            self.fn = entry[0]
+        else:
+            self.fn = os.path.join(os.path.dirname(self.parent.fn), entry[0])
         
         self.data_format = entry[1]
         if self.data_format is None:

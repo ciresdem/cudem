@@ -198,8 +198,11 @@ def fetch_queue(q, m, p=False):
                 if not os.path.exists(o_x_fn):
                     with open(o_x_fn, 'w') as out_xyz:
                         m.dump_xyz(fetch_args, dst_port=out_xyz)
-                    if os.path.exists(o_x_fn) and os.stat(o_x_fn).st_size == 0:
-                        utils.remove_glob(o_x_fn)
+                    try:
+                        if os.path.exists(o_x_fn):
+                            if os.stat(o_x_fn).st_size == 0:
+                                utils.remove_glob(o_x_fn)
+                    except: pass
         q.task_done()
 
 class fetch_results(threading.Thread):
