@@ -161,7 +161,7 @@ and deliver topographic information for the Nation.'''
                     fmt = fmt['value']
                     break
                 #print(ds)
-            this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+            #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
             this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
             geom = this_xml.bounds(geom = True)
             h_epsg, v_epsg = this_xml.reference_system()
