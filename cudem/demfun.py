@@ -662,6 +662,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None):
             out, status = filter_outliers(
                 dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
         else:
+            utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
             out, status = blur(dem_l, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
         if status != 0: return(status)
 
