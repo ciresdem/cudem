@@ -333,7 +333,7 @@ class Waffle:
                         fltr_val = fltr_opts[1]
                     if len(fltr_opts) > 2:
                         split_val= fltr_opts[2]
-
+                    
                     if demfun.filter_(fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val) == 0:
                         os.rename('__tmp_fltr.tif', fn)
             
@@ -342,8 +342,17 @@ class Waffle:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
-            if demfun.clip(fn, '__tmp_cut__.tif', src_ply=self.clip)[1] == 0:
-                os.rename('__tmp_cut__.tif', '{}'.format(fn))
+            clip_args = {}
+            cp = self.clip.split(':')
+            clip_args['src_ply'] = cp[0]
+            clip_args = utils.args2dict(cp[1:], clip_args)
+            print(clip_args)
+            if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
+                os.rename('__tmp_clip__.tif', '{}'.format(fn))
+            # gdalfun.gdal_clip(this_dem, **clip_args)
+            # if this_wg['mask']:
+            #     if this_wg['verbose']: utils.echo_msg('clipping {}...'.format(this_dem_msk))
+            #     gdalfun.gdal_clip(this_dem_msk, **clip_args)
                 
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             os.rename('__tmp_cut__.tif', '{}'.format(fn))
