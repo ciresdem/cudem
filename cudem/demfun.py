@@ -241,11 +241,11 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False):
     g_region = regions.Region().from_geo_transform(geoT=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
     tmp_ply = '__tmp_clp_ply.shp'
     
-    utils.run_cmd('ogr2ogr {} {} -clipsrc {}'.format(tmp_ply, src_ply, g_region.format('ul_lr'), verbose=True))
+    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=True)
     if gi is not None and src_ply is not None:
         if invert:
-            gr_cmd = 'gdalwarp -cutline {} -cl tmp_clp_ply {} {}'.format(tmp_ply, src_dem, dst_dem)
-            out, status = utils.run_cmd(gr_cmd, verbose = True)
+            gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)
+            out, status = utils.run_cmd(gr_cmd, verbose=True)
         else:
             shutil.copyfile(src_dem, dst_dem)
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
