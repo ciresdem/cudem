@@ -1065,7 +1065,7 @@ class WafflesCoastline(Waffle):
             out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
             utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']), verbose = True)
             warped_tifs.append(out)
-            #utils.remove_glob(cop_tif[1])
+            utils.remove_glob(cop_tif[1])
 
         ## ==============================================
         ## update wet/dry mask with gsshg/gmrt data
@@ -1099,7 +1099,7 @@ class WafflesCoastline(Waffle):
                     #         self.coast_array[ypos, xpos] = 1
                 except: pass
             c_ds = None
-            #utils.remove_glob('{}*'.format(cop_tif))
+            utils.remove_glob('{}*'.format(cop_tif))
         _prog.end(0, 'filled the coast mask with copernicus data.')
     
     def _load_nhd(self):
