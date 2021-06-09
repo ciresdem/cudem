@@ -1,0 +1,48 @@
+[ c u d e m ]
+
+CUDEM is a set of Python modules and console scripts for utilizing elevation data and Digital Elevation Models.
+
+==============================================
+Install via git and pip:
+==============================================
+
+ % git clone https:/github.com/ciresdem/cudem.git
+ % cd cudem
+ % pip install --user --upgrade ./
+
+==============================================
+Install via git and setup.py:
+==============================================
+
+ % git clone https://github.com/ciresdem/cudem.git
+ % cd cudem
+ % python setup.py build
+ % sudo python setup.py install --record cudem.install
+
+==============================================
+Install via zip and setup.py:
+==============================================
+
+ % wget https://github.com/ciresdem/cudem/archive/master.zip
+ % unzip master.zip
+ % cd master
+ % python setup.py build
+ % sudo python setup.py install --record cudem.install
+
+==============================================
+Uninstall from setup.py:
+==============================================
+ 
+ % sudo python setup.py clean
+ % sudo xargs rm -r < cudem.install
+
+==============================================
+Update with setup.py:
+==============================================
+
+ % git pull
+ % sudo python setup.py clean
+ % sudo xargs rm -r < cudem.install
+ % python setup.py build
+ % sudo python setup.py install --record cudem.install
+
