@@ -956,8 +956,8 @@ class WafflesCoastline(Waffle):
         c_ds = gdal.Open(wd_mask.fn)
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-            ca_v = self.coast_array[ypos, xpos]
             try:
+                ca_v = self.coast_array[ypos, xpos]
                 if this_xyz.z == 0:
                     self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
                 elif this_xyz.z == 1:
@@ -1014,8 +1014,8 @@ class WafflesCoastline(Waffle):
 
         for this_xyz in demfun.parse(w_ds):
             xpos, ypos = utils._geo2pixel(this_xyz[0], this_xyz[1], self.ds_config['geoT'])
-            ca_v = self.coast_array[ypos, xpos]
             try:
+                ca_v = self.coast_array[ypos, xpos]
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
                 else:
@@ -1043,8 +1043,8 @@ class WafflesCoastline(Waffle):
 
         for this_xyz in demfun.parse(d_ds):
             xpos, ypos = utils._geo2pixel(this_xyz[0], this_xyz[1], self.ds_config['geoT'])
-            ca_v = self.coast_array[ypos, xpos]
             try:
+                ca_v = self.coast_array[ypos, xpos]
                 #if coast_array[ypos, xpos] == self.ds_config['ndv']:
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
@@ -1083,8 +1083,8 @@ class WafflesCoastline(Waffle):
             for this_xyz in demfun.parse(c_ds):
                 #, srcwin=srcwin):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-                ca_v = self.coast_array[ypos, xpos]
                 try:
+                    ca_v = self.coast_array[ypos, xpos]
                     if this_xyz.z == 0:
                         self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
                     else:
@@ -1161,8 +1161,8 @@ class WafflesCoastline(Waffle):
         #c_ds = gdal.Open(u_mask)
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-            ca_v = self.coast_array[ypos, xpos]
             try:
+                ca_v = self.coast_array[ypos, xpos]
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
             # try:
@@ -1198,8 +1198,8 @@ class WafflesCoastline(Waffle):
         #c_ds = gdal.Open(self.g_mask)
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-            ca_v = self.coast_array[ypos, xpos]
             try:
+                ca_v = self.coast_array[ypos, xpos]
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
                 elif this_xyz.z == 0:
