@@ -958,9 +958,9 @@ class WafflesCoastline(Waffle):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
             try:
                 ca_v = self.coast_array[ypos, xpos]
-                if this_xyz.z == 0:
+                if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
-                elif this_xyz.z == 1:
+                elif this_xyz.z == 0:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
             except: pass
         c_ds = None            
