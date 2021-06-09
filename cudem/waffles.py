@@ -582,7 +582,7 @@ class WafflesNum(Waffle):
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
         if self.verbose:
-            progress = utils.CliProgress('generating uninterpolated NUM grid {} @ {}/{}'.format(self.mode, ycount, xcount))
+            progress = utils.CliProgress('generating uninterpolated NUM grid `{}` @ {}/{}'.format(self.mode, ycount, xcount))
         if self.mode == 'm' or self.mode == 'w':
             sum_array = np.zeros((ycount, xcount))
         count_array = np.zeros((ycount, xcount))
@@ -612,7 +612,7 @@ class WafflesNum(Waffle):
 
         out_array[np.isnan(out_array)] = -9999
         if self. verbose:
-            progress.end(0, 'generated uninterpolated num grid {} @ {}/{}'.format(self.mode, ycount, xcount))
+            progress.end(0, 'generated uninterpolated num grid `{}` @ {}/{}'.format(self.mode, ycount, xcount))
         utils.gdal_write(out_array, self.fn, ds_config)
         
     def run(self):
@@ -886,8 +886,352 @@ class WafflesNearest(WafflesGDALGrid):
             .format(radius1, radius2, angle, nodata)
         self.mod_args = {'radius1':radius1, 'radius2': radius2, 'angle': angle, 'nodata':nodata}
         self._set_config()
-        
+
 class WafflesCoastline(Waffle):
+    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, **kwargs):
+        """Generate a coastline polygon from various sources."""
+
+        super().__init__(**kwargs)
+        self.want_nhd = want_nhd
+        self.want_gmrt = want_gmrt
+        self.wet = wet
+        self.dry = dry
+
+        self.w_name = '{}_w'.format(self.name)
+        self.w_mask = '{}.tif'.format(self.w_name)
+
+        self.u_name = '{}_u'.format(self.name)
+        self.u_mask = '{}.tif'.format(self.u_name)
+
+        self.g_name = '{}_g'.format(self.name)
+        self.g_mask = '{}.tif'.format(self.g_name)
+        
+        self.coast_array = None
+        self.ds_config = None
+
+        import cudem.fetches.globalelus
+        import cudem.fetches.copernicus
+        import cudem.fetches.tnm
+        import cudem.fetches.gmrt
+        import cudem.fetches.utils
+
+        self.f_region = self.p_region
+        self.f_region.buffer(self.inc*10)
+        self.mod = 'coastline'
+        self.mod_args = {'wet': wet, 'dry': dry, 'want_nhd': want_nhd, 'want_gmrt': want_gmrt}
+        self._set_config()
+
+    def run(self):
+        self._burn_region()
+        self._load_coast_mask()
+
+        #self._load_background()
+        
+        if self.wet is not None:
+            self._load_wet_mask()
+        if self.dry is not None:
+            self._load_dry_mask()
+            
+        self._load_copernicus()
+        self._load_nhd()        
+        
+        if len(self.data) > 0:
+            self._load_data()
+        
+        self._write_coast_array()
+        self._write_coast_poly()
+        return(self)
+
+    def _load_data(self):
+
+        c_region = self.p_region
+        c_region.zmin = -1
+        c_region.zmax = 1
+        #print(self.data)
+        wd_mask = WafflesNum(data=[x.fn for x in self.data], src_region=c_region, inc=self.inc, name=self.w_name,
+                             extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+                             sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
+                             mode='w').run()
+
+        c_ds = gdal.Open(wd_mask.fn)
+        for this_xyz in demfun.parse(c_ds):
+            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+            ca_v = self.coast_array[ypos, xpos]
+            try:
+                if this_xyz.z == 0:
+                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                elif this_xyz.z == 1:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+            except: pass
+        c_ds = None            
+        utils.remove_glob('{}*'.format(wd_mask.fn))
+    
+    def _burn_region(self):
+        """wet/dry datalist mask or burn region."""
+
+        c_region = self.p_region
+        c_region.zmin = -1
+        c_region.zmax = 1
+        
+        # if len(self.data) > 0:
+        #     waffles.WafflesNum(data=self.data, src_region=c_region, inc=self.inc, name=self.w_name,
+        #                        extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+        #                        sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
+        #                        **kwargs, mode='w').run()
+        # else:
+        c_region.export_as_ogr('region_buff.shp')
+        xsize, ysize, gt = c_region.geo_transform(x_inc=self.inc)
+            
+        utils.run_cmd('gdal_rasterize -ts {} {} -te {} -burn -9999 -a_nodata -9999 \
+        -ot Int32 -co COMPRESS=DEFLATE -a_srs EPSG:{} region_buff.shp {}\
+        '.format(xsize, ysize, c_region.format('te'), self.epsg, self.w_mask), verbose=self.verbose)
+
+    def _load_coast_mask(self):
+        """load the wet/dry mask array"""
+
+        ds = gdal.Open(self.w_mask)
+        if ds is not None:
+            self.ds_config = demfun.gather_infos(ds)
+            this_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
+            self.coast_array = ds.GetRasterBand(1).ReadAsArray(0, 0, self.ds_config['nx'], self.ds_config['ny'])
+            ds = None
+        else:
+            utils.echo_error_msg('could not open {}'.format(self.w_mask))
+            sys.exit()
+        utils.remove_glob('{}*'.format(self.w_mask))
+
+    def _load_wet_mask(self):
+        """Input coastline shapefile `coastpoly`"""
+
+        wp_mask = '{}_wp.tif'.format(self.name)
+
+        utils.echo_msg('filling the coast mask with input wet mask poly data...')
+
+        utils.ogr_clip(self.wet, '_tmp_wet.shp', clip_region=self.p_region, dn = "ESRI Shapefile")
+        utils.run_cmd('gdal_rasterize -ts {} {} -te {} -burn 1 {} {}'.format(
+            self.ds_config['nx'], self.ds_config['ny'], self.p_region.format('te'), '_tmp_wet.shp', wp_mask), verbose=True)
+        w_ds = gdal.Open(wp_mask)
+
+        for this_xyz in demfun.parse(w_ds):
+            xpos, ypos = utils._geo2pixel(this_xyz[0], this_xyz[1], self.ds_config['geoT'])
+            ca_v = self.coast_array[ypos, xpos]
+            try:
+                if this_xyz.z == 1:
+                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                else:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                # if coast_array[ypos, xpos] == self.ds_config['ndv']:
+                #     if this_xyz[2] == 1:
+                #         coast_array[ypos, xpos] = 1
+                #     else:
+                #         coast_array[ypos, xpos] = 0
+            except: pass
+        w_ds = None
+        utils.remove_glob('{}*'.format(wp_mask), '_tmp_wet.*')
+
+    def _load_dry_mask(self):
+        """Input coastline shapefile `coastpoly`"""
+
+        dp_mask = '{}_dp.tif'.format(self.name)
+
+        utils.echo_msg('filling the coast mask with input dry mask poly data...')
+
+        utils.ogr_clip(self.dry, '_tmp_dry.shp', clip_region=self.p_region, dn = "ESRI Shapefile")
+        utils.run_cmd('gdal_rasterize -ts {} {} -te {} -burn 1 {} {}'.format(
+            self.ds_config['nx'], self.ds_config['ny'], self.p_region.format('te'), '_tmp_dry.shp', dp_mask), verbose=True)
+        d_ds = gdal.Open(wp_mask)
+
+        for this_xyz in demfun.parse(d_ds):
+            xpos, ypos = utils._geo2pixel(this_xyz[0], this_xyz[1], self.ds_config['geoT'])
+            ca_v = self.coast_array[ypos, xpos]
+            try:
+                #if coast_array[ypos, xpos] == self.ds_config['ndv']:
+                if this_xyz.z == 1:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                else:
+                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+            except: pass
+        d_ds = None
+        utils.remove_glob('{}*'.format(dp_mask), '_tmp_dry.*')
+
+    def _load_copernicus(self):
+        """copernicus"""
+
+        warped_tifs = []
+        this_cop = cudem.fetches.copernicus.CopernicusDEM(src_region=self.f_region, weight=self.weights, verbose=self.verbose, datatype='1').run()
+        this_cop.fetch_results()
+        #cop_tif = this_gmrt.results[0]
+        for i, cop_tif in enumerate(this_cop.results):
+            out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
+            utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']), verbose = True)
+            warped_tifs.append(out)
+            #utils.remove_glob(cop_tif[1])
+
+        ## ==============================================
+        ## update wet/dry mask with gsshg/gmrt data
+        ## speed up!
+        ## ==============================================
+        _prog = utils.CliProgress('filling the coast mask with copernicus data...')
+        #utils.echo_msg('filling the coast mask with copernicus data...')
+        for cop_tif in warped_tifs:
+            _prog.update()
+            c_ds = gdal.Open(cop_tif)
+            c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+            #c_ds = gdal.Open(self.g_mask)
+            #c_ds_config = demfun.gather_infos(c_ds)
+            #srcwin = self.region.srcwin(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
+            for this_xyz in demfun.parse(c_ds):
+                #, srcwin=srcwin):
+                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+                ca_v = self.coast_array[ypos, xpos]
+                try:
+                    if this_xyz.z == 0:
+                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                    else:
+                        self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                    
+                    # if self.coast_array[ypos, xpos] == self.ds_config['ndv']:
+                    #     #if this_xyz.z > 0:
+                    #     #    self.coast_array[ypos, xpos] = 0
+                    #     if this_xyz.z == 0:
+                    #         self.coast_array[ypos, xpos] = 0
+                    #     else:
+                    #         self.coast_array[ypos, xpos] = 1
+                except: pass
+            c_ds = None
+            #utils.remove_glob('{}*'.format(cop_tif))
+        _prog.end(0, 'filled the coast mask with copernicus data.')
+    
+    def _load_nhd(self):
+        """USGS NHD (HIGH-RES U.S. Only)
+        Fetch NHD (NHD High/Plus) data from TNM to fill in near-shore areas. 
+        High resoultion data varies by location...
+        """
+
+        self.p_region.export_as_ogr('region_buff.shp')
+        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.inc)
+
+        utils.run_cmd('gdal_rasterize -ts {} {} -te {} -burn -9999 -a_nodata -9999 \
+        -ot Int32 -co COMPRESS=DEFLATE -a_srs EPSG:{} region_buff.shp {}\
+        '.format(xsize, ysize, self.p_region.format('te'), self.epsg, self.u_mask), verbose=self.verbose)
+        utils.remove_glob('region_buff.*')
+
+        this_tnm = cudem.fetches.tnm.TheNationalMap(
+            src_region=self.f_region, weight=self.weights, verbose=self.verbose,
+            where=["Name LIKE '%Hydro%'"],
+            extents='HU-8 Subbasin').run()
+            #extents='HU-4 Subregion,HU-8 Subbasin').run()
+            
+        #fl = fetches._fetch_modules['tnm'](waffles_proc_region(wg), ["Name LIKE '%Hydro%'"], None, True)
+        r_shp = []
+        for result in this_tnm.results:
+            #fl._parse_results(e = 'HU-2 Region,HU-4 Subregion,HU-8 Subbasin'):
+            if cudem.fetches.utils.Fetch(result[0], verbose=self.verbose).fetch_file(os.path.join(result[2], result[1])) == 0:
+                gdb_zip = os.path.join(result[2], result[1])
+                gdb_files = utils.unzip(gdb_zip)
+                gdb_bn = os.path.basename('.'.join(gdb_zip.split('.')[:-1]))
+                gdb = gdb_bn + '.gdb'
+
+                utils.run_cmd('ogr2ogr {}_NHDArea.shp {} NHDArea -clipdst {} -overwrite 2>&1\
+                '.format(gdb_bn, gdb, self.p_region.format('ul_lr')), verbose=False)
+                if os.path.exists('{}_NHDArea.shp'.format(gdb_bn)):
+                    r_shp.append('{}_NHDArea.shp'.format(gdb_bn))
+                utils.run_cmd('ogr2ogr {}_NHDPlusBurnWaterBody.shp {} NHDPlusBurnWaterBody -clipdst {} -overwrite 2>&1\
+                '.format(gdb_bn, gdb, self.p_region.format('ul_lr')), verbose=False)
+                if os.path.exists('{}_NHDPlusBurnWaterBody.shp'.format(gdb_bn)):
+                    r_shp.append('{}_NHDPlusBurnWaterBody.shp'.format(gdb_bn))
+                utils.run_cmd('ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType = 390" -clipdst {} -overwrite 2>&1\
+                '.format(gdb_bn, gdb, self.p_region.format('ul_lr')), verbose=False)
+                if os.path.exists('{}_NHDWaterBody.shp'.format(gdb_bn)):
+                    r_shp.append('{}_NHDWaterBody.shp'.format(gdb_bn))
+                utils.remove_glob(gdb, *gdb_files)
+            else: utils.echo_error_msg('unable to fetch {}'.format(result))
+
+            [utils.run_cmd('ogr2ogr -skipfailures -update -append nhdArea_merge.shp {} 2>&1\
+            '.format(shp), verbose=False) for shp in r_shp]
+            utils.run_cmd('gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True)
+            utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
+
+        ## ==============================================
+        ## update wet/dry mask with nhd data
+        ## ==============================================
+        utils.echo_msg('filling the coast mask with NHD data...')
+        c_ds = gdal.Open(self.u_mask)
+        c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+        #c_ds = gdal.Open(u_mask)
+        for this_xyz in demfun.parse(c_ds):
+            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+            ca_v = self.coast_array[ypos, xpos]
+            try:
+                if this_xyz.z == 1:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+            # try:
+            #     if self.coast_array[ypos, xpos] == self.ds_config['ndv']:
+            #         if this_xyz.z == 1: self.coast_array[ypos, xpos] = 0
+            except: pass
+        c_ds = None            
+        utils.remove_glob('{}*'.format(self.u_mask))
+
+    def _load_background(self):
+        """GSHHG/GMRT - Global low-res
+        Used to fill un-set cells.
+        """
+        
+        if self.gc['GMT'] is not None and not self.want_gmrt:
+            utils.run_cmd('gmt grdlandmask {} -I{} -r -Df -G{}=gd:GTiff -V -N1/0/0/0/0\
+            '.format(self.p_region.format('gmt'), self.inc, self.g_mask), verbose=self.verbose)
+        else:
+            this_gmrt = cudem.fetches.gmrt.GMRT(src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask').run()
+            #gmrt_tif = this_gmrt.results[0]
+            this_gmrt.fetch_results()
+            
+            utils.run_cmd('gdalwarp {} {} -tr {} {} -overwrite'.format(gmrt_tif, g_mask, wg['inc'], wg['inc']), verbose = True)
+            #utils.remove_glob(gmrt_tif)
+
+        ## ==============================================
+        ## update wet/dry mask with gsshg/gmrt data
+        ## speed up!
+        ## ==============================================
+        utils.echo_msg('filling the coast mask with gsshg/gmrt data...')
+        c_ds = gdal.Open(self.g_mask)
+        c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+        #c_ds = gdal.Open(self.g_mask)
+        for this_xyz in demfun.parse(c_ds):
+            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+            ca_v = self.coast_array[ypos, xpos]
+            try:
+                if this_xyz.z == 1:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                elif this_xyz.z == 0:
+                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+            except: pass
+        c_ds = None
+        utils.remove_glob('{}*'.format(self.g_mask))
+
+    def _write_coast_array(self):
+        """write coast_array to file
+        1 = land
+        0 = water
+        """
+        
+        utils.gdal_write(self.coast_array, '{}.tif'.format(self.name), self.ds_config)
+
+    def _write_coast_poly(self):
+        """convert to coast_array vector"""
+
+        tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('tmp_c_{}.shp'.format(self.name))
+        if tmp_ds is not None:
+            tmp_layer = tmp_ds.CreateLayer('tmp_c_{}'.format(self.name), None, ogr.wkbMultiPolygon)
+            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+            demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
+            tmp_ds = None
+        utils.run_cmd('ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN<1 order by ST_AREA(geometry) desc limit 8"\
+        {}.shp tmp_c_{}.shp'.format(self.name, self.name, self.name), verbose=True)
+        utils.remove_glob('tmp_c_{}.*'.format(self.name))
+        utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp\
+        '.format(self.name, self.name))
+        
+class WafflesCoastline2(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, **kwargs):
         """Generate a coastline polygon from various sources."""
 
@@ -934,7 +1278,7 @@ class WafflesCoastline(Waffle):
         c_region.zmin = -1
         c_region.zmax = 1
         
-        if len(self.data) < 0:
+        if len(self.data) > 0:
             waffles.WafflesNum(data=self.data, src_region=c_region, inc=self.inc, name=self.w_name,
                                extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
                                sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,

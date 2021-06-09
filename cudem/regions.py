@@ -352,8 +352,12 @@ class Region:
         this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, gt)]
         this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, gt)]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
-        if this_size[0] > x_count - this_origin[0]: this_size[0] = x_count - this_origin[0]
-        if this_size[1] > y_count - this_origin[1]: this_size[1] = y_count - this_origin[1]
+        if this_size[0] > x_count - this_origin[0]:
+            this_size[0] = x_count - this_origin[0]
+        if this_size[1] > y_count - this_origin[1]:
+            this_size[1] = y_count - this_origin[1]
+        if this_size[0] < 0: this_size[0] = 0
+        if this_size[1] < 0: this_size[1] = 0
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
         
     def buffer(self, bv = 0, pct = None):
