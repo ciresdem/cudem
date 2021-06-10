@@ -924,8 +924,6 @@ class WafflesCoastline(Waffle):
     def run(self):
         self._burn_region()
         self._load_coast_mask()
-
-        #self._load_background()
         
         if self.wet is not None:
             self._load_wet_mask()
@@ -946,45 +944,11 @@ class WafflesCoastline(Waffle):
     def _finalize_array(self):
         self.coast_array[self.coast_array > 0] = 1
         self.coast_array[self.coast_array <= 0] = 0
-    
-    def _load_data(self):
 
-        c_region = self.p_region
-        c_region.zmin = -1
-        c_region.zmax = 1
-        #print(self.data)
-        #wd_mask = WafflesNum(data=[x.fn for x in self.data], src_region=c_region, inc=self.inc, name=self.w_name,
-        #                     extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
-        #                     sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
-        #                     mode='w').run()
-
-        #c_ds = gdal.Open(wd_mask.fn)
-        for this_data in self.data:
-            for this_xyz in this_data.yield_xyz():
-                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-                try:
-                    ca_v = self.coast_array[ypos, xpos]
-                    if this_xyz.z >=0:
-                        self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
-                    elif this_xyz.z < 0:
-                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-                except: pass
-            #c_ds = None            
-            #utils.remove_glob('{}*'.format(wd_mask.fn))
-    
     def _burn_region(self):
         """wet/dry datalist mask or burn region."""
 
         c_region = self.p_region
-        c_region.zmin = -1
-        c_region.zmax = 1
-        
-        # if len(self.data) > 0:
-        #     waffles.WafflesNum(data=self.data, src_region=c_region, inc=self.inc, name=self.w_name,
-        #                        extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
-        #                        sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
-        #                        **kwargs, mode='w').run()
-        # else:
         c_region.export_as_ogr('region_buff.shp')
         xsize, ysize, gt = c_region.geo_transform(x_inc=self.inc)
             
@@ -998,14 +962,14 @@ class WafflesCoastline(Waffle):
         ds = gdal.Open(self.w_mask)
         if ds is not None:
             self.ds_config = demfun.gather_infos(ds)
-            this_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
+            #this_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
             self.coast_array = ds.GetRasterBand(1).ReadAsArray(0, 0, self.ds_config['nx'], self.ds_config['ny'])
             ds = None
         else:
             utils.echo_error_msg('could not open {}'.format(self.w_mask))
             sys.exit()
         utils.remove_glob('{}*'.format(self.w_mask))
-
+        
     def _load_wet_mask(self):
         """Input coastline shapefile `coastpoly`"""
 
@@ -1026,11 +990,6 @@ class WafflesCoastline(Waffle):
                     self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
                 else:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-                # if coast_array[ypos, xpos] == self.ds_config['ndv']:
-                #     if this_xyz[2] == 1:
-                #         coast_array[ypos, xpos] = 1
-                #     else:
-                #         coast_array[ypos, xpos] = 0
             except: pass
         w_ds = None
         utils.remove_glob('{}*'.format(wp_mask), '_tmp_wet.*')
@@ -1051,7 +1010,6 @@ class WafflesCoastline(Waffle):
             xpos, ypos = utils._geo2pixel(this_xyz[0], this_xyz[1], self.ds_config['geoT'])
             try:
                 ca_v = self.coast_array[ypos, xpos]
-                #if coast_array[ypos, xpos] == self.ds_config['ndv']:
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
                 else:
@@ -1066,7 +1024,6 @@ class WafflesCoastline(Waffle):
         warped_tifs = []
         this_cop = cudem.fetches.copernicus.CopernicusDEM(src_region=self.f_region, weight=self.weights, verbose=self.verbose, datatype='1').run()
         this_cop.fetch_results()
-        #cop_tif = this_gmrt.results[0]
         for i, cop_tif in enumerate(this_cop.results):
             out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
             utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']), verbose = True)
@@ -1078,16 +1035,11 @@ class WafflesCoastline(Waffle):
         ## speed up!
         ## ==============================================
         _prog = utils.CliProgress('filling the coast mask with copernicus data...')
-        #utils.echo_msg('filling the coast mask with copernicus data...')
         for cop_tif in warped_tifs:
             _prog.update()
             c_ds = gdal.Open(cop_tif)
             c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
-            #c_ds = gdal.Open(self.g_mask)
-            #c_ds_config = demfun.gather_infos(c_ds)
-            #srcwin = self.region.srcwin(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
             for this_xyz in demfun.parse(c_ds):
-                #, srcwin=srcwin):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
                 try:
                     ca_v = self.coast_array[ypos, xpos]
@@ -1095,14 +1047,6 @@ class WafflesCoastline(Waffle):
                         self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
                     else:
                         self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
-                    
-                    # if self.coast_array[ypos, xpos] == self.ds_config['ndv']:
-                    #     #if this_xyz.z > 0:
-                    #     #    self.coast_array[ypos, xpos] = 0
-                    #     if this_xyz.z == 0:
-                    #         self.coast_array[ypos, xpos] = 0
-                    #     else:
-                    #         self.coast_array[ypos, xpos] = 1
                 except: pass
             c_ds = None
             utils.remove_glob('{}*'.format(cop_tif))
@@ -1128,10 +1072,8 @@ class WafflesCoastline(Waffle):
             extents='HU-8 Subbasin').run()
             #extents='HU-4 Subregion,HU-8 Subbasin').run()
             
-        #fl = fetches._fetch_modules['tnm'](waffles_proc_region(wg), ["Name LIKE '%Hydro%'"], None, True)
         r_shp = []
         for result in this_tnm.results:
-            #fl._parse_results(e = 'HU-2 Region,HU-4 Subregion,HU-8 Subbasin'):
             if cudem.fetches.utils.Fetch(result[0], verbose=self.verbose).fetch_file(os.path.join(result[2], result[1])) == 0:
                 gdb_zip = os.path.join(result[2], result[1])
                 gdb_files = utils.unzip(gdb_zip)
@@ -1158,50 +1100,45 @@ class WafflesCoastline(Waffle):
             utils.run_cmd('gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True)
             utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
 
-        ## ==============================================
-        ## update wet/dry mask with nhd data
-        ## ==============================================
         utils.echo_msg('filling the coast mask with NHD data...')
         c_ds = gdal.Open(self.u_mask)
         c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
-        #c_ds = gdal.Open(u_mask)
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
             try:
                 ca_v = self.coast_array[ypos, xpos]
                 if this_xyz.z == 1:
                     self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-            # try:
-            #     if self.coast_array[ypos, xpos] == self.ds_config['ndv']:
-            #         if this_xyz.z == 1: self.coast_array[ypos, xpos] = 0
             except: pass
         c_ds = None            
         utils.remove_glob('{}*'.format(self.u_mask))
 
-    def _load_background(self):
-        """GSHHG/GMRT - Global low-res
+    def _load_data(self):
+        """load data from user datalist and amend coast_array"""
+        
+        for this_data in self.data:
+            for this_xyz in this_data.yield_xyz():
+                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+                try:
+                    ca_v = self.coast_array[ypos, xpos]
+                    if this_xyz.z >=0:
+                        self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                    elif this_xyz.z < 0:
+                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                except: pass
+        
+    def _load_gshhg(self):
+        """GSHHG - Global low-res
         Used to fill un-set cells.
         """
         
-        if self.gc['GMT'] is not None and not self.want_gmrt:
+        if self.gc['GMT'] is not None:
             utils.run_cmd('gmt grdlandmask {} -I{} -r -Df -G{}=gd:GTiff -V -N1/0/0/0/0\
             '.format(self.p_region.format('gmt'), self.inc, self.g_mask), verbose=self.verbose)
-        else:
-            this_gmrt = cudem.fetches.gmrt.GMRT(src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask').run()
-            #gmrt_tif = this_gmrt.results[0]
-            this_gmrt.fetch_results()
-            
-            utils.run_cmd('gdalwarp {} {} -tr {} {} -overwrite'.format(gmrt_tif, g_mask, wg['inc'], wg['inc']), verbose = True)
-            #utils.remove_glob(gmrt_tif)
 
-        ## ==============================================
-        ## update wet/dry mask with gsshg/gmrt data
-        ## speed up!
-        ## ==============================================
-        utils.echo_msg('filling the coast mask with gsshg/gmrt data...')
+        utils.echo_msg('filling the coast mask with gsshg data...')
         c_ds = gdal.Open(self.g_mask)
         c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
-        #c_ds = gdal.Open(self.g_mask)
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
             try:
@@ -1214,6 +1151,35 @@ class WafflesCoastline(Waffle):
         c_ds = None
         utils.remove_glob('{}*'.format(self.g_mask))
 
+    def _load_gmrt(self):
+        """GMRT - Global low-res
+        Used to fill un-set cells.
+        """
+        
+        this_gmrt = cudem.fetches.gmrt.GMRT(src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask').run()
+        this_gmrt.fetch_results()
+        gmrt_tif = this_gmrt.results[0]
+            
+        utils.run_cmd('gdalwarp {} {} -tr {} {} -overwrite'.format(gmrt_tif, self.g_mask, wg['inc'], wg['inc']), verbose = True)
+        utils.remove_glob(gmrt_tif)
+
+        utils.echo_msg('filling the coast mask with gmrt data...')
+        c_ds = gdal.Open(self.g_mask)
+        c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+
+        for this_xyz in demfun.parse(c_ds):
+            #, srcwin=srcwin):
+            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+            try:
+                ca_v = self.coast_array[ypos, xpos]
+                if this_xyz.z == 0:
+                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                else:
+                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+            except: pass
+        c_ds = None
+        utils.remove_glob('{}*'.format(self.g_mask))
+        
     def _write_coast_array(self):
         """write coast_array to file
         1 = land
