@@ -937,34 +937,40 @@ class WafflesCoastline(Waffle):
         
         if len(self.data) > 0:
             self._load_data()
-        
+
+        self._finalize_array()
         self._write_coast_array()
         self._write_coast_poly()
         return(self)
 
+    def _finalize_array(self):
+        self.coast_array[self.coast_array > 0] = 1
+        self.coast_array[self.coast_array <= 0] = 0
+    
     def _load_data(self):
 
         c_region = self.p_region
         c_region.zmin = -1
         c_region.zmax = 1
         #print(self.data)
-        wd_mask = WafflesNum(data=[x.fn for x in self.data], src_region=c_region, inc=self.inc, name=self.w_name,
-                             extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
-                             sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
-                             mode='w').run()
+        #wd_mask = WafflesNum(data=[x.fn for x in self.data], src_region=c_region, inc=self.inc, name=self.w_name,
+        #                     extend=self.extend, extend_proc=self.extend_proc, weights=self.weights,
+        #                     sample=self.sample, clip=self.clip, epsg=self.epsg, verbose=self.verbose,
+        #                     mode='w').run()
 
-        c_ds = gdal.Open(wd_mask.fn)
-        for this_xyz in demfun.parse(c_ds):
-            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
-            try:
-                ca_v = self.coast_array[ypos, xpos]
-                if this_xyz.z == 1:
-                    self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
-                elif this_xyz.z == 0:
-                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-            except: pass
-        c_ds = None            
-        utils.remove_glob('{}*'.format(wd_mask.fn))
+        #c_ds = gdal.Open(wd_mask.fn)
+        for this_data in self.data:
+            for this_xyz in this_data.yield_xyz():
+                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
+                try:
+                    ca_v = self.coast_array[ypos, xpos]
+                    if this_xyz.z >=0:
+                        self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                    elif this_xyz.z < 0:
+                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                except: pass
+            #c_ds = None            
+            #utils.remove_glob('{}*'.format(wd_mask.fn))
     
     def _burn_region(self):
         """wet/dry datalist mask or burn region."""
@@ -1225,7 +1231,7 @@ class WafflesCoastline(Waffle):
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
-        utils.run_cmd('ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN<1 order by ST_AREA(geometry) desc limit 8"\
+        utils.run_cmd('ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 8"\
         {}.shp tmp_c_{}.shp'.format(self.name, self.name, self.name), verbose=True)
         utils.remove_glob('tmp_c_{}.*'.format(self.name))
         utils.run_cmd('ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp\
