@@ -405,7 +405,8 @@ class XYZDataset():
         b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
         if b_region.valid_p():
             if self.verbose:
-                utils.echo_msg('using region: {} @ {}'.format(b_region.format('gmt'), inc))
+                utils.echo_msg('using reduced region: {} @ {}'.format(b_region.format('gmt'), inc))
+                
             xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
             gdt = gdal.GDT_Float32
             sum_array = np.zeros((ycount, xcount))
@@ -414,7 +415,7 @@ class XYZDataset():
             
             if ycount != 0 and xcount != 0:
                 if self.verbose:
-                    _prog = utils.CliProgress('blocking {} to {}/{} grid...'.format(self.infos['name'], ycount, xcount))
+                    _prog = utils.CliProgress('blocking {} points from {} to {}/{} grid...'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
 
                 for n, this_xyz in enumerate(self.yield_xyz()):
                     if regions.xyz_in_region_p(this_xyz, b_region):
@@ -425,7 +426,7 @@ class XYZDataset():
                             count_array[ypos, xpos] += 1
                             weight_array[ypos, xpos] += this_xyz.w
                             if self.verbose:
-                                if n % 200 == 0: _prog.update_perc((n, self.infos['numpts']))
+                                if n % 1000 == 0: _prog.update_perc((n, self.infos['numpts']))
                         except: pass
 
                 count_array[count_array == 0] = np.nan
@@ -435,7 +436,7 @@ class XYZDataset():
                 sum_array = count_array = weight_array = None
 
                 if self.verbose:
-                    _prog.end(0, 'blocked {} to {}/{} grid.'.format(self.infos['name'], ycount, xcount))
+                    _prog.end(0, 'blocked {} points from {} to {}/{} grid.'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
                 
                 for y in range(0, ycount):
                     #if self.verbose: _prog.update_perc((y,ycount))
