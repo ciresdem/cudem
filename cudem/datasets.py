@@ -404,8 +404,8 @@ class XYZDataset():
 
         b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
         if b_region.valid_p():
-            if self.verbose:
-                utils.echo_msg('using reduced region: {} @ {}'.format(b_region.format('gmt'), inc))
+            #if self.verbose:
+            #    utils.echo_msg('using reduced region: {} @ {}'.format(b_region.format('gmt'), inc))
                 
             xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
             gdt = gdal.GDT_Float32
@@ -417,7 +417,7 @@ class XYZDataset():
                 if self.verbose:
                     _prog = utils.CliProgress('blocking {} points from {} to {}/{} grid...'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
 
-                for n, this_xyz in enumerate(self.yield_xyz()):
+                for this_xyz in self.yield_xyz():
                     if regions.xyz_in_region_p(this_xyz, b_region):
                         this_z = this_xyz.z * this_xyz.w
                         xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
@@ -425,8 +425,8 @@ class XYZDataset():
                             sum_array[ypos, xpos] += this_z
                             count_array[ypos, xpos] += 1
                             weight_array[ypos, xpos] += this_xyz.w
-                            if self.verbose:
-                                if n % 1000 == 0: _prog.update_perc((n, self.infos['numpts']))
+                            #if self.verbose:
+                            #    if n % 1000 == 0: _prog.update_perc((n, self.infos['numpts']))
                         except: pass
 
                 count_array[count_array == 0] = np.nan
