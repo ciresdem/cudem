@@ -398,7 +398,7 @@ class FRED:
                 else: out_regions = this_region
         return(out_regions)
 
-    def _attribute_filter(self, where = []):
+    def _attribute_filter(self, where=[]):
         if self.open_p:
             attr_str = []
             [attr_str.append(f) for f in where]
@@ -407,14 +407,16 @@ class FRED:
             return(0)
         else: return(-1)
         
-    def _filter(self, region = None, where = [], layers = []):
-        '''Search for data in the reference vector file'''
+    def _filter(self, region=None, where=[], layers=[]):
+        """Search for data in the reference vector file"""
+        
         _results = []
         if region is not None:
-            _boundsGeom = region.export_as_geom()#region2geom(region)
+            _boundsGeom = region.export_as_geom()
         else: _boundsGeom = None
 
-        if self._verbose: _prog = utils.CliProgress('filtering {}...'.format(self.FREDloc))
+        if self._verbose:
+            _prog = utils.CliProgress('filtering {}...'.format(self.FREDloc))
         if not self.open_p:
             self._open_ds()
             close_p = True
@@ -449,7 +451,7 @@ class FRED:
 ## ==============================================
 ## lambdas for the FRED using the module object `mod`
 ## ==============================================
-_filter_FRED = lambda mod: mod.FRED._filter(mod.region, mod.where, [mod.name])
+_filter_FRED = lambda mod: mod.FRED._filter(region=mod.region, where=mod.where, layers=[mod.name])
 _update_FRED = lambda mod, s: mod.FRED._add_surveys(s)
 _filter_FRED_index = lambda mod: [utils.echo_msg(json.dumps(f, indent = 2)) for f in _filter_FRED(mod)]
 

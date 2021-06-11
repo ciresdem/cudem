@@ -1022,18 +1022,16 @@ class WafflesCoastline(Waffle):
         """copernicus"""
 
         warped_tifs = []
-        this_cop = cudem.fetches.copernicus.CopernicusDEM(src_region=self.f_region, weight=self.weights, verbose=self.verbose, datatype='1').run()
+        this_cop = cudem.fetches.copernicus.CopernicusDEM(src_region=self.f_region, weight=self.weights, verbose=self.verbose, datatype='1')
+        this_cop.run()
         this_cop.fetch_results()
         for i, cop_tif in enumerate(this_cop.results):
             out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
-            utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']), verbose = True)
+            utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(
+                cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']), verbose = True)
             warped_tifs.append(out)
             utils.remove_glob(cop_tif[1])
 
-        ## ==============================================
-        ## update wet/dry mask with gsshg/gmrt data
-        ## speed up!
-        ## ==============================================
         _prog = utils.CliProgress('filling the coast mask with copernicus data...')
         for cop_tif in warped_tifs:
             _prog.update()
