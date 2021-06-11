@@ -404,20 +404,19 @@ class XYZDataset():
 
         b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
         if b_region.valid_p():
-            #b_region = self.region
-            #return()
-            utils.echo_msg('using region: {} @ {}'.format(b_region.format('gmt'), inc))
-
+            if self.verbose:
+                utils.echo_msg('using region: {} @ {}'.format(b_region.format('gmt'), inc))
             xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
             gdt = gdal.GDT_Float32
             sum_array = np.zeros((ycount, xcount))
             count_array = np.zeros((ycount, xcount))
             weight_array = np.zeros((ycount, xcount))
+            
             if ycount != 0 and xcount != 0:
                 if self.verbose:
-                    utils.echo_msg('blocking data to {}/{} grid'.format(ycount, xcount))
+                    _prog = utils.CliProgress('blocking {} to {}/{} grid...'.format(self.infos['name'], ycount, xcount))
 
-                for this_xyz in self.yield_xyz():
+                for n, this_xyz in enumerate(self.yield_xyz()):
                     if regions.xyz_in_region_p(this_xyz, b_region):
                         this_z = this_xyz.z * this_xyz.w
                         xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
@@ -425,16 +424,21 @@ class XYZDataset():
                             sum_array[ypos, xpos] += this_z
                             count_array[ypos, xpos] += 1
                             weight_array[ypos, xpos] += this_xyz.w
+                            if self.verbose:
+                                if n % 200 == 0: _prog.update_perc((n, self.infos['numpts']))
                         except: pass
 
                 count_array[count_array == 0] = np.nan
                 weight_array[weight_array == 0] = np.nan
                 out_weight_array = (weight_array/count_array)
                 out_array = (sum_array/out_weight_array)/count_array
-
                 sum_array = count_array = weight_array = None
 
+                if self.verbose:
+                    _prog.end(0, 'blocked {} to {}/{} grid.'.format(self.infos['name'], ycount, xcount))
+                
                 for y in range(0, ycount):
+                    #if self.verbose: _prog.update_perc((y,ycount))
                     for x in range(0, xcount):
                         z = out_array[y,x]
                         if not np.isnan(z):

@@ -111,7 +111,7 @@ class Fetch:
         req = None
 
         if self.verbose:
-            progress = utils.CliProgress('fetching remote file: {}...'.format(os.path.basename(self.url)[:20]))
+            progress = utils.CliProgress('fetching remote file: {}...'.format(self.url))
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
                 os.makedirs(os.path.dirname(dst_fn))
@@ -121,6 +121,9 @@ class Fetch:
                 with requests.get(self.url, stream=True, params=params, headers=self.headers,
                                   timeout=(timeout,read_timeout)) as req:
                     req_h = req.headers
+                    if 'Content-length' in req_h:
+                        req_s = int(req_h['Content-length'])
+                    else: req_s = -1
                     if req.status_code == 200:
                         curr_chunk = 0
                         with open(dst_fn, 'wb') as local_file:
@@ -128,7 +131,8 @@ class Fetch:
                                 if self.callback():
                                     break
                                 if self.verbose:
-                                    progress.update()
+                                    progress.update_perc((curr_chunk, req_s))
+                                    curr_chunk += 8196
                                 if chunk:
                                     local_file.write(chunk)
                     else:
@@ -139,7 +143,7 @@ class Fetch:
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             status = -1
         if self.verbose:
-            progress.end(status, 'fetched remote file: {}.'.format(os.path.basename(dst_fn)[:20]))
+            progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
         return(status)
 
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):

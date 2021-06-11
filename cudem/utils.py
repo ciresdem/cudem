@@ -848,7 +848,7 @@ class CliProgress:
         sys.stderr.flush()
 
     def update_perc(self, p, msg = None):
-        if len(p) == 2:
+        if len(p) == 2 and p[0] <= p[1]:
             self._clear_stderr()
             sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {:40}\r'.format(self.perc(p), msg if msg is not None else self.opm))
         else: self.update()
