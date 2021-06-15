@@ -38,9 +38,9 @@ def xyzClip(inxyz, ingrd, outfile, outfile2, delim, msk_nval, msk_kval, inverse,
     xextent = float(comp_geot[0])
     yextent = float(comp_geot[3])
     if outfile is not None:
-        writer = csv.writer(file(outfile, 'w'), delimiter=delim, lineterminator='\n')
+        writer = csv.writer(open(outfile, 'w'), delimiter=delim, lineterminator='\n')
     if outfile2 is not None:
-        writer2 = csv.writer(file(outfile2, 'w'), delimiter=delim, lineterminator='\n')
+        writer2 = csv.writer(open(outfile2, 'w'), delimiter=delim, lineterminator='\n')
     pointnum = 0
     
     ## Iterate through the xyz file and compare each point to the input grid file.
@@ -134,9 +134,9 @@ def xyz_clip(inxyz, ingrd, outfile, outfile2, delim, msk_nval, msk_kval, inverse
     xextent = float(comp_geot[0])
     yextent = float(comp_geot[3])
     if outfile is not None:
-        writer = csv.writer(file(outfile, 'w'), delimiter=delim, lineterminator='\n')
+        writer = csv.writer(open(outfile, 'w'), delimiter=delim, lineterminator='\n')
     if outfile2 is not None:
-        writer2 = csv.writer(file(outfile2, 'w'), delimiter=delim, lineterminator='\n')
+        writer2 = csv.writer(open(outfile2, 'w'), delimiter=delim, lineterminator='\n')
     pointnum = 0
     
     ## Iterate through the xyz file and compare each point to the input grid file.
