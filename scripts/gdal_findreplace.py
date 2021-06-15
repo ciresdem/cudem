@@ -93,7 +93,7 @@ if __name__ == "__main__":
     # Create the output GDAL Raster
     if np.any(t):
         outarray[t]=float(rdata)
-        dst_ds = demfuncopy_infos(ds_config)
+        dst_ds = demfun.copy_infos(ds_config)
         if mk_ndata is True: dst_ds['ndv'] = float(ndata)
         utils.gdal_write(outarray, outgrd, dst_ds)
         

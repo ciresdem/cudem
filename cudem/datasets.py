@@ -102,6 +102,7 @@ class XYZDataset():
             #if self.region is not None:
             if self.data_format == -1:
                 self.inf(check_hash=True)
+                #self.inf(check_hash=False)
             else:
                 self.inf()
             self.set_transform()
@@ -395,7 +396,7 @@ class XYZDataset():
                                               dst_port=xp, encode=False)
         #Datalist(fn='{}.datalist'.format(a_name)).parse()
 
-    def block_xyz(self, inc=1):
+    def block_xyz(self, inc=1, want_gmt=False):
         """block the src_xyz data to the mean block value
 
         Yields:
@@ -404,50 +405,57 @@ class XYZDataset():
 
         b_region = regions.regions_reduce(self.region, regions.Region().from_list(self.infos['minmax']))
         if b_region.valid_p():
-            #if self.verbose:
-            #    utils.echo_msg('using reduced region: {} @ {}'.format(b_region.format('gmt'), inc))
-                
-            xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
-            gdt = gdal.GDT_Float32
-            sum_array = np.zeros((ycount, xcount))
-            count_array = np.zeros((ycount, xcount))
-            weight_array = np.zeros((ycount, xcount))
-            
-            if ycount != 0 and xcount != 0:
-                if self.verbose:
-                    _prog = utils.CliProgress('blocking {} points from {} to {}/{} grid...'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
 
-                for this_xyz in self.yield_xyz():
-                    if regions.xyz_in_region_p(this_xyz, b_region):
-                        this_z = this_xyz.z * this_xyz.w
-                        xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
-                        try:
-                            sum_array[ypos, xpos] += this_z
-                            count_array[ypos, xpos] += 1
-                            weight_array[ypos, xpos] += this_xyz.w
-                            #if self.verbose:
-                            #    if n % 1000 == 0: _prog.update_perc((n, self.infos['numpts']))
-                        except: pass
+            if want_gmt:
+                xyz_func = lambda p: self.dump_xyz(dst_port=p, encode=True)
+                for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(inc, b_region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                    yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
 
-                count_array[count_array == 0] = np.nan
-                weight_array[weight_array == 0] = np.nan
-                out_weight_array = (weight_array/count_array)
-                out_array = (sum_array/out_weight_array)/count_array
-                sum_array = count_array = weight_array = None
+            else:
+                #if self.verbose:
+                #    utils.echo_msg('using reduced region: {} @ {}'.format(b_region.format('gmt'), inc))
 
-                if self.verbose:
-                    _prog.end(0, 'blocked {} points from {} to {}/{} grid.'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
-                
-                for y in range(0, ycount):
-                    #if self.verbose: _prog.update_perc((y,ycount))
-                    for x in range(0, xcount):
-                        z = out_array[y,x]
-                        if not np.isnan(z):
-                            geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-                            out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x])
-                            yield(out_xyz)
+                xcount, ycount, dst_gt = b_region.geo_transform(x_inc=inc)
+                gdt = gdal.GDT_Float32
+                sum_array = np.zeros((ycount, xcount))
+                count_array = np.zeros((ycount, xcount))
+                weight_array = np.zeros((ycount, xcount))
 
-                out_array = out_weight_array = None
+                if ycount != 0 and xcount != 0:
+                    if self.verbose:
+                        _prog = utils.CliProgress('blocking {} points from {} to {}/{} grid...'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
+
+                    for this_xyz in self.yield_xyz():
+                        if regions.xyz_in_region_p(this_xyz, b_region):
+                            this_z = this_xyz.z * this_xyz.w
+                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                            try:
+                                sum_array[ypos, xpos] += this_z
+                                count_array[ypos, xpos] += 1
+                                weight_array[ypos, xpos] += this_xyz.w
+                                #if self.verbose:
+                                #    if n % 1000 == 0: _prog.update_perc((n, self.infos['numpts']))
+                            except: pass
+
+                    count_array[count_array == 0] = np.nan
+                    weight_array[weight_array == 0] = np.nan
+                    out_weight_array = (weight_array/count_array)
+                    out_array = (sum_array/out_weight_array)/count_array
+                    sum_array = count_array = weight_array = None
+
+                    if self.verbose:
+                        _prog.end(0, 'blocked {} points from {} to {}/{} grid.'.format(self.infos['numpts'], self.infos['name'], ycount, xcount))
+
+                    for y in range(0, ycount):
+                        #if self.verbose: _prog.update_perc((y,ycount))
+                        for x in range(0, xcount):
+                            z = out_array[y,x]
+                            if not np.isnan(z):
+                                geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                                out_xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x])
+                                yield(out_xyz)
+
+                    out_array = out_weight_array = None
         
     def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid

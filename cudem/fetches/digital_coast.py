@@ -167,16 +167,17 @@ class DigitalCoast(f_utils.FetchModule):
                 _ds = datasets.LASFile(fn=src_dc, data_format=400, warp=self.warp,
                                        name=src_dc, src_region=self.region, verbose=self.verbose, remote=True)
 
-                # if self.inc is not None:
-                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                #     for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
-                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-                # else:
-                #     for xyz in _ds.yield_xyz():
-                #         yield(xyz)
+                if self.inc is not None:
+                    b_region = regions.regions_reduce(self.region, regions.Region().from_list(_ds.infos['minmax']))
+                    xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                        yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                else:
+                    for xyz in _ds.yield_xyz():
+                        yield(xyz)
 
-                for xyz in _ds.block_xyz(self.inc) if self.inc is not None else _ds.yield_xyz():
-                    yield(xyz)
+                #for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
+                #    yield(xyz)
                 #y = _ds.block_xyz if self.inc is not None else _ds.yield_xyz
 
                 #for xyz in y():
@@ -204,7 +205,7 @@ class DigitalCoast(f_utils.FetchModule):
                 #_ds.src_ds = src_ds
                 #_ds.ds_open_p = True
 
-                for xyz in _ds.block_xyz(self.inc) if self.inc is not None else _ds.yield_xyz():
+                for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
                 #src_ds = None
                 utils.remove_glob(src_dc)    

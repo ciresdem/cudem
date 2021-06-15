@@ -68,7 +68,41 @@ class Multibeam(f_utils.FetchModule):
                 if len(til) > 1:
                     if til[0] == 'MBIO':
                         return(til[4])
-        
+
+    def mb_inf_data_date(self, src_inf):
+        """extract the data format from the mbsystem inf file.
+
+        Args:
+          src_inf (str): the source mbsystem .inf file pathname
+
+        Returns:
+          str: the mbsystem datalist format number
+        """
+
+        with open(src_inf) as iob:
+            for il in iob:
+                til = il.split()
+                if len(til) > 1:
+                    if til[0] == 'Time:':
+                        return(til[3])
+
+    def mb_inf_perc_good(self, src_inf):
+        """extract the data format from the mbsystem inf file.
+
+        Args:
+          src_inf (str): the source mbsystem .inf file pathname
+
+        Returns:
+          str: the mbsystem datalist format number
+        """
+
+        with open(src_inf) as iob:
+            for il in iob:
+                til = il.split(':')
+                if len(til) > 1:
+                    if til[0].strip() == 'Number of Good Beams':
+                        return(til[1].split()[-1].split('%')[0])
+                    
     def run(self):
         these_surveys = {}
         these_versions = {}
@@ -102,14 +136,28 @@ class Multibeam(f_utils.FetchModule):
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
                         self.results.append(survs)
-                
+
+        for entry in self.results:
+            self.echo_inf(entry)
+
+    def echo_inf(self, entry):
+        src_data = os.path.basename(entry[1])
+        src_mb = src_data[:-4]
+        survey = entry[0].split('/')[7]
+        if f_utils.Fetch('{}.inf'.format(entry[0][:-4]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
+            mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
+            mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
+            mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
+            print(survey, src_data, mb_fmt, mb_perc, mb_date)
+            
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
+        src_mb = src_data[:-4]
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
             out, status = utils.run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_data, src_xyz), verbose=False)
             if status != 0:
-                if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_data)) == 0:
+                if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
                     mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
                     utils.remove_glob('{}.inf'.format(entry[0]))
                     out, status = utils.run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)

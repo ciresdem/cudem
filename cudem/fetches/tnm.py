@@ -56,7 +56,8 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
-        self.where = where
+        self.where = [where]
+        #print(self.where)
 
         self.name = 'tnm'
         self._info = '''Various datasets from USGS's National Map. The National Map is a 
@@ -161,15 +162,22 @@ and deliver topographic information for the Nation.'''
                     fmt = fmt['value']
                     break
                 #print(ds)
+            #print(len(ds))
             #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
-            this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
-            geom = this_xml.bounds(geom = True)
-            h_epsg, v_epsg = this_xml.reference_system()
+
             tags = ds['tags']
             if len(tags) > 0:
                 for tag in tags:
+                    print(tag)
+                    this_xml = FRED.iso_xml('{}?format=iso'.format(tag['infoUrl']))
+                    geom = this_xml.bounds(geom=True)
+                    h_epsg, v_epsg = this_xml.reference_system()
                     self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
-            else: self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
+            else:
+                this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
+                geom = this_xml.bounds(geom = True)
+                h_epsg, v_epsg = this_xml.reference_system()
+                self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
         if self.verbose:
             _prog.end(0, 'scanned {} datasets from TNM'.format(len(datasets)))
         self.FRED._close_ds()
