@@ -12,6 +12,7 @@ import struct
 import os
 import numpy as np
 from osgeo import gdal
+from cudem import utils
 #--
 
 xc_version = '1.3.3'
@@ -59,6 +60,7 @@ def xyzClip(inxyz, ingrd, outfile, outfile2, delim, msk_nval, msk_kval, inverse,
         if x > xextent and y < yextent:
             xpos = int(math.fabs(math.ceil((xextent - x)/float(cellsize[0]))))
             ypos = int(math.fabs(math.ceil((y - yextent)/float(cellsize[1]*-1))))
+            #xpos, ypos = utils._geo2pixel(x, y, band.)
 
             scanline = band.ReadRaster(0,ypos,band.XSize, 1, band.XSize, 1, gdal.GDT_Float32)
             these_values = struct.unpack('f' * band.XSize, scanline)

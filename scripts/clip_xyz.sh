@@ -45,7 +45,7 @@ to return the data points which are outside the given polygon, use the -i switch
 Report bugs to <matthew.love@colorado.edu>\n\
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 "
-while getopts ":I:M:O:iS:D:V" options; do
+while getopts ":I:M:O:iS:D:VQ" options; do
     case $options in
 	I ) inxyz=$OPTARG;;
 	O ) outxyz=$OPTARG;;
