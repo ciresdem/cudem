@@ -644,7 +644,7 @@ class WafflesIDW(Waffle):
         self.radius = utils.str2inc(radius)
         self.power = power
         self.block_p = block
-        self.min_pts = int_or(min_pts)
+        self.min_pts = utils.int_or(min_pts)
         self.mod = 'IDW'
         self.mod_args = {
             'radius':self.radius,
