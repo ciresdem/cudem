@@ -639,16 +639,18 @@ class WafflesIDW(Waffle):
     https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
-    def __init__(self, radius='1', power=2, block=True, **kwargs):
+    def __init__(self, radius='1', power=2, block=True, min_pts=None, **kwargs):
         super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
         self.power = power
         self.block_p = block
+        self.min_pts = min_pts
         self.mod = 'IDW'
         self.mod_args = {
             'radius':self.radius,
             'power':self.power,
             'block':self.block_p,
+            'min_pts':self.min_pts,
         }
         self._set_config()
         
@@ -680,16 +682,31 @@ class WafflesIDW(Waffle):
                 if self.weights:
                     ww_list = []
 
-                xg, yg = utils._pixel2geo(x, y, dst_gt)
-                block_region = regions.Region(xmin=xg-self.radius, xmax=xg+self.radius,
-                                              ymin=yg-self.radius, ymax=yg+self.radius)
-                srcwin = block_region.srcwin(dst_gt, xcount, ycount)
-                
-                for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-                    for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
-                        for b in self.block_t[y_i, x_i]:
-                            xyz_bucket.append(b)
+                if self.min_pts is not None:
+                    l_radius = 0
+                    while len(xyz_bucket) < self.min_pts:
+                        l_radius += self.radius
+                        xg, yg = utils._pixel2geo(x, y, dst_gt)
+                        block_region = regions.Region(xmin=xg-l_radius, xmax=xg+l_radius,
+                                                      ymin=yg-l_radius, ymax=yg+l_radius)
+                        srcwin = block_region.srcwin(dst_gt, xcount, ycount)
 
+                        for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+                            for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
+                                for b in self.block_t[y_i, x_i]:
+                                    xyz_bucket.append(b)
+                else:
+                    xg, yg = utils._pixel2geo(x, y, dst_gt)
+                    block_region = regions.Region(xmin=xg-self.radius, xmax=xg+self.radius,
+                                                  ymin=yg-self.radius, ymax=yg+self.radius)
+                    srcwin = block_region.srcwin(dst_gt, xcount, ycount)
+
+                    for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+                        for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
+                            for b in self.block_t[y_i, x_i]:
+                                xyz_bucket.append(b)
+
+                                
                 for this_xyz in xyz_bucket:
                     d = self._distance([this_xyz.x, this_xyz.y], [xg, yg])
                     z_list.append(this_xyz.z)
