@@ -25,12 +25,12 @@ Provides:
 ======================
 Console Scripts:
 ======================
-dlim
-regions
-waffles
-fetches
-spatial_metadata
-uncertainties
+dlim - process data and datalists
+regions - process regions
+waffles - generate a Digital Elevation Model
+fetches - fetch elevation data
+spatial_metadata - generate spatial metadata
+uncertainties - calculate DEM uncertainties
 
 ======================
 Scripts:
