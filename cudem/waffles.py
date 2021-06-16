@@ -639,18 +639,18 @@ class WafflesIDW(Waffle):
     https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
-    def __init__(self, radius='1', power=2, block=True, min_pts=None, **kwargs):
+    def __init__(self, radius='1', power=2, block=True, min_points=None, **kwargs):
         super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
         self.power = power
         self.block_p = block
-        self.min_pts = utils.int_or(min_pts)
+        self.min_pts = utils.int_or(min_points)
         self.mod = 'IDW'
         self.mod_args = {
             'radius':self.radius,
             'power':self.power,
             'block':self.block_p,
-            'min_pts':self.min_pts,
+            'min_pts':self.min_points,
         }
         self._set_config()
         
@@ -1495,7 +1495,8 @@ see gdal_grid --help for more info
 
 < nearest:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
- :radius2=[val] - search radius""",
+ :radius2=[val] - search radius
+ :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)""",
             'class': lambda k: WafflesMovingAverage(**k),
         },
         'invdst': {
@@ -1507,14 +1508,24 @@ see gdal_grid --help for more info
 
 < invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
- :radius2=[val] - search radius""",
+ :radius2=[val] - search radius
+ :power=[val] - weight**power
+ :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)""",
             'class': lambda k: WafflesInvDst(**k),
         },
         'IDW': {
             'name': 'IDW',
             'datalist-p': True,
             'description': """INVERSE DISTANCE WEIGHTED DEM\n
-            """,
+Generate a DEM using an Inverse Distance Weighted algorithm.
+If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
+as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+
+< IDW:radius=0:min_points=0:power=2:block=True >
+ :radius=[val] - search radius
+ :power=[val] - weight**power
+ :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
+ :block=[True/False] - block the data before performing the IDW routine""",
             'class': lambda k: WafflesIDW(**k),
         },
         'vdatum': {
@@ -1527,15 +1538,26 @@ see gdal_grid --help for more info
         'mbgrid': {
             'name': 'mbgrid',
             'datalist-p': True,
-            'description': """SPLINE grid via MB-System's mbgrid.
-            """,
+            'description': """SPLINE grid via MB-System's mbgrid.\n
+Generate a DEM using MB-System's mbgrid command.
+see mbgrid --help for more info
+
+< mbgrid:dist='10/3':tension=35:use_datalists=False >
+ :dist=[val] - the dist variable to use in mbgrid
+ :tension=[val] - the spline tension value (0-inf)
+ :use_datalist=[True/False] - use built-in datalists rather than mbdatalist""",
             'class': lambda k: WafflesMBGrid(**k),
         },
         'coastline': {
             'name': 'coastline',
             'datalist-p': False,
             'description': """COASTLINE generation.
-            """,
+Generate a coastline (land/sea mask) using a variety of sources.
+
+< coastline:wet=None:dry=None:use_gmrt=False >
+ :wet=[val] - an input wet mask vector file
+ :dry=[val] - an input dry mask vector file
+ :use_gmrt=[True/False] - use GMRT to fill background""",
             'class': lambda k: WafflesCoastline(**k),
         },
     }
@@ -1824,7 +1846,7 @@ Options:
 Datalists and data formats:
   A datalist is a file that contains a number of datalist entries, 
   while an entry is a space-delineated line:
-  `/path/to/data format weight data,meta,data`
+  `path [format weight [name source date type resolution hdatum vdatum url]]`
 
 Supported datalist formats: 
   {dl_formats}
