@@ -666,7 +666,10 @@ class WafflesIDW(Waffle):
         outArray[:] = np.nan
 
         if self.verbose:
-            progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
+            if self.min_pts:
+                progress = utils.CliProgress('generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(self.radius, ycount, xcount, self.min_pts))
+            else:
+                progress = utils.CliProgress('generating IDW grid @ {} and {}/{}'.format(self.radius, ycount, xcount))
             i=0
 
         self._xyz_block_t(self.yield_xyz(block=self.block_p))
@@ -1458,8 +1461,8 @@ see gmt xyz2grd --help for more info.
 < num:mode=n >
  :mode=[key] - specify mode of grid population: 
   keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)""",
+            'class': lambda k: WafflesNum(**k),
         },
-        'class': lambda k: WafflesNum(**k),
         'linear': {
             'name': 'linear',
             'datalist-p': True,
@@ -1469,8 +1472,8 @@ see gdal_grid --help for more info
 
 < linear:radius=-1 >
  :radius=[val] - search radius""",
+            'class': lambda k: WafflesLinear(**k),
         },
-        'class': lambda k: WafflesLinear(**k),
         'nearest': {
             'name': 'nearest',
             'datalist-p': True,
@@ -1481,8 +1484,8 @@ see gdal_grid --help for more info
 < nearest:radius1=0:radius2=0:angle=0:nodata=0 >
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
+            'class': lambda k: WafflesNearest(**k),
         },
-        'class': lambda k: WafflesNearest(**k),
         'average': {
             'name': 'average',
             'datalist-p': True,
@@ -1493,8 +1496,8 @@ see gdal_grid --help for more info
 < nearest:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
+            'class': lambda k: WafflesMovingAverage(**k),
         },
-        'class': lambda k: WafflesMovingAverage(**k),
         'invdst': {
             'name': 'invdst',
             'datalist-p': True,
@@ -1505,8 +1508,8 @@ see gdal_grid --help for more info
 < invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
  :radius2=[val] - search radius""",
+            'class': lambda k: WafflesInvDst(**k),
         },
-        'class': lambda k: WafflesInvDst(**k),
         'IDW': {
             'name': 'IDW',
             'datalist-p': True,

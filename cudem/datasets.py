@@ -101,8 +101,8 @@ class XYZDataset():
         if self.valid_p():
             #if self.region is not None:
             if self.data_format == -1:
-                self.inf(check_hash=True)
-                #self.inf(check_hash=False)
+                #self.inf(check_hash=True)
+                self.inf(check_hash=False)
             else:
                 self.inf()
             self.set_transform()
