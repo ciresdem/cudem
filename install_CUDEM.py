@@ -29,8 +29,8 @@ if not cmd_exists('mblist'):
               Some functionality of CUDEM will be unavailable without it.
               Get the latest from ...""")
 
-if not cmd_exists('las2txt'):
-    print(""" WARNING: Could not find LASTools on the system.
+if not cmd_exists('laszip'):
+    print(""" WARNING: Could not find laszip on the system.
               Some functionality of CUDEM will be unavailable without it.
               Get the latest from ...""")
 
