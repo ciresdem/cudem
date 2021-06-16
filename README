@@ -74,6 +74,14 @@ Installation:
 ==============================================
 
 ======================
+via install_CUDEM.py
+======================
+
+ % git clone https:/github.com/ciresdem/cudem.git
+ % cd cudem
+ % python install_CUDEM.py
+
+======================
 via git and pip:
 ======================
 
