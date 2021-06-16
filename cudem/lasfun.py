@@ -28,6 +28,7 @@ import time
 import re
 import numpy as np
 from scipy import spatial
+import cudem
 from cudem import utils
 from cudem import regions
 from cudem import xyzs
@@ -131,14 +132,14 @@ def las_file_p(inlas):
     file.  The first four(4) bytes of an
     LAS file should have the characters "LASF"'''
 
-    return(open(inlas, 'rb').read(4) == "LASF")
+    return(open(inlas, 'rb').read(4) == b'LASF')
 
 ## ==============================================
 ## las-file header
 ## ==============================================
 class LasHeader:
     
-    def __init__(self, inlas = "None"):
+    def __init__(self, inlas=None):
         self.inlas = inlas
         try:
             if os.path.exists(self.inlas):
@@ -520,8 +521,8 @@ class LasFile:
         point = {}
         outpoint = []
 
-        scale = self.hc.getScale()
-        offsets = self.hc.getOffsets()
+        scale = self.hc.get_scale()
+        offsets = self.hc.get_offsets()
         pt_form = tuple(re.findall(r'(\D)', use_recs))
 
         for form in pt_form:
@@ -561,9 +562,9 @@ class LasFile:
             thisP = struct.unpack(unpackstring, las.read(BUFF))
 
             if clf is not None and str(thisP[5]) in clfs:
-                print(str(delim).join(map(str, self.validPoint(thisP, use_recs, clf))))
+                print(str(delim).join(map(str, self.valid_point(thisP, use_recs, clf))))
             elif clf is None:
-                print(str(delim).join(map(str, self.validPoint(thisP, use_recs, clf))))
+                print(str(delim).join(map(str, self.valid_point(thisP, use_recs, clf))))
 
     def readAsArray(self, israw=False):
         """Read a binary LAS-files point records into a
@@ -730,5 +731,69 @@ class LasWrite:
         for i in header_struct:
             nh.append(lhead[i[0]])
         return(np.array(tuple(nh), dt))
-        
+
+## ==============================================
+##
+## lasfun cli
+##
+## ==============================================
+lasfun_usage = '''{cmd} ({version}): lasfun; Process and generate las files
+
+usage: {cmd} [ -hqPRW [ args ] ]...
+
+Options:
+
+  --quiet\t\tLower the verbosity to a quiet
+
+  --help\t\tPrint the usage text
+  --version\t\tPrint the version information
+
+Examples:
+  % {cmd}
+
+CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
+'''.format(cmd =  os.path.basename(sys.argv[0]), 
+           version = cudem.__version__)
+
+def lasfun_cli(argv = sys.argv):
+    """run lasfun from command-line
+
+    See `lasfun_usage` for full cli options.
+    """
+
+    want_verbose = True
+    inlasen = []
+    
+    ## ==============================================
+    ## parse command line arguments.
+    ## ==============================================
+    i = 1
+    while i < len(argv):
+        arg = argv[i]
+        if arg == '--quiet' or arg == '-q':
+            want_verbose = False
+        elif arg == '--help' or arg == '-h':
+            print(lasfun_usage)
+            sys.exit(1)
+        elif arg == '--version' or arg == '-v':
+            print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
+            sys.exit(1)
+        elif arg[0] == '-':
+            print(lasfun_usage)
+            sys.exit(0)
+        else: inlasen.append(arg)
+        i = i + 1
+
+    if len(inlasen) == 0:
+        print(lasfun_usage)
+        utils.echo_error_msg('you must specify at least one las file')
+        sys.exit(-1)
+    
+    for rn, this_las in enumerate(inlasen):
+
+        LasHeader(this_las).dump_header()
+        LasFile(this_las).dump_points("xyzircsupg")
+        #printHeader(infile)
+
+    
 ### End

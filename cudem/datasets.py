@@ -26,6 +26,7 @@ import os
 import sys
 import json
 import hashlib
+import laspy as lp
 import numpy as np
 from scipy import spatial
 from osgeo import gdal
@@ -636,21 +637,27 @@ class LASFile(XYZDataset):
 
         #region_ = self.region
         #self.region = None
-        
-        out, status = utils.run_cmd('lasinfo -nc -nv -stdout -i {}'.format(self.fn), verbose=False)
-        for i in out.split(b'\n'):
-            #print(i)
-            if b'number of point records' in i:
-                #print(i)
-                #print(i.split(':')[1].strip())
-                self.infos['numpts'] = int(i.split(b':')[1].strip())
-            if b'min x y z' in i:
-                xyz_min = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
-            if b'max x y z' in i:
-                xyz_max = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
-        this_region.from_list([xyz_min[0], xyz_max[0], xyz_min[1], xyz_max[1], xyz_min[2], xyz_max[2]])
+
+        with lp.open(self.fn) as lasf:
+            self.infos['numpts'] = lasf.header.point_count
+            this_region.from_list([lasf.header.x_min, lasf.header.x_max, lasf.header.y_min, lasf.header.y_max, lasf.header.z_min, lasf.header.z_max])
         self.infos['minmax'] = this_region.export_as_list(include_z=True)
         self.infos['wkt'] = this_region.export_as_wkt()
+            
+        # out, status = utils.run_cmd('lasinfo -nc -nv -stdout -i {}'.format(self.fn), verbose=False)
+        # for i in out.split(b'\n'):
+        #     #print(i)
+        #     if b'number of point records' in i:
+        #         #print(i)
+        #         #print(i.split(':')[1].strip())
+        #         self.infos['numpts'] = int(i.split(b':')[1].strip())
+        #     if b'min x y z' in i:
+        #         xyz_min = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
+        #     if b'max x y z' in i:
+        #         xyz_max = [float(y) for y in [x.strip() for x in i.split(b':')][1].split()]
+        # this_region.from_list([xyz_min[0], xyz_max[0], xyz_min[1], xyz_max[1], xyz_min[2], xyz_max[2]])
+        # self.infos['minmax'] = this_region.export_as_list(include_z=True)
+        # self.infos['wkt'] = this_region.export_as_wkt()
         #self.region = region_
         #print(this_region)        
         return(self.infos)
@@ -717,24 +724,40 @@ class LASFile(XYZDataset):
             min_z = max_z = None
             
         this_xyz = xyzfun.XYZPoint(w=1)
-        
-        for line in utils.yield_cmd('las2txt -parse xyz -stdout {} -i {} {} {} {}'.format(
-                '' if self.classes is None else '-keep_class {}'.format(' '.join([str(x) for x in self.classes])), self.fn,
-                '' if self.region is None else '-keep_xy {}'.format(self.region.format('te')),
-                '' if min_z is None else '-drop_z_below {}'.format(min_z),
-                '' if max_z is None else '-drop_z_above {}'.format(max_z)), data_fun=None, verbose=False):
-            this_xyz.from_string(line, delim=' ', x_pos=0, y_pos=1)
-            if this_xyz.valid_p():
-                this_xyz.w = self.weight
-                if self.dst_trans is not None:
-                    this_xyz.transform(self.dst_trans)
-                if self.region is not None and self.region.valid_p():
-                    if regions.xyz_in_region_p(this_xyz, self.region):
+        ln = 0
+        with lp.open(self.fn) as lasf:
+            for points in lasf.chunk_iterator(1000):
+                for point in points[points.classification == 2]:
+                    ln += 1
+                    this_xyz.x = (point.X * lasf.header.x_scale) + lasf.header.x_offset
+                    this_xyz.y = (point.Y * lasf.header.y_scale) + lasf.header.y_offset
+                    this_xyz.z = (point.Z * lasf.header.z_scale) + lasf.header.z_offset
+                    this_xyz.w = self.weight
+                    if self.region is not None and self.region.valid_p():
+                        if regions.xyz_in_region_p(this_xyz, self.region):
+                            ln += 1
+                            yield(this_xyz)
+                    else:
                         ln += 1
                         yield(this_xyz)
-                else:
-                    ln += 1
-                    yield(this_xyz)
+
+        # for line in utils.yield_cmd('las2txt -parse xyz -stdout {} -i {} {} {} {}'.format(
+        #         '' if self.classes is None else '-keep_class {}'.format(' '.join([str(x) for x in self.classes])), self.fn,
+        #         '' if self.region is None else '-keep_xy {}'.format(self.region.format('te')),
+        #         '' if min_z is None else '-drop_z_below {}'.format(min_z),
+        #         '' if max_z is None else '-drop_z_above {}'.format(max_z)), data_fun=None, verbose=False):
+        #     this_xyz.from_string(line, delim=' ', x_pos=0, y_pos=1)
+        #     if this_xyz.valid_p():
+        #         this_xyz.w = self.weight
+        #         if self.dst_trans is not None:
+        #             this_xyz.transform(self.dst_trans)
+        #         if self.region is not None and self.region.valid_p():
+        #             if regions.xyz_in_region_p(this_xyz, self.region):
+        #                 ln += 1
+        #                 yield(this_xyz)
+        #         else:
+        #             ln += 1
+        #             yield(this_xyz)
         if self.verbose:
             utils.echo_msg('parsed {} data records from {}'.format(ln, self.fn))
         
