@@ -29,9 +29,11 @@ dlim - process data and datalists
        formats: datalist (-1),  yxz (167),  xyz (168),  raster (200),  las (300),  fetches (-11)
 regions - process regions
 waffles - generate a Digital Elevation Model
-          modules: surface, triangulate, num, linear, nearest, average, invdst, IDW, vdatum, mbgrid, coastline
+          modules: surface, triangulate, num, linear, nearest, average, invdst, IDW, vdatum,
+	  mbgrid, coastline
 fetches - fetch elevation data
-          modules: gmrt, srtm_plus, mar_grav, multibeam, usace, ngs, nos, charts, digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem
+          modules: gmrt, srtm_plus, mar_grav, multibeam, usace, ngs, nos, charts, digital_coast,
+	  ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem
 spatial_metadata - generate spatial metadata
 uncertainties - calculate DEM uncertainties
 
