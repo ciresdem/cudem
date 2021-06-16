@@ -369,10 +369,13 @@ class XYZDataset():
                 self.name, self.region.format('fn'), utils.this_year())
             
         [x for x in self.parse()]
-            
+        self.parse_data_lists()
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
-                a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
+                if self.region is None:
+                    a_dir = '{}_{}'.format(x, utils.this_year())
+                else:
+                    a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
                 this_dir = xdl2dir(self.data_lists[x]['parent'])
                 this_dir.append(a_dir)
                 tmp_dir = this_dir
@@ -661,7 +664,7 @@ class LASFile(XYZDataset):
         ln = 0
         with lp.open(self.fn) as lasf:
             for points in lasf.chunk_iterator(1000):
-                for point in points[points.classification == 2]:
+                for point in points[points.classification == 2 or points.classification == 29]:
                     ln += 1
                     this_xyz.x = (point.X * lasf.header.x_scale) + lasf.header.x_offset
                     this_xyz.y = (point.Y * lasf.header.y_scale) + lasf.header.y_offset
