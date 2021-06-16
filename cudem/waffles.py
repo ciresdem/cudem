@@ -1538,7 +1538,7 @@ as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/
         'mbgrid': {
             'name': 'mbgrid',
             'datalist-p': True,
-            'description': """SPLINE grid via MB-System's mbgrid.\n
+            'description': """SPLINE DEM via MB-System's mbgrid.\n
 Generate a DEM using MB-System's mbgrid command.
 see mbgrid --help for more info
 
@@ -1828,7 +1828,7 @@ Options:
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tgenerate a waffles_config JSON file using the --config flag.
 
-  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
+  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc_nYYxYY_wXXxXX_YEAR info to output BASENAME).
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 
