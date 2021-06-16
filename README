@@ -3,6 +3,22 @@
 CUDEM is a set of Python modules and console scripts for utilizing elevation data and Digital Elevation Models.
 
 ==============================================
+Requires:
+==============================================
+
+Python >= 3
+GDAL
+
+======================
+Optional:
+======================
+
+GMT
+MB-System
+VDatum >= 4
+laszip
+
+==============================================
 Provides:
 ==============================================
 
