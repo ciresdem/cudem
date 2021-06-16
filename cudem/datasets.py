@@ -363,7 +363,7 @@ class XYZDataset():
             return(this_dir)
         
         if self.region is None:
-            a_name = self.name
+            a_name = '{}_{}'.format(self.name, utils.this_year())
         else:
             a_name = '{}_{}_{}'.format(
                 self.name, self.region.format('fn'), utils.this_year())
