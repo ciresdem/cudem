@@ -25,7 +25,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.1.2',
+    version = '1.2.0',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -93,7 +93,7 @@ setuptools.setup(
         'scripts/tif2chunks2xyz.sh',
         'scripts/bag2tif2chunks2xyz.sh',
     ],
-    python_requires = '>=2.7',
+    python_requires = '>=3.0',
     project_urls = {
         'Source': 'https://github.com/ciresdem/cudem',
     },
