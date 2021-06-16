@@ -6,7 +6,9 @@ CUDEM is a set of Python modules and console scripts for utilizing elevation dat
 Provides:
 ==============================================
 
+======================
 Console Scripts:
+======================
 dlim
 regions
 waffles
@@ -14,7 +16,9 @@ fetches
 spatial_metadata
 uncertainties
 
+======================
 Scripts:
+======================
 gdal_null.py
 gdal_outliers.py
 gdal_nan2null.py
