@@ -26,14 +26,11 @@ Provides:
 Console Scripts:
 ======================
 dlim - process data and datalists
-Supported datalist formats: 
   datalist (-1),  yxz (167),  xyz (168),  raster (200),  las (300),  fetches (-11)
 regions - process regions
 waffles - generate a Digital Elevation Model
-Modules (see waffles --modules <module-name> for more info):
   surface, triangulate, num, linear, nearest, average, invdst, IDW, vdatum, mbgrid, coastline
 fetches - fetch elevation data
-Supported FETCHES modules: 
   gmrt, srtm_plus, mar_grav, multibeam, usace, ngs, nos, charts, digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem
 spatial_metadata - generate spatial metadata
 uncertainties - calculate DEM uncertainties
