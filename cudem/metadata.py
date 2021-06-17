@@ -72,10 +72,11 @@ def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
     c_layer = c_ds.GetLayer()
     
     dst_ds = driver.CreateDataSource(dst_ogr)
-    dst_layer = dst_ds.CreateLayer(dst_ogr.split('.')[0], geom_type=ogr.wkbMultiPolygon)
+    dst_layer = dst_ds.CreateLayer(
+        dst_ogr.split('.')[0], geom_type=ogr.wkbMultiPolygon
+    )
 
     layer.Clip(c_layer, dst_layer)
-
     ds = c_ds = dst_ds = None
 
 def ogr_empty_p(src_ogr):
@@ -88,18 +89,29 @@ def ogr_empty_p(src_ogr):
         if fc == 0:
             return(True)
         else: return(False)
+        
     else: return(True)
 
-class SpatialMetadata: #(waffles.Waffle):
+class SpatialMetadata:
     """Waffles Spatial Metadata
     Polygonize each datalist entry into vector data source.
     """
 
-    def __init__(self, data=[], src_region=None, inc=None, name='waffles_sm', epsg=4326,
-                 warp=None, extend=0, node='pixel', make_valid=False, verbose=False):
+    def __init__(
+            self,
+            data=[],
+            src_region=None,
+            inc=None,
+            name='waffles_sm',
+            epsg=4326,
+            warp=None,
+            extend=0,
+            node='pixel',
+            make_valid=False,
+            verbose=False
+    ):
         """generate spatial-metadata"""
         
-        #super().__init__(**kwargs)
         self.data = data
         self.inc = utils.float_or(inc)
         self.epsg = utils.int_or(epsg)
@@ -134,16 +146,40 @@ class SpatialMetadata: #(waffles.Waffle):
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.shp'
-        self.v_fields = ['Name', 'Title', 'Agency', 'Date', 'Type', 'Resolution', 'HDatum', 'VDatum', 'URL']
-        self.t_fields = [ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString,
-                         ogr.OFTString, ogr.OFTString, ogr.OFTString, ogr.OFTString]
+        self.v_fields = [
+            'Name',
+            'Title',
+            'Agency',
+            'Date',
+            'Type',
+            'Resolution',
+            'HDatum',
+            'VDatum',
+            'URL'
+        ]
+        self.t_fields = [
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString
+        ]
         utils.remove_glob('{}.*'.format(self.dst_layer))
         utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
     
         self.ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(self.dst_vector)
         if self.ds is not None: 
-            self.layer = self.ds.CreateLayer('{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon)
-            [self.layer.CreateField(ogr.FieldDefn('{}'.format(f), self.t_fields[i])) for i, f in enumerate(self.v_fields)]
+            self.layer = self.ds.CreateLayer(
+                '{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon
+            )
+            [self.layer.CreateField(
+                ogr.FieldDefn('{}'.format(f), self.t_fields[i])
+            ) for i, f in enumerate(self.v_fields)]
+            
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
             
@@ -154,33 +190,57 @@ class SpatialMetadata: #(waffles.Waffle):
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
-                o_v_fields = [x, p.title if p.title is not None else x, p.source, p.date, p.data_type, p.resolution, p.hdatum, p.vdatum, p.url]
+                o_v_fields = [
+                    x, p.title if p.title is not None else x,
+                    p.source,
+                    p.date,
+                    p.data_type,
+                    p.resolution,
+                    p.hdatum,
+                    p.vdatum,
+                    p.url
+                ]
+                
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
                 for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc):
                     yield(xyz)
 
                 if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
-                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource('{}_poly.shp'.format(dl_name))
+                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
+                        '{}_poly.shp'.format(dl_name)
+                    )
+                    
                     if tmp_ds is not None:
-                        tmp_layer = tmp_ds.CreateLayer('{}_poly'.format(dl_name), None, ogr.wkbMultiPolygon)
+                        tmp_layer = tmp_ds.CreateLayer(
+                            '{}_poly'.format(dl_name), None, ogr.wkbMultiPolygon
+                        )
+                        
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                        demfun.polygonize('{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose)
+                        demfun.polygonize(
+                            '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
+                        )
 
                         if len(tmp_layer) > 0:
                             if defn is None: defn = tmp_layer.GetLayerDefn()
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
                             [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
                             self.layer.CreateFeature(out_feat)
+                            
                     tmp_ds = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
                 utils.remove_glob('{}.tif'.format(x))
         self.ds = None
 
         if self.make_valid:
-            utils.echo_msg('validating spatial geometries...')
-            utils.run_cmd('ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}\
-            '.format(self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector), verbose=self.verbose)
+            utils.echo_msg(
+                'validating spatial geometries...'
+            )
+            
+            utils.run_cmd(
+                'ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}'.format(
+                    self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector), verbose=self.verbose
+            )
 
     def run(self):
         [s for s in self.yield_xyz()]
@@ -285,14 +345,22 @@ def spat_meta_cli(argv = sys.argv):
             for i in tmp_region:
                 if i.valid_p():
                     if len(i_region_s) > 1:
-                        these_regions.append(regions.Region().from_string('/'.join([i.format('str'), i_region_s[1]])))
+                        these_regions.append(
+                            regions.Region().from_string(
+                                '/'.join([i.format('str'), i_region_s[1]])
+                            )
+                        )
+                        
                     else:
                         these_regions.append(i)
 
     if len(these_regions) == 0:
         these_regions = [None]
     else:
-        if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
+        if want_verbose:
+            utils.echo_msg(
+                'parsed {} region(s)'.format(len(these_regions))
+            )
 
     name_ = name
     for rn, this_region in enumerate(these_regions):
@@ -302,7 +370,15 @@ def spat_meta_cli(argv = sys.argv):
         else:
             if want_prefix or len(these_regions) > 1:
                 name_ = utils.append_fn(name, this_region, inc)
-            SpatialMetadata(data=dls, src_region=this_region, inc=inc, extend=extend, epsg=epsg,
-                            node=node, name=name_, verbose=want_verbose, make_valid=want_valid).run()
-
+            SpatialMetadata(
+                data=dls,
+                src_region=this_region,
+                inc=inc,
+                extend=extend,
+                epsg=epsg,
+                node=node,
+                name=name_,
+                verbose=want_verbose,
+                make_valid=want_valid
+            ).run()
 ### End
