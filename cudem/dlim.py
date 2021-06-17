@@ -74,7 +74,7 @@ class Datalist(datasets.XYZDataset):
         for entry in self.parse():
             if self.verbose:
                 callback()
-            #print(entry.infos)
+                
             out_regions.append(entry.infos['minmax'])
             if 'numpts' in self.infos.keys():
                 self.infos['numpts'] += entry.infos['numpts']
@@ -91,6 +91,7 @@ class Datalist(datasets.XYZDataset):
                 tmp_region = regions.Region().from_list(this_region)
                 if tmp_region.valid_p():
                     out_region = regions.regions_merge(out_region, tmp_region)
+                    
         if out_region is not None:
             self.infos['minmax'] = out_region.export_as_list(include_z=True)
             self.infos['wkt'] = out_region.export_as_wkt()
@@ -112,23 +113,40 @@ class Datalist(datasets.XYZDataset):
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
+                
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
                     #if self.verbose:
                     #_prog.update_perc((l, count))
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
-                            this_line, parent=self, name=self.name, src_region=self.region, source=self.source, date=self.date,
-                            data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url, title=self.title,
-                            warp=self.warp, weight=self.weight, verbose=self.verbose).acquire_dataset()
-                        if data_set is not None and data_set.valid_p(fmts=DatasetFactory.data_types[data_set.data_format]['fmts']):
+                            this_line,
+                            parent=self,
+                            name=self.name,
+                            src_region=self.region,
+                            source=self.source,
+                            date=self.date,
+                            data_type=self.data_type,
+                            resolution=self.resolution,
+                            hdatum=self.hdatum,
+                            vdatum=self.vdatum,
+                            url=self.url,
+                            title=self.title,
+                            warp=self.warp,
+                            weight=self.weight,
+                            verbose=self.verbose
+                        ).acquire_dataset()
+                        if data_set is not None and data_set.valid_p(
+                                fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                        ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:
-                                    inf_region = regions.Region().from_string(data_set.infos['wkt'])
+                                    inf_region = regions.Region().from_string(
+                                        data_set.infos['wkt']
+                                    )
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
-                                            #print(self.name)
                                             #self.parse_data_lists()
                                             yield(ds)
                             else:
@@ -138,7 +156,9 @@ class Datalist(datasets.XYZDataset):
                                     yield(ds)
             #self.parse_data_lists()
         else:
-            utils.echo_warning_msg('could not open datalist/entry {}'.format(self.fn))
+            utils.echo_warning_msg(
+                'could not open datalist/entry {}'.format(self.fn)
+            )
         #if self.verbose:
         #    _prog.end(0, 'parsed datalist {}'.format(self.fn))
            
@@ -152,6 +172,7 @@ class Datalist(datasets.XYZDataset):
         for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
+                
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
 
@@ -166,6 +187,7 @@ class Datalist(datasets.XYZDataset):
             #for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
+                
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
                 
@@ -196,9 +218,24 @@ class DatasetFactory:
               'class': lambda k: datasets.LASFile(**k),
               },
         -11: {'name': 'fetches',
-              'fmts': ['gmrt', 'multibeam', 'usace', 'mar_grav', 'srtm_plus',
-                       'ngs', 'nos', 'charts', 'digital_coast', 'ncei_thredds',
-                       'tnm', 'emodnet', 'chs', 'hrdem', 'copernicus', 'nasadem'],
+              'fmts': [
+                  'gmrt',
+                  'multibeam',
+                  'usace',
+                  'mar_grav',
+                  'srtm_plus',
+                  'ngs',
+                  'nos',
+                  'charts',
+                  'digital_coast',
+                  'ncei_thredds',
+                  'tnm',
+                  'emodnet',
+                  'chs',
+                  'hrdem',
+                  'copernicus',
+                  'nasadem'
+              ],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
     }
@@ -207,9 +244,26 @@ class DatasetFactory:
                      'date', 'type', 'resolution', 'horz', 'vert',
                      'url']
     
-    def __init__(self, fn=None, data_format=None, weight=1, epsg=4326, name="xyz_dataset", title=None,
-                 source=None, date=None, data_type=None, resolution=None, hdatum=None, vdatum=None, url=None,
-                 parent=None, src_region=None, warp=None, verbose=False):
+    def __init__(
+            self,
+            fn=None,
+            data_format=None,
+            weight=1,
+            epsg=4326,
+            name="xyz_dataset",
+            title=None,
+            source=None,
+            date=None,
+            data_type=None,
+            resolution=None,
+            hdatum=None,
+            vdatum=None,
+            url=None,
+            parent=None,
+            src_region=None,
+            warp=None,
+            verbose=False
+    ):
         
         self.name = name
         self.title = title
@@ -229,6 +283,7 @@ class DatasetFactory:
         self.verbose = verbose
         self.fn = fn
         self.parse_fn()
+        
         if self.data_format is None:
             self.guess_data_format()
         
@@ -252,6 +307,7 @@ class DatasetFactory:
                 if see in self.data_types[key]['fmts']:
                     entry.append(int(key))
                     break
+                
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
@@ -260,35 +316,53 @@ class DatasetFactory:
             entry.append(self.weight)
         elif entry[2] is None:
             entry[2] = self.weight
+            
         if len(entry) < 4:
             entry.append(self.title)
-        else: self.title = entry[3]
+        else:
+            self.title = entry[3]
+            
         if len(entry) < 5:
             entry.append(self.source)
-        else: self.source = entry[4]
+        else:
+            self.source = entry[4]
+            
         if len(entry) < 6:
             entry.append(self.date)
-        else: self.date = entry[5]
+        else:
+            self.date = entry[5]
+            
         if len(entry) < 7:
             entry.append(self.data_type)
-        else: self.data_type = entry[6]
+        else:
+            self.data_type = entry[6]
+            
         if len(entry) < 8:
             entry.append(self.resolution)
-        else: self.resolution = entry[7]
+        else:
+            self.resolution = entry[7]
+            
         if len(entry) < 9:
             entry.append(self.hdatum)
-        else: self.hdatum = entry[8]
+        else:
+            self.hdatum = entry[8]
+            
         if len(entry) < 10:
             entry.append(self.vdatum)
-        else: self.vdatum = entry[9]
+        else:
+            self.vdatum = entry[9]
+            
         if len(entry) < 11:
             entry.append(self.url)
-        else: self.url = entry[10]
+        else:
+            self.url = entry[10]
 
         if self.parent is None or entry[1] == -11:
             self.fn = entry[0]
         else:
-            self.fn = os.path.join(os.path.dirname(self.parent.fn), entry[0])
+            self.fn = os.path.join(
+                os.path.dirname(self.parent.fn), entry[0]
+            )
         
         self.data_format = entry[1]
         if self.data_format is None:
@@ -311,56 +385,167 @@ class DatasetFactory:
             self.data_types[key] = type_def[key]
 
     def acquire_datalist(self, **kwargs):
-        return(Datalist(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-            **kwargs))
+        return(
+            Datalist(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                **kwargs
+            )
+        )
 
     def acquire_xyz_file(self, **kwargs):
-        return(datasets.XYZFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-            xpos=0, ypos=1, zpos=2, **kwargs))
+        return(
+            datasets.XYZFile(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                xpos=0,
+                ypos=1,
+                zpos=2,
+                **kwargs
+            )
+        )
 
     def acquire_las_file(self, **kwargs):
-        return(datasets.LASFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-            classes=[2,29], **kwargs))    
+        return(
+            datasets.LASFile(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                classes=[2,29],
+                **kwargs
+            )
+        )    
     
     def acquire_raster_file(self, **kwargs):
-        return(datasets.RasterFile(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-            **kwargs))
+        return(
+            datasets.RasterFile(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                **kwargs
+            )
+        )
 
     def acquire_fetcher(self, **kwargs):
-        return(fetches.Fetcher(
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose, remote=True,
-            **kwargs))
+        return(
+            fetches.Fetcher(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                remote=True,
+                **kwargs
+            )
+        )
 
     def acquire(self, **kwargs):
-        return(self.data_types[self.data_format]['class'](
-            fn=self.fn, data_format=self.data_format, weight=self.weight, src_region=self.region, title=self.title,
-            source=self.source, date=self.date, data_type=self.data_type, resolution=self.resolution, hdatum=self.hdatum, vdatum=self.vdatum, url=self.url,
-            epsg=self.epsg, warp=self.warp, name=self.name, parent=self.parent, verbose=self.verbose,
-            **kwargs))
+        return(
+            self.data_types[self.data_format]['class'](
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                **kwargs
+            )
+        )
     
     def acquire_dataset(self, **kwargs):
         if self.data_format == -1:
             return(self.acquire_datalist(**kwargs))#.parse())
+        
         if self.data_format == 168:
             return(self.acquire_xyz_file(**kwargs))#.parse())
+        
         if self.data_format == 200:
             return(self.acquire_raster_file(**kwargs))#.parse())
+        
         if self.data_format == 300:
             return(self.acquire_las_file(**kwargs))#.parse())
+        
         if self.data_format == -11:
             return(self.acquire_fetcher(**kwargs))#.parse())
 
@@ -467,12 +652,15 @@ def datalists_cli(argv = sys.argv):
             print(datalists_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
+            print('{}, version {}'.format(
+                os.path.basename(sys.argv[0]), cudem.__version__)
+                  )
             sys.exit(1)
         elif arg[0] == '-':
             print(datalists_usage)
             sys.exit(0)
         else: dls.append(arg)
+        
         i = i + 1
 
     if want_glob:
@@ -480,7 +668,14 @@ def datalists_cli(argv = sys.argv):
             if key != -1:
                 for f in DatasetFactory().data_types[key]['fmts']:
                     globs = glob.glob('*.{}'.format(f))
-                    [sys.stdout.write('{}\n'.format(' '.join([x, str(key), '1']))) for x in globs]
+                    [sys.stdout.write(
+                        '{}\n'.format(
+                            ' '.join(
+                                [x, str(key), '1']
+                            )
+                        )
+                    ) for x in globs]
+                    
         sys.exit(0)
 
     for i_region in i_regions:
@@ -493,7 +688,11 @@ def datalists_cli(argv = sys.argv):
             for i in tmp_region:
                 if i.valid_p():
                     if len(i_region_s) > 1:
-                        these_regions.append(regions.Region().from_string('/'.join([i.format('str'), i_region_s[1]])))
+                        these_regions.append(
+                            regions.Region().from_string(
+                                '/'.join([i.format('str'), i_region_s[1]])
+                            )
+                        )
                     else:
                         these_regions.append(i)
 
@@ -513,10 +712,13 @@ def datalists_cli(argv = sys.argv):
             epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
 
         for xdl in xdls:
-            if xdl is not None and xdl.valid_p(fmts=DatasetFactory.data_types[xdl.data_format]['fmts']):
+            if xdl is not None and xdl.valid_p(
+                    fmts=DatasetFactory.data_types[xdl.data_format]['fmts']
+            ):
                 #xdl.parse()
                 if not want_weights:
                     xdl.weight = None
+                    
                 if want_inf:
                     print(xdl.inf())
                 elif want_list:
