@@ -664,7 +664,8 @@ class LASFile(XYZDataset):
         ln = 0
         with lp.open(self.fn) as lasf:
             for points in lasf.chunk_iterator(1000):
-                for point in points[points.classification == 2 or points.classification == 29]:
+                for point in points[points.classification == 2]:
+                    #for point in points[points.classification == 2 or points.classification == 29]:
                     ln += 1
                     this_xyz.x = (point.X * lasf.header.x_scale) + lasf.header.x_offset
                     this_xyz.y = (point.Y * lasf.header.y_scale) + lasf.header.y_offset
