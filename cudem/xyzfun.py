@@ -40,8 +40,16 @@ class XYZPoint:
       z_datum (str): vertical datum of the z_value
     """
     
-    def __init__(self, x=None, y=None, z=None, w=1,
-                 epsg=4326, z_units='m', z_datum='msl'):
+    def __init__(
+            self,
+            x=None,
+            y=None,
+            z=None,
+            w=1,
+            epsg=4326,
+            z_units='m',
+            z_datum='msl'
+    ):
         """
         Args:
           x (float): longitude/x
@@ -62,16 +70,36 @@ class XYZPoint:
         #self.z_datum = z_datum
 
     def copy(self):
-        return(XYZPoint(x=self.x, y=self.y, z=self.z, w=self.w))
+        return(
+            XYZPoint(
+                x=self.x,
+                y=self.y,
+                z=self.z,
+                w=self.w
+            )
+        )
         
     def valid_p(self):
         
-        if self.x is None: return(False)
-        if self.y is None: return(False)
-        if self.z is None: return(False)
+        if self.x is None:
+            return(False)
+        
+        if self.y is None:
+            return(False)
+        
+        if self.z is None:
+            return(False)
+        
         return(True)
     
-    def from_list(self, xyz_list, x_pos=0, y_pos=1, z_pos=2, w_pos=3):
+    def from_list(
+            self,
+            xyz_list,
+            x_pos=0,
+            y_pos=1,
+            z_pos=2,
+            w_pos=3
+    ):
         """load xyz data from a list
 
         Args:
@@ -83,15 +111,27 @@ class XYZPoint:
 
         if len(xyz_list) > x_pos:
             self.x = utils.float_or(xyz_list[x_pos])
+            
         if len(xyz_list) > y_pos:
             self.y = utils.float_or(xyz_list[y_pos])
+            
         if len(xyz_list) > z_pos:
             self.z = utils.float_or(xyz_list[z_pos])
+            
         if len(xyz_list) > w_pos:
             self.w = utils.float_or(xyz_list[w_pos])
+            
         return(self)
     
-    def from_string(self, xyz_str, x_pos=0, y_pos=1, z_pos=2, w_pos=3, delim=" "):
+    def from_string(
+            self,
+            xyz_str,
+            x_pos=0,
+            y_pos=1,
+            z_pos=2,
+            w_pos=3,
+            delim=" "
+    ):
         """load xyz data from a string
 
         Args:
@@ -102,7 +142,11 @@ class XYZPoint:
         """
         
         this_line = xyz_str.strip()
-        return(self.from_list(this_line.split(delim), x_pos, y_pos, z_pos, w_pos))
+        return(
+            self.from_list(
+                this_line.split(delim), x_pos, y_pos, z_pos, w_pos
+            )
+        )
         
     def export_as_list(self, include_z=False, include_w=False):
         """export xyz as a list
@@ -118,8 +162,10 @@ class XYZPoint:
         xyz_list = [self.x, self.y]
         if include_z:
             xyz_list.append(self.z)
+            
         if include_w:
             xyz_list.append(self.w)
+            
         return(xyz_list)
 
     def export_as_string(self, delim, include_z=False, include_w=False):
@@ -129,7 +175,10 @@ class XYZPoint:
           delim (str): the delimiter
         """
 
-        l = self.export_as_list(include_z=include_z, include_w=include_w)
+        l = self.export_as_list(
+            include_z=include_z, include_w=include_w
+        )
+        
         return('{}\n'.format(delim.join([str(x) for x in l])))
 
     def export_as_wkt(self, include_z=False):
@@ -138,7 +187,14 @@ class XYZPoint:
         else:
             return('POINT ({} {})'.format(self.x, self.y))
     
-    def dump(self, delim=' ', include_z=True, include_w=False, encode=False, dst_port=sys.stdout):
+    def dump(
+            self,
+            delim=' ',
+            include_z=True,
+            include_w=False,
+            encode=False,
+            dst_port=sys.stdout
+    ):
         """dump xyz as a string to dst_port
 
         Args:
@@ -150,8 +206,13 @@ class XYZPoint:
             files usually like unencoded...
         """
     
-        l = self.export_as_string(delim, include_z=include_z, include_w=include_w)
-        if encode: l = l.encode('utf-8')
+        l = self.export_as_string(
+            delim, include_z=include_z, include_w=include_w
+        )
+        
+        if encode:
+            l = l.encode('utf-8')
+            
         dst_port.write(l)
 
     def transform(self, dst_trans):
@@ -164,7 +225,10 @@ class XYZPoint:
           xyz: self
         """
         
-        point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(self.x, self.y))
+        point = ogr.CreateGeometryFromWkt(
+            'POINT ({} {})'.format(self.x, self.y)
+        )
+        
         point.Transform(dst_trans)
         self.x = point.GetX()
         self.y = point.GetY()
