@@ -850,7 +850,7 @@ class WafflesIDW(Waffle):
             'radius':self.radius,
             'power':self.power,
             'block':self.block_p,
-            'min_pts':self.min_points,
+            'min_pts':self.min_pts,
         }
         self._set_config()
         

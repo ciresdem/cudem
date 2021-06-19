@@ -752,7 +752,7 @@ class LASFile(XYZDataset):
         self._known_fmts = ['las', 'laz']
         super().__init__(**kwargs)
 
-    def generate_inf2(self, callback=lambda: False):
+    def generate_inf(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
@@ -775,7 +775,7 @@ class LASFile(XYZDataset):
         self.infos['wkt'] = this_region.export_as_wkt()
         return(self.infos)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf2(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
