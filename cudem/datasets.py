@@ -564,7 +564,9 @@ class XYZDataset():
         for this_xyz in self.yield_xyz_from_entries(**kwargs):
             yield(this_xyz)
             if regions.xyz_in_region_p(this_xyz, self.region):
-                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
                 try:
                     ptArray[ypos, xpos] = 1
                 except:
@@ -663,7 +665,7 @@ class XYZFile(XYZDataset):
                     pts, qhull_options='Qt'
                 ).vertices]
                 out_hull.append(out_hull[0])
-                self.infos['wkt'] = create_wkt_polygon(out_hull, xpos=0, ypos=1)
+                self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
             except:
                 self.infos['wkt'] = this_region.export_as_wkt()
                 
@@ -683,7 +685,7 @@ class XYZFile(XYZDataset):
             this_xyz = xyz_line.split(delim)
             if len(this_xyz) > 1:
                 self.delim = delim
-                
+            
     def yield_xyz(self):
         """xyz file parsing generator
 
@@ -698,7 +700,7 @@ class XYZFile(XYZDataset):
                 self.src_data = self.fn
         else:
             self.src_data = sys.stdin
-        
+
         sk = self.skip
         this_xyz = xyzfun.XYZPoint(w = 1)
         
@@ -750,7 +752,7 @@ class LASFile(XYZDataset):
         self._known_fmts = ['las', 'laz']
         super().__init__(**kwargs)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf2(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
@@ -772,6 +774,66 @@ class LASFile(XYZDataset):
         )
         self.infos['wkt'] = this_region.export_as_wkt()
         return(self.infos)
+
+    def generate_inf(self, callback=lambda: False):
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['numpts'] = 0
+        this_region = regions.Region()
+
+        pts = []
+        region_ = self.region
+        self.region = None
+
+        for i, l in enumerate(self.yield_xyz()):
+            if i == 0:
+                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
+            else:
+                if l.x < this_region.xmin:
+                    this_region.xmin = l.x
+                elif l.x > this_region.xmax:
+                    this_region.xmax = l.x
+                if l.y < this_region.ymin:
+                    this_region.ymin = l.y
+                elif l.y > this_region.ymax:
+                    this_region.ymax = l.y
+                if l.z < this_region.zmin:
+                    this_region.zmin = l.z
+                elif l.z > this_region.zmax:
+                    this_region.zmax = l.z
+            pts.append(l.export_as_list(include_z = True))
+            self.infos['numpts'] = i
+
+        self.infos['minmax'] = this_region.export_as_list(include_z = True)
+        if self.infos['numpts'] > 0:
+            #try:
+            out_hull = [pts[i] for i in spatial.ConvexHull(
+                pts, qhull_options='Qt'
+            ).vertices]
+            out_hull.append(out_hull[0])
+            self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
+            #except:
+            #    self.infos['wkt'] = this_region.export_as_wkt()
+                
+        self.region = region_
+        return(self.infos)
+     
+        # with lp.open(self.fn) as lasf:
+        #     self.infos['numpts'] = lasf.header.point_count
+        #     this_region.from_list(
+        #         [lasf.header.x_min,
+        #          lasf.header.x_max,
+        #          lasf.header.y_min,
+        #          lasf.header.y_max,
+        #          lasf.header.z_min,
+        #          lasf.header.z_max]
+        #     )
+            
+        # self.infos['minmax'] = this_region.export_as_list(
+        #     include_z=True
+        # )
+        # self.infos['wkt'] = this_region.export_as_wkt()
+        # return(self.infos)
         
     def yield_xyz(self):
         """LAS file parsing generator
@@ -780,35 +842,38 @@ class LASFile(XYZDataset):
           xyz: xyz data
         """
 
-        ln = 0
-        if self.region is not None and self.region.valid_p():
-            min_z = None if self.region.zmin is None else self.region.zmin
-            max_z = None if self.region.zmax is None else self.region.zmax
-        else:
-            min_z = max_z = None
-            
         this_xyz = xyzfun.XYZPoint(w=1)
         ln = 0
-        with lp.open(self.fn) as lasf:
-            for points in lasf.chunk_iterator(1000):
-                for point in points[points.classification == 2]:
-                    #for point in points[points.classification == 2 or points.classification == 29]:
+        lasf = lp.read(self.fn)
+        lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0)]
+        dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
+        for point in dataset:
+            #with lp.open(self.fn) as lasf:
+            #for points in lasf.chunk_iterator(1000000):
+            #    for point in points[points.classification == 2]:
+            #for point in points[points.classification == 2 or points.classification == 29]:
+            #this_xyz.x = (point.X * lasf.header.x_scale) + lasf.header.x_offset
+            #this_xyz.y = (point.Y * lasf.header.y_scale) + lasf.header.y_offset
+            #this_xyz.z = (point.Z * lasf.header.z_scale) + lasf.header.z_offset
+
+            this_xyz.x = point[0]
+            this_xyz.y = point[1]
+            this_xyz.z = point[2]
+            this_xyz.w = self.weight
+                    
+            if self.dst_trans is not None:
+                this_xyz.transform(self.dst_trans)
+                        
+            if self.region is not None and self.region.valid_p():
+                if regions.xyz_in_region_p(this_xyz, self.region):
                     ln += 1
-                    this_xyz.x = (point.X * lasf.header.x_scale) + lasf.header.x_offset
-                    this_xyz.y = (point.Y * lasf.header.y_scale) + lasf.header.y_offset
-                    this_xyz.z = (point.Z * lasf.header.z_scale) + lasf.header.z_offset
-                    this_xyz.w = self.weight
-                    if self.dst_trans is not None:
-                        this_xyz.transform(self.dst_trans)
-                        
-                    if self.region is not None and self.region.valid_p():
-                        if regions.xyz_in_region_p(this_xyz, self.region):
-                            ln += 1
-                            yield(this_xyz)
-                    else:
-                        ln += 1
-                        yield(this_xyz)
-                        
+                    yield(this_xyz)
+            else:
+                ln += 1
+                yield(this_xyz)
+
+        lasf = dataset = None
+        
         if self.verbose:
             utils.echo_msg(
                 'parsed {} data records from {}'.format(
@@ -1072,6 +1137,7 @@ class RasterFile(XYZDataset):
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
+                        
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
                          

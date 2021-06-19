@@ -65,9 +65,9 @@ class XYZPoint:
         self.y = utils.float_or(y)
         self.z = utils.float_or(z)
         self.w = utils.float_or(w)
-        #self.epsg = utils.int_or(epsg)
-        #self.z_units = z_units
-        #self.z_datum = z_datum
+        self.epsg = utils.int_or(epsg)
+        self.z_units = z_units
+        self.z_datum = z_datum
 
     def copy(self):
         return(
