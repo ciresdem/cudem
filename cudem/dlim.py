@@ -378,8 +378,9 @@ class DatasetFactory:
             self.guess_data_format()
 
         if self.weight is not None:
-            self.weight *= entry[2]
-
+            if self.parent is not None and self.parent.weight is not None:
+                self.weight *= self.parent.weight
+            
         return(self)
 
     def guess_data_format(self):

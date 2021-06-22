@@ -651,7 +651,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     """
     
     if verbose:
-        _prog = CliProgress('running cmd: {}...'.format(cmd.rstrip()))
+        _prog = CliProgress('running cmd: `{}`'.format(cmd.rstrip()))
         
     if data_fun is not None:
         pipe_stdin = subprocess.PIPE
@@ -674,7 +674,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     if not verbose: p.stderr.close()
     p.stdout.close()
     if verbose:
-        _prog.end(p.returncode, 'ran cmd: {}... and returned {}.'.format(cmd.rstrip(), p.returncode))
+        _prog.end(p.returncode, 'ran cmd: `{}` and returned {}.'.format(cmd.rstrip(), p.returncode))
     return(out, p.returncode)
 
 def yield_cmd(cmd, data_fun=None, verbose=False):

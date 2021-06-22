@@ -1271,11 +1271,11 @@ class WafflesCUDEM(Waffle):
         ).acquire()
 
         idw_region = self.region.copy()
-        idw_region.z_max = 0
-        #print(self.data_ + ['gmrt -4 0.1'])
+        idw_region.zmax = 0
+        #print(self.data_ + ['gmrt,-11,0.1'])
         self.idw = WaffleFactory(
             mod='IDW:radius=3s',
-            data=self.data_ + ['gmrt,-11,0.1'],
+            data=self.data_,
             src_region=idw_region,
             inc=utils.str2inc('1s'),
             name='tmp_idw',
