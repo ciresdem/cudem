@@ -33,6 +33,7 @@ import glob
 import math
 import time
 import datetime
+import shutil
 import subprocess
 import zipfile
 import gzip
@@ -649,7 +650,9 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    if verbose: _prog = CliProgress('running cmd: {}...'.format(cmd.rstrip()[:72]))
+    if verbose:
+        _prog = CliProgress('running cmd: {}...'.format(cmd.rstrip()))
+        
     if data_fun is not None:
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
@@ -670,7 +673,8 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     out = p.stdout.read()
     if not verbose: p.stderr.close()
     p.stdout.close()
-    if verbose: _prog.end(p.returncode, 'ran cmd: {}... and returned {}.'.format(cmd.rstrip()[:72], p.returncode))
+    if verbose:
+        _prog.end(p.returncode, 'ran cmd: {}... and returned {}.'.format(cmd.rstrip(), p.returncode))
     return(out, p.returncode)
 
 def yield_cmd(cmd, data_fun=None, verbose=False):
@@ -828,7 +832,10 @@ class CliProgress:
         self.tw = 7
         self.count = 0
         self.pc = self.count % self.tw
-        self.opm = message
+
+        self.message = message
+        self._init_opm()
+        
         self.add_one = lambda x: x + 1
         self.sub_one = lambda x: x - 1
         self.spin_way = self.add_one
@@ -838,8 +845,29 @@ class CliProgress:
         
         if self.opm is not None:
             self._clear_stderr()
-            sys.stderr.write('\r {}  {:40}\n'.format(" " * (self.tw - 1), self.opm))
-        
+            sys.stderr.write('\r {}  {}\n'.format(" " * (self.tw - 1), self.opm))
+
+    def _init_opm(self):
+        self.width = int(self._terminal_width()) - (self.tw+6)
+        if len(self.message) > self.width:
+            self.opm = '{}...'.format(self.message[:self.width])
+        else:
+            self.opm = '{}'.format(self.message)
+            
+    def _terminal_width(self):
+
+        cols = 40
+        try:
+            cols = shutil.get_terminal_size().columns
+        except:
+            import curses
+            try:
+                rows, cols = curses.initscr().getmaxyx()
+            finally:
+                curses.endwin()
+                
+        return(cols)
+                    
     def _switch_way(self):
         self.spin_way = self.sub_one if self.spin_way == self.add_one else self.add_one
 
@@ -848,28 +876,34 @@ class CliProgress:
         sys.stderr.flush()
 
     def update_perc(self, p, msg = None):
+        
         if len(p) == 2 and p[0] <= p[1]:
+            self._init_opm()
             self._clear_stderr()
-            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {:40}\r'.format(self.perc(p), msg if msg is not None else self.opm))
+            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(self.perc(p), msg if msg is not None else self.opm))
         else: self.update()
         
     def update(self, msg = None):
-
+        self._init_opm()
         self.pc = (self.count % self.tw)
         self.sc = (self.count % (self.tw + 1))
             
         self._clear_stderr()
-        sys.stderr.write('\r[\033[36m{:6}\033[m] {:40}\r'.format(self.spinner[self.sc], msg if msg is not None else self.opm))
+        sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(self.spinner[self.sc], msg if msg is not None else self.opm))
         
         if self.count == self.tw: self.spin_way = self.sub_one
         if self.count == 0: self.spin_way = self.add_one
         self.count = self.spin_way(self.count)
 
     def end(self, status, end_msg = None):
+        self._init_opm()
         self._clear_stderr()
-        if end_msg is None: end_msg = self.opm
+        if end_msg is None:
+            end_msg = self.message
+            
         if status != 0:
-            sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {:40}\n'.format('fail', end_msg))
-        else: sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {:40}\n'.format('ok', end_msg))
+            sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', end_msg))
+        else:
+            sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg))
         
 ### End

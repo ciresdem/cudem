@@ -222,6 +222,7 @@ class Region:
         Args:
           t (str): output mode
             t = 'str': xmin/xmax/ymin/ymax
+            t = 'fstr': xmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax
             t = 'sstr': xmin xmax ymin ymax
             t = 'gmt': -Rxmin/xmax/ymin/ymax
             t = 'bbox': xmin,ymin,xmax,ymax
@@ -237,6 +238,7 @@ class Region:
         if self.valid_p():
             if t == 'str': return('/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
+            elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)]))
             elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
             elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin), str(self.ymax), str(self.xmax)]))
@@ -517,12 +519,32 @@ def regions_reduce(region_a, region_b):
             region_c.ymax = region_a.ymax if region_a.ymax < region_b.ymax else region_b.ymax
         if region_a.zmin is not None and region_b.zmin is not None:
             region_c.zmin = region_a.zmin if region_a.zmin > region_b.zmin else region_b.zmin
+        else:
+            if region_a.zmin is not None:
+                region_c.zmin = region_a.zmin
+            if region_b.zmin is not None:
+                region_c.zmin = region_b.zmin
         if region_a.zmax is not None and region_b.zmax is not None:
             region_c.zmax = region_a.zmax if region_a.zmax < region_b.zmax else region_b.zmax
-        if region_a.wmin is not None and region_w.zmin is not None:
+        else:
+            if region_a.zmax is not None:
+                region_c.zmax = region_a.zmax
+            if region_b.zmax is not None:
+                region_c.zmax = region_b.zmax
+        if region_a.wmin is not None and region_b.zmin is not None:
             region_c.wmin = region_a.wmin if region_a.wmin > region_b.wmin else region_b.wmin
+        else:
+            if region_a.wmin is not None:
+                region_c.wmin = region_a.wmin
+            if region_b.wmin is not None:
+                region_c.wmin = region_b.wmin
         if region_a.wmax is not None and region_b.wmax is not None:
             region_c.wmax = region_a.wmax if region_a.wmax < region_b.wmax else region_b.wmax
+        else:
+            if region_a.wmax is not None:
+                region_c.wmax = region_a.wmax
+            if region_b.wmax is not None:
+                region_c.wmax = region_b.wmax
     return(region_c)
 
 def regions_merge(region_a, region_b):
@@ -562,21 +584,25 @@ def regions_intersect_p(region_a, region_b):
     """
 
     if region_a.valid_p() and region_b.valid_p():
-        tmp_a = Region()
-        tmp_b = Region()
-        tmp_a.zmin = region_a.zmin
-        tmp_a.zmax = region_a.zmax
-        tmp_a.wmin = region_a.wmin
-        tmp_a.wmax = region_a.wmax
-        tmp_b.zmin = region_b.zmin
-        tmp_b.zmax = region_b.zmax
-        tmp_b.wmin = region_b.wmin
-        tmp_b.wmax = region_b.wmax
+        # tmp_a = Region()
+        # tmp_b = Region()
+        # tmp_a.zmin = region_a.zmin
+        # tmp_a.zmax = region_a.zmax
+        # tmp_a.wmin = region_a.wmin
+        # tmp_a.wmax = region_a.wmax
+        # tmp_b.zmin = region_b.zmin
+        # tmp_b.zmax = region_b.zmax
+        # tmp_b.wmin = region_b.wmin
+        # tmp_b.wmax = region_b.wmax
 
-        tmp_c = regions_reduce(tmp_a, tmp_b)
+        tmp_c = regions_reduce(region_a, region_b)
+        #print(tmp_c.format('fstr'))
         if any(tmp_c.full_region()):
-            if not tmp_c.valid_p(): return(False)
-        if not regions_intersect_ogr_p(region_a, region_b): return(False)
+            if not tmp_c.valid_p():
+                return(False)
+            
+        if not regions_intersect_ogr_p(region_a, region_b):
+            return(False)
         
     return(True)
     

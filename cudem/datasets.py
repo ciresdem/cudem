@@ -736,8 +736,8 @@ class XYZFile(XYZDataset):
             
         if self.verbose:
             utils.echo_msg(
-                'parsed {} data records from {}'.format(
-                    ln, self.fn
+                'parsed {} data records from {}{}'.format(
+                    ln, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
             

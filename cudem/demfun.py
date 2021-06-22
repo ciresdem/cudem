@@ -262,11 +262,11 @@ def crop(src_dem, dst_dem):
     except: ds = None
     if ds is not None:
         
-        ds_config = gather_infos(src_ds)
-        ds_arr = src_ds.GetRasterBand(1).ReadAsArray()
+        ds_config = gather_infos(ds)
+        ds_arr = ds.GetRasterBand(1).ReadAsArray()
 
-        src_arr[elev_array == ds_config['ndv']] = np.nan
-        nans = np.isnan(src_arr)
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        nans = np.isnan(ds_arr)
         nancols = np.all(nans, axis=0)
         nanrows = np.all(nans, axis=1)
 
@@ -275,17 +275,18 @@ def crop(src_dem, dst_dem):
         lastcol = len(nancols) - nancols[::-1].argmin()
         lastrow = len(nanrows) - nanrows[::-1].argmin()
 
-        dst_arr = src_arr[firstrow:lastrow,firstcol:lastcol]
-        src_arr = None
+        dst_arr = ds_arr[firstrow:lastrow,firstcol:lastcol]
+        ds_arr = None
 
-        dst_arr[np.isnan(dst_arr)] = ds_config['nv']
+        dst_arr[np.isnan(dst_arr)] = ds_config['ndv']
         GeoT = ds_config['geoT']
         dst_x_origin = GeoT[0] + (GeoT[1] * firstcol)
         dst_y_origin = GeoT[3] + (GeoT[5] * firstrow)
         dst_geoT = [dst_x_origin, GeoT[1], 0.0, dst_y_origin, 0.0, GeoT[5]]
         ds_config['geoT'] = dst_geoT
-
-        return(utils.gdal_write(ds_arr, dst_dem, ds_config))
+        ds = None
+        
+        return(utils.gdal_write(dst_arr, dst_dem, ds_config))
     else:
         return(None, -1)
     

@@ -108,16 +108,16 @@ class Datalist(datasets.XYZDataset):
           datalist_parser: self
         """
         
-        #if self.verbose:
-        #_prog = utils.CliProgress('parsing datalist {}'.format(self.fn))
+        if self.verbose:
+            _prog = utils.CliProgress('parsing datalist {} @ {}'.format(self.fn, self.weight))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
                 
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
-                    #if self.verbose:
-                    #_prog.update_perc((l, count))
+                    if self.verbose:
+                        _prog.update_perc((l, count))
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line,
@@ -141,9 +141,18 @@ class Datalist(datasets.XYZDataset):
                         ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:
-                                    inf_region = regions.Region().from_string(
-                                        data_set.infos['wkt']
+                                    # inf_region = regions.Region().from_string(
+                                    #     data_set.infos['wkt']
+                                    # )
+                                    inf_region = regions.Region().from_list(
+                                        data_set.infos['minmax']
                                     )
+                                    inf_region.wmin = data_set.weight
+                                    inf_region.wmax = data_set.weight
+                                    #print(data_set.weight)
+                                    #inf.region.z_min = data_set.infos['zmin'
+                                    #print(inf_region.format('fstr'))
+                                    #print(self.region.format('fstr'))
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
@@ -159,8 +168,8 @@ class Datalist(datasets.XYZDataset):
             utils.echo_warning_msg(
                 'could not open datalist/entry {}'.format(self.fn)
             )
-        #if self.verbose:
-        #    _prog.end(0, 'parsed datalist {}'.format(self.fn))
+        if self.verbose:
+            _prog.end(0, 'parsed datalist {} @ {}'.format(self.fn, self.weight))
            
     def yield_xyz(self):
         """parse the data from the datalist

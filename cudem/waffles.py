@@ -103,25 +103,39 @@ class Waffle:
         
         if self.node == 'grid':
             self.region = self.region.buffer(self.inc*.5)
+            #self._init_regions()
         self.p_region = self._proc_region()
         self.d_region = self._dist_region()
-
+        
         self.data_ = data
+        self._init_data()
+        # self.data = [dlim.DatasetFactory(
+        #     fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+        #     src_region=self.p_region,
+        #     verbose=self.verbose,
+        #     weight=self.weights,
+        #     warp=self.epsg
+        # ).acquire_dataset() for dl in self.data]
 
-        self.data = [dlim.DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=self.p_region,
-            verbose=self.verbose,
-            weight=self.weights,
-            warp=self.epsg
-        ).acquire_dataset() for dl in self.data]
-
-        self.data = [d for d in self.data if d is not None]
+        # self.data = [d for d in self.data if d is not None]
         
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
 
+    def _init_regions(self):
+        self.p_region = self._proc_region()
+        self.d_region = self._dist_region()
+        
+    def _init_data(self):
+
+        self.data = [dlim.DatasetFactory(
+            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+            src_region=self.d_region, verbose=self.verbose,
+            epsg=self.epsg).acquire_dataset() for dl in self.data_]
+
+        self.data = [d for d in self.data if d is not None]
+        
     def _set_config(self):
         """export the waffles config info as a dictionary"""
         
@@ -842,15 +856,15 @@ class WafflesIDW(Waffle):
     ):
         super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
-        self.power = power
+        self.power = utils.float_or(power)
         self.block_p = block
-        self.min_pts = utils.int_or(min_points)
+        self.min_points = utils.int_or(min_points)
         self.mod = 'IDW'
         self.mod_args = {
             'radius':self.radius,
             'power':self.power,
             'block':self.block_p,
-            'min_pts':self.min_pts,
+            'min_points':self.min_points,
         }
         self._set_config()
         
@@ -874,10 +888,10 @@ class WafflesIDW(Waffle):
         outArray[:] = np.nan
 
         if self.verbose:
-            if self.min_pts:
+            if self.min_points:
                 progress = utils.CliProgress(
                     'generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
-                        self.radius, ycount, xcount, self.min_pts
+                        self.radius, ycount, xcount, self.min_points
                     )
                 )
             else:
@@ -901,9 +915,9 @@ class WafflesIDW(Waffle):
                 if self.weights:
                     ww_list = []
 
-                if self.min_pts is not None:
+                if self.min_points is not None:
                     l_radius = 0
-                    while len(xyz_bucket) < self.min_pts:
+                    while len(xyz_bucket) < self.min_points:
                         l_radius += self.radius
                         xg, yg = utils._pixel2geo(x, y, dst_gt)
                         block_region = regions.Region(
@@ -1235,6 +1249,91 @@ class WafflesNearest(WafflesGDALGrid):
         }
         self._set_config()
 
+class WafflesCUDEM(Waffle):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        #self.coastline = WafflesCoastline(**kwargs)
+        #self.idw = WafflesIDW(**kwargs)
+        #self.surface = GMTSurface(**kwargs)
+        self.coast = WaffleFactory(
+            mod='coastline',
+            data=[],
+            src_region=self.region,
+            inc=self.inc,
+            name='tmp_coast',
+            node=self.node,
+            fmt=self.fmt,
+            extend=self.extend,
+            extend_proc=self.extend_proc,
+            weights=self.weights,
+            fltr=self.fltr,
+            sample=self.sample,
+            clip=self.clip,
+            chunk=self.chunk,
+            epsg=self.epsg,
+            archive=self.archive,
+            mask=self.mask,
+            spat=self.spat,
+            clobber=self.clobber,
+            verbose=self.verbose,
+        ).acquire()
+
+        idw_region = self.region.copy()
+        idw_region.z_max = 0
+        #print(self.data_ + ['gmrt -4 0.1'])
+        self.idw = WaffleFactory(
+            mod='IDW:radius=3s',
+            data=self.data_ + ['gmrt,-11,0.1'],
+            src_region=idw_region,
+            inc=utils.str2inc('1s'),
+            name='tmp_idw',
+            node=self.node,
+            fmt=self.fmt,
+            extend=self.extend+6,
+            extend_proc=self.extend+10,
+            weights=1,
+            fltr=self.fltr,
+            sample=self.sample,
+            epsg=self.epsg,
+            archive=False,
+            mask=False,
+            spat=False,
+            clobber=True,
+            verbose=self.verbose,
+        ).acquire()
+
+        surface_region = self.region.copy()
+        surface_region.wmin = 1
+        self.surface = WaffleFactory(
+            mod='surface',
+            data=self.data_ + [self.idw.fn],
+            src_region=surface_region,
+            inc=self.inc,
+            name=self.name,
+            node=self.node,
+            fmt=self.fmt,
+            extend=self.extend,
+            extend_proc=self.extend_proc,
+            weights=1,
+            fltr=[],
+            sample=self.sample,
+            clip=self.clip,
+            epsg=self.epsg,
+            archive=False,
+            mask=False,
+            spat=False,
+            clobber=True,
+            verbose=self.verbose,
+        ).acquire()
+        
+    def run(self):
+        #coast.run()
+        self.idw.generate()
+        self.surface.generate()
+
+        return(self)
+        
 class WafflesCoastline(Waffle):
     def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, **kwargs):
         """Generate a coastline polygon from various sources."""
@@ -1484,7 +1583,7 @@ class WafflesCoastline(Waffle):
             weight=self.weights,
             verbose=self.verbose,
             where="Name LIKE '%Hydro%'",
-            extents='HU-8 Subbasin'
+            extents='HU-8 Subbasin,HU-4 Subregion'
         ).run()
             #extents='HU-4 Subregion,HU-8 Subbasin').run()
             
@@ -1500,8 +1599,10 @@ class WafflesCoastline(Waffle):
                 gdb_files = utils.unzip(gdb_zip)
                 gdb_bn = os.path.basename('.'.join(gdb_zip.split('.')[:-1]))
                 gdb = gdb_bn + '.gdb'
+                #                    'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType = 312" -clipdst {} -overwrite 2>&1'.format(
+                #'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} -overwrite 2>&1'.format(
                 utils.run_cmd(
-                    'ogr2ogr {}_NHDArea.shp {} NHDArea -clipdst {} -overwrite 2>&1'.format(
+                    'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} -overwrite 2>&1'.format(
                         gdb_bn, gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=False)
@@ -1518,9 +1619,9 @@ class WafflesCoastline(Waffle):
                 
                 if os.path.exists('{}_NHDPlusBurnWaterBody.shp'.format(gdb_bn)):
                     r_shp.append('{}_NHDPlusBurnWaterBody.shp'.format(gdb_bn))
-                    
+                    #                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} -overwrite 2>&1'.format(
                 utils.run_cmd(
-                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType = 390" -clipdst {} -overwrite 2>&1'.format(
+                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} -overwrite 2>&1'.format(
                         gdb_bn, gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=False
@@ -1528,8 +1629,18 @@ class WafflesCoastline(Waffle):
                 
                 if os.path.exists('{}_NHDWaterBody.shp'.format(gdb_bn)):
                     r_shp.append('{}_NHDWaterBody.shp'.format(gdb_bn))
+
+                # utils.run_cmd(
+                #     'ogr2ogr {}_NHDPlusLandSea.shp {} NHDPlusLandSea -clipdst {} -overwrite 2>&1'.format(
+                #         gdb_bn, gdb, self.p_region.format('ul_lr')
+                #     ),
+                #     verbose=False
+                # )
+                
+                # if os.path.exists('{}_NHDPlusLandSea.shp'.format(gdb_bn)):
+                #     r_shp.append('{}_NHDPlusLandSea.shp'.format(gdb_bn))
                     
-                utils.remove_glob(gdb, *gdb_files)
+                #utils.remove_glob(gdb, *gdb_files)
             else:
                 utils.echo_error_msg(
                     'unable to fetch {}'.format(result)
@@ -1544,7 +1655,7 @@ class WafflesCoastline(Waffle):
                 'gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True
             )
             
-            utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
+            #utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
 
         utils.echo_msg(
             'filling the coast mask with NHD data...'
@@ -1686,6 +1797,8 @@ class WafflesCoastline(Waffle):
             'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
                 self.name, self.name)
         )
+
+        utils.gdal_prj_file(self.name + '.prj', self.epsg)
                 
 class WaffleFactory():
     """Find and generate a WAFFLE object for DEM generation."""
@@ -1822,6 +1935,15 @@ Generate a coastline (land/sea mask) using a variety of sources.
  :dry=[val] - an input dry mask vector file
  :use_gmrt=[True/False] - use GMRT to fill background""",
             'class': lambda k: WafflesCoastline(**k),
+        },
+        'cudem': {
+            'name': 'cudem',
+            'datalist-p': True,
+            'description': """CUDEM integrated DEM generation.
+Generate a DEM using a variety of sources.
+
+< cudem >""",
+            'class': lambda k: WafflesCUDEM(**k),
         },
     }
     
@@ -2206,6 +2328,32 @@ Generate a coastline (land/sea mask) using a variety of sources.
                 **kwargs
             )
         )
+    
+    def acquire_cudem(self, **kwargs):
+        return(
+            WafflesCUDEM(
+                data=self.data,
+                src_region=self.region,
+                inc=self.inc,
+                name=self.name,
+                node=self.node,
+                fmt=self.fmt,
+                extend=self.extend,
+                extend_proc=self.extend_proc,
+                weights=self.weights,
+                fltr=self.fltr,
+                sample=self.sample,
+                clip=self.clip,
+                chunk=self.chunk,
+                epsg=self.epsg,
+                archive=self.archive,
+                mask=self.mask,
+                spat=self.spat,
+                clobber=self.clobber,
+                verbose=self.verbose,
+                **kwargs
+            )
+        )
 
     def acquire(self):
         if self.mod_name == 'surface':
@@ -2240,6 +2388,9 @@ Generate a coastline (land/sea mask) using a variety of sources.
         
         if self.mod_name == 'coastline':
             return(self.acquire_coastline(**self.mod_args))
+
+        if self.mod_name == 'cudem':
+            return(self.acquire_cudem(**self.mod_args))
     
     def acquire_module_by_name(self, mod_name, **mod_args):
 
@@ -2278,6 +2429,9 @@ Generate a coastline (land/sea mask) using a variety of sources.
         if mod_name == 'coastline':
             return(self.acquire_coastline(**mod_args))
 
+        if mod_name == 'cudem':
+            return(self.acquire_cudem(**mod_args))
+            
     def acquire_from_config(self, config):
         def waffles_config(wc):
             print(wc)
