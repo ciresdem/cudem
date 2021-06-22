@@ -1263,19 +1263,10 @@ class WafflesCUDEM(Waffle):
             inc=self.inc,
             name='tmp_coast',
             node=self.node,
-            fmt=self.fmt,
             extend=self.extend,
-            extend_proc=self.extend_proc,
             weights=self.weights,
-            fltr=self.fltr,
-            sample=self.sample,
-            clip=self.clip,
-            chunk=self.chunk,
             epsg=self.epsg,
-            archive=self.archive,
-            mask=self.mask,
-            spat=self.spat,
-            clobber=self.clobber,
+            clobber=True,
             verbose=self.verbose,
         ).acquire()
 
@@ -1296,11 +1287,9 @@ class WafflesCUDEM(Waffle):
             fltr=self.fltr,
             sample=self.sample,
             epsg=self.epsg,
-            archive=False,
-            mask=False,
-            spat=False,
             clobber=True,
             verbose=self.verbose,
+            clip=self.coast.name + '.shp',
         ).acquire()
 
         surface_region = self.region.copy()
@@ -1328,7 +1317,7 @@ class WafflesCUDEM(Waffle):
         ).acquire()
         
     def run(self):
-        #coast.run()
+        self.coast.generate()
         self.idw.generate()
         self.surface.generate()
 
@@ -1787,7 +1776,7 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 8" {}.shp tmp_c_{}.shp'.format(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 4" {}.shp tmp_c_{}.shp'.format(
                 self.name, self.name, self.name),
             verbose=True
         )
