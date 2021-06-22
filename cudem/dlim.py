@@ -325,6 +325,8 @@ class DatasetFactory:
             entry.append(self.weight)
         elif entry[2] is None:
             entry[2] = self.weight
+        else:
+            self.weight *= entry[2]
             
         if len(entry) < 4:
             entry.append(self.title)
@@ -377,10 +379,6 @@ class DatasetFactory:
         if self.data_format is None:
             self.guess_data_format()
 
-        if self.weight is not None:
-            if self.parent is not None and self.parent.weight is not None:
-                self.weight *= self.parent.weight
-            
         return(self)
 
     def guess_data_format(self):

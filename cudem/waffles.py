@@ -1293,7 +1293,7 @@ class WafflesCUDEM(Waffle):
         ).acquire()
 
         surface_region = self.region.copy()
-        surface_region.wmin = 1
+        surface_region.wmin = .75
         self.surface = WaffleFactory(
             mod='surface',
             data=self.data_ + [self.idw.fn],
@@ -1317,7 +1317,7 @@ class WafflesCUDEM(Waffle):
         ).acquire()
         
     def run(self):
-        self.coast.generate()
+        #self.coast.generate()
         self.idw.generate()
         self.surface.generate()
 
