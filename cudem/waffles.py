@@ -1253,9 +1253,10 @@ class WafflesCUDEM(Waffle):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        #self.coastline = WafflesCoastline(**kwargs)
-        #self.idw = WafflesIDW(**kwargs)
-        #self.surface = GMTSurface(**kwargs)
+        self.coast_xyz = '{}_coast.xyz'.format(self.name)
+        
+    def run(self):
+        
         self.coast = WaffleFactory(
             mod='coastline',
             data=[],
@@ -1263,68 +1264,65 @@ class WafflesCUDEM(Waffle):
             inc=self.inc,
             name='tmp_coast',
             node=self.node,
-            extend=self.extend,
+            extend=self.extend+12,
             weights=self.weights,
             epsg=self.epsg,
             clobber=True,
             verbose=self.verbose,
-        ).acquire()
+        ).acquire().generate()
 
-        idw_region = self.region.copy()
-        idw_region.zmax = 0
-        #print(self.data_ + ['gmrt,-11,0.1'])
-        self.idw = WaffleFactory(
-            mod='IDW:radius=3s',
-            data=self.data_,
-            src_region=idw_region,
-            inc=utils.str2inc('1s'),
-            name='tmp_idw',
+        c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
+            'tmp_coast.shp',
+            self.coast_xyz,
+            self.p_region.xmin,
+            self.p_region.xmax,
+            self.p_region.ymin,
+            self.p_region.ymax)
+        out, status = utils.run_cmd(c_cmd, verbose=True)
+        
+        bathy_region = self.region.copy()
+        bathy_region.zmax = 0
+        self.bathy = WaffleFactory(
+            mod='surface:upper_limit=-0:tension=.35',
+            data=self.data_ + [self.coast_xyz],
+            src_region=bathy_region,
+            inc=self.inc*3,
+            name='tmp_bathy',
             node=self.node,
             fmt=self.fmt,
             extend=self.extend+6,
             extend_proc=self.extend+10,
             weights=1,
-            fltr=self.fltr,
-            sample=self.sample,
+            fltr=['1:10'],
+            sample=self.inc,
             epsg=self.epsg,
             clobber=True,
             verbose=self.verbose,
-            clip=self.coast.name + '.shp',
-        ).acquire()
-
+            clip='{}:invert=True'.format(self.coast.name + '.shp'),
+        ).acquire().generate()
+        
         surface_region = self.region.copy()
         surface_region.wmin = .75
         self.surface = WaffleFactory(
-            mod='surface',
-            data=self.data_ + [self.idw.fn],
+            mod='surface:tension=.75',
+            data=self.data_ + [self.bathy.fn],
             src_region=surface_region,
             inc=self.inc,
             name=self.name,
             node=self.node,
-            fmt=self.fmt,
             extend=self.extend,
             extend_proc=self.extend_proc,
             weights=1,
             fltr=[],
-            sample=self.sample,
-            clip=self.clip,
             epsg=self.epsg,
-            archive=False,
-            mask=False,
-            spat=False,
             clobber=True,
             verbose=self.verbose,
-        ).acquire()
+        ).acquire().generate()
         
-    def run(self):
-        #self.coast.generate()
-        self.idw.generate()
-        self.surface.generate()
-
         return(self)
         
 class WafflesCoastline(Waffle):
-    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, **kwargs):
+    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, invert=False, **kwargs):
         """Generate a coastline polygon from various sources."""
 
         super().__init__(**kwargs)
@@ -1332,6 +1330,7 @@ class WafflesCoastline(Waffle):
         self.want_gmrt = want_gmrt
         self.wet = wet
         self.dry = dry
+        self.invert = invert
 
         self.w_name = '{}_w'.format(self.name)
         self.w_mask = '{}.tif'.format(self.w_name)
@@ -1383,8 +1382,8 @@ class WafflesCoastline(Waffle):
         return(self)
 
     def _finalize_array(self):
-        self.coast_array[self.coast_array > 0] = 1
-        self.coast_array[self.coast_array <= 0] = 0
+        self.coast_array[self.coast_array > 0] = 0 if self.invert else 1
+        self.coast_array[self.coast_array <= 0] = 1 if self.invert else 0
 
     def _burn_region(self):
         """wet/dry datalist mask or burn region."""
@@ -1629,7 +1628,7 @@ class WafflesCoastline(Waffle):
                 # if os.path.exists('{}_NHDPlusLandSea.shp'.format(gdb_bn)):
                 #     r_shp.append('{}_NHDPlusLandSea.shp'.format(gdb_bn))
                     
-                #utils.remove_glob(gdb, *gdb_files)
+                utils.remove_glob(gdb, *gdb_files)
             else:
                 utils.echo_error_msg(
                     'unable to fetch {}'.format(result)
@@ -1644,7 +1643,7 @@ class WafflesCoastline(Waffle):
                 'gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True
             )
             
-            #utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
+            utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
 
         utils.echo_msg(
             'filling the coast mask with NHD data...'
@@ -1919,10 +1918,11 @@ see mbgrid --help for more info
             'description': """COASTLINE generation.
 Generate a coastline (land/sea mask) using a variety of sources.
 
-< coastline:wet=None:dry=None:use_gmrt=False >
+< coastline:wet=None:dry=None:use_gmrt=False:invert=False >
  :wet=[val] - an input wet mask vector file
  :dry=[val] - an input dry mask vector file
- :use_gmrt=[True/False] - use GMRT to fill background""",
+ :use_gmrt=[True/False] - use GMRT to fill background
+ :invert=[True/False] - invert the output results""",
             'class': lambda k: WafflesCoastline(**k),
         },
         'cudem': {
@@ -1990,7 +1990,7 @@ Generate a DEM using a variety of sources.
         opts = mod.split(':')
         if opts[0] in self._modules.keys():
             if len(opts) > 1:
-                self.mod_args = utils.args2dict(list(opts[1:]))
+                self.mod_args = utils.args2dict(list(opts[1:]), {})
             self.mod_name = opts[0]
         else:
             utils.echo_error_msg(

@@ -109,7 +109,7 @@ class Datalist(datasets.XYZDataset):
         """
         
         if self.verbose:
-            _prog = utils.CliProgress('parsing datalist {} @ {}'.format(self.fn, self.weight))
+            _prog = utils.CliProgress('parsing datalist {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
@@ -169,7 +169,7 @@ class Datalist(datasets.XYZDataset):
                 'could not open datalist/entry {}'.format(self.fn)
             )
         if self.verbose:
-            _prog.end(0, 'parsed datalist {} @ {}'.format(self.fn, self.weight))
+            _prog.end(0, 'parsed datalist {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
            
     def yield_xyz(self):
         """parse the data from the datalist
@@ -622,7 +622,8 @@ def datalists_cli(argv = sys.argv):
     want_list = False
     want_glob = False
     want_archive = False
-    want_verbose = True    
+    want_verbose = True
+    want_region = False
     
     ## ==============================================
     ## parse command line arguments.
@@ -650,6 +651,8 @@ def datalists_cli(argv = sys.argv):
             want_weights = True
         elif arg == '--info' or arg == '-i':
             want_inf = True
+        elif arg == '--region_inf' or arg == '-r':
+            want_region = True
         elif arg == '--list' or arg == '-l':
             want_list = True
         elif arg == '--glob' or arg == '-g':
@@ -733,5 +736,7 @@ def datalists_cli(argv = sys.argv):
                     xdl.echo()
                 elif want_archive:
                     [x for x in xdl.archive_xyz()]
+                elif want_region:
+                    print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
                 else: xdl.dump_xyz()
 ### End
