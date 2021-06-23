@@ -2587,7 +2587,11 @@ def waffles_cli(argv = sys.argv):
             i = i + 1
         elif arg[:2] == '-P': wg['epsg'] = utils.int_or(arg[2:], 4326)
         
-        elif arg == '-w' or arg == '--weights': wg['weights'] = 1
+        elif arg == '-w' or arg == '--weights':
+            if 'weights' not in wg.keys():
+                wg['weights'] = 1
+            else:
+                wg['weights'] += 1
         elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-p' or arg == '--prefix': want_prefix = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
