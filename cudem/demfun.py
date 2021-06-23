@@ -632,7 +632,7 @@ def grdfilter(src_dem, dst_dem, dist='3s', node='pixel', verbose=False):
     ft_cmd1 = ('gmt grdfilter -V {} -G{} -Fc{} -D1{}'.format(src_dem, dst_dem, dist, ' -r' if node == 'pixel' else ''))
     return(utils.run_cmd(ft_cmd1, verbose=verbose))
 
-def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None):
+def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):
     """filter raster using smoothing factor `fltr`; optionally
     only smooth bathymetry (sub-zero) using a split_val of 0.
 

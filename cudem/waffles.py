@@ -1281,19 +1281,19 @@ class WafflesCUDEM(Waffle):
         out, status = utils.run_cmd(c_cmd, verbose=True)
         
         bathy_region = self.region.copy()
-        bathy_region.zmax = 0
+        bathy_region.zmax = 2
+        #            fltr=['1:10'],
         self.bathy = WaffleFactory(
-            mod='surface:upper_limit=-0:tension=.35',
-            data=self.data_ + [self.coast_xyz],
+            mod='surface:upper_limit=0:tension=.35',
+            data=self.data_ + ['{},168,0.1'.format(self.coast_xyz)],
             src_region=bathy_region,
             inc=self.inc*3,
             name='tmp_bathy',
             node=self.node,
-            fmt=self.fmt,
+            fltr=['2:{}'.format(utils.str2inc('3s'))],
             extend=self.extend+6,
             extend_proc=self.extend+10,
             weights=1,
-            fltr=['1:10'],
             sample=self.inc,
             epsg=self.epsg,
             clobber=True,

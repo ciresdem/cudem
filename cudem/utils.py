@@ -656,9 +656,15 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     if data_fun is not None:
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
+    
     if verbose:
-        p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True)
-    else: p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True)
+        p = subprocess.Popen(
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True
+        )
+    else:
+        p = subprocess.Popen(
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True
+        )
 
     if data_fun is not None:
         if verbose: echo_msg('piping data to cmd subprocess...')
@@ -671,10 +677,13 @@ def run_cmd(cmd, data_fun=None, verbose=False):
             _prog.update()
 
     out = p.stdout.read()
-    if not verbose: p.stderr.close()
+    if not verbose:
+        p.stderr.close()
+        
     p.stdout.close()
     if verbose:
         _prog.end(p.returncode, 'ran cmd: `{}` and returned {}.'.format(cmd.rstrip(), p.returncode))
+        
     return(out, p.returncode)
 
 def yield_cmd(cmd, data_fun=None, verbose=False):
