@@ -1251,9 +1251,10 @@ class WafflesNearest(WafflesGDALGrid):
 
 class WafflesCUDEM(Waffle):
     def __init__(self, **kwargs):
+        
         super().__init__(**kwargs)
-
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
+        self._set_config()
         
     def run(self):
         
@@ -1261,7 +1262,7 @@ class WafflesCUDEM(Waffle):
             mod='coastline',
             data=[],
             src_region=self.region,
-            inc=self.inc,
+            inc=self.inc*3,
             name='tmp_coast',
             node=self.node,
             extend=self.extend+12,
@@ -1281,16 +1282,16 @@ class WafflesCUDEM(Waffle):
         out, status = utils.run_cmd(c_cmd, verbose=True)
         
         bathy_region = self.region.copy()
-        bathy_region.zmax = 2
+        bathy_region.zmax = 1
         #            fltr=['1:10'],
+        #             fltr=['2:{}'. format(utils.str2inc('3s'))],
         self.bathy = WaffleFactory(
-            mod='surface:upper_limit=0:tension=.35',
+            mod='surface:upper_limit=-0.1:tension=.35',
             data=self.data_ + ['{},168,0.1'.format(self.coast_xyz)],
             src_region=bathy_region,
-            inc=self.inc*3,
+            inc=utils.str2inc('3s'),
             name='tmp_bathy',
             node=self.node,
-            fltr=['2:{}'.format(utils.str2inc('3s'))],
             extend=self.extend+6,
             extend_proc=self.extend+10,
             weights=1,
@@ -1305,7 +1306,7 @@ class WafflesCUDEM(Waffle):
         surface_region.wmin = .75
         self.surface = WaffleFactory(
             mod='surface:tension=.75',
-            data=self.data_ + [self.bathy.fn],
+            data=self.data_ + ['{},200,.75'.format(self.bathy.fn)],
             src_region=surface_region,
             inc=self.inc,
             name=self.name,
@@ -1528,9 +1529,9 @@ class WafflesCoastline(Waffle):
         )
         
         for cop_tif in warped_tifs:
-            _prog.update()
             c_ds = gdal.Open(cop_tif)
-            c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+            #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+            _prog.update()
             for this_xyz in demfun.parse(c_ds):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
                 try:
@@ -1650,7 +1651,7 @@ class WafflesCoastline(Waffle):
         )
         
         c_ds = gdal.Open(self.u_mask)
-        c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+        #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(
                 this_xyz.x, this_xyz.y, self.ds_config['geoT']
@@ -1693,7 +1694,7 @@ class WafflesCoastline(Waffle):
 
         utils.echo_msg('filling the coast mask with gsshg data...')
         c_ds = gdal.Open(self.g_mask)
-        c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+        #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
         for this_xyz in demfun.parse(c_ds):
             xpos, ypos = utils._geo2pixel(
                 this_xyz.x, this_xyz.y, self.ds_config['geoT']
