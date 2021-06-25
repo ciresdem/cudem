@@ -106,6 +106,7 @@ class Waffle:
             #self._init_regions()
         self.p_region = self._proc_region()
         self.d_region = self._dist_region()
+        self.c_region = self._coast_region()
         
         self.data_ = data
         self._init_data()
@@ -123,9 +124,10 @@ class Waffle:
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
 
-    def _init_regions(self):
+    def _init_regions(self):    
         self.p_region = self._proc_region()
         self.d_region = self._dist_region()
+        self.c_region = self._coast_region()
         
     def _init_data(self):
 
@@ -170,7 +172,13 @@ class Waffle:
                 self._config[self.mod][key] = self.mod_args[key]
 
         return(self._config)
+
+    def _coast_region(self):
+        """processing region (extended by self.extend and self.extend_proc."""
         
+        cr = regions.Region().from_region(self.region)
+        return(cr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend) + (self.inc*10)))
+    
     def _proc_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
         
@@ -1261,7 +1269,7 @@ class WafflesCUDEM(Waffle):
         self.coast = WaffleFactory(
             mod='coastline',
             data=[],
-            src_region=self.region,
+            src_region=self.c_region,
             inc=self.inc*3,
             name='tmp_coast',
             node=self.node,
@@ -1275,13 +1283,13 @@ class WafflesCUDEM(Waffle):
         c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
             'tmp_coast.shp',
             self.coast_xyz,
-            self.p_region.xmin,
-            self.p_region.xmax,
-            self.p_region.ymin,
-            self.p_region.ymax)
+            self.c_region.xmin,
+            self.c_region.xmax,
+            self.c_region.ymin,
+            self.c_region.ymax)
         out, status = utils.run_cmd(c_cmd, verbose=True)
         
-        bathy_region = self.region.copy()
+        bathy_region = self.p_region.copy()
         bathy_region.zmax = 1
         #            fltr=['1:10'],
         #             fltr=['2:{}'. format(utils.str2inc('3s'))],
@@ -1294,7 +1302,8 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+6,
             extend_proc=self.extend+10,
-            weights=1,
+            fltr=['1:5'],
+            weights=self.weights,
             sample=self.inc,
             epsg=self.epsg,
             clobber=True,
@@ -1302,7 +1311,7 @@ class WafflesCUDEM(Waffle):
             clip='{}:invert=True'.format(self.coast.name + '.shp'),
         ).acquire().generate()
         
-        surface_region = self.region.copy()
+        surface_region = self.p_region.copy()
         surface_region.wmin = .75
         self.surface = WaffleFactory(
             mod='surface:tension=.75',
@@ -1313,12 +1322,14 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend,
             extend_proc=self.extend_proc,
-            weights=1,
+            weights=self.weights,
             fltr=[],
             epsg=self.epsg,
             clobber=True,
             verbose=self.verbose,
         ).acquire().generate()
+
+        utils.remove_glob('tmp_bathy*', 'tmp_coast*', '{}*'.format(self.coast_xyz))
         
         return(self)
         

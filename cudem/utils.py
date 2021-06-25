@@ -734,7 +734,7 @@ def cmd_check(cmd_str, cmd_vers_str):
     if cmd_exists(cmd_str): 
         cmd_vers, status = run_cmd('{}'.format(cmd_vers_str))
         return(cmd_vers.rstrip())
-    else: return("0")
+    else: return("0".encode())
 
 def config_check(chk_vdatum=False, verbose=False):
     """check for needed waffles external software.
