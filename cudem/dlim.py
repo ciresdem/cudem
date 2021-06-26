@@ -302,6 +302,7 @@ class DatasetFactory:
         if os.path.exists(self.fn): return(self.fn)
 
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
+
         try:
             entry = [x if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else x \
                      for n, x in enumerate(this_entry)]
@@ -325,9 +326,18 @@ class DatasetFactory:
             entry.append(self.weight)
         elif entry[2] is None:
             entry[2] = self.weight
-        else:
-            self.weight *= entry[2]
-            
+            #else:
+        #entry[2] *= self.weight
+        if self.parent is not None:
+            #entry[2] *= self.parent.weight
+            #self.weight *= self.parent.weight
+            if self.weight is not None:
+                self.weight *= entry[2]
+            else:
+                self.weight = entry[2]
+
+        #print(self.weight)
+        
         if len(entry) < 4:
             entry.append(self.title)
         else:
