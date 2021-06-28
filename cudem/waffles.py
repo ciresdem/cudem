@@ -434,11 +434,30 @@ class Waffle:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
+
             clip_args = {}
             cp = self.clip.split(':')
             clip_args['src_ply'] = cp[0]
             clip_args = utils.args2dict(cp[1:], clip_args)
-            print(clip_args)
+            #print(clip_args)
+            
+            if clip_args['src_ply'] == 'coastline':
+                self.coast = WaffleFactory(
+                    mod='coastline',
+                    data=[],
+                    src_region=self.c_region,
+                    inc=self.inc,
+                    name='tmp_coast',
+                    node=self.node,
+                    extend=self.extend+12,
+                    weights=self.weights,
+                    epsg=self.epsg,
+                    clobber=True,
+                    verbose=self.verbose,
+                    invert=True,
+                ).acquire().generate()
+                clip_args['src_ply'] = 'tmp_coast.shp'
+
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
                 
@@ -1309,13 +1328,13 @@ class WafflesCUDEM(Waffle):
             mod='surface:upper_limit=-0.1:tension=.35',
             data=bathy_data,
             src_region=bathy_region,
-            inc=utils.str2inc('3s'),
+            inc=self.inc*3,
             name='tmp_bathy',
             node=self.node,
             extend=self.extend+6,
             extend_proc=self.extend+10,
             fltr=['1:5'],
-            weights=1,
+            weights=4,
             sample=self.inc,
             epsg=self.epsg,
             clobber=True,
@@ -1327,7 +1346,7 @@ class WafflesCUDEM(Waffle):
         surface_region.wmin = .75
         #mod='surface:tension=.75',
         self.surface = WaffleFactory(
-            mod='IDW:radius={}'.format(self.inc*3),
+            mod='surface:tension=.75',
             data=self.data_ + ['{},200,.1'.format(self.bathy.fn)],
             src_region=surface_region,
             inc=self.inc,

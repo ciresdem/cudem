@@ -847,6 +847,15 @@ class LASFile(XYZDataset):
         lasf = lp.read(self.fn)
         lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0)]
         dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
+        dataset = dataset[dataset[:,0] > self.region.xmin,:]
+        dataset = dataset[dataset[:,0] < self.region.xmax,:]
+        dataset = dataset[dataset[:,1] > self.region.ymin,:]
+        dataset = dataset[dataset[:,1] < self.region.ymax,:]
+        if self.region.zmin is not None:
+            dataset = dataset[dataset[:,2] > self.region.zmin,:]
+        if self.region.zmax is not None:
+            dataset = dataset[dataset[:,2] < self.region.zmax,:]
+                
         for point in dataset:
             #with lp.open(self.fn) as lasf:
             #for points in lasf.chunk_iterator(1000000):
@@ -863,7 +872,8 @@ class LASFile(XYZDataset):
                     
             if self.dst_trans is not None:
                 this_xyz.transform(self.dst_trans)
-                        
+            #utils.echo_msg(self.region)
+            #utils.echo_msg(self.region.valid_p())
             if self.region is not None and self.region.valid_p():
                 if regions.xyz_in_region_p(this_xyz, self.region):
                     ln += 1
