@@ -443,7 +443,7 @@ class Waffle:
             
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
-                    mod='coastline',
+                    mod='coastline:invert=True',
                     data=[],
                     src_region=self.c_region,
                     inc=self.inc,
@@ -454,7 +454,6 @@ class Waffle:
                     epsg=self.epsg,
                     clobber=True,
                     verbose=self.verbose,
-                    invert=True,
                 ).acquire().generate()
                 clip_args['src_ply'] = 'tmp_coast.shp'
 
@@ -1277,12 +1276,13 @@ class WafflesNearest(WafflesGDALGrid):
         self._set_config()
 
 class WafflesCUDEM(Waffle):
-    def __init__(self, want_coast=False, **kwargs):
+    def __init__(self, want_coast=False, w_thresh = .75, **kwargs):
         
         super().__init__(**kwargs)
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
 
         self.want_coast = want_coast
+        self.w_thresh = w_thresh
         self.mod = 'cudem'
         self.mod_args = {}
         
@@ -1333,7 +1333,7 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+6,
             extend_proc=self.extend+10,
-            fltr=['1:5'],
+            fltr=['1:10'],
             weights=4,
             sample=self.inc,
             epsg=self.epsg,
@@ -1343,7 +1343,7 @@ class WafflesCUDEM(Waffle):
         ).acquire().generate()
         
         surface_region = self.p_region.copy()
-        surface_region.wmin = .75
+        surface_region.wmin = utils.float_or(self.w_thresh)
         #mod='surface:tension=.75',
         self.surface = WaffleFactory(
             mod='surface:tension=.75',
