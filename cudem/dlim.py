@@ -323,9 +323,10 @@ class DatasetFactory:
                 return(self)
 
         if len(entry) < 3:
-            entry.append(self.weight)
+            entry.append(1)
         elif entry[2] is None:
-            entry[2] = self.weight
+            #entry[2] = self.weight
+            entry[2] = 1
             #else:
         #entry[2] *= self.weight
         if self.parent is not None:
