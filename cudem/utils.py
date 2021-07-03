@@ -577,6 +577,7 @@ def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff'):
         except Exception as e:
             utils.echo_error_msg(e)
             utils.remove_glob(dst_gdal)
+
     ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])

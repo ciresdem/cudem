@@ -1333,7 +1333,7 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+6,
             extend_proc=self.extend+10,
-            fltr=['1:10'],
+            fltr=['1:5'],
             weights=4,
             sample=self.inc,
             epsg=self.epsg,

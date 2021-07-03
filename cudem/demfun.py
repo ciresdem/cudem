@@ -267,6 +267,7 @@ def crop(src_dem, dst_dem):
 
         ds_arr[ds_arr == ds_config['ndv']] = np.nan
         nans = np.isnan(ds_arr)
+
         nancols = np.all(nans, axis=0)
         nanrows = np.all(nans, axis=1)
 
@@ -284,6 +285,9 @@ def crop(src_dem, dst_dem):
         dst_y_origin = GeoT[3] + (GeoT[5] * firstrow)
         dst_geoT = [dst_x_origin, GeoT[1], 0.0, dst_y_origin, 0.0, GeoT[5]]
         ds_config['geoT'] = dst_geoT
+        ds_config['nx'] = int(lastcol - firstcol)
+        ds_config['ny'] = int(lastrow - firstrow)
+        ds_config['nb'] = int(ds_config['nx'] * ds_config['ny'])
         ds = None
         
         return(utils.gdal_write(dst_arr, dst_dem, ds_config))
