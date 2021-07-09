@@ -292,6 +292,9 @@ class DatasetFactory:
         self.verbose = verbose
         self.fn = fn
         self.parse_fn()
+
+        #if self.weight is not None:
+        #    self.weight = self.weight**4
         
         if self.data_format is None:
             self.guess_data_format()

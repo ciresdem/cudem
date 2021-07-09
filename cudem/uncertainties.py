@@ -25,6 +25,7 @@ import sys
 from osgeo import gdal
 import numpy as np
 import math
+import json
 import cudem
 from cudem import utils
 from cudem import regions
@@ -335,10 +336,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## split the xyz data to inner/outer; outer is
                         ## the data buffer, inner will be randomly sampled
                         ## ==============================================
-                        s_inner, s_outer = self._gmt_select_split(o_xyz, this_region, 'sub_{}'.format(n), verbose=False)
+                        s_inner, s_outer = self._gmt_select_split(
+                            o_xyz, this_region, 'sub_{}'.format(n), verbose=False
+                        )
                         if os.stat(s_inner).st_size != 0:
                             sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')
                         else: sub_xyz = []
+                        
                         ss_len = len(sub_xyz)
                         if ss_samp is not None:
                             sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
@@ -351,11 +355,24 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## ==============================================
                         ## generate the random-sample DEM
                         ## ==============================================
-                        waff = waffles.WaffleFactory(mod=self.dem.mod, data=[s_outer, sub_xyz_head], src_region=this_region,
-                                                   inc=self.dem.inc, name='sub_{}'.format(n), node=self.dem.node, fmt=self.dem.fmt,
-                                                   extend=self.dem.extend, extend_proc=self.dem.extend_proc, weights=self.dem.weights,
-                                                   sample=self.dem.sample, clip=self.dem.clip, chunk=None, epsg=self.dem.epsg,
-                                                   mask=True, verbose=True, clobber=True)
+                        waff = waffles.WaffleFactory(
+                            mod=self.dem.mod,
+                            data=[s_outer, sub_xyz_head],
+                            src_region=this_region,
+                            inc=self.dem.inc,
+                            name='sub_{}'.format(n),
+                            node=self.dem.node,
+                            fmt=self.dem.fmt,
+                            extend=self.dem.extend,
+                            extend_proc=self.dem.extend_proc,
+                            weights=self.dem.weights,
+                            sample=self.dem.sample,
+                            clip=self.dem.clip,
+                            epsg=self.dem.epsg,
+                            mask=True,
+                            verbose=True,
+                            clobber=True
+                        )
                         waff.mod_args = self.dem.mod_args
                         wf = waff.acquire().generate()
                         
@@ -569,57 +586,13 @@ _waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:
 
 uncertainties_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
 
-usage: {cmd} [OPTIONS] DATALIST
+usage: {cmd} [OPTIONS] WAFFLES_CONFIG
 
 Options:
-  -R, --region\t\tSpecifies the desired REGION;
-\t\t\tThis can either be a GMT-style region ( -R xmin/xmax/ymin/ymax )
-\t\t\tor an OGR-compatible vector file with regional polygons. 
-\t\t\tIf a vector file is supplied it will search each region found therein.
-\t\t\tIf omitted, use the region gathered from the data in DATALIST.
-  -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
-\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s:.1111111s
-  -F, --format\t\tOutput grid FORMAT. [GTiff]
-  -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
-\t\t\tsyntax is -M module:mod_opt=mod_val:mod_opt1=mod_val1:...
-  -O, --output-name\tBASENAME for all outputs.
-  -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
-  -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
-\t\t\tappend :<num> to extend the processing region: -X6:12
-  -T, --filter\t\tFILTER the output DEM using one or multiple filters. <fltr:fltr_val:split_value=z>
-\t\t\tAvailable filters:
-\t\t\t1: perform a Gaussian filter at -T1:<factor>.
-\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-\t\t\t3: Spike Filter at -T3:<stand-dev. threshhold>.
-\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
-\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
-  -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
-  -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
-\t\t\tgenerate a waffles_config JSON file using the --config flag.
-
-  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
-  -r, --grid-node\tUse grid-node registration, default is pixel-node
-  -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
-
-  -c, --continue\tDon't clobber existing files.
   -q, --quiet\t\tLower verbosity to a quiet.
 
   --help\t\tPrint the usage text
-  --config\t\tSave the waffles config JSON and major datalist
-  --modules\t\tDisply the module descriptions and usage
   --version\t\tPrint the version information
-
-Datalists and data formats:
-  A datalist is a file that contains a number of datalist entries, 
-  while an entry is a space-delineated line:
-  `/path/to/data format weight data,meta,data`
-
-Supported datalist formats: 
-  {dl_formats}
-
-Modules (see waffles --modules <module-name> for more info):
-  {modules}
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
@@ -633,94 +606,16 @@ def uncertainties_cli(argv = sys.argv):
     See `waffles_cli_usage` for full cli options.
     """
     
-    dls = []
-    i_regions = []
-    these_regions = []
-    module = None
     wg_user = None
-    want_prefix = False
     status = 0
     i = 1
     wg = {}
     wg['verbose'] = True
-    wg['sample'] = None
-    wg['fltr'] = []
+    wg['clobber'] = False
     
     while i < len(argv):
         arg = argv[i]
-        if arg == '--region' or arg == '-R':
-            i_regions.append(str(argv[i + 1]))
-            i += 1
-        elif arg[:2] == '-R': i_regions.append(str(arg[2:]))
-        elif arg == '--module' or arg == '-M':
-            module = str(argv[i + 1])
-            i += 1
-        elif arg[:2] == '-M': module = str(arg[2:])
-        elif arg == '--increment' or arg == '-E':
-            incs = argv[i + 1].split(':')
-            wg['inc'] = utils.str2inc(incs[0])
-            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
-            i = i + 1
-        elif arg[:2] == '-E':
-            incs = arg[2:].split(':')
-            wg['inc'] = utils.str2inc(arg[2:].split(':')[0])
-            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
-        elif arg == '--outname' or arg == '-O':
-            wg['name'] = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-O': wg['name'] = arg[2:]
-        elif arg == '--format' or arg == '-F':
-            wg['fmt'] = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-F': wg['fmt'] = arg[2:]
-        elif arg == '--filter' or arg == '-T':
-            wg['fltr'].append(argv[i + 1])
-            i += 1
-        elif arg[:2] == '-T': wg['fltr'].append(arg[2:])
-        elif arg == '--extend' or arg == '-X':
-            exts = argv[i + 1].split(':')
-            wg['extend'] = utils.int_or(exts[0], 0)
-            if len(exts) > 1: wg['extend_proc'] = utils.int_or(exts[1], 10)
-            i += 1
-        elif arg[:2] == '-X':
-            exts = arg[2:].split(':')
-            wg['extend'] = utils.int_or(exts[0], 0)
-            if len(exts) > 1: wg['extend_proc'] = utils.int_or(exts[1], 10)
-        elif arg == '--wg-config' or arg == '-G':
-            wg_user = argv[i + 1]
-            i += 1
-        elif arg[:2] == '-G': wg_user = arg[2:]
-        elif arg == '--clip' or arg == '-C':
-            wg['clip'] = argv[i + 1]
-            i = i + 1
-        elif arg[:2] == '-C': wg['clip'] = arg[2:]
-        elif arg == '--chunk' or arg == '-K':
-            wg['chunk'] = utils.int_or(argv[i + 1], None)
-            i = i + 1
-        elif arg[:2] == '-K': wg['chunk'] = utils.int_or(arg[2:], None)
-        elif arg == '--epsg' or arg == '-P':
-            wg['epsg'] = utils.int_or(argv[i + 1], 4326)
-            i = i + 1
-        elif arg[:2] == '-P': wg['epsg'] = utils.int_or(arg[2:], 4326)
-        
-        elif arg == '-w' or arg == '--weights': wg['weights'] = 1
-        elif arg == '-t' or arg == '--threads': want_threads = True
-        elif arg == '-p' or arg == '--prefix': want_prefix = True
-        elif arg == '-a' or arg == '--archive': wg['archive'] = True
-        elif arg == '-m' or arg == '--mask': wg['mask'] = True
-        elif arg == '-s' or arg == '--spat': wg['spat'] = True
-        elif arg == '-c' or arg == '--continue': wg['clobber'] = False
-        elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
-
-        elif arg == '--quiet' or arg == '-q': wg['verbose'] = False
-        elif arg == '--config': want_config = True
-        elif arg == '--modules' or arg == '-m':
-            try:
-                if argv[i + 1] in waffles.WaffleFactory()._modules.keys():
-                    sys.stderr.write(_waffles_module_long_desc({k: waffles.WaffleFactory()._modules[k] for k in (argv[i + 1],)}))
-                else: sys.stderr.write(_waffles_module_long_desc(waffles.WaffleFactory()._modules))
-            except: sys.stderr.write(_waffles_module_long_desc(waffles.WaffleFactory()._modules))
-            sys.exit(0)
+        if arg == '--quiet' or arg == '-q': wg['verbose'] = False
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(uncertainties_cli_usage)
             sys.exit(0)
@@ -731,93 +626,47 @@ def uncertainties_cli(argv = sys.argv):
             sys.stdout.write(uncertainties_cli_usage)
             utils.echo_error_msg('{} is not a valid waffles cli switch'.format(arg))
             sys.exit(0)
-        else: dls.append(arg)
+        else: wg_user = arg
         i += 1
 
-    if module is None:
-        sys.stderr.write(uncertainties_cli_usage)
-        utils.echo_error_msg('''must specify a waffles -M module.''')
-        sys.exit(-1)
-                
     ## ==============================================
-    ## check the increment
+    ## load the user wg json and run waffles with that.
     ## ==============================================
-    if wg['inc'] is None:
-        sys.stderr.write(uncertainties_cli_usage)
-        utils.echo_error_msg('''must specify a gridding increment.''')
-        sys.exit(-1)
-    
-    ## ==============================================
-    ## set the datalists and names
-    ## ==============================================
-    wg['data'] = dls
+    if wg_user is not None:
+        if os.path.exists(wg_user):
+            #try:
+            with open(wg_user, 'r') as wgj:
+                wg = json.load(wgj)
 
-    for i_region in i_regions:
-        tmp_region = regions.Region().from_string(i_region)
-        if tmp_region.valid_p():
-            these_regions.append(tmp_region)
+                for key in wg.keys():
+                    #this_waffle = WaffleFactory()._modules[key]['class'](wg[key])
+                    this_waffle = waffles.WaffleFactory().acquire_from_config(wg)
+                    this_waffle.mask = True
+                    this_waffle.clobber = False
+                    if not this_waffle.valid_p():
+                        this_waffle.generate()
+
+                    #print(wf.mod)
+                    #print(wf.mod_args)
+                    i = InterpolationUncertainty(dem=this_waffle).run()
+                    utils.echo_msg(this_waffle)
+
+                    #this_waffle.generate()
+
+                sys.exit(0)
+            # except Exception as e:
+            #     utils.echo_error_msg(e)
+            #     sys.exit(-1)
         else:
-            tmp_region = regions.ogr_wkts(i_region)
-            for i in tmp_region:
-                if i.valid_p():
-                    these_regions.append(i)
-                    
-    if len(these_regions) == 0:
-        these_regions = []
-        utils.echo_error_msg('failed to parse region(s), {}'.format(i_regions))
+            utils.echo_error_msg(
+                'specified waffles config file does not exist, {}'.format(wg_user)
+            )
+            sys.stderr.write(waffles_cli_usage)
+            sys.exit(-1)
     else:
-        if wg['verbose']: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-    
-    for i, this_region in enumerate(these_regions):
-        wg['src_region'] = this_region
-        if want_prefix or len(these_regions) > 1:
-            wg['name'] = utils.append_fn(wg['name'], wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc'])
+        utils.echo_error_msg(
+            'you must supply a waffles config file; see waffles --help for more information.'
+        )
+        sys.exit(-1)
 
-        wg['mask'] = True
-        print(module)
-        wf = waffles.WaffleFactory(mod=module, **wg).acquire()
-        if not wf.valid_p():
-            wf.generate()
-
-        #print(wf.mod)
-        #print(wf.mod_args)
-        i = InterpolationUncertainty(dem=wf).run()
-        utils.echo_msg(wf)
-    
-# ## ==============================================
-# ## testing
-# ## ==============================================
-# region = regions.Region().from_list([480000.01, 482999.99, 4395000.0, 4397999.99])
-# epsg = 26913
-
-# module = 'triangulate'
-# module_args = ()
-
-# inc = 1
-# name='CO_SoPlatteRiver_MergeTriangulate1'
-
-# datasets = [
-#     'USGS_LPC_CO_SoPlatteRiver_Lot5_2013_13SDD480395_LAS_2015.xyz',
-#     'USGS_LPC_CO_SoPlatteRiver_Lot5_2013_13SDD481395_LAS_2015.xyz',
-#     'USGS_LPC_CO_SoPlatteRiver_Lot5_2013_13SDD480396_LAS_2015.xyz',
-#     'USGS_LPC_CO_SoPlatteRiver_Lot5_2013_13SDD481396_LAS_2015.xyz',
-# ]
-
-# waffles_dem = waffles.WaffleFactory(
-#     mod = module,
-#     data = datasets,
-#     src_region = region,
-#     inc = inc,
-#     name = name,
-#     epsg = epsg,
-# ).acquire(*module_args)
-
-# waffles_dem.fn = 'CO_SoPlatteRiver_MergeTriangulate1.tif'
-# waffles_dem.waffled = True
-
-# print(waffles_dem.valid_p())
-
-# i = InterpolationUncertainty(dem=waffles_dem, data_mask='CO_SoPlatteRiver_MergeTriangulate1_msk.tif')
-# i.run()
-
-# print(i.dem)
+### End        

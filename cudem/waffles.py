@@ -486,6 +486,10 @@ class Waffle:
                 utils.echo_msg(
                     'DEM {} already exists, skipping...'.format(self.fn)
                 )
+                if self.mask:
+                    if not os.path.exists(self.mask_fn):
+                        [x for x in self.yield_xyz()]
+                        self._process(fn=self.mask_fn, filter_=False)
                 return(self)
             
         self.run()
@@ -531,7 +535,8 @@ class GMTSurface(Waffle):
     """
     
     def __init__(self, tension = .35, relaxation = 1.2,
-                 lower_limit = 'd', upper_limit = 'd', **kwargs):
+                 lower_limit = 'd', upper_limit = 'd',
+                 breakline=None, **kwargs):
         """generate a DEM with GMT surface"""
 
         super().__init__(**kwargs)
@@ -546,6 +551,7 @@ class GMTSurface(Waffle):
         self.relaxation = relaxation
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
+        self.breakline = breakline
 
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
@@ -557,23 +563,25 @@ class GMTSurface(Waffle):
             'tension': self.tension,
             'relaxation': self.relaxation,
             'lower_limit': self.lower_limit,
-            'upper_limit': self.upper_limit
+            'upper_limit': self.upper_limit,
+            'breakline': self.breakline,
         }
         self._set_config()
         
     def run(self):        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}{} -V -r | gmt surface -V {} -I{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r'.format(
+            'gmt blockmean {} -I{:.10f}{} -V -r | gmt surface -V {} -I{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r{}'.format(
                 self.p_region.format('gmt'),
                 self.inc,
-                ' -Wi' if self.weights else '',
+                ' -W' if self.weights else '',
                 self.p_region.format('gmt'),
                 self.inc,
                 self.name,
                 self.tension,
                 self.relaxation,
                 self.lower_limit,
-                self.upper_limit
+                self.upper_limit,
+                ' -D{}'.format(self.breakline) if self.breakline is not None else '',
             )
         )
         
@@ -1017,7 +1025,155 @@ class WafflesIDW(Waffle):
         )
         
         return(self)
+
+class WafflesIDW2(Waffle):
+    """Generate an IDW DEM.
+    If self.weights is True, use weights as uncertainty values
+    to generate a UIDW DEM as described here: 
+    https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+    """
+    
+    def __init__(
+            self, radius='1', power=2, block=True, min_points=None, **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.radius = utils.str2inc(radius)
+        self.power = utils.float_or(power)
+        self.block_p = block
+        self.min_points = utils.int_or(min_points)
+        self.mod = 'IDW'
+        self.mod_args = {
+            'radius':self.radius,
+            'power':self.power,
+            'block':self.block_p,
+            'min_points':self.min_points,
+        }
+        self._set_config()
+        
+    def _distance(self, pnt0, pnt1):
+        return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
+    
+    def run(self):
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            utils.sr_wkt(self.epsg),
+            gdal.GDT_Float32,
+            -9999,
+            self.fmt
+        )
+        
+        outArray = np.empty((ycount, xcount))
+        outArray[:] = np.nan
+
+        if self.verbose:
+            if self.min_points:
+                progress = utils.CliProgress(
+                    'generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
+                        self.radius, ycount, xcount, self.min_points
+                    )
+                )
+            else:
+                progress = utils.CliProgress(
+                    'generating IDW grid @ {} and {}/{}'.format(
+                        self.radius, ycount, xcount
+                    )
+                )
+            i=0
+
+        self._xyz_block_t(self.yield_xyz(block=self.block_p))
+        for y in range(0, ycount):
+            if self.verbose:
+                i+=1
+                progress.update_perc((i, ycount))
+                
+            for x in range(0, xcount):
+                xyz_bucket = []
+                z_list = []
+                dw_list = []
+                if self.weights:
+                    ww_list = []
+
+                if self.min_points is not None:
+                    l_radius = 0
+                    while len(xyz_bucket) < self.min_points:
+                        l_radius += self.radius
+                        xg, yg = utils._pixel2geo(x, y, dst_gt)
+                        block_region = regions.Region(
+                            xmin=xg-l_radius,
+                            xmax=xg+l_radius,
+                            ymin=yg-l_radius,
+                            ymax=yg+l_radius
+                        )
+                        
+                        srcwin = block_region.srcwin(dst_gt, xcount, ycount)
+                        for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+                            for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
+                                for b in self.block_t[y_i, x_i]:
+                                    xyz_bucket.append(b)
+                else:
+                    xg, yg = utils._pixel2geo(x, y, dst_gt)
+                    block_region = regions.Region(
+                        xmin=xg-self.radius,
+                        xmax=xg+self.radius,
+                        ymin=yg-self.radius,
+                        ymax=yg+self.radius
+                    )
+                    
+                    srcwin = block_region.srcwin(dst_gt, xcount, ycount)
+                    for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+                        for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
+                            for b in self.block_t[y_i, x_i]:
+                                xyz_bucket.append(b)
+                                
+                for this_xyz in xyz_bucket:
+                    d = self._distance([this_xyz.x, this_xyz.y], [xg, yg])
+                    z_list.append(this_xyz.z)
+                    if d > 0:
+                        dw_list.append(1./(d**self.power))
+                    else: dw_list.append(0)
+                    
+                    if self.weights:
+                        w = this_xyz.w
+                        if w > 0:
+                            ww_list.append(w**self.power)
+                        else: ww_list.append(0)
+
+                if len(dw_list) > 0:
+                    dwt = np.transpose(dw_list)
+                    if self.weights:
+                        wwt = np.transpose(ww_list)
+                        den = sum(np.array(dw_list)*np.array(ww_list))
+                        if den > 0:
+                            outArray[y,x] = np.dot(
+                                z_list, (np.array(dwt)*np.array(wwt))
+                            )/den
+                        else: outArray[y,x] = sum(z_list)/len(z_list)
+                        
+                    else:
+                        dw_list_sum = sum(dw_list)
+                        if dw_list_sum > 0:
+                            outArray[y,x] = np.dot(z_list, dwt)/dw_list_sum
+                        else: outArray[y,x] = sum(z_list)/len(z_list)
+        if self.verbose:
+            progress.end(
+                0,
+                'generated IDW grid {}/{}'.format(
+                    ycount, xcount
+                )
+            )
             
+        ds = None            
+        outArray[np.isnan(outArray)] = -9999
+        out, status = utils.gdal_write(
+            outArray, '{}.tif'.format(self.name), ds_config
+        )
+        
+        return(self)
+    
 class WafflesVdatum(Waffle):
     """vertical datum transformation grid via NOAA's VDATUM.
     U.S. and territories only.
@@ -1276,26 +1432,41 @@ class WafflesNearest(WafflesGDALGrid):
         self._set_config()
 
 class WafflesCUDEM(Waffle):
-    def __init__(self, want_coast=False, w_thresh = .75, **kwargs):
+    def __init__(self, want_coast=False, coastline=None, w_thresh=.75, **kwargs):
         
         super().__init__(**kwargs)
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
 
         self.want_coast = want_coast
+        self.coastline = coastline
         self.w_thresh = w_thresh
         self.mod = 'cudem'
         self.mod_args = {}
         
         self._set_config()
+        self.w_thresh=.5
         
     def run(self):
 
-        if self.want_coast:
+        if self.coastline is not None:
+            
+            #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
+            #    self.coastline,
+            #    self.coast_xyz,
+            #    self.c_region.xmin,
+            #    self.c_region.xmax,
+            #    self.c_region.ymin,
+            #    self.c_region.ymax)
+            #out, status = utils.run_cmd(c_cmd, verbose=True)
+            #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
+            bathy_data = self.data_
+            bathy_clip = '{}:invert=True'.format(self.coastline)
+        elif self.want_coast:
             self.coast = WaffleFactory(
                 mod='coastline',
-                data=[],
+                data=self.data_,
                 src_region=self.c_region,
-                inc=self.inc*3,
+                inc=self.inc,
                 name='tmp_coast',
                 node=self.node,
                 extend=self.extend+12,
@@ -1305,27 +1476,28 @@ class WafflesCUDEM(Waffle):
                 verbose=self.verbose,
             ).acquire().generate()
 
-            c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
-                'tmp_coast.shp',
-                self.coast_xyz,
-                self.c_region.xmin,
-                self.c_region.xmax,
-                self.c_region.ymin,
-                self.c_region.ymax)
-            out, status = utils.run_cmd(c_cmd, verbose=True)
-            bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
+            #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
+            #    'tmp_coast.shp',
+            #    self.coast_xyz,
+            #    self.c_region.xmin,
+            #    self.c_region.xmax,
+            #    self.c_region.ymin,
+            #    self.c_region.ymax)
+            #out, status = utils.run_cmd(c_cmd, verbose=True)
+            #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
+            bathy_data = self.data_
             bathy_clip = '{}:invert=True'.format(self.coast.name + '.shp')
         else:
             bathy_data = self.data_
             bathy_clip = None
             
         bathy_region = self.p_region.copy()
-        bathy_region.zmax = 1
+        #bathy_region.zmax = 1
         #            fltr=['1:10'],
         #             fltr=['2:{}'. format(utils.str2inc('3s'))],
         #            inc=utils.str2inc('1s'),
         self.bathy = WaffleFactory(
-            mod='surface:upper_limit=-0.1:tension=.35',
+            mod='surface:tension=.35',
             data=bathy_data,
             src_region=bathy_region,
             inc=self.inc*3,
@@ -2770,7 +2942,7 @@ def waffles_cli(argv = sys.argv):
             with open('{}.json'.format(this_waffle.name), 'w') as wg_json:
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_waffle.name))
                 wg_json.write(json.dumps(this_wg, indent = 4, sort_keys = True))
-                
-        this_waffle.generate()
-        #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
+        else:
+            this_waffle.generate()
+            #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
 ### End
