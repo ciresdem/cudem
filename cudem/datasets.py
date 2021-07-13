@@ -289,8 +289,11 @@ class XYZDataset():
         if gen_inf:
             if self.verbose:
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
+                _pu = _prog.update
+            else:
+                _pu = None
                 
-            self.infos = self.generate_inf(_prog.update)
+            self.infos = self.generate_inf(_pu)
             self.infos['format'] = self.data_format
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:

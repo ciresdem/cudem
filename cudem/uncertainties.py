@@ -370,7 +370,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             clip=self.dem.clip,
                             epsg=self.dem.epsg,
                             mask=True,
-                            verbose=True,
+                            verbose=False,
                             clobber=True
                         )
                         waff.mod_args = self.dem.mod_args
