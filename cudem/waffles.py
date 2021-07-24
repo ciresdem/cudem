@@ -715,8 +715,6 @@ class WafflesMBGrid(Waffle):
         else: return(None)
     
     def run(self):
-        #raise(NotImplementedError)
-
         # if use_datalists:
         #     #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
         #     archive = wg['archive']
@@ -728,8 +726,9 @@ class WafflesMBGrid(Waffle):
         mb_region = self.p_region
         mb_region = mb_region.buffer(self.inc * -.5)
         xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
-        
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -G100 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+
+        ## -G100 breaks mbgrid >= 5.7.8
+        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
             mb_region.format('gmt'),
             xsize,
@@ -741,7 +740,7 @@ class WafflesMBGrid(Waffle):
         )
         for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
             sys.stderr.write('{}'.format(out))
-        #out, status = utils.run_cmd(mbgrid_cmd, verbose = wg['verbose'])
+        #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
 
         self._gmt_grd2gdal('{}.grd'.format(self.name))
         utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
