@@ -575,8 +575,8 @@ def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff'):
         try:
             driver.Delete(dst_gdal)
         except Exception as e:
-            utils.echo_error_msg(e)
-            utils.remove_glob(dst_gdal)
+            echo_error_msg(e)
+            remove_glob(dst_gdal)
 
     ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
     if ds is not None:
@@ -595,7 +595,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
     
     if os.path.exists(src_dem):
         if dst_dem is None:
-            dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], utils.gdal_fext(dst_fmt))
+            dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
         if not co:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {}'.format(src_dem, dst_dem, dst_fmt))
         else:

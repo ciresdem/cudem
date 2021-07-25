@@ -1431,7 +1431,7 @@ class WafflesNearest(WafflesGDALGrid):
         self._set_config()
 
 class WafflesCUDEM(Waffle):
-    def __init__(self, want_coast=False, coastline=None, w_thresh=.75, **kwargs):
+    def __init__(self, want_coast=False, coastline=None, w_thresh=1, **kwargs):
         
         super().__init__(**kwargs)
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
@@ -1443,7 +1443,7 @@ class WafflesCUDEM(Waffle):
         self.mod_args = {}
         
         self._set_config()
-        self.w_thresh=.5
+        #self.w_thresh=1
         
     def run(self):
 
@@ -1496,17 +1496,18 @@ class WafflesCUDEM(Waffle):
         #             fltr=['2:{}'. format(utils.str2inc('3s'))],
         #            inc=utils.str2inc('1s'),
         self.bathy = WaffleFactory(
-            mod='surface:tension=.35',
+            #mod='surface:tension=.35',
+            mod='IDW:radius={}'.format('3s'),
             data=bathy_data,
             src_region=bathy_region,
-            inc=self.inc*3,
+            inc=utils.str2inc('1s'),
             name='tmp_bathy',
             node=self.node,
             extend=self.extend+6,
             extend_proc=self.extend+10,
-            fltr=['1:5'],
-            weights=4,
-            sample=self.inc,
+            #fltr=['1:5'],
+            weights=1,
+            #sample=self.inc,
             epsg=self.epsg,
             clobber=True,
             verbose=self.verbose,
@@ -1517,7 +1518,7 @@ class WafflesCUDEM(Waffle):
         surface_region.wmin = utils.float_or(self.w_thresh)
         #mod='surface:tension=.75',
         self.surface = WaffleFactory(
-            mod='surface:tension=.75',
+            mod='surface:tension=1',
             data=self.data_ + ['{},200,.1'.format(self.bathy.fn)],
             src_region=surface_region,
             inc=self.inc,
