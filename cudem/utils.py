@@ -596,6 +596,8 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
     if os.path.exists(src_dem):
         if dst_dem is None:
             dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
+        if dst_fmt != 'GTiff':
+            co = False
         if not co:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {}'.format(src_dem, dst_dem, dst_fmt))
         else:
