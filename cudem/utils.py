@@ -601,7 +601,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
         else:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
             '.format(src_dem, dst_dem, dst_fmt))
-        out, status = utils.run_cmd(gdal2gdal_cmd, verbose=False)
+        out, status = run_cmd(gdal2gdal_cmd, verbose=False)
         if status == 0:
             return(dst_dem)
         else:
