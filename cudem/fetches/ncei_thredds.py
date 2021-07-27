@@ -119,7 +119,7 @@ community preparedness.'''
                 zv = this_xml.xml_doc.findall('.//gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString', namespaces = this_xml.namespaces)
                 if zv is not None:
                     for zvs in zv:
-                        #print(zvs.text)
+                        print(zvs.text)
                         if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
                             zvar = zvs.text
                             break
@@ -146,13 +146,13 @@ community preparedness.'''
         """Search for data in the reference vector file"""
         
         for surv in FRED._filter_FRED(self):
-            wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=NetCDF3"\
-                .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
-            print(wcs_url)
-            self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
-            #for d in surv['DataLink'].split(','):
-            #    if d != '':
-            #        self.results.append([d, d.split('/')[-1], surv['DataType']])
+            #wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=NetCDF3"\
+            #    .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
+            #print(wcs_url)
+            #self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
+            for d in surv['DataLink'].split(','):
+                if d != '':
+                    self.results.append([d, d.split('/')[-1], surv['DataType']])
 
     def yield_xyz(self, entry):
         src_ncei = os.path.basename(entry[1])

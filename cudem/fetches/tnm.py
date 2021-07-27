@@ -56,7 +56,7 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
-        self.where = [where]
+        self.where = where
         #print(self.where)
 
         self.name = 'tnm'
