@@ -1786,7 +1786,7 @@ class WafflesCoastline(Waffle):
             src_region=self.f_region,
             weight=self.weights,
             verbose=self.verbose,
-            where="Name LIKE '%Hydro%'",
+            where=["Name LIKE '%Hydro%'"],
             extents='HU-8 Subbasin,HU-4 Subregion'
         ).run()
             #extents='HU-4 Subregion,HU-8 Subbasin').run()
