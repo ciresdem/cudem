@@ -146,7 +146,7 @@ class CopernicusDEM(f_utils.FetchModule):
 
         if self.datatype is not None:
             self.where.append("DataType = '{}'".format(self.datatype))
-            
+
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])

@@ -409,7 +409,7 @@ class FRED:
         
     def _filter(self, region=None, where=[], layers=[]):
         """Search for data in the reference vector file"""
-        
+
         _results = []
         if region is not None:
             _boundsGeom = region.export_as_geom()

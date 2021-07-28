@@ -302,6 +302,7 @@ class Region:
         eg = [[self.ymin, self.xmin], [self.ymin, self.xmax],
               [self.ymax, self.xmax], [self.ymax, self.xmin],
               [self.ymin, self.xmin]]
+
         return(create_wkt_polygon(eg))
 
     def export_as_geom(self):
@@ -472,6 +473,7 @@ class Region:
         except: pass
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         self.epsg = warp_epsg
+        self.wkt = None
         return(self.transform(dst_trans))
 
     def transform(self, dst_trans=None):

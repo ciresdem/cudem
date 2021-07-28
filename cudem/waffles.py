@@ -1566,8 +1566,9 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.gmrt
         import cudem.fetches.utils
 
-        self.f_region = self.p_region
+        self.f_region = self.p_region.copy()
         self.f_region.buffer(self.inc*10)
+        self.f_region.epsg = self.epsg
         self.mod = 'coastline'
         self.mod_args = {
             'wet': wet,
@@ -1575,6 +1576,9 @@ class WafflesCoastline(Waffle):
             'want_nhd': want_nhd,
             'want_gmrt': want_gmrt
         }
+
+        self.wgs_region = self.f_region.copy()
+        self.wgs_region.warp(4326)
         self._set_config()
 
     def run(self):
@@ -1587,7 +1591,7 @@ class WafflesCoastline(Waffle):
             self._load_dry_mask()
             
         self._load_copernicus()
-        self._load_nhd()        
+        self._load_nhd()
         
         if len(self.data) > 0:
             self._load_data()
@@ -1722,7 +1726,7 @@ class WafflesCoastline(Waffle):
 
         warped_tifs = []
         this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=self.f_region, weight=self.weights, verbose=self.verbose, datatype='1'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, datatype='1'
         )
         
         this_cop.run()
@@ -1730,8 +1734,8 @@ class WafflesCoastline(Waffle):
         for i, cop_tif in enumerate(this_cop.results):
             out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
             utils.run_cmd(
-                'gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite'.format(
-                    cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv']
+                'gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite{}'.format(
+                    cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv'], ' -s_srs EPSG:4326 -t_srs EPSG:{}'.format(self.epsg) if self.epsg else '',
                 ),
                 verbose = True
             )
@@ -1783,7 +1787,7 @@ class WafflesCoastline(Waffle):
         
         utils.remove_glob('region_buff.*')
         this_tnm = cudem.fetches.tnm.TheNationalMap(
-            src_region=self.f_region,
+            src_region=self.wgs_region,
             weight=self.weights,
             verbose=self.verbose,
             where=["Name LIKE '%Hydro%'"],
@@ -1864,21 +1868,23 @@ class WafflesCoastline(Waffle):
         utils.echo_msg(
             'filling the coast mask with NHD data...'
         )
+
+        if len(this_tnm.results) > 0:
         
-        c_ds = gdal.Open(self.u_mask)
-        #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
-        for this_xyz in demfun.parse(c_ds):
-            xpos, ypos = utils._geo2pixel(
-                this_xyz.x, this_xyz.y, self.ds_config['geoT']
-            )
-            try:
-                ca_v = self.coast_array[ypos, xpos]
-                if this_xyz.z == 1:
-                    self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-                    
-            except: pass
-            
-        c_ds = None            
+            c_ds = gdal.Open(self.u_mask)
+            #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+            for this_xyz in demfun.parse(c_ds, warp=self.epsg):
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, self.ds_config['geoT']
+                )
+                try:
+                    ca_v = self.coast_array[ypos, xpos]
+                    if this_xyz.z == 1:
+                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+
+                except: pass
+
+            c_ds = None            
         utils.remove_glob('{}*'.format(self.u_mask))
 
     def _load_data(self):
