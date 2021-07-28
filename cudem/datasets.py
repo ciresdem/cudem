@@ -1058,6 +1058,24 @@ class RasterFile(XYZDataset):
         if self.ds_open_p:
             self.gt = self.src_ds.GetGeoTransform()
 
+            #mt = self.src_ds.GetMetadata()
+
+            # node = 'pixel'
+            # if 'AREA_OR_POINT' in mt.keys():
+            #     if mt['AREA_OR_POINT'].lower() == 'point':
+            #         node = 'grid'
+            # elif 'NC_GLOBAL#node_offset' in mt.keys():
+            #     if mt['NC_GLOBAL#node_offset'] == '0':
+            #         node = 'grid'
+            # else:
+            #     node = 'pixel'
+
+            # if node == 'grid':
+            #     self.gt = list(self.gt)
+            #     self.gt[0] = self.gt[0] - (self.gt[1]/2)
+            #     self.gt[3] = self.gt[3] - (self.gt[5]/2)
+            #     self.gt = tuple(self.gt)
+            
             if self.region is not None:
                 if self.dst_trans is not None:
                     if self.trans_region is not None and self.trans_region.valid_p(
@@ -1112,7 +1130,23 @@ class RasterFile(XYZDataset):
         if self.src_ds is not None:
             ln = 0
             band = self.src_ds.GetRasterBand(1)
-            gt = self.gt            
+            gt = self.gt
+            # mt = self.src_ds.GetMetadata()
+            # node = 'pixel'
+            # if 'AREA_OR_POINT' in mt.keys():
+            #     if mt['AREA_OR_POINT'].lower() == 'point':
+            #         node = 'grid'
+            # elif 'NC_GLOBAL#node_offset' in mt.keys():
+            #     if mt['NC_GLOBAL#node_offset'] == '0':
+            #         node = 'grid'
+            # else:
+            #     node = 'pixel'
+
+            # if node == 'grid':
+            #     gt = list(gt)
+            #     gt[0] = gt[0] - (gt[1]/2)
+            #     gt[3] = gt[3] - (gt[5]/2)
+            #     gt = tuple(gt)
             msk_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)

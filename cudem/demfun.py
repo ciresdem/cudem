@@ -61,6 +61,24 @@ def gather_infos(src_ds, region = None, scan = False):
     src_band = src_ds.GetRasterBand(1)
     dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
 
+    # mt = src_ds.GetMetadata()
+
+    # node = 'pixel'
+    # if 'AREA_OR_POINT' in mt.keys():
+    #     if mt['AREA_OR_POINT'].lower() == 'point':
+    #         node = 'grid'
+    # elif 'NC_GLOBAL#node_offset' in mt.keys():
+    #     if mt['NC_GLOBAL#node_offset'] == '0':
+    #         node = 'grid'
+    # else:
+    #     node = 'pixel'
+
+    # if node == 'grid':
+    #     dst_gt = list(dst_gt)
+    #     dst_gt[0] = dst_gt[0] - (dst_gt[1]/2)
+    #     dst_gt[3] = dst_gt[3] - (dst_gt[5]/2)
+    #     dst_gt = tuple(dst_gt)
+        
     ds_config = {
         'nx': srcwin[2],
         'ny': srcwin[3],
@@ -329,6 +347,11 @@ def chunks(src_dem, n_chunk):
         ds_config = gather_infos(src_ds)
         band = src_ds.GetRasterBand(1)
         gt = ds_config['geoT']
+        gt = list(gt)
+        gt[0] = gt[0] - (gt[1]/2)
+        gt[3] = gt[3] - (gt[5]/2)
+        gt = tuple(gt)
+        
         c_n = 0
         for srcwin in yield_srcwin(src_dem, n_chunk = n_chunk, step = n_chunk):
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
