@@ -1126,7 +1126,7 @@ class RasterFile(XYZDataset):
         """
 
         self._open_ds()
-        out_xyz = xyzfun.XYZPoint(w = 1)
+        out_xyz = xyzfun.XYZPoint(w=1)
         if self.src_ds is not None:
             ln = 0
             band = self.src_ds.GetRasterBand(1)

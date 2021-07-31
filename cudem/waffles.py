@@ -993,6 +993,10 @@ class WafflesIDW(Waffle):
                             ww_list.append(w**self.power)
                         else: ww_list.append(0)
 
+                # if 0 not in dw_list:
+                #     if len(dw_list) <= 3:
+                #         dw_list = []
+                        
                 if len(dw_list) > 0:
                     dwt = np.transpose(dw_list)
                     if self.weights:
@@ -1431,24 +1435,62 @@ class WafflesNearest(WafflesGDALGrid):
         self._set_config()
 
 class WafflesCUDEM(Waffle):
-    def __init__(self, want_coast=False, coastline=None, w_thresh=1, **kwargs):
+    def __init__(
+            self,
+            want_landmask=False,
+            coastline=None,
+            min_weight=1,
+            smoothing=10,
+            radius=None,
+            bathy_inc=None,
+            **kwargs
+    ):
         
         super().__init__(**kwargs)
+        
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
-
-        self.want_coast = want_coast
+        self.want_landmask = want_landmask
         self.coastline = coastline
-        self.w_thresh = w_thresh
+        self.mask_p = True if self.coastline is not None or self.want_landmask else False
+        self.mask_z = 0
+        
+        self.min_weight = utils.float_or(min_weight)
+        self.smoothing = utils.int_or(smoothing)
+        self.radius = self.inc*9 if radius is None else radius
+        self.bathy_inc = self.inc*3 if bathy_inc is None else bathy_inc
         self.mod = 'cudem'
         self.mod_args = {}
-        
         self._set_config()
-        #self.w_thresh=1
         
     def run(self):
+        idw_region = self.p_region.copy()
+        if self.mask_p:
+            idw_region.zmax = self.mask_z
+        surface_region = self.p_region.copy()
+        surface_region.wmin = self.min_weight
 
-        if self.coastline is not None:
-            
+        self.idw = WaffleFactory(
+            mod='IDW:radius={}'.format(self.radius),
+            data=self.data_,
+            src_region=idw_region,
+            inc=utils.str2inc(self.bathy_inc),
+            name='tmp_idw',
+            node=self.node,
+            extend=self.extend+6,
+            extend_proc=self.extend_proc+6,
+            fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
+            weights=1,
+            epsg=self.epsg,
+            clobber=True,
+            verbose=self.verbose,
+        ).acquire().generate()
+
+        if self.mask_p:
+            bathy_region = self.p_region.copy()
+            bathy_region.zmax = self.mask_z
+            bathy_clip = None
+            bathy_data = self.data_
+
             #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
             #    self.coastline,
             #    self.coast_xyz,
@@ -1458,22 +1500,6 @@ class WafflesCUDEM(Waffle):
             #    self.c_region.ymax)
             #out, status = utils.run_cmd(c_cmd, verbose=True)
             #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
-            bathy_data = self.data_
-            bathy_clip = '{}:invert=True'.format(self.coastline)
-        elif self.want_coast:
-            self.coast = WaffleFactory(
-                mod='coastline',
-                data=self.data_,
-                src_region=self.c_region,
-                inc=self.inc,
-                name='tmp_coast',
-                node=self.node,
-                extend=self.extend+12,
-                weights=self.weights,
-                epsg=self.epsg,
-                clobber=True,
-                verbose=self.verbose,
-            ).acquire().generate()
 
             #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
             #    'tmp_coast.shp',
@@ -1484,42 +1510,48 @@ class WafflesCUDEM(Waffle):
             #    self.c_region.ymax)
             #out, status = utils.run_cmd(c_cmd, verbose=True)
             #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
-            bathy_data = self.data_
-            bathy_clip = '{}:invert=True'.format(self.coast.name + '.shp')
-        else:
-            bathy_data = self.data_
-            bathy_clip = None
             
-        bathy_region = self.p_region.copy()
-        #bathy_region.zmax = 1
-        #            fltr=['1:10'],
-        #             fltr=['2:{}'. format(utils.str2inc('3s'))],
-        #            inc=utils.str2inc('1s'),
-        self.bathy = WaffleFactory(
-            #mod='surface:tension=.35',
-            mod='IDW:radius={}'.format('3s'),
-            data=bathy_data,
-            src_region=bathy_region,
-            inc=utils.str2inc('1s'),
-            name='tmp_bathy',
-            node=self.node,
-            extend=self.extend+6,
-            extend_proc=self.extend+10,
-            #fltr=['1:5'],
-            weights=1,
-            #sample=self.inc,
-            epsg=self.epsg,
-            clobber=True,
-            verbose=self.verbose,
-            clip=bathy_clip,
-        ).acquire().generate()
+            if self.coastline is not None:            
+                bathy_clip = '{}:invert=True'.format(self.coastline)
+            elif self.want_landmask:
+                self.coast = WaffleFactory(
+                    mod='coastline',
+                    data=self.data_,
+                    src_region=self.c_region,
+                    inc=self.inc,
+                    name='tmp_coast',
+                    node=self.node,
+                    extend=self.extend+12,
+                    weights=self.weights,
+                    epsg=self.epsg,
+                    clobber=True,
+                    verbose=self.verbose,
+                ).acquire().generate()
+                bathy_clip = '{}:invert=True'.format(self.coast.name + '.shp')
         
-        surface_region = self.p_region.copy()
-        surface_region.wmin = utils.float_or(self.w_thresh)
-        #mod='surface:tension=.75',
+            self.bathy = WaffleFactory(
+                mod='surface:tension=1:upper_limit={}'.format(self.mask_z),
+                #data=bathy_data + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                src_region=bathy_region,
+                inc=utils.str2inc(self.bathy_inc),
+                name='tmp_bathy',
+                node=self.node,
+                extend=self.extend+6,
+                extend_proc=self.extend_proc+6,
+                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+                weights=1,
+                epsg=self.epsg,
+                clobber=True,
+                verbose=self.verbose,
+                clip=bathy_clip,
+            ).acquire().generate()
+        else:
+            self.bathy = self.idw
+        
         self.surface = WaffleFactory(
             mod='surface:tension=1',
-            data=self.data_ + ['{},200,.1'.format(self.bathy.fn)],
+            data=self.data_ + ['{},200,{}'.format(self.bathy.fn, self.min_weight)],
             src_region=surface_region,
             inc=self.inc,
             name=self.name,
@@ -1527,13 +1559,12 @@ class WafflesCUDEM(Waffle):
             extend=self.extend,
             extend_proc=self.extend_proc,
             weights=self.weights,
-            fltr=[],
             epsg=self.epsg,
             clobber=True,
             verbose=self.verbose,
         ).acquire().generate()
 
-        utils.remove_glob('tmp_bathy*', 'tmp_coast*', '{}*'.format(self.coast_xyz))
+        utils.remove_glob('tmp_bathy*', 'tmp_coast*', 'tmp_idw*', '{}*'.format(self.coast_xyz))
         
         return(self)
         

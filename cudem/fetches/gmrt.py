@@ -81,7 +81,7 @@ class GMRT(f_utils.FetchModule):
     def yield_xyz(self, entry):
         src_data = 'gmrt_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
-            gmrt_ds = datasets.RasterFile(fn=src_data, data_format=200, epsg=4326, warp=self.warp,
+            gmrt_ds = datasets.RasterFile(fn=src_data, data_format=200, epsg=4326, warp=self.warp, weight=1,
                                           name=src_data, src_region=self.region, verbose=self.verbose)
             if self.bathy_only:
                 for xyz in gmrt_ds.yield_xyz():
