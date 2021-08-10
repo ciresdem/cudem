@@ -445,7 +445,7 @@ def blur(src_dem, dst_dem, sf = 1):
         return(utils.gdal_write(smooth_array, dst_dem, ds_config))
     else: return([], -1)
 
-def filter_outliers(src_gdal, dst_gdal, threshhold = None, chunk_size = None, chunk_step = None):
+def filter_outliers(src_gdal, dst_gdal, threshhold=None, chunk_size=None, chunk_step=None):
     """scan a src_gdal file for outliers and remove them"""
     
     try:
@@ -461,7 +461,7 @@ def filter_outliers(src_gdal, dst_gdal, threshhold = None, chunk_size = None, ch
         gt = ds_config['geoT']
         if threshhold is None:
             ds_std = np.std(ds_array)
-        else: ds_std = threshhold
+        else: ds_std = utils.float_or(threshhold)
 
         driver = gdal.GetDriverByName('MEM')
         mem_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
