@@ -455,7 +455,7 @@ def filter_outliers(src_gdal, dst_gdal, threshhold = None, chunk_size = None, ch
     if ds is not None:
         tnd = 0
         
-        ds_config = demfungather_infos(ds)
+        ds_config = gather_infos(ds)
         ds_band = ds.GetRasterBand(1)
         ds_array = ds_band.ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
         gt = ds_config['geoT']
@@ -481,13 +481,13 @@ def filter_outliers(src_gdal, dst_gdal, threshhold = None, chunk_size = None, ch
         else: n_step = chunk_step
 
         utils.echo_msg('scanning {} for spikes with {}@{} MAX {}...'.format(src_gdal, n_chunk, n_step, ds_std))
-        for srcwin in demfun.yield_srcwin(src_gdal, n_chunk = n_chunk, step = n_step):
+        for srcwin in yield_srcwin(src_gdal, n_chunk = n_chunk, step = n_step):
             band_data = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             band_data[band_data == ds_config['ndv']] = np.nan
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
             dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
 
-            dst_config = demfun.copy_infos(ds_config)
+            dst_config = copy_infos(ds_config)
             dst_config['nx'] = srcwin[2]
             dst_config['ny'] = srcwin[3]
             dst_config['geoT'] = dst_gt

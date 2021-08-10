@@ -226,6 +226,10 @@ class DatasetFactory:
               'fmts': ['las', 'laz'],
               'class': lambda k: datasets.LASFile(**k),
               },
+        301: {'name': 'mbs',
+              'fmts': ['fbt'],
+              'class': lambda k: datasets.MBSParser(**k),
+              },
         -11: {'name': 'fetches',
               'fmts': [
                   'gmrt',
@@ -480,7 +484,31 @@ class DatasetFactory:
                 classes=[2,29],
                 **kwargs
             )
-        )    
+        )
+
+    def acquire_mbs_file(self, **kwargs):
+        return(
+            datasets.MBSParser(
+                fn=self.fn,
+                data_format=self.data_format,
+                weight=self.weight,
+                src_region=self.region,
+                title=self.title,
+                source=self.source,
+                date=self.date,
+                data_type=self.data_type,
+                resolution=self.resolution,
+                hdatum=self.hdatum,
+                vdatum=self.vdatum,
+                url=self.url,
+                epsg=self.epsg,
+                warp=self.warp,
+                name=self.name,
+                parent=self.parent,
+                verbose=self.verbose,
+                **kwargs
+            )
+        )
     
     def acquire_raster_file(self, **kwargs):
         return(
@@ -567,7 +595,10 @@ class DatasetFactory:
         
         if self.data_format == 300:
             return(self.acquire_las_file(**kwargs))#.parse())
-        
+
+        if self.data_format == 301:
+            return(self.acquire_mbs_file(**kwargs))#.parse())
+
         if self.data_format == -11:
             return(self.acquire_fetcher(**kwargs))#.parse())
 

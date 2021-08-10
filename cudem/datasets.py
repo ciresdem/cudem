@@ -1225,12 +1225,13 @@ class MBSParser(XYZDataset):
         return(self.infos)
 
     def yield_xyz(self):
+        #out, status = utils.run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_data, src_xyz), verbose=False)
+        
         for line in utils.yield_cmd(
-                'mblist -MA -OXYZ -I{} -F{}'.format(
-                    self.fn, self.data_format
-                )
+                'mblist -MA -OXYZ -I{}'.format(self.fn),
+                verbose=True,
         ):
-            this_xyz = xyzfun.XYZPoint().from_string(line)
+            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
             this_xyz.weight = self.weight
             yield(this_xyz)
             

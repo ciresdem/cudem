@@ -640,7 +640,7 @@ class WafflesMBGrid(Waffle):
     input datalist must be compatible with MB-SYSTEM.
     """
     
-    def __init__(self, dist='10/3', tension=35, use_datalists=False, **kwargs):
+    def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
         super().__init__(**kwargs)
 
         if self.gc['MBGRID'] is None:
@@ -655,6 +655,7 @@ class WafflesMBGrid(Waffle):
             )
             return(None, -1)
 
+        self.nc = nc
         self.dist = dist
         self.tension = tension
         self.use_datalists = use_datalists
@@ -722,9 +723,10 @@ class WafflesMBGrid(Waffle):
         #     for xyz in waffles_yield_datalist(wg): pass
         #     wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
         #     wg['archive'] = archive
-        
+
         mb_region = self.p_region
-        mb_region = mb_region.buffer(self.inc * -.5)
+        if self.nc:
+            mb_region = mb_region.buffer(self.inc * -.5)
         xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
 
         ## -G100 breaks mbgrid >= 5.7.8
@@ -1443,6 +1445,7 @@ class WafflesCUDEM(Waffle):
             smoothing=10,
             radius=None,
             bathy_inc=None,
+            idw=True,
             **kwargs
     ):
         
@@ -1458,38 +1461,44 @@ class WafflesCUDEM(Waffle):
         self.smoothing = utils.int_or(smoothing)
         self.radius = self.inc*9 if radius is None else radius
         self.bathy_inc = self.inc*3 if bathy_inc is None else bathy_inc
+        self.idw = idw
+        self.bathy_data = self.data_
         self.mod = 'cudem'
         self.mod_args = {}
         self._set_config()
         
     def run(self):
-        idw_region = self.p_region.copy()
-        if self.mask_p:
-            idw_region.zmax = self.mask_z
-        surface_region = self.p_region.copy()
-        surface_region.wmin = self.min_weight
 
-        self.idw = WaffleFactory(
-            mod='IDW:radius={}'.format(self.radius),
-            data=self.data_,
-            src_region=idw_region,
-            inc=utils.str2inc(self.bathy_inc),
-            name='tmp_idw',
-            node=self.node,
-            extend=self.extend+6,
-            extend_proc=self.extend_proc+6,
-            fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
-            weights=1,
-            epsg=self.epsg,
-            clobber=True,
-            verbose=self.verbose,
-        ).acquire().generate()
+        if self.idw:
+            idw_region = self.p_region.copy()
+            if self.mask_p:
+                idw_region.zmax = self.mask_z
+            surface_region = self.p_region.copy()
+            surface_region.wmin = self.min_weight
+
+            self.idw = WaffleFactory(
+                mod='IDW:radius={}'.format(self.radius),
+                data=self.data_,
+                src_region=idw_region,
+                inc=utils.str2inc(self.bathy_inc),
+                name='tmp_idw',
+                node=self.node,
+                extend=self.extend+6,
+                extend_proc=self.extend_proc+6,
+                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
+                weights=1,
+                epsg=self.epsg,
+                clobber=True,
+                verbose=self.verbose,
+            ).acquire().generate()
+
+            self.bathy_data = self.data_ + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
 
         if self.mask_p:
             bathy_region = self.p_region.copy()
             bathy_region.zmax = self.mask_z
             bathy_clip = None
-            bathy_data = self.data_
+            #bathy_data = self.data_
 
             #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
             #    self.coastline,
@@ -1532,13 +1541,14 @@ class WafflesCUDEM(Waffle):
             self.bathy = WaffleFactory(
                 mod='surface:tension=1:upper_limit={}'.format(self.mask_z),
                 #data=bathy_data + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
-                data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                #data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                data=self.bathy_data,
                 src_region=bathy_region,
                 inc=utils.str2inc(self.bathy_inc),
                 name='tmp_bathy',
                 node=self.node,
-                extend=self.extend+6,
-                extend_proc=self.extend_proc+6,
+                extend=self.extend+2,
+                extend_proc=self.extend_proc+2,
                 fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
                 weights=1,
                 epsg=self.epsg,
@@ -1547,7 +1557,26 @@ class WafflesCUDEM(Waffle):
                 clip=bathy_clip,
             ).acquire().generate()
         else:
-            self.bathy = self.idw
+            self.bathy = WaffleFactory(
+                mod='surface:tension=1',
+                #data=bathy_data + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                #data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
+                data=self.bathy_data,
+                src_region=bathy_region,
+                inc=utils.str2inc(self.bathy_inc),
+                name='tmp_bathy',
+                node=self.node,
+                extend=self.extend+2,
+                extend_proc=self.extend_proc+2,
+                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+                weights=1,
+                epsg=self.epsg,
+                clobber=True,
+                verbose=self.verbose,
+                clip=bathy_clip,
+            ).acquire().generate()
+            
+            #self.bathy = self.idw
         
         self.surface = WaffleFactory(
             mod='surface:tension=1',
