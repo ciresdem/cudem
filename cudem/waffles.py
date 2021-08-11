@@ -725,7 +725,7 @@ class WafflesMBGrid(Waffle):
         #     wg['archive'] = archive
 
         mb_region = self.p_region
-        if self.nc:
+        if self.node == 'pixel':
             mb_region = mb_region.buffer(self.inc * -.5)
         xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
 
@@ -744,8 +744,11 @@ class WafflesMBGrid(Waffle):
             sys.stderr.write('{}'.format(out))
         #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
 
-        self._gmt_grd2gdal('{}.grd'.format(self.name))
-        utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
+        if not self.node == 'pixel':
+            self._gmt_grd2gdal('{}.grd'.format(self.name))
+            utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
+        else:
+            utils.remove_glob('*.cmd', '*.mb-1')
         if self.use_datalists and not self.archive:
             utils.remove_glob('archive')
 

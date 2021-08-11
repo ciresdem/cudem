@@ -26,6 +26,7 @@ import os
 import shutil
 from osgeo import gdal
 from osgeo import osr
+from osgeo import ogr
 import numpy as np
 from cudem import utils
 from cudem import regions
