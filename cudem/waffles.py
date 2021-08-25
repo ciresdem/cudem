@@ -1448,17 +1448,22 @@ class WafflesCUDEM(Waffle):
             smoothing=10,
             radius=None,
             bathy_inc=None,
-            idw=True,
+            idw=False,
+            mask_z=0,
             **kwargs
     ):
-        
-        super().__init__(**kwargs)
+
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
         
         self.coast_xyz = '{}_coast.xyz'.format(self.name)
         self.want_landmask = want_landmask
         self.coastline = coastline
         self.mask_p = True if self.coastline is not None or self.want_landmask else False
-        self.mask_z = 0
+        self.mask_z = utils.float_or(mask_z)
         
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
@@ -1472,12 +1477,19 @@ class WafflesCUDEM(Waffle):
         
     def run(self):
 
+        surface_region = self.p_region.copy()
+        surface_region.wmin = self.min_weight
+
+        bathy_region = self.p_region.copy()
+        if self.mask_z is not None:
+            bathy_region.zmax = self.mask_z + 10
+        bathy_clip = None
+        #bathy_data = self.data_
+
         if self.idw:
             idw_region = self.p_region.copy()
             if self.mask_p:
                 idw_region.zmax = self.mask_z
-            surface_region = self.p_region.copy()
-            surface_region.wmin = self.min_weight
 
             self.idw = WaffleFactory(
                 mod='IDW:radius={}'.format(self.radius),
@@ -1495,13 +1507,10 @@ class WafflesCUDEM(Waffle):
                 verbose=self.verbose,
             ).acquire().generate()
 
-            self.bathy_data = self.data_ + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
+            #self.bathy_data = self.data_ + ['{},200,{}'.format(self.idw.fn, self.min_weight)],
+            self.bathy_data = ['{},200,{}'.format(self.idw.fn, self.min_weight)]
 
         if self.mask_p:
-            bathy_region = self.p_region.copy()
-            bathy_region.zmax = self.mask_z
-            bathy_clip = None
-            #bathy_data = self.data_
 
             #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
             #    self.coastline,
