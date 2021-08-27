@@ -251,9 +251,9 @@ class SpatialMetadata:
 ##
 ## spatial_metadata cli
 ## ==============================================
-_usage = '''spatial_metadata.py ({}): generate spatial metadata from a datalist
+_usage = '''spatial_metadata ({}): generate spatial metadata from a datalist
 
-usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
+usage: spatial_metadata [ datalist [ OPTIONS ] ]
 
   datalist\t\tThe input datalist/entry
 
@@ -277,7 +277,7 @@ usage: spatial_metadata.py [ datalist [ OPTIONS ] ]
   --version\t\tPrint the version information
 
  Examples:
-  % spatial_metadata.py my_data.datalist
+  % spatial_metadata my_data.datalist
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 '''.format(__version__)
