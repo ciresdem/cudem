@@ -1566,6 +1566,7 @@ class WafflesCUDEM(Waffle):
                 epsg=self.epsg,
                 clobber=True,
                 verbose=self.verbose,
+                sample=utils.str2inc(self.inc),
                 clip=bathy_clip,
             ).acquire().generate()
         else:
@@ -1585,6 +1586,7 @@ class WafflesCUDEM(Waffle):
                 epsg=self.epsg,
                 clobber=True,
                 verbose=self.verbose,
+                sample=utils.str2inc(self.inc),
                 clip=bathy_clip,
             ).acquire().generate()
             

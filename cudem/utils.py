@@ -274,6 +274,11 @@ def float_or(val, or_val = None):
         return(float(val))
     except: return(or_val)
 
+def str_or(instr, or_val=None):
+    try:
+        return(str(instr).replace('"', ''))
+    except: return(or_val)
+    
 def euc_dst(pnt0, pnt1):
     """return the distance between pnt0 and pnt1,
     using the euclidean formula.

@@ -302,7 +302,7 @@ class DatasetFactory:
         
         if self.data_format is None:
             self.guess_data_format()
-        
+            
     def parse_fn(self):
 
         if self.fn is None: return(self)
@@ -311,7 +311,7 @@ class DatasetFactory:
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
 
         try:
-            entry = [x if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else x \
+            entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
         except Exception as e:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
