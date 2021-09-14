@@ -1612,7 +1612,7 @@ class WafflesCUDEM(Waffle):
         return(self)
         
 class WafflesCoastline(Waffle):
-    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, invert=False, polygonzie=True, **kwargs):
+    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
         """Generate a coastline polygon from various sources."""
 
         super().__init__(**kwargs)
@@ -2221,7 +2221,8 @@ Generate a coastline (land/sea mask) using a variety of sources.
  :wet=[val] - an input wet mask vector file
  :dry=[val] - an input dry mask vector file
  :use_gmrt=[True/False] - use GMRT to fill background
- :invert=[True/False] - invert the output results""",
+ :invert=[True/False] - invert the output results
+ :polygonize=[True/False] - polygonize the output""",
             'class': lambda k: WafflesCoastline(**k),
         },
         'cudem': {
