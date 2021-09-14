@@ -43,10 +43,11 @@ import cudem.fetches.FRED as FRED
 class NOS(f_utils.FetchModule):
     """Fetch NOS BAG and XYZ sounding data from NOAA"""
 
-    def __init__(self, where=[], datatype=None, **kwargs):
+    def __init__(self, where=[], datatype=None, update=False, **kwargs):
         super().__init__(**kwargs)
         self._nos_url = 'https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html'
         self._nos_xml_url = lambda nd: 'https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/NOS/%siso_u/xml/' %(nd)
+        self._nos_iso_xml_url = lambda nd: 'https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/NOS/%siso/xml/' %(nd)
         self._nos_directories = [
             "B00001-B02000/", "D00001-D02000/", "F00001-F02000/", \
             "H00001-H02000/", "H02001-H04000/", "H04001-H06000/", \
@@ -70,7 +71,12 @@ class NOS(f_utils.FetchModule):
         self._usage = '''< nos >'''
         self._urls = [self._nos_url]
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
-        self.update_if_not_in_FRED()
+        self.want_update = update
+        
+        if self.want_update:
+            self.update()
+        else:
+            self.update_if_not_in_FRED()
         
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -89,6 +95,12 @@ class NOS(f_utils.FetchModule):
             surveys = []
             xml_catalog = self._nos_xml_url(nosdir)
             page = f_utils.Fetch(xml_catalog).fetch_html()
+            if page is None:
+                xml_catalog = self._nos_iso_xml_url(nosdir)
+                page = f_utils.Fetch(xml_catalog).fetch_html()
+            if page is None:
+                utils.echo_error_msg('failed to retrieve {}'.format(nosdir))
+                break
             rows = page.xpath('//a[contains(@href, ".xml")]/@href')
             if self.verbose: _prog = utils.CliProgress('scanning {} surveys in {}...'.format(len(rows), nosdir))
 
