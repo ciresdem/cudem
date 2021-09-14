@@ -1612,7 +1612,7 @@ class WafflesCUDEM(Waffle):
         return(self)
         
 class WafflesCoastline(Waffle):
-    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, invert=False, **kwargs):
+    def __init__(self, wet=None, dry=None, want_nhd=True, want_gmrt=False, invert=False, polygonzie=True, **kwargs):
         """Generate a coastline polygon from various sources."""
 
         super().__init__(**kwargs)
@@ -1621,6 +1621,7 @@ class WafflesCoastline(Waffle):
         self.wet = wet
         self.dry = dry
         self.invert = invert
+        self.polygonize = polygonize
 
         self.w_name = '{}_w'.format(self.name)
         self.w_mask = '{}.tif'.format(self.w_name)
@@ -1648,7 +1649,8 @@ class WafflesCoastline(Waffle):
             'wet': wet,
             'dry': dry,
             'want_nhd': want_nhd,
-            'want_gmrt': want_gmrt
+            'want_gmrt': want_gmrt,
+            'polygonize': polygonize,
         }
 
         self.wgs_region = self.f_region.copy()
@@ -1672,7 +1674,8 @@ class WafflesCoastline(Waffle):
 
         self._finalize_array()
         self._write_coast_array()
-        self._write_coast_poly()
+        if self.polygonize:
+            self._write_coast_poly()
         return(self)
 
     def _finalize_array(self):
