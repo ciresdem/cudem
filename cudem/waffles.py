@@ -2072,7 +2072,6 @@ class WafflesCoastline(Waffle):
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
-            
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 4" {}.shp tmp_c_{}.shp'.format(
                 self.name, self.name, self.name),

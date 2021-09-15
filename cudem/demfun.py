@@ -321,8 +321,11 @@ def polygonize(src_gdal, dst_layer, verbose=False):
     except: ds = None
     if ds is not None:
         ds_arr = ds.GetRasterBand(1)
-        if verbose: utils.echo_msg('polygonizing {}'.format(src_gdal))
+        if verbose:
+            utils.echo_msg('polygonizing {}...'.format(src_gdal))
         status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
+        if verbose:
+            utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
         return(0, 0)
     else: return(-1, -1)
