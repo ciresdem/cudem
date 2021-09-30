@@ -306,7 +306,8 @@ class DatasetFactory:
     def parse_fn(self):
 
         if self.fn is None: return(self)
-        if os.path.exists(self.fn): return(self.fn)
+        if os.path.exists(self.fn):
+            return(self.fn)
 
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
 
@@ -336,6 +337,7 @@ class DatasetFactory:
             entry[2] = 1
             #else:
         #entry[2] *= self.weight
+
         if self.parent is not None:
             #entry[2] *= self.parent.weight
             #self.weight *= self.parent.weight
@@ -343,6 +345,8 @@ class DatasetFactory:
                 self.weight *= entry[2]
             else:
                 self.weight = entry[2]
+        else:
+            self.weight = entry[2]
 
         #print(self.weight)
         

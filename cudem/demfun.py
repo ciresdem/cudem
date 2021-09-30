@@ -324,6 +324,7 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         if verbose:
             utils.echo_msg('polygonizing {}...'.format(src_gdal))
         status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
+        print('ok')
         if verbose:
             utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
@@ -691,7 +692,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
                 dem_l, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
                 node = node, verbose = False)
         elif int(fltr) == 3:
-            out, status = filter_outliers(
+            out, status = filter_outliers_slp(
                 dem_l, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
         else:
             utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))

@@ -1481,8 +1481,8 @@ class WafflesCUDEM(Waffle):
         surface_region.wmin = self.min_weight
 
         bathy_region = self.p_region.copy()
-        if self.mask_z is not None:
-            bathy_region.zmax = self.mask_z + 10
+        #if self.mask_z is not None:
+        #    bathy_region.zmax = self.mask_z + 10
         bathy_clip = None
         #bathy_data = self.data_
 
@@ -1586,7 +1586,7 @@ class WafflesCUDEM(Waffle):
                 epsg=self.epsg,
                 clobber=True,
                 verbose=self.verbose,
-                sample=utils.str2inc(self.inc),
+                #sample=utils.str2inc(self.inc),
                 clip=bathy_clip,
             ).acquire().generate()
             
