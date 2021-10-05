@@ -184,7 +184,7 @@ class Datalist(datasets.XYZDataset):
                 
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
-
+                
     def yield_xyz_from_entries(self):
         """parse the data from the datalist
 

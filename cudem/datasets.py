@@ -1125,6 +1125,9 @@ class RasterFile(XYZDataset):
           xyz: the parsed xyz data
         """
 
+        if self.verbose and self.parent is None:
+            _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+        
         self._open_ds()
         out_xyz = xyzfun.XYZPoint(w=1)
         if self.src_ds is not None:
@@ -1159,6 +1162,9 @@ class RasterFile(XYZDataset):
             for y in range(
                     self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1
             ):
+                if self.verbose and self.parent is None:
+                    _prog.update_perc((y, self.srcwin[1] + self.srcwin[3]))
+                    
                 band_data = band.ReadAsArray(
                     self.srcwin[0], y, self.srcwin[2], 1
                 )
@@ -1187,14 +1193,15 @@ class RasterFile(XYZDataset):
                         
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
-                         
-                        if self.region is not None and self.region.valid_p():
-                            if regions.xyz_in_region_p(out_xyz, self.region):
-                                ln += 1
-                                yield(out_xyz)
-                        else:
-                            ln += 1
-                            yield(out_xyz)
+                        ln += 1
+                        yield(out_xyz)
+                        # if self.region is not None and self.region.valid_p():
+                        #     if regions.xyz_in_region_p(out_xyz, self.region):
+                        #         ln += 1
+                        #         yield(out_xyz)
+                        # else:
+                        #     ln += 1
+                        #     yield(out_xyz)
                             
             band = src_mask = msk_band = None
             if self.verbose:
@@ -1206,6 +1213,10 @@ class RasterFile(XYZDataset):
                 
         self._close_ds()
 
+        if self.verbose and self.parent is None:
+            _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+
+        
 class MBSParser(XYZDataset):
     """providing an mbsystem parser"""
 

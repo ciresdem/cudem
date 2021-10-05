@@ -207,7 +207,9 @@ class Waffle:
             
         for this_xyz in src_xyz:
             if regions.xyz_in_region_p(this_xyz, self.p_region):
-                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
                 if xpos < xcount and ypos < ycount:
                     self.block_t[ypos,xpos].append(this_xyz.copy())
 
@@ -425,7 +427,7 @@ class Waffle:
                         split_val= fltr_opts[2]
                     
                     if demfun.filter_(
-                            fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val
+                            fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                     ) == 0:
                         os.rename('__tmp_fltr.tif', fn)
             
@@ -878,7 +880,8 @@ class WafflesNum(Waffle):
                 )
             )
         else:
-            self._xyz_num(self.yield_xyz(block=True))
+            #self._xyz_num(self.yield_xyz(block=True))
+            self._xyz_num(self.yield_xyz(block=False))
             
         return(self)
 
@@ -890,7 +893,7 @@ class WafflesIDW(Waffle):
     """
     
     def __init__(
-            self, radius='1', power=2, block=True, min_points=None, **kwargs
+            self, radius='1', power=2, block=False, min_points=None, **kwargs
     ):
         super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
@@ -1481,8 +1484,8 @@ class WafflesCUDEM(Waffle):
         surface_region.wmin = self.min_weight
 
         bathy_region = self.p_region.copy()
-        #if self.mask_z is not None:
-        #    bathy_region.zmax = self.mask_z + 10
+        if self.mask_z is not None:
+            bathy_region.zmax = self.mask_z + 10
         bathy_clip = None
         #bathy_data = self.data_
 
@@ -1500,7 +1503,7 @@ class WafflesCUDEM(Waffle):
                 node=self.node,
                 extend=self.extend+6,
                 extend_proc=self.extend_proc+6,
-                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
+                #fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
                 weights=1,
                 epsg=self.epsg,
                 clobber=True,

@@ -558,10 +558,10 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
         gt = ds_config['geoT']
         if threshhold is None:
             ds_std = np.std(ds_array)
-        else: ds_std = threshhold
+        else: ds_std = utils.float_or(threshhold)
         if slp_threshhold is None:
             slp_std = ds_std
-        else: slp_std = slp_threshhold
+        else: slp_std = utils.float_or(slp_threshhold)
 
         driver = gdal.GetDriverByName('MEM')
         mem_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
@@ -598,7 +598,8 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
                     srcwin_std = np.nanstd(band_data)
                     slp_data = np.gradient(band_data, axis=0)
                     slp_srcwin_std = np.nanstd(slp_data)
-                    if srcwin_std < ds_std and slp_srcwin_std < slp_std: break
+                    if srcwin_std < ds_std and slp_srcwin_std < slp_std:
+                        break
                     
                     srcwin_perc75 = np.nanpercentile(band_data, 75)
                     srcwin_perc25 = np.nanpercentile(band_data, 25)
@@ -729,7 +730,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
                         l_arr[l_arr == ds_config['ndv']] = 0
                         ds_arr = (u_arr + l_arr) * msk_arr
                         ds_arr[np.isnan(ds_arr)] = ds_config['ndv']
-                        utils.gdal_write(ds_arr, 'merged.tif', ds_config)
+                        utils.gdal_write(ds_arr, '__merged.tif', ds_config)
                         l_ds = None
                         utils.remove_glob(dem_l)
                     u_ds = None
