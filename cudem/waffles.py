@@ -1190,7 +1190,7 @@ class WafflesVdatum(Waffle):
     U.S. and territories only.
     """
     
-    def __init__(self, ivert='navd88', overt='mhw', region='3', jar=None, **kwargs):
+    def __init__(self, ivert='navd88', overt='mhw', region='4', jar=None, **kwargs):
         """generate a 'conversion-grid' with vdatum.
         
         output will be the differences (surfaced) between 

@@ -35,7 +35,7 @@ from cudem import utils
 class Vdatum:
 
     def __init__(self, jar=None, ivert='navd88:m:height', overt='mhw:m:height',
-                 ihorz='NAD83_2011', ohorz='NAD83_2011', region=3, fmt='txt',
+                 ihorz='NAD83_2011', ohorz='NAD83_2011', region='4', fmt='txt',
                  xyzl='0,1,2', skip=0, delim='space', result_dir='result',
                  verbose=False):
         self.jar = jar
@@ -130,7 +130,7 @@ class Vdatum:
             vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -file:txt:{},{},skip{}:{}:{} {}region:{}\
             '.format(self.ihorz, self.ivert, self.ohorz, self.overt, self.delim, self.xyzl, self.skip, src_fn, self.result_dir, 'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region)
             #return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
-            return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
+            return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=False))
         else: return([], -1)
 
 ## ==============================================
@@ -138,7 +138,7 @@ class Vdatum:
 ## U.S. Only
 ## ==============================================
 def waffles_vdatum(wg, ivert = 'navd88', overt = 'mhw',
-                   region = '3', jar = None):
+                   region = '4', jar = None):
     """generate a 'conversion-grid' with vdatum.
     
     output will be the differences (surfaced) between 
