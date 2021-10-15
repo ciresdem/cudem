@@ -1452,7 +1452,7 @@ class WafflesCUDEM(Waffle):
             radius=None,
             bathy_inc=None,
             idw=False,
-            mask_z=0,
+            mask_z=None,
             **kwargs
     ):
 

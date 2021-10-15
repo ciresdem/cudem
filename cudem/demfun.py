@@ -324,7 +324,7 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         if verbose:
             utils.echo_msg('polygonizing {}...'.format(src_gdal))
         status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
-        print('ok')
+        print(status)
         if verbose:
             utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
@@ -736,6 +736,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
                     u_ds = None
                     utils.remove_glob(dem_u)
                 os.rename('__merged.tif', dst_dem)
+                utils.remove_glob('tmp_fltr.tif')
         else:
             os.rename('tmp_fltr.tif', dst_dem)
         return(0)

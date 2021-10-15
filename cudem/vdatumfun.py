@@ -50,7 +50,14 @@ class Vdatum:
         self.delim = delim
         self.result_dir = result_dir
         self.verbose = verbose
+        self.epoch = None
+        self.vdatum_set_horz()
 
+    def vdatum_set_horz(self):
+        if 'ITRF' in self.overt:
+            self.ohorz = self.overt
+            self.epoch = '2017.0:2017.0'
+        
     def vdatum_locate_jar(self):
         """Find the VDatum executable on the local system.
         
@@ -92,8 +99,8 @@ class Vdatum:
         if self.jar is None:
             self.vdatum_locate_jar()
         if self.jar is not None:
-            vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -pt:{},{},{} region:{}\
-            '.format(self.ihorz, self.ivert, self.ohorz, self.overt, xyz[0], xyz[1], xyz[2], self.region)
+            vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -pt:{},{},{} {}region:{}\
+            '.format(self.ihorz, self.ivert, self.ohorz, self.overt, xyz[0], xyz[1], xyz[2], 'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region)
             out, status = utils.run_cmd('java -Djava.awt.headless=false -jar {} {}'.format(self.jar, vdc), verbose = False)
             for i in out.split('\n'):
                 if 'Height/Z' in i:
@@ -120,8 +127,8 @@ class Vdatum:
         if self.jar is None:
             self.vdatum_locate_jar()
         if self.jar is not None:
-            vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -file:txt:{},{},skip{}:{}:{} region:{}\
-            '.format(self.ihorz, self.ivert, self.ohorz, self.overt, self.delim, self.xyzl, self.skip, src_fn, self.result_dir, self.region)
+            vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -file:txt:{},{},skip{}:{}:{} {}region:{}\
+            '.format(self.ihorz, self.ivert, self.ohorz, self.overt, self.delim, self.xyzl, self.skip, src_fn, self.result_dir, 'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region)
             #return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
             return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
         else: return([], -1)

@@ -360,10 +360,10 @@ class XYZDataset():
             #self.parse_data_lists()
             yield(self)
 
-    def parse_data_lists(self):
+    def parse_data_lists(self, gather_data=True):
         """parse the data into a datalist dictionary"""
 
-        #for e in self.data_entries:
+        #if gather_data:
         for e in self.parse():
             if e.parent is not None:
                 if e.parent.name in self.data_lists.keys():
@@ -373,16 +373,7 @@ class XYZDataset():
             else:
                 self.data_lists[e.name] = {'data': [e], 'parent': e}
         return(self)
-
-        # if self.parent is not None:
-        #     if self.parent.name in self.data_lists.keys():
-        #         self.data_lists[self.parent.name]['data'].append(self)
-        #     else:
-        #         self.data_lists[self.parent.name] = {'data': [self], 'parent': self.parent}
-        # else:
-        #     self.data_lists[self.name] = {'data': [self], 'parent': self}
-        #     #print(self.data_lists)
-        # return(self)
+        #else:
 
     def yield_xyz(self):
         """define this in sub-class"""

@@ -673,6 +673,7 @@ def datalists_cli(argv = sys.argv):
     want_archive = False
     want_verbose = True
     want_region = False
+    want_csv = False
     
     ## ==============================================
     ## parse command line arguments.
@@ -787,5 +788,71 @@ def datalists_cli(argv = sys.argv):
                     [x for x in xdl.archive_xyz()]
                 elif want_region:
                     print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
+                elif want_csv:
+                    xdl.parse_data_lists()
+                    #print(xdl.data_lists)
+                    for x in xdl.data_lists.keys():
+                        xdl.data_entries = xdl.data_lists[x]['data']
+                        p = xdl.data_lists[x]['parent']
+
+                        # print(
+                        #     ','.join(
+                        #         [
+                        #             '"{}"'.format(str(y)) for y in [
+                        #                 x,
+                        #                 p.data_format,
+                        #                 p.weight,
+                        #                 p.title if p.title is not None else x,
+                        #                 p.source,
+                        #                 p.date,
+                        #                 p.data_type,
+                        #                 p.resolution,
+                        #                 p.hdatum,
+                        #                 p.vdatum,
+                        #                 p.url
+                        #             ]
+                        #         ]
+                        #     )
+                        # )
+                        # print(
+                        #     ','.join(
+                        #         [
+                        #             '"{}"'.format(str(y)) for y in [
+                        #                 p.title if p.title is not None else x,
+                        #                 p.date,
+                        #                 p.data_type,
+                        #                 p.resolution,
+                        #                 p.hdatum,
+                        #                 p.vdatum,
+                        #             ]
+                        #         ]
+                        #     )
+                        # )
+                        # print(
+                        #     ','.join(
+                        #         [
+                        #             '"{}"'.format(str(y)) for y in [
+                        #                 '{} ({})'.format(p.title if p.title is not None else x, x),
+                        #                 p.weight
+                        #             ]
+                        #         ]
+                        #     )
+                        # )
+                        
+
+                        
+                    #for x in xdl.data_lists.keys():
+                    #    print(x)
+                    
+                    # for entry in xdl.parse():
+                    #     if entry.format == -1:
+                    #         print(entry)
+                    #     # l = [entry.fn, entry.data_format]
+                        # if entry.weight is not None:
+                        #     l.append(entry.weight)
+                            
+                        # print('{}'.format(" ".join([str(x) for x in l])))
+
+                        #print(xdl)
                 else: xdl.dump_xyz()
 ### End

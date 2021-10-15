@@ -34,7 +34,7 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-__version__ = '0.0.4'
+__version__ = '0.0.5'
 
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
@@ -46,9 +46,9 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     if dst_defn is None: dst_defn = src_layer.GetLayerDefn()
     multi = ogr.Geometry(ogr.wkbMultiPolygon)
     feats = len(src_layer)
-    utils.echo_msg('unioning {} features'.format(feats))
+    _prog = utils.CliProgress('unioning {} features...'.format(feats))
     for n, f in enumerate(src_layer):
-        gdal.TermProgress_nocb((n+1 / feats) * 100)
+        _prog.update_perc((n+1, feats))
         if f.GetField(src_field) == 0:
             src_layer.DeleteFeature(f.GetFID())
         elif f.GetField(src_field) == 1:
@@ -56,10 +56,9 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
             wkt = f.geometry().ExportToWkt()
             multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
             src_layer.DeleteFeature(f.GetFID())
-    #union = multi.UnionCascaded() ## slow on large multi...
     out_feat = ogr.Feature(dst_defn)
     out_feat.SetGeometryDirectly(multi)
-    #union = multi = None
+    _prog.end(0, 'unioned {} features'.format(feats))
     return(out_feat)
 
 def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
@@ -187,11 +186,13 @@ class SpatialMetadata:
         for xdl in self.data:
             [x for x in xdl.parse()]
             xdl.parse_data_lists()
+            #print(xdl.data_lists)
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
                 o_v_fields = [
-                    x, p.title if p.title is not None else x,
+                    x,
+                    p.title if p.title is not None else x,
                     p.source,
                     p.date,
                     p.data_type,
@@ -224,8 +225,13 @@ class SpatialMetadata:
                         if len(tmp_layer) > 0:
                             if defn is None: defn = tmp_layer.GetLayerDefn()
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-                            [out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
+                            #_prog = utils.CliProgress('creating feature {}'.format())
+                            for i, f in enumerate(self.v_fields):
+                                out_feat.SetField(f, o_v_fields[i])
+                                #_prog.update()
+                            #[out_feat.SetField(f, o_v_fields[i]) for i, f in enumerate(self.v_fields)]
                             self.layer.CreateFeature(out_feat)
+                            #_prog.end(0, 'created feature')
                             
                     tmp_ds = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
@@ -376,15 +382,22 @@ def spat_meta_cli(argv = sys.argv):
         else:
             if want_prefix or len(these_regions) > 1:
                 name_ = utils.append_fn(name, this_region, inc)
-            SpatialMetadata(
-                data=dls,
-                src_region=this_region,
-                inc=inc,
-                extend=extend,
-                epsg=epsg,
-                node=node,
-                name=name_,
-                verbose=want_verbose,
-                make_valid=want_valid
-            ).run()
+
+            if os.path.exists('{}_sm.shp'.format(name_)):
+                utils.echo_msg(
+                'SPATIAL METADATA {} already exists, skipping...'.format('{}_sm.shp'.format(name_))
+                    )
+            else:
+                
+                SpatialMetadata(
+                    data=dls,
+                    src_region=this_region,
+                    inc=inc,
+                    extend=extend,
+                    epsg=epsg,
+                    node=node,
+                    name=name_,
+                    verbose=want_verbose,
+                    make_valid=want_valid
+                ).run()
 ### End
