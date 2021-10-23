@@ -801,11 +801,9 @@ def datalists_cli(argv = sys.argv):
                     print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
                 elif want_csv:
                     xdl.parse_data_lists()
-                    #print(xdl.data_lists)
                     for x in xdl.data_lists.keys():
                         xdl.data_entries = xdl.data_lists[x]['data']
                         p = xdl.data_lists[x]['parent']
-
                         print(
                             '|'.join(
                                 [
@@ -823,45 +821,5 @@ def datalists_cli(argv = sys.argv):
                                 ]
                             )
                         )
-                        # print(
-                        #     ','.join(
-                        #         [
-                        #             '"{}"'.format(str(y)) for y in [
-                        #                 p.title if p.title is not None else x,
-                        #                 p.date,
-                        #                 p.data_type,
-                        #                 p.resolution,
-                        #                 p.hdatum,
-                        #                 p.vdatum,
-                        #             ]
-                        #         ]
-                        #     )
-                        # )
-                        # print(
-                        #     ','.join(
-                        #         [
-                        #             '"{}"'.format(str(y)) for y in [
-                        #                 '{} ({})'.format(p.title if p.title is not None else x, x),
-                        #                 p.weight
-                        #             ]
-                        #         ]
-                        #     )
-                        # )
-                        
-
-                        
-                    #for x in xdl.data_lists.keys():
-                    #    print(x)
-                    
-                    # for entry in xdl.parse():
-                    #     if entry.format == -1:
-                    #         print(entry)
-                    #     # l = [entry.fn, entry.data_format]
-                        # if entry.weight is not None:
-                        #     l.append(entry.weight)
-                            
-                        # print('{}'.format(" ".join([str(x) for x in l])))
-
-                        #print(xdl)
                 else: xdl.dump_xyz()
 ### End
