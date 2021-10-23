@@ -132,7 +132,6 @@ class SpatialMetadata:
 
         self._init_data()
         self._init_vector()
-        self.make_valid = True
 
     def dist_region(self):
             

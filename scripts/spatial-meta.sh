@@ -133,7 +133,7 @@ for region in $(gmt gmtinfo $itiles -I- -As); do
 
     # Convert gmt vector to shapefile
     printf "spatial-meta: converting to boundary: %s.shp\n" $out_name
-    ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
+    ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid
     # -makevalid -progress
 done
 
