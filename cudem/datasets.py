@@ -195,7 +195,7 @@ class XYZDataset():
         return(
             ' '.join(
                 [
-                    str(x) for x in [
+                    '"{}"'.format(str(x)) for x in [
                         self.fn,
                         self.data_format,
                         self.weight,
@@ -216,7 +216,7 @@ class XYZDataset():
         """print self.data_entries as a datalist entries."""
 
         for entry in self.parse():
-            l = [entry.fn, entry.data_format]
+            l = [os.path.abspath(entry.fn), entry.data_format]
             if entry.weight is not None:
                 l.append(entry.weight)
                 

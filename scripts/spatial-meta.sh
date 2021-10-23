@@ -25,33 +25,46 @@
 ## `idatalist` is a datalist that holds all the data for which the spatial
 ## metadata will be generated. 
 ##
-## It is assumed that a file `idatalist`.csv exists
-## and that file will be used to fill the attribute data for each datalist.
-##
-## The $datalist.csv file is formatted like this:
-##
-##  Title,Agency,Date,Type,Resolution,HDatum,VDatum,URL,Unc
-##  "NOAA CRM",NOAA,2009,DEM,0.00027777,WGS84,NAVD88,coast.noaa.gov,NA
-## 
-## Uses `regions, `bounds, `mbsystem, `gmt, `gdal
+## Uses `regions, `bounds, `gmt, `gdal
 ##
 ### Code:
 
-usage="spatial-meta.sh [ all_data.datalist all_tiles.gmt ]\n\
+usage="spatial-meta.sh [ -I all_data.datalist -R all_tiles.gmt [ -XOEP ]  ]\n\
 Generate spatial metadata for a DEM tileset.\n\n\
-where 'all_data.datalist' is a MBSystem style datalist containing xyz data\n\
+where 'all_data.datalist' is a MBSystem/dlim style datalist containing elevation data\n\
 and 'all_tiles.gmt' is a GMT formatted vector containing regional tile(s).\n\
+  note: the tile vector can be any ogr compatible format (such as shp)
 \n\
 Output will be a GMT formatted vector and a ESRI shapefile for each tile.\n\
 \n\
+Options:
+  -I - input datalist
+  -R - input tileset vector
+  -O - output basename (meta)
+  -X - extend region by number of cells (6)
+  -E - cellsize of gridded boundary (0.000277777777)
+  -P - EPSG code of output vector (4326)
  Examples:
- %% spatial-meta.sh master.datalist master_regions.gmt\n\
+ %% spatial-meta.sh -I master.datalist -R master_regions.gmt -O meta -X 6 -P 4326 \n\
 \n\
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 "
 
-idatalist=$1
-itiles=$2
+while getopts ":I:R:X:O:E:P:" options; do
+    case $options in
+	I ) idatalist=$OPTARG;;
+	R ) itiles=$OPTARG;;
+	X ) extend=$OPTARG;;
+	O ) oname=$OPTARG;;
+	E ) iinc=$OPTARG;;
+	P ) epsg=$OPTARG;;
+	h ) echo -e $usage;;
+	\? ) echo -e $usage
+	exit 1;;
+	* ) echo -e $usage
+	    exit 1;;
+    esac
+done
 
 if [ -z "$idatalist" -o -z "$itiles" ]; then
     printf "$usage"
@@ -59,56 +72,69 @@ if [ -z "$idatalist" -o -z "$itiles" ]; then
 fi
 
 ## Set the Increment
-iinc=.0000925925925
-#iinc=0.000277777777
-#iinc=0.000030864194
+## 1/9 0.000030864194
+## 1/3 - .0000925925925
+## 1 - 0.000277777777
+if [ -z "$iinc" ]; then
+    iinc=0.000277777777
+fi
+
+# if [ "$iinc" -lt .0000925925925925 ]; then
+#     iinc=.0000925925925
+# fi
+
+if [ -z "$iextend" ]; then
+    iextend=6
+fi
+
+if [ -z "$oname" ]; then
+    oname="meta"
+fi
+if [ -z "$epsg" ]; then
+    epsg=4326
+fi
 
 tcount=$(gmt gmtinfo $itiles -F | awk '{print $2}')
-printf "\n: Generating Spatial Metadata for %d regions using %s\n" $tcount $idatalist
+printf "\nspatial-meta: Generating Spatial Metadata for %d regions using %s\n" $tcount $idatalist
 
 ## Loop through each region found in the $itiles gmt vector
 for region in $(gmt gmtinfo $itiles -I- -As); do 
 
     # The proc region is the region extended by 6 cells at 1/9 (form 1/9), 
     # 6 cells at 1/3 (for 1/3) and 2 cells at 1/3 (for 1/9), based on the increment value
-    proc_region=$(regions -b $(echo 2*$iinc | bc) $region -e)
-    out_name="meta_"$(regions $region -n)_$(date +%Y)
-    printf "\n: %s < %s >\n" $out_name $proc_region
+    proc_region=$(regions -b $(echo $iextend*$iinc | bc) $region -e)
+    gmt_region=$(regions $proc_region -ee)
+    out_name="${oname}_"$(regions $region -n)_$(date +%Y)v1_sm
+    printf "\nspatial-meta: %s < %s >\n" $out_name $proc_region
 
     # Initialize the output gmt vector
     cat /dev/null | bounds -g > ${out_name}.gmt
-    sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL|UNC/g' ${out_name}.gmt
-    sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
-
+    sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${out_name}.gmt
+    sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
+    sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${out_name}.gmt
+    
     # Loop through each datalist entry
-    for datalist in $(cat ${idatalist} | awk '{print $1}' | grep -v "\#") ; do 
+    dlim ${idatalist} -c ${proc_region} > tmp.csv
 
+    for datalist in $(dlim ${idatalist} -d ${proc_region} | awk '{print $1}') ; do
 	# Gather the data from the datalist entry that is within our region
 	dlbn=$(basename $datalist .datalist)
-	data=$(mbdatalist -I${datalist} $proc_region -F-1 | awk '{print $1}')
-	dinfo="NA|NA|NA|NA|NA|NA|NA|NA|NA"
-
-	# If there is data in the region, continue
-	if [ -n "$data" ]; then
-
-	    # Generate the boundary of the data found in this datalist and add it to the output gmt vector
-	    printf "  datalist: %s < %s >\n" $dlbn $datalist
-	    cat $data | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose >> ${out_name}.gmt;
-
-	    # Add extra attribute data (from $datalist.csv).
-	    if [ -f ${datalist}.csv ]; then
-		dinfo=$(sed -e '1d' ${datalist}.csv | sed -e 's/,/|/g')
-		#dinfo=$(awk -F, 'BEGIN {OFS="|"} {if (NR!=1) {print $1,$2,$3,$4,$5,$6,$7,$8,$9}}' ${datalist}.csv)
-	    fi
-	    sed -i "s/\@D${dlbn}/\@D${dlbn}|${dinfo}/g" ${out_name}.gmt
-	fi
-	unset data
-	unset dinfo
+	# Generate the boundary of the data found in this datalist and add it to the output gmt vector
+	printf "spatial-meta: using datalist datalist: %s < %s >\n" $dlbn $datalist
+	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose >> ${out_name}.gmt;
     done
 
+    printf "spatial-meta: adding metadata to vector fields...\n"
+    while read p; do
+	meta=$(echo ${p} | sed 's/\"//g')
+	dlbn=$(echo ${p} | awk -F'|' '{print $1}' | sed 's/\"//g')
+	sed -i "s^\@D${dlbn}^\@D${p}^g" ${out_name}.gmt
+    done<tmp.csv
+
     # Convert gmt vector to shapefile
-    printf ": boundary: %s.shp\n" $out_name
-    ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite;
+    printf "spatial-meta: converting to boundary: %s.shp\n" $out_name
+    ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
+    # -makevalid -progress
 done
 
 ### End

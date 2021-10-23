@@ -1670,7 +1670,9 @@ class WafflesCoastline(Waffle):
             self._load_dry_mask()
             
         self._load_copernicus()
-        self._load_nhd()
+
+        if self.want_nhd:
+            self._load_nhd()
         
         if len(self.data) > 0:
             self._load_data()
@@ -1814,8 +1816,14 @@ class WafflesCoastline(Waffle):
         for i, cop_tif in enumerate(this_cop.results):
             out = cop_tif[1].split('.')[0] + '_' + str(i) + '.tif'
             utils.run_cmd(
-                'gdalwarp {} {} -te {} -tr {} {} -dstnodata {} -overwrite{}'.format(
-                    cop_tif[1], out, self.p_region.format('te'), self.inc, self.inc, self.ds_config['ndv'], ' -s_srs EPSG:4326 -t_srs EPSG:{}'.format(self.epsg) if self.epsg else '',
+                'gdalwarp {} {} -r cubicspline -te {} -ts {} {} -dstnodata {} -overwrite{}'.format(
+                    cop_tif[1],
+                    out,
+                    self.p_region.format('te'),
+                    self.ds_config['nx'],
+                    self.ds_config['ny'],
+                    self.ds_config['ndv'],
+                    ' -s_srs EPSG:4326 -t_srs EPSG:{}'.format(self.epsg) if self.epsg else '',
                 ),
                 verbose = True
             )
@@ -1831,16 +1839,17 @@ class WafflesCoastline(Waffle):
             c_ds = gdal.Open(cop_tif)
             #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
             _prog.update()
+            
             for this_xyz in demfun.parse(c_ds):
                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, self.ds_config['geoT'])
                 try:
                     ca_v = self.coast_array[ypos, xpos]
                     if this_xyz.z == 0:
-                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
+                        self.coast_array[ypos, xpos] = 0 #if ca_v == self.ds_config['ndv'] else ca_v - 1
                     else:
-                        self.coast_array[ypos, xpos] = 1 if ca_v == self.ds_config['ndv'] else ca_v + 1
+                        self.coast_array[ypos, xpos] = 1 #if ca_v == self.ds_config['ndv'] else ca_v + 1
                         
-                except: pass
+                except: pass#utils.echo_error_msg('could not locate pos')
                 
             c_ds = None
             utils.remove_glob('{}*'.format(cop_tif))
@@ -1860,7 +1869,11 @@ class WafflesCoastline(Waffle):
 
         utils.run_cmd(
             'gdal_rasterize -ts {} {} -te {} -burn -9999 -a_nodata -9999 -ot Int32 -co COMPRESS=DEFLATE -a_srs EPSG:{} region_buff.shp {}'.format(
-                xsize, ysize, self.p_region.format('te'), self.epsg, self.u_mask
+                xsize,
+                ysize,
+                self.p_region.format('te'),
+                self.epsg,
+                self.u_mask
             ),
             verbose=self.verbose
         )
@@ -1890,16 +1903,17 @@ class WafflesCoastline(Waffle):
                 #                    'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType = 312" -clipdst {} -overwrite 2>&1'.format(
                 #'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} -overwrite 2>&1'.format(
                 utils.run_cmd(
-                    'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} -overwrite 2>&1'.format(
+                    'ogr2ogr {}_NHDArea.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} -overwrite 2>/dev/null'.format(
                         gdb_bn, gdb, self.p_region.format('ul_lr')
                     ),
-                    verbose=False)
+                    verbose=False
+                )
                 
                 if os.path.exists('{}_NHDArea.shp'.format(gdb_bn)):
                     r_shp.append('{}_NHDArea.shp'.format(gdb_bn))
                     
                 utils.run_cmd(
-                    'ogr2ogr {}_NHDPlusBurnWaterBody.shp {} NHDPlusBurnWaterBody -clipdst {} -overwrite 2>&1'.format(
+                    'ogr2ogr {}_NHDPlusBurnWaterBody.shp {} NHDPlusBurnWaterBody -clipdst {} -overwrite 2>/dev/null'.format(
                         gdb_bn, gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=False
@@ -1909,7 +1923,7 @@ class WafflesCoastline(Waffle):
                     r_shp.append('{}_NHDPlusBurnWaterBody.shp'.format(gdb_bn))
                     #                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} -overwrite 2>&1'.format(
                 utils.run_cmd(
-                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} -overwrite 2>&1'.format(
+                    'ogr2ogr {}_NHDWaterBody.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} -overwrite 2>/dev/null'.format(
                         gdb_bn, gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=False
@@ -1935,7 +1949,7 @@ class WafflesCoastline(Waffle):
                 )
 
             [utils.run_cmd(
-                'ogr2ogr -skipfailures -update -append nhdArea_merge.shp {} 2>&1'.format(shp),
+                'ogr2ogr -skipfailures -update -append nhdArea_merge.shp {} 2>/dev/null'.format(shp),
                 verbose=False
             ) for shp in r_shp]
             
@@ -1943,7 +1957,7 @@ class WafflesCoastline(Waffle):
                 'gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True
             )
             
-            utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
+            #utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
 
         utils.echo_msg(
             'filling the coast mask with NHD data...'
@@ -1953,19 +1967,24 @@ class WafflesCoastline(Waffle):
         
             c_ds = gdal.Open(self.u_mask)
             #c_ds_arr = c_ds.GetRasterBand(1).ReadAsArray()
+            print(self.ds_config)
             for this_xyz in demfun.parse(c_ds, warp=self.epsg):
                 xpos, ypos = utils._geo2pixel(
                     this_xyz.x, this_xyz.y, self.ds_config['geoT']
                 )
                 try:
                     ca_v = self.coast_array[ypos, xpos]
+                    if ca_v == self.ds_config['ndv']:
+                        ca_v = 0
+                    else:
+                        ca_v -= 1
+                        
                     if this_xyz.z == 1:
-                        self.coast_array[ypos, xpos] = 0 if ca_v == self.ds_config['ndv'] else ca_v - 1
-
+                        self.coast_array[ypos, xpos] = ca_v
                 except: pass
 
             c_ds = None            
-        utils.remove_glob('{}*'.format(self.u_mask))
+        #utils.remove_glob('{}*'.format(self.u_mask))
 
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
@@ -2025,7 +2044,7 @@ class WafflesCoastline(Waffle):
         gmrt_tif = this_gmrt.results[0]
             
         utils.run_cmd(
-            'gdalwarp {} {} -tr {} {} -overwrite'.format(gmrt_tif, self.g_mask, wg['inc'], wg['inc']),
+            'gdalwarp {} {} -r bilinear -tr {} {} -overwrite'.format(gmrt_tif, self.g_mask, wg['inc'], wg['inc']),
             verbose = True
         )
         

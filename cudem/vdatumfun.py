@@ -56,7 +56,7 @@ class Vdatum:
     def vdatum_set_horz(self):
         if 'ITRF' in self.overt:
             self.ohorz = self.overt
-            self.epoch = '2017.0:2017.0'
+            self.epoch = '1997.0:1997.0'
         
     def vdatum_locate_jar(self):
         """Find the VDatum executable on the local system.
@@ -130,7 +130,7 @@ class Vdatum:
             vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -file:txt:{},{},skip{}:{}:{} {}region:{}\
             '.format(self.ihorz, self.ivert, self.ohorz, self.overt, self.delim, self.xyzl, self.skip, src_fn, self.result_dir, 'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region)
             #return(utils.run_cmd('java -Djava.awt.headless=true -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
-            return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=False))
+            return(utils.run_cmd('java -jar {} {}'.format(self.jar, vdc), verbose=self.verbose))
         else: return([], -1)
 
 ## ==============================================

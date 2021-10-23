@@ -52,13 +52,18 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
         if f.GetField(src_field) == 0:
             src_layer.DeleteFeature(f.GetFID())
         elif f.GetField(src_field) == 1:
-            f.geometry().CloseRings()
-            wkt = f.geometry().ExportToWkt()
-            multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+            f_geom = f.geometry()
+            f_geom.CloseRings()
+            f_geom_valid = f_geom.MakeValid()
+            wkt = f_geom_valid.ExportToWkt()
+            wkt_geom = ogr.CreateGeometryFromWkt(wkt)
+            multi.AddGeometry(wkt_geom)
             src_layer.DeleteFeature(f.GetFID())
+    #union = multi.UnionCascaded() ## slow on large multi...
     out_feat = ogr.Feature(dst_defn)
     out_feat.SetGeometryDirectly(multi)
     _prog.end(0, 'unioned {} features'.format(feats))
+    multi = None
     return(out_feat)
 
 def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
@@ -127,6 +132,7 @@ class SpatialMetadata:
 
         self._init_data()
         self._init_vector()
+        self.make_valid = True
 
     def dist_region(self):
             
@@ -220,10 +226,10 @@ class SpatialMetadata:
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                         demfun.polygonize(
                             '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
-                        )
-
+                        )                        
                         if len(tmp_layer) > 0:
-                            if defn is None: defn = tmp_layer.GetLayerDefn()
+                            if defn is None:
+                                defn = tmp_layer.GetLayerDefn()
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
                             #_prog = utils.CliProgress('creating feature {}'.format())
                             for i, f in enumerate(self.v_fields):
@@ -233,10 +239,10 @@ class SpatialMetadata:
                             self.layer.CreateFeature(out_feat)
                             #_prog.end(0, 'created feature')
                             
-                    tmp_ds = None
+                    tmp_ds = tmp_layer = out_feat = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
                 utils.remove_glob('{}.tif'.format(x))
-        self.ds = None
+        self.ds = self.layer = None
 
         if self.make_valid:
             utils.echo_msg(

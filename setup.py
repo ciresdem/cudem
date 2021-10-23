@@ -52,7 +52,7 @@ setuptools.setup(
     entry_points = {
         'console_scripts': [
             'dlim = cudem.dlim:datalists_cli',
-            'regions = cudem.regions:regions_cli',
+            'regions3 = cudem.regions:regions_cli',
             'waffles = cudem.waffles:waffles_cli',
             'waffles3 = cudem.waffles:waffles_cli',
             'fetches = cudem.fetches.fetches:fetches_cli',

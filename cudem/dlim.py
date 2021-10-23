@@ -674,6 +674,7 @@ def datalists_cli(argv = sys.argv):
     want_verbose = True
     want_region = False
     want_csv = False
+    want_datalists=False
     
     ## ==============================================
     ## parse command line arguments.
@@ -707,6 +708,10 @@ def datalists_cli(argv = sys.argv):
             want_list = True
         elif arg == '--glob' or arg == '-g':
             want_glob = True
+        elif arg == '--datalists' or arg == '-d':
+            want_datalists = True
+        elif arg == '--csv' or arg == '-c':
+            want_csv = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
@@ -776,11 +781,17 @@ def datalists_cli(argv = sys.argv):
             if xdl is not None and xdl.valid_p(
                     fmts=DatasetFactory.data_types[xdl.data_format]['fmts']
             ):
+               
                 #xdl.parse()
                 if not want_weights:
                     xdl.weight = None
-                    
-                if want_inf:
+                if want_datalists:
+                    xdl.parse_data_lists()
+                    for x in xdl.data_lists.keys():
+                        #print(xdl.data_lists[x]['parent'].echo_())
+                        print('{}'.format(xdl.data_lists[x]['parent'].fn))
+                        
+                elif want_inf:
                     print(xdl.inf())
                 elif want_list:
                     xdl.echo()
@@ -795,25 +806,23 @@ def datalists_cli(argv = sys.argv):
                         xdl.data_entries = xdl.data_lists[x]['data']
                         p = xdl.data_lists[x]['parent']
 
-                        # print(
-                        #     ','.join(
-                        #         [
-                        #             '"{}"'.format(str(y)) for y in [
-                        #                 x,
-                        #                 p.data_format,
-                        #                 p.weight,
-                        #                 p.title if p.title is not None else x,
-                        #                 p.source,
-                        #                 p.date,
-                        #                 p.data_type,
-                        #                 p.resolution,
-                        #                 p.hdatum,
-                        #                 p.vdatum,
-                        #                 p.url
-                        #             ]
-                        #         ]
-                        #     )
-                        # )
+                        print(
+                            '|'.join(
+                                [
+                                    '"{}"'.format(str(y)) for y in [
+                                        x,
+                                        p.title if p.title is not None else x,
+                                        p.source,
+                                        p.date,
+                                        p.data_type,
+                                        p.resolution,
+                                        p.hdatum,
+                                        p.vdatum,
+                                        p.url
+                                    ]
+                                ]
+                            )
+                        )
                         # print(
                         #     ','.join(
                         #         [

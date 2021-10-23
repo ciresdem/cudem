@@ -333,10 +333,10 @@ def _geo2pixel(geo_x, geo_y, geoTransform):
     Returns:
       list: a list of the pixel values [pixel-x, pixel-y]
     """
-    
+
     if geoTransform[2] + geoTransform[4] == 0:
-        pixel_x = ((geo_x - geoTransform[0]) / geoTransform[1]) + .5
-        pixel_y = ((geo_y - geoTransform[3]) / geoTransform[5]) + .5
+        pixel_x = int(((geo_x - geoTransform[0]) / geoTransform[1]))# + .5)
+        pixel_y = int(((geo_y - geoTransform[3]) / geoTransform[5]))
     else: pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geoTransform))
     return(int(pixel_x), int(pixel_y))
 

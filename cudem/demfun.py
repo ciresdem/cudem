@@ -62,7 +62,7 @@ def gather_infos(src_ds, region = None, scan = False):
     src_band = src_ds.GetRasterBand(1)
     dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
 
-    # mt = src_ds.GetMetadata()
+    mt = src_ds.GetMetadata()
 
     # node = 'pixel'
     # if 'AREA_OR_POINT' in mt.keys():
@@ -79,7 +79,7 @@ def gather_infos(src_ds, region = None, scan = False):
     #     dst_gt[0] = dst_gt[0] - (dst_gt[1]/2)
     #     dst_gt[3] = dst_gt[3] - (dst_gt[5]/2)
     #     dst_gt = tuple(dst_gt)
-        
+
     ds_config = {
         'nx': srcwin[2],
         'ny': srcwin[3],
@@ -160,7 +160,7 @@ def set_nodata(src_dem, nodata=-9999, convert_array=False):
         return(0)
     else: return(None)
 
-def set_metadata(src_dem, node='pixel', cudem=False):
+def set_metadata(src_dem, node='pixel', cudem=False, vdatum='NAVD88'):
     """add metadata to the waffled raster
 
     Args: 
@@ -178,7 +178,7 @@ def set_metadata(src_dem, node='pixel', cudem=False):
         md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
         if cudem:
             md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
-            md['TIFFTAG_IMAGEDESCRIPTION'] = 'Topography-Bathymetry; NAVD88'
+            md['TIFFTAG_IMAGEDESCRIPTION'] = 'Topography-Bathymetry; {}'.format(vdatum)
         ds.SetMetadata(md)
         ds = None
         return(0)
@@ -324,7 +324,6 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         if verbose:
             utils.echo_msg('polygonizing {}...'.format(src_gdal))
         status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
-        print(status)
         if verbose:
             utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
