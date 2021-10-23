@@ -44,6 +44,7 @@ Options:
   -X - extend region by number of cells (6)
   -E - cellsize of gridded boundary (0.000277777777)
   -P - EPSG code of output vector (4326)
+  -v - make output shapefile valid
  Examples:
  %% spatial-meta.sh -I master.datalist -R master_regions.gmt -O meta -X 6 -P 4326 \n\
 \n\
@@ -58,6 +59,7 @@ while getopts ":I:R:X:O:E:P:" options; do
 	O ) oname=$OPTARG;;
 	E ) iinc=$OPTARG;;
 	P ) epsg=$OPTARG;;
+	v ) makevalid=True;;
 	h ) echo -e $usage;;
 	\? ) echo -e $usage
 	exit 1;;
@@ -133,7 +135,11 @@ for region in $(gmt gmtinfo $itiles -I- -As); do
 
     # Convert gmt vector to shapefile
     printf "spatial-meta: converting to boundary: %s.shp\n" $out_name
-    ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid -skipfailures
+    if [ $makevalid ] ; then
+	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid -skipfailures
+    else
+	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
+    fi
     # -makevalid -progress
 done
 
