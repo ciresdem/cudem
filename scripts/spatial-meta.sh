@@ -121,26 +121,38 @@ for region in $(gmt gmtinfo $itiles -I- -As); do
     for datalist in $(dlim ${idatalist} -d ${proc_region} | awk '{print $1}') ; do
 	# Gather the data from the datalist entry that is within our region
 	dlbn=$(basename $datalist .datalist)
+	#cat /dev/null | bounds -g > ${dlbn}.gmt
+	#sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${dlbn}.gmt
+	#sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${dlbn}.gmt
+	#sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${dlbn}.gmt
+
 	# Generate the boundary of the data found in this datalist and add it to the output gmt vector
-	printf "spatial-meta: using datalist datalist: %s < %s >\n" $dlbn $datalist
-	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose >> ${out_name}.gmt;
+	printf "spatial-meta: using datalist: %s < %s >\n" $dlbn $datalist
+	meta=$(grep "${dlbn}" tmp.csv)
+	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose | \
+	    sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" >> ${out_name}.gmt;
+
+	#dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -g --verbose | \
+	#    sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" > ${dlbn}.gmt;
+
+	#printf "spatial-meta: appending boundary to output %s.shp\n" $out_name
+	#ogr2ogr ${out_name}.shp ${dlbn}.gmt -append -update
     done
 
-    printf "spatial-meta: adding metadata to vector fields...\n"
-    while read p; do
-	meta=$(echo ${p} | sed 's/\"//g')
-	dlbn=$(echo ${p} | awk -F'|' '{print $1}' | sed 's/\"//g')
-	sed -i "s^\@D${dlbn}^\@D${p}^g" ${out_name}.gmt
-    done<tmp.csv
+    # printf "spatial-meta: adding metadata to vector fields...\n"
+    # while read p; do
+    # 	meta=$(echo ${p} | sed 's/\"//g')
+    # 	dlbn=$(echo ${p} | awk -F'|' '{print $1}' | sed 's/\"//g')
+    # 	sed -i "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${p}^;}" ${out_name}.gmt
+    # done<tmp.csv
 
     # Convert gmt vector to shapefile
-    printf "spatial-meta: converting to boundary: %s.shp\n" $out_name
+    printf "spatial-meta: converting boundary to shapefile: %s.shp\n" $out_name
     if [ $makevalid ] ; then
-	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid -skipfailures
+	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid
     else
 	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
     fi
-    # -makevalid -progress
 done
 
 ### End

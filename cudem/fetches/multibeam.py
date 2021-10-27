@@ -62,7 +62,7 @@ class Multibeam(f_utils.FetchModule):
           str: the mbsystem datalist format number
         """
 
-        with open(src_inf) as iob:
+        with open(src_inf, errors='ignore') as iob:
             for il in iob:
                 til = il.split()
                 if len(til) > 1:
@@ -79,7 +79,7 @@ class Multibeam(f_utils.FetchModule):
           str: the mbsystem datalist format number
         """
 
-        with open(src_inf) as iob:
+        with open(src_inf, errors='ignore') as iob:
             for il in iob:
                 til = il.split()
                 if len(til) > 1:
@@ -96,7 +96,7 @@ class Multibeam(f_utils.FetchModule):
           str: the mbsystem datalist format number
         """
 
-        with open(src_inf) as iob:
+        with open(src_inf, errors='ignore') as iob:
             for il in iob:
                 til = il.split(':')
                 if len(til) > 1:

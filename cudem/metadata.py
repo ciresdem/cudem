@@ -34,7 +34,7 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-__version__ = '0.0.5'
+__version__ = '0.0.6'
 
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     '''`union` a `src_layer`'s features based on `src_field` where
@@ -45,20 +45,18 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     
     if dst_defn is None: dst_defn = src_layer.GetLayerDefn()
     multi = ogr.Geometry(ogr.wkbMultiPolygon)
+    src_layer.SetAttributeFilter("{} = 1".format(src_field))
     feats = len(src_layer)
     _prog = utils.CliProgress('unioning {} features...'.format(feats))
-    for n, f in enumerate(src_layer):
-        _prog.update_perc((n+1, feats))
-        if f.GetField(src_field) == 0:
-            src_layer.DeleteFeature(f.GetFID())
-        elif f.GetField(src_field) == 1:
+    if feats > 0:
+        for n, f in enumerate(src_layer):
+            _prog.update_perc((n, feats))
             f_geom = f.geometry()
             f_geom.CloseRings()
             f_geom_valid = f_geom.MakeValid()
             wkt = f_geom_valid.ExportToWkt()
             wkt_geom = ogr.CreateGeometryFromWkt(wkt)
             multi.AddGeometry(wkt_geom)
-            src_layer.DeleteFeature(f.GetFID())
     #union = multi.UnionCascaded() ## slow on large multi...
     out_feat = ogr.Feature(dst_defn)
     out_feat.SetGeometryDirectly(multi)
@@ -188,10 +186,12 @@ class SpatialMetadata:
         else: self.layer = None
             
     def yield_xyz(self):
+        
         for xdl in self.data:
-            [x for x in xdl.parse()]
+            #[x for x in xdl.parse()]
             xdl.parse_data_lists()
             #print(xdl.data_lists)
+            out_feats = []
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
@@ -213,6 +213,7 @@ class SpatialMetadata:
                     yield(xyz)
 
                 if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
+                    #out_feat = None
                     tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
                         '{}_poly.shp'.format(dl_name)
                     )
@@ -230,16 +231,21 @@ class SpatialMetadata:
                             if defn is None:
                                 defn = tmp_layer.GetLayerDefn()
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-                            #_prog = utils.CliProgress('creating feature {}'.format())
                             for i, f in enumerate(self.v_fields):
                                 out_feat.SetField(f, o_v_fields[i])
+
+                            #out_feats.append(out_feat)
                             self.layer.CreateFeature(out_feat)
-                            #_prog.end(0, 'created feature')
-                            
                     tmp_ds = tmp_layer = out_feat = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
                 utils.remove_glob('{}.tif'.format(x))
-        self.ds = self.layer = None
+
+        #_prog = utils.CliProgress('combining {} unioned features...'.format(len(out_feats)))
+        #for of, out_feat in enumerate(out_feats):
+        #    self.layer.CreateFeature(out_feat)
+        #    _prog.update((of,len(out_feats)))
+        #self.ds = self.layer = None
+        #_prog.end(0, 'Combined {} unioned features.'.format(len(out_feats)))
 
         if self.make_valid:
             utils.echo_msg(
@@ -250,6 +256,7 @@ class SpatialMetadata:
                 'ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}'.format(
                     self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector), verbose=self.verbose
             )
+        utils.echo_msg('Generated SPATIAL METADATA {}'.format(self.name))
 
     def run(self):
         [s for s in self.yield_xyz()]
