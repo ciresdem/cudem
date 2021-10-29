@@ -34,9 +34,9 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-__version__ = '0.0.6'
+__version__ = '0.0.7'
 
-def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
+def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
     '''`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
     an output layer defn for the unioned feature.
@@ -53,10 +53,14 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
             _prog.update_perc((n, feats))
             f_geom = f.geometry()
             f_geom.CloseRings()
-            f_geom_valid = f_geom.MakeValid()
+            try:
+                f_geom_valid = f_geom.MakeValid()
+            except:
+                f_geom_valid = f_geom
+                
             wkt = f_geom_valid.ExportToWkt()
             wkt_geom = ogr.CreateGeometryFromWkt(wkt)
-            multi.AddGeometry(wkt_geom)
+            multi.AddGeometryDirectly(wkt_geom)
     #union = multi.UnionCascaded() ## slow on large multi...
     out_feat = ogr.Feature(dst_defn)
     out_feat.SetGeometryDirectly(multi)
@@ -64,13 +68,13 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn = None):
     multi = None
     return(out_feat)
 
-def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
+def ogr_clip(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
     driver = ogr.GetDriverByName(dn)
     ds = driver.Open(src_ogr, 0)
     layer = ds.GetLayer()
 
-    clip_region.export_as_ogr('tmp_clip.shp')
-    c_ds = driver.Open('tmp_clip.shp', 0)
+    clip_region.export_as_ogr('tmp_clip.{}'.format(utils.ogr_fext(dn)))
+    c_ds = driver.Open('tmp_clip.{}'.format(utils.ogr_fext(dn)), 0)
     c_layer = c_ds.GetLayer()
     
     dst_ds = driver.CreateDataSource(dst_ogr)
@@ -81,8 +85,8 @@ def ogr_clip(src_ogr, dst_ogr, clip_region = None, dn = "ESRI Shapefile"):
     layer.Clip(c_layer, dst_layer)
     ds = c_ds = dst_ds = None
 
-def ogr_empty_p(src_ogr):
-    driver = ogr.GetDriverByName('ESRI Shapefile')
+def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
+    driver = ogr.GetDriverByName(dn)
     ds = driver.Open(src_ogr, 0)
 
     if ds is not None:
@@ -109,7 +113,7 @@ class SpatialMetadata:
             warp=None,
             extend=0,
             node='pixel',
-            make_valid=False,
+            ogr_format='ESRI Shapefile',
             verbose=False
     ):
         """generate spatial-metadata"""
@@ -125,7 +129,7 @@ class SpatialMetadata:
         self.d_region = self.dist_region()
         
         self.name = name
-        self.make_valid = make_valid
+        self.ogr_format = ogr_format
         self.verbose = verbose
 
         self._init_data()
@@ -147,7 +151,7 @@ class SpatialMetadata:
         
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
-        self.dst_vector = self.dst_layer + '.shp'
+        self.dst_vector = self.dst_layer + '.{}'.format(utils.ogr_fext(self.ogr_format))
         self.v_fields = [
             'Name',
             'Title',
@@ -173,7 +177,7 @@ class SpatialMetadata:
         utils.remove_glob('{}.*'.format(self.dst_layer))
         utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
     
-        self.ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(self.dst_vector)
+        self.ds = ogr.GetDriverByName(self.ogr_format).CreateDataSource(self.dst_vector)
         if self.ds is not None: 
             self.layer = self.ds.CreateLayer(
                 '{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon
@@ -190,8 +194,6 @@ class SpatialMetadata:
         for xdl in self.data:
             #[x for x in xdl.parse()]
             xdl.parse_data_lists()
-            #print(xdl.data_lists)
-            out_feats = []
             for x in xdl.data_lists.keys():
                 xdl.data_entries = xdl.data_lists[x]['data']
                 p = xdl.data_lists[x]['parent']
@@ -213,9 +215,8 @@ class SpatialMetadata:
                     yield(xyz)
 
                 if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
-                    #out_feat = None
-                    tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
-                        '{}_poly.shp'.format(dl_name)
+                    tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
+                        '{}_poly'.format(dl_name)
                     )
                     
                     if tmp_ds is not None:
@@ -226,7 +227,8 @@ class SpatialMetadata:
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
                         demfun.polygonize(
                             '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
-                        )                        
+                        )
+                        
                         if len(tmp_layer) > 0:
                             if defn is None:
                                 defn = tmp_layer.GetLayerDefn()
@@ -234,28 +236,11 @@ class SpatialMetadata:
                             for i, f in enumerate(self.v_fields):
                                 out_feat.SetField(f, o_v_fields[i])
 
-                            #out_feats.append(out_feat)
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = tmp_layer = out_feat = None
                     utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
                 utils.remove_glob('{}.tif'.format(x))
 
-        #_prog = utils.CliProgress('combining {} unioned features...'.format(len(out_feats)))
-        #for of, out_feat in enumerate(out_feats):
-        #    self.layer.CreateFeature(out_feat)
-        #    _prog.update((of,len(out_feats)))
-        #self.ds = self.layer = None
-        #_prog.end(0, 'Combined {} unioned features.'.format(len(out_feats)))
-
-        if self.make_valid:
-            utils.echo_msg(
-                'validating spatial geometries...'
-            )
-            
-            utils.run_cmd(
-                'ogrinfo -spat {} -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}'.format(
-                    self.d_region.format('ul_lr'), self.dst_layer, self.dst_vector), verbose=self.verbose
-            )
         utils.echo_msg('Generated SPATIAL METADATA {}'.format(self.name))
 
     def run(self):
@@ -285,6 +270,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
   -O, --output-name\tBASENAME for all outputs.
   -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
+  -F, --format\t\tOutput OGR format. (ESRI Shapefile)
 
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
   -r, --grid-node\tUse grid-node registration, default is pixel-node
@@ -307,10 +293,10 @@ def spat_meta_cli(argv = sys.argv):
     inc = utils.str2inc('1s')
     node = 'pixel'
     name = 'waffles_spat'
+    ogr_format = 'ESRI Shapefile'
     extend = 0
     want_verbose = True
     want_prefix = False
-    want_valid = False
 
     argv = sys.argv
     while i < len(argv):
@@ -339,6 +325,12 @@ def spat_meta_cli(argv = sys.argv):
         elif arg[:2] == '-X':
             exts = arg[2:].split(':')
             extend = utils.int_or(exts[0], 0)
+        elif arg == '--format' or arg == '-F':
+            ogr_format = argv[i + 1]
+            i += 1
+        elif arg[:2] == '-F':
+            ogr_format = argv[2:]
+
         # elif arg == '--extend' or arg == '-X':
         #     extend = utils.int_or(argv[i + 1], 0)
         #     i = i + 1
@@ -346,7 +338,6 @@ def spat_meta_cli(argv = sys.argv):
         #     extend = utils.int_or(arg[2:], 0)
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
         elif arg == '-p' or arg == '--prefix': want_prefix = True
-        elif arg == '-v' or arg == '--validate': want_valid = True
         elif arg == '--quiet' or arg == '-q': want_verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
@@ -393,9 +384,9 @@ def spat_meta_cli(argv = sys.argv):
             if want_prefix or len(these_regions) > 1:
                 name_ = utils.append_fn(name, this_region, inc)
 
-            if os.path.exists('{}_sm.shp'.format(name_)):
+            if os.path.exists('{}_sm.{}'.format(name_, utils.ogr_fext(ogr_format))):
                 utils.echo_msg(
-                'SPATIAL METADATA {} already exists, skipping...'.format('{}_sm.shp'.format(name_))
+                'SPATIAL METADATA {} already exists, skipping...'.format('{}_sm.{}'.format(name_, utils.ogr_fext(ogr_format)))
                     )
             else:
                 
@@ -408,6 +399,6 @@ def spat_meta_cli(argv = sys.argv):
                     node=node,
                     name=name_,
                     verbose=want_verbose,
-                    make_valid=want_valid
+                    ogr_format=ogr_format
                 ).run()
 ### End

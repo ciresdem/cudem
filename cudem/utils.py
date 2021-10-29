@@ -482,6 +482,33 @@ def gdal_fext(src_drv_name):
         else: fext = 'gdal'
         return(fext)
 
+def ogr_fext(src_drv_name):
+    """find the common file extention given a OGR driver name
+    older versions of gdal can't do this, so fallback to known standards.
+
+    Args:
+      src_drv_name (str): a source OGR driver name
+
+    Returns:
+      list: a list of known file extentions or None
+    """
+    
+    fexts = None
+    try:
+        drv = ogr.GetDriverByName(src_drv_name)
+        #if drv.GetMetadataItem(gdal.DCAP_RASTER):
+        fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+            
+        if fexts is not None: return(fexts.split()[0])
+        else: return(None)
+    except:
+        if src_drv_name.lower() == 'gtiff': fext = 'tif'
+        elif src_drv_name == 'HFA': fext = 'img'
+        elif src_drv_name == 'GMT': fext = 'grd'
+        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
+        else: fext = 'gdal'
+        return(fext)
+
 ## ==============================================
 ##
 ## Archives (zip/gzip/etc.)
