@@ -363,11 +363,12 @@ class Region:
         if this_size[1] < 0: this_size[1] = 0
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
         
-    def buffer(self, bv = 0, pct = None):
+    def buffer(self, x_bv = 0, y_bv = 0, pct = None):
         """return the region buffered by buffer-value `bv`
 
         Args:
-          bv (float): the buffer value
+          x_bv (float): the x-direction buffer value
+          y_bv (float): the y-direction buffer value
           pct (float): attain the buffer-value via percentage
 
         Returns:
@@ -380,10 +381,10 @@ class Region:
                 nsp = (self.ymax - self.ymin) * (pctv * .01)
                 bv = (ewp + nsp) / 2
 
-            self.xmin -= bv
-            self.xmax += bv
-            self.ymin -= bv
-            self.ymax += bv
+            self.xmin -= x_bv
+            self.xmax += x_bv
+            self.ymin -= y_bv
+            self.ymax += y_bv
 
             self.wkt = self.export_as_wkt()
         return(self)
@@ -860,7 +861,7 @@ def regions_cli(argv = sys.argv):
     
     for rn, this_region in enumerate(these_regions):
         if bv is not None:
-            this_region.buffer(bv)
+            this_region.buffer(x_bv=bv, y_bv=bv)
             
         if echo:
             print(this_region.format('gmt'))

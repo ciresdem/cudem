@@ -330,10 +330,11 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         return(0, 0)
     else: return(-1, -1)
     
-def sample(src_dem, dst_dem, sample_inc, src_region):
+def sample(src_dem, dst_dem, x_sample_inc, y_sample_incsrc_region):
 
+    ## TODO use gdal.Warp
     out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
-    '.format(sample_inc, sample_inc, src_dem, src_region.format('te'), dst_dem))
+    '.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
 
     return(out, status)
 

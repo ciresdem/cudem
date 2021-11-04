@@ -69,6 +69,8 @@ class Waffle:
             weights=None,
             fltr=[],
             sample=None,
+            xsample=None,
+            ysample=None,
             clip=None,
             chunk=None,
             epsg=4326,
@@ -82,7 +84,12 @@ class Waffle:
         self.data = data
         self.region = src_region
         self.inc = inc
-        self.size = size
+        self.xinc = xinc
+        self.yinc = yinc
+        self.sample = sample
+        self.xsample = xsample
+        self.ysample = ysample
+        #self.size = size
         self.name = name
         self.node = node
         self.fmt = fmt
@@ -90,7 +97,6 @@ class Waffle:
         self.extend_proc = extend_proc
         self.weights = weights
         self.fltr = fltr
-        self.sample = sample
         self.clip = clip
         self.chunk = chunk
         self.epsg = utils.int_or(epsg)
@@ -107,7 +113,7 @@ class Waffle:
         self.ogr_ds = None
         
         if self.node == 'grid':
-            self.region = self.region.buffer(self.inc*.5)
+            self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
             #self._init_regions()
         self.p_region = self._proc_region()
         self.d_region = self._dist_region()
@@ -153,6 +159,8 @@ class Waffle:
                     include_z=True, include_w=True
                 ) if self.region is not None else None,
                 'inc': self.inc,
+                'xinc': self.xinc,
+                'yinc': self.yinc,
                 'name': self.name,
                 'node': self.node,
                 'fmt': self.fmt,
@@ -161,6 +169,8 @@ class Waffle:
                 'weights': self.weights,
                 'fltr': self.fltr,
                 'sample': self.sample,
+                'xsample': self.xsample,
+                'ysample': self.ysample,
                 'clip': self.clip,
                 'chunk': self.chunk,
                 'epsg': self.epsg,
@@ -182,24 +192,26 @@ class Waffle:
         """processing region (extended by self.extend and self.extend_proc."""
         
         cr = regions.Region().from_region(self.region)
-        return(cr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend) + (self.inc*10)))
+        #return(cr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend) + (self.inc*10)))
+        return(cr.buffer(x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10), y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)))
     
     def _proc_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
         
         pr = regions.Region().from_region(self.region)
-        return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
-
+        #return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
+        return(pr.buffer(x_bv=(self.xinc*self.extend), y_bv=(self.yinc*self.extend)))
+    
     def _dist_region(self):
         """distribution region (extended by self.extend)."""
         
         dr = regions.Region().from_region(self.region)
-        return(dr.buffer((self.inc*self.extend)))
+        return(dr.buffer(x_bv=(self.xinc*self.extend), y_bv=(self.yinc*self.extend)))
 
     def _xyz_block_t(self, src_xyz):
         """block the src_xyz data for fast lookup"""
 
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         self.block_t = np.empty((ycount, xcount), dtype=object)
         for y in range(0, ycount):
             for x in range(0, xcount):
@@ -270,7 +282,7 @@ class Waffle:
         """
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(
-            x_inc=self.inc
+            x_inc=self.xinc, y_inc=self.yinc
         )
         gdt = gdal.GDT_Float32
         sum_array = np.zeros((ycount, xcount))
@@ -333,7 +345,7 @@ class Waffle:
         yields the xyz data
         """
 
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
@@ -361,7 +373,7 @@ class Waffle:
                 xyz_yield = metadata.SpatialMetadata(
                     data=[xdl.fn],
                     src_region=self.p_region,
-                    inc=self.inc,
+                    inc=self.xinc,
                     extend=self.extend,
                     epsg=self.epsg,
                     node=self.node,
@@ -436,8 +448,8 @@ class Waffle:
                     ) == 0:
                         os.rename('__tmp_fltr.tif', fn)
             
-        if self.sample is not None:
-            if demfun.sample(fn, '__tmp_sample.tif', self.sample, self.p_region)[1] == 0:
+        if self.xsample is not None or self.ysample is not None:
+            if demfun.sample(fn, '__tmp_sample.tif', self.xsample, self.ysample, self.p_region)[1] == 0:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
@@ -453,7 +465,8 @@ class Waffle:
                     mod='coastline:invert=True',
                     data=[],
                     src_region=self.c_region,
-                    inc=self.inc,
+                    xinc=self.xinc,
+                    yinc=self.yinc,
                     name='tmp_coast',
                     node=self.node,
                     extend=self.extend+12,
@@ -577,12 +590,14 @@ class GMTSurface(Waffle):
         
     def run(self):        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}{} -V -r | gmt surface -V {} -I{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r{}'.format(
+            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V -r | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r{}'.format(
                 self.p_region.format('gmt'),
-                self.inc,
+                self.xinc,
+                self.yinc,
                 ' -W' if self.weights else '',
                 self.p_region.format('gmt'),
-                self.inc,
+                self.xinc,
+                self.yinc,
                 self.name,
                 self.tension,
                 self.relaxation,
@@ -628,8 +643,8 @@ class GMTTriangulate(Waffle):
         self._set_config()
         
     def run(self):
-        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f} -G{}.tif=gd:GTiff -r'.format(
-            self.p_region.format('gmt'), self.inc, self.name
+        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff -r'.format(
+            self.p_region.format('gmt'), self.xinc, self.yinc, self.name
         )
         out, status = utils.run_cmd(
             dem_tri_cmd,
@@ -733,8 +748,9 @@ class WafflesMBGrid(Waffle):
 
         mb_region = self.p_region
         if self.node == 'pixel':
-            mb_region = mb_region.buffer(self.inc * -.5)
-        xsize, ysize, gt = mb_region.geo_transform(x_inc=self.inc)
+            #mb_region = mb_region.buffer(self.xinc * -.5)
+            mb_region = mb_region.buffer(x_bv=(self.xinc*-.5), y_bv=(self.yinc*-.5))
+        xsize, ysize, gt = mb_region.geo_transform(x_inc=self.xinc)
 
         ## -G100 breaks mbgrid >= 5.7.8
         mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
@@ -797,7 +813,7 @@ class WafflesNum(Waffle):
     def _xyz_num(self, src_xyz):
         """Create a GDAL supported grid from xyz data """
 
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         if self.verbose:
             progress = utils.CliProgress(
                 'generating uninterpolated NUM grid `{}` @ {}/{}'.format(
@@ -869,10 +885,11 @@ class WafflesNum(Waffle):
 
             out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
             
-            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f} -G{}.tif=gd:GTiff -r{}'.format(
+            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff -r{}'.format(
                 self.mode,
                 self.p_region.format('gmt'),
-                self.inc,
+                self.xinc,
+                self.yinc,
                 self.name,
                 ' -Wi' if self.weights else ''
             )
@@ -918,7 +935,7 @@ class WafflesIDW(Waffle):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
     
     def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, yinc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -1070,7 +1087,7 @@ class WafflesIDW2(Waffle):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
     
     def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_iinc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -1234,11 +1251,11 @@ class WafflesVdatum(Waffle):
         self._set_config()
         
     def _create_null(
-            self, outfile, extent, cellsize, nodata, outformat, verbose, overwrite
+            self, outfile, extent, x_inc, y_inc, nodata, outformat, verbose, overwrite
     ):
         """create a nodata grid"""
         
-        xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
+        xcount, ycount, gt = extent.geo_transform(x_inc=x_inc, y_inc=y_inc)
         ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -1256,7 +1273,7 @@ class WafflesVdatum(Waffle):
         
     def run(self):
         self._create_null(
-            'empty.tif', self.p_region, 0.00083333, 0, 'GTiff', self.verbose, True
+            'empty.tif', self.p_region, 0.00083333, 0.00083333, 0, 'GTiff', self.verbose, True
         )
         demfun.set_nodata('empty.tif')
         empty = datasets.RasterFile(
@@ -1290,7 +1307,8 @@ class WafflesVdatum(Waffle):
                 data=['result/empty.xyz'],
                 name=self.name,
                 src_region=self.region,
-                inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
                 epsg=self.epsg,
                 verbose=self.verbose,
                 tension=0,
@@ -1343,7 +1361,7 @@ class WafflesGDALGrid(Waffle):
         if ds.GetLayer().GetFeatureCount() == 0:
             utils.echo_error_msg('no input data')
             
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.inc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         
         gd_opts = gdal.GridOptions(
             outputType = gdal.GDT_Float32,
@@ -1384,7 +1402,7 @@ class WafflesLinear(WafflesGDALGrid):
     def __init__(self, radius=None, nodata=-9999, **kwargs):
         super().__init__(**kwargs)
         
-        radius = self.inc * 4 if radius is None else utils.str2inc(radius)
+        radius = self.xinc * 4 if radius is None else utils.str2inc(radius)
         self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
         self.mod_args = {'radius':radius, 'nodata':nodata}
         self._set_config()
@@ -1395,8 +1413,8 @@ class WafflesInvDst(WafflesGDALGrid):
                    max_points = 0, min_points = 0, nodata = -9999, **kwargs):
         super().__init__(**kwargs)
 
-        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'invdist:power={}:smoothing={}:radius1={}:radius2={}:angle={}:max_points={}:min_points={}:nodata={}'\
             .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
 
@@ -1417,8 +1435,8 @@ class WafflesMovingAverage(WafflesGDALGrid):
     def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
         super().__init__(**kwargs)
 
-        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'average:radius1={}:radius2={}:angle={}:min_points={}:nodata={}'\
             .format(radius1, radius2, angle, min_points, nodata)
         self.mod_args = {
@@ -1435,8 +1453,8 @@ class WafflesNearest(WafflesGDALGrid):
     def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
         super().__init__(**kwargs)
 
-        radius1 = self.inc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.inc * 2 if radius2 is None else utils.str2inc(radius2)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, nodata)
         self.mod_args = {
@@ -1574,7 +1592,8 @@ class WafflesCUDEM(Waffle):
                 epsg=self.epsg,
                 clobber=True,
                 verbose=self.verbose,
-                sample=utils.str2inc(self.inc),
+                xsample=utils.str2inc(self.xinc),
+                ysample=utils.str2inc(self.yinc),
                 clip=bathy_clip,
             ).acquire().generate()
         else:
@@ -1650,7 +1669,7 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.utils
 
         self.f_region = self.p_region.copy()
-        self.f_region.buffer(self.inc*10)
+        self.f_region.buffer(x_bv=self.xinc*10, y_bv=self.yinc*10)
         self.f_region.epsg = self.epsg
         self.mod = 'coastline'
         self.mod_args = {
@@ -1697,7 +1716,7 @@ class WafflesCoastline(Waffle):
 
         c_region = self.p_region
         c_region.export_as_ogr('region_buff.shp')
-        xsize, ysize, gt = c_region.geo_transform(x_inc=self.inc)
+        xsize, ysize, gt = c_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
             
         utils.run_cmd(
             'gdal_rasterize -ts {} {} -te {} -burn -9999 -a_nodata -9999 -ot Int32 -co COMPRESS=DEFLATE -a_srs EPSG:{} region_buff.shp {}'.format(
@@ -1870,7 +1889,7 @@ class WafflesCoastline(Waffle):
         """
 
         self.p_region.export_as_ogr('region_buff.shp')
-        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.inc)
+        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
 
         utils.run_cmd(
             'gdal_rasterize -ts {} {} -te {} -burn -9999 -a_nodata -9999 -ot Int32 -co COMPRESS=DEFLATE -a_srs EPSG:{} region_buff.shp {}'.format(
@@ -2014,8 +2033,8 @@ class WafflesCoastline(Waffle):
         """
         
         if self.gc['GMT'] is not None:
-            utils.run_cmd('gmt grdlandmask {} -I{} -r -Df -G{}=gd:GTiff -V -N1/0/0/0/0\
-            '.format(self.p_region.format('gmt'), self.inc, self.g_mask), verbose=self.verbose)
+            utils.run_cmd('gmt grdlandmask {} -I{}/{} -r -Df -G{}=gd:GTiff -V -N1/0/0/0/0\
+            '.format(self.p_region.format('gmt'), self.xinc, self.yinc, self.g_mask), verbose=self.verbose)
 
         utils.echo_msg('filling the coast mask with gsshg data...')
         c_ds = gdal.Open(self.g_mask)
@@ -2047,9 +2066,10 @@ class WafflesCoastline(Waffle):
         
         this_gmrt.fetch_results()
         gmrt_tif = this_gmrt.results[0]
-            
+
+        ## TODO use gdal.Warp
         utils.run_cmd(
-            'gdalwarp {} {} -r bilinear -tr {} {} -overwrite'.format(gmrt_tif, self.g_mask, wg['inc'], wg['inc']),
+            'gdalwarp {} {} -r bilinear -tr {} {} -overwrite'.format(gmrt_tif, self.g_mask, wg['xinc'], wg['yinc']),
             verbose = True
         )
         
@@ -2268,6 +2288,8 @@ Generate a DEM using a variety of sources.
             data=[],
             src_region=None,
             inc=None,
+            xinc=None,
+            yinc=None,
             name='waffles_dem',
             node='pixel',
             fmt='GTiff',
@@ -2276,6 +2298,8 @@ Generate a DEM using a variety of sources.
             weights=None,
             fltr=[],
             sample=None,
+            xsample=None,
+            ysample=None,
             clip=None,
             chunk=None,
             epsg=4326,
@@ -2290,6 +2314,11 @@ Generate a DEM using a variety of sources.
         self.data = data
         self.region = src_region
         self.inc = inc
+        self.xinc = xinc
+        self.yinc = yinc
+        self.sample = sample
+        self.xsample = xsample
+        self.ysample = ysample
         self.name = name
         self.node = node
         self.fmt = fmt
@@ -2297,7 +2326,6 @@ Generate a DEM using a variety of sources.
         self.extend_proc = extend_proc
         self.weights = weights
         self.fltr = fltr
-        self.sample = sample
         self.clip = clip
         self.chunk = chunk
         self.epsg = utils.int_or(epsg)
@@ -2334,6 +2362,11 @@ Generate a DEM using a variety of sources.
                 include_z=True, include_w=True
             ) if self.region is not None else None,
             'inc': self.inc,
+            'xinc': self.xinc,
+            'yinc': self.yinc,
+            'sample': self.sample,
+            'xsample': self.xsample,
+            'ysample': self.ysample,
             'name': self.name,
             'node': self.node,
             'fmt': self.fmt,
@@ -2341,7 +2374,6 @@ Generate a DEM using a variety of sources.
             'extend_proc': self.extend_proc,
             'weights': self.weights,
             'fltr': self.fltr,
-            'sample': self.sample,
             'clip': self.clip,
             'chunk': self.chunk,
             'epsg': self.epsg,
@@ -2364,6 +2396,11 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                sample=self.sample,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2371,7 +2408,6 @@ Generate a DEM using a variety of sources.
                 extend_proc=self.extend_proc,
                 weights=self.weights,
                 fltr=self.fltr,
-                sample=self.sample,
                 clip=self.clip,
                 chunk=self.chunk,
                 epsg=self.epsg,
@@ -2390,6 +2426,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2416,6 +2456,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2442,6 +2486,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2468,6 +2516,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2494,6 +2546,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2520,6 +2576,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2546,6 +2606,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2572,6 +2636,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2598,6 +2666,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2624,6 +2696,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2650,6 +2726,10 @@ Generate a DEM using a variety of sources.
                 data=self.data,
                 src_region=self.region,
                 inc=self.inc,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                xsample=self.xsample,
+                ysample=self.ysample,
                 name=self.name,
                 node=self.node,
                 fmt=self.fmt,
@@ -2782,7 +2862,7 @@ Options:
 \t\t\tIf a vector file is supplied it will search each region found therein.
 \t\t\tIf omitted, use the region gathered from the data in DATALIST.
   -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
-\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s:.1111111s
+\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s/.3333333s:.1111111s/.1111111s
   -F, --format\t\tOutput grid FORMAT. [GTiff]
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tsyntax is -M module:mod_opt=mod_val:mod_opt1=mod_val1:...
@@ -2867,13 +2947,40 @@ def waffles_cli(argv = sys.argv):
         elif arg[:2] == '-M': module = str(arg[2:])
         elif arg == '--increment' or arg == '-E':
             incs = argv[i + 1].split(':')
-            wg['inc'] = utils.str2inc(incs[0])
-            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
+            xy_inc = incs[0].split('/')
+            #wg['inc'] = utils.str2inc(incs[0])
+            wg['xinc'] = utils.str2inc(xy_inc[0])
+            if len(xy_inc) > 1:
+                wg['yinc'] = utils.str2inc(xy_inc[1])
+            else:
+                wg['yinc'] = utils.str2inc(xy_inc[0])
+            if len(incs) > 1:
+                xy_samples = incs[1].split('/')
+                wg['xsample'] = utils.str2inc(xy_samples[0])
+                if len(xy_samples) > 1:
+                    wg['ysample'] = utils.str2inc(xy_samples[1])
+                else:
+                    wg['ysample'] = utils.str2inc(xy_samples[0])
             i = i + 1
         elif arg[:2] == '-E':
             incs = arg[2:].split(':')
-            wg['inc'] = utils.str2inc(arg[2:].split(':')[0])
-            if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
+            xy_inc = incs[0].split('/')
+            wg['xinc'] = utils.str2inc(xy_inc[0])
+            if len(xy_inc) > 1:
+                wg['yinc'] = utils.str2inc(xy_inc[1])
+            else:
+                wg['yinc'] = utils.str2inc(xy_inc[0])
+            if len(incs) > 1:
+                xy_samples = incs[1].split('/')
+                wg['xsample'] = utils.str2inc(xy_samples[0])
+                if len(xy_samples) > 1:
+                    wg['ysample'] = utils.str2inc(xy_samples[1])
+                else:
+                    wg['ysample'] = utils.str2inc(xy_samples[0])
+
+            #incs = arg[2:].split(':')
+            #wg['inc'] = utils.str2inc(arg[2:].split(':')[0])
+            #if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
         elif arg == '--outname' or arg == '-O':
             wg['name'] = argv[i + 1]
             i += 1
@@ -2999,11 +3106,14 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## check the increment
     ## ==============================================
-    if 'inc' in wg.keys():
-        if wg['inc'] is None:
+    if 'xinc' in wg.keys():
+        if wg['xinc'] is None:
             sys.stderr.write(waffles_cli_usage)
             utils.echo_error_msg('''must specify a gridding increment.''')
             sys.exit(-1)
+        else:
+            if wg['yinc'] is None:
+                wg['yinc'] = wg['xinc']
     else:
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a gridding increment.''')
