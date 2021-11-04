@@ -535,7 +535,47 @@ class XYZDataset():
 
                     out_array = out_weight_array = None
         
-    def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+    def mask_xyz(self, dst_inc, dst_format='MEM', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
+
+        yields the xyz data
+        """
+
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
+        ptArray = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            (xcount*ycount),
+            dst_gt,
+            utils.sr_wkt(self.epsg),
+            gdal.GDT_Int32,
+            -9999,
+            dst_format
+        )
+
+        for this_xyz in self.yield_xyz_from_entries(**kwargs):
+            if regions.xyz_in_region_p(this_xyz, self.region):
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
+                try:
+                    ptArray[ypos, xpos] = 1
+                except:
+                    pass
+
+        driver = gdal.GetDriverByName(dst_format)
+        ds = driver.Create("MEM", ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+        if ds is not None:
+            ds.SetGeoTransform(ds_config['geoT'])
+            ds.SetProjection(ds_config['proj'])
+            ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
+            ds.GetRasterBand(1).WriteArray(ptArray)
+                
+        return(ds, ds_config)
+        
+    def mask_and_yield_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
 
@@ -565,8 +605,8 @@ class XYZDataset():
                     ptArray[ypos, xpos] = 1
                 except:
                     pass
-                
-        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
+
+        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)
         
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the XYZ data from the dataset"""

@@ -654,7 +654,7 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
            dl_version=cudem.__version__,
            dl_formats=_datalist_fmts_short_desc())
 
-def datalists_cli(argv = sys.argv):
+def datalists_cli(argv=sys.argv):
     """run datalists from command-line
 
     See `datalists_cli_usage` for full cli options.

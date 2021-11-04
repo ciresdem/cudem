@@ -13,8 +13,8 @@ myarray_flat=myarray.flatten()
 min_pct = int(np.nanpercentile(myarray_flat, 0.00001)-0.5)
 max_pct = int(np.nanpercentile(myarray_flat, 99.9999)+0.5)
 
-print "0.00001 percentile elevation is", min_pct
-print "99.9999 percentile elevation is", max_pct
+print("0.00001 percentile elevation is", min_pct)
+print("99.9999 percentile elevation is", max_pct)
 min_pct
 max_pct
 

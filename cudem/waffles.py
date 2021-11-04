@@ -57,6 +57,10 @@ class Waffle:
             data=[],
             src_region=None,
             inc=None,
+            xinc=None,
+            yinc=None,
+            xsize=None,
+            ysize=None,
             name='waffles_dem',
             node='pixel',
             fmt='GTiff',
@@ -78,6 +82,7 @@ class Waffle:
         self.data = data
         self.region = src_region
         self.inc = inc
+        self.size = size
         self.name = name
         self.node = node
         self.fmt = fmt

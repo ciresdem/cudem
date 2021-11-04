@@ -25,7 +25,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.2.4',
+    version = '1.3.0',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -51,6 +51,7 @@ setuptools.setup(
     ], 
     entry_points = {
         'console_scripts': [
+            'cudem = cudem.cudem_cli:cudem_cli',
             'dlim = cudem.dlim:datalists_cli',
             'regions3 = cudem.regions:regions_cli',
             'waffles = cudem.waffles:waffles_cli',
@@ -92,6 +93,16 @@ setuptools.setup(
         'scripts/create_povray_template.sh',
         'scripts/tif2chunks2xyz.sh',
         'scripts/bag2tif2chunks2xyz.sh',
+        'scripts/ogr_edit_field.py',
+        'scripts/create_coastline.py',
+        'scripts/error_distance_plots.py',
+        'scripts/grd2mesh.py',
+        'scripts/nsidc_download.py',
+        'scripts/rename_shp.py',
+        'scripts/smooth_dem_bathy.py',
+        'scripts/vdatum_cmd.py',
+        'scripts/x360.py',
+        'scripts/xyztindex.py'
     ],
     python_requires = '>=3.0',
     project_urls = {

@@ -27,11 +27,11 @@
 import os
 import sys
 import numpy as np
-from gdalconst import *
 from osgeo import osr
 from osgeo import gdal
 from cudem import utils
 from cudem import demfun
+#from osgeo.gdal.gdalconst import *
 
 _version = "0.1.1"
 

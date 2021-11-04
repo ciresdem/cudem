@@ -189,7 +189,8 @@ class SpatialMetadata:
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
             
-    def yield_xyz(self):
+    def run(self):
+        #yield_xyz(self):
         
         for xdl in self.data:
             #[x for x in xdl.parse()]
@@ -211,10 +212,16 @@ class SpatialMetadata:
                 
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
-                for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc):
-                    yield(xyz)
 
-                if demfun.infos('{}.tif'.format(dl_name), scan=True)['zr'][1] == 1:
+                mask_ds, mask_config = xdl.mask_xyz(self.inc)
+                #mask_band = mask_ds.GetRasterBand(1)
+                #mask_array = mask_ds.GetRasterBand(1).ReadAsArray()
+                #ds_array = ds.GetRasterBand(1).ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
+                #for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc, dst_format='MEM'):
+                #    yield(xyz)
+
+                if demfun.gather_infos(mask_ds, scan=True)['zr'][1] == 1:
+                    #if 1 in mask_array:
                     tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
                         '{}_poly'.format(dl_name)
                     )
@@ -225,9 +232,24 @@ class SpatialMetadata:
                         )
                         
                         tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                        demfun.polygonize(
-                            '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
+
+                        if self.verbose:
+                            utils.echo_msg('polygonizing {} mask...'.format(dl_name))
+                            
+                        mask_band = mask_ds.GetRasterBand(1)
+                        status = gdal.Polygonize(
+                            mask_band,
+                            None,
+                            tmp_layer,
+                            0,
+                            callback = gdal.TermProgress if self.verbose else None
                         )
+                        if self.verbose:
+                            utils.echo_msg('polygonized {}'.format(dl_name))
+                        
+                        #demfun.polygonize(
+                        #    '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
+                        #)
                         
                         if len(tmp_layer) > 0:
                             if defn is None:
@@ -238,14 +260,15 @@ class SpatialMetadata:
 
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = tmp_layer = out_feat = None
-                    utils.remove_glob('{}_poly.*'.format(dl_name), 'tmp.tif')
-                utils.remove_glob('{}.tif'.format(x))
+                    utils.remove_glob('{}_poly.*'.format(dl_name))
+                mask_ds = mask_band = None
+                #utils.remove_glob('{}.tif'.format(x))
 
         utils.echo_msg('Generated SPATIAL METADATA {}'.format(self.name))
 
-    def run(self):
-        [s for s in self.yield_xyz()]
-            
+    #def run(self):
+        #[s for s in self.yield_xyz()]
+        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ spatial_metadata
@@ -369,6 +392,7 @@ def spat_meta_cli(argv = sys.argv):
 
     if len(these_regions) == 0:
         these_regions = [None]
+        utils.echo_error_msg('Could not parse region {}'.format(these_regions))
     else:
         if want_verbose:
             utils.echo_msg(
@@ -377,6 +401,7 @@ def spat_meta_cli(argv = sys.argv):
 
     name_ = name
     for rn, this_region in enumerate(these_regions):
+        utils.echo_msg('using region {}'.format(this_region.format('gmt')))
         if len(dls) == 0:
             sys.stderr.write(_usage)
             utils.echo_error_msg('you must specify some type of data')
