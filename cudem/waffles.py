@@ -161,6 +161,8 @@ class Waffle:
                 'inc': self.inc,
                 'xinc': self.xinc,
                 'yinc': self.yinc,
+                'xsample': self.xsample,
+                'ysample': self.ysample,
                 'name': self.name,
                 'node': self.node,
                 'fmt': self.fmt,
@@ -1494,7 +1496,8 @@ class WafflesCUDEM(Waffle):
         
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
-        self.radius = self.inc*9 if radius is None else radius
+        #self.radius = self.inc*9 if radius is None else radius
+        self.radius = self.xinc*9 if radius is None else radius
         self.bathy_xinc = self.xinc*3 if bathy_xinc is None else bathy_xinc
         self.bathy_yinc = self.yinc*3 if bathy_yinc is None else bathy_yinc
         self.idw = idw
@@ -1523,7 +1526,8 @@ class WafflesCUDEM(Waffle):
                 mod='IDW:radius={}'.format(self.radius),
                 data=self.data_,
                 src_region=idw_region,
-                inc=utils.str2inc(self.bathy_inc),
+                xinc=utils.str2inc(self.bathy_xinc),
+                yinc=utils.str2inc(self.bathy_yinc),
                 name='tmp_idw',
                 node=self.node,
                 extend=self.extend+6,
@@ -2938,7 +2942,8 @@ def waffles_cli(argv = sys.argv):
     i = 1
     wg = {}
     wg['verbose'] = True
-    wg['sample'] = None
+    wg['xsample'] = None
+    wg['ysample'] = None
     wg['fltr'] = []
     wg['name'] = 'waffles'
     
@@ -3160,7 +3165,7 @@ def waffles_cli(argv = sys.argv):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
-                name, wg['src_region'], wg['sample'] if wg['sample'] is not None else wg['inc']
+                name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc']
             )
         this_waffle = WaffleFactory(mod=module, **wg).acquire()
         if want_config:
