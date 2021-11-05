@@ -1981,7 +1981,7 @@ class WafflesCoastline(Waffle):
                 'gdal_rasterize -burn 1 nhdArea_merge.shp {}'.format(self.u_mask), verbose=True
             )
             
-            #utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
+            utils.remove_glob('tnm', 'nhdArea_merge.*', 'NHD_*', *r_shp, '{}*'.format(gdb_bn))
 
         utils.echo_msg(
             'filling the coast mask with NHD data...'
@@ -2008,7 +2008,7 @@ class WafflesCoastline(Waffle):
                 except: pass
 
             c_ds = None            
-        #utils.remove_glob('{}*'.format(self.u_mask))
+        utils.remove_glob('{}*'.format(self.u_mask))
 
     def _load_data(self):
         """load data from user datalist and amend coast_array"""

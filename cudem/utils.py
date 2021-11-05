@@ -523,12 +523,16 @@ def unzip(zip_file):
     Returns:
       list: a list of extracted file names.
     """
-    
-    zip_ref = zipfile.ZipFile(zip_file)
-    zip_files = zip_ref.namelist()
-    zip_ref.extractall()
-    zip_ref.close()
-    return(zip_files)
+
+    try:
+        zip_ref = zipfile.ZipFile(zip_file)
+        zip_files = zip_ref.namelist()
+        zip_ref.extractall()
+        zip_ref.close()
+        return(zip_files)
+    except Exception as e:
+        utils.echo_error_msg(e)
+        return(None)
 
 def gunzip(gz_file):
     """gunzip `gz_file`
