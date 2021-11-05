@@ -2263,10 +2263,11 @@ see mbgrid --help for more info
             'description': """COASTLINE generation.
 Generate a coastline (land/sea mask) using a variety of sources.
 
-< coastline:wet=None:dry=None:use_gmrt=False:invert=False >
+< coastline:wet=None:dry=None:want_gmrt=False:invert=False >
  :wet=[val] - an input wet mask vector file
  :dry=[val] - an input dry mask vector file
- :use_gmrt=[True/False] - use GMRT to fill background
+ :want_gmrt=[True/False] - use GMRT to fill background
+ :want_nhd=[True/False] - use NHD
  :invert=[True/False] - invert the output results
  :polygonize=[True/False] - polygonize the output""",
             'class': lambda k: WafflesCoastline(**k),

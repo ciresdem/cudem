@@ -333,8 +333,12 @@ def polygonize(src_gdal, dst_layer, verbose=False):
 def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region):
 
     ## TODO use gdal.Warp
-    out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
-    '.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
+    xcount, ycount, dst_gt = src_region.geo_transform(x_inc=x_sample_inc, y_inc=y_sample_inc)
+    
+    #out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
+    #'.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
+    out, status = utils.run_cmd('gdalwarp -ts {} {} {} -r bilinear -te {} {}\
+    '.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem))
 
     return(out, status)
 
