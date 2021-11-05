@@ -136,10 +136,18 @@ Update with setup.py:
  % python setup.py build
  % sudo python setup.py install --record cudem.install
 
-======================
+==============================================
 Examples
+==============================================
+
+======================
+Generate a 1arc-second DEM in southern louisiana using data from 'fetches'
+======================
+ 
+ % cudem waffles -R -90/-89.75/29.5/29.75 -E 1s/1s -M surface copernicus charts nos:datatype=xyz -O so_la -p -X 6 -w
+
+======================
+Generate a 1 meter DEM in of all the lidar files in the current directory
 ======================
 
- # Generate a 1arc-second DEM of southern louisiana using data from 'fetches'
- 
- % cudem waffles -R -90/-89.75/29.25/29.5 -E 1s/1s -M surface copernicus charts nos -O so_la -p -X 6 -w
+ % cudem waffles -R -90/-89.75/29.5/29.75 -E 1/1 -M invdst -O so_la -p -X 6 -w *.laz
