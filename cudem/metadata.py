@@ -152,8 +152,8 @@ class SpatialMetadata:
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.{}'.format(utils.ogr_fext(self.ogr_format))
+        #            'Name',
         self.v_fields = [
-            'Name',
             'Title',
             'Agency',
             'Date',
@@ -163,8 +163,8 @@ class SpatialMetadata:
             'VDatum',
             'URL'
         ]
+        #            ogr.OFTString,
         self.t_fields = [
-            ogr.OFTString,
             ogr.OFTString,
             ogr.OFTString,
             ogr.OFTString,
@@ -188,18 +188,39 @@ class SpatialMetadata:
             
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
-            
+
+
+    # def run(self):
+    #     dls = {}
+    #     for xdl in self.data:
+    #         for e in xdl.parse():
+    #             while e.parent != xdl:
+    #                 e = e.parent
+    #             if e.name in dls.keys():
+    #                 dls[e.name]['data'].append(e)
+    #             else:
+    #                 dls[e.name] = {'data': [e]}
+
     def run(self):
         #yield_xyz(self):
-        
+
         for xdl in self.data:
-            #[x for x in xdl.parse()]
-            xdl.parse_data_lists()
-            for x in xdl.data_lists.keys():
-                xdl.data_entries = xdl.data_lists[x]['data']
-                p = xdl.data_lists[x]['parent']
+            dls = {}
+            for e in xdl.parse():
+                while e.parent != xdl:
+                    e = e.parent
+                # if e.name in dls.keys():
+                #     dls[e.name]['data'].append(e)
+                # else:
+                if e.name not in dls.keys():
+                    dls[e.name] = {'data': [e] ,'dl': e}
+
+            for x in dls.keys():
+                utils.echo_msg('Working on {}'.format(x))
+                xdl.data_entries = dls[x]['data'] #xdl.data_lists[x]['data']
+                #p = xdl.data_lists[x]['parent']
+                p = dls[x]['dl']
                 o_v_fields = [
-                    x,
                     p.title if p.title is not None else x,
                     p.source,
                     p.date,
@@ -209,6 +230,25 @@ class SpatialMetadata:
                     p.vdatum,
                     p.url
                 ]
+
+                    
+                #for xdl in self.data:
+                #    #[x for x in xdl.parse()]
+                #    xdl.parse_data_lists()
+                #    for x in xdl.data_lists.keys():
+                # xdl.data_entries = xdl.data_lists[x]['data']
+                # p = xdl.data_lists[x]['parent']
+                # o_v_fields = [
+                #     x,
+                #     p.title if p.title is not None else x,
+                #     p.source,
+                #     p.date,
+                #     p.data_type,
+                #     p.resolution,
+                #     p.hdatum,
+                #     p.vdatum,
+                #     p.url
+                # ]
                 
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
