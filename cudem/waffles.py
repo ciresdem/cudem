@@ -1473,7 +1473,8 @@ class WafflesCUDEM(Waffle):
             min_weight=1,
             smoothing=10,
             radius=None,
-            bathy_inc=None,
+            bathy_xinc=None,
+            bathy_yinc=None,
             idw=False,
             mask_z=None,
             **kwargs
@@ -1494,7 +1495,8 @@ class WafflesCUDEM(Waffle):
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
         self.radius = self.inc*9 if radius is None else radius
-        self.bathy_inc = self.inc*3 if bathy_inc is None else bathy_inc
+        self.bathy_xinc = self.xinc*3 if bathy_xinc is None else bathy_xinc
+        self.bathy_yinc = self.yinc*3 if bathy_yinc is None else bathy_yinc
         self.idw = idw
         self.bathy_data = self.data_
         self.mod = 'cudem'
@@ -1565,7 +1567,8 @@ class WafflesCUDEM(Waffle):
                     mod='coastline',
                     data=self.data_,
                     src_region=self.c_region,
-                    inc=self.inc,
+                    xinc=self.xinc,
+                    yinc=self.yinc,
                     name='tmp_coast',
                     node=self.node,
                     extend=self.extend+12,
@@ -1582,7 +1585,8 @@ class WafflesCUDEM(Waffle):
                 #data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
                 data=self.bathy_data,
                 src_region=bathy_region,
-                inc=utils.str2inc(self.bathy_inc),
+                xinc=utils.str2inc(self.bathy_xinc),
+                yinc=utils.str2inc(self.bathy_yinc),
                 name='tmp_bathy',
                 node=self.node,
                 extend=self.extend+2,
@@ -1603,7 +1607,8 @@ class WafflesCUDEM(Waffle):
                 #data=['{},200,{}'.format(self.idw.fn, self.min_weight)],
                 data=self.bathy_data,
                 src_region=bathy_region,
-                inc=utils.str2inc(self.bathy_inc),
+                xinc=utils.str2inc(self.bathy_xinc),
+                yinc=utils.str2inc(self.bathy_yinc),
                 name='tmp_bathy',
                 node=self.node,
                 extend=self.extend+2,
@@ -1623,7 +1628,8 @@ class WafflesCUDEM(Waffle):
             mod='surface:tension=1',
             data=self.data_ + ['{},200,{}'.format(self.bathy.fn, self.min_weight)],
             src_region=surface_region,
-            inc=self.inc,
+            xinc=self.xinc,
+            yinc=self.yinc,
             name=self.name,
             node=self.node,
             extend=self.extend,
