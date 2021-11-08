@@ -34,7 +34,7 @@ from cudem import dlim
 from cudem import regions
 from cudem import demfun
 
-__version__ = '0.0.7'
+__version__ = '0.0.8'
 
 def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
     '''`union` a `src_layer`'s features based on `src_field` where
@@ -43,10 +43,13 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
 
     returns the output feature class'''
     
-    if dst_defn is None: dst_defn = src_layer.GetLayerDefn()
+    if dst_defn is None:
+        dst_defn = src_layer.GetLayerDefn()
+        
     multi = ogr.Geometry(ogr.wkbMultiPolygon)
     src_layer.SetAttributeFilter("{} = 1".format(src_field))
     feats = len(src_layer)
+    
     _prog = utils.CliProgress('unioning {} features...'.format(feats))
     if feats > 0:
         for n, f in enumerate(src_layer):
@@ -61,11 +64,13 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
             wkt = f_geom_valid.ExportToWkt()
             wkt_geom = ogr.CreateGeometryFromWkt(wkt)
             multi.AddGeometryDirectly(wkt_geom)
+            
     #union = multi.UnionCascaded() ## slow on large multi...
     out_feat = ogr.Feature(dst_defn)
     out_feat.SetGeometryDirectly(multi)
-    _prog.end(0, 'unioned {} features'.format(feats))
     multi = None
+    
+    _prog.end(0, 'unioned {} features'.format(feats))
     return(out_feat)
 
 def ogr_clip(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
@@ -120,6 +125,8 @@ class SpatialMetadata:
         
         self.data = data
         self.inc = utils.float_or(inc)
+        self.xinc = self.inc
+        self.yinc = self.inc
         self.epsg = utils.int_or(epsg)
         self.warp = utils.int_or(warp)
         self.extend = extend
@@ -152,7 +159,7 @@ class SpatialMetadata:
     def _init_vector(self):
         self.dst_layer = '{}_sm'.format(self.name)
         self.dst_vector = self.dst_layer + '.{}'.format(utils.ogr_fext(self.ogr_format))
-        #            'Name',
+
         self.v_fields = [
             'Title',
             'Agency',
@@ -163,7 +170,7 @@ class SpatialMetadata:
             'VDatum',
             'URL'
         ]
-        #            ogr.OFTString,
+
         self.t_fields = [
             ogr.OFTString,
             ogr.OFTString,
@@ -189,36 +196,18 @@ class SpatialMetadata:
             [self.layer.SetFeature(feature) for feature in self.layer]
         else: self.layer = None
 
-
-    # def run(self):
-    #     dls = {}
-    #     for xdl in self.data:
-    #         for e in xdl.parse():
-    #             while e.parent != xdl:
-    #                 e = e.parent
-    #             if e.name in dls.keys():
-    #                 dls[e.name]['data'].append(e)
-    #             else:
-    #                 dls[e.name] = {'data': [e]}
-
     def run(self):
-        #yield_xyz(self):
-
         for xdl in self.data:
             dls = {}
             for e in xdl.parse():
                 while e.parent != xdl:
                     e = e.parent
-                # if e.name in dls.keys():
-                #     dls[e.name]['data'].append(e)
-                # else:
                 if e.name not in dls.keys():
                     dls[e.name] = {'data': [e] ,'dl': e}
 
             for x in dls.keys():
                 utils.echo_msg('Working on {}'.format(x))
-                xdl.data_entries = dls[x]['data'] #xdl.data_lists[x]['data']
-                #p = xdl.data_lists[x]['parent']
+                xdl.data_entries = dls[x]['data']
                 p = dls[x]['dl']
                 o_v_fields = [
                     p.title if p.title is not None else x,
@@ -231,37 +220,11 @@ class SpatialMetadata:
                     p.url
                 ]
 
-                    
-                #for xdl in self.data:
-                #    #[x for x in xdl.parse()]
-                #    xdl.parse_data_lists()
-                #    for x in xdl.data_lists.keys():
-                # xdl.data_entries = xdl.data_lists[x]['data']
-                # p = xdl.data_lists[x]['parent']
-                # o_v_fields = [
-                #     x,
-                #     p.title if p.title is not None else x,
-                #     p.source,
-                #     p.date,
-                #     p.data_type,
-                #     p.resolution,
-                #     p.hdatum,
-                #     p.vdatum,
-                #     p.url
-                # ]
-                
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
 
-                mask_ds, mask_config = xdl.mask_xyz(self.inc)
-                #mask_band = mask_ds.GetRasterBand(1)
-                #mask_array = mask_ds.GetRasterBand(1).ReadAsArray()
-                #ds_array = ds.GetRasterBand(1).ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
-                #for xyz in xdl.mask_xyz('{}.tif'.format(dl_name), self.inc, dst_format='MEM'):
-                #    yield(xyz)
-
+                mask_ds, mask_config = xdl.mask_xyz(self.xinc, self.yinc)
                 if demfun.gather_infos(mask_ds, scan=True)['zr'][1] == 1:
-                    #if 1 in mask_array:
                     tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
                         '{}_poly'.format(dl_name)
                     )
@@ -284,32 +247,28 @@ class SpatialMetadata:
                             0,
                             callback = gdal.TermProgress if self.verbose else None
                         )
-                        if self.verbose:
-                            utils.echo_msg('polygonized {}'.format(dl_name))
-                        
-                        #demfun.polygonize(
-                        #    '{}.tif'.format(dl_name), tmp_layer, verbose=self.verbose
-                        #)
                         
                         if len(tmp_layer) > 0:
                             if defn is None:
                                 defn = tmp_layer.GetLayerDefn()
+                                
                             out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+
+                            utils.echo_msg('creating feature {}...'.format(dl_name))
                             for i, f in enumerate(self.v_fields):
                                 out_feat.SetField(f, o_v_fields[i])
 
-                            utils.echo_msg('creating feature {}...'.format(dl_name))
                             self.layer.CreateFeature(out_feat)
-                    tmp_ds = tmp_layer = out_feat = None
-                    utils.remove_glob('{}_poly.*'.format(dl_name))
-                mask_ds = mask_band = None
-                #utils.remove_glob('{}.tif'.format(x))
 
+                        if self.verbose:
+                            utils.echo_msg('polygonized {}'.format(dl_name))
+
+                            
+                    tmp_ds = tmp_layer = out_feat = None
+                mask_ds = mask_band = None
+                
         utils.echo_msg('Generated SPATIAL METADATA {}'.format(self.name))
 
-    #def run(self):
-        #[s for s in self.yield_xyz()]
-        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ spatial_metadata
@@ -434,6 +393,7 @@ def spat_meta_cli(argv = sys.argv):
     if len(these_regions) == 0:
         these_regions = [None]
         utils.echo_error_msg('Could not parse region {}'.format(these_regions))
+        sys.exit(1)
     else:
         if want_verbose:
             utils.echo_msg(
