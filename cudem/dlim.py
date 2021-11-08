@@ -32,6 +32,7 @@ import sys
 import re
 import glob
 import cudem
+import json
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -674,6 +675,7 @@ def datalists_cli(argv=sys.argv):
     want_verbose = True
     want_region = False
     want_csv = False
+    want_json = False
     want_datalists=False
     
     ## ==============================================
@@ -712,6 +714,8 @@ def datalists_cli(argv=sys.argv):
             want_datalists = True
         elif arg == '--csv' or arg == '-c':
             want_csv = True
+        elif arg == '--json' or arg == '-j':
+            want_json = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
@@ -786,7 +790,26 @@ def datalists_cli(argv=sys.argv):
                 if not want_weights:
                     xdl.weight = None
                 if want_datalists:
+                    j = open('{}.json'.format(xdl.name), 'w')
                     xdl.parse_data_lists()
+                    for x in xdl.data_lists.keys():
+                        p = xdl.data_lists[x]['parent']
+
+                        out_json = {
+                            "Name": x,
+                            "Title": p.title if p.title is not None else x,
+                            "Source": p.source,
+                            "Date": p.date,
+                            "DataType": p.data_type,
+                            "Resolution": p.resolution,
+                            "HDatum": p.hdatum,
+                            "VDatum": p.vdatum,
+                            "URL": p.url
+                        }
+                        j.write(json.dumps(out_json))
+                        j.write('\n')
+                    j.close()
+                    
                     for x in xdl.data_lists.keys():
                         #print(xdl.data_lists[x]['parent'].echo_())
                         print('{}'.format(xdl.data_lists[x]['parent'].fn))
@@ -821,5 +844,23 @@ def datalists_cli(argv=sys.argv):
                                 ]
                             )
                         )
+                elif want_json:
+                    xdl.parse_data_lists()
+                    for x in xdl.data_lists.keys():
+                        xdl.data_entries = xdl.data_lists[x]['data']
+                        p = xdl.data_lists[x]['parent']
+                        out_json = {
+                            'Name': x,
+                            'Title': p.title if p.title is not None else x,
+                            'Source': p.source,
+                            'Date': p.date,
+                            'DataType': p.data_type,
+                            'Resolution': p.resolution,
+                            'HDatum': p.hdatum,
+                            'VDatum': p.vdatum,
+                            'URL': p.url
+                        }
+                        print(out_json)
+
                 else: xdl.dump_xyz()
 ### End

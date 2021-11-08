@@ -298,6 +298,7 @@ class SpatialMetadata:
                             for i, f in enumerate(self.v_fields):
                                 out_feat.SetField(f, o_v_fields[i])
 
+                            utils.echo_msg('creating feature {}...'.format(dl_name))
                             self.layer.CreateFeature(out_feat)
                     tmp_ds = tmp_layer = out_feat = None
                     utils.remove_glob('{}_poly.*'.format(dl_name))

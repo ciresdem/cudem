@@ -110,49 +110,45 @@ for region in $(gmt gmtinfo $itiles -I- -As); do
     printf "\nspatial-meta: %s < %s >\n" $out_name $proc_region
 
     # Initialize the output gmt vector
-    cat /dev/null | bounds -g > ${out_name}.gmt
-    sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${out_name}.gmt
-    sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
-    sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${out_name}.gmt
+    # cat /dev/null | bounds -g > ${out_name}.gmt
+    # sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${out_name}.gmt
+    # sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
+    # sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${out_name}.gmt
+
+    printf "{ \"type\": \"FeatureCollection\",\n\"features\": [\n" > ${out_name}.json
     
     # Loop through each datalist entry
-    dlim ${idatalist} -c ${proc_region} > tmp.csv
-
+    #dlim ${idatalist} -c ${proc_region} > tmp.csv
+    cnt=0
     for datalist in $(dlim ${idatalist} -d ${proc_region} | awk '{print $1}') ; do
 	# Gather the data from the datalist entry that is within our region
+	
 	dlbn=$(basename $datalist .datalist)
-	#cat /dev/null | bounds -g > ${dlbn}.gmt
-	#sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${dlbn}.gmt
-	#sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${dlbn}.gmt
-	#sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${dlbn}.gmt
-
 	# Generate the boundary of the data found in this datalist and add it to the output gmt vector
 	printf "spatial-meta: using datalist: %s < %s >\n" $dlbn $datalist
-	meta=$(grep "${dlbn}" tmp.csv)
-	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose | \
-	    sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" >> ${out_name}.gmt;
+	#meta=$(grep "${dlbn}" tmp.csv)
+	meta=$(grep "${dlbn}" $(basename $idatalist .datalist).json)
 
-	#dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -g --verbose | \
-	#    sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" > ${dlbn}.gmt;
-
-	#printf "spatial-meta: appending boundary to output %s.shp\n" $out_name
-	#ogr2ogr ${out_name}.shp ${dlbn}.gmt -append -update
+	if [ $cnt -gt 0 ]; then
+	    printf "," >> ${out_name}.json
+	fi
+	printf "{ \"type\": \"Feature\", \"properties\": ${meta}," >> ${out_name}.json
+	printf " \"geometry\": { \"type\": \"MultiPolygon\",\n \"coordinates\": [[[" >> ${out_name}.json
+	
+	# dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose | \
+	#     sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" >> ${out_name}.gmt;
+	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -jjj --verbose >> ${out_name}.json
+	printf "]]]}}" >> ${out_name}.json
+	cnt=$(echo $cnt+1 | bc)
     done
-
-    # printf "spatial-meta: adding metadata to vector fields...\n"
-    # while read p; do
-    # 	meta=$(echo ${p} | sed 's/\"//g')
-    # 	dlbn=$(echo ${p} | awk -F'|' '{print $1}' | sed 's/\"//g')
-    # 	sed -i "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${p}^;}" ${out_name}.gmt
-    # done<tmp.csv
-
-    # Convert gmt vector to shapefile
-    printf "spatial-meta: converting boundary to shapefile: %s.shp\n" $out_name
-    if [ $makevalid ] ; then
-	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid
-    else
-	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
-    fi
+    printf "]}\n" >> ${out_name}.json
+    # # Convert gmt vector to shapefile
+    # printf "spatial-meta: converting boundary to shapefile: %s.shp\n" $out_name
+    # if [ $makevalid ] ; then
+    # 	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg} -makevalid
+    # else
+    # 	ogr2ogr ${out_name}.shp ${out_name}.gmt -overwrite -a_srs EPSG:${epsg}
+    # fi
 done
 
 ### End
