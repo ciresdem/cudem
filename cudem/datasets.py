@@ -879,16 +879,18 @@ class LASFile(XYZDataset):
         this_xyz = xyzfun.XYZPoint(w=1)
         ln = 0
         lasf = lp.read(self.fn)
-        lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0)]
+        lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0) | (lasf.classification == 40)]
         dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
-        dataset = dataset[dataset[:,0] > self.region.xmin,:]
-        dataset = dataset[dataset[:,0] < self.region.xmax,:]
-        dataset = dataset[dataset[:,1] > self.region.ymin,:]
-        dataset = dataset[dataset[:,1] < self.region.ymax,:]
-        if self.region.zmin is not None:
-            dataset = dataset[dataset[:,2] > self.region.zmin,:]
-        if self.region.zmax is not None:
-            dataset = dataset[dataset[:,2] < self.region.zmax,:]
+
+        if self.region is not None  and self.region.valid_p():        
+            dataset = dataset[dataset[:,0] > self.region.xmin,:]
+            dataset = dataset[dataset[:,0] < self.region.xmax,:]
+            dataset = dataset[dataset[:,1] > self.region.ymin,:]
+            dataset = dataset[dataset[:,1] < self.region.ymax,:]
+            if self.region.zmin is not None:
+                dataset = dataset[dataset[:,2] > self.region.zmin,:]
+            if self.region.zmax is not None:
+                dataset = dataset[dataset[:,2] < self.region.zmax,:]
                 
         for point in dataset:
             #with lp.open(self.fn) as lasf:
