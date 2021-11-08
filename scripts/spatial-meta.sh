@@ -29,7 +29,7 @@
 ##
 ### Code:
 
-usage="spatial-meta.sh [ -I all_data.datalist -R all_tiles.gmt [ -XOEP ]  ]\n\
+usage="spatial-meta.sh [ -I all_data.datalist -R all_tiles.gmt [ -EFOPX ]  ]\n\
 Generate spatial metadata for a DEM tileset.\n\n\
 where 'all_data.datalist' is a MBSystem/dlim style datalist containing elevation data\n\
 and 'all_tiles.gmt' is a GMT formatted vector containing regional tile(s).\n\
@@ -43,6 +43,7 @@ Options:
   -O - output basename (meta)
   -X - extend region by number of cells (6)
   -E - cellsize of gridded boundary (0.000277777777)
+  -F - output vector format (GeoJSON)
   -P - EPSG code of output vector (4326)
   -v - make output shapefile valid
  Examples:
@@ -51,7 +52,7 @@ Options:
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 "
 
-while getopts ":I:R:X:O:E:P:" options; do
+while getopts ":I:R:X:O:E:F:P:" options; do
     case $options in
 	I ) idatalist=$OPTARG;;
 	R ) itiles=$OPTARG;;
@@ -59,6 +60,7 @@ while getopts ":I:R:X:O:E:P:" options; do
 	O ) oname=$OPTARG;;
 	E ) iinc=$OPTARG;;
 	P ) epsg=$OPTARG;;
+	F ) frmt=$OPTARG;;
 	v ) makevalid=True;;
 	h ) echo -e $usage;;
 	\? ) echo -e $usage
@@ -81,19 +83,28 @@ if [ -z "$iinc" ]; then
     iinc=0.000277777777
 fi
 
-# if [ "$iinc" -lt .0000925925925925 ]; then
-#     iinc=.0000925925925
-# fi
+#if [ $iinc -lt .0000925 ]; then
+#    iinc=.0000925925925
+#fi
 
+## Set the cell extend
 if [ -z "$iextend" ]; then
     iextend=6
 fi
 
+## Set the basename
 if [ -z "$oname" ]; then
     oname="meta"
 fi
+
+## Set the output EPSG
 if [ -z "$epsg" ]; then
     epsg=4326
+fi
+
+## Set the output Format
+if [ -z "$frmt" ]; then
+    frmt="GeoJSON"
 fi
 
 tcount=$(gmt gmtinfo $itiles -F | awk '{print $2}')
@@ -109,39 +120,49 @@ for region in $(gmt gmtinfo $itiles -I- -As); do
     out_name="${oname}_"$(regions $region -n)_$(date +%Y)v1_sm
     printf "\nspatial-meta: %s < %s >\n" $out_name $proc_region
 
-    # Initialize the output gmt vector
-    # cat /dev/null | bounds -g > ${out_name}.gmt
-    # sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${out_name}.gmt
-    # sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
-    # sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${out_name}.gmt
-
-    printf "{ \"type\": \"FeatureCollection\",\n\"features\": [\n" > ${out_name}.json
+    if [ "$frmt" = "GMT" ]; then
+	# Initialize the output gmt vector
+	cat /dev/null | bounds -g > ${out_name}.gmt
+	sed -i 's/\@NName/\@NName|Title|Agency|Date|Type|Resolution|HDatum|VDatum|URL/g' ${out_name}.gmt
+	sed -i 's/\@Tstring/\@Tstring|string|string|string|string|string|string|string|string/g' ${out_name}.gmt
+	sed -i "s,\@GMULTIPOLYGON,\@GMULTIPOLYGON\ \@R${gmt_region},g" ${out_name}.gmt
+	dlim ${idatalist} -c ${proc_region} > tmp.csv
+    elif [ "$frmt" = "GeoJSON" ]; then
+	printf "{ \"type\": \"FeatureCollection\",\n\"features\": [\n" > ${out_name}.json
+    fi
     
     # Loop through each datalist entry
-    #dlim ${idatalist} -c ${proc_region} > tmp.csv
     cnt=0
     for datalist in $(dlim ${idatalist} -d ${proc_region} | awk '{print $1}') ; do
-	# Gather the data from the datalist entry that is within our region
-	
 	dlbn=$(basename $datalist .datalist)
+	
 	# Generate the boundary of the data found in this datalist and add it to the output gmt vector
 	printf "spatial-meta: using datalist: %s < %s >\n" $dlbn $datalist
-	#meta=$(grep "${dlbn}" tmp.csv)
-	meta=$(grep "${dlbn}" $(basename $idatalist .datalist).json)
 
-	if [ $cnt -gt 0 ]; then
-	    printf "," >> ${out_name}.json
+	if [ "$frmt" = "GeoJSON" ]; then
+	    meta=$(grep "${dlbn}" $(basename $idatalist .datalist).json)
+	    
+	    if [ $cnt -gt 0 ]; then
+		printf "," >> ${out_name}.json
+	    fi
+	    printf "{ \"type\": \"Feature\", \"properties\": ${meta}," >> ${out_name}.json
+	    printf " \"geometry\": { \"type\": \"MultiPolygon\",\n \"coordinates\": [[[" >> ${out_name}.json
+	    
+	    dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -jjj --verbose >> ${out_name}.json
+	    printf "]]]}}" >> ${out_name}.json
+	elif [ "$frmt" = "GMT" ]; then
+	    meta=$(grep "${dlbn}" tmp.csv)
+	    
+	    dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose | \
+		sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" >> ${out_name}.gmt;
 	fi
-	printf "{ \"type\": \"Feature\", \"properties\": ${meta}," >> ${out_name}.json
-	printf " \"geometry\": { \"type\": \"MultiPolygon\",\n \"coordinates\": [[[" >> ${out_name}.json
-	
-	# dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -n $dlbn -gg --verbose | \
-	#     sed "0,/\@D${dlbn}/{s^\@D${dlbn}^\@D${meta}^;}" >> ${out_name}.gmt;
-	dlim $datalist $proc_region | bounds -k ${iinc}/$(regions $proc_region -ee) -jjj --verbose >> ${out_name}.json
-	printf "]]]}}" >> ${out_name}.json
 	cnt=$(echo $cnt+1 | bc)
     done
-    printf "]}\n" >> ${out_name}.json
+
+    if [ "$frmt" = "GeoJSON" ]; then
+	printf "]}\n" >> ${out_name}.json
+    fi
+    
     # # Convert gmt vector to shapefile
     # printf "spatial-meta: converting boundary to shapefile: %s.shp\n" $out_name
     # if [ $makevalid ] ; then
