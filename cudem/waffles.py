@@ -1679,7 +1679,8 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.utils
 
         self.f_region = self.p_region.copy()
-        self.f_region.buffer(x_bv=self.xinc*10, y_bv=self.yinc*10)
+        #self.f_region.buffer(x_bv=(self.xinc*10)+.5, y_bv=(self.yinc*10)+.5)
+        self.f_region.buffer(x_bv=(self.xinc*10), y_bv=(self.yinc*10))
         self.f_region.epsg = self.epsg
         self.mod = 'coastline'
         self.mod_args = {
@@ -1725,6 +1726,7 @@ class WafflesCoastline(Waffle):
         """wet/dry datalist mask or burn region."""
 
         c_region = self.p_region
+        c_region = self.wgs_region.copy()
         c_region.export_as_ogr('region_buff.shp')
         xsize, ysize, gt = c_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
             
