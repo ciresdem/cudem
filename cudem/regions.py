@@ -293,6 +293,20 @@ class Region:
             region_list.append(self.wmin)
             region_list.append(self.wmax)
         return(region_list)
+
+    def export_as_gdal_extent(self, include_z = False, include_w = False):
+        """export region as a list
+
+        Args:
+          include_z: include the z-region in the output
+          include_w: include the w-region in the output
+
+        Returns:
+          tuple: the region values in a list
+        """
+
+        region_list = [self.xmin, self.ymin, self.xmax, self.ymax]
+        return(tuple(region_list))
     
     def export_as_wkt(self):
         """transform a region to wkt
