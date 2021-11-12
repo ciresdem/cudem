@@ -55,11 +55,11 @@ if __name__ == '__main__':
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg == '--region' or arg == '-R':
-            i_region =str(argv[i + 1])
+            i_region = str(sys.argv[i + 1])
             i = i + 1
         elif arg[:2] == '-R':
             i_region = str(arg[2:])
-        if arg == '-help' or arg == '--help' or arg == '-h':
+        elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
