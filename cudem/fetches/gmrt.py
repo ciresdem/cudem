@@ -39,7 +39,7 @@ import cudem.fetches.utils as f_utils
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
-    def __init__(self, res='max', fmt='geotiff', bathy_only=False, **kwargs):
+    def __init__(self, res='max', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
         super().__init__(**kwargs) 
         #if self.verbose: utils.echo_msg('loading GMRT fetch module...')
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -49,6 +49,7 @@ class GMRT(f_utils.FetchModule):
         self.name = 'gmrt'
         self.res = res
         self.fmt = fmt
+        self.layer = layer
         self.bathy_only = bathy_only
         
     def run(self):
@@ -63,6 +64,7 @@ class GMRT(f_utils.FetchModule):
             'mformat':'json',
             'resolution':self.res,
             'format':self.fmt,
+            'layer':self.layer,
         }
         
         req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(params=self.data, tries=10, timeout=2)

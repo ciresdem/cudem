@@ -1704,7 +1704,9 @@ class WafflesCoastline(Waffle):
         )
         self._finalize_array()
         utils.echo_msg('writing array to {}.tif...'.format(self.name))
+        
         self._write_coast_array()
+        
         if self.polygonize:
             self._write_coast_poly()
             
@@ -1746,12 +1748,21 @@ class WafflesCoastline(Waffle):
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
             src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask'
-        ).run()
+        )
+        this_gmrt._outdir = './'
+        this_gmrt.run()
+
+        fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
         
-        this_gmrt.fetch_results()
+        #this_gmrt.fetch_results()
         gmrt_tif = this_gmrt.results[0]
 
-
+        dst_srs = osr.SpatialReference()
+        dst_srs.ImportFromEPSG(int(self.epsg))
+        
         driver = gdal.GetDriverByName('MEM')
         out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
             
@@ -1785,6 +1796,8 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
+
+        #this_cop.fetch_results()
         
         dst_srs = osr.SpatialReference()
         dst_srs.ImportFromEPSG(int(self.epsg))
@@ -1829,9 +1842,10 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-
+        #this_tnm.fetch_results()
+            
         if len(this_tnm.results) > 0:
-        
+
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1])
                 gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
@@ -1900,7 +1914,7 @@ class WafflesCoastline(Waffle):
         """
         
         utils.gdal_write(
-            self.coast_array, '{}.tif'.format(self.name), self.ds_config
+            self.coast_array, '{}.tif'.format(self.name), self.ds_config,
         )
 
     def _write_coast_poly(self):

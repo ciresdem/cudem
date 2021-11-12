@@ -603,7 +603,7 @@ def p_unzip(src_file, exts=None):
 ## ==============================================
 ## Write an array to a gdal file
 ## ==============================================
-def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff'):
+def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff', max_cache = False):
     """write src_arr to gdal file dst_gdal using src_config
 
     returns [output-gdal, status-code]
@@ -617,6 +617,9 @@ def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff'):
             echo_error_msg(e)
             remove_glob(dst_gdal)
 
+    if max_cache:
+        gdal.SetCacheMax(2**30)
+            
     ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])
