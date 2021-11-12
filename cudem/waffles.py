@@ -1823,52 +1823,54 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
+
+        if len(this_tnm.results) > 0:
         
-        for i, tnm_zip in enumerate(this_tnm.results):
-            tnm_zips = utils.unzip(tnm_zip[1])
-            gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
+            for i, tnm_zip in enumerate(this_tnm.results):
+                tnm_zips = utils.unzip(tnm_zip[1])
+                gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=True
+                )
+
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=True
+                )
+
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=True
+                )
+
+                utils.remove_glob(tnm_zip[1], *tnm_zips)
+
             utils.run_cmd(
-                'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
-                    gdb, self.p_region.format('ul_lr')
+                'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                    self.p_region.format('te'),
+                    self.ds_config['nx'],
+                    self.ds_config['ny'],
                 ),
                 verbose=True
             )
 
-            utils.run_cmd(
-                'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
-                    gdb, self.p_region.format('ul_lr')
-                ),
-                verbose=True
-            )
+            tnm_ds = gdal.Open('nhdArea_merge.tif')
+            if tnm_ds is not None:
+                tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
 
-            utils.run_cmd(
-                'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
-                    gdb, self.p_region.format('ul_lr')
-                ),
-                verbose=True
-            )
+                tnm_ds_arr[tnm_ds_arr != 1] = -1
 
-            utils.remove_glob(tnm_zip[1], *tnm_zips)
-            
-        utils.run_cmd(
-            'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
-                self.p_region.format('te'),
-                self.ds_config['nx'],
-                self.ds_config['ny'],
-            ),
-            verbose=True
-        )
+                self.coast_array -= tnm_ds_arr
 
-        tnm_ds = gdal.Open('nhdArea_merge.tif')
-        if tnm_ds is not None:
-            tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-        
-            tnm_ds_arr[tnm_ds_arr != 1] = -1
-        
-            self.coast_array -= tnm_ds_arr
-
-            tnm_ds = tnm_ds_arr = None
-        utils.remove_glob('nhdArea_merge.*')
+                tnm_ds = tnm_ds_arr = None
+            utils.remove_glob('nhdArea_merge.*')
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
