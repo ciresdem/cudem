@@ -1860,13 +1860,14 @@ class WafflesCoastline(Waffle):
         )
 
         tnm_ds = gdal.Open('nhdArea_merge.tif')
-        tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
+        if tnm_ds is not None:
+            tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
         
-        tnm_ds_arr[tnm_ds_arr != 1] = -1
+            tnm_ds_arr[tnm_ds_arr != 1] = -1
         
-        self.coast_array -= tnm_ds_arr
+            self.coast_array -= tnm_ds_arr
 
-        tnm_ds = tnm_ds_arr = None
+            tnm_ds = tnm_ds_arr = None
         utils.remove_glob('nhdArea_merge.*')
         
     def _load_data(self):
