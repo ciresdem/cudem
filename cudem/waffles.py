@@ -1697,7 +1697,13 @@ class WafflesCoastline(Waffle):
         if len(self.data) > 0:
             self._load_data()
 
+        utils.echo_msg(
+            'finanlizing array for region {} at {} {}...'.format(
+                self.p_region.format('gmt'), self.ds_config['nx'], self.ds_config['ny']
+            )
+        )
         self._finalize_array()
+        utils.echo_msg('writing array to {}.tif...'.format(self.name))
         self._write_coast_array()
         if self.polygonize:
             self._write_coast_poly()
