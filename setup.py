@@ -88,6 +88,7 @@ setuptools.setup(
         'scripts/hillshade.sh',
         'scripts/colortable.py',
         'scripts/coastline2xyz.sh',
+        'scripts/coastline_mask.py',
         'scripts/create_datalist.sh',
         'scripts/create_outliers.sh',
         'scripts/create_povray_template.sh',
