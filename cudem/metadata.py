@@ -55,22 +55,25 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
         for n, f in enumerate(src_layer):
             _prog.update_perc((n, feats))
             f_geom = f.geometry()
-            f_geom.CloseRings()
-            try:
-                f_geom_valid = f_geom.MakeValid()
-            except:
-                f_geom_valid = f_geom
+            #f_geom.CloseRings()
+            #try:
+            #    f_geom_valid = f_geom.MakeValid()
+            #except:
+            f_geom_valid = f_geom
                 
-            wkt = f_geom_valid.ExportToWkt()
-            wkt_geom = ogr.CreateGeometryFromWkt(wkt)
-            multi.AddGeometryDirectly(wkt_geom)
+            #wkt = f_geom_valid.ExportToWkt()
+            #wkt_geom = ogr.CreateGeometryFromWkt(wkt)
+            #multi.AddGeometryDirectly(wkt_geom)
+            multi.AddGeometry(f_geom_valid)
             
     #union = multi.UnionCascaded() ## slow on large multi...
-    out_feat = ogr.Feature(dst_defn)
-    out_feat.SetGeometryDirectly(multi)
-    multi = None
-    
     _prog.end(0, 'unioned {} features'.format(feats))
+    utils.echo_msg('setting geometry to unioned feature...')
+    out_feat = ogr.Feature(dst_defn)
+    #out_feat.SetGeometryDirectly(multi)
+    out_feat.SetGeometry(multi)
+    union = multi = None
+    
     return(out_feat)
 
 def ogr_clip(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):

@@ -652,9 +652,15 @@ class XYZFile(XYZDataset):
         self.y_scale = y_scale
         self.z_scale = z_scale
         self.x_offset = x_offset
-        self.y_offset = y_offset        
+        self.y_offset = y_offset
+
         self._known_delims = [',', '/', ':']
         self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
+
+        if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0:
+            self.scoff = True
+        else: self.scoff = False
+        
         super().__init__(**kwargs)
         
     def generate_inf(self, callback=lambda: False):
@@ -751,9 +757,11 @@ class XYZFile(XYZDataset):
                     y_pos=self.ypos
                 )
                 if this_xyz.valid_p():
-                    this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
-                    this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
-                    this_xyz.z *= self.z_scale
+                    if self.scoff:
+                        this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
+                        this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
+                        this_xyz.z *= self.z_scale
+                        
                     this_xyz.w = self.weight
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
@@ -901,13 +909,8 @@ class LASFile(XYZDataset):
             if self.dst_trans is not None:
                 this_xyz.transform(self.dst_trans)
                 
-            if self.region is not None and self.region.valid_p():
-                if regions.xyz_in_region_p(this_xyz, self.region):
-                    ln += 1
-                    yield(this_xyz)
-            else:
-                ln += 1
-                yield(this_xyz)
+            ln += 1
+            yield(this_xyz)
 
         lasf = dataset = None
         
