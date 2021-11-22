@@ -522,8 +522,10 @@ class Waffle:
                 
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             os.rename('__tmp_cut__.tif', '{}'.format(fn))
-            
-        demfun.set_metadata(fn, node=self.node)
+
+        ## update when vertical datum support
+        self.vepsg = 'NAVD88'
+        demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg)
         demfun.set_epsg(fn, self.epsg)
         
         if self.fmt != 'GTiff':
