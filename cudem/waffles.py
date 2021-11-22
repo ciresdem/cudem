@@ -493,7 +493,6 @@ class Waffle:
             cp = self.clip.split(':')
             clip_args['src_ply'] = cp[0]
             clip_args = utils.args2dict(cp[1:], clip_args)
-            #print(clip_args)
             
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
@@ -515,17 +514,12 @@ class Waffle:
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
                 
-            # gdalfun.gdal_clip(this_dem, **clip_args)
-            # if this_wg['mask']:
-            #     if this_wg['verbose']: utils.echo_msg('clipping {}...'.format(this_dem_msk))
-            #     gdalfun.gdal_clip(this_dem_msk, **clip_args)
-                
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             os.rename('__tmp_cut__.tif', '{}'.format(fn))
 
         ## update when vertical datum support
         self.vepsg = 'NAVD88'
-        demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg)
+        demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg))
         demfun.set_epsg(fn, self.epsg)
         
         if self.fmt != 'GTiff':
