@@ -196,20 +196,35 @@ class Waffle:
         
         cr = regions.Region().from_region(self.region)
         #return(cr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend) + (self.inc*10)))
-        return(cr.buffer(x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10), y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)))
+        return(
+            cr.buffer(
+                x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10),
+                y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)
+            )
+        )
     
     def _proc_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
         
         pr = regions.Region().from_region(self.region)
         #return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
-        return(pr.buffer(x_bv=(self.xinc*self.extend), y_bv=(self.yinc*self.extend)))
+        return(
+            pr.buffer(
+                x_bv=(self.xinc*self.extend),
+                y_bv=(self.yinc*self.extend)
+            )
+        )
     
     def _dist_region(self):
         """distribution region (extended by self.extend)."""
         
         dr = regions.Region().from_region(self.region)
-        return(dr.buffer(x_bv=(self.xinc*self.extend), y_bv=(self.yinc*self.extend)))
+        return(
+            dr.buffer(
+                x_bv=(self.xinc*self.extend),
+                y_bv=(self.yinc*self.extend)
+            )
+        )
 
     def _xyz_block_t(self, src_xyz):
         """block the src_xyz data for fast lookup"""
@@ -240,7 +255,10 @@ class Waffle:
         self.ogr_ds = gdal.GetDriverByName('Memory').Create(
             '', 0, 0, 0, gdal.GDT_Unknown
         )
-        layer = self.ogr_ds.CreateLayer(dst_ogr, geom_type = ogr.wkbPoint25D)
+        layer = self.ogr_ds.CreateLayer(
+            dst_ogr,
+            geom_type=ogr.wkbPoint25D
+        )
         fd = ogr.FieldDefn('long', ogr.OFTReal)
         fd.SetWidth(10)
         fd.SetPrecision(8)
@@ -260,7 +278,7 @@ class Waffle:
             fd.SetPrecision(6)
             layer.CreateField(fd)
             
-        f = ogr.Feature(feature_def = layer.GetLayerDefn())
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())
         
         for this_xyz in self.yield_xyz():#src_xyz:
             #print(this_xyz.x, this_xyz.y, this_xyz.z)

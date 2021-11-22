@@ -25,7 +25,7 @@ import sys
 import numpy as np
 from scipy.signal import fftconvolve
 from scipy.signal import convolve
-from gdalconst import *
+from osgeo.gdalconst import *
 from osgeo import osr
 from osgeo import gdal
 
