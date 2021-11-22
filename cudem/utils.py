@@ -620,7 +620,7 @@ def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff', max_cache = Fal
     if max_cache:
         gdal.SetCacheMax(2**30)
             
-    ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+    ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES', 'PREDICTOR=3'])
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])
         ds.SetProjection(ds_config['proj'])
