@@ -20,6 +20,18 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Generate DEMs from a variety of data sources.
+## Use CLI command 'waffles'
+##
+## Supported input datatypes include:
+## datalist, las/laz, gdal, xyz, mbs, fetches
+##
+## Supported gridding modules include:
+## surface (GMT), triangulate (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
+## coastline (CUDEM), cudem (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
+## nearest (GDAL)
+##
 ### Code:
 
 import sys
@@ -27,9 +39,11 @@ import os
 import math
 import json
 import numpy as np
+
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+
 import cudem
 from cudem import dlim
 from cudem import datasets
@@ -2077,6 +2091,8 @@ as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/
             'datalist-p': True,
             'description': """SPLINE DEM via MB-System's mbgrid.\n
 Generate a DEM using MB-System's mbgrid command.
+By default, will use MB-Systems datalist processes, set 'use_datalist=True' to use
+CUDEM's dlim instead.
 see mbgrid --help for more info
 
 < mbgrid:dist='10/3':tension=35:use_datalists=False >
@@ -2092,8 +2108,8 @@ see mbgrid --help for more info
 Generate a coastline (land/sea mask) using a variety of sources.
 
 < coastline:wet=None:dry=None:want_gmrt=False:invert=False >
- :want_gmrt=[True/False] - use GMRT to fill background
- :want_nhd=[True/False] - use NHD
+ :want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
+ :want_nhd=[True/False] - use high-resolution NHD
  :invert=[True/False] - invert the output results
  :polygonize=[True/False] - polygonize the output""",
             'class': lambda k: WafflesCoastline(**k),
@@ -2102,9 +2118,15 @@ Generate a coastline (land/sea mask) using a variety of sources.
             'name': 'cudem',
             'datalist-p': True,
             'description': """CUDEM integrated DEM generation.
-Generate a DEM using a variety of sources.
+Generate an topo/bathy integrated DEM using a variety of data sources.
 
-< cudem >""",
+< cudem:coastline=None:bathy_xinc=1s:bathy_yinc=1s:mask_z=0:min_weight=.5:smoothing=10 >
+ :coastline=[path] - path to coastline vector mask
+ :bathy_xinc=[val] - the bathymetry surface x increment
+ :bathy_yinc=[val] - the bathymetry surface y increment
+ :mask_z=[val] - the maximum z-value for the bathymetry surace
+ :min_weight=[val] - the minumum weight to inclue in the final DEM
+ :smoothing=[val] - the Gaussian bathymetry smoothing value""",
             'class': lambda k: WafflesCUDEM(**k),
         },
     }
