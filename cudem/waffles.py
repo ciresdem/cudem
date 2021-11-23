@@ -126,13 +126,11 @@ class Waffle:
         self.spat = spat
         self.block_t = None
         self.ogr_ds = None
-        
+
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
-            #self._init_regions()
-        self.p_region = self._proc_region()
-        self.d_region = self._dist_region()
-        self.c_region = self._coast_region()
+            
+        self._init_regions()
         
         self.data_ = data
         self._init_data()
@@ -224,8 +222,8 @@ class Waffle:
         #return(pr.buffer((self.inc*self.extend_proc) + (self.inc*self.extend)))
         return(
             pr.buffer(
-                x_bv=(self.xinc*self.extend),
-                y_bv=(self.yinc*self.extend)
+                x_bv=(self.xinc*self.extend_proc + self.xinc*self.extend),
+                y_bv=(self.yinc*self.extend_proc + self.yinc*self.extend)
             )
         )
     
@@ -691,9 +689,11 @@ class WafflesMBGrid(Waffle):
     """Waffles MBGrid module
     Does not use internal datalists processing,
     input datalist must be compatible with MB-SYSTEM.
+    Use dlim --archive to convert a dlim datalist to MB-SYSTEM
     """
     
     def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
+        self.mod = 'mbgrid'
         super().__init__(**kwargs)
 
         if self.gc['MBGRID'] is None:
@@ -712,12 +712,13 @@ class WafflesMBGrid(Waffle):
         self.dist = dist
         self.tension = tension
         self.use_datalists = use_datalists
-        self.mod = 'mbgird'
+    
         self.mod_args = {
             'dist': self.dist,
             'tension': self.tension,
             'use_datalists': self.use_datalists
         }
+        
         self._set_config()
                 
     def _gmt_num_msk(self, num_grd, dst_msk):
@@ -767,6 +768,34 @@ class WafflesMBGrid(Waffle):
             return(dst_gdal)
         
         else: return(None)
+        
+    def _gmt_grdsample(self, src_grd, dst_fmt='GTiff'):
+        """convert the grd file to tif using GMT
+
+        Args:
+          src_grd (str): a pathname to a grid file
+          dst_fmt (str): the output GDAL format string
+
+        Returns:
+          str: the gdal file name or None
+        """
+
+        dst_gdal = '{}.{}'.format(
+            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
+        )
+        
+        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n-9999:{} -V'.format(
+            src_grd, dst_gdal, dst_fmt
+        )
+        
+        out, status = utils.run_cmd(
+            grdsample_cmd, verbose=self.verbose
+        )
+        
+        if status == 0:
+            return(dst_gdal)
+        
+        else: return(None)
     
     def run(self):
         # if use_datalists:
@@ -777,18 +806,14 @@ class WafflesMBGrid(Waffle):
         #     wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
         #     wg['archive'] = archive
 
-        mb_region = self.p_region
-        if self.node == 'pixel':
-            #mb_region = mb_region.buffer(self.xinc * -.5)
-            mb_region = mb_region.buffer(x_bv=(self.xinc*-.5), y_bv=(self.yinc*-.5))
-        xsize, ysize, gt = mb_region.geo_transform(x_inc=self.xinc)
+        ## xsize and ysize are mistaken when gridding for grid-node...make note.
+        #xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc)
 
-        ## -G100 breaks mbgrid >= 5.7.8
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+        mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
-            mb_region.format('gmt'),
-            xsize,
-            ysize,
+            self.p_region.format('gmt'),
+            self.xinc,
+            self.yinc,
             self.name,
             self.dist,
             self.tension,
@@ -798,11 +823,9 @@ class WafflesMBGrid(Waffle):
             sys.stderr.write('{}'.format(out))
         #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
 
-        if not self.node == 'pixel':
-            self._gmt_grd2gdal('{}.grd'.format(self.name))
-            utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
-        else:
-            utils.remove_glob('*.cmd', '*.mb-1')
+        self._gmt_grdsample('{}.grd'.format(self.name))
+        utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
+        
         if self.use_datalists and not self.archive:
             utils.remove_glob('archive')
 

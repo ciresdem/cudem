@@ -29,7 +29,8 @@ from osgeo.gdalconst import *
 from osgeo import osr
 from osgeo import gdal
 
-from geomods import gdalfun
+#from geomods import gdalfun
+from cudem import demfun
 
 _version = '0.0.7'
 _usage = '''smooth_dem_bathy.py ({}): smooth the bathymetry in a DEM
@@ -223,6 +224,6 @@ if __name__ == '__main__':
             proc_elev(lf, smooth_factor)
     else:
         #proc_elev(elev, smooth_factor)
-        gdalfun.gdal_blur(elev, elev[:-4] + '_smooth.tif', smooth_factor)
+        demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
 
 ### End

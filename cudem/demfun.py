@@ -174,7 +174,12 @@ def set_metadata(src_dem, node='pixel', cudem=False, vdatum='NAVD88'):
         md = ds.GetMetadata()
         if node == 'pixel':
             md['AREA_OR_POINT'] = 'Area'
-        else: md['AREA_OR_POINT'] = 'Point'
+            md['NC_GLOBAL#node_offset'] = '1'
+            md['tos#node_offset'] = '1'
+        else:
+            md['AREA_OR_POINT'] = 'Point'
+            md['NC_GLOBAL#node_offset'] = '0'
+            md['tos#node_offset'] = '0'
         md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
         if cudem:
             md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
