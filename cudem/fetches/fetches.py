@@ -281,11 +281,11 @@ usage: {cmd} [ -hiqwPRW [ args ] ] MODULE ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\tWhere a REGION is [ xmin/xmax/ymin/ymax/[ zmin/zmax/[ wmin/wmax ] ] ]
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
 \t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\tAppend :zmin/zmax/[ wmin/wmax ] to the file path to extended REGION.
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format in WGS84. <beta>
 

@@ -322,7 +322,7 @@ def hav_dst(pnt0, pnt1):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return(rad_m * c)
     
-def _geo2pixel(geo_x, geo_y, geoTransform):
+def _geo2pixel(geo_x, geo_y, geoTransform, node='pixel'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
     Args:
@@ -335,8 +335,11 @@ def _geo2pixel(geo_x, geo_y, geoTransform):
     """
 
     if geoTransform[2] + geoTransform[4] == 0:
-        pixel_x = int(((geo_x - geoTransform[0]) / geoTransform[1]) + .5)
-        pixel_y = int(((geo_y - geoTransform[3]) / geoTransform[5]) + .5)
+        pixel_x = ((geo_x - geoTransform[0]) / geoTransform[1])
+        pixel_y = ((geo_y - geoTransform[3]) / geoTransform[5])
+        if node == 'grid':
+            pixel_x += .5
+            pixel_y += .5
     else: pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geoTransform))
     return(int(pixel_x), int(pixel_y))
 

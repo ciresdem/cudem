@@ -116,6 +116,8 @@ class SpatialMetadata:
             data=[],
             src_region=None,
             inc=None,
+            xinc=None,
+            yinc=None,
             name='waffles_sm',
             epsg=4326,
             warp=None,
@@ -128,8 +130,8 @@ class SpatialMetadata:
         
         self.data = data
         self.inc = utils.float_or(inc)
-        self.xinc = self.inc
-        self.yinc = self.inc
+        self.xinc = utils.float_or(xinc)
+        self.yinc = utils.float_or(yinc)
         self.epsg = utils.int_or(epsg)
         self.warp = utils.int_or(warp)
         self.extend = extend
@@ -291,8 +293,8 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
 \t\t\tor an OGR-compatible vector file with regional polygons. 
 \t\t\tIf a vector file is supplied it will search each region found therein.
 \t\t\tIf omitted, use the region gathered from the data in DATALIST.
-  -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
-\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s:.1111111s
+  -E, --increment\tGridding INCREMENT in native units or GMT-style increments.
+\t\t\tWhere INCREMENT is x-inc[/y-inc]
   -O, --output-name\tBASENAME for all outputs.
   -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
@@ -316,7 +318,9 @@ def spat_meta_cli(argv = sys.argv):
     i_regions = []
     these_regions = []
     epsg = 4326
-    inc = utils.str2inc('1s')
+    #inc = utils.str2inc('1s')
+    xinc = utils.str2inc('1s')
+    yinc = utils.str2inc('1s')
     node = 'pixel'
     name = 'waffles_spat'
     ogr_format = 'ESRI Shapefile'
@@ -340,10 +344,27 @@ def spat_meta_cli(argv = sys.argv):
             epsg = argv[i + 1]
             i = i + 1
         elif arg == '--increment' or arg == '-E':
-            inc = utils.str2inc(argv[i + 1])
+            incs = argv[i + 1].split(':')
+            xy_inc = incs[0].split('/')
+            xinc = utils.str2inc(xy_inc[0])
+            if len(xy_inc) > 1:
+                yinc = utils.str2inc(xy_inc[1])
+            else:
+                yinc = utils.str2inc(xy_inc[0])
             i = i + 1
         elif arg[:2] == '-E':
-            inc = utils.str2inc(arg[2:])
+            incs = arg[2:].split(':')
+            xy_inc = incs[0].split('/')
+            xinc = utils.str2inc(xy_inc[0])
+            if len(xy_inc) > 1:
+                yinc = utils.str2inc(xy_inc[1])
+            else:
+                yinc = utils.str2inc(xy_inc[0])
+        # elif arg == '--increment' or arg == '-E':
+        #     inc = utils.str2inc(argv[i + 1])
+        #     i = i + 1
+        # elif arg[:2] == '-E':
+        #     inc = utils.str2inc(arg[2:])
         elif arg == '--extend' or arg == '-X':
             exts = argv[i + 1].split(':')
             extend = utils.int_or(exts[0], 0)
@@ -369,7 +390,8 @@ def spat_meta_cli(argv = sys.argv):
             sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
-            sys.stderr.write('{}\n'.format(_version))
+            sys.stdout.write('{}\n'.format(__version__))
+
             sys.exit(1)
         else: dls.append(arg)
         i = i + 1
@@ -396,6 +418,7 @@ def spat_meta_cli(argv = sys.argv):
     if len(these_regions) == 0:
         these_regions = [None]
         utils.echo_error_msg('Could not parse region {}'.format(these_regions))
+        sys.stderr.write('{}\n'.format(_usage))
         sys.exit(1)
     else:
         if want_verbose:
@@ -422,7 +445,8 @@ def spat_meta_cli(argv = sys.argv):
                 SpatialMetadata(
                     data=dls,
                     src_region=this_region,
-                    inc=inc,
+                    xinc=xinc,
+                    yinc=yinc,
                     extend=extend,
                     epsg=epsg,
                     node=node,

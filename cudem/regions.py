@@ -782,16 +782,16 @@ usage: {cmd} [ -hqPRW [ args ] ]...
 
 Options:
   -R, --region\t\tThe desired REGION 
-\t\t\tWhere a REGION is [ xmin/xmax/ymin/ymax/[ zmin/zmax/[ wmin/wmax ] ] ]
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
 \t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\tAppend :zmin/zmax/[ wmin/wmax ] to the file path to extended REGION.
-  -P, --s_epsg\t\tSet the projection EPSG code of the datalist
-  -W, --t_epsg\t\tSet the output warp projection EPSG code
-  -B, --buffer\t\tBuffer the region with a buffer-value.
-  -e, --echo\t\tEcho the <processed> region
-  -n, --name\t\tPrint the region as a name
+  -P, --s_epsg\t\tSet the SOURCE horizontal projection EPSG code.
+  -W, --t_epsg\t\tSet the TARGET horizontal projection EPSG code.
+  -B, --buffer\t\tBUFFER the region with a buffer-value.
+  -e, --echo\t\tECHO the <processed> region
+  -n, --name\t\tPrint the region as a NAME
 
   --quiet\t\tLower the verbosity to a quiet
 

@@ -620,18 +620,18 @@ _datalist_fmts_short_desc = lambda: ',  '.join(
 ## ==============================================
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
-usage: {cmd} [ -ghiqwPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
+usage: {cmd} [ -acdghijqwFPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\tWhere a REGION is [ xmin/xmax/ymin/ymax/[ zmin/zmax/[ wmin/wmax ] ] ]
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
 \t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-\t\t\tAppend :zmin/zmax/[ wmin/wmax ] to the file path to extended REGION.
-  -P, --s_epsg\t\tSet the projection EPSG code of the datalist.
-  -W, --t_epsg\t\tSet the output warp projection EPSG code.
-  -F, --format\t\tOnly process the given data format.
+  -P, --s_epsg\t\tSet the SOURCE horizontal projection EPSG code.
+  -W, --t_epsg\t\tSet the SOURCE horizontal projection EPSG code.
+  -F, --format\t\tOnly process the given data FORMAT.
 
   --archive\t\tARCHIVE the datalist to the given REGION
   --glob\t\tGLOB the datasets in the current directory to stdout

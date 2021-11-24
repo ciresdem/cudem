@@ -104,7 +104,6 @@ class Waffle:
         self.sample = sample
         self.xsample = xsample
         self.ysample = ysample
-        #self.size = size
         self.name = name
         self.node = node
         self.fmt = fmt
@@ -119,7 +118,6 @@ class Waffle:
         self.mod_args = {}
         self.archive = archive
         self.mask = mask
-        #self.data_mask = None
         self.clobber = clobber
         self.verbose = verbose
         self.gc = utils.config_check()
@@ -134,15 +132,6 @@ class Waffle:
         
         self.data_ = data
         self._init_data()
-        # self.data = [dlim.DatasetFactory(
-        #     fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-        #     src_region=self.p_region,
-        #     verbose=self.verbose,
-        #     weight=self.weights,
-        #     warp=self.epsg
-        # ).acquire_dataset() for dl in self.data]
-
-        # self.data = [d for d in self.data if d is not None]
         
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
@@ -152,6 +141,8 @@ class Waffle:
         self.p_region = self._proc_region()
         self.d_region = self._dist_region()
         self.c_region = self._coast_region()
+        self.ps_region = self.p_region.copy()
+        self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
         
     def _init_data(self):
 
@@ -619,12 +610,12 @@ class GMTSurface(Waffle):
         
     def run(self):        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V -r | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{} -r{}'.format(
-                self.p_region.format('gmt'),
+            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}'.format(
+                self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 ' -W' if self.weights else '',
-                self.p_region.format('gmt'),
+                self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 self.name,
@@ -672,8 +663,8 @@ class GMTTriangulate(Waffle):
         self._set_config()
         
     def run(self):
-        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff -r'.format(
-            self.p_region.format('gmt'), self.xinc, self.yinc, self.name
+        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
+            self.ps_region.format('gmt'), self.xinc, self.yinc, self.name
         )
         out, status = utils.run_cmd(
             dem_tri_cmd,
@@ -759,7 +750,7 @@ class WafflesMBGrid(Waffle):
         grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n-9999:{} -V'.format(
             src_grd, dst_gdal, dst_fmt
         )
-        
+
         out, status = utils.run_cmd(
             grd2gdal_cmd, verbose=self.verbose
         )
@@ -806,12 +797,15 @@ class WafflesMBGrid(Waffle):
         #     wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
         #     wg['archive'] = archive
 
+        mb_region = self.p_region.copy()
+        mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
+
         ## xsize and ysize are mistaken when gridding for grid-node...make note.
         #xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc)
 
-        mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+        mbgrid_cmd = 'mbgrid -I{} {} -E{:.10f}/{:.10f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
-            self.p_region.format('gmt'),
+            mb_region.format('gmt'),
             self.xinc,
             self.yinc,
             self.name,
@@ -823,7 +817,9 @@ class WafflesMBGrid(Waffle):
             sys.stderr.write('{}'.format(out))
         #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
 
-        self._gmt_grdsample('{}.grd'.format(self.name))
+        #self._gmt_grdsample('{}.grd'.format(self.name))
+        #self._gmt_grd2gdal('{}.grd'.format(self.name))
+        utils.gdal2gdal('{}.grd'.format(self.name))
         utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
         
         if self.use_datalists and not self.archive:
@@ -939,13 +935,12 @@ class WafflesNum(Waffle):
 
             out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
             
-            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff -r{}'.format(
+            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
                 self.mode,
                 self.p_region.format('gmt'),
                 self.xinc,
                 self.yinc,
-                self.name,
-                ' -Wi' if self.weights else ''
+                self.name
             )
             
             out, status = utils.run_cmd(
@@ -989,7 +984,7 @@ class WafflesIDW(Waffle):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
     
     def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, yinc=self.yinc)
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -2725,21 +2720,24 @@ usage: {cmd} [OPTIONS] DATALIST
 
 Options:
   -R, --region\t\tSpecifies the desired REGION;
-\t\t\tThis can either be a GMT-style region ( -R xmin/xmax/ymin/ymax )
-\t\t\tor an OGR-compatible vector file with regional polygons. 
-\t\t\tIf a vector file is supplied it will search each region found therein.
-\t\t\tIf omitted, use the region gathered from the data in DATALIST.
-  -E, --increment\tGridding CELL-SIZE in native units or GMT-style increments.
-\t\t\tappend :<inc> to resample the output to the given <inc>: -E.3333333s/.3333333s:.1111111s/.1111111s
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+\t\t\tIf a vector file is supplied, will use each region found therein.
+  -E, --increment\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
+\t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
   -F, --format\t\tOutput grid FORMAT. [GTiff]
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
-\t\t\tsyntax is -M module:mod_opt=mod_val:mod_opt1=mod_val1:...
+\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
   -O, --output-name\tBASENAME for all outputs.
   -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
-  -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
-\t\t\tappend :<num> to extend the processing region: -X6:12
-  -T, --filter\t\tFILTER the output DEM using one or multiple filters. <fltr:fltr_val:split_value=z>
-\t\t\tAvailable filters:
+  -X, --extend\t\tNumber of cells with which to EXTEND the REGION and processing REGION.
+\t\t\tWhere EXTEND is dem-extend[:processing-extend]
+\t\t\te.g. -X6:12 to extend the DEM REGION by 6 cells and the processing region by 12 cells.
+  -T, --filter\t\tFILTER the output DEM using one or multiple filters. 
+\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
+\t\t\tAvailable FILTERS:
 \t\t\t1: perform a Gaussian filter at -T1:<factor>.
 \t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
 \t\t\t3: Spike Filter at -T3:<stand-dev. threshhold>.
