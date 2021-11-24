@@ -937,7 +937,7 @@ class WafflesNum(Waffle):
             
             dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
                 self.mode,
-                self.p_region.format('gmt'),
+                self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 self.name
