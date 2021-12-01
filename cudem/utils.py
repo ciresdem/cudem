@@ -37,15 +37,16 @@ import shutil
 import subprocess
 import zipfile
 import gzip
+
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+
 import cudem
 
 ## ==============================================
 ##
-
 ## General Utility Functions, definitions, etc.
 ##
 ## ==============================================
@@ -85,22 +86,38 @@ FIPS_TO_EPSG = {
     "5103": "26963", "5104": "26964", "5105": "26965", "5200": "32161"
 }
 
-def append_fn(bn, src_region, inc, version=1):
-    return('{}{}_{}_{}v{}'.format(bn, inc2str(inc), src_region.format('fn'), this_year(), version))
+def append_fn(fn, src_region, inc, version=1):
+    """append the src_region, inc and version to a string filename"""
+    
+    return(
+        '{}{}_{}_{}v{}'.format(
+            fn,
+            inc2str(inc),
+            src_region.format('fn'),
+            this_year(),
+            version
+        )
+    )
 
 def fn_basename(fn, ext):
+    """return the basename of fn based on ext"""
+    
     if '.' in ext:
         return(fn[:-len(ext)])
     else:
         return(fn[:-(len(ext)+1)])
 
 def fn_url_p(fn):
+    """check if fn is a url"""
+    
     url_sw = ['http://', 'https://', 'ftp://', 'ftps://']
     for u in url_sw:
         try:
             if fn.startswith(u):
                 return(True)
-        except: return(False)
+        except:
+            return(False)
+        
     return(False)
     
 def inc2str(inc):
@@ -114,10 +131,14 @@ def inc2str(inc):
     """
     
     import fractions
-    return(str(fractions.Fraction(str(inc * 3600)).limit_denominator(10)).replace('/', ''))
+    return(
+        str(
+            fractions.Fraction(str(inc * 3600)).limit_denominator(10)
+        ).replace('/', '')
+    )
 
 def str2inc(inc_str):
-    """convert a GMT-style `inc_str` (6s) to geographic units
+    """convert a GMT-style `inc_str` (e.g. 6s) to geographic units
 
     c/s - arc-seconds
     m - arc-minutes
@@ -134,17 +155,23 @@ def str2inc(inc_str):
     except:
         return(None)
     
-    if inc_str is None or inc_str.lower() == 'none': return(None)
+    if inc_str is None or inc_str.lower() == 'none':
+        return(None)
+    
     units = inc_str[-1]
-    if units == 'c': inc = float(inc_str[:-1]) / 3600.
-    elif units == 's': inc = float(inc_str[:-1]) / 3600.
-    elif units == 'm': inc = float(inc_str[:-1]) / 360.
+    if units == 'c':
+        inc = float(inc_str[:-1]) / 3600.
+    elif units == 's':
+        inc = float(inc_str[:-1]) / 3600.
+    elif units == 'm':
+        inc = float(inc_str[:-1]) / 360.
     else:
         try:
             inc = float(inc_str)
         except ValueError as e:
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
             return(None)
+        
     return(inc)
 
 def this_date():
@@ -165,7 +192,7 @@ def this_year():
     
     return(datetime.datetime.now().strftime('%Y'))
 
-def dl_hash(fn, sha1 = False):
+def dl_hash(fn, sha1=False):
     """calculate a hash of a file
 
     Args:
@@ -175,9 +202,11 @@ def dl_hash(fn, sha1 = False):
       str: hexdigest
     """
     
-    BUF_SIZE = 65536  # lets read stuff in 64kbchunks!
-    if sha1: this_hash = hashlib.sha1()
-    else: this_hash = hashlib.md5()
+    BUF_SIZE = 65536
+    if sha1:
+        this_hash = hashlib.sha1()
+    else:
+        this_hash = hashlib.md5()
 
     with open(fn, 'rb') as f:
         while True:
@@ -201,7 +230,12 @@ def args2dict(args, dict_args={}):
     
     for arg in args:
         p_arg = arg.split('=')
-        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else True if p_arg[1].lower() == 'true' else None if p_arg[1].lower() == 'none' else '='.join(p_arg[1:]) if len(p_arg) > 2 else p_arg[1]
+        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else \
+            True if p_arg[1].lower() == 'true' else \
+            None if p_arg[1].lower() == 'none' else \
+            '='.join(p_arg[1:]) if len(p_arg) > 2 else \
+            p_arg[1]
+        
     return(dict_args)
 
 def remove_glob(*args):
@@ -223,6 +257,7 @@ def remove_glob(*args):
                     os.removedirs(g)
                 else: os.remove(g)
         except: pass
+        
     return(0)
 
 def slugify(value, allow_unicode=False):
@@ -241,10 +276,11 @@ def slugify(value, allow_unicode=False):
         value = unicodedata.normalize('NFKC', value)
     else:
         value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+        
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return(re.sub(r'[-\s]+', '-', value).strip('-_'))
 
-def int_or(val, or_val = None):
+def int_or(val, or_val=None):
     """return val if val is integer
 
     Args:
@@ -259,7 +295,7 @@ def int_or(val, or_val = None):
         return(int(val))
     except: return(or_val)
 
-def float_or(val, or_val = None):
+def float_or(val, or_val=None):
     """return val if val is integer
 
     Args:
@@ -318,32 +354,35 @@ def hav_dst(pnt0, pnt1):
     rad_m = 637100
     dx = math.radians(x1 - x0)
     dy = math.radians(y1 - y0)
-    a = math.sin(dx / 2) * math.sin(dx / 2) + math.cos(math.radians(x0)) * math.cos(math.radians(x1)) * math.sin(dy / 2) * math.sin(dy / 2)
+    a = math.sin(dx/2)*math.sin(dx/2)+math.cos(math.radians(x0))*math.cos(math.radians(x1))*math.sin(dy/2)*math.sin(dy/2)
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return(rad_m * c)
     
-def _geo2pixel(geo_x, geo_y, geoTransform, node='pixel'):
+    return(rad_m*c)
+    
+def _geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
     Args:
       geo_x (float): geographic x coordinate
       geo_y (float): geographic y coordinate
-      geoTransform (list): a geo-transform list describing a raster
+      geo_transform (list): a geo-transform list describing a raster
 
     Returns:
       list: a list of the pixel values [pixel-x, pixel-y]
     """
 
-    if geoTransform[2] + geoTransform[4] == 0:
-        pixel_x = ((geo_x - geoTransform[0]) / geoTransform[1])
-        pixel_y = ((geo_y - geoTransform[3]) / geoTransform[5])
+    if geo_transform[2] + geo_transform[4] == 0:
+        pixel_x = ((geo_x - geo_transform[0]) / geo_transform[1])
+        pixel_y = ((geo_y - geo_transform[3]) / geo_transform[5])
         if node == 'grid':
             pixel_x += .5
             pixel_y += .5
-    else: pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geoTransform))
+    else:
+        pixel_x, pixel_y = _apply_gt(geo_x, geo_y, _invert_gt(geo_transform))
+        
     return(int(pixel_x), int(pixel_y))
 
-def _geo2pixel_affine(geo_x, geo_y, geoTransform):
+def _geo2pixel_affine(geo_x, geo_y, geo_transform):
     """convert a geographic x,y value to a pixel location of geoTransform
 
     note: use _geo2pixel instead
@@ -351,35 +390,36 @@ def _geo2pixel_affine(geo_x, geo_y, geoTransform):
     Args:
       geo_x (float): geographic x coordinate
       geo_y (float): geographic y coordinate
-      geoTransform (list): a geo-transform list describing a raster
+      geo_transform (list): a geo-transform list describing a raster
 
     Returns:
       list: a list of the pixel values [pixel-x, pixel-y]
     """
     
     import affine
-    forward_transform = affine.Affine.from_gdal(*geoTransform)
+    forward_transform = affine.Affine.from_gdal(*geo_transform)
     reverse_transform = ~forward_transform
     pixel_x, pixel_y = reverse_transform * (geo_x, geo_y)
-    pixel_x, pixel_y = int(pixel_x + 0.5), int(pixel_y + 0.5)
+    pixel_x, pixel_y = int(pixel_x+0.5), int(pixel_y+0.5)
+    
     return(pixel_x, pixel_y)
 
-def _pixel2geo(pixel_x, pixel_y, geoTransform):
+def _pixel2geo(pixel_x, pixel_y, geo_transform):
     """convert a pixel location to geographic coordinates given geoTransform
 
     Args:
       pixel_x (int): the x pixel value
       pixel_y (int): the y pixel value
-      geoTransform (list): a geo-transform list describing a raster
+      geo_transform (list): a geo-transform list describing a raster
     
     Returns:
       list: [geographic-x, geographic-y]
     """
     
-    geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geoTransform)
+    geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geo_transform)
     return(geo_x, geo_y)
 
-def _apply_gt(in_x, in_y, geoTransform):
+def _apply_gt(in_x, in_y, geo_transform):
     """apply geotransform to in_x,in_y
     
     Args:
@@ -391,37 +431,32 @@ def _apply_gt(in_x, in_y, geoTransform):
       list: [geographic-x, geographic-y]
     """
 
-    out_x = geoTransform[0] + (in_x + 0.5) * geoTransform[1] + (in_y + 0.5) * geoTransform[2]
-    out_y = geoTransform[3] + (in_x + 0.5) * geoTransform[4] + (in_y + 0.5) * geoTransform[5]
-
-    # out_x = geoTransform[0] + (int(in_x + 0.5)*geoTransform[1]) + (int(in_y + 0.5)*geoTransform[2])
-    # out_y = geoTransform[3] + (int(in_x + 0.5)*geoTransform[4]) + (int(in_y + 0.5)*geoTransform[5])
-
-    #out_x = geoTransform[0] + int(in_x + 0.5) * geoTransform[1] + int(in_y + 0.5) * geoTransform[2]
-    #out_y = geoTransform[3] + int(in_x + 0.5) * geoTransform[4] + int(in_y + 0.5) * geoTransform[5]
+    out_x = geo_transform[0] + (in_x+0.5) * geo_transform[1] + (in_y+0.5) * geo_transform[2]
+    out_y = geo_transform[3] + (in_x+0.5) * geo_transform[4] + (in_y+0.5) * geo_transform[5]
 
     return(out_x, out_y)
 
-def _invert_gt(geoTransform):
-    """invert the geotransform
+def _invert_gt(geo_transform):
+    """invert the geo_transform
     
     Args:
-      geoTransform (list): a geo-transform list describing a raster
+      geo_transform (list): a geo-transform list describing a raster
 
     Returns:
       list: a geo-transform list describing a raster
     """
     
-    det = (geoTransform[1]*geoTransform[5]) - (geoTransform[2]*geoTransform[4])
+    det = (geo_transform[1]*geo_transform[5]) - (geo_transform[2]*geo_transform[4])
     if abs(det) < 0.000000000000001: return
-    invDet = 1.0 / det
-    outGeoTransform = [0, 0, 0, 0, 0, 0]
-    outGeoTransform[1] = geoTransform[5] * invDet
-    outGeoTransform[4] = -geoTransform[4] * invDet
-    outGeoTransform[2] = -geoTransform[2] * invDet
-    outGeoTransfrom[5] = geoTransform[1] * invDet
-    outGeoTransform[0] = (geoTransform[2] * geoTransform[3] - geoTransform[0] * geoTransform[5]) * invDet
-    outGeoTransform[3] = (-geoTransform[1] * geoTransform[3] + geoTransform[0] * geoTransform[4]) * invDet
+    
+    inv_det = 1.0 / det
+    out_geo_transform = [0, 0, 0, 0, 0, 0]
+    out_geo_transform[1] = geo_transform[5] * inv_det
+    out_geo_transform[4] = -geo_transform[4] * inv_det
+    out_geo_transform[2] = -geo_transform[2] * inv_det
+    out_geo_transfrom[5] = geo_transform[1] * inv_Det
+    out_geo_transform[0] = (geo_transform[2] * geo_transform[3] - geo_transform[0] * geo_transform[5]) * inv_det
+    out_geo_Transform[3] = (-geo_transform[1] * geo_transform[3] + geo_transform[0] * geo_transform[4]) * inv_det
     return(outGeoTransform)
 
 def wkt2geom(wkt):
@@ -436,7 +471,7 @@ def wkt2geom(wkt):
     
     return(ogr.CreateGeometryFromWkt(wkt))
 
-def sr_wkt(epsg, esri = False):
+def sr_wkt(epsg, esri=False):
     """convert an epsg code to wkt
 
     Returns:
@@ -458,6 +493,7 @@ def gdal_prj_file(dst_fn, epsg):
     
     with open(dst_fn, 'w') as out:
         out.write(sr_wkt(int(epsg), True))
+        
     return(0)
     
 def gdal_fext(src_drv_name):
@@ -475,14 +511,17 @@ def gdal_fext(src_drv_name):
     try:
         drv = gdal.GetDriverByName(src_drv_name)
         if drv.GetMetadataItem(gdal.DCAP_RASTER): fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
-        if fexts is not None: return(fexts.split()[0])
-        else: return(None)
+        if fexts is not None:
+            return(fexts.split()[0])
+        else:
+            return(None)
     except:
         if src_drv_name.lower() == 'gtiff': fext = 'tif'
         elif src_drv_name == 'HFA': fext = 'img'
         elif src_drv_name == 'GMT': fext = 'grd'
         elif src_drv_name.lower() == 'netcdf': fext = 'nc'
         else: fext = 'gdal'
+        
         return(fext)
 
 def ogr_fext(src_drv_name):
@@ -499,17 +538,18 @@ def ogr_fext(src_drv_name):
     fexts = None
     try:
         drv = ogr.GetDriverByName(src_drv_name)
-        #if drv.GetMetadataItem(gdal.DCAP_RASTER):
         fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
-            
-        if fexts is not None: return(fexts.split()[0])
-        else: return(None)
+        if fexts is not None:
+            return(fexts.split()[0])
+        else:
+            return(None)
     except:
         if src_drv_name.lower() == 'gtiff': fext = 'tif'
         elif src_drv_name == 'HFA': fext = 'img'
         elif src_drv_name == 'GMT': fext = 'grd'
         elif src_drv_name.lower() == 'netcdf': fext = 'nc'
         else: fext = 'gdal'
+        
         return(fext)
 
 ## ==============================================
@@ -532,9 +572,12 @@ def unzip(zip_file):
         zip_files = zip_ref.namelist()
         zip_ref.extractall()
         zip_ref.close()
+        
         return(zip_files)
+    
     except Exception as e:
         utils.echo_error_msg(e)
+        
         return(None)
 
 def gunzip(gz_file):
@@ -560,6 +603,7 @@ def gunzip(gz_file):
     else:
         echo_error_msg('{} does not exist'.format(gz_file))
         guz_file = None
+        
     return(guz_file)
     
 def p_unzip(src_file, exts=None):
@@ -590,6 +634,7 @@ def p_unzip(src_file, exts=None):
         except:
             echo_error_msg('unable to gunzip {}'.format(src_file))
             tmp_proc = None
+            
         if tmp_proc is not None:
             for ext in exts:
                 if ext == tmp_proc.split('.')[-1]:
@@ -601,12 +646,19 @@ def p_unzip(src_file, exts=None):
             if ext == src_file.split('.')[-1]:
                 src_procs.append(src_file)
                 break
+            
     return(src_procs)
     
 ## ==============================================
 ## Write an array to a gdal file
 ## ==============================================
-def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff', max_cache = False):
+def gdal_write(
+        src_arr,
+        dst_gdal,
+        ds_config,
+        dst_fmt='GTiff',
+        max_cache=False
+):
     """write src_arr to gdal file dst_gdal using src_config
 
     returns [output-gdal, status-code]
@@ -624,17 +676,23 @@ def gdal_write (src_arr, dst_gdal, ds_config, dst_fmt = 'GTiff', max_cache = Fal
         gdal.SetCacheMax(2**30)
 
     if ds_config['dt'] == 5:
-        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES'])
+        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
+                           ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES'])
     else:
-        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES', 'PREDICTOR=3'])
+        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
+                           ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES', 'PREDICTOR=3'])
+        
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])
         ds.SetProjection(ds_config['proj'])
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
         ds.GetRasterBand(1).WriteArray(src_arr)
         ds = None
+        
         return(dst_gdal, 0)
-    else: return(None, -1)
+    
+    else:
+        return(None, -1)
 
 def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
     """convert the gdal file to gdal using gdal
@@ -644,13 +702,16 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
     if os.path.exists(src_dem):
         if dst_dem is None:
             dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
+            
         if dst_fmt != 'GTiff':
             co = False
+            
         if not co:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {}'.format(src_dem, dst_dem, dst_fmt))
         else:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
             '.format(src_dem, dst_dem, dst_fmt))
+            
         out, status = run_cmd(gdal2gdal_cmd, verbose=False)
         if status == 0:
             return(dst_dem)
@@ -659,7 +720,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
     else:
         return(None)
     
-def mb_inf(src_xyz, src_fmt = 168):
+def mb_inf(src_xyz, src_fmt=168):
     """generate an info (.inf) file from a src_xyz file using MBSystem.
 
     Args:
@@ -670,7 +731,7 @@ def mb_inf(src_xyz, src_fmt = 168):
       dict: xyz infos dictionary mb_inf_parse(inf_file)
     """
 
-    run_cmd('mbdatalist -O -F{} -I{}'.format(src_fmt, src_xyz.name), verbose = False)
+    run_cmd('mbdatalist -O -F{} -I{}'.format(src_fmt, src_xyz.name), verbose=False)
     return(mb_inf_parse('{}.inf'.format(src_xyz.name)))
 
 ## ==============================================
@@ -765,11 +826,15 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
 
     while p.poll() is None:
         line = p.stdout.readline().decode('utf-8')
-        if not line: break
-        else: yield(line)
+        if not line:
+            break
+        else:
+            yield(line)
+        
     line = p.stdout.read().decode('utf-8')
     p.stdout.close()
-    if verbose: echo_msg('ran cmd: {} and returned {}.'.format(cmd.rstrip(), p.returncode))
+    if verbose:
+        echo_msg('ran cmd: {} and returned {}.'.format(cmd.rstrip(), p.returncode))
 
 def cmd_check(cmd_str, cmd_vers_str):
     """check system for availability of 'cmd_str' 
@@ -784,8 +849,10 @@ def cmd_check(cmd_str, cmd_vers_str):
     
     if cmd_exists(cmd_str): 
         cmd_vers, status = run_cmd('{}'.format(cmd_vers_str))
+        
         return(cmd_vers.rstrip())
-    else: return("0".encode())
+    else:
+        return("0".encode())
 
 def config_check(chk_vdatum=False, verbose=False):
     """check for needed waffles external software.

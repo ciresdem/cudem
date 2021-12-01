@@ -24,9 +24,11 @@
 
 import os
 import sys
+
+import numpy as np
 from osgeo import ogr
 from osgeo import osr
-import numpy as np
+
 import cudem
 from cudem import utils
 
@@ -50,11 +52,6 @@ class Region:
       wmax (float): the maximum w(weight) value
       wkt (str): the wkt representation of the region
       epsg (int): the EPSG code representing the regions projection
-
-    Methods:
-      valid_p(): True if the region is valid else False
-      buffer(bv = 0): buffer the region by buffer value
-      center(): find the center point of the region
     """
 
     full_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax, x.zmin, x.zmax, x.wmin, x.wmax]
@@ -62,22 +59,17 @@ class Region:
     z_region = lambda x: [x.zmin, x.zmax]
     w_region = lambda x: [x.wmin, x.wmax]
     
-    def __init__(self, xmin = None, xmax = None, ymin = None, ymax = None,
-                 zmin = None, zmax = None, wmin = None, wmax = None,
-                 epsg = 4326, wkt = None):
-        """
-        Args:
-          xmin (float): the minimum x(long) value
-          xmax (float): the maximum x(long) value
-          ymin (float): the minimum x(lat) value
-          ymax (float): the maximum x(lat) value
-          zmin (float): the minimum z(elev) value
-          zmax (float): the maximum z(elev) value
-          wmin (float): the minimum w(weight) value
-          wmax (float): the maximum w(weight) value
-          epsg (int): the EPSG code representing the regions projection
-        """
-        
+    def __init__(self,
+                 xmin=None,
+                 xmax=None,
+                 ymin=None,
+                 ymax=None,
+                 zmin=None,
+                 zmax=None,
+                 wmin=None,
+                 wmax=None,
+                 epsg=4326,
+                 wkt=None):        
         self.xmin = utils.float_or(xmin)
         self.xmax = utils.float_or(xmax)
         self.ymin = utils.float_or(ymin)
@@ -95,7 +87,7 @@ class Region:
     def __str__(self):
         return(self.format('gmt'))
         
-    def valid_p(self, check_xy = False):
+    def valid_p(self, check_xy=False):
         """check the validity of a region
     
         Returns:
@@ -121,6 +113,8 @@ class Region:
         return(True)
 
     def copy(self):
+        """return a copy of the region."""
+        
         return(Region(xmin = self.xmin,
                       xmax = self.xmax,
                       ymin = self.ymin,
@@ -136,7 +130,7 @@ class Region:
         """import a region from a region list 
 
         Args:
-          region_list (list): [xmin, xmax, ymin, ymax, zmin, zmax, wmin, wmax]
+          region_list (list): [xmin, xmax, ymin, ymax[, zmin, zmax[, wmin, wmax]]]
 
         Returns:
           region-object: self
@@ -181,7 +175,7 @@ class Region:
             self.from_list(ogr.CreateGeometryFromWkt(region_str).GetEnvelope())
         return(self)
     
-    def from_geo_transform(self, geoT = None, x_count = None, y_count = None):
+    def from_geo_transform(self, geo_transform=None, x_count=None, y_count=None):
         """import a region from a region string 
 
         Args:
@@ -193,30 +187,21 @@ class Region:
           region-object: self
         """
         
-        if geoT is not None and x_count is not None and y_count is not None:
-            self.xmin = geoT[0]
-            self.xmax = geoT[0] + geoT[1] * x_count
-            self.ymin = geoT[3] + geoT[5] * y_count
-            self.ymax = geoT[3]
+        if geo_transform is not None and x_count is not None and y_count is not None:
+            self.xmin = geo_transform[0]
+            self.xmax = geo_transform[0] + geo_transform[1] * x_count
+            self.ymin = geo_transform[3] + geo_transform[5] * y_count
+            self.ymax = geo_transform[3]
         if self.wkt is None:
             self.wkt = self.export_as_wkt()
         return(self)
 
-    def from_region(self, i_region):
-        self.xmin = i_region.xmin
-        self.xmax = i_region.xmax
-        self.ymin = i_region.ymin
-        self.ymax = i_region.ymax
-        self.zmin = i_region.zmin
-        self.zmax = i_region.zmax
-        self.wmin = i_region.wmin
-        self.wmax = i_region.wmax
-        self.wkt = i_region.wkt
-        self.epsg = i_region.epsg
-        
-        return(self)
+    def from_region(self, input_region):
+        """import a region from another region"""
+
+        return(input_region.copy())
     
-    def format(self, t = 'gmt'):
+    def format(self, t='gmt'):
         """format region to string, defined by `t`
 
         Args:
@@ -274,7 +259,7 @@ class Region:
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
-    def export_as_list(self, include_z = False, include_w = False):
+    def export_as_list(self, include_z=False, include_w=False):
         """export region as a list
 
         Args:
@@ -294,7 +279,7 @@ class Region:
             region_list.append(self.wmax)
         return(region_list)
 
-    def export_as_gdal_extent(self, include_z = False, include_w = False):
+    def export_as_gdal_extent(self, include_z=False, include_w=False):
         """export region as a list
 
         Args:
@@ -315,8 +300,10 @@ class Region:
           wkt: a wkt polygon geometry
         """
 
-        eg = [[self.ymin, self.xmin], [self.ymin, self.xmax],
-              [self.ymax, self.xmax], [self.ymax, self.xmin],
+        eg = [[self.ymin, self.xmin],
+              [self.ymin, self.xmax],
+              [self.ymax, self.xmax],
+              [self.ymax, self.xmin],
               [self.ymin, self.xmin]]
 
         return(create_wkt_polygon(eg))
@@ -335,14 +322,13 @@ class Region:
             return(ogr.CreateGeometryFromWkt(self.wkt))
         else: return(None)
 
-    def export_as_ogr(self, dst_ogr, dst_fmt = 'ESRI Shapefile', append = False):
+    def export_as_ogr(self, dst_ogr, dst_fmt='ESRI Shapefile', append=False):
         """convert a region string to an OGR vector
 
         Args:
           dst_ogr (str): destination ogr dataset pathname
           append (bool): Append to existing dataset
         """
-
         
         wkt = self.export_as_wkt()
         driver = ogr.GetDriverByName(dst_fmt)
@@ -359,8 +345,9 @@ class Region:
         dst_feat = None
         dst_ds = None
 
-    def srcwin(self, gt, x_count, y_count):
-        """output the appropriate gdal srcwin for the region.
+    def srcwin(self, geo_transform, x_count, y_count):
+        """output the appropriate gdal srcwin for the region 
+        based on the geo_transform and x/y count.
 
         Args:
           region (region): an input region
@@ -368,8 +355,8 @@ class Region:
         returns the gdal srcwin
         """
 
-        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, gt)]
-        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, gt)]
+        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform)]
+        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform)]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
             this_size[0] = x_count - this_origin[0]
@@ -379,7 +366,7 @@ class Region:
         if this_size[1] < 0: this_size[1] = 0
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
         
-    def buffer(self, x_bv = 0, y_bv = 0, pct = None):
+    def buffer(self, x_bv=0, y_bv=0, pct=None):
         """return the region buffered by buffer-value `bv`
 
         Args:
@@ -413,11 +400,11 @@ class Region:
         """
 
         if self.valid_p():
-            return([self.xmin + (self.xmax - self.xmin / 2),
-                    self.ymax + (self.ymax - self.ymin / 2)])
+            return([self.xmin + (self.xmax-self.xmin/2),
+                    self.ymax + (self.ymax-self.ymin/2)])
         else: return(None)        
         
-    def chunk(self, inc, n_chunk = 10):
+    def chunk(self, inc, n_chunk=10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 
         n_chunk by n_chunk cell regions, given inc.
 
@@ -466,11 +453,11 @@ class Region:
             else: break
         return(o_chunks)
 
-    def warp(self, warp_epsg = 4326):
-        """warp the region from to dst_epsg
+    def warp(self, warp_epsg=4326):
+        """warp the region from self.epsg to dst_epsg
 
         Args:
-          warp_epsg (ing): the destination EPSG code
+          warp_epsg (int): the destination EPSG code
 
         Returns:
           region-object: warped self
@@ -488,9 +475,11 @@ class Region:
             src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
+        
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         self.epsg = warp_epsg
         self.wkt = None
+        
         return(self.transform(dst_trans))
 
     def transform(self, dst_trans=None):
@@ -603,21 +592,9 @@ def regions_intersect_p(region_a, region_b):
     """
 
     if region_a.valid_p() and region_b.valid_p():
-        # tmp_a = Region()
-        # tmp_b = Region()
-        # tmp_a.zmin = region_a.zmin
-        # tmp_a.zmax = region_a.zmax
-        # tmp_a.wmin = region_a.wmin
-        # tmp_a.wmax = region_a.wmax
-        # tmp_b.zmin = region_b.zmin
-        # tmp_b.zmax = region_b.zmax
-        # tmp_b.wmin = region_b.wmin
-        # tmp_b.wmax = region_b.wmax
-
-        tmp_c = regions_reduce(region_a, region_b)
-        #print(tmp_c.format('fstr'))
-        if any(tmp_c.full_region()):
-            if not tmp_c.valid_p():
+        reduced_region = regions_reduce(region_a, region_b)
+        if any(reduced_region.full_region()):
+            if not reduced_region.valid_p():
                 return(False)
             
         if not regions_intersect_ogr_p(region_a, region_b):
@@ -643,7 +620,7 @@ def regions_intersect_ogr_p(region_a, region_b):
             return(True)
     return(False)
 
-def z_region_pass(region, upper_limit = None, lower_limit = None):
+def z_region_pass(region, upper_limit=None, lower_limit=None):
     """return True if extended region [xmin, xmax, ymin, ymax, zmin, zmax] is 
     within upper and lower z limits
     
@@ -711,22 +688,17 @@ def gdal_ogr_regions(src_ds):
         poly = ogr.Open(src_ds)
         if poly is not None:
             p_layer = poly.GetLayer(0)
-            #multi = ogr.Geometry(ogr.wkbMultiPolygon)
-            #this_region = region()
             for pf in p_layer:
                 this_region = Region()
-                #feat.geometry().CloseRings()
-                #wkt = feat.geometry().ExportToWkt()
-                #multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
                 pgeom = pf.GetGeometryRef()
                 pwkt = pgeom.ExportToWkt()
                 this_region.from_list(ogr.CreateGeometryFromWkt(pwkt).GetEnvelope())
                 these_regions.append(this_region)
-            #wkt = multi.ExportToWkt()
         poly = None
+        
     return(these_regions)
 
-def create_wkt_polygon(coords, xpos = 1, ypos = 0):
+def create_wkt_polygon(coords, xpos=1, ypos=0):
     """convert coords to Wkt
 
     Args:
@@ -744,11 +716,11 @@ def create_wkt_polygon(coords, xpos = 1, ypos = 0):
     poly.AddGeometry(ring)
     poly_wkt = poly.ExportToWkt()
     poly = None
+    
     return(poly_wkt)
 
 def ogr_wkts(src_ds):
-    """return the wkt(s) of the ogr dataset
-    """
+    """return the wkt(s) of the ogr dataset"""
     
     these_regions = []
     src_s = src_ds.split(':')

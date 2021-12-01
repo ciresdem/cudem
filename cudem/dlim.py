@@ -31,8 +31,9 @@ import os
 import sys
 import re
 import glob
-import cudem
 import json
+
+import cudem
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -137,6 +138,7 @@ class Datalist(datasets.XYZDataset):
                             weight=self.weight,
                             verbose=self.verbose
                         ).acquire_dataset()
+                        
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):
@@ -150,21 +152,14 @@ class Datalist(datasets.XYZDataset):
                                     )
                                     inf_region.wmin = data_set.weight
                                     inf_region.wmax = data_set.weight
-                                    #print(data_set.weight)
-                                    #inf.region.z_min = data_set.infos['zmin'
-                                    #print(inf_region.format('fstr'))
-                                    #print(self.region.format('fstr'))
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
-                                            #self.parse_data_lists()
                                             yield(ds)
                             else:
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
-                                    #self.parse_data_lists()
                                     yield(ds)
-            #self.parse_data_lists()
         else:
             utils.echo_warning_msg(
                 'could not open datalist/entry {}'.format(self.fn)
@@ -194,7 +189,6 @@ class Datalist(datasets.XYZDataset):
         """
 
         for this_entry in self.data_entries:
-            #for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
                 
@@ -298,14 +292,12 @@ class DatasetFactory:
         self.fn = fn
         self.parse_fn()
 
-        #if self.weight is not None:
-        #    self.weight = self.weight**4
-        
         if self.data_format is None:
             self.guess_data_format()
             
     def parse_fn(self):
-
+        """parse the datalist entry line"""
+        
         if self.fn is None: return(self)
         if os.path.exists(self.fn):
             return(self.fn)
@@ -319,6 +311,7 @@ class DatasetFactory:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
             return(self)
 
+        ## data format
         if len(entry) < 2:
             for key in self.data_types.keys():
                 se = entry[0].split('.')
@@ -331,17 +324,13 @@ class DatasetFactory:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
 
+        ## weight
         if len(entry) < 3:
             entry.append(1)
         elif entry[2] is None:
-            #entry[2] = self.weight
             entry[2] = 1
-            #else:
-        #entry[2] *= self.weight
 
         if self.parent is not None:
-            #entry[2] *= self.parent.weight
-            #self.weight *= self.parent.weight
             if self.weight is not None:
                 self.weight *= entry[2]
             else:
@@ -349,48 +338,55 @@ class DatasetFactory:
         else:
             self.weight = entry[2]
 
-        #print(self.weight)
-        
+        ## title
         if len(entry) < 4:
             entry.append(self.title)
         else:
             self.title = entry[3]
-            
+
+        ## source
         if len(entry) < 5:
             entry.append(self.source)
         else:
             self.source = entry[4]
-            
+
+        ## date
         if len(entry) < 6:
             entry.append(self.date)
         else:
             self.date = entry[5]
-            
+
+        ## data type
         if len(entry) < 7:
             entry.append(self.data_type)
         else:
             self.data_type = entry[6]
-            
+
+        ## resolution
         if len(entry) < 8:
             entry.append(self.resolution)
         else:
             self.resolution = entry[7]
-            
+
+        ## hdatum
         if len(entry) < 9:
             entry.append(self.hdatum)
         else:
             self.hdatum = entry[8]
-            
+
+        ## vdatum
         if len(entry) < 10:
             entry.append(self.vdatum)
         else:
             self.vdatum = entry[9]
-            
+
+        ## url
         if len(entry) < 11:
             entry.append(self.url)
         else:
             self.url = entry[10]
 
+        ## file-name
         if self.parent is None or entry[1] == -11:
             self.fn = entry[0]
         else:
@@ -405,13 +401,15 @@ class DatasetFactory:
         return(self)
 
     def guess_data_format(self):
+        """guess a data format based on the file-name"""
+        
         if self.fn is not None:
             for key in self.data_types.keys():
                 if self.fn.split('.')[-1] in self.data_types[key]['fmts']:
                     self.data_format = key
                     break
 
-    def add_data_type(self, type_def = {}):
+    def add_data_type(self, type_def={}):
         for key in type_def.keys():
             self.data_types[key] = type_def[key]
 
@@ -590,22 +588,22 @@ class DatasetFactory:
     
     def acquire_dataset(self, **kwargs):
         if self.data_format == -1:
-            return(self.acquire_datalist(**kwargs))#.parse())
+            return(self.acquire_datalist(**kwargs))
         
         if self.data_format == 168:
-            return(self.acquire_xyz_file(**kwargs))#.parse())
+            return(self.acquire_xyz_file(**kwargs))
         
         if self.data_format == 200:
-            return(self.acquire_raster_file(**kwargs))#.parse())
+            return(self.acquire_raster_file(**kwargs))
         
         if self.data_format == 300:
-            return(self.acquire_las_file(**kwargs))#.parse())
+            return(self.acquire_las_file(**kwargs))
 
         if self.data_format == 301:
-            return(self.acquire_mbs_file(**kwargs))#.parse())
+            return(self.acquire_mbs_file(**kwargs))
 
         if self.data_format == -11:
-            return(self.acquire_fetcher(**kwargs))#.parse())
+            return(self.acquire_fetcher(**kwargs))
 
 _datalist_fmts_long_desc = lambda: '\n  '.join(
     ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
@@ -836,7 +834,7 @@ def datalists_cli(argv=sys.argv):
                                         p.source,
                                         p.date,
                                         p.data_type,
-                                        p.resolution,
+                                       p.resolution,
                                         p.hdatum,
                                         p.vdatum,
                                         p.url

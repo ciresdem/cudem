@@ -23,8 +23,10 @@
 ### Code:
 
 import sys
+
 from osgeo import gdal
 from osgeo import ogr
+
 from cudem import utils
 
 class XYZPoint:
@@ -78,7 +80,14 @@ class XYZPoint:
                 w=self.w
             )
         )
-        
+
+    def reset(self):
+        self.x = self.y = self.z = None
+        self.w = 1
+        self.epsg = 4326
+        self.z_units = 'm'
+        self.z_datum = 'msl'
+    
     def valid_p(self):
         
         if self.x is None:
@@ -246,7 +255,8 @@ class XYZPoint:
         """
 
         warp_epsg = utils.int_or(warp_epsg)
-        if warp_epsg is None or self.epsg is None: return(self)
+        if warp_epsg is None or self.epsg is None:
+            return(self)
 
         src_srs = osr.SpatialReference()
         src_srs.ImportFromEPSG(self.epsg)
@@ -257,9 +267,12 @@ class XYZPoint:
             src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
+        
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
         
-        if dst_trans is None: return(self)
+        if dst_trans is None:
+            return(self)
+        
         self.transform(dst_trans)
         
         return(self)
