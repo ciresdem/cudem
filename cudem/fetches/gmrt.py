@@ -70,12 +70,11 @@ class GMRT(f_utils.FetchModule):
             'format':self.fmt,
         }
 
-        ## specifying the layer in the url builder breaks it...
+        ## specifying the layer in the url builder breaks it! this is new
         #'layer':self.layer,
         
         req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(params=self.data, tries=10, timeout=2)
         if req is not None:
-            print(req.url)
             gmrt_urls = req.json()
             for url in gmrt_urls:
                 opts = {}
