@@ -25,9 +25,12 @@
 import os
 import json
 import lxml.etree
+
 from osgeo import ogr
+
 from cudem import utils
 from cudem import regions
+
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -36,35 +39,47 @@ import cudem.fetches.utils as f_utils
 ##
 ## =============================================================================
 def xml2py(node):
-    '''parse an xml file into a python dictionary'''
+    """parse an xml file into a python dictionary"""
+    
     texts = {}
-    if node is None: return(None)
+    if node is None:
+        return(None)
+    
     for child in list(node):
         child_key = lxml.etree.QName(child).localname
-        if 'name' in child.attrib.keys(): child_key = child.attrib['name']
+        if 'name' in child.attrib.keys():
+            child_key = child.attrib['name']
+        
         if '{http://www.w3.org/1999/xlink}href' in child.attrib.keys():
             href = child.attrib['{http://www.w3.org/1999/xlink}href']
         else: href = None
+        
         if child.text is None or child.text.strip() == '':
             if href is not None:
                 if child_key in texts.keys():
                     texts[child_key].append(href)
-                else: texts[child_key] = [href]
+                else:
+                    texts[child_key] = [href]
+                    
             else:
                 if child_key in texts.keys():
                     ck = xml2py(child)
                     texts[child_key][list(ck.keys())[0]].update(ck[list(ck.keys())[0]])
-                else: texts[child_key] = xml2py(child)
+                else:
+                    texts[child_key] = xml2py(child)
+                    
         else:
             if child_key in texts.keys():
                 texts[child_key].append(child.text)
-            else: texts[child_key] = [child.text]
+            else:
+                texts[child_key] = [child.text]
+                
     return(texts)
 
 class iso_xml:
-    def __init__(self, xml_url, timeout = 2, read_timeout = 10):
+    def __init__(self, xml_url, timeout=2, read_timeout=10):
         self.url = xml_url
-        self.xml_doc = self._fetch(timeout = timeout, read_timeout = read_timeout)
+        self.xml_doc = self._fetch(timeout=timeout, read_timeout=read_timeout)
         self.namespaces = {
             'gmd': 'http://www.isotc211.org/2005/gmd', 
             'gmi': 'http://www.isotc211.org/2005/gmi', 
@@ -75,7 +90,6 @@ class iso_xml:
         }
         
     def _fetch(self, timeout = 2, read_timeout = 10):
-        
         return(f_utils.Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
 
     def title(self):
@@ -107,21 +121,30 @@ class iso_xml:
         dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces = self.namespaces)
         if dt is None:
             dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces = self.namespaces)
+            
         return(dt.text[:4] if dt is not None else '0000')
 
     def xml_date(self):
         mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
+        
         return(utils.this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
         ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
-        if ref_s is None or len(ref_s) == 0: return(None, None)
+        if ref_s is None or len(ref_s) == 0:
+            return(None, None)
+        
         h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
-        if h_epsg is not None: h_epsg = h_epsg.text.split(':')[-1]
+        if h_epsg is not None:
+            h_epsg = h_epsg.text.split(':')[-1]
+        
         if len(ref_s) > 1:
             v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
-            if v_epsg is not None: v_epsg = v_epsg.text.split(':')[-1]
-        else: v_epsg = None
+            if v_epsg is not None:
+                v_epsg = v_epsg.text.split(':')[-1]
+                
+        else:
+            v_epsg = None
             
         return(h_epsg, v_epsg)
 
@@ -129,12 +152,16 @@ class iso_xml:
         try:
             abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces = self.namespaces)
             abstract = '' if abstract is None else abstract.text
-        except: abstract = ''
+        except:
+            abstract = ''
+            
         return(abstract)
 
     def linkages(self):
         linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces = self.namespaces)
-        if linkage is not None: linkage = linkage.text
+        if linkage is not None:
+            linkage = linkage.text
+        
         return(linkage)
     
     def data_links(self):
@@ -148,6 +175,7 @@ class iso_xml:
                     dd[j.text].append(dus[i].text)
                 else:
                     dd[j.text] = [dus[i].text]
+                    
         return(dd)
 
 class WCS:

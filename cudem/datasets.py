@@ -107,6 +107,7 @@ class XYZDataset():
 
         self.dst_trans = None
         self.trans_region = None
+
         if self.valid_p():
             if self.data_format == -1:
                 self.inf(check_hash=False)
@@ -419,15 +420,19 @@ class XYZDataset():
                             this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
                 ) as sub_dlf:
                     for xyz_dataset in self.data_lists[x]['data']:
-                        sub_xyz_path = '.'.join(
-                            [utils.fn_basename(
-                                os.path.basename(
-                                    utils.slugify(xyz_dataset.fn)
-                                ),
-                                xyz_dataset.fn.split('.')[-1]),
-                             'xyz']
-                        )
-                        
+                        if len(xyz_dataset.fn.split('.')) > 1:
+                            xyz_ext = xyz_dataset.fn.split('.')[-1]
+                            sub_xyz_path = '.'.join(
+                                [utils.fn_basename(
+                                    os.path.basename(
+                                        utils.slugify(xyz_dataset.fn)
+                                    ),
+                                    xyz_dataset.fn.split('.')[-1]),
+                                 'xyz']
+                            )
+                        else:
+                            sub_xyz_path = '.'.join([xyz_dataset.fn, 'xyz'])
+
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
                         sub_dlf.write('{} 168\n'.format(sub_xyz_path))
                         
@@ -643,7 +648,7 @@ class XYZFile(XYZDataset):
         if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0:
             self.scoff = True
         else: self.scoff = False
-        
+
         super().__init__(**kwargs)
         
     def generate_inf(self, callback=lambda: False):
@@ -747,9 +752,10 @@ class XYZFile(XYZDataset):
                         this_xyz.z *= self.z_scale
                         
                     this_xyz.w = self.weight
+
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
-                        
+
                     if self.region is not None and self.region.valid_p():
                         if regions.xyz_in_region_p(this_xyz, self.region):
                             ln += 1
@@ -979,7 +985,7 @@ class RasterFile(XYZDataset):
         if self.ds_open_p:
             gt = self.src_ds.GetGeoTransform()
             this_region = regions.Region().from_geo_transform(
-                geoT=gt,
+                geo_transform=gt,
                 x_count=self.src_ds.RasterXSize,
                 y_count=self.src_ds.RasterYSize
             )

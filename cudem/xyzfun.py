@@ -71,6 +71,12 @@ class XYZPoint:
         self.z_units = z_units
         self.z_datum = z_datum
 
+    def __repr__(self):
+        return('<XYZPoint x: {} y: {} z: {}>'.format(self.x, self.y, self.z))
+        
+    def __str__(self):
+        return('<XYZPoint x: {} y: {} z: {}>'.format(self.x, self.y, self.z))
+        
     def copy(self):
         return(
             XYZPoint(
@@ -254,6 +260,8 @@ class XYZPoint:
           xyz: self
         """
 
+        from osgeo import osr
+        
         warp_epsg = utils.int_or(warp_epsg)
         if warp_epsg is None or self.epsg is None:
             return(self)

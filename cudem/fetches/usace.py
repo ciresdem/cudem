@@ -25,9 +25,13 @@
 import os
 import sys
 import lxml.etree
+
+from osgeo import ogr
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
@@ -39,7 +43,7 @@ import cudem.fetches.FRED as FRED
 ##
 ## =============================================================================
 class USACE(f_utils.FetchModule):
-    '''Fetch USACE bathymetric surveys'''
+    """Fetch USACE bathymetric surveys"""
     
     def __init__(self, s_type=None, inc=None, **kwargs):
         super().__init__(**kwargs)
@@ -53,7 +57,9 @@ class USACE(f_utils.FetchModule):
     def run(self):
         '''Run the USACE fetching module'''
         
-        if self.region is None: return([])
+        if self.region is None:
+            return([])
+        
         _data = {
             'geometry': self.region.format('bbox'),
             'inSR':4326,
@@ -64,11 +70,14 @@ class USACE(f_utils.FetchModule):
         if _req is not None:
             survey_list = _req.json()
             for feature in survey_list['features']:
-                fetch_fn = feature['attributes']['SOURCEDATALOCATION']
+                fetch_fn = feature['attributes']['sourcedatalocation']
                 if self.s_type is not None:
-                    if feature['attributes']['SURVEYTYPE'].lower() == self.s_type.lower():
+                    if feature['attributes']['surveytype'].lower() == self.s_type.lower():
                         self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
-                else: self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
+                        
+                else:
+                    self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'usace'])
+                    
         return(self)
 
     def yield_xyz(self, entry):
@@ -77,7 +86,9 @@ class USACE(f_utils.FetchModule):
         src_region = None
         #xyzc['warp'] = epsg
         
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose
+        ).fetch_file(src_zip) == 0:
             src_xmls = utils.p_unzip(src_zip, ['xml', 'XML'])
             for src_xml in src_xmls:
                 if src_region is None:
@@ -90,39 +101,60 @@ class USACE(f_utils.FetchModule):
                             s = this_xml.find('.//southbc').text
                             src_region = regions.Region().from_list([float(w), float(e), float(s), float(n)])
                         except:
-                            utils.echo_warning_msg('could not determine survey bb from {}'.format(src_xml))
-                if src_epsg is None:
-                    try:
-                        prj = this_xml.find('.//gridsysn').text
-                        szone = this_xml.find('.//spcszone').text
-                        utils.echo_msg('zone: {}'.format(szone))                        
-                        src_epsg = int(utils.FIPS_TO_EPSG[szone])
-                    except:
-                        utils.echo_warning_msg('could not determine state plane zone from {}'.format(src_xml))
+                            pass
+                            #utils.echo_warning_msg('could not determine survey bb from {}'.format(src_xml))
+                            
+                # if src_epsg is None:
+                #     try:
+                #         prj = this_xml.find('.//gridsysn').text
+                #         szone = this_xml.find('.//spcszone').text
+                #         utils.echo_msg('zone: {}'.format(szone))                        
+                #         src_epsg = int(utils.FIPS_TO_EPSG[szone])
+                #     except:
+                #         utils.echo_warning_msg('could not determine state plane zone from {}'.format(src_xml))
+                        
                 utils.remove_glob(src_xml)
 
             if src_region is None:
                 sys.exit()
+
             if src_epsg is None:
                 this_geom = src_region.export_as_geom()
                 sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
-                try:
-                    sp = ogr.Open(sp_fn)
-                    layer = sp.GetLayer()
+                sp = ogr.Open(sp_fn)
+                layer = sp.GetLayer()
                 
-                    for feature in layer:
-                        geom = feature.GetGeometryRef()
-                        if this_geom.Intersects(geom):
-                            src_epsg = feature.GetField('EPSG')
-                    sp = None
-                except: pass
+                for feature in layer:
+                    geom = feature.GetGeometryRef()
+                    if this_geom.Intersects(geom):
+                        src_epsg = feature.GetField('EPSG')
+                        break
+                    
+                sp = None
 
+            #utils.echo_msg('source epsg: {}'.format(src_epsg))
             src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
             for src_usace in src_usaces:
-                _dl = datasets.XYZFile(fn=src_usace, epsg=src_epsg, warp=self.warp, src_region=src_region, name=src_usace, verbose=self.verbose, remote=True)
+                _dl = datasets.XYZFile(
+                    fn=src_usace,
+                    data_format=168,
+                    x_scale=.3048,
+                    y_scale=.3048,
+                    z_scale=-.3048,
+                    epsg=src_epsg,
+                    warp=self.warp,
+                    src_region=src_region,
+                    name=src_usace,
+                    verbose=self.verbose,
+                    remote=True
+                )
                 for xyz in _dl.yield_xyz():
                     yield(xyz)
-                utils.remove_glob(src_usace)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
+                    
+                utils.remove_glob(src_usace, src_usace+'.inf')
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
+            
         utils.remove_glob(src_zip)
 ### End

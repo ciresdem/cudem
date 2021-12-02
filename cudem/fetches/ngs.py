@@ -1,4 +1,4 @@
-### ngs.py - SRTM fetch
+### ngs.py - NGS fetch
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -24,10 +24,12 @@
 
 import os
 import json
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
+
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -40,16 +42,23 @@ import cudem.fetches.utils as f_utils
 class NGS(f_utils.FetchModule):
     """Fetch NGS monuments from NOAA"""
     
-    def __init__(self, **kwargs):
+    def __init__(self, datum='geoidHt', **kwargs):
         super().__init__(**kwargs)
         self._ngs_search_url = 'http://geodesy.noaa.gov/api/nde/bounds?'
         self._outdir = os.path.join(os.getcwd(), 'ngs')
         self.name = 'ngs'
+        if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
+            utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(self.datum))
+            self.datum = 'geoidHt'
+        else:
+            self.datum = datum
 
-    def run(self, csv = False):
+    def run(self, csv=False):
         """Run the NGS (monuments) fetching module."""
         
-        if self.region is None: return([])
+        if self.region is None:
+            return([])
+        
         self.data = {
             'maxlon':self.region.xmax,
             'minlon':self.region.xmin,
@@ -60,6 +69,7 @@ class NGS(f_utils.FetchModule):
         _req = f_utils.Fetch(self._ngs_search_url).fetch_req(params=self.data)
         if _req is not None:
             self.results.append([_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'])
+            
         return(self)
 
     def yield_xyz(self, entry):
@@ -74,9 +84,20 @@ class NGS(f_utils.FetchModule):
             
             if len(r) > 0:
                 for row in r:
-                    yield(xyzfun.XYZPoint().from_list([float(row['lon']), float(row['lat']), float(row['geoidHt'])]))
+                    lon = float(row['lon'])
+                    lat = float(row['lat'])
+                    z = utils.float_or(row[self.datum])
 
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                    if z is not None:
+                        xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon, lat, z])
+                        if self.warp is not None:
+                            xyz.warp(warp_epsg=self.warp)
+                            
+                        yield(xyz)
+
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
         utils.remove_glob('{}*'.format(src_data))
 
 ### End

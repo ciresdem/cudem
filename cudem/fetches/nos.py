@@ -23,9 +23,11 @@
 ### Code:
 
 import os
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
@@ -84,6 +86,7 @@ class NOS(f_utils.FetchModule):
         if len(self.FRED.layer) == 0:
             self.FRED._close_ds()
             self.update()
+            
         self.FRED._close_ds()
         
     def update(self):
@@ -91,24 +94,32 @@ class NOS(f_utils.FetchModule):
         
         self.FRED._open_ds(1)
         for nosdir in self._nos_directories:
-            if self.callback(): break
+            if self.callback():
+                break
+            
             surveys = []
             xml_catalog = self._nos_xml_url(nosdir)
             page = f_utils.Fetch(xml_catalog).fetch_html()
             if page is None:
                 xml_catalog = self._nos_iso_xml_url(nosdir)
                 page = f_utils.Fetch(xml_catalog).fetch_html()
+                
             if page is None:
                 utils.echo_error_msg('failed to retrieve {}'.format(nosdir))
                 break
+            
             rows = page.xpath('//a[contains(@href, ".xml")]/@href')
-            if self.verbose: _prog = utils.CliProgress('scanning {} surveys in {}...'.format(len(rows), nosdir))
+            if self.verbose:
+                _prog = utils.CliProgress('scanning {} surveys in {}...'.format(len(rows), nosdir))
 
             for i, survey in enumerate(rows):
-                if self.callback(): break
+                if self.callback():
+                    break
+                
                 sid = survey[:-4]
                 if self.verbose:
                     _prog.update_perc((i, len(rows)))
+                    
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
                     this_xml = FRED.iso_xml(xml_catalog + survey)
@@ -128,9 +139,11 @@ class NOS(f_utils.FetchModule):
                                         'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(), 'DataLink': ','.join([','.join(x) for x in d_links]),
                                         'DataType': ','.join(list(set(d_types))), 'DataSource': 'nos', 'HorizontalDatum': h_epsg,
                                         'VerticalDatum': v_epsg, 'Info': this_xml.abstract(), 'geom': geom})
+                        
             if self.verbose:
                 _prog.end(0, 'scanned {} surveys in {}.'.format(len(rows), nosdir))
                 utils.echo_msg('added {} surveys from {}'.format(len(surveys), nosdir))
+                
             self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -146,8 +159,7 @@ class NOS(f_utils.FetchModule):
             else: dt = None
         else:
             dt = None
-            #print(src_nos)
-            #print(dt)
+            
         return(dt)
         
     def run(self):
@@ -173,20 +185,40 @@ class NOS(f_utils.FetchModule):
             if dt == 'geodas_xyz':
                 nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
                 for nos_f_r in nos_fns:
-                    _ds = datasets.XYZFile(fn=nos_f_r, data_format=168, skip=1, xpos=2, ypos=1, zpos=3, z_scale=-1, epsg=4326, warp=self.warp,
-                                           name=nos_f_r, src_region=self.region, verbose=self.verbose, remote=True)
+                    _ds = datasets.XYZFile(
+                        fn=nos_f_r,
+                        data_format=168,
+                        skip=1,
+                        xpos=2,
+                        ypos=1,
+                        zpos=3,
+                        epsg=4326,
+                        warp=self.warp,
+                        name=nos_f_r,
+                        src_region=self.region,
+                        verbose=self.verbose,
+                        remote=True
+                    )
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
-                utils.remove_glob(*nos_fns)
+                        
+                utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
 
             elif dt == 'grid_bag':
                 src_bags = utils.p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:
 
-                    _ds = datasets.RasterFile(fn=src_bag, data_format=200, warp=self.warp,
-                                              name=src_bag, src_region=self.region, verbose=self.verbose)
+                    _ds = datasets.RasterFile(
+                        fn=src_bag,
+                        data_format=200,
+                        warp=self.warp,
+                        name=src_bag,
+                        src_region=self.region,
+                        verbose=self.verbose
+                    )
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
+                        
                 utils.remove_glob(*src_bags)
         utils.remove_glob(src_nos)
     

@@ -25,10 +25,12 @@
 import os
 import sys
 import time
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import fetches
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.multibeam as mb
 import cudem.fetches.usace as usace
@@ -48,6 +50,7 @@ import cudem.fetches.osm as osm
 import cudem.fetches.globalelus as globalelus
 import cudem.fetches.copernicus as copernicus
 import cudem.fetches.nasadem as nasadem
+import cudem.fetches.tides as tides
         
 ## ==============================================
 ## Fetches Module Parser
@@ -78,6 +81,7 @@ the global and coastal oceans."""},
         'globalelus': {'description': """"""},
         'copernicus': {'description': """"""},
         'nasadem': {'description': """"""},
+        'tides': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -182,6 +186,10 @@ the global and coastal oceans."""},
         return(nasadem.NASADEM(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    def acquire_tides(self, **kwargs):
+        return(tides.Tides(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -236,12 +244,18 @@ the global and coastal oceans."""},
 
         if self.mod == 'nasadem':
             return(self.acquire_nasadem(**kwargs))
+        
+        if self.mod == 'tides':
+            return(self.acquire_tides(**kwargs))
 
 class Fetcher(datasets.XYZDataset):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.fetch_module = FetchesFactory(mod=self.fn, src_region=self.region, verbose=self.verbose).acquire(warp=self.warp)
+        self.name = self.fn
+        self.fetch_module = FetchesFactory(
+            mod=self.fn, src_region=self.region, verbose=self.verbose
+        ).acquire(warp=self.warp)
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset
@@ -259,7 +273,7 @@ class Fetcher(datasets.XYZDataset):
         self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
         return(self.infos)
-
+    
     def yield_xyz(self):
         for xyz in self.fetch_module.yield_results_to_xyz():
             yield(xyz)

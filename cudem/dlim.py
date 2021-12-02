@@ -242,7 +242,8 @@ class DatasetFactory:
                   'chs',
                   'hrdem',
                   'copernicus',
-                  'nasadem'
+                  'nasadem',
+                  'tides'
               ],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },

@@ -25,9 +25,11 @@
 import os
 import sys
 import lxml.etree
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
@@ -65,6 +67,7 @@ class CopernicusDEM(f_utils.FetchModule):
         if len(self.FRED.layer) == 0:
             self.FRED._close_ds()
             self.update()
+            
         self.FRED._close_ds()
 
     def update(self):
@@ -79,7 +82,6 @@ class CopernicusDEM(f_utils.FetchModule):
             _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(rows), self.cop_10_url))
         
         for i, row in enumerate(rows):
-
             sid = row.split('.')[0]
             if self.verbose:
                 _prog.update_perc((i, len(rows)))
@@ -138,6 +140,7 @@ class CopernicusDEM(f_utils.FetchModule):
         if self.verbose:
             _prog.end(0, 'scanned {} tiles in {}.'.format(len(fns), self.cop30_url))
             utils.echo_msg('added {} COPERNICUS DEM tiles'.format(len(surveys)))
+            
         self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -150,6 +153,7 @@ class CopernicusDEM(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
+                
         return(self)
 
     def yield_xyz(self, entry):
@@ -158,12 +162,20 @@ class CopernicusDEM(f_utils.FetchModule):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
-                _ds = datasets.RasterFile(fn=src_cop_dem, data_format=200, epsg=4326, warp=self.warp,
-                                          name=src_cop_dem, src_region=self.region, verbose=self.verbose)
+                _ds = datasets.RasterFile(
+                    fn=src_cop_dem,
+                    data_format=200,
+                    epsg=4326,
+                    warp=self.warp,
+                    name=src_cop_dem,
+                    src_region=self.region,
+                    verbose=self.verbose
+                )
                 for xyz in _ds.yield_xyz():
                     if xyz.z != 0:
                         yield(xyz)
-                utils.remove_glob(src_cop_dem)
+                        
+                utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
         utils.remove_glob(entry[1])
 
 if __name__ == '__main__':
