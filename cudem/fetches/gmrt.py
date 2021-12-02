@@ -23,9 +23,11 @@
 ### Code:
 
 import os
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -41,7 +43,7 @@ class GMRT(f_utils.FetchModule):
     
     def __init__(self, res='max', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
         super().__init__(**kwargs) 
-        #if self.verbose: utils.echo_msg('loading GMRT fetch module...')
+
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
         self._gmrt_grid_urls_url = "https://www.gmrt.org:443/services/GridServer/urls?"
         self._gmrt_grid_metadata_url = "https://www.gmrt.org/services/GridServer/metadata?"        
@@ -55,7 +57,9 @@ class GMRT(f_utils.FetchModule):
     def run(self):
         '''Run the GMRT fetching module'''
 
-        if self.region is None: return([])
+        if self.region is None:
+            return([])
+        
         self.data = {
             'north':self.region.ymax,
             'west':self.region.xmin,
@@ -64,27 +68,40 @@ class GMRT(f_utils.FetchModule):
             'mformat':'json',
             'resolution':self.res,
             'format':self.fmt,
-            'layer':self.layer,
         }
+
+        ## specifying the layer in the url builder breaks it...
+        #'layer':self.layer,
         
         req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(params=self.data, tries=10, timeout=2)
         if req is not None:
+            print(req.url)
             gmrt_urls = req.json()
             for url in gmrt_urls:
                 opts = {}
                 for url_opt in url.split('?')[1].split('&'):
                     opt_kp = url_opt.split('=')
                     opts[opt_kp[0]] = opt_kp[1]
+                    
                 url_region = regions.Region().from_list([float(opts['west']), float(opts['east']), float(opts['south']), float(opts['north'])])
                 outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
                 self.results.append([url, outf, 'gmrt'])
+                
         return(self)
 
     def yield_xyz(self, entry):
         src_data = 'gmrt_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
-            gmrt_ds = datasets.RasterFile(fn=src_data, data_format=200, epsg=4326, warp=self.warp, weight=1,
-                                          name=src_data, src_region=self.region, verbose=self.verbose)
+            gmrt_ds = datasets.RasterFile(
+                fn=src_data,
+                data_format=200,
+                epsg=4326,
+                warp=self.warp,
+                weight=1,
+                name=src_data,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             if self.bathy_only:
                 for xyz in gmrt_ds.yield_xyz():
                     if xyz.z < 0:
@@ -92,7 +109,10 @@ class GMRT(f_utils.FetchModule):
             else:
                 for xyz in gmrt_ds.yield_xyz():
                     yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                    
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
         utils.remove_glob('{}*'.format(src_data))
     
 ### End

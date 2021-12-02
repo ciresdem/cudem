@@ -67,11 +67,12 @@ def urlencode(opts):
 
 class Fetch:
 
-    def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers):
+    def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers, verify=True):
         self.url = url
         self.callback = callback
         self.verbose = verbose
         self.headers = headers
+        self.verify = verify
 
     def fetch_req(self, params=None, tries=5, timeout=2, read_timeout=10):
         """fetch src_url and return the requests object"""
@@ -80,7 +81,7 @@ class Fetch:
             utils.echo_error_msg('max-tries exhausted')
             return(None)
         try:
-            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers))
+            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify))
         except:
             return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
             
@@ -119,7 +120,7 @@ class Fetch:
         if not os.path.exists(dst_fn) or overwrite:
             try:
                 with requests.get(self.url, stream=True, params=params, headers=self.headers,
-                                  timeout=(timeout,read_timeout)) as req:
+                                  timeout=(timeout,read_timeout), verify=self.verify) as req:
                     req_h = req.headers
                     if 'Content-length' in req_h:
                         req_s = int(req_h['Content-length'])

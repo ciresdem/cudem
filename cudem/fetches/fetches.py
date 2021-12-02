@@ -270,6 +270,7 @@ class Fetcher(datasets.XYZDataset):
         if self.region is None:
             #self.region = self.fetch_module.region
             self.region = regions.Region().from_list([-180,180,-90,90])
+            
         self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
         return(self.infos)

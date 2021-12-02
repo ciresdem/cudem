@@ -23,9 +23,11 @@
 ### Code:
 
 import os
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -58,21 +60,34 @@ class SRTMPlus(f_utils.FetchModule):
             'east':self.region.xmax,
         }
 
-        _req = f_utils.Fetch(self._srtm_url).fetch_req(params=self.data, tries=10, timeout=2)
+        _req = f_utils.Fetch(self._srtm_url, verify=False).fetch_req(params=self.data)
         if _req is not None:
-            url = _req.url
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
-            self.results.append([url, outf, 'srtm'])
+            self.results.append([_req.url, outf, 'srtm'])
+            
         return(self)
 
     def yield_xyz(self, entry):
         src_data = 'srtm_plus_tmp.xyz'
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
-            _ds = datasets.XYZFile(fn=src_data, data_format=168, skip=1, epsg=4326, warp=self.warp,
-                                   name=src_data, src_region=self.region, verbose=self.verbose, remote=True)
-
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose, verify=False
+        ).fetch_file(src_data) == 0:
+            _ds = datasets.XYZFile(
+                fn=src_data,
+                data_format=168,
+                skip=1,
+                epsg=4326,
+                warp=self.warp,
+                name=src_data,
+                src_region=self.region,
+                verbose=self.verbose,
+                remote=True
+            )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
         utils.remove_glob('{}*'.format(src_data))
 ### End

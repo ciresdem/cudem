@@ -642,7 +642,7 @@ class XYZFile(XYZDataset):
         self.x_offset = x_offset
         self.y_offset = y_offset
 
-        self._known_delims = [' ', ',', '/', ':']
+        self._known_delims = [',', '/', ':']
         self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
 
         if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0:
@@ -745,6 +745,7 @@ class XYZFile(XYZDataset):
                     x_pos=self.xpos,
                     y_pos=self.ypos
                 )
+
                 if this_xyz.valid_p():
                     if self.scoff:
                         this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
@@ -752,7 +753,7 @@ class XYZFile(XYZDataset):
                         this_xyz.z *= self.z_scale
                         
                     this_xyz.w = self.weight
-
+                    
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
 

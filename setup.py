@@ -44,7 +44,7 @@ setuptools.setup(
     install_requires = [
         'numpy',
         'scipy',
-        'requests',
+        'requests[security]',
         'lxml',
         'matplotlib',
         'laspy[laszip]',

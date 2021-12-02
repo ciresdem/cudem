@@ -23,9 +23,11 @@
 ### Code:
 
 import os
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -50,29 +52,46 @@ class MarGrav(f_utils.FetchModule):
     def run(self):
         '''Run the mar_grav fetching module.'''
         
-        if self.region is None: return([])
-        self.data = {
+        if self.region is None:
+            return([])
+        
+        grav_data = {
             'north':self.region.ymax,
             'west':self.region.xmin,
             'south':self.region.ymin,
             'east':self.region.xmax,
             'mag':1,
         }
-        _req = f_utils.Fetch(self._mar_grav_url).fetch_req(params=self.data, tries=10, timeout=2)
+        _req = f_utils.Fetch(self._mar_grav_url, verify=False).fetch_req(params=grav_data)
         if _req is not None:
-            url = _req.url
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn'))
-            self.results.append([url, outf, 'mar_grav'])
+            self.results.append([_req.url, outf, 'mar_grav'])
+            
         return(self)
         
     def yield_xyz(self, entry):
         src_data = 'mar_grav_tmp.xyz'
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
-            _ds = datasets.XYZFile(fn=src_data, data_format=168, skip=1, x_offset=-360, epsg=4326, warp=self.warp,
-                                   name=src_data, src_region=self.region, verbose=self.verbose, remote=True)
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose, verify=False
+        ).fetch_file(src_data) == 0:
+            _ds = datasets.XYZFile(
+                fn=src_data,
+                data_format=168,
+                skip=1,
+                x_offset=-360,
+                epsg=4326,
+                warp=self.warp,
+                name=src_data,
+                src_region=self.region,
+                verbose=self.verbose,
+                remote=True
+            )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
         utils.remove_glob('{}*'.format(src_data))                
 
 ### End
