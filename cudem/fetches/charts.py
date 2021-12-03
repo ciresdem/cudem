@@ -24,11 +24,13 @@
 
 import os
 import json
+
 from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
@@ -44,11 +46,11 @@ class NauticalCharts(f_utils.FetchModule):
 
     def __init__(self, where=[], datatype=None, **kwargs):
         super().__init__(**kwargs)
+        
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
         self._rnc_data_catalog = 'https://charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
-        # self._enc_data_catalog = 'https://www.charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
-        # self._rnc_data_catalog = 'https://www.charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
+        self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
         self._outdir = os.path.join(os.getcwd(), 'charts')
         self._dt_xml = { 'ENC':self._enc_data_catalog,
                          'RNC':self._rnc_data_catalog }
@@ -59,7 +61,7 @@ class NauticalCharts(f_utils.FetchModule):
         self._info = '''Raster and Vector U.S. Nautical Charts'''
         self._title = '''NOAA Nautical CHARTS (RNC & ENC)'''
         self._usage = '''< charts >'''
-        self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
+        self.v_datum = 'mhw'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
         
@@ -69,6 +71,7 @@ class NauticalCharts(f_utils.FetchModule):
         if len(self.FRED.layer) == 0:
             self.FRED._close_ds()
             self.update()
+            
         self.FRED._close_ds()
 
     def update(self):
@@ -87,6 +90,7 @@ class NauticalCharts(f_utils.FetchModule):
                 title = this_xml.title()
                 if self.verbose:
                     _prog.update_perc((i, len(charts)))
+                    
                 self.FRED._attribute_filter(["ID = '{}'".format(title)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
                     h_epsg, v_epsg = this_xml.reference_system()
@@ -98,10 +102,12 @@ class NauticalCharts(f_utils.FetchModule):
                                         'DataLink': this_data, 'Link': self._charts_url, 'DataType': dt,
                                         'DataSource': 'charts', 'HorizontalDatum': h_epsg, 'VerticalDatum': v_epsg,
                                         'Info': this_xml.abstract, 'geom': geom})
+                        
             self.FRED._add_surveys(surveys)
             if self.verbose:
                 _prog.end(0, 'scanned {} surveys in {}'.format(len(charts), dt))
                 utils.echo_msg('added {} surveys from {}'.format(len(surveys), dt))
+                
         self.FRED._close_ds()
         
     def run(self):
@@ -135,8 +141,17 @@ class NauticalCharts(f_utils.FetchModule):
                     except:
                         utils.echo_warning_msg('could not parse {}'.format(src_ch))
 
-                    _ds = datasets.XYZFile(fn=dst_xyz, data_format=168, z_scale=-1, epsg=4326, warp=self.warp,
-                                           name=dst_xyz, src_region=self.region, verbose=self.verbose, remote=True)
+                    _ds = datasets.XYZFile(
+                        fn=dst_xyz,
+                        data_format=168,
+                        z_scale=-1,
+                        epsg=4326,
+                        warp=self.warp,
+                        name=dst_xyz,
+                        src_region=self.region,
+                        verbose=self.verbose,
+                        remote=True
+                    )
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
 

@@ -51,6 +51,7 @@ import cudem.fetches.globalelus as globalelus
 import cudem.fetches.copernicus as copernicus
 import cudem.fetches.nasadem as nasadem
 import cudem.fetches.tides as tides
+import cudem.fetches.vdatum as vdatum
         
 ## ==============================================
 ## Fetches Module Parser
@@ -82,6 +83,7 @@ the global and coastal oceans."""},
         'copernicus': {'description': """"""},
         'nasadem': {'description': """"""},
         'tides': {'description': """"""},
+        'vdatum': {'description': """"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -190,6 +192,10 @@ the global and coastal oceans."""},
         return(tides.Tides(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
+    def acquire_vdatum(self, **kwargs):
+        return(vdatum.VDATUM(
+            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
     def acquire(self, **kwargs):
         if self.mod == 'multibeam':
             return(self.acquire_mb(**kwargs))
@@ -247,6 +253,9 @@ the global and coastal oceans."""},
         
         if self.mod == 'tides':
             return(self.acquire_tides(**kwargs))
+
+        if self.mod == 'vdatum':
+            return(self.acquire_vdatum(**kwargs))
 
 class Fetcher(datasets.XYZDataset):
     

@@ -107,7 +107,7 @@ class Tides(f_utils.FetchModule):
         }
         _req = f_utils.Fetch(self._stations_api_url).fetch_req(params=_data)
         if _req is not None:
-            self.results.append([_req.url, 'stations_results_{}.json'.format(self.region.format('fn')), 'tides'])
+            self.results.append([_req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides'])
             
         return(self)
 
@@ -116,27 +116,34 @@ class Tides(f_utils.FetchModule):
         
         src_data = 'tides_tmp.json'
         src_csv = 'tides_tmp.csv'
-
+        ln = 0
+        
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             with open(src_data, 'r') as json_file:
                 r = json.load(json_file)
-            
+
             if len(r) > 0:
                 for feature in r['features']:
                     lon = feature['attributes']['longitude']
                     lat = feature['attributes']['latitude']
-                    z = feature['attributes'][self.t_datum] - feature['attributes'][self.s_datum]
+                    z = feature['attributes'][self.s_datum] - feature['attributes'][self.t_datum]
                     if self.units == 'm':
                         z = z * 0.3048
                         
                     xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon, lat, z])
                     if self.warp is not None:
                         xyz.warp(warp_epsg=self.warp)
-                    
+
+                    ln += 1
                     yield(xyz)
                     
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+
+        if self.verbose:
+            utils.echo_msg(
+                'parsed {} data records from {}'.format(ln, src_data)
+            )
             
         utils.remove_glob('{}*'.format(src_data))
 ### End

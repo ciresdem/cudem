@@ -1,8 +1,8 @@
-### emodnet.py - emodnet fetch - Europe
+### chs.py - emodnet fetch - Europe
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
-## emodnet.py is part of CUDEM
+## chs.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 

@@ -43,11 +43,12 @@ import cudem.fetches.utils as f_utils
 class MarGrav(f_utils.FetchModule):
     '''Fetch mar_grav sattelite altimetry topography'''
     
-    def __init__(self, **kwargs):
+    def __init__(self, mag=1, **kwargs):
         super().__init__(**kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
         self._outdir = os.path.join(os.getcwd(), 'mar_grav')
         self.name = 'mar_grav'
+        self.mag = mag if mag == 1 else 0.1
 
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -60,7 +61,7 @@ class MarGrav(f_utils.FetchModule):
             'west':self.region.xmin,
             'south':self.region.ymin,
             'east':self.region.xmax,
-            'mag':1,
+            'mag':self.mag,
         }
         _req = f_utils.Fetch(self._mar_grav_url, verify=False).fetch_req(params=grav_data)
         if _req is not None:

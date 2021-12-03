@@ -1331,7 +1331,8 @@ class WafflesVdatum(Waffle):
             src_region=self.region,
             epsg=self.epsg,
             name=self.name,
-            verbose=self.verbose
+            verbose=self.verbose,
+            weight=None
         )
 
         with open('empty.xyz', 'w') as mt_xyz:
@@ -1345,7 +1346,8 @@ class WafflesVdatum(Waffle):
                 src_region=self.region,
                 epsg=self.epsg,
                 name=self.name,
-                verbose=self.verbose
+                verbose=self.verbose,
+                weight=None
             )
             
             empty_infos = empty_xyz.inf()
@@ -1371,7 +1373,7 @@ class WafflesVdatum(Waffle):
             vd_out = {}
             status = -1
 
-        utils.remove_glob('empty.*', 'result/*', 'result')
+        #utils.remove_glob('empty.*', 'result/*', 'result')
         return(self)
 
 class WafflesGDALGrid(Waffle):

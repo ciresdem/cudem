@@ -648,7 +648,49 @@ def p_unzip(src_file, exts=None):
                 break
             
     return(src_procs)
+
+def p_f_unzip(src_file, fns=None):
+    """unzip/gunzip src_file based on `fn`
     
+    Args:
+      src_file (str): a zip/gzip filename string
+      exts (list): a list of files to extract
+
+    Returns:
+      list: a list of the extracted files
+    """
+    
+    src_procs = []
+    if src_file.split('.')[-1].lower() == 'zip':
+        with zipfile.ZipFile(src_file) as z:
+            zfs = z.namelist()
+            for fn in fns:
+                for zf in zfs:
+                    if fn == os.path.basename(zf):
+                        src_procs.append(os.path.basename(zf))
+                        with open(os.path.basename(zf), 'wb') as f:
+                            f.write(z.read(zf))
+    elif src_file.split('.')[-1] == 'gz':
+        try:
+            tmp_proc = gunzip(src_file)
+        except:
+            echo_error_msg('unable to gunzip {}'.format(src_file))
+            tmp_proc = None
+            
+        if tmp_proc is not None:
+            for fn in fns:
+                if fn == os.path.basename(tmp_proc):
+                    src_procs.append(os.path.basename(tmp_proc))
+                    break
+                else: remove_glob(tmp_proc)
+    else:
+        for fn in fns:
+            if fn == os.path.basename(src_file):
+                src_procs.append(src_file)
+                break
+            
+    return(src_procs)
+
 ## ==============================================
 ## Write an array to a gdal file
 ## ==============================================
