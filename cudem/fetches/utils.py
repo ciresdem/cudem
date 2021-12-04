@@ -192,9 +192,20 @@ def fetch_queue(q, m, p=False):
             #if this_region is None:
             if not p:
                 if fetch_args[0].split(':')[0] == 'ftp':
-                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose, headers=m.headers).fetch_ftp_file(fetch_args[1])
+                    Fetch(
+                        url=fetch_args[0],
+                        callback=m.callback,
+                        verbose=m.verbose,
+                        headers=m.headers
+                    ).fetch_ftp_file(fetch_args[1])
                 else:
-                    Fetch(url=fetch_args[0], callback=m.callback, verbose=m.verbose, headers=m.headers).fetch_file(fetch_args[1])
+                    Fetch(
+                        url=fetch_args[0],
+                        callback=m.callback,
+                        verbose=m.verbose,
+                        headers=m.headers,
+                        verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
+                    ).fetch_file(fetch_args[1])
             else:
                 if m.region is not None:
                     o_x_fn = fetch_args[1] + m.region.format('fn') + '.xyz'
