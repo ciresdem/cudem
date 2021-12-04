@@ -373,7 +373,8 @@ class Waffle:
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
-            gdal.GDT_Float32, -9999, 'GTiff')
+            gdal.GDT_Float32, -9999, 'GTiff'
+        )
         for this_xyz in src_xyz:
             yield(this_xyz)
             
@@ -1824,8 +1825,11 @@ class WafflesCoastline(Waffle):
 
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr <= 0] = 0
-        self.coast_array += gmrt_ds_arr
 
+        #self.coast_array += gmrt_ds_arr
+
+        self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]
+        
         out_ds = gmrt_ds_arr = None
 
         utils.remove_glob(gmrt_tif[1])
@@ -1863,7 +1867,7 @@ class WafflesCoastline(Waffle):
             
             c_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
 
-            c_ds_arr[c_ds_arr != 0] = 1
+            c_ds_arr[c_ds_arr > 0] = 1
             self.coast_array += c_ds_arr
 
             out_ds = c_ds_arr = None
@@ -1918,7 +1922,7 @@ class WafflesCoastline(Waffle):
                     verbose=True
                 )
 
-                utils.remove_glob(tnm_zip[1], *tnm_zips)
+                utils.remove_glob(tnm_zip[1], *tnm_zips, gdb)
 
             utils.run_cmd(
                 'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
@@ -1932,8 +1936,9 @@ class WafflesCoastline(Waffle):
             tnm_ds = gdal.Open('nhdArea_merge.tif')
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-
-                tnm_ds_arr[tnm_ds_arr != 1] = -1
+                
+                #tnm_ds_arr[tnm_ds_arr != 1] = -1
+                tnm_ds_arr[tnm_ds_arr < 1] = 0
 
                 self.coast_array -= tnm_ds_arr
 

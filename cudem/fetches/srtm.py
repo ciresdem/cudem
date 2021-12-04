@@ -37,6 +37,8 @@ import cudem.fetches.utils as f_utils
 ## Fetch srtm+ data
 ## https://topex.ucsd.edu/WWW_html/srtm15_plus.html
 ## http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
+## https://topex.ucsd.edu/pub/srtm15_plus/
+## https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
 ##
 ## =============================================================================
 class SRTMPlus(f_utils.FetchModule):

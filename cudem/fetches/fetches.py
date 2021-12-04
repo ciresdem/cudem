@@ -64,9 +64,15 @@ compilation of edited multibeam sonar data collected by scientists and instituti
 reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
 of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
 to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
-the global and coastal oceans."""},
-        'srtm_plus': {'description': """"""},
-        'mar_grav': {'description': """"""},
+the global and coastal oceans.
+
+< gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >"""},
+        'srtm_plus': {'description': """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
+
+< srtm_plus >"""},
+        'mar_grav': {'description': """Sattelite Altimetry Topography from Scripps.
+
+< mar_grav >"""},
         'multibeam': {'description': """"""},
         'usace': {'description': """"""},
         'ngs': {'description': """"""},
@@ -82,7 +88,9 @@ the global and coastal oceans."""},
         'globalelus': {'description': """"""},
         'copernicus': {'description': """"""},
         'nasadem': {'description': """"""},
-        'tides': {'description': """"""},
+        'tides': {'description': """Tide station information from NOAA/NOS
+
+< tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""},
         'vdatum': {'description': """"""},
     }
     

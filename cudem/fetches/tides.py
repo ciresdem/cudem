@@ -82,7 +82,7 @@ import cudem.fetches.FRED as FRED
 class Tides(f_utils.FetchModule):
     """Fetch NOS Tide Stations"""
     
-    def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
+    def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
         super().__init__(**kwargs)
         self._stations_api_url = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
         self._outdir = os.path.join(os.getcwd(), 'tides')
@@ -90,6 +90,7 @@ class Tides(f_utils.FetchModule):
         self.s_datum = s_datum
         self.t_datum = t_datum
         self.units = units
+        self.station_id = station_id
         
     def run(self):
         '''Run the TIDES fetching module'''
@@ -124,6 +125,9 @@ class Tides(f_utils.FetchModule):
 
             if len(r) > 0:
                 for feature in r['features']:
+                    if self.station_id is not None:
+                        if self.station_id != feature['attributes']['id']:
+                            continue
                     lon = feature['attributes']['longitude']
                     lat = feature['attributes']['latitude']
                     z = feature['attributes'][self.s_datum] - feature['attributes'][self.t_datum]

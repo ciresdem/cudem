@@ -21,7 +21,7 @@
 ##
 ### Commentary:
 ##
-## Fetch VDATUM conversion grids from NOAA
+## Fetch VDATUM transformation grids from NOAA
 ##
 ### Code:
 
