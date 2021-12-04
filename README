@@ -36,7 +36,8 @@ waffles                   generate Digital Elevation Models
 regions                   process REGIONS
 fetches                   fetch elevation data
                           modules: gmrt, srtm_plus, mar_grav, multibeam, usace, ngs, nos, charts, digital_coast,
-	                           ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem
+	                           ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem,
+				   tides, vdatum
 spatial_metadata          generate spatial metadata
 uncertainties             calculate DEM uncertainties
 bag2tif2chunks2xyz.sh     convert a BAG to chunked XYZ
