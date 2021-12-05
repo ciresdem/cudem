@@ -198,10 +198,13 @@ class VDATUM(f_utils.FetchModule):
         appropriate gtx file.
         """
 
+        w = []
         if self.datatype is not None:
-            self.where.append("DataType = '{}'".format(self.datatype))
+            #self.where.append("DataType = '{}'".format(self.datatype))
+            w.append("DataType = '{}'".format(self.datatype))
 
-        for surv in FRED._filter_FRED(self):
+        #for surv in FRED._filter_FRED(self):
+        for surv in self.FRED._filter(self.region, w, [self.name]):
             if self.gtx:
                 dst_zip = '{}.zip'.format(surv['ID'])
                 if f_utils.Fetch(surv['DataLink'], callback=self.callback, verbose=self.verbose).fetch_file(dst_zip) == 0:

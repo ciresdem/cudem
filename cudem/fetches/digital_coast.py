@@ -48,7 +48,8 @@ class DigitalCoast(f_utils.FetchModule):
         super().__init__(**kwargs)
         self._dc_url = 'https://coast.noaa.gov'
         self._dc_htdata_url = 'https://coast.noaa.gov/htdata/'
-        self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
+        #self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
+        self._dc_dirs = ['lidar1_z', 'raster1']
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.where = where
         self.datatype = datatype

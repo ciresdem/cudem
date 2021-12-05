@@ -73,21 +73,21 @@ the global and coastal oceans.
         'mar_grav': {'description': """Sattelite Altimetry Topography from Scripps.
 
 < mar_grav >"""},
-        'multibeam': {'description': """"""},
-        'usace': {'description': """"""},
-        'ngs': {'description': """"""},
-        'nos': {'description': """"""},
-        'charts': {'description': """"""},
-        'digital_coast': {'description': """"""},
-        'ncei_thredds': {'description': """"""},
-        'tnm': {'description': """"""},
-        'emodnet': {'description': """"""},
-        'chs': {'description': """"""},
-        'hrdem': {'description': """"""},
-        'osm': {'description': """"""},
+        'multibeam': {'description': """NOAA Multibeam data."""},
+        'usace': {'description': """USACE eHydro"""},
+        'ngs': {'description': """NGS Monuments"""},
+        'nos': {'description': """NOS Soundings (bag/hydro)"""},
+        'charts': {'description': """NOAA Nautical Charts"""},
+        'digital_coast': {'description': """NOAA Digital Coast"""},
+        'ncei_thredds': {'description': """NOAA NCEI DEMs"""},
+        'tnm': {'description': """USGS The National Map"""},
+        'emodnet': {'description': """EU elevation data"""},
+        'chs': {'description': """Canadian Hydrographic surveys"""},
+        'hrdem': {'description': """High-Resolution elevation data for Canada"""},
+        'osm': {'description': """Open Street Map (beta)"""},
         'globalelus': {'description': """"""},
-        'copernicus': {'description': """"""},
-        'nasadem': {'description': """"""},
+        'copernicus': {'description': """Copernicus sattelite elevation data"""},
+        'nasadem': {'description': """NASA digital elevation model"""},
         'tides': {'description': """Tide station information from NOAA/NOS
 
 < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""},
@@ -114,6 +114,7 @@ the global and coastal oceans.
             self.mod = opts[0]
         else:
             utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
+            sys.exit(-1)
         return(self)
 
     def add_module(self, type_def={}):

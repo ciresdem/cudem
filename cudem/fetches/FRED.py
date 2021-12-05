@@ -472,8 +472,15 @@ class FRED:
                         _results[-1][key] = feat.GetField(key)
                         
             #this_layer = None
-        if close_p: self._close_ds()
-        if self._verbose: _prog.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
+        if close_p:
+            self._close_ds()
+            
+        if self._verbose:
+            _prog.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
+
+        #clear where
+        #where = []
+            
         return(_results)
 
 ## ==============================================
