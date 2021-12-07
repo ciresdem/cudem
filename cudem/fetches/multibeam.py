@@ -40,6 +40,7 @@ import cudem.fetches.utils as f_utils
 class Multibeam(f_utils.FetchModule):
 
     def __init__(self, processed=False, inc=None, **kwargs):
+        super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
         self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
@@ -47,10 +48,9 @@ class Multibeam(f_utils.FetchModule):
         self._mb_html = "https://www.ngdc.noaa.gov/"
         self._outdir = os.path.join(os.getcwd(), 'mb')
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
-        self.name = 'mb'
+        self.name = 'multibeam'
         self.processed_p = processed
         self.inc = utils.str2inc(inc)
-        super().__init__(**kwargs)
 
     def mb_inf_data_format(self, src_inf):
         """extract the data format from the mbsystem inf file.
@@ -140,7 +140,7 @@ class Multibeam(f_utils.FetchModule):
         for entry in self.results:
             self.echo_inf(entry)
 
-    def echo_inf(self, entry):
+    def echo_inf(self, entry, keep_inf=False):
         src_data = os.path.basename(entry[1])
         src_mb = src_data[:-4]
         survey = entry[0].split('/')[7]
@@ -149,6 +149,8 @@ class Multibeam(f_utils.FetchModule):
             mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
             mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
             print(survey, src_data, mb_fmt, mb_perc, mb_date)
+            if not keep_inf:
+                utils.remove_glob('{}'.format(src_mb))
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])

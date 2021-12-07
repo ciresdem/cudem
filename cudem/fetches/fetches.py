@@ -52,7 +52,7 @@ import cudem.fetches.copernicus as copernicus
 import cudem.fetches.nasadem as nasadem
 import cudem.fetches.tides as tides
 import cudem.fetches.vdatum as vdatum
-        
+
 ## ==============================================
 ## Fetches Module Parser
 ## ==============================================
@@ -73,25 +73,28 @@ the global and coastal oceans.
         'mar_grav': {'description': """Sattelite Altimetry Topography from Scripps.
 
 < mar_grav >"""},
-        'multibeam': {'description': """NOAA Multibeam data."""},
+        'multibeam': {'description': """NOAA Multibeam data.
+
+< multibeam >"""},
         'usace': {'description': """USACE eHydro"""},
         'ngs': {'description': """NGS Monuments"""},
         'nos': {'description': """NOS Soundings (bag/hydro)"""},
         'charts': {'description': """NOAA Nautical Charts"""},
         'digital_coast': {'description': """NOAA Digital Coast"""},
         'ncei_thredds': {'description': """NOAA NCEI DEMs"""},
-        'tnm': {'description': """USGS The National Map"""},
+        'tnm': {'description': """USGS' The National Map"""},
         'emodnet': {'description': """EU elevation data"""},
         'chs': {'description': """Canadian Hydrographic surveys"""},
         'hrdem': {'description': """High-Resolution elevation data for Canada"""},
         'osm': {'description': """Open Street Map (beta)"""},
-        'globalelus': {'description': """"""},
         'copernicus': {'description': """Copernicus sattelite elevation data"""},
         'nasadem': {'description': """NASA digital elevation model"""},
         'tides': {'description': """Tide station information from NOAA/NOS
 
 < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""},
-        'vdatum': {'description': """"""},
+        'vdatum': {'description': """NOAA's VDATUM transformation grids
+
+< vdatum:datatype=None:gtx=False >"""},
     }
     
     def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
@@ -113,8 +116,8 @@ the global and coastal oceans.
                 self.mod_args = utils.args2dict(list(opts[1:]), {})
             self.mod = opts[0]
         else:
-            utils.echo_error_msg('invalid module name `{}`'.format(opts[0]))
-            sys.exit(-1)
+            utils.echo_error_msg('could not parse module `{}`'.format(opts[0]))
+            return(None)
         return(self)
 
     def add_module(self, type_def={}):
@@ -165,10 +168,6 @@ the global and coastal oceans.
         return(tnm.TheNationalMap(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
 
-    # def acquire_tnm(self, **kwargs):
-    #     return(tnm.TNM(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-    
     def acquire_emodnet(self, **kwargs):
         return(emodnet.EMODNet(
             src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
@@ -272,8 +271,13 @@ class Fetcher(datasets.XYZDataset):
         super().__init__(**kwargs)
         self.name = self.fn
         self.fetch_module = FetchesFactory(
-            mod=self.fn, src_region=self.region, verbose=self.verbose
+            mod=self.fn,
+            src_region=self.region,
+            verbose=self.verbose
         ).acquire(warp=self.warp)
+
+        if self.fetch_module is None:
+            pass
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset
@@ -310,7 +314,7 @@ _fetches_module_long_desc = lambda x: 'fetches modules:\n% fetches ... <mod>:key
 ## ==============================================
 fetches_usage = """{cmd} ({f_version}): Fetches; Fetch and process remote elevation data
 
-usage: {cmd} [ -hiqwPRW [ args ] ] MODULE ...
+usage: {cmd} [ -hlmpqR [ args ] ] MODULE ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -321,9 +325,7 @@ Options:
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format in WGS84. <beta>
-
-  --weights\t\tOutput WEIGHT values along with xyz
-  --quiet\t\tLower the verbosity to a quiet
+  -q, --quiet\t\tLower the verbosity to a quiet
 
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
@@ -346,7 +348,6 @@ def fetches_cli(argv = sys.argv):
     these_regions = []
     mods = []
     mod_opts = {}
-    want_weights = False
     want_list = False
     want_proc = False
     want_verbose = True
@@ -363,8 +364,6 @@ def fetches_cli(argv = sys.argv):
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
-        elif arg == '--weights' or arg == '-w':
-            want_weights = True
         elif arg == '--list' or arg == '-l':
             want_list = True
         elif arg == '--process' or arg == '-p':
@@ -381,8 +380,12 @@ def fetches_cli(argv = sys.argv):
             try:
                 if argv[i + 1] in FetchesFactory.mods.keys():
                     sys.stderr.write(_fetches_module_long_desc({k: FetchesFactory.mods[k] for k in (argv[i + 1],)}))
-                else: sys.stderr.write(_fetches_module_long_desc(FetchesFactory.mods))
-            except: sys.stderr.write(_fetches_module_long_desc(FetchesFactory.mods))
+                else:
+                    sys.stderr.write(_fetches_module_long_desc(FetchesFactory.mods))
+                    
+            except:
+                sys.stderr.write(_fetches_module_long_desc(FetchesFactory.mods))
+                
             sys.exit(0)
         elif arg[0] == '-':
             sys.stderr.write(fetches_usage)
@@ -418,15 +421,28 @@ def fetches_cli(argv = sys.argv):
             utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 
     for rn, this_region in enumerate(these_regions):
-        if stop_threads: return
-        x_fs = [FetchesFactory(mod=mod, src_region=this_region, verbose=want_verbose).acquire(warp=4326) for mod in mods]
+        if stop_threads:
+            return
+        
+        x_fs = [FetchesFactory(
+            mod=mod,
+            src_region=this_region,
+            verbose=want_verbose
+        ).acquire(warp=4326) for mod in mods]
         for x_f in x_fs:
-            utils.echo_msg('running fetch module {} on region {}...'.format(x_f.name, this_region.format('str')))
+            if x_f is None:
+                continue
             
-            #r = x_f.run().results
+            if want_verbose:
+                utils.echo_msg('running fetch module {} on region {}...'.format(x_f.name, this_region.format('str')))
+            
             x_f.run()
-            utils.echo_msg('found {} data files.'.format(len(x_f.results)))
-            if len(x_f.results) == 0: break
+            if want_verbose:
+                utils.echo_msg('found {} data files.'.format(len(x_f.results)))
+                
+            if len(x_f.results) == 0:
+                break
+            
             if want_list:
                 for result in x_f.results:
                     print(result[0])
@@ -439,13 +455,14 @@ def fetches_cli(argv = sys.argv):
                     while True:
                         time.sleep(2)
                         sys.stderr.write('\x1b[2K\r')
-                        perc = float((len(x_f.results) - fr.fetch_q.qsize())) / len(x_f.results) * 100 if len(x_f.results) > 0 else 1
-                        #if want_verbose: sys.stderr.write('fetches: fetching remote data files [{}%]'.format(perc))
+                        perc = float((len(x_f.results)-fr.fetch_q.qsize())) / len(x_f.results)*100 if len(x_f.results) > 0 else 1
                         if want_verbose:
                             _p.update_perc((len(x_f.results) - fr.fetch_q.qsize(), len(x_f.results)))
+                            
                         sys.stderr.flush()
                         if not fr.is_alive():
                             break
+                        
                 except (KeyboardInterrupt, SystemExit):
                     utils.echo_error_msg('user breakage...please wait for while fetches exits.')
                     x_f.status = -1
@@ -453,11 +470,14 @@ def fetches_cli(argv = sys.argv):
                     while not fr.fetch_q.empty():
                         try:
                             fr.fetch_q.get(False)
-                        except Empty: continue
+                        except Empty:
+                            continue
+                        
                         fr.fetch_q.task_done()
                 fr.join()
                 _p.end(x_f.status, 'fetched {} remote data files'.format(len(x_f.results)))
             if want_verbose:
                 utils.echo_msg('ran fetch module {} on region {}...\
             '.format(x_f.name, this_region.format('str')))
+                
 ### End
