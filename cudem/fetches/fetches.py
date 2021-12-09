@@ -20,6 +20,10 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Fetch elevation and related data from a variety of sources.
+## Use CLI command 'fetches'
+##
 ### Code:
 
 import os
@@ -52,6 +56,7 @@ import cudem.fetches.copernicus as copernicus
 import cudem.fetches.nasadem as nasadem
 import cudem.fetches.tides as tides
 import cudem.fetches.vdatum as vdatum
+import cudem.fetches.buoys as buoys
 
 ## ==============================================
 ## Fetches Module Parser
@@ -59,45 +64,115 @@ import cudem.fetches.vdatum as vdatum
 class FetchesFactory:
 
     mods = {
-        'gmrt': {'description': """The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+        'gmrt': {
+            'class': gmrt.GMRT,
+            'description': """The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
 compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
 reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
 of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
 to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
 the global and coastal oceans.
 
-< gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >"""},
-        'srtm_plus': {'description': """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
+< gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
+        },
+        'srtm_plus': {
+            'class': srtm.SRTMPlus,
+            'description': """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
 
-< srtm_plus >"""},
-        'mar_grav': {'description': """Sattelite Altimetry Topography from Scripps.
+< srtm_plus >""",
+        },
+        'mar_grav': {
+            'class': mar_grav.MarGrav,
+            'description': """Sattelite Altimetry Topography from Scripps.
 
-< mar_grav >"""},
-        'multibeam': {'description': """NOAA Multibeam data.
+< mar_grav >""",
+        },
+        'multibeam': {
+            'class': mb.Multibeam,
+            'description': """NOAA Multibeam data.
 
-< multibeam >"""},
-        'usace': {'description': """USACE eHydro"""},
-        'ngs': {'description': """NGS Monuments"""},
-        'nos': {'description': """NOS Soundings (bag/hydro)"""},
-        'charts': {'description': """NOAA Nautical Charts"""},
-        'digital_coast': {'description': """NOAA Digital Coast"""},
-        'ncei_thredds': {'description': """NOAA NCEI DEMs"""},
-        'tnm': {'description': """USGS' The National Map"""},
-        'emodnet': {'description': """EU elevation data"""},
-        'chs': {'description': """Canadian Hydrographic surveys"""},
-        'hrdem': {'description': """High-Resolution elevation data for Canada"""},
-        'osm': {'description': """Open Street Map (beta)"""},
-        'copernicus': {'description': """Copernicus sattelite elevation data"""},
-        'nasadem': {'description': """NASA digital elevation model"""},
-        'tides': {'description': """Tide station information from NOAA/NOS
+< multibeam >""",
+        },
+        'usace': {
+            'class': usace.USACE,
+            'description': """USACE eHydro""",
+        },
+        'ngs': {
+            'class': ngs.NGS,
+            'description': """NGS Monuments""",
+        },
+        'nos': {
+            'class': nos.NOS,
+            'description': """NOS Soundings (bag/hydro)""",
+        },
+        'charts': {
+            'class': charts.NauticalCharts,
+            'description': """NOAA Nautical Charts""",
+        },
+        'digital_coast': {
+            'class': digital_coast.DigitalCoast,
+            'description': """NOAA Digital Coast""",
+        },
+        'ncei_thredds': {
+            'class': ncei_thredds.NCEIThreddsCatalog,
+            'description': """NOAA NCEI DEMs
 
-< tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""},
-        'vdatum': {'description': """NOAA's VDATUM transformation grids
+< ncei_thredds:where=None >""",
+        },
+        'tnm': {
+            'class': tnm.TheNationalMap,
+            'description': """USGS' The National Map""",
+        },
+        'emodnet': {
+            'class': emodnet.EMODNet,
+            'description': """EU elevation data""",
+        },
+        'chs': {
+            'class': chs.CHS,
+            'description': """Canadian Hydrographic surveys""",
+        },
+        'hrdem': {
+            'class': hrdem.HRDEM,
+            'description': """High-Resolution elevation data for Canada""",
+        },
+        'osm': {
+            'class': osm.OpenStreetMap,
+            'description': """Open Street Map (beta)""",
+        },
+        'copernicus': {
+            'class': copernicus.CopernicusDEM,
+            'description': """Copernicus sattelite elevation data""",
+        },
+        'nasadem': {
+            'class': nasadem.NASADEM,
+            'description': """NASA digital elevation model""",
+        },
+        'tides': {
+            'class': tides.Tides,
+            'description': """Tide station information from NOAA/NOS
 
-< vdatum:datatype=None:gtx=False >"""},
+< tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >""",
+        },
+        'vdatum': {
+            'class': vdatum.VDATUM,
+            'description': """NOAA's VDATUM transformation grids
+
+< vdatum:datatype=None:gtx=False >""",
+        },
+        'buoys': {
+            'class': buoys.BUOYS,
+            'description': """NOAA BUOY data""",
+        },
     }
     
-    def __init__(self, mod=None, src_region=None, callback=lambda: False, weight=None, verbose=True):
+    def __init__(
+            self,
+            mod=None,
+            src_region=None,
+            callback=lambda: False,
+            weight=None,
+            verbose=True
+    ):
         self.mod = mod
         self.mod_args = {}
         self.region = src_region
@@ -118,152 +193,173 @@ the global and coastal oceans.
         else:
             utils.echo_error_msg('could not parse module `{}`'.format(opts[0]))
             return(None)
+        
         return(self)
 
     def add_module(self, type_def={}):
         for key in type_def.keys():
             self.mods[key] = type_def[key]
 
-    def acquire_mb(self, **kwargs):
-        return(mb.Multibeam(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_usace(self, **kwargs):
-        return(usace.USACE(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_gmrt(self, **kwargs):
-        return(gmrt.GMRT(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_srtm_plus(self, **kwargs):
-        return(srtm.SRTMPlus(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_mar_grav(self, **kwargs):
-        return(mar_grav.MarGrav(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_ngs(self, **kwargs):
-        return(ngs.NGS(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_nos(self, **kwargs):
-        return(nos.NOS(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_charts(self, **kwargs):
-        return(charts.NauticalCharts(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_digital_coast(self, **kwargs):
-        return(digital_coast.DigitalCoast(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_ncei_thredds(self, **kwargs):
-        return(ncei_thredds.NCEIThreddsCatalog(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_tnm(self, **kwargs):
-        return(tnm.TheNationalMap(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_emodnet(self, **kwargs):
-        return(emodnet.EMODNet(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-    
-    def acquire_chs(self, **kwargs):
-        return(chs.CHS(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    def acquire_hrdem(self, **kwargs):
-        return(hrdem.HRDEM(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_osm(self, **kwargs):
-        return(osm.OpenStreetMap(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_globalelus(self, **kwargs):
-        return(globalelus.GlobalELUS(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_copernicus(self, **kwargs):
-        return(copernicus.CopernicusDEM(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_nasadem(self, **kwargs):
-        return(nasadem.NASADEM(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_tides(self, **kwargs):
-        return(tides.Tides(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    def acquire_vdatum(self, **kwargs):
-        return(vdatum.VDATUM(
-            src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
     def acquire(self, **kwargs):
-        if self.mod == 'multibeam':
-            return(self.acquire_mb(**kwargs))
+        return(
+            self.mods[self.mod]['class'](
+                src_region=self.region,
+                callback=self.callback,
+                weight=self.weight,
+                verbose=self.verbose,
+                **kwargs,
+                **self.mod_args
+            )
+        )
+            
+    # def acquire_mb(self, **kwargs):
+    #     return(
+    #         mb.Multibeam(
+    #             src_region=self.region,
+    #             callback=self.callback,
+    #             weight=self.weight,
+    #             verbose=self.verbose,
+    #             **kwargs,
+    #             **self.mod_args
+    #         )
+    #     )
 
-        if self.mod == 'usace':
-            return(self.acquire_usace(**kwargs))
+    # def acquire_usace(self, **kwargs):
+    #     return(usace.USACE(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_gmrt(self, **kwargs):
+    #     return(gmrt.GMRT(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_srtm_plus(self, **kwargs):
+    #     return(srtm.SRTMPlus(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_mar_grav(self, **kwargs):
+    #     return(mar_grav.MarGrav(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_ngs(self, **kwargs):
+    #     return(ngs.NGS(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_nos(self, **kwargs):
+    #     return(nos.NOS(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_charts(self, **kwargs):
+    #     return(charts.NauticalCharts(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_digital_coast(self, **kwargs):
+    #     return(digital_coast.DigitalCoast(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_ncei_thredds(self, **kwargs):
+    #     return(ncei_thredds.NCEIThreddsCatalog(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_tnm(self, **kwargs):
+    #     return(tnm.TheNationalMap(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_emodnet(self, **kwargs):
+    #     return(emodnet.EMODNet(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+    
+    # def acquire_chs(self, **kwargs):
+    #     return(chs.CHS(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
+
+    # def acquire_hrdem(self, **kwargs):
+    #     return(hrdem.HRDEM(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_osm(self, **kwargs):
+    #     return(osm.OpenStreetMap(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_globalelus(self, **kwargs):
+    #     return(globalelus.GlobalELUS(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_copernicus(self, **kwargs):
+    #     return(copernicus.CopernicusDEM(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_nasadem(self, **kwargs):
+    #     return(nasadem.NASADEM(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_tides(self, **kwargs):
+    #     return(tides.Tides(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+
+    # def acquire_vdatum(self, **kwargs):
+    #     return(vdatum.VDATUM(
+    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
+    
+    # def acquire1(self, **kwargs):
+    #     if self.mod == 'multibeam':
+    #         return(self.acquire_mb(**kwargs))
+
+    #     if self.mod == 'usace':
+    #         return(self.acquire_usace(**kwargs))
         
-        if self.mod == 'gmrt':
-            return(self.acquire_gmrt(**kwargs))
+    #     if self.mod == 'gmrt':
+    #         return(self.acquire_gmrt(**kwargs))
 
-        if self.mod == 'srtm_plus':
-            return(self.acquire_srtm_plus(**kwargs))
+    #     if self.mod == 'srtm_plus':
+    #         return(self.acquire_srtm_plus(**kwargs))
        
-        if self.mod == 'mar_grav':
-            return(self.acquire_mar_grav(**kwargs))
+    #     if self.mod == 'mar_grav':
+    #         return(self.acquire_mar_grav(**kwargs))
         
-        if self.mod == 'ngs':
-            return(self.acquire_ngs(**kwargs))
+    #     if self.mod == 'ngs':
+    #         return(self.acquire_ngs(**kwargs))
 
-        if self.mod == 'nos':
-            return(self.acquire_nos(**kwargs))
+    #     if self.mod == 'nos':
+    #         return(self.acquire_nos(**kwargs))
 
-        if self.mod == 'charts':
-            return(self.acquire_charts(**kwargs))
+    #     if self.mod == 'charts':
+    #         return(self.acquire_charts(**kwargs))
 
-        if self.mod == 'digital_coast':
-            return(self.acquire_digital_coast(**kwargs))
+    #     if self.mod == 'digital_coast':
+    #         return(self.acquire_digital_coast(**kwargs))
 
-        if self.mod == 'ncei_thredds':
-            return(self.acquire_ncei_thredds(**kwargs))
+    #     if self.mod == 'ncei_thredds':
+    #         return(self.acquire_ncei_thredds(**kwargs))
         
-        if self.mod == 'tnm':
-            return(self.acquire_tnm(**kwargs))
+    #     if self.mod == 'tnm':
+    #         return(self.acquire_tnm(**kwargs))
 
-        if self.mod == 'emodnet':
-            return(self.acquire_emodnet(**kwargs))
+    #     if self.mod == 'emodnet':
+    #         return(self.acquire_emodnet(**kwargs))
 
-        if self.mod == 'chs':
-            return(self.acquire_chs(**kwargs))
+    #     if self.mod == 'chs':
+    #         return(self.acquire_chs(**kwargs))
 
-        if self.mod == 'hrdem':
-            return(self.acquire_hrdem(**kwargs))
+    #     if self.mod == 'hrdem':
+    #         return(self.acquire_hrdem(**kwargs))
 
-        if self.mod == 'osm':
-            return(self.acquire_osm(**kwargs))
+    #     if self.mod == 'osm':
+    #         return(self.acquire_osm(**kwargs))
         
-        if self.mod == 'globalelus':
-            return(self.acquire_globalelus(**kwargs))
+    #     if self.mod == 'globalelus':
+    #         return(self.acquire_globalelus(**kwargs))
 
-        if self.mod == 'copernicus':
-            return(self.acquire_copernicus(**kwargs))
+    #     if self.mod == 'copernicus':
+    #         return(self.acquire_copernicus(**kwargs))
 
-        if self.mod == 'nasadem':
-            return(self.acquire_nasadem(**kwargs))
+    #     if self.mod == 'nasadem':
+    #         return(self.acquire_nasadem(**kwargs))
         
-        if self.mod == 'tides':
-            return(self.acquire_tides(**kwargs))
+    #     if self.mod == 'tides':
+    #         return(self.acquire_tides(**kwargs))
 
-        if self.mod == 'vdatum':
-            return(self.acquire_vdatum(**kwargs))
+    #     if self.mod == 'vdatum':
+    #         return(self.acquire_vdatum(**kwargs))
 
 class Fetcher(datasets.XYZDataset):
     

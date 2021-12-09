@@ -26,6 +26,7 @@ import os
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 ## =============================================================================
@@ -48,21 +49,23 @@ class OpenStreetMap(f_utils.FetchModule):
             'waterway': ['LINESTRING'],
             'building': ['POLYGON'],
         }
+        self.osm_type = osm_type
+        self.proc = proc
         
     def run(self):
         '''Run the OSM fetching module.'''
         
         if self.region is None: return([])
-        if osm_type == 'all':
+        if self.osm_type == 'all':
             for key in self.osm_types.keys():
-                self._fetch_results(osm_type = key, proc = proc)
+                self._fetch_results(osm_type=key, proc=self.proc)
         else:
-            if osm_type in self.osm_types.keys():
-                self._fetch_results(osm_type = osm_type, proc = proc)
+            if self.osm_type in self.osm_types.keys():
+                self._fetch_results(osm_type=self.osm_type, proc=self.proc)
                 
         return(self)
         
-    def _fetch_results(self, osm_type = 'highway', proc = False):
+    def _fetch_results(self, osm_type='highway', proc=False):
         c_bbox = self.region.format('osm_bbox')
         out_fn = 'osm_{}_{}'.format(osm_type, self.region.format('fn'))
         
@@ -104,11 +107,11 @@ class OpenStreetMap(f_utils.FetchModule):
                 out body;
                 '''.format(','.join([str(n) for n in el['nodes']]))
 
-                node_data = f_utils.Fetch(self._osm_api).fetch_req(params={'data': osm_node_q})
-                if node_data.status_code == 200:
-                    self.results.append([node_data.url, '{}.json'.format(out_fn), 'osm'])
-                    
-                    if proc:
+
+
+                if proc:
+                    node_data = f_utils.Fetch(self._osm_api).fetch_req(params={'data': osm_node_q})
+                    if node_data.status_code == 200:
                         node_json = node_data.json()
 
                         dst_gmt.write('>\n# @D{}\n'.format(el['id']))
@@ -117,8 +120,14 @@ class OpenStreetMap(f_utils.FetchModule):
                             for el_node in node_json['elements']:
                                 if el_node['id'] == node:
                                     xyzfun.xyz_line([el_node['lon'], el_node['lat']], dst_gmt)
+
+                else:
+                    osm_data = f_utils.urlencode({'data': osm_node_q})
+                    node_data_url = self._osm_api + '?' +osm_data
+                    self.results.append([node_data_url, '{}_{}.json'.format(out_fn, el_n), 'osm'])
                                     
-        if self.verbose: utils.echo_msg_inline('fetching osm {} data [OK]\n'.format(osm_type))
+        if self.verbose:
+            utils.echo_msg_inline('fetching osm {} data [OK]\n'.format(osm_type))
         
         if proc:
             dst_gmt.close()
