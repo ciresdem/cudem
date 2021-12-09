@@ -43,7 +43,7 @@ class OpenStreetMap(f_utils.FetchModule):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
         self._outdir = os.path.join(os.getcwd(), 'osm')
-
+        self.name = 'osm'
         self.osm_types = {
             'highway': ['LINESTRING'],
             'waterway': ['LINESTRING'],
