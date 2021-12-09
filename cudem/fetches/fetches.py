@@ -423,10 +423,11 @@ Options:
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format in WGS84. <beta>
   -q, --quiet\t\tLower the verbosity to a quiet
 
+  --modules\t\tDisply the module descriptions and usage
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
-Supported FETCHES modules: 
+Supported FETCHES modules (see fetches --modules <module-name> for more info): 
   {f_formats}
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
