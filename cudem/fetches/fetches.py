@@ -66,12 +66,13 @@ class FetchesFactory:
     mods = {
         'gmrt': {
             'class': gmrt.GMRT,
-            'description': """The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
-compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
-reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
-of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
-to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
-the global and coastal oceans.
+            'description': """The Global Multi-Resolution Topography (GMRT) synthesis.
+            The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+            compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
+            reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
+            of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
+            to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
+            the global and coastal oceans.
 
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
         },
@@ -137,7 +138,12 @@ the global and coastal oceans.
         },
         'osm': {
             'class': osm.OpenStreetMap,
-            'description': """Open Street Map (beta)""",
+            'description': """OpenStreetMap (osm) data. 
+            OpenStreetMap is a free, editable map of the whole world that is 
+            being built by volunteers largely from scratch and released with an 
+            open-content license.
+
+< osm:q=None:fmt=osm >""",
         },
         'copernicus': {
             'class': copernicus.CopernicusDEM,
