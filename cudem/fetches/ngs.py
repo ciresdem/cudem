@@ -20,6 +20,14 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## National Geodetic Survey (NGS)
+##
+## NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
+## Note some survey markers installed by other organizations may not be available through NGS.
+##
+## Fetch NGS monuments from NGS - US Only
+##
 ### Code:
 
 import os
@@ -32,13 +40,6 @@ from cudem import xyzfun
 
 import cudem.fetches.utils as f_utils
 
-## =============================================================================
-##
-## National Geodetic Survey (NGS)
-##
-## Fetch NGS monuments from NGS - US Only
-##
-## =============================================================================
 class NGS(f_utils.FetchModule):
     """Fetch NGS monuments from NOAA"""
     

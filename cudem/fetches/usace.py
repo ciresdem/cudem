@@ -20,6 +20,24 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## USACE Fetch
+##
+## Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
+## harbors throughout the United States requires extensive surveying and mapping services, including 
+## boundary, topographic, hydrographic, terrestrial lidar, and multispectral and hyperspectral aerial 
+## imagery collection as well as airborne topographic and bathymetric lidar acquisition, project-level 
+## GIS implementation, development of file-based geodatabases, and GIS tool development.
+##
+## Three representative survey and mapping datasets include the National Channel Framework (NCF)—an enterprise 
+## geodatabase of information on all 61 USACE-maintained high-tonnage channels —hydrographic surveys, which 
+## provide assistance in locating navigable channels, determining dredging requirements, verifying dredging 
+## accuracy, and maintaining harbors and rivers —and Inland Electronic Navigational Charts(IENC), accurate 
+## navigational charts provided in a highly structured data format for use in navigation systems and to increase 
+## overall navigational safety..
+##
+## Fetch USACE bathymetric surveys via eHydro
+##
 ### Code:
 
 import os
@@ -35,13 +53,6 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
-## =============================================================================
-##
-## USACE Fetch
-##
-## Fetch USACE bathymetric surveys via eHydro
-##
-## =============================================================================
 class USACE(f_utils.FetchModule):
     """Fetch USACE bathymetric surveys"""
     
@@ -84,7 +95,6 @@ class USACE(f_utils.FetchModule):
         src_zip = os.path.basename(entry[1])
         src_epsg = None
         src_region = None
-        #xyzc['warp'] = epsg
         
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
@@ -100,19 +110,8 @@ class USACE(f_utils.FetchModule):
                             n = this_xml.find('.//northbc').text
                             s = this_xml.find('.//southbc').text
                             src_region = regions.Region().from_list([float(w), float(e), float(s), float(n)])
-                        except:
-                            pass
-                            #utils.echo_warning_msg('could not determine survey bb from {}'.format(src_xml))
+                        except: pass
                             
-                # if src_epsg is None:
-                #     try:
-                #         prj = this_xml.find('.//gridsysn').text
-                #         szone = this_xml.find('.//spcszone').text
-                #         utils.echo_msg('zone: {}'.format(szone))                        
-                #         src_epsg = int(utils.FIPS_TO_EPSG[szone])
-                #     except:
-                #         utils.echo_warning_msg('could not determine state plane zone from {}'.format(src_xml))
-                        
                 utils.remove_glob(src_xml)
 
             if src_region is None:
@@ -132,7 +131,6 @@ class USACE(f_utils.FetchModule):
                     
                 sp = None
 
-            #utils.echo_msg('source epsg: {}'.format(src_epsg))
             src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
             for src_usace in src_usaces:
                 _dl = datasets.XYZFile(

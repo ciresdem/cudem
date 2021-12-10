@@ -1,4 +1,4 @@
-### nos.py - SRTM fetch
+### nos.py - NOS fetch
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -20,6 +20,20 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## NOS Fetch
+##
+## fetch NOS BAG and XYZ sounding data from NOAA
+## BAG data is in projected units and MLLW (height)
+## XYZ data is CSV in MLLW (Sounding)
+##
+## NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
+## Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
+## Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
+## and its territories.
+##
+## https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
+##
 ### Code:
 
 import os
@@ -31,17 +45,6 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
-## =============================================================================
-##
-## NOS Fetch
-##
-## fetch NOS BAG and XYZ sounding data from NOAA
-## BAG data is in projected units and MLLW (height)
-## XYZ data is CSV in MLLW (Sounding)
-##
-## https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
-##
-## =============================================================================
 class NOS(f_utils.FetchModule):
     """Fetch NOS BAG and XYZ sounding data from NOAA"""
 
@@ -68,9 +71,6 @@ class NOS(f_utils.FetchModule):
             self.where.append("DataType LIKE '%{}%'".format(self.datatype.upper()))
         
         self.name = 'nos'
-        self._info = '''Bathymetry surveys and data (xyz & BAG)'''
-        self._title = '''NOAA NOS Bathymetric Data'''
-        self._usage = '''< nos >'''
         self._urls = [self._nos_url]
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.want_update = update

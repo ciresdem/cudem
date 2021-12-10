@@ -20,22 +20,32 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from osgeo import ogr
-from osgeo import gdal
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## NCEI THREDDS Catalog (CUDEM)
 ##
-## =============================================================================
+## Digital Elevation Models around the world at various resolutions and extents.
+## NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
+## bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
+## and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
+##
+## DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
+## etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
+## community preparedness.
+##
+### Code:
+
+import os
+
+from osgeo import ogr
+from osgeo import gdal
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class NCEIThreddsCatalog(f_utils.FetchModule):
     """Fetch DEMs from NCEI THREDDS Catalog"""
 
@@ -47,16 +57,6 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         self.where = where
 
         self.name = 'ncei_thredds'
-        self._info = '''NOAA NCEI THREDDS DEM Catalog Access.
-Digital Elevation Models around the world at various resolutions and extents.
-NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
-bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
-and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
-\nDEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
-etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
-community preparedness.'''
-        self._title = '''NCEI THREDDS'''
-        self._usage = '''< ncei_thredds >'''
         self._urls = [self._nt_catalog, self._ngdc_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
@@ -67,6 +67,7 @@ community preparedness.'''
         if len(self.FRED.layer) == 0:
             self.FRED._close_ds()
             self.update()
+            
         self.FRED._close_ds()
         
     def _parse_catalog(self, catalog_url):
@@ -85,8 +86,8 @@ community preparedness.'''
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         if self.verbose:
             _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(this_ds), this_ds[0].attrib['name']))
+            
         surveys = []
-        
         for i, node in enumerate(this_ds):
             this_title = node.attrib['name']
             this_id = node.attrib['ID']
@@ -95,10 +96,11 @@ community preparedness.'''
                 
             self.FRED._attribute_filter(["ID = '{}'".format(this_id)])
             if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                subCatRefs = node.findall('.//th:catalogRef', namespaces = ntCatXml.namespaces)
+                subCatRefs = node.findall('.//th:catalogRef', namespaces=ntCatXml.namespaces)
                 if len(subCatRefs) > 0:
                     self._parse_catalog(catalog_url)
                     break
+                
                 try:
                     ds_path = node.attrib['urlPath']
                 except: continue
@@ -115,8 +117,10 @@ community preparedness.'''
                 this_xml = FRED.iso_xml(iso_url)
                 title = this_xml.title()
                 h_epsg, v_epsg = this_xml.reference_system()
-
-                zv = this_xml.xml_doc.findall('.//gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString', namespaces = this_xml.namespaces)
+                zv = this_xml.xml_doc.findall(
+                    './/gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString',
+                    namespaces=this_xml.namespaces
+                )
                 if zv is not None:
                     for zvs in zv:
                         print(zvs.text)
@@ -125,6 +129,7 @@ community preparedness.'''
                             break
                         else:
                             zvar = 'z'
+                            
                 geom = this_xml.bounds(geom=True)
                 if geom is not None:
                     surveys.append({'Name': title, 'ID': this_id, 'Agency': 'NOAA', 'Date': this_xml.date(),
@@ -132,6 +137,7 @@ community preparedness.'''
                                     'DataLink': http_url, 'IndexLink': wcs_url, 'Link': self._nt_catalog,
                                     'DataType': 'raster', 'DataSource': 'ncei_thredds', 'HorizontalDatum': h_epsg,
                                     'VerticalDatum': v_epsg, 'Etcetra': zvar, 'Info': this_xml.abstract(), 'geom': geom})
+                    
         self.FRED._add_surveys(surveys) 
         if self.verbose:
             _prog.end(0, 'scanned {} datasets in {}.'.format(len(this_ds), this_ds[0].attrib['name']))
@@ -172,12 +178,20 @@ community preparedness.'''
             
         if src_ds is not None:
 
-            _ds = datasets.RasterFile(fn=src_ncei, data_format=200, epsg=4326, warp=self.warp,
-                                      name=src_ncei, src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=src_ncei,
+                data_format=200,
+                epsg=4326,
+                warp=self.warp,
+                name=src_ncei,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             _ds.src_ds = src_ds
             _ds.ds_open_p = True
             for xyz in _ds.yield_xyz():
                 yield(xyz)
+                
         src_ds = None
         utils.remove_glob(src_ncei)    
                     

@@ -20,6 +20,11 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Chart Fetch - ENC & RNC
+##
+## Fetch digital charts from NOAA, including ENC and RNC
+##
 ### Code:
 
 import os
@@ -34,13 +39,6 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
-## =============================================================================
-##
-## Chart Fetch - ENC & RNC
-##
-## Fetch digital charts from NOAA, including ENC and RNC
-##
-## =============================================================================
 class NauticalCharts(f_utils.FetchModule):
     """Fetch digital chart data from NOAA"""
 
@@ -58,9 +56,6 @@ class NauticalCharts(f_utils.FetchModule):
         self.where = where
         self.datatype = datatype
         self.name = 'charts'
-        self._info = '''Raster and Vector U.S. Nautical Charts'''
-        self._title = '''NOAA Nautical CHARTS (RNC & ENC)'''
-        self._usage = '''< charts >'''
         self.v_datum = 'mhw'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()

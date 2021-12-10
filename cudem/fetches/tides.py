@@ -1,4 +1,4 @@
-### tides.py - STATIONS fetch
+### tides.py - TIDE stations fetch
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -55,6 +55,7 @@
 ##     max_date ( type: esriFieldTypeString , alias: max_date , editable: true , nullable: true , length: 50 )
 ##     wl_min ( type: esriFieldTypeDouble , alias: wl_min , editable: true , nullable: true )
 ##     min_date ( type: esriFieldTypeString , alias: min_date , editable: true , nullable: true , length: 50 )
+#3
 ### Code:
 
 import os
@@ -69,15 +70,6 @@ from cudem import xyzfun
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
-
-
-## =============================================================================
-##
-## STATIONS Fetch
-##
-## Fetch NOAA tide stations
-##
-## =============================================================================
 
 class Tides(f_utils.FetchModule):
     """Fetch NOS Tide Stations"""

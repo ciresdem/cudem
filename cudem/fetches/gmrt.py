@@ -20,6 +20,19 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## GMRT Fetch
+##
+## fetch extracts of the GMRT. - Global Extents
+## https://www.gmrt.org/index.php
+##
+## The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+## compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
+## reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
+## of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
+## to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
+## the global and coastal oceans.
+##
 ### Code:
 
 import os
@@ -30,14 +43,6 @@ from cudem import datasets
 
 import cudem.fetches.utils as f_utils
 
-## =============================================================================
-##
-## GMRT Fetch
-##
-## fetch extracts of the GMRT. - Global Extents
-## https://www.gmrt.org/index.php
-##
-## =============================================================================
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     

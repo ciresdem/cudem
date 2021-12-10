@@ -20,22 +20,24 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## NASADEM Fetch
+##
+## Fetch NASADEM extracts
+##
 ### Code:
 
 import os
 import sys
 import lxml.etree
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
-## =============================================================================
-##
-## NASADEM Fetch ()
-##
-## =============================================================================
 class NASADEM(f_utils.FetchModule):
     '''Fetch NASADEM data'''
     

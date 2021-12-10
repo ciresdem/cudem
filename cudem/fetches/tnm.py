@@ -20,24 +20,28 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-import sys
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## The National Map (TNM) - USGS
 ##
 ## Fetch elevation data from The National Map
 ## NED, 3DEP, NHD, Etc.
 ##
-## =============================================================================
+## Various datasets from USGS's National Map. The National Map is a 
+## collaborative effort among the USGS and other Federal, State, and local partners to improve
+## and deliver topographic information for the Nation.
+##
+### Code:
+
+import os
+import sys
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class TheNationalMap(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
@@ -57,15 +61,10 @@ class TheNationalMap(f_utils.FetchModule):
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
         self.where = where
-        #print(self.where)
-
+        
         self.name = 'tnm'
-        self._info = '''Various datasets from USGS's National Map. The National Map is a 
-collaborative effort among the USGS and other Federal, State, and local partners to improve
-and deliver topographic information for the Nation.'''
-        self._title = '''The National Map (TNM) from USGS'''
-        self._usage = '''< tnm:formats=fmt,fmt:extents=ext,ext >'''
         self._urls = [self._tnm_api_url]
+        
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
 
@@ -236,6 +235,7 @@ and deliver topographic information for the Nation.'''
                 offset += 100
                 if offset >= total: break
         return(self)
+    
     ## ==============================================
     ## _update_prods() and _parse_prods_results() will update FRED with every product as a feature, rather than
     ## the default of each feature being a TNM dataset. _update_prods() takes much longer time to gather the
@@ -328,16 +328,10 @@ and deliver topographic information for the Nation.'''
                     utils.remove_glob(src_tnm)
         utils.remove_glob(entry[1])
 
-## =============================================================================
-##
-## The National Map (TNM) - USGS
-##
-## Fetch elevation data from The National Map
-## NED, 3DEP, Etc.
-##
-## TODO: Break up search regions on large regions 
-## THIS IS THE OLD/DEPRECIATED CLASS (DOESNT CURRENTLY WORK WITH NEW TNM
-## =============================================================================
+## ==============================================
+## class TNM is the old tnm api, doesn't currently work.
+## held for now for historical purposes
+## ==============================================
 class TNM(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
@@ -471,13 +465,7 @@ class TNM(f_utils.FetchModule):
             except: exts = ''
             print('%s: %s [ %s ]' %(i, j['title'], fmts))
             for m, n in enumerate(j['tags']):
-                #print(m, n)
-                #print(j['formats'])
-                #print(j['tags'][n]['formats'])
-                #print(j['tags'][n]['extents'])
-                #print('\t{}" {} [ {} ] [ {} ]'.format(m, n, ', '.join(j['tags'][n]['formats']), ', '.join(j['tags'][n]['extents'])))
                 print('\t{}: {} [ {} ] [ {} ]'.format(m, n['title'], j['formats'][0]['value'], ', '.join(n['extents'])))
-                #print('\t%s: %s [ %s ] [ %s ]' %(m, n, ", ".join(j['tags'][n]['formats']), ", ".join(j['tags'][n]['extents'])))
 
     def yield_xyz(self, entry):
         """yield the xyz data from the tnm fetch module"""
@@ -487,8 +475,15 @@ class TNM(f_utils.FetchModule):
             if datatype == 'ned':
                 src_tnm, src_zips = utils.procs_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
 
-                _ds = datasets.RasterFile(fn=src_tnm, data_format=200, epsg=4326, warp=self.warp,
-                                          name=src_tnm, src_region=self.region, verbose=self.verbose)
+                _ds = datasets.RasterFile(
+                    fn=src_tnm,
+                    data_format=200,
+                    epsg=4326,
+                    warp=self.warp,
+                    name=src_tnm,
+                    src_region=self.region,
+                    verbose=self.verbose
+                )
                 for xyz in _ds.yield_xyz():
                     if xyz.z != 0:
                         yield(xyz)

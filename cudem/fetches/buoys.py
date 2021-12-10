@@ -31,20 +31,20 @@ import lxml.etree
 import json
 import lxml.html as lh
 
+from osgeo import ogr
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
 
 import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
 
 ## =============================================================================
 ##
-## STATIONS Fetch
+## BUOYS Fetch
 ##
-## Fetch NOAA tide stations
+## Fetch NOAA bouy station information
 ##
 ## =============================================================================
 
@@ -59,13 +59,13 @@ class BUOYS(f_utils.FetchModule):
         self._outdir = os.path.join(os.getcwd(), 'buoys')
         self.name = 'buoys'
         self.buoy_id = buoy_id
-        
+
     def run(self):
         '''Run the BOUYS fetching module'''
         
         if self.region is None:
             return([])
-        
+
         _data = {
             'lat1': self.region.ymin,
             'lat2': self.region.ymax,
@@ -73,7 +73,7 @@ class BUOYS(f_utils.FetchModule):
             'lon2': self.region.xmax,
             'uom': 'M',
             'ot': 'A',
-            'time': 1,
+            'time': 0,
         }
 
         ## Fetch buoy ids from box search
@@ -81,22 +81,14 @@ class BUOYS(f_utils.FetchModule):
             self._buoy_box_search_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
-            doc = lh.document_fromstring(_req.text)
+            print(_req.content)
+            # doc = lh.document_fromstring(_req.text)
+            # sp = doc.xpath('//span')
 
-            sp = doc.xpath('//span')
-
-            for s in sp:
-                #print(s.text_content())
-                if len(s.xpath('a')) > 0:
-                    print(s.xpath('a')[0].get('href'))
-            
-            # _station_data = {
-            #     'station': _b_id,
-            # }
-
-            # _station_req = f_utils.Fetch(
-            #     self._buoy_station_url, verbose=self.verbose
-            # ).fetch_req(params=_station_data)
+            # for s in sp:
+            #     print(s.text_content())
+            #     if len(s.xpath('a')) > 0:
+            #         print(s.xpath('a')[0].text_content())
             
             self.results.append([_req.url, 'buoy_results_{}.json'.format(self.region.format('fn')), 'buoys'])
             

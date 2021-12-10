@@ -20,24 +20,24 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-import lxml.etree
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## EMODNET Fetch
 ##
 ## fetch extracts of the EMOD DTM - Mostly European extents
 ## https://portal.emodnet-bathymetry.eu/
 ##
-## =============================================================================
+### Code:
+
+import os
+import lxml.etree
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class EMODNet(f_utils.FetchModule):
     """Fetch raster data from the EMODNET DTM"""
 
@@ -85,17 +85,16 @@ class EMODNet(f_utils.FetchModule):
                                       name=src_emodnet, src_region=self.region, verbose=self.verbose)
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_emodnet))
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_emodnet))
+            
         utils.remove_glob(src_emodnet)
 
-## =============================================================================
-##
-## EMODNET Fetch
-##
-## fetch extracts of the EMOD DTM - Mostly European extents
-## https://portal.emodnet-bathymetry.eu/
-##
-## =============================================================================
+## ==============================================
+## the EMODNetFRED class attempts to store EMDNet data in FRED
+## rather than use the EMODNet API as above.
+## ==============================================
 class EMODNetFRED(f_utils.FetchModule):
     """Fetch raster data from the EMODNET DTM"""
     

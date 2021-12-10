@@ -21,7 +21,9 @@
 ##
 ### Commentary:
 ##
-## Fetch VDATUM transformation grids from NOAA
+## VDATUM Fetch - NOAA VDatum conversion grids
+##
+## Fetch vertical datum conversion grids from NOAA's VDATUM project
 ##
 ### Code:
 
@@ -78,17 +80,9 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
         
         _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
         _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
-
             
     return(_inf_areas_fmt)
 
-## =============================================================================
-##
-## VDATUM Fetch - NOAA VDatum conversion grids
-##
-## Fetch vertical datum conversion grids from NOAA's VDATUM project
-##
-## =============================================================================
 class VDATUM(f_utils.FetchModule):
     """Fetch vertical datum conversion grids from NOAA"""
 
@@ -133,11 +127,12 @@ class VDATUM(f_utils.FetchModule):
             surveys = []
 
             if vd == 'TIDAL' or vd == 'IGLD85':
-                #continue
+                ## ==============================================
                 ## All tidal inf data is in each one, so we only
                 ## have to download one of the tidal zips to process
                 ## them all; lets use the smallest one
                 ## Keep this link up-tod-date!
+                ## ==============================================
                 if vd == 'TIDAL':
                     vd_ = 'DEVAemb12_8301'
                 else:

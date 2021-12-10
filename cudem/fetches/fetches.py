@@ -66,13 +66,13 @@ class FetchesFactory:
     mods = {
         'gmrt': {
             'class': gmrt.GMRT,
-            'description': """The Global Multi-Resolution Topography (GMRT) synthesis.
-            The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
-            compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
-            reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
-            of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
-            to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
-            the global and coastal oceans.
+            'description': """The Global Multi-Resolution Topography synthesis.
+The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
+reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
+of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
+to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
+the global and coastal oceans.
 
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
         },
@@ -84,78 +84,133 @@ class FetchesFactory:
         },
         'mar_grav': {
             'class': mar_grav.MarGrav,
-            'description': """Sattelite Altimetry Topography from Scripps.
+            'description': """MARine GRAVity Sattelite Altimetry Topography from Scripps.
 
 < mar_grav >""",
         },
         'multibeam': {
             'class': mb.Multibeam,
-            'description': """NOAA Multibeam data.
+            'description': """NOAA MULTIBEAM bathymetric data.
+NCEI is the U.S. national archive for multibeam bathymetric data and holds more than 9 million 
+nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
+worldwide.
 
-< multibeam >""",
+< multibeam:inc=None >""",
         },
         'usace': {
             'class': usace.USACE,
-            'description': """USACE eHydro""",
+            'description': """USACE eHydro bathymetric data.
+Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
+harbors throughout the United States requires extensive surveying and mapping services, including 
+boundary, topographic, hydrographic, terrestrial lidar, and multispectral and hyperspectral aerial 
+imagery collection as well as airborne topographic and bathymetric lidar acquisition, project-level 
+GIS implementation, development of file-based geodatabases, and GIS tool development.
+
+Three representative survey and mapping datasets include the National Channel Framework (NCF)—an enterprise 
+geodatabase of information on all 61 USACE-maintained high-tonnage channels —hydrographic surveys, which 
+provide assistance in locating navigable channels, determining dredging requirements, verifying dredging 
+accuracy, and maintaining harbors and rivers —and Inland Electronic Navigational Charts(IENC), accurate 
+navigational charts provided in a highly structured data format for use in navigation systems and to increase 
+overall navigational safety.. 
+
+< usace:s_type=None >""",
         },
         'ngs': {
             'class': ngs.NGS,
-            'description': """NGS Monuments""",
+            'description': """NGS Monuments
+NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
+Note some survey markers installed by other organizations may not be available through NGS.
+
+< ngs:datum=geoidHt >""",
         },
         'nos': {
             'class': nos.NOS,
-            'description': """NOS Soundings (bag/hydro)""",
+            'description': """NOS Soundings (bag/hydro)
+NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
+Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
+Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
+and its territories. 
+
+< nos:datatype=None >""",
         },
         'charts': {
             'class': charts.NauticalCharts,
-            'description': """NOAA Nautical Charts""",
+            'description': """NOAA Nautical CHARTS
+
+< charts >""",
         },
         'digital_coast': {
             'class': digital_coast.DigitalCoast,
-            'description': """NOAA Digital Coast""",
+            'description': """NOAA DIGITAL COAST elevation data
+
+< digital_coast >""",
         },
         'ncei_thredds': {
             'class': ncei_thredds.NCEIThreddsCatalog,
-            'description': """NOAA NCEI DEMs
+            'description': """NOAA NCEI DEMs via THREDDS
+Digital Elevation Models around the world at various resolutions and extents.
+NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
+bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
+and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
+
+DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
+etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
+community preparedness.
 
 < ncei_thredds:where=None >""",
         },
         'tnm': {
             'class': tnm.TheNationalMap,
-            'description': """USGS' The National Map""",
+            'description': """USGS' The National Map
+Various datasets from USGS's National Map. The National Map is a 
+collaborative effort among the USGS and other Federal, State, and local partners to improve
+and deliver topographic information for the Nation.
+
+< tnm:formats=None:extents=None:q=None >""",
         },
         'emodnet': {
             'class': emodnet.EMODNet,
-            'description': """EU elevation data""",
+            'description': """EU elevation data extracts from EMOD DTM.
+
+< emodnet >""",
         },
         'chs': {
             'class': chs.CHS,
-            'description': """Canadian Hydrographic surveys""",
+            'description': """Canadian Hydrographic Surveys
+CHS NONNA 10m and 100m Bathymetric Survey Grids; Non-Navigational gridded bathymetric data based on charts and soundings.
+
+< chs >""",
         },
         'hrdem': {
             'class': hrdem.HRDEM,
-            'description': """High-Resolution elevation data for Canada""",
+            'description': """High-Resolution Digital Elevation Model data for Canada
+
+< hrdem >""",
         },
         'osm': {
             'class': osm.OpenStreetMap,
-            'description': """OpenStreetMap (osm) data. 
-            OpenStreetMap is a free, editable map of the whole world that is 
-            being built by volunteers largely from scratch and released with an 
-            open-content license.
+            'description': """OpenStreetMap data. 
+OpenStreetMap is a free, editable map of the whole world that is 
+being built by volunteers largely from scratch and released with an 
+open-content license.
 
 < osm:q=None:fmt=osm >""",
         },
         'copernicus': {
             'class': copernicus.CopernicusDEM,
-            'description': """Copernicus sattelite elevation data""",
+            'description': """COPERNICUS sattelite elevation data
+
+< copernicus >""",
         },
         'nasadem': {
             'class': nasadem.NASADEM,
-            'description': """NASA digital elevation model""",
+            'description': """NASA Digital Elevation Model
+
+< nasadem >""",
         },
         'tides': {
             'class': tides.Tides,
-            'description': """Tide station information from NOAA/NOS
+            'description': """TIDE station information from NOAA/NOS
 
 < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >""",
         },
@@ -167,7 +222,7 @@ class FetchesFactory:
         },
         'buoys': {
             'class': buoys.BUOYS,
-            'description': """NOAA BUOY data""",
+            'description': """NOAA BUOY data (beta)""",
         },
     }
     
@@ -218,155 +273,6 @@ class FetchesFactory:
             )
         )
             
-    # def acquire_mb(self, **kwargs):
-    #     return(
-    #         mb.Multibeam(
-    #             src_region=self.region,
-    #             callback=self.callback,
-    #             weight=self.weight,
-    #             verbose=self.verbose,
-    #             **kwargs,
-    #             **self.mod_args
-    #         )
-    #     )
-
-    # def acquire_usace(self, **kwargs):
-    #     return(usace.USACE(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_gmrt(self, **kwargs):
-    #     return(gmrt.GMRT(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_srtm_plus(self, **kwargs):
-    #     return(srtm.SRTMPlus(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_mar_grav(self, **kwargs):
-    #     return(mar_grav.MarGrav(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_ngs(self, **kwargs):
-    #     return(ngs.NGS(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_nos(self, **kwargs):
-    #     return(nos.NOS(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_charts(self, **kwargs):
-    #     return(charts.NauticalCharts(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_digital_coast(self, **kwargs):
-    #     return(digital_coast.DigitalCoast(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_ncei_thredds(self, **kwargs):
-    #     return(ncei_thredds.NCEIThreddsCatalog(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_tnm(self, **kwargs):
-    #     return(tnm.TheNationalMap(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_emodnet(self, **kwargs):
-    #     return(emodnet.EMODNet(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-    
-    # def acquire_chs(self, **kwargs):
-    #     return(chs.CHS(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))
-
-    # def acquire_hrdem(self, **kwargs):
-    #     return(hrdem.HRDEM(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_osm(self, **kwargs):
-    #     return(osm.OpenStreetMap(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_globalelus(self, **kwargs):
-    #     return(globalelus.GlobalELUS(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_copernicus(self, **kwargs):
-    #     return(copernicus.CopernicusDEM(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_nasadem(self, **kwargs):
-    #     return(nasadem.NASADEM(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_tides(self, **kwargs):
-    #     return(tides.Tides(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-
-    # def acquire_vdatum(self, **kwargs):
-    #     return(vdatum.VDATUM(
-    #         src_region=self.region, callback=self.callback, weight=self.weight, verbose=self.verbose, **kwargs, **self.mod_args))    
-    
-    # def acquire1(self, **kwargs):
-    #     if self.mod == 'multibeam':
-    #         return(self.acquire_mb(**kwargs))
-
-    #     if self.mod == 'usace':
-    #         return(self.acquire_usace(**kwargs))
-        
-    #     if self.mod == 'gmrt':
-    #         return(self.acquire_gmrt(**kwargs))
-
-    #     if self.mod == 'srtm_plus':
-    #         return(self.acquire_srtm_plus(**kwargs))
-       
-    #     if self.mod == 'mar_grav':
-    #         return(self.acquire_mar_grav(**kwargs))
-        
-    #     if self.mod == 'ngs':
-    #         return(self.acquire_ngs(**kwargs))
-
-    #     if self.mod == 'nos':
-    #         return(self.acquire_nos(**kwargs))
-
-    #     if self.mod == 'charts':
-    #         return(self.acquire_charts(**kwargs))
-
-    #     if self.mod == 'digital_coast':
-    #         return(self.acquire_digital_coast(**kwargs))
-
-    #     if self.mod == 'ncei_thredds':
-    #         return(self.acquire_ncei_thredds(**kwargs))
-        
-    #     if self.mod == 'tnm':
-    #         return(self.acquire_tnm(**kwargs))
-
-    #     if self.mod == 'emodnet':
-    #         return(self.acquire_emodnet(**kwargs))
-
-    #     if self.mod == 'chs':
-    #         return(self.acquire_chs(**kwargs))
-
-    #     if self.mod == 'hrdem':
-    #         return(self.acquire_hrdem(**kwargs))
-
-    #     if self.mod == 'osm':
-    #         return(self.acquire_osm(**kwargs))
-        
-    #     if self.mod == 'globalelus':
-    #         return(self.acquire_globalelus(**kwargs))
-
-    #     if self.mod == 'copernicus':
-    #         return(self.acquire_copernicus(**kwargs))
-
-    #     if self.mod == 'nasadem':
-    #         return(self.acquire_nasadem(**kwargs))
-        
-    #     if self.mod == 'tides':
-    #         return(self.acquire_tides(**kwargs))
-
-    #     if self.mod == 'vdatum':
-    #         return(self.acquire_vdatum(**kwargs))
-
 class Fetcher(datasets.XYZDataset):
     
     def __init__(self, **kwargs):

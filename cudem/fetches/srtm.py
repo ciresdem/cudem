@@ -20,6 +20,15 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## SRTM Plus
+##
+## Fetch srtm+ data
+## https://topex.ucsd.edu/WWW_html/srtm15_plus.html
+## http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
+## https://topex.ucsd.edu/pub/srtm15_plus/
+## https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
+##
 ### Code:
 
 import os
@@ -30,17 +39,6 @@ from cudem import datasets
 
 import cudem.fetches.utils as f_utils
 
-## =============================================================================
-##
-## SRTM Plus
-##
-## Fetch srtm+ data
-## https://topex.ucsd.edu/WWW_html/srtm15_plus.html
-## http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
-## https://topex.ucsd.edu/pub/srtm15_plus/
-## https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
-##
-## =============================================================================
 class SRTMPlus(f_utils.FetchModule):
     '''Fetch SRTM+ data'''
     

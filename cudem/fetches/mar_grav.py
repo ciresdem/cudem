@@ -20,6 +20,14 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## mar_grav - Sattelite Altimetry Topography from Scripps
+##
+## https://topex.ucsd.edu/WWW_html/mar_grav.html
+## ftp://topex.ucsd.edu/pub/global_grav_1min/
+## https://topex.ucsd.edu/marine_grav/explore_grav.html
+## https://topex.ucsd.edu/marine_grav/white_paper.pdf
+##
 ### Code:
 
 import os
@@ -30,16 +38,6 @@ from cudem import datasets
 
 import cudem.fetches.utils as f_utils
 
-## =============================================================================
-##
-## mar_grav - Sattelite Altimetry Topography from Scripps
-##
-## https://topex.ucsd.edu/WWW_html/mar_grav.html
-## ftp://topex.ucsd.edu/pub/global_grav_1min/
-## https://topex.ucsd.edu/marine_grav/explore_grav.html
-## https://topex.ucsd.edu/marine_grav/white_paper.pdf
-##
-## =============================================================================
 class MarGrav(f_utils.FetchModule):
     '''Fetch mar_grav sattelite altimetry topography'''
     

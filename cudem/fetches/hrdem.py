@@ -20,24 +20,25 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from osgeo import ogr
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## HRDEM Fetch - Canada High Resolution DEM dataset
 ##
 ## Fetch Canadian HRDEM data.
 ## https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6
 ##
-## =============================================================================
+### Code:
+
+import os
+
+from osgeo import ogr
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class HRDEM(f_utils.FetchModule):
     """Fetch HRDEM data from Canada (NRCAN)"""
     
@@ -116,7 +117,7 @@ class HRDEM(f_utils.FetchModule):
                             data_link = feature.GetField('Ftp_dtm').replace('http', 'ftp')
                             self.results.append([data_link, data_link.split('/')[-1], surv['DataType']])
             utils.remove_glob(v_zip, *v_shps)
-                                
+            
     ## ==============================================
     ## _update_all() and _parse_results_all() will update FRED with all the data
     ## from the hrdem footprints, which can take a long time and use a lot of FRED

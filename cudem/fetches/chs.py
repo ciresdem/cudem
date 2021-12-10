@@ -1,4 +1,4 @@
-### chs.py - emodnet fetch - Europe
+### chs.py - chs fetch - Canada
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -20,24 +20,26 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-import lxml.etree
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## CHS Fetch
 ##
 ## fetch bathymetric soundings from the Canadian Hydrographic Service (CHS) - Canada Only
 ## https://open.canada.ca/data/en/dataset/d3881c4c-650d-4070-bf9b-1e00aabf0a1d
 ##
-## =============================================================================
+## NONNA 10 and NONNA 100
+##
+### Code:
+
+import os
+import lxml.etree
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class CHS(f_utils.FetchModule):
     """Fetch bathymetric soundings from the CHS"""
     
@@ -89,16 +91,10 @@ class CHS(f_utils.FetchModule):
         else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
         utils.remove_glob(src_chs)
 
-## =============================================================================
-##
-## CHS Fetch
-##
-## fetch bathymetric soundings from the Canadian Hydrographic Service (CHS) - Canada Only
-## https://open.canada.ca/data/en/dataset/d3881c4c-650d-4070-bf9b-1e00aabf0a1d
-##
-## NONNA 10 and NONNA 100
-##
-## =============================================================================
+## ==============================================
+## class CHS_FRED attempts to add chs data to FRED.
+## Use class CHS instead
+## ==============================================
 class CHS_FRED(f_utils.FetchModule):
     """Fetch raster data from CHS"""
 

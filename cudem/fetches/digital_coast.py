@@ -20,18 +20,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from osgeo import ogr
-from osgeo import gdal
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## Digital Coast ('dc')
 ## fetches-dc
@@ -41,7 +29,21 @@ import cudem.fetches.FRED as FRED
 ## data files...
 ##
 ## - check bounds in xml for slr dems
-## =============================================================================
+##
+### Code:
+
+import os
+
+from osgeo import ogr
+from osgeo import gdal
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+import cudem.fetches.FRED as FRED
+
 class DigitalCoast(f_utils.FetchModule):
 
     def __init__(self, where=[], datatype=None, inc=None, **kwargs):
@@ -55,9 +57,6 @@ class DigitalCoast(f_utils.FetchModule):
         self.datatype = datatype
         self.inc = utils.str2inc(inc)
         self.name = 'dc'
-        self._info = '''Lidar and Raster data from NOAA's Digital Coast'''
-        self._title = '''NOAA Digital Coast'''
-        self._usage = '''< digital_coast >'''
         self._urls = [self._dc_url, self._dc_htdata_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self._update_if_not_in_FRED()
@@ -165,14 +164,25 @@ class DigitalCoast(f_utils.FetchModule):
                 #                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
                 #xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
                 #'.format(self.region.format('te'), '2 29', src_dc), verbose = False)
-                _ds = datasets.LASFile(fn=src_dc, data_format=400, warp=self.warp,
-                                       name=src_dc, src_region=self.region, verbose=self.verbose, remote=True)
-
+                _ds = datasets.LASFile(
+                    fn=src_dc,
+                    data_format=400,
+                    warp=self.warp,
+                    name=src_dc,
+                    src_region=self.region,
+                    verbose=self.verbose,
+                    remote=True
+                )
                 if self.inc is not None:
                     b_region = regions.regions_reduce(self.region, regions.Region().from_list(_ds.infos['minmax']))
                     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                    for xyz in utils.yield_cmd(
+                            'gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')),
+                            verbose=self.verbose,
+                            data_fun=xyz_func
+                    ):
                         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                        
                 else:
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
@@ -201,11 +211,17 @@ class DigitalCoast(f_utils.FetchModule):
                 
                 #if src_ds is not None:
                 #src_ds = None
-                _ds = datasets.RasterFile(fn=src_dc, data_format=200, warp=self.warp, epsg=None,
-                                          name=src_dc, src_region=self.region, verbose=self.verbose)
+                _ds = datasets.RasterFile(
+                    fn=src_dc,
+                    data_format=200,
+                    warp=self.warp,
+                    epsg=None,
+                    name=src_dc,
+                    src_region=self.region,
+                    verbose=self.verbose
+                )
                 #_ds.src_ds = src_ds
                 #_ds.ds_open_p = True
-
                 for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
                 #src_ds = None

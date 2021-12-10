@@ -20,23 +20,23 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-from cudem import xyzfun
-import cudem.fetches.utils as f_utils
-
-## =============================================================================
 ##
 ## Opens Street Map data (OSM)
 ##
 ## Fetch various datasets from OSM/Overpass
 ## https://wiki.openstreetmap.org/wiki/Overpass_API
 ##
-## =============================================================================
+### Code:
+
+import os
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+from cudem import xyzfun
+
+import cudem.fetches.utils as f_utils
+
 class OpenStreetMap(f_utils.FetchModule):
     """Fetch OSM data"""
     

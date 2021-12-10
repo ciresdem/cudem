@@ -20,6 +20,9 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## COPERNICUS Fetch
+##
 ### Code:
 
 import os
@@ -33,11 +36,6 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
-## =============================================================================
-##
-## COPERNICUS Fetch ()
-##
-## =============================================================================
 class CopernicusDEM(f_utils.FetchModule):
     '''Fetch COPERNICUS data'''
     

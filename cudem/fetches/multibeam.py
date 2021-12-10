@@ -1,4 +1,4 @@
-### multibeam.py - GMRT dataset
+### multibeam.py - NCEI Multibeam
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
@@ -20,25 +20,30 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-from cudem import xyzfun
-import cudem.fetches.utils as f_utils
-
-## =============================================================================
 ##
 ## MB Fetch
 ##
 ## Fetch Multibeam bathymetric surveys from NOAA
 ## MBSystem is required to process the resulting data
 ##
-## =============================================================================
-class Multibeam(f_utils.FetchModule):
+## NCEI is the U.S. national archive for multibeam bathymetric data and holds more than 9 million 
+## nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
+## worldwide.
+##
+### Code:
 
+import os
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+from cudem import xyzfun
+
+import cudem.fetches.utils as f_utils
+
+class Multibeam(f_utils.FetchModule):
+    """Fetch multibeam data from NOAA NCEI"""
+    
     def __init__(self, processed=False, inc=None, **kwargs):
         super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
@@ -120,8 +125,12 @@ class Multibeam(f_utils.FetchModule):
                 if survey in these_surveys.keys():
                     if version in these_surveys[survey].keys():
                         these_surveys[survey][version].append([data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb'])
-                    else: these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
-                else: these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
+                    else:
+                        these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
+                        
+                else:
+                    these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
+                    
         else: utils.echo_error_msg('{}'.format(_req.reason))
                     
         for key in these_surveys.keys():
@@ -132,6 +141,7 @@ class Multibeam(f_utils.FetchModule):
                 else:
                     for v1 in these_surveys[key]['1']:
                         self.results.append(v1)
+                        
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
@@ -169,7 +179,13 @@ class Multibeam(f_utils.FetchModule):
 
                 if self.inc is not None:
                     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd('gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, self.region.format('gmt')), verbose=self.verbose, data_fun=xyz_func):
+                    for xyz in utils.yield_cmd(
+                            'gmt blockmedian -I{:.10f} {} -r -V'.format(
+                                self.inc, self.region.format('gmt')
+                            ),
+                            verbose=self.verbose,
+                            data_fun=xyz_func
+                    ):
                         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
                 else:
                     for xyz in _ds.yield_xyz():
