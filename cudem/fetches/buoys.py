@@ -52,9 +52,12 @@ class BUOYS(f_utils.FetchModule):
     
     def __init__(self, buoy_id=None, **kwargs):
         super().__init__(**kwargs)
+        self._ndbc_url = 'https://www.ndbc.noaa.gov'
         self._buoy_box_search_url = 'https://www.ndbc.noaa.gov/box_search.php?'
         self._buoy_station_url = 'https://www.ndbc.noaa.gov/station_page.php?'
+        self._buoy_stations_url = 'https://www.ndbc.noaa.gov/to_station.shtml'
         self._buoy_station_kml = 'https://www.ndbc.noaa.gov/kml/marineobs_by_owner.kml'
+        self._buoy_station_realtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
         self._outdir = os.path.join(os.getcwd(), 'buoys')
         self.name = 'buoys'
         self.buoy_id = buoy_id
@@ -80,16 +83,22 @@ class BUOYS(f_utils.FetchModule):
             self._buoy_box_search_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
-            print(_req.content)
-            # doc = lh.document_fromstring(_req.text)
-            # sp = doc.xpath('//span')
-
-            # for s in sp:
-            #     print(s.text_content())
-            #     if len(s.xpath('a')) > 0:
-            #         print(s.xpath('a')[0].text_content())
+            #print(_req.content)
+            doc = lh.document_fromstring(_req.text)
+            sp = doc.xpath('//span')
+            current_stations = []
             
-            self.results.append([_req.url, 'buoy_results_{}.json'.format(self.region.format('fn')), 'buoys'])
+            for s in sp:
+                #print(s.text_content())
+                if len(s.xpath('a')) > 0:
+                    station_url = s.xpath('a')[0].get('href')
+                    if 'station=' in station_url:
+                        station_id = station_url.split('=')[-1]
+                        #self.results.append([self._ndbc_url + station_url, 'buoy_results_{}.html'.format(station_id), 'buoys'])
+                        if station_id not in current_stations:
+                            current_stations.append(station_id)
+            for station_id in current_stations:
+                self.results.append([self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys'])
             
         return(self)
 
