@@ -29,7 +29,6 @@
 
 import os
 import sys
-import lxml.etree
 
 from cudem import utils
 from cudem import regions

@@ -20,22 +20,19 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-import sys
-import lxml.etree
-from cudem import utils
-from cudem import regions
-from cudem import datasets
-import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
-
-## =============================================================================
 ##
 ## GLOBAL ELUS Fetch (Landsat coast)
 ##
-## =============================================================================
+### Code:
+
+import os
+
+from cudem import utils
+from cudem import regions
+from cudem import datasets
+
+import cudem.fetches.utils as f_utils
+
 class GlobalELUS(f_utils.FetchModule):
     '''Fetch GLOBAL ELUS data from USGS'''
     

@@ -75,7 +75,7 @@ class NauticalCharts(f_utils.FetchModule):
         self.FRED._open_ds(1)
         for dt in self._dt_xml.keys():
             surveys = []
-            this_xml = FRED.iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
+            this_xml = f_utils.iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
             if self.verbose:
                 _prog = utils.CliProgress('scanning {} surveys in {}.'.format(len(charts), dt))

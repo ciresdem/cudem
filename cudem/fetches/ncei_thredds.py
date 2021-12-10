@@ -71,7 +71,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         self.FRED._close_ds()
         
     def _parse_catalog(self, catalog_url):
-        ntCatalog = FRED.iso_xml(catalog_url)
+        ntCatalog = f_utils.iso_xml(catalog_url)
         ntCatRefs = ntCatalog.xml_doc.findall('.//th:catalogRef', namespaces = ntCatalog.namespaces)
         for ntCatRef in ntCatRefs:
             ntCatHref =ntCatRef.attrib['{http://www.w3.org/1999/xlink}href']
@@ -81,7 +81,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
             self._parse_dataset(ntCatUrl)
             
     def _parse_dataset(self, catalog_url):
-        ntCatXml = FRED.iso_xml(catalog_url)
+        ntCatXml = f_utils.iso_xml(catalog_url)
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         if self.verbose:
@@ -114,7 +114,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
                     if service_name == 'wcs': wcs_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
                     if service_name == 'http': http_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
 
-                this_xml = FRED.iso_xml(iso_url)
+                this_xml = f_utils.iso_xml(iso_url)
                 title = this_xml.title()
                 h_epsg, v_epsg = this_xml.reference_system()
                 zv = this_xml.xml_doc.findall(

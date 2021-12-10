@@ -27,7 +27,6 @@
 
 import os
 import sys
-import lxml.etree
 import json
 import lxml.html as lh
 

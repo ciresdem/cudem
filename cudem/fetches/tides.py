@@ -59,8 +59,6 @@
 ### Code:
 
 import os
-import sys
-import lxml.etree
 import json
 
 from cudem import utils
@@ -69,7 +67,6 @@ from cudem import datasets
 from cudem import xyzfun
 
 import cudem.fetches.utils as f_utils
-import cudem.fetches.FRED as FRED
 
 class Tides(f_utils.FetchModule):
     """Fetch NOS Tide Stations"""

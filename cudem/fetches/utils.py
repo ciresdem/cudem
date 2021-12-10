@@ -1,8 +1,8 @@
-### fetches.py
+### utils.py
 ##
 ## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
 ##
-## fetches.py is part of CUDEM
+## utils.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -20,6 +20,15 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Fetching Utility Functions
+##
+## Generic fetching and processing functions, etc.
+##
+## The `fetch_results` class will fetch a list of fetch results [[url, file-name, data-type]...]
+## in a queue `fetch_queue` using 3 threads; set `p` and `s` as a fetch module object to processes
+## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
+##
 ### Code:
 
 import os
@@ -32,20 +41,10 @@ import threading
 try:
     import Queue as queue
 except: import queue as queue
+
 from cudem import utils
 from cudem import fetches
 
-## =============================================================================
-##
-## Fetching Functions
-##
-## Generic fetching and processing functions, etc.
-##
-## The `fetch_results` class will fetch a list of fetch results [[url, file-name, data-type]...]
-## in a queue `fetch_queue` using 3 threads; set `p` and `s` as a fetch module object to processes
-## and dump XYZ data from the fetched results, respectively. Use `fetch_file` to fetch single files.
-##
-## =============================================================================
 r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 namespaces = {
     'gmd': 'http://www.isotc211.org/2005/gmd', 
@@ -64,6 +63,235 @@ def urlencode(opts):
     except:
         url_enc = urllib.parse.urlencode(opts)
     return(url_enc)
+
+def xml2py(node):
+    """parse an xml file into a python dictionary"""
+    
+    texts = {}
+    if node is None:
+        return(None)
+    
+    for child in list(node):
+        child_key = lxml.etree.QName(child).localname
+        if 'name' in child.attrib.keys():
+            child_key = child.attrib['name']
+        
+        if '{http://www.w3.org/1999/xlink}href' in child.attrib.keys():
+            href = child.attrib['{http://www.w3.org/1999/xlink}href']
+        else: href = None
+        
+        if child.text is None or child.text.strip() == '':
+            if href is not None:
+                if child_key in texts.keys():
+                    texts[child_key].append(href)
+                else:
+                    texts[child_key] = [href]
+                    
+            else:
+                if child_key in texts.keys():
+                    ck = xml2py(child)
+                    texts[child_key][list(ck.keys())[0]].update(ck[list(ck.keys())[0]])
+                else:
+                    texts[child_key] = xml2py(child)
+                    
+        else:
+            if child_key in texts.keys():
+                texts[child_key].append(child.text)
+            else:
+                texts[child_key] = [child.text]
+                
+    return(texts)
+
+class iso_xml:
+    def __init__(self, xml_url, timeout=2, read_timeout=10):
+        self.url = xml_url
+        self.xml_doc = self._fetch(timeout=timeout, read_timeout=read_timeout)
+        self.namespaces = {
+            'gmd': 'http://www.isotc211.org/2005/gmd', 
+            'gmi': 'http://www.isotc211.org/2005/gmi', 
+            'gco': 'http://www.isotc211.org/2005/gco',
+            'gml': 'http://www.isotc211.org/2005/gml',
+            'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
+            'wms': 'http://www.opengis.net/wms',
+        }
+        
+    def _fetch(self, timeout = 2, read_timeout = 10):
+        return(f_utils.Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
+
+    def title(self):
+        t = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString', namespaces = self.namespaces)
+        return(t.text if t is not None else 'Unknown')
+        
+    def bounds(self, geom = True):
+        wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces = self.namespaces)
+        el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces = self.namespaces)
+        sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces = self.namespaces)                            
+        nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces = self.namespaces)                           
+        if wl is not None and el is not None and sl is not None and nl is not None:
+            region = [float(wl.text), float(el.text), float(sl.text), float(nl.text)]
+            if geom: return(regions.Region().from_list([float(wl.text), float(el.text), float(sl.text), float(nl.text)]).export_as_geom())
+            else: return(region)
+        else: return(None)
+
+    def polygon(self, geom = True):
+        opoly = []
+        polygon = self.xml_doc.find('.//{*}Polygon', namespaces = self.namespaces)
+        if polygon is not None:
+            nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
+            [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
+            if geom: return(utils.wkt2geom(regions.create_wkt_polygon(opoly)))
+            else: return(opoly)
+        else: return(None)
+        
+    def date(self):
+        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces = self.namespaces)
+        if dt is None:
+            dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces = self.namespaces)
+            
+        return(dt.text[:4] if dt is not None else '0000')
+
+    def xml_date(self):
+        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
+        
+        return(utils.this_date() if mddate is None else mddate.text)
+        
+    def reference_system(self):
+        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
+        if ref_s is None or len(ref_s) == 0:
+            return(None, None)
+        
+        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+        if h_epsg is not None:
+            h_epsg = h_epsg.text.split(':')[-1]
+        
+        if len(ref_s) > 1:
+            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+            if v_epsg is not None:
+                v_epsg = v_epsg.text.split(':')[-1]
+                
+        else:
+            v_epsg = None
+            
+        return(h_epsg, v_epsg)
+
+    def abstract(self):
+        try:
+            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces = self.namespaces)
+            abstract = '' if abstract is None else abstract.text
+        except:
+            abstract = ''
+            
+        return(abstract)
+
+    def linkages(self):
+        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces = self.namespaces)
+        if linkage is not None:
+            linkage = linkage.text
+        
+        return(linkage)
+    
+    def data_links(self):
+        dd = {}        
+        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces = self.namespaces)
+        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces =  self.namespaces)
+
+        if dfs is not None:
+            for i,j in enumerate(dfs):
+                if j.text in dd.keys():
+                    dd[j.text].append(dus[i].text)
+                else:
+                    dd[j.text] = [dus[i].text]
+                    
+        return(dd)
+
+class WCS:
+    def __init__(self, url):
+        self.url = url
+        self.namespaces = {
+            'wms': 'http://www.opengis.net/wms', 'wcs': 'http://www.opengis.net/wcs/2.0',
+            'ows': 'http://www.opengis.net/ows/2.0', 'gml': 'http://www.opengis.net/gml/3.2',
+            'gmlcov': 'http://www.opengis.net/gmlcov/1.0'}
+        self._get_capabilities()
+        self._s_version = self._si()['ServiceTypeVersion'][0]
+
+    def _get_capabilities(self):
+        _data = {'request': 'GetCapabilities', 'service': 'WCS'}
+        c = f_utils.Fetch(self.url).fetch_req(params=_data)
+        cx = lxml.etree.fromstring(c.text.encode('utf-8'))
+        self.service_provider = cx.find('.//ows:ServiceProvider', namespaces = self.namespaces)
+        self.service_identification = cx.find('.//ows:ServiceIdentification', namespaces = self.namespaces)
+        self.operations_metadata = cx.find('.//ows:OperationsMetadata', namespaces = self.namespaces)
+        self.service_metadata = cx.find('.//wcs:ServiceMetadata', namespaces = self.namespaces)
+        self.contents = cx.find('.//wcs:Contents', namespaces = self.namespaces)
+
+    def _contents(self):
+        c = []
+        for coverage in self.contents.xpath('//wcs:CoverageSummary', namespaces = self.namespaces):
+            c.append(xml2py(coverage))
+        return(c)
+
+    def _om(self):
+        return(xml2py(self.operations_metadata))
+
+    def _sp(self):
+        return(xml2py(self.service_provider))
+    
+    def _si(self):
+        return(xml2py(self.service_identification))
+    
+    def fix_coverage_id(self, coverage):
+        return(':'.join(coverage.split('__')))
+
+    def unfix_coverage_id(self, coverage):
+        return('__'.join(coverage.split(':')))
+
+    def _describe_coverage(self, coverage):
+        c_d = {}
+        valid = False
+        c = self._contents()
+        for cc in c:
+            if coverage == cc['CoverageId']:
+                valid = True
+                c_d = cc
+                break
+
+        om = self._om()
+        url = om['DescribeCoverage']['DCP']['HTTP']['Get'][0]
+        _data = {'request': 'DescribeCoverage', 'service': 'WCS',
+            'version': self._s_version, 'CoverageID': self.unfix_coverage_id(coverage)}
+        d = f_utils.Fetch(url).fetch_req(params=_data)
+        d_r = lxml.etree.fromstring(d.text.encode('utf-8'))
+        cd = d_r.find('.//wcs:CoverageDescription', namespaces = self.namespaces)
+        return(xml2py(d_r.find('.//wcs:CoverageDescription', namespaces = self.namespaces)))
+
+    def _get_coverage_region(self, cov_desc):
+        uc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["upperCorner"][0].split()]
+        lc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["lowerCorner"][0].split()]
+        return(regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]]))
+    
+    def _get_coverage_url(self, coverage, region = None):
+        dl_coverage = self.fix_coverage_id(coverage)
+        cov_desc = self._describe_coverage(coverage)
+        fmt = cov_desc["ServiceParameters"]["nativeFormat"][0]        
+        hl = [float(x) for x in cov_desc["domainSet"]["RectifiedGrid"]["limits"]["GridEnvelope"]['high'][0].split()]
+        uc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["upperCorner"][0].split()]
+        lc = [float(x) for x in cov_desc["boundedBy"]["Envelope"]["lowerCorner"][0].split()]
+        ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
+        resx = (uc[1] - lc[1]) / hl[0]
+        resy = (uc[0] - lc[0]) / hl[1]
+        data = {'request': 'GetCoverage', 'version': '1.0.0', 'service': 'WCS',
+                'resx': resx, 'resy': resy, 'crs': 'EPSG:4326', 'format': fmt,
+                'coverage': coverage, 'Identifier': coverage}
+        if region is not None: data['bbox'] = region.format('bbox')
+        enc_data = f_utils.urlencode(data)
+        #try:
+        #    enc_data = urllib.urlencode(data)
+        #except: enc_data = urllib.parse.urlencode(data)
+        return('{}{}'.format(self.url, enc_data))
+    
+    def fetch_coverage(coverage, region = None):
+        c_url = self._get_coverage_url(coverage, region)
+        return(f_utils.Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data))
 
 class Fetch:
 
@@ -113,10 +341,12 @@ class Fetch:
 
         if self.verbose:
             progress = utils.CliProgress('fetching remote file: {}...'.format(self.url))
+            
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
                 os.makedirs(os.path.dirname(dst_fn))
-            except: pass 
+            except: pass
+            
         if not os.path.exists(dst_fn) or overwrite:
             try:
                 with requests.get(self.url, stream=True, params=params, headers=self.headers,
@@ -136,15 +366,20 @@ class Fetch:
                                     curr_chunk += 8196
                                 if chunk:
                                     local_file.write(chunk)
+                                    
                     else:
                         utils.echo_error_msg('server returned: {}'.format(req.status_code))
+                        
             except Exception as e:
                 utils.echo_error_msg(e)
                 status = -1
+                
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             status = -1
+            
         if self.verbose:
             progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
+            
         return(status)
 
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):
@@ -155,11 +390,13 @@ class Fetch:
 
         if self.verbose:
             utils.echo_msg('fetching remote ftp file: {}...'.format(self.url[:20]))
+            
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
                 os.makedirs(os.path.dirname(dst_fn))
             except:
-                pass 
+                pass
+            
         try:
             f = urllib.request.urlopen(self.url)
         except:
@@ -169,8 +406,10 @@ class Fetch:
         if f is not None:
             with open(dst_fn, 'wb') as local_file:
                  local_file.write(f.read())
+                 
             if self.verbose:
                 utils.echo_msg('fetched remote ftp file: {}.'.format(os.path.basename(self.url)))
+                
         return(status)
 
 def fetch_queue(q, m, p=False):
@@ -210,14 +449,17 @@ def fetch_queue(q, m, p=False):
                 if m.region is not None:
                     o_x_fn = fetch_args[1] + m.region.format('fn') + '.xyz'
                 else: o_x_fn = fetch_args[1] + '.xyz'
+                
                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
                 if not os.path.exists(o_x_fn):
                     with open(o_x_fn, 'w') as out_xyz:
                         m.dump_xyz(fetch_args, dst_port=out_xyz)
+                        
                     try:
                         if os.path.exists(o_x_fn):
                             if os.stat(o_x_fn).st_size == 0:
                                 utils.remove_glob(o_x_fn)
+                                
                     except: pass
         q.task_done()
 
@@ -267,7 +509,12 @@ class FetchModule:
         raise(NotImplementedError)
     
     def fetch(self, entry):
-        Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1])
+        Fetch(
+            entry[0],
+            callback=self.callback,
+            verbose=self.verbose,
+            headers=self.headers
+        ).fetch_file(entry[1])
 
     def fetch_results(self):
         for entry in self.results:
@@ -275,19 +522,26 @@ class FetchModule:
             
     def dump_xyz(self, entry, dst_port=sys.stdout, **kwargs):
         for xyz in self.yield_xyz(entry, **kwargs):
-            xyz.dump(include_w=True if self.weight is not None else False,
-                     dst_port=dst_port, encode=False)
+            xyz.dump(
+                include_w=True if self.weight is not None else False,
+                dst_port=dst_port,
+                encode=False
+            )
             
     def yield_results_to_xyz(self, **kwargs):
         if len(self.results) == 0:
             self.run()
+            
         for entry in self.results:
             for xyz in self.yield_xyz(entry, **kwargs):
                 yield(xyz)
                 
     def dump_results_to_xyz(self, dst_port=sys.stdout, **kwargs):
         for xyz in self.yield_results_to_xyz(**kwargs):
-            xyz.dump(include_w=True if self.weight is not None else False,
-                     dst_port=dst_port, encode=False)
+            xyz.dump(
+                include_w=True if self.weight is not None else False,
+                dst_port=dst_port,
+                encode=False
+            )
 
 ### End

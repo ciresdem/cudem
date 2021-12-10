@@ -122,7 +122,7 @@ class NOS(f_utils.FetchModule):
                     
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    this_xml = FRED.iso_xml(xml_catalog + survey)
+                    this_xml = f_utils.iso_xml(xml_catalog + survey)
                     h_epsg, v_epsg = this_xml.reference_system()
                     this_data = this_xml.data_links()
                     d_links = []

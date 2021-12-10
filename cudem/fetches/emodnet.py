@@ -124,7 +124,7 @@ class EMODNetFRED(f_utils.FetchModule):
 
     def update(self):
         self.FRED._open_ds(1)
-        emod_wcs = FRED.WCS(self._emodnet_grid_url)
+        emod_wcs = f_utils.WCS(self._emodnet_grid_url)
         contents = emod_wcs._contents()
         if self.verbose:
             _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._emodnet_grid_url))
@@ -147,7 +147,7 @@ class EMODNetFRED(f_utils.FetchModule):
         self.FRED._close_ds()
         
     def run(self):        
-        emod_wcs = FRED.WCS(self._emodnet_grid_url)
+        emod_wcs = f_utils.WCS(self._emodnet_grid_url)
         for surv in FRED._filter_FRED(self):
             d = emod_wcs._describe_coverage(surv['ID'])
             if d is not None:

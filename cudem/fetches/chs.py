@@ -125,7 +125,7 @@ class CHS_FRED(f_utils.FetchModule):
         
     def update(self):
         self.FRED._open_ds(1)
-        chs_wcs = FRED.WCS(self._chs_url)
+        chs_wcs = f_utils.WCS(self._chs_url)
         contents = chs_wcs._contents()
         if self.verbose:
             _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._chs_url))
@@ -159,7 +159,7 @@ class CHS_FRED(f_utils.FetchModule):
         self.FRED._close_ds()
         
     def run(self):        
-        chs_wcs = FRED.WCS(self._chs_url)
+        chs_wcs = f_utils.WCS(self._chs_url)
         for surv in FRED._filter_FRED(self):
             d = chs_wcs._describe_coverage(surv['ID'])
             if d is not None:

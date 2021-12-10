@@ -106,7 +106,7 @@ class DigitalCoast(f_utils.FetchModule):
                 self.FRED._attribute_filter(["ID = '{}'".format(dc['ID #'])])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
                     if 'Metadata' in dc.keys():
-                        this_xml = FRED.iso_xml(dc['Metadata'])
+                        this_xml = f_utils.iso_xml(dc['Metadata'])
                         h_epsg, v_epsg = this_xml.reference_system()
                         geom = this_xml.bounds(geom=True)
                         if geom is not None:

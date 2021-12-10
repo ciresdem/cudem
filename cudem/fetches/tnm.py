@@ -168,12 +168,12 @@ class TheNationalMap(f_utils.FetchModule):
             if len(tags) > 0:
                 for tag in tags:
                     print(tag)
-                    this_xml = FRED.iso_xml('{}?format=iso'.format(tag['infoUrl']))
+                    this_xml = f_utils.iso_xml('{}?format=iso'.format(tag['infoUrl']))
                     geom = this_xml.bounds(geom=True)
                     h_epsg, v_epsg = this_xml.reference_system()
                     self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
             else:
-                this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
+                this_xml = f_utils.iso_xml('{}?format=iso'.format(ds['infoUrl']))
                 geom = this_xml.bounds(geom = True)
                 h_epsg, v_epsg = this_xml.reference_system()
                 self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
@@ -263,8 +263,8 @@ class TheNationalMap(f_utils.FetchModule):
                 _prog = utils.CliProgress('gathering {} products from {}...'.format(total, dsTag))
             
             ds = self._datasets(dataset = dsTag)
-            #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
-            this_xml = FRED.iso_xml('{}?format=iso'.format(ds['infoUrl']))
+            #this_xml = f_utils.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+            this_xml = f_utils.iso_xml('{}?format=iso'.format(ds['infoUrl']))
             h_epsg, v_epsg = this_xml.reference_system()
             
             while True:
