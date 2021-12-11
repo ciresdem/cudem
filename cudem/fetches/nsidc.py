@@ -94,6 +94,8 @@ class NSIDC(f_utils.FetchModule):
         self.quiet = False
 
         credentials = get_credentials(None)
+
+        #'User-Agent': 'Mozilla/5.0 (X11; Linux ppc64le; rv:75.0) Gecko/20100101 Firefox/75.0',
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
         
     def run(self):
@@ -635,3 +637,5 @@ if __name__ == '__main__':
     #                   version='004',
     #                   time_start='2020-11-23T00:00:00Z',
     #                   time_end='2021-04-20T00:00:00Z')
+
+### End

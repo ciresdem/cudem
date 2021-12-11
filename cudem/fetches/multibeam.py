@@ -30,6 +30,8 @@
 ## nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
 ## worldwide.
 ##
+## Uses NCEI multibeam groovy script to discover multibeam surveys.
+##
 ### Code:
 
 import os
@@ -58,14 +60,7 @@ class Multibeam(f_utils.FetchModule):
         self.inc = utils.str2inc(inc)
 
     def mb_inf_data_format(self, src_inf):
-        """extract the data format from the mbsystem inf file.
-
-        Args:
-          src_inf (str): the source mbsystem .inf file pathname
-
-        Returns:
-          str: the mbsystem datalist format number
-        """
+        """extract the data format from the mbsystem inf file."""
 
         with open(src_inf, errors='ignore') as iob:
             for il in iob:
@@ -75,14 +70,7 @@ class Multibeam(f_utils.FetchModule):
                         return(til[4])
 
     def mb_inf_data_date(self, src_inf):
-        """extract the data format from the mbsystem inf file.
-
-        Args:
-          src_inf (str): the source mbsystem .inf file pathname
-
-        Returns:
-          str: the mbsystem datalist format number
-        """
+        """extract the data format from the mbsystem inf file."""
 
         with open(src_inf, errors='ignore') as iob:
             for il in iob:
@@ -92,14 +80,7 @@ class Multibeam(f_utils.FetchModule):
                         return(til[3])
 
     def mb_inf_perc_good(self, src_inf):
-        """extract the data format from the mbsystem inf file.
-
-        Args:
-          src_inf (str): the source mbsystem .inf file pathname
-
-        Returns:
-          str: the mbsystem datalist format number
-        """
+        """extract the data format from the mbsystem inf file."""
 
         with open(src_inf, errors='ignore') as iob:
             for il in iob:
@@ -160,7 +141,7 @@ class Multibeam(f_utils.FetchModule):
             mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
             print(survey, src_data, mb_fmt, mb_perc, mb_date)
             if not keep_inf:
-                utils.remove_glob('{}'.format(src_mb))
+                utils.remove_glob('{}.inf'.format(src_mb))
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
