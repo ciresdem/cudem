@@ -108,7 +108,7 @@ class NSIDC(f_utils.FetchModule):
 
     def yield_xyz(self, entry):
         import h5py
-        ln = 0
+        import numpy as np
         
         if entry[1].split('.')[-1] == 'h5':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
@@ -120,22 +120,50 @@ class NSIDC(f_utils.FetchModule):
                     #    print('orientation (1 = forward/ 0 = backward): {}'.format(h5['{}/sc_orient'.format(g)][0]))
 
                     if 'gt' in g:
+
+                        ln = 0
+                        this_xyz = xyzfun.XYZPoint(w=1, epsg=4326)
+                        
                         h_ph = h5['{}/land_segments/dem_h'.format(g)]
                         lon_ph = h5['{}/land_segments/longitude'.format(g)]
                         lat_ph = h5['{}/land_segments/latitude'.format(g)]
                         ofn = h5_file[:-3]
 
-                        sys.stderr.write('processing {} points to {}_{}.xyz...'.format(h_ph.shape[0], ofn, g))
+                        dataset = np.vstack((lon_ph, lat_ph, h_ph)).transpose()
 
-                        for n, h in enumerate(h_ph):
-                            xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon_ph[n], lat_ph[n], h])
+                        if self.region is not None  and self.region.valid_p():        
+                            dataset = dataset[dataset[:,0] > self.region.xmin,:]
+                            dataset = dataset[dataset[:,0] < self.region.xmax,:]
+                            dataset = dataset[dataset[:,1] > self.region.ymin,:]
+                            dataset = dataset[dataset[:,1] < self.region.ymax,:]
+                            if self.region.zmin is not None:
+                                dataset = dataset[dataset[:,2] > self.region.zmin,:]
+                            if self.region.zmax is not None:
+                                dataset = dataset[dataset[:,2] < self.region.zmax,:]
+                
+                        for point in dataset:
+                            this_xyz.x = point[0]
+                            this_xyz.y = point[1]
+                            this_xyz.z = point[2]
+                            this_xyz.w = self.weight
+
                             if self.warp is not None:
-                                xyz.warp(warp_epsg=self.warp)
-
+                                this_xyz.warp(warp_epsg=self.warp)
+                            
                             ln += 1
-                            yield(xyz)
-            else:
-                utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[1]))
+                            yield(this_xyz)
+
+                        dataset = None
+
+            #             for n, h in enumerate(h_ph):
+            #                 xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon_ph[n], lat_ph[n], h])
+            #                 if self.warp is not None:
+            #                     xyz.warp(warp_epsg=self.warp)
+
+            #                 ln += 1
+            #                 yield(xyz)
+            # else:
+            #     utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[1]))
 
             if self.verbose:
                 utils.echo_msg(
