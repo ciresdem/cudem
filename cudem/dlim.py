@@ -244,7 +244,8 @@ class DatasetFactory:
                   'copernicus',
                   'nasadem',
                   'tides',
-                  'vdatum'
+                  'vdatum',
+                  'nsidc'
               ],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },

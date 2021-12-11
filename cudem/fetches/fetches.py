@@ -57,6 +57,7 @@ import cudem.fetches.nasadem as nasadem
 import cudem.fetches.tides as tides
 import cudem.fetches.vdatum as vdatum
 import cudem.fetches.buoys as buoys
+import cudem.fetches.nsidc as nsidc
 
 ## ==============================================
 ## Fetches Module Parser
@@ -222,7 +223,15 @@ open-content license.
         },
         'buoys': {
             'class': buoys.BUOYS,
-            'description': """NOAA BUOY data (beta)""",
+            'description': """NOAA BUOY data (beta)
+
+< buoys >""",
+        },
+        'nsidc': {
+            'class': nsidc.NSIDC,
+            'description': """NSIDC Downloads
+
+< nsidc >""",
         },
     }
     

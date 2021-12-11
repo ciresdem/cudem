@@ -48,6 +48,7 @@ setuptools.setup(
         'lxml',
         'matplotlib',
         'laspy[laszip]',
+        'h5py',
     ], 
     entry_points = {
         'console_scripts': [

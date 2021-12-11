@@ -116,7 +116,7 @@ class iso_xml:
         }
         
     def _fetch(self, timeout = 2, read_timeout = 10):
-        return(f_utils.Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
+        return(Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
 
     def title(self):
         t = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString', namespaces = self.namespaces)
@@ -216,7 +216,7 @@ class WCS:
 
     def _get_capabilities(self):
         _data = {'request': 'GetCapabilities', 'service': 'WCS'}
-        c = f_utils.Fetch(self.url).fetch_req(params=_data)
+        c = Fetch(self.url).fetch_req(params=_data)
         cx = lxml.etree.fromstring(c.text.encode('utf-8'))
         self.service_provider = cx.find('.//ows:ServiceProvider', namespaces = self.namespaces)
         self.service_identification = cx.find('.//ows:ServiceIdentification', namespaces = self.namespaces)
@@ -259,7 +259,7 @@ class WCS:
         url = om['DescribeCoverage']['DCP']['HTTP']['Get'][0]
         _data = {'request': 'DescribeCoverage', 'service': 'WCS',
             'version': self._s_version, 'CoverageID': self.unfix_coverage_id(coverage)}
-        d = f_utils.Fetch(url).fetch_req(params=_data)
+        d = Fetch(url).fetch_req(params=_data)
         d_r = lxml.etree.fromstring(d.text.encode('utf-8'))
         cd = d_r.find('.//wcs:CoverageDescription', namespaces = self.namespaces)
         return(xml2py(d_r.find('.//wcs:CoverageDescription', namespaces = self.namespaces)))
@@ -283,7 +283,7 @@ class WCS:
                 'resx': resx, 'resy': resy, 'crs': 'EPSG:4326', 'format': fmt,
                 'coverage': coverage, 'Identifier': coverage}
         if region is not None: data['bbox'] = region.format('bbox')
-        enc_data = f_utils.urlencode(data)
+        enc_data = urlencode(data)
         #try:
         #    enc_data = urllib.urlencode(data)
         #except: enc_data = urllib.parse.urlencode(data)
@@ -291,7 +291,7 @@ class WCS:
     
     def fetch_coverage(coverage, region = None):
         c_url = self._get_coverage_url(coverage, region)
-        return(f_utils.Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data))
+        return(Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data))
 
 class Fetch:
 
@@ -351,11 +351,33 @@ class Fetch:
             try:
                 with requests.get(self.url, stream=True, params=params, headers=self.headers,
                                   timeout=(timeout,read_timeout), verify=self.verify) as req:
+
                     req_h = req.headers
                     if 'Content-length' in req_h:
                         req_s = int(req_h['Content-length'])
                     else: req_s = -1
-                    if req.status_code == 200:
+                    
+                    ## ==============================================
+                    ## hack for earthdata credential redirect...
+                    ## recursion here may never end with incorrect user/pass
+                    ## ==============================================
+                    if req.status_code == 401:
+                        ## ==============================================
+                        ## we're hoping for a redirect url here.
+                        ## ==============================================
+                        if self.url == req.url:
+                            raise UnboundLocalError('Incorrect Authentication')
+                        
+                        Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                            dst_fn,
+                            params=params,
+                            datatype=datatype,
+                            overwrite=overwrite,
+                            timeout=timeout,
+                            read_timeout=read_timeout
+                        )
+                        
+                    elif req.status_code == 200:
                         curr_chunk = 0
                         with open(dst_fn, 'wb') as local_file:
                             for chunk in req.iter_content(chunk_size = 8196):
