@@ -207,8 +207,8 @@ class VDATUM(f_utils.FetchModule):
                     for v_gtx in v_gtxs:
                         os.rename(v_gtx, '{}.gtx'.format(surv['ID']))
                     utils.remove_glob(dst_zip)
-            
-            self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
+            else:
+                self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
             
     def yield_xyz(self, entry):
         src_zip = entry[1]

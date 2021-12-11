@@ -218,20 +218,35 @@ open-content license.
         'vdatum': {
             'class': vdatum.VDATUM,
             'description': """NOAA's VDATUM transformation grids
+VDatum is a free software tool being developed jointly by NOAA's National Geodetic Survey (NGS), 
+Office of Coast Survey (OCS), and Center for Operational Oceanographic Products and Services (CO-OPS). 
+
+VDatum is designed to vertically transform geospatial data among a variety of tidal, orthometric and 
+ellipsoidal vertical datums - allowing users to convert their data from different horizontal/vertical 
+references into a common system and enabling the fusion of diverse geospatial data in desired reference 
+levels.
 
 < vdatum:datatype=None:gtx=False >""",
         },
         'buoys': {
             'class': buoys.BUOYS,
             'description': """NOAA BUOY data (beta)
+A sustainable and resilient marine observation and monitoring infrastructure which enhances healthy 
+ecosystems, communities, and economies in the face of change and To provide quality observations in 
+the marine environment in a safe and sustainable manner to support the understanding of and predictions 
+to changes in weather, climate, oceans and coast. 
 
 < buoys >""",
         },
         'nsidc': {
             'class': nsidc.NSIDC,
-            'description': """NSIDC Downloads
+            'description': """NSIDC Downloads.
+NASA promotes the full and open sharing of all its data to research and applications communities, 
+private industry, academia, and the general public. In order to meet the needs of these different 
+communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
+ways to discover, access, and use the data.
 
-< nsidc >""",
+< nsidc:short_name=ATL08:version=004:time_start='':time_end='' >""",
         },
     }
     

@@ -31,6 +31,11 @@
 ##    machine urs.earthdata.nasa.gov login myusername password mypassword
 ## where 'myusername' and 'mypassword' are your Earthdata credentials.
 ##
+## NASA promotes the full and open sharing of all its data to research and applications communities, 
+## private industry, academia, and the general public. In order to meet the needs of these different 
+## communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
+## ways to discover, access, and use the data.
+##
 ## nsidc_download.py updated for fetches integration 12/21
 ##
 ### Code:
@@ -66,7 +71,7 @@ import cudem.fetches.utils as f_utils
 
 class NSIDC(f_utils.FetchModule):
 
-    def __init__(self, **kwargs):
+    def __init__(self, short_name='ATL08', version='004', time_start='', time_end='', **kwargs):
         super().__init__(**kwargs)
         self.CMR_URL = 'https://cmr.earthdata.nasa.gov'
         self.URS_URL = 'https://urs.earthdata.nasa.gov'
@@ -77,10 +82,10 @@ class NSIDC(f_utils.FetchModule):
         self.name = 'nsidc'
         self._outdir = os.path.join(os.getcwd(), 'nsidc')
         
-        self.short_name = 'ATL08'
-        self.version = '004'
-        self.time_start = ''
-        self.time_end = ''
+        self.short_name = short_name
+        self.version = version
+        self.time_start = time_start
+        self.time_end = time_end
         self.bounding_box = ''
         self.polygon = ''
         self.filename_filter = ''
@@ -123,10 +128,14 @@ class NSIDC(f_utils.FetchModule):
                     if 'gt' in g:
 
                         this_xyz = xyzfun.XYZPoint(w=1, epsg=4326)
+
+                        try:
+                            h_ph = h5['{}/land_segments/dem_h'.format(g)]
+                            lon_ph = h5['{}/land_segments/longitude'.format(g)]
+                            lat_ph = h5['{}/land_segments/latitude'.format(g)]
+                        except:
+                            continue
                         
-                        h_ph = h5['{}/land_segments/dem_h'.format(g)]
-                        lon_ph = h5['{}/land_segments/longitude'.format(g)]
-                        lat_ph = h5['{}/land_segments/latitude'.format(g)]
                         ofn = h5_file[:-3]
 
                         dataset = np.vstack((lon_ph, lat_ph, h_ph)).transpose()
