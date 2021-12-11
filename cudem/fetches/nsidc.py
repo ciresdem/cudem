@@ -109,6 +109,7 @@ class NSIDC(f_utils.FetchModule):
     def yield_xyz(self, entry):
         import h5py
         import numpy as np
+        ln = 0
         
         if entry[1].split('.')[-1] == 'h5':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
@@ -121,7 +122,6 @@ class NSIDC(f_utils.FetchModule):
 
                     if 'gt' in g:
 
-                        ln = 0
                         this_xyz = xyzfun.XYZPoint(w=1, epsg=4326)
                         
                         h_ph = h5['{}/land_segments/dem_h'.format(g)]
