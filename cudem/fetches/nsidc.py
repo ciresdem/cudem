@@ -135,11 +135,11 @@ class NSIDC(f_utils.FetchModule):
                             ln += 1
                             yield(xyz)
             else:
-                utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+                utils.echo_error_msg('failed to fetch remote file, {}...'.format(h5_file))
 
             if self.verbose:
                 utils.echo_msg(
-                    'parsed {} data records from {}'.format(ln, src_data)
+                    'parsed {} data records from {}'.format(ln, h5_file)
                 )
             
             utils.remove_glob('{}*'.format(h5_file))
