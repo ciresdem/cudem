@@ -116,8 +116,8 @@ class NSIDC(f_utils.FetchModule):
                 h5 = h5py.File(h5_file, 'r')
 
                 for g in h5['/']:
-                    if 'orbit' in g:
-                        print('orientation (1 = forward/ 0 = backward): {}'.format(h5['{}/sc_orient'.format(g)][0]))
+                    #if 'orbit' in g:
+                    #    print('orientation (1 = forward/ 0 = backward): {}'.format(h5['{}/sc_orient'.format(g)][0]))
 
                     if 'gt' in g:
                         h_ph = h5['{}/land_segments/dem_h'.format(g)]
@@ -135,14 +135,14 @@ class NSIDC(f_utils.FetchModule):
                             ln += 1
                             yield(xyz)
             else:
-                utils.echo_error_msg('failed to fetch remote file, {}...'.format(h5_file))
+                utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[1]))
 
             if self.verbose:
                 utils.echo_msg(
-                    'parsed {} data records from {}'.format(ln, h5_file)
+                    'parsed {} data records from {}'.format(ln, entry[1])
                 )
             
-            utils.remove_glob('{}*'.format(h5_file))
+            utils.remove_glob('{}*'.format(entry[1]))
 
 ## ==============================================
 ## nsidc_download.py from Mike McFerrin
