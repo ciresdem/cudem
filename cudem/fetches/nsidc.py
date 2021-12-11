@@ -155,16 +155,6 @@ class NSIDC(f_utils.FetchModule):
 
                         dataset = None
 
-            #             for n, h in enumerate(h_ph):
-            #                 xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon_ph[n], lat_ph[n], h])
-            #                 if self.warp is not None:
-            #                     xyz.warp(warp_epsg=self.warp)
-
-            #                 ln += 1
-            #                 yield(xyz)
-            # else:
-            #     utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[1]))
-
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}'.format(ln, entry[1])
