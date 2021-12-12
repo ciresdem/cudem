@@ -200,6 +200,8 @@ open-content license.
         'copernicus': {
             'class': copernicus.CopernicusDEM,
             'description': """COPERNICUS sattelite elevation data
+The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
+infrastructure and vegetation.
 
 < copernicus >""",
         },

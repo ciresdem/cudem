@@ -60,24 +60,14 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
             _out_key = '{}_{}'.format(name, key)
         else:
             _out_key = key
+            
         if _out_key not in _inf_areas_fmt.keys():
             _inf_areas_fmt[_out_key] = {}
             
-        xmin = float(_inf_areas[key]['minlon'])
-        xmax = float(_inf_areas[key]['maxlon'])
+        xmin = utils.x360(float(_inf_areas[key]['minlon']))
+        xmax = utils.x360(float(_inf_areas[key]['maxlon']))
         ymin = float(_inf_areas[key]['minlat'])
         ymax = float(_inf_areas[key]['maxlat'])
-
-        if xmin == 0:
-            xmin = -180
-        else:
-            xmin = ((xmin + 180) % 360) - 180
-
-        if xmax == 360:
-            xmax = 180
-        else:
-            xmax = ((xmax + 180) % 360) - 180
-        
         _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
         _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
             

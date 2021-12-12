@@ -1,6 +1,6 @@
 ### copernicus.py - COPERNICUS fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2021 CIRES Coastal DEM Team
 ##
 ## copernicus.py is part of CUDEM
 ##
@@ -22,6 +22,11 @@
 ### Commentary:
 ##
 ## COPERNICUS Fetch
+##
+## The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
+## infrastructure and vegetation.
+##
+## Fetches from opentopography
 ##
 ### Code:
 

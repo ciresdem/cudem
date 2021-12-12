@@ -127,18 +127,18 @@ class NSIDC(f_utils.FetchModule):
         ln = 0
         
         if entry[1].split('.')[-1] == 'h5':
-            if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+            if f_utils.Fetch(
+                    entry[0],
+                    callback=self.callback,
+                    verbose=self.verbose,
+                    headers=self.headers
+            ).fetch_file(entry[1]) == 0:
                 h5_file = entry[1]
                 h5 = h5py.File(h5_file, 'r')
 
                 for g in h5['/']:
-                    #if 'orbit' in g:
-                    #    print('orientation (1 = forward/ 0 = backward): {}'.format(h5['{}/sc_orient'.format(g)][0]))
-
                     if 'gt' in g:
-
                         this_xyz = xyzfun.XYZPoint(w=1, epsg=4326)
-
                         try:
                             h_ph = h5['{}/land_segments/dem_h'.format(g)]
                             lon_ph = h5['{}/land_segments/longitude'.format(g)]
@@ -147,9 +147,7 @@ class NSIDC(f_utils.FetchModule):
                             continue
                         
                         ofn = h5_file[:-3]
-
                         dataset = np.vstack((lon_ph, lat_ph, h_ph)).transpose()
-
                         if self.region is not None  and self.region.valid_p():        
                             dataset = dataset[dataset[:,0] > self.region.xmin,:]
                             dataset = dataset[dataset[:,0] < self.region.xmax,:]
@@ -157,6 +155,7 @@ class NSIDC(f_utils.FetchModule):
                             dataset = dataset[dataset[:,1] < self.region.ymax,:]
                             if self.region.zmin is not None:
                                 dataset = dataset[dataset[:,2] > self.region.zmin,:]
+                                
                             if self.region.zmax is not None:
                                 dataset = dataset[dataset[:,2] < self.region.zmax,:]
                 

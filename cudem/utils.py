@@ -552,6 +552,14 @@ def ogr_fext(src_drv_name):
         
         return(fext)
 
+def x360(x):
+    if x == 0:
+        return(-180)
+    elif x == 360:
+        return(180)
+    else:
+        return(((xmin + 180) % 360) - 180)
+    
 ## ==============================================
 ##
 ## Archives (zip/gzip/etc.)
@@ -691,9 +699,6 @@ def p_f_unzip(src_file, fns=None):
             
     return(src_procs)
 
-## ==============================================
-## Write an array to a gdal file
-## ==============================================
 def gdal_write(
         src_arr,
         dst_gdal,
