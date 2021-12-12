@@ -246,7 +246,7 @@ private industry, academia, and the general public. In order to meet the needs o
 communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
 ways to discover, access, and use the data.
 
-< nsidc:short_name=ATL08:version=004:time_start='':time_end='' >""",
+< nsidc:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
         },
     }
     

@@ -71,7 +71,15 @@ import cudem.fetches.utils as f_utils
 
 class NSIDC(f_utils.FetchModule):
 
-    def __init__(self, short_name='ATL08', version='004', time_start='', time_end='', **kwargs):
+    def __init__(
+            self,
+            short_name='ATL08',
+            version='004',
+            time_start='',
+            time_end='',
+            filename_filter = '',
+            **kwargs
+    ):
         super().__init__(**kwargs)
         self.CMR_URL = 'https://cmr.earthdata.nasa.gov'
         self.URS_URL = 'https://urs.earthdata.nasa.gov'
@@ -91,7 +99,7 @@ class NSIDC(f_utils.FetchModule):
         self.filename_filter = ''
         self.url_list = []
         self.dest_dir = None
-        self.quiet = False
+        self.quiet = True
 
         credentials = get_credentials(None)
 
