@@ -608,8 +608,7 @@ class GMTTriangulate(Waffle):
             data_fun = lambda p: self.dump_xyz(
                 dst_port=p, encode=True
             )
-        )
-        
+        )        
         return(self)
 
 class WafflesMBGrid(Waffle):
@@ -869,7 +868,11 @@ class WafflesNum(Waffle):
             
         return(self)
 
-class WafflesIDW(Waffle):
+class WafflesUIDW(Waffle):
+    """Uncertrainty Inverse Distance Weighted.
+    see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+    """
+    
     def __init__(
             self, radius=None, power=2, block=False, min_points=None, **kwargs
     ):
@@ -905,13 +908,13 @@ class WafflesIDW(Waffle):
         if self.verbose:
             if self.min_points:
                 progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
+                    'generating UIDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
                         self.radius, ycount, xcount, self.min_points
                     )
                 )
             else:
                 progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{}'.format(
+                    'generating UIDW grid @ {} and {}/{}'.format(
                         self.radius, ycount, xcount
                     )
                 )
@@ -967,151 +970,7 @@ class WafflesIDW(Waffle):
         out, status = utils.gdal_write(
             outArray, '{}.tif'.format(self.name), ds_config
         )        
-        return(self)
-    
-class WafflesIDW_(Waffle):
-    """Generate an IDW DEM.
-    If self.weights is True, use weights as uncertainty values
-    to generate a UIDW DEM as described here: 
-    https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-    """
-    
-    def __init__(
-            self, radius='1', power=2, block=False, min_points=None, **kwargs
-    ):
-        super().__init__(**kwargs)
-        self.radius = utils.str2inc(radius)
-        self.power = utils.float_or(power)
-        self.block_p = block
-        self.min_points = utils.int_or(min_points)
-        self.mod = 'IDW'
-        
-    def _distance(self, pnt0, pnt1):
-        return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
-    
-    def run(self):
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.epsg),
-            gdal.GDT_Float32,
-            -9999,
-            self.fmt
-        )
-        
-        outArray = np.empty((ycount, xcount))
-        outArray[:] = np.nan
-
-        if self.verbose:
-            if self.min_points:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
-                        self.radius, ycount, xcount, self.min_points
-                    )
-                )
-            else:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{}'.format(
-                        self.radius, ycount, xcount
-                    )
-                )
-            i=0
-
-        self._xyz_block_t(self.yield_xyz(block=self.block_p))
-        for y in range(0, ycount):
-            if self.verbose:
-                i+=1
-                progress.update_perc((i, ycount))
-                
-            for x in range(0, xcount):
-                xyz_bucket = []
-                z_list = []
-                dw_list = []
-                if self.weights:
-                    ww_list = []
-
-                if self.min_points is not None:
-                    l_radius = 0
-                    while len(xyz_bucket) < self.min_points:
-                        l_radius += self.radius
-                        xg, yg = utils._pixel2geo(x, y, dst_gt)
-                        block_region = regions.Region(
-                            xmin=xg-l_radius,
-                            xmax=xg+l_radius,
-                            ymin=yg-l_radius,
-                            ymax=yg+l_radius
-                        )
-                        
-                        srcwin = block_region.srcwin(dst_gt, xcount, ycount)
-                        for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-                            for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
-                                for b in self.block_t[y_i, x_i]:
-                                    xyz_bucket.append(b)
-                else:
-                    xg, yg = utils._pixel2geo(x, y, dst_gt)
-                    block_region = regions.Region(
-                        xmin=xg-self.radius,
-                        xmax=xg+self.radius,
-                        ymin=yg-self.radius,
-                        ymax=yg+self.radius
-                    )
-                    
-                    srcwin = block_region.srcwin(dst_gt, xcount, ycount)
-                    for y_i in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-                        for x_i in range(srcwin[0], srcwin[0] + srcwin[2], 1):
-                            for b in self.block_t[y_i, x_i]:
-                                xyz_bucket.append(b)
-                                
-                for this_xyz in xyz_bucket:
-                    d = self._distance([this_xyz.x, this_xyz.y], [xg, yg])
-                    z_list.append(this_xyz.z)
-                    if d > 0:
-                        dw_list.append(1./(d**self.power))
-                    else: dw_list.append(0)
-                    
-                    if self.weights:
-                        w = this_xyz.w
-                        if w > 0:
-                            ww_list.append(w**self.power)
-                        else: ww_list.append(0)
-
-                # if 0 not in dw_list:
-                #     if len(dw_list) <= 3:
-                #         dw_list = []
-                        
-                if len(dw_list) > 0:
-                    dwt = np.transpose(dw_list)
-                    if self.weights:
-                        wwt = np.transpose(ww_list)
-                        den = sum(np.array(dw_list)*np.array(ww_list))
-                        if den > 0:
-                            outArray[y,x] = np.dot(
-                                z_list, (np.array(dwt)*np.array(wwt))
-                            )/den
-                        else: outArray[y,x] = sum(z_list)/len(z_list)
-                        
-                    else:
-                        dw_list_sum = sum(dw_list)
-                        if dw_list_sum > 0:
-                            outArray[y,x] = np.dot(z_list, dwt)/dw_list_sum
-                        else: outArray[y,x] = sum(z_list)/len(z_list)
-        if self.verbose:
-            progress.end(
-                0,
-                'generated IDW grid {}/{}'.format(
-                    ycount, xcount
-                )
-            )
-            
-        ds = None            
-        outArray[np.isnan(outArray)] = -9999
-        out, status = utils.gdal_write(
-            outArray, '{}.tif'.format(self.name), ds_config
-        )        
-        return(self)
+        return(self)    
     
 class WafflesVDatum(Waffle):
     """vertical datum transformation grid via NOAA's VDATUM.
@@ -1328,7 +1187,6 @@ class WafflesCUDEM(Waffle):
             mask_z=None,
             **kwargs
     ):
-
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -1340,10 +1198,8 @@ class WafflesCUDEM(Waffle):
         self.coastline = coastline
         self.mask_p = True if self.coastline is not None or self.want_landmask else False
         self.mask_z = utils.float_or(mask_z)
-        
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
-        #self.radius = self.inc*9 if radius is None else radius
         self.radius = self.xinc*9 if radius is None else radius
         self.bathy_xinc = self.xinc*3 if bathy_xinc is None else bathy_xinc
         self.bathy_yinc = self.yinc*3 if bathy_yinc is None else bathy_yinc
@@ -1352,23 +1208,20 @@ class WafflesCUDEM(Waffle):
         self.mod = 'cudem'
         
     def run(self):
-
         surface_region = self.p_region.copy()
         surface_region.wmin = self.min_weight
-
         bathy_region = self.p_region.copy()
+        bathy_clip = None
         if self.mask_z is not None:
             bathy_region.zmax = self.mask_z + 10
-        bathy_clip = None
-        #bathy_data = self.data_
-
+            
         if self.idw:
             idw_region = self.p_region.copy()
             if self.mask_p:
                 idw_region.zmax = self.mask_z
 
             self.idw = WaffleFactory(
-                mod='IDW:radius={}'.format(self.radius),
+                mod='UIDW:radius={}'.format(self.radius),
                 data=self.data_,
                 src_region=idw_region,
                 xinc=utils.str2inc(self.bathy_xinc),
@@ -1835,16 +1688,16 @@ see gdal_grid --help for more info
  :power=[val] - weight**power
  :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)""",
         },
-        'IDW': {
-            'name': 'IDW',
+        'UIDW': {
+            'name': 'UIDW',
             'datalist-p': True,
-            'class': WafflesIDW,
-            'description': """INVERSE DISTANCE WEIGHTED DEM\n
+            'class': WafflesUIDW,
+            'description': """UNCERTAINTY INVERSE DISTANCE WEIGHTED DEM\n
 Generate a DEM using an Inverse Distance Weighted algorithm.
 If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
 as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
 
-< IDW:radius=0:min_points=0:power=2:block=True >
+< UIDW:radius=None:min_points=None:power=2:block=False >
  :radius=[val] - search radius
  :power=[val] - weight**power
  :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
