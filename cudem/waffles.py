@@ -183,28 +183,6 @@ class Waffle:
                 y_bv=(self.yinc*self.extend)
             )
         )
-
-    def _xyz_block_t(self, src_xyz):
-        """block the src_xyz data for fast lookup"""
-
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        self.block_t = np.empty((ycount, xcount), dtype=object)
-        for y in range(0, ycount):
-            for x in range(0, xcount):
-                self.block_t[y,x] = []
-
-        if self.verbose:
-            utils.echo_msg(
-                'blocking data into {} buckets'.format(ycount*xcount)
-            )
-            
-        for this_xyz in src_xyz:
-            if regions.xyz_in_region_p(this_xyz, self.p_region):
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, dst_gt
-                )
-                if xpos < xcount and ypos < ycount:
-                    self.block_t[ypos,xpos].append(this_xyz.copy())
                     
     def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz"""
@@ -314,7 +292,29 @@ class Waffle:
                     yield(out_xyz)
 
         out_array = out_weight_array = None
-                        
+
+    def _xyz_block_t(self, src_xyz):
+        """block the src_xyz data for fast lookup"""
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        self.block_t = np.empty((ycount, xcount), dtype=object)
+        for y in range(0, ycount):
+            for x in range(0, xcount):
+                self.block_t[y,x] = []
+
+        if self.verbose:
+            utils.echo_msg(
+                'blocking data into {} buckets'.format(ycount*xcount)
+            )
+            
+        for this_xyz in src_xyz:
+            if regions.xyz_in_region_p(this_xyz, self.p_region):
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
+                if xpos < xcount and ypos < ycount:
+                    self.block_t[ypos,xpos].append(this_xyz.copy())
+        
     def _xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
@@ -329,8 +329,7 @@ class Waffle:
             gdal.GDT_Float32, -9999, 'GTiff'
         )
         for this_xyz in src_xyz:
-            yield(this_xyz)
-            
+            yield(this_xyz)            
             if regions.xyz_in_region_p(this_xyz, self.region):
                 xpos, ypos = utils._geo2pixel(
                     this_xyz.x, this_xyz.y, dst_gt
@@ -407,7 +406,6 @@ class Waffle:
             fn = self.fn
         
         demfun.set_nodata(fn, nodata=-9999, convert_array=True)
-        
         if filter_:
             if len(self.fltr) > 0:
                 for f in self.fltr:
@@ -431,12 +429,10 @@ class Waffle:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
-
             clip_args = {}
             cp = self.clip.split(':')
             clip_args['src_ply'] = cp[0]
-            clip_args = utils.args2dict(cp[1:], clip_args)
-            
+            clip_args = utils.args2dict(cp[1:], clip_args)            
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
                     mod='coastline:invert=True',
@@ -467,7 +463,6 @@ class Waffle:
         self.vepsg = 'NAVD88'
         demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg))
         demfun.set_epsg(fn, self.epsg)
-        
         if self.fmt != 'GTiff':
             out_dem = utils.gdal2gdal(fn, dst_fmt=self.fmt)
             if out_dem is not None:
@@ -547,12 +542,10 @@ class GMTSurface(Waffle):
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
         self.breakline = breakline
-
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
-        )
-        
+        )        
         self.mod = 'surface'
         
     def run(self):        
@@ -679,20 +672,17 @@ class WafflesMBGrid(Waffle):
 
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
-        )
-        
+        )        
         grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n-9999:{} -V'.format(
             src_grd, dst_gdal, dst_fmt
         )
-
         out, status = utils.run_cmd(
             grd2gdal_cmd, verbose=self.verbose
         )
-        
         if status == 0:
             return(dst_gdal)
-        
-        else: return(None)
+        else:
+            return(None)
         
     def _gmt_grdsample(self, src_grd, dst_fmt='GTiff'):
         """convert the grd file to tif using GMT
@@ -715,9 +705,9 @@ class WafflesMBGrid(Waffle):
             grdsample_cmd, verbose=self.verbose
         )        
         if status == 0:
-            return(dst_gdal)
-        
-        else: return(None)
+            return(dst_gdal)        
+        else:
+            return(None)
     
     def run(self):
         # if use_datalists:
@@ -730,10 +720,8 @@ class WafflesMBGrid(Waffle):
 
         mb_region = self.p_region.copy()
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
-
         ## xsize and ysize are mistaken when gridding for grid-node...make note.
         #xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc)
-
         mbgrid_cmd = 'mbgrid -I{} {} -E{:.10f}/{:.10f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
             mb_region.format('gmt'),
@@ -746,13 +734,12 @@ class WafflesMBGrid(Waffle):
         )
         for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
             sys.stderr.write('{}'.format(out))
+            
         #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
-
         #self._gmt_grdsample('{}.grd'.format(self.name))
         #self._gmt_grd2gdal('{}.grd'.format(self.name))
         utils.gdal2gdal('{}.grd'.format(self.name))
         utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
-        
         if self.use_datalists and not self.archive:
             utils.remove_glob('archive')
 
@@ -763,7 +750,6 @@ class WafflesMBGrid(Waffle):
             out, status = self._gmt_num_msk(
                 num_grd, dst_msk, verbose=self.verbose
             )
-            
             utils.remove_glob(num_grd, '*_sd.grd')
             if not self.use_datalists:
                 if self.spat or self.archive:
@@ -817,7 +803,6 @@ class WafflesNum(Waffle):
         )
         
         for this_xyz in src_xyz:
-            #this_xyz = t.copy()
             if regions.xyz_in_region_p(this_xyz, self.p_region):
                 xpos, ypos = utils._geo2pixel(
                     this_xyz.x, this_xyz.y, dst_gt
@@ -862,8 +847,7 @@ class WafflesNum(Waffle):
                 )
                 return(None, -1)
 
-            out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)
-            
+            out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)            
             dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
                 self.mode,
                 self.ps_region.format('gmt'),
@@ -892,7 +876,8 @@ class WafflesIDW(Waffle):
         super().__init__(**kwargs)
         if radius is not None:
             self.radius = utils.str2inc(radius)
-        else: self.radius = self.xinc
+        else:
+            self.radius = self.xinc
         
         self.power = utils.float_or(power)
         self.block_p = block
@@ -904,7 +889,6 @@ class WafflesIDW(Waffle):
             
     def run(self):
         from scipy import spatial
-
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
@@ -943,7 +927,6 @@ class WafflesIDW(Waffle):
         x, y, z, w = np.array(x), np.array(y), np.array(z), np.array(w)        
         obs = np.vstack((x, y)).T
         tree = spatial.cKDTree(obs)
-        #self._xyz_block_t(self.yield_xyz(block=self.block_p))        
         for y_g in range(0, ycount):
             if self.verbose:
                 i+=1
@@ -983,8 +966,7 @@ class WafflesIDW(Waffle):
         outArray[np.isnan(outArray)] = -9999
         out, status = utils.gdal_write(
             outArray, '{}.tif'.format(self.name), ds_config
-        )
-        
+        )        
         return(self)
     
 class WafflesIDW_(Waffle):
@@ -1128,8 +1110,7 @@ class WafflesIDW_(Waffle):
         outArray[np.isnan(outArray)] = -9999
         out, status = utils.gdal_write(
             outArray, '{}.tif'.format(self.name), ds_config
-        )
-        
+        )        
         return(self)
     
 class WafflesVDatum(Waffle):
@@ -1154,11 +1135,10 @@ class WafflesVDatum(Waffle):
         """
 
         super().__init__(**kwargs)
-        
-        #if self.gc['VDATUM'] is None:
-        #    utils.echo_error_msg('VDatum must be installed to use the VDATUM module')
-        #    return(None, -1)
-        
+        if self.gc['VDATUM'] is None:
+           utils.echo_error_msg('VDatum must be installed to use the VDATUM module')
+           return(None, -1)
+       
         self.mod = 'vdatum'
         self.vdc = vdatumfun.Vdatum(
             ivert=ivert,
@@ -1184,7 +1164,6 @@ class WafflesVDatum(Waffle):
             nodata,
             outformat
         )
-        
         nullArray = np.zeros( (ycount, xcount) )
         nullArray[nullArray==0]=nodata
         utils.gdal_write(nullArray, outfile, ds_config)
@@ -1203,7 +1182,6 @@ class WafflesVDatum(Waffle):
             verbose=self.verbose,
             weight=None
         )
-
         with open('empty.xyz', 'w') as mt_xyz:
             empty.dump_xyz(mt_xyz)
             
@@ -1218,11 +1196,9 @@ class WafflesVDatum(Waffle):
                 verbose=self.verbose,
                 weight=None
             )
-            
             empty_infos = empty_xyz.inf()
             ll = 'd' if empty_infos['minmax'][4] < 0 else '0'
             lu = 'd' if empty_infos['minmax'][5] > 0 else '0'
-
             GMTSurface(
                 data=['result/empty.xyz'],
                 name=self.name,
@@ -1590,8 +1566,7 @@ class WafflesCoastline(Waffle):
             gdal.GDT_Int32,
             -9999,
             'GTiff'
-        )
-        
+        )        
         self.coast_array = np.zeros( (ycount, xcount) )
 
     def _load_gmrt(self):
@@ -1610,12 +1585,10 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
         
-        #this_gmrt.fetch_results()
         gmrt_tif = this_gmrt.results[0]
 
         dst_srs = osr.SpatialReference()
         dst_srs.ImportFromEPSG(int(self.epsg))
-        
         driver = gdal.GetDriverByName('MEM')
         out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
             
@@ -1626,16 +1599,11 @@ class WafflesCoastline(Waffle):
         gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg = gdal.GRA_CubicSpline)
             
         gmrt_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
-
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr <= 0] = 0
 
-        #self.coast_array += gmrt_ds_arr
-
-        self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]
-        
+        self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]        
         out_ds = gmrt_ds_arr = None
-
         utils.remove_glob(gmrt_tif[1])
         
     def _load_copernicus(self):
@@ -2128,7 +2096,7 @@ Options:
 \t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
   -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
-\t\t\tgenerate a waffles_config JSON file using the --config flag.
+\t\t\tGenerate a waffles_config JSON file using the --config flag.
 
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc_nYYxYY_wXXxXX_YEAR info to output BASENAME).
   -r, --grid-node\tUse grid-node registration, default is pixel-node
