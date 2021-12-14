@@ -192,6 +192,7 @@ class NOS(f_utils.FetchModule):
                         xpos=2,
                         ypos=1,
                         zpos=3,
+                        z_scale=-1,
                         epsg=4326,
                         warp=self.warp,
                         name=nos_f_r,
