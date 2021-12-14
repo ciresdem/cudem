@@ -730,10 +730,9 @@ class XYZFile(XYZDataset):
         else:
             self.src_data = sys.stdin
 
-        sk = self.skip
-        this_xyz = xyzfun.XYZPoint()
-        
         ln = 0
+        sk = self.skip
+        this_xyz = xyzfun.XYZPoint()        
         for xyz_line in self.src_data:
             if ln >= sk:
                 if self.delim is None:
@@ -743,7 +742,8 @@ class XYZFile(XYZDataset):
                     xyz_line,
                     delim=self.delim,
                     x_pos=self.xpos,
-                    y_pos=self.ypos
+                    y_pos=self.ypos,
+                    z_pos=self.zpos,
                 )
 
                 if this_xyz.valid_p():
