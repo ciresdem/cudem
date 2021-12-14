@@ -253,6 +253,7 @@ class Region:
             y_inc = x_inc * -1.
         elif y_inc > 0:
             y_inc = y_inc * -1.
+
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
         this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt)
         this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt)
@@ -377,8 +378,8 @@ class Region:
         Returns:
           region-object: self
         """
-        
-        if self.valid_p:
+
+        if self.valid_p():
             if pct is not None:
                 ewp = (self.xmax - self.xmin) * (pctv * .01)
                 nsp = (self.ymax - self.ymin) * (pctv * .01)

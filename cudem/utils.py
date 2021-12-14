@@ -372,8 +372,8 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     """
 
     if geo_transform[2] + geo_transform[4] == 0:
-        pixel_x = ((geo_x - geo_transform[0]) / geo_transform[1])
-        pixel_y = ((geo_y - geo_transform[3]) / geo_transform[5])
+        pixel_x = round((geo_x - geo_transform[0]) / geo_transform[1], 4)
+        pixel_y = round((geo_y - geo_transform[3]) / geo_transform[5], 4)
         if node == 'grid':
             pixel_x += .5
             pixel_y += .5
