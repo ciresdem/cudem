@@ -155,7 +155,7 @@ class Multibeam(f_utils.FetchModule):
                     utils.remove_glob('{}.inf'.format(entry[0]))
                     out, status = utils.run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)
             if status == 0:
-                _ds = datasets.XYZFile(fn=src_xyz, delim='\t', data_format=168, epsg=4326, warp=self.warp,
+                _ds = datasets.XYZFile(fn=src_xyz, delim='\t', data_format=168, src_srs=4326, dst_srs=self.dst_srs,
                                        name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose, remote=True)
 
                 if self.inc is not None:

@@ -138,7 +138,7 @@ class NSIDC(f_utils.FetchModule):
 
                 for g in h5['/']:
                     if 'gt' in g:
-                        this_xyz = xyzfun.XYZPoint(w=1, epsg=4326)
+                        this_xyz = xyzfun.XYZPoint(w=1, src_srs='epsg:4326')
                         try:
                             h_ph = h5['{}/land_segments/dem_h'.format(g)]
                             lon_ph = h5['{}/land_segments/longitude'.format(g)]
@@ -165,8 +165,8 @@ class NSIDC(f_utils.FetchModule):
                             this_xyz.z = point[2]
                             this_xyz.w = self.weight
 
-                            if self.warp is not None:
-                                this_xyz.warp(warp_epsg=self.warp)
+                            if self.dst_srs is not None:
+                                this_xyz.warp(dst_srs=self.dst_srs)
                             
                             ln += 1
                             yield(this_xyz)

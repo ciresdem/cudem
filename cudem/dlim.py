@@ -34,9 +34,11 @@ import glob
 import json
 
 import cudem
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
 import cudem.fetches.fetches as fetches
 
 ## ==============================================
@@ -55,15 +57,6 @@ class Datalist(datasets.XYZDataset):
     def generate_inf(self, callback=lambda: False):
         """return the region of the datalist and generate
         an associated `.inf` file if `inf_file` is True.
-
-        Args:
-          dl (str): a datalist pathname
-          inf_file (bool): generate an inf file
-          epsg (int): EPSG code
-          overwrite (bool): overwrite a possibly existing inf_file
-
-        Returns:
-          list: the region [xmin, xmax, ymin, ymax]
         """
         
         _region = self.region
@@ -82,7 +75,6 @@ class Datalist(datasets.XYZDataset):
                 self.infos['numpts'] += entry.infos['numpts']
 
         l = 0
-
         for this_region in out_regions:
             if l == 0:
                 tmp_region = regions.Region().from_list(this_region)
@@ -104,14 +96,15 @@ class Datalist(datasets.XYZDataset):
         return(self.infos)
     
     def parse(self):
-        """import a datalist entry from a string
-    
-        Returns:
-          datalist_parser: self
-        """
+        """import a datalist entry from a string"""
         
         if self.verbose:
-            _prog = utils.CliProgress('parsing datalist {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+            _prog = utils.CliProgress(
+                'parsing datalist {}{}'.format(
+                    self.fn,
+                    ' @{}'.format(self.weight) if self.weight is not None else '')
+            )
+            
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
@@ -120,6 +113,7 @@ class Datalist(datasets.XYZDataset):
                 for l, this_line in enumerate(op):
                     if self.verbose:
                         _prog.update_perc((l, count))
+                        
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line,
@@ -134,7 +128,8 @@ class Datalist(datasets.XYZDataset):
                             vdatum=self.vdatum,
                             url=self.url,
                             title=self.title,
-                            warp=self.warp,
+                            src_srs=self.src_srs,
+                            dst_srs=self.dst_srs,
                             weight=self.weight,
                             verbose=self.verbose
                         ).acquire_dataset()
@@ -164,15 +159,12 @@ class Datalist(datasets.XYZDataset):
             utils.echo_warning_msg(
                 'could not open datalist/entry {}'.format(self.fn)
             )
+            
         if self.verbose:
             _prog.end(0, 'parsed datalist {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
            
     def yield_xyz(self):
-        """parse the data from the datalist
-
-        Yields:
-          xyz: the parsed xyz data
-        """
+        """parse the data from the datalist"""
 
         for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():
@@ -182,11 +174,7 @@ class Datalist(datasets.XYZDataset):
                 utils.remove_glob('{}*'.format(this_entry.fn))
                 
     def yield_xyz_from_entries(self):
-        """parse the data from the datalist
-
-        Yields:
-          xyz: the parsed xyz data
-        """
+        """parse the data from the datalist"""
 
         for this_entry in self.data_entries:
             for xyz in this_entry.yield_xyz():
@@ -250,7 +238,6 @@ class DatasetFactory:
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
     }
-
     datalist_cols = ['path', 'format', 'weight', 'name', 'source',
                      'date', 'type', 'resolution', 'horz', 'vert',
                      'url']
@@ -260,7 +247,8 @@ class DatasetFactory:
             fn=None,
             data_format=None,
             weight=1,
-            epsg=4326,
+            src_srs='epsg:4326',
+            dst_srs=None,
             name="xyz_dataset",
             title=None,
             source=None,
@@ -272,7 +260,6 @@ class DatasetFactory:
             url=None,
             parent=None,
             src_region=None,
-            warp=None,
             verbose=False
     ):
         
@@ -284,17 +271,16 @@ class DatasetFactory:
         self.date = date
         self.data_type = data_type
         self.resolution = resolution
-        self.epsg = epsg
+        self.src_srs = src_srs
+        self.dst_srs = dst_srs
         self.hdatum = hdatum
         self.vdatum = vdatum
         self.url = url
-        self.warp = warp
         self.region = src_region
         self.parent = parent
         self.verbose = verbose
         self.fn = fn
         self.parse_fn()
-
         if self.data_format is None:
             self.guess_data_format()
             
@@ -431,8 +417,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -455,8 +441,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -482,8 +468,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -507,8 +493,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -531,8 +517,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -555,8 +541,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -580,8 +566,8 @@ class DatasetFactory:
                 hdatum=self.hdatum,
                 vdatum=self.vdatum,
                 url=self.url,
-                epsg=self.epsg,
-                warp=self.warp,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
                 name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
@@ -630,8 +616,8 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-  -P, --s_epsg\t\tSet the SOURCE horizontal projection EPSG code.
-  -W, --t_epsg\t\tSet the SOURCE horizontal projection EPSG code.
+  -P, --s_srs\t\tSet the SOURCE projection.
+  -W, --t_srs\t\tSet the TARGET projection.
   -F, --format\t\tOnly process the given data FORMAT.
 
   --archive\t\tARCHIVE the datalist to the given REGION
@@ -649,7 +635,7 @@ Supported datalist formats:
 Examples:
   % {cmd} my_data.datalist -R -90/-89/30/31
   % {cmd} -R-90/-89/30/31/-100/100 *.tif -l -w > tifs_in_region.datalist
-  % {cmd} -R my_region.shp my_data.xyz -w -s_epsg 4326 -t_epsg 3565 > my_data_3565.xyz
+  % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 """.format(cmd=os.path.basename(sys.argv[0]), 
@@ -663,8 +649,8 @@ def datalists_cli(argv=sys.argv):
     """
 
     dls = []
-    epsg = None
-    warp = None
+    src_srs = None
+    dst_srs = None
     fmt = None
     i_regions = []
     these_regions = []
@@ -690,11 +676,11 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
-        elif arg == '-s_epsg' or arg == '--s_epsg' or arg == '-P':
-            epsg = argv[i + 1]
+        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
+            src_srs = argv[i + 1]
             i = i + 1
-        elif arg == '-t_epsg' or arg == '--t_epsg' or arg == '-W':
-            warp = argv[i + 1]
+        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
+            dst_srs = argv[i + 1]
             i = i + 1
         elif arg == '--format' or arg == '-F':
             fmt = utils.int_or(argv[i + 1])
@@ -780,7 +766,7 @@ def datalists_cli(argv=sys.argv):
         xdls = [DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=this_region, verbose=want_verbose,
-            epsg=epsg, warp=warp).acquire_dataset() for dl in dls]
+            src_srs=src_srs, dst_srs=dst_srs).acquire_dataset() for dl in dls]
 
         for xdl in xdls:
             if xdl is not None and xdl.valid_p(
@@ -837,7 +823,7 @@ def datalists_cli(argv=sys.argv):
                                         p.source,
                                         p.date,
                                         p.data_type,
-                                       p.resolution,
+                                        p.resolution,
                                         p.hdatum,
                                         p.vdatum,
                                         p.url

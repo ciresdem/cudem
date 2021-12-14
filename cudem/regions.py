@@ -51,7 +51,7 @@ class Region:
       wmin (float): the minimum w(weight) value
       wmax (float): the maximum w(weight) value
       wkt (str): the wkt representation of the region
-      epsg (int): the EPSG code representing the regions projection
+      src_srs (str): the regions projection
     """
 
     full_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax, x.zmin, x.zmax, x.wmin, x.wmax]
@@ -68,7 +68,7 @@ class Region:
                  zmax=None,
                  wmin=None,
                  wmax=None,
-                 epsg=4326,
+                 src_srs='epsg:4326',
                  wkt=None):        
         self.xmin = utils.float_or(xmin)
         self.xmax = utils.float_or(xmax)
@@ -78,7 +78,7 @@ class Region:
         self.zmax = utils.float_or(zmax)
         self.wmin = utils.float_or(wmin)
         self.wmax = utils.float_or(wmax)
-        self.epsg = utils.int_or(epsg)
+        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
         self.wkt = wkt
 
     def __repr__(self):
@@ -123,7 +123,7 @@ class Region:
                       zmax = self.zmax,
                       wmin = self.wmin,
                       wmax = self.wmax,
-                      epsg = self.epsg,
+                      src_srs = self.src_srs,
                       wkt = self.wkt))
     
     def from_list(self, region_list):
@@ -454,31 +454,24 @@ class Region:
             else: break
         return(o_chunks)
 
-    def warp(self, warp_epsg=4326):
-        """warp the region from self.epsg to dst_epsg
+    def warp(self, dst_srs='epsg:4326'):
+        """warp the region from self.epsg to dst_epsg"""
 
-        Args:
-          warp_epsg (int): the destination EPSG code
-
-        Returns:
-          region-object: warped self
-        """
-
-        warp_epsg = utils.int_or(warp_epsg)
-        if warp_epsg is None or self.epsg is None: return(self)
+        dst_srs = utils.str_or(dst_srs)
+        if dst_srs is None or self.src_srs is None: return(self)
 
         src_srs = osr.SpatialReference()
-        src_srs.ImportFromEPSG(self.epsg)
+        src_srs.SetFromUserInput(self.src_srs)
 
         dst_srs = osr.SpatialReference()
-        dst_srs.ImportFromEPSG(warp_epsg)
+        dst_srs.SetFromUserInput(dst_srs)
         try:
             src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
         
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-        self.epsg = warp_epsg
+        self.src_srs = dst_srs
         self.wkt = None
         
         return(self.transform(dst_trans))
@@ -760,8 +753,8 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-  -P, --s_epsg\t\tSet the SOURCE horizontal projection EPSG code.
-  -W, --t_epsg\t\tSet the TARGET horizontal projection EPSG code.
+  -P, --s_srs\t\tSet the SOURCE projection.
+  -W, --t_srs\t\tSet the TARGET projection.
   -B, --buffer\t\tBUFFER the region with a buffer-value.
   -e, --echo\t\tECHO the <processed> region
   -n, --name\t\tPrint the region as a NAME
@@ -784,8 +777,8 @@ def regions_cli(argv = sys.argv):
     See `regions_usage` for full cli options.
     """
 
-    epsg = None
-    warp = None
+    src_srs = None
+    dst_srs = None
     i_regions = []
     these_regions = []
     want_verbose = True
@@ -804,11 +797,11 @@ def regions_cli(argv = sys.argv):
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
-        elif arg == '-s_epsg' or arg == '--s_epsg' or arg == '-P':
-            epsg = argv[i + 1]
+        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
+            src_srs = argv[i + 1]
             i = i + 1
-        elif arg == '-t_epsg' or arg == '--t_epsg' or arg == '-W':
-            warp = argv[i + 1]
+        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
+            dst_srs = argv[i + 1]
             i = i + 1
         elif arg == '-b' or arg == '-B' or arg == '--buffer':
             bv = utils.int_or(argv[i+1])

@@ -513,14 +513,14 @@ class fetch_results(threading.Thread):
 
 class FetchModule:
 
-    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, warp=None):
+    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, dst_srs=None):
         self.region = src_region
         self.callback = callback
         self.weight = weight
         self.verbose = verbose
         self.status = 0
         self.results = []
-        self.warp = warp
+        self.dst_srs = dst_srs
         self.name = None
         self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 

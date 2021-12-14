@@ -160,14 +160,14 @@ class DigitalCoast(f_utils.FetchModule):
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 # xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
                 # '.format(self.region.format('te'), '2 29', src_dc), verbose = False)
-                # _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, warp=self.warp,
+                # _ds = datasets.XYZFile(fn=xyz_dat, data_format=168, dst_srs=self.dst_Srs,
                 #                        name=xyz_dat, src_region=self.region, verbose=self.verbose, remote=True)
                 #xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\
                 #'.format(self.region.format('te'), '2 29', src_dc), verbose = False)
                 _ds = datasets.LASFile(
                     fn=src_dc,
                     data_format=400,
-                    warp=self.warp,
+                    dst_srs=self.dst_srs,
                     name=src_dc,
                     src_region=self.region,
                     verbose=self.verbose,
@@ -214,8 +214,8 @@ class DigitalCoast(f_utils.FetchModule):
                 _ds = datasets.RasterFile(
                     fn=src_dc,
                     data_format=200,
-                    warp=self.warp,
-                    epsg=None,
+                    dst_srs=self.dst_srs,
+                    src_srs=None,
                     name=src_dc,
                     src_region=self.region,
                     verbose=self.verbose

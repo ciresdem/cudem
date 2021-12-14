@@ -193,7 +193,7 @@ class HRDEM(f_utils.FetchModule):
 
         if src_ds is not None:
 
-            _ds = datasets.RasterFile(fn=src_dc, data_format=200, epsg=4326, warp=self.warp,
+            _ds = datasets.RasterFile(fn=src_dc, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
                                       name=src_dc, src_region=self.region, verbose=self.verbose)
             _ds.src_ds = src_ds
             _ds.ds_open_p = True

@@ -181,8 +181,8 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
             _ds = datasets.RasterFile(
                 fn=src_ncei,
                 data_format=200,
-                epsg=4326,
-                warp=self.warp,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
                 name=src_ncei,
                 src_region=self.region,
                 verbose=self.verbose

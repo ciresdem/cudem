@@ -117,17 +117,14 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
-def set_epsg(src_dem, epsg = 4326):
-    """set the projection of gdal file src_fn to epsg
-
-    returns status-code (0 == success)
-    """
+def set_srs(src_dem, src_srs='epsg:4326'):
+    """set the projection of gdal file src_fn to src_srs"""
     
     try:
         ds = gdal.Open(src_dem, gdal.GA_Update)
     except: ds = None
     if ds is not None:
-        ds.SetProjection(utils.sr_wkt(int(epsg)))
+        ds.SetProjection(utils.sr_wkt(src_srs))
         ds = None
         return(0)
     else: return(None)
@@ -805,9 +802,9 @@ def percentile(src_gdal, perc = 95):
         return(p)
     else: return(None)
 
-def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, warp=None, verbose=False, z_region=None, step=1):
+def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
     '''parse the data from gdal dataset src_ds (first band only)
-    optionally mask the output with `mask` or transform the coordinates to `warp` (epsg-code)
+    optionally mask the output with `mask` or transform the coordinates to `dst_srs`
 
     yields the parsed xyz data'''
 
@@ -827,17 +824,17 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, warp=None, verbose=
         src_srs.ImportFromEPSG(4326)
         src_srs.AutoIdentifyEPSG()
         srs_auth = src_srs.GetAuthorityCode(None)
-        
-    if srs_auth == warp: warp = None
 
-    if warp is not None:
-        dst_srs = osr.SpatialReference()
-        dst_srs.ImportFromEPSG(int(warp))
+    #if srs_auth == warp: dst_srs = None
+
+    if dst_srs is not None:
+        dst_srs_ = osr.SpatialReference()
+        dst_srs_.SetFromUserInput(dst_srs)
         ## GDAL 3+
         try:
-            dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
-        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
+        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
 
     gt = ds_config['geoT']
     msk_band = None

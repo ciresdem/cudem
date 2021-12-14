@@ -308,7 +308,7 @@ class Fetcher(datasets.XYZDataset):
             mod=self.fn,
             src_region=self.region,
             verbose=self.verbose
-        ).acquire(warp=self.warp)
+        ).acquire(dst_srs=self.dst_srs)
 
         if self.fetch_module is None:
             pass
@@ -463,7 +463,7 @@ def fetches_cli(argv = sys.argv):
             mod=mod,
             src_region=this_region,
             verbose=want_verbose
-        ).acquire(warp=4326) for mod in mods]
+        ).acquire(dst_srs='epsg:4326') for mod in mods]
         for x_f in x_fs:
             if x_f is None:
                 continue

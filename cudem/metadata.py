@@ -27,6 +27,7 @@
 
 import os
 import sys
+
 from osgeo import ogr
 from osgeo import gdal
 from cudem import utils
@@ -119,8 +120,8 @@ class SpatialMetadata:
             xinc=None,
             yinc=None,
             name='waffles_sm',
-            epsg=4326,
-            warp=None,
+            src_srs='epsg:4326',
+            dst_srs=None,
             extend=0,
             node='pixel',
             ogr_format='ESRI Shapefile',
@@ -132,8 +133,8 @@ class SpatialMetadata:
         self.inc = utils.float_or(inc)
         self.xinc = utils.float_or(xinc)
         self.yinc = utils.float_or(yinc)
-        self.epsg = utils.int_or(epsg)
-        self.warp = utils.int_or(warp)
+        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
+        self.dst_srs = utils.str_or(dst_srs, 'epsg:4326')
         self.extend = extend
         self.node = node
         
@@ -157,7 +158,7 @@ class SpatialMetadata:
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.d_region, verbose=self.verbose,
-            epsg=self.epsg).acquire_dataset() for dl in self.data]
+            src_srs=self.src_srs).acquire_dataset() for dl in self.data]
 
         self.data = [d for d in self.data if d is not None]
         
@@ -187,7 +188,7 @@ class SpatialMetadata:
             ogr.OFTString
         ]
         utils.remove_glob('{}.*'.format(self.dst_layer))
-        utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.epsg)
+        utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
     
         self.ds = ogr.GetDriverByName(self.ogr_format).CreateDataSource(self.dst_vector)
         if self.ds is not None: 
@@ -296,7 +297,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
   -E, --increment\tGridding INCREMENT in native units or GMT-style increments.
 \t\t\tWhere INCREMENT is x-inc[/y-inc]
   -O, --output-name\tBASENAME for all outputs.
-  -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
+  -P, --src_srs\t\PROJECTION of the data and output.
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
   -F, --format\t\tOutput OGR format. (ESRI Shapefile)
 
@@ -317,7 +318,7 @@ def spat_meta_cli(argv = sys.argv):
     dls = []
     i_regions = []
     these_regions = []
-    epsg = 4326
+    src_srs = 'epsg:4326'
     #inc = utils.str2inc('1s')
     xinc = utils.str2inc('1s')
     yinc = utils.str2inc('1s')
@@ -340,8 +341,8 @@ def spat_meta_cli(argv = sys.argv):
             name = argv[i + 1]
             i += 1
         elif arg[:2] == '-O': name = arg[2:]
-        elif arg == '-s_epsg' or arg == '--s_epsg' or arg == '-P':
-            epsg = argv[i + 1]
+        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
+            src_srs = argv[i + 1]
             i = i + 1
         elif arg == '--increment' or arg == '-E':
             incs = argv[i + 1].split(':')
@@ -448,7 +449,7 @@ def spat_meta_cli(argv = sys.argv):
                     xinc=xinc,
                     yinc=yinc,
                     extend=extend,
-                    epsg=epsg,
+                    src_srs=src_srs,
                     node=node,
                     name=name_,
                     verbose=want_verbose,

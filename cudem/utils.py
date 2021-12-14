@@ -471,28 +471,21 @@ def wkt2geom(wkt):
     
     return(ogr.CreateGeometryFromWkt(wkt))
 
-def sr_wkt(epsg, esri=False):
-    """convert an epsg code to wkt
-
-    Returns:
-      (str): wkt or None
-    """
+def sr_wkt(src_srs, esri=False):
+    """convert a src_srs to wkt"""
     
     try:
         sr = osr.SpatialReference()
-        sr.ImportFromEPSG(int(epsg))
+        sr.SetFromUserInput(src_srs)
         if esri: sr.MorphToESRI()
         return(sr.ExportToWkt())
     except: return(None)
 
-def gdal_prj_file(dst_fn, epsg):
-    """generate a .prj file given an epsg code
-
-    returns 0
-    """
+def gdal_prj_file(dst_fn, src_srs):
+    """generate a .prj file given a src_srs"""
     
     with open(dst_fn, 'w') as out:
-        out.write(sr_wkt(int(epsg), True))
+        out.write(sr_wkt(src_srs, True))
         
     return(0)
     
@@ -741,7 +734,7 @@ def gdal_write(
     else:
         return(None, -1)
 
-def gdal2gdal(src_dem, dst_fmt='GTiff', epsg=4326, dst_dem=None, co=True):
+def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=True):
     """convert the gdal file to gdal using gdal
 
     return output-gdal-fn"""

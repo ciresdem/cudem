@@ -167,8 +167,8 @@ class CopernicusDEM(f_utils.FetchModule):
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
-                    epsg=4326,
-                    warp=self.warp,
+                    src_srs='epsg:4326',
+                    dst_srs=self.dst_srs,
                     name=src_cop_dem,
                     src_region=self.region,
                     verbose=self.verbose

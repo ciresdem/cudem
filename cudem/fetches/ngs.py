@@ -90,9 +90,9 @@ class NGS(f_utils.FetchModule):
                     z = utils.float_or(row[self.datum])
 
                     if z is not None:
-                        xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon, lat, z])
-                        if self.warp is not None:
-                            xyz.warp(warp_epsg=self.warp)
+                        xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                        if self.dst_srs is not None:
+                            xyz.warp(dst_srs=self.dst_srs)
                             
                         yield(xyz)
 

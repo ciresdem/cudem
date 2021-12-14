@@ -99,8 +99,8 @@ class GMRT(f_utils.FetchModule):
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                epsg=4326,
-                warp=self.warp,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
                 weight=1,
                 name=src_data,
                 src_region=self.region,

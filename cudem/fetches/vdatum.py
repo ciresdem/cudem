@@ -210,8 +210,8 @@ class VDATUM(f_utils.FetchModule):
             _ds = datasets.RasterFile(
                 fn=src_tif,
                 data_format=200,
-                warp=self.warp,
-                epsg=None,
+                dst_srs=self.dst_srs,
+                src_srs=None,
                 name=src_tif,
                 src_region=self.region,
                 verbose=self.verbose

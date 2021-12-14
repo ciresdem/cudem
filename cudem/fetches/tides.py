@@ -123,9 +123,9 @@ class Tides(f_utils.FetchModule):
                     if self.units == 'm':
                         z = z * 0.3048
                         
-                    xyz = xyzfun.XYZPoint(epsg=4326).from_list([lon, lat, z])
-                    if self.warp is not None:
-                        xyz.warp(warp_epsg=self.warp)
+                    xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                    if self.dst_srs is not None:
+                        xyz.warp(dst_srs=self.dst_srs)
 
                     ln += 1
                     yield(xyz)

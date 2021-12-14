@@ -84,7 +84,7 @@ class CHS(f_utils.FetchModule):
     def yield_xyz(self, entry):
         src_chs = 'chs_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_chs) == 0:
-            _ds = datasets.RasterFile(fn=src_chs, data_format=200, epsg=4326, warp=self.warp,
+            _ds = datasets.RasterFile(fn=src_chs, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
                                       name=src_chs, src_region=self.region, verbose=self.verbose)
             for xyz in _ds.yield_xyz():
                 yield(xyz)
@@ -172,7 +172,7 @@ class CHS_FRED(f_utils.FetchModule):
     def _yield_xyz(self, entry):
         src_chs = 'chs_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_chs) == 0:
-            _ds = datasets.RasterFile(fn=src_chs, data_format=200, epsg=4326, warp=self.warp,
+            _ds = datasets.RasterFile(fn=src_chs, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
                                       name=src_chs, src_region=self.region, verbose=self.verbose)
             for xyz in _ds.yield_xyz():
                 yield(xyz)

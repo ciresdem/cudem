@@ -124,7 +124,7 @@ class NASADEM(f_utils.FetchModule):
         """yield the xyz data from the nasadem fetch module"""
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
-            _ds = datasets.RasterFile(fn=entry[1], data_format=200, epsg=4326, warp=self.warp,
+            _ds = datasets.RasterFile(fn=entry[1], data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
                                       name=entry[1], src_region=self.region, verbose=self.verbose)
             for xyz in _ds.yield_xyz():
                 if xyz.z != 0:

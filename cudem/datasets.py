@@ -20,6 +20,10 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Dataset parsing.
+## datasets include: xyz, raster (gdal), las/laz (laspy), mbs (MBSystem)
+##
 ### Code:
 
 import os
@@ -53,8 +57,8 @@ class XYZDataset():
       sub_ds.yield_xyz()
 
     where:
-      generate_inf() - generates a dlim compatible inf file,
-      yield_xyz() - yields the xyz elevation data (xyzfun.XYZPoint) from the dataset.
+      generate_inf() generates a dlim compatible inf file,
+      yield_xyz() yields the xyz elevation data (xyzfun.XYZPoint) from the dataset.
     """
 
     def __init__(
@@ -62,7 +66,8 @@ class XYZDataset():
             fn=None,
             data_format=None,
             weight=1,
-            epsg=4326,
+            src_srs="epsg:4326",
+            dst_srs=None,
             name="XYZDataset",
             title=None,
             source=None,
@@ -74,7 +79,6 @@ class XYZDataset():
             url=None,
             parent=None,
             src_region=None,
-            warp=None,
             verbose=False,
             remote=None
     ):
@@ -83,8 +87,10 @@ class XYZDataset():
         self.weight = weight
         self.name = name
         self.title = title
-        self.epsg = utils.int_or(epsg)
-        self.warp = utils.int_or(warp)
+        self.src_srs = src_srs
+        self.dst_srs = dst_srs
+        self.dst_trans = None
+        self.trans_region = None
         self.source = source
         self.date = date
         self.data_type = data_type
@@ -95,18 +101,13 @@ class XYZDataset():
         self.parent = parent
         self.verbose = verbose
         self.region = src_region
-
         self._fn = None
         self.infos = {}
         self.data_entries = []
-        self.data_lists = {}
-        
+        self.data_lists = {}        
         self.remote = remote
         if utils.fn_url_p(self.fn):
             self.remote = True
-
-        self.dst_trans = None
-        self.trans_region = None
 
         if self.valid_p():
             if self.data_format == -1:
@@ -133,11 +134,7 @@ class XYZDataset():
                 utils.echo_warning_msg('nothing to fetch')
 
     def valid_p(self, fmts=[]):
-        """check if self appears to be a valid dataset entry
-
-        Returns:
-          bools: True if dataset is valid else False
-        """
+        """check if self appears to be a valid dataset entry"""
         
         if self.fn is None:
             return(False)
@@ -158,11 +155,7 @@ class XYZDataset():
         return(True)
         
     def hash(self, sha1=False):
-        """generate a hash of the xyz-dataset source file
-
-        Returns:
-          str: hexdigest
-        """
+        """generate a hash of the xyz-dataset source file"""
         
         BUF_SIZE = 65536
         if sha1:
@@ -176,8 +169,9 @@ class XYZDataset():
                     data = f.read(BUF_SIZE)
                     if not data:
                         break
+                    
                     this_hash.update(data)
-            return(this_hash.hexdigest())        
+            return(this_hash.hexdigest())
         except: return('0')
 
     def echo_(self, **kwargs):
@@ -238,17 +232,10 @@ class XYZDataset():
         If the inf file is not found, will attempt to generate one.
         The function `generate_inf()` should be defined for each specific
         dataset sub-class.
-
-        Args:
-          kwargs (dict): any arguments to pass to the dataset parser
-        
-        Returns:
-          dict: xyz-dataset info dictionary
         """
         
         inf_path = '{}.inf'.format(self.fn)
         self.infos = {}
-        
         if os.path.exists(inf_path):
             try:
                 with open(inf_path) as i_ob:
@@ -256,7 +243,7 @@ class XYZDataset():
             except ValueError:
                 try:
                     self.infos = MBSParser(
-                        fn=self.fn, epsg=self.epsg).inf_parse().infos
+                        fn=self.fn, src_srs=self.src_srs).inf_parse().infos
                     self.check_hash = False
                 except:
                     if self.verbose:
@@ -297,7 +284,7 @@ class XYZDataset():
                                 'dlim_tmp', self.region.format('fn')), 'w') as inf:
                             inf.write(json.dumps(self.infos))
                             
-            self.infos['epsg'] = self.epsg
+            self.infos['src_srs'] = self.src_srs
             #if self.parent is not None:
             #    #self.parent.infos = {}
             #    self.parent.inf(check_hash=True)
@@ -312,11 +299,11 @@ class XYZDataset():
         return(self.infos)
 
     def set_transform(self):
-        if self.warp is not None and self.epsg is not None:
+        if self.dst_srs is not None and self.src_srs is not None:
             src_srs = osr.SpatialReference()
-            src_srs.ImportFromEPSG(self.epsg)
+            src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
-            dst_srs.ImportFromEPSG(self.warp)
+            dst_srs.SetFromUserInput(self.dst_srs)
             try:
                 src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
                 dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
@@ -330,7 +317,7 @@ class XYZDataset():
         if self.region is not None:
             if self.dst_trans is not None:
                 trans_region = self.region.copy()
-                trans_region.epsg = self.warp
+                trans_region.src_srs = self.dst_srs
                 trans_region.transform(self.dst_trans)
     
     def parse(self):
@@ -449,8 +436,7 @@ class XYZDataset():
     def block_xyz(self, inc=1, want_gmt=False):
         """block the src_xyz data to the mean block value
 
-        Yields:
-          list: xyz data for each block with data
+        yields xyz data for each block with data
         """
 
         block_region = regions.regions_reduce(
@@ -467,17 +453,12 @@ class XYZDataset():
                         data_fun=xyz_func
                 ):
                     yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-
             else:
-                #if self.verbose:
-                #    utils.echo_msg('using reduced region: {} @ {}'.format(block_region.format('gmt'), inc))
-
                 xcount, ycount, dst_gt = block_region.geo_transform(x_inc=inc)
                 gdt = gdal.GDT_Float32
                 sum_array = np.zeros((ycount, xcount))
                 count_array = np.zeros((ycount, xcount))
                 weight_array = np.zeros((ycount, xcount))
-
                 if ycount != 0 and xcount != 0:
                     if self.verbose:
                         _prog = utils.CliProgress(
@@ -503,7 +484,6 @@ class XYZDataset():
                     out_weight_array = (weight_array/count_array)
                     out_array = (sum_array/out_weight_array)/count_array
                     sum_array = count_array = weight_array = None
-
                     if self.verbose:
                         _prog.end(
                             0,
@@ -512,7 +492,6 @@ class XYZDataset():
                             )
                         )
 
-                    ## yield the blocked xyz data
                     for y in range(0, ycount):
                         for x in range(0, xcount):
                             z = out_array[y,x]
@@ -539,12 +518,11 @@ class XYZDataset():
             ycount,
             (xcount*ycount),
             dst_gt,
-            utils.sr_wkt(self.epsg),
+            utils.sr_wkt(self.src_srs),
             gdal.GDT_Int32,
             -9999,
             'MEM'
         )
-
         for this_xyz in self.yield_xyz_from_entries(**kwargs):
             xpos, ypos = utils._geo2pixel(
                 this_xyz.x, this_xyz.y, dst_gt
@@ -577,7 +555,7 @@ class XYZDataset():
             ycount,
             (xcount*ycount),
             dst_gt,
-            utils.sr_wkt(self.epsg),
+            utils.sr_wkt(self.src_srs),
             gdal.GDT_Float32,
             -9999,
             'GTiff'
@@ -641,29 +619,24 @@ class XYZFile(XYZDataset):
         self.z_scale = z_scale
         self.x_offset = x_offset
         self.y_offset = y_offset
-
+        ## space and tab are 'None'
         self._known_delims = [',', '/', ':']
         self._known_fmts = ['xyz', 'csv', 'dat', 'ascii']
-
         if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0:
             self.scoff = True
-        else: self.scoff = False
+        else:
+            self.scoff = False
 
         super().__init__(**kwargs)
         
     def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the xyz dataset
-
-        Returns:
-          dict: a data-entry infos dictionary
-        """
+        """generate a infos dictionary from the xyz dataset"""
                 
         pts = []
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
         this_region = regions.Region()
-
         region_ = self.region
         self.region = None
 
@@ -701,13 +674,7 @@ class XYZFile(XYZDataset):
         return(self.infos)
         
     def line_delim(self, xyz_line):
-        """guess a line delimiter
-        Args:
-          xyz_line (str): a string representing delimited data.
-
-        Returns:
-          str: delimiter (or None)
-        """
+        """guess a line delimiter"""
 
         for delim in self._known_delims:
             this_xyz = xyz_line.split(delim)
@@ -716,11 +683,7 @@ class XYZFile(XYZDataset):
                 break
             
     def yield_xyz(self):
-        """xyz file parsing generator
-
-        Yields:
-          xyz: xyz data
-        """
+        """xyz file parsing generator"""
         
         if self.fn is not None:
             if os.path.exists(str(self.fn)):
@@ -753,7 +716,6 @@ class XYZFile(XYZDataset):
                         this_xyz.z *= self.z_scale
                         
                     this_xyz.w = self.weight
-                    
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
 
@@ -764,6 +726,7 @@ class XYZFile(XYZDataset):
                     else:
                         ln += 1
                         yield(this_xyz)
+                        
                 this_xyz.reset()
             else: sk -= 1
             
@@ -804,7 +767,7 @@ class LASFile(XYZDataset):
                  lasf.header.z_max]
             )
 
-        ## gather the projection info if it exists
+        ## gather the projection info if it exists - testing
         print(lasf.header.vlrs[2].record_id)
         print(lasf.header.vlrs[2].description)
         #lasf.header.vlrs[2].parse_record_data(lasf.header.vlrs[2].record_data)
@@ -867,14 +830,10 @@ class LASFile(XYZDataset):
         return(self.infos)
         
     def yield_xyz(self):
-        """LAS file parsing generator
+        """LAS file parsing generator"""
 
-        Yields:
-          xyz: xyz data
-        """
-
-        this_xyz = xyzfun.XYZPoint(w=1)
         ln = 0
+        this_xyz = xyzfun.XYZPoint(w=1)
         lasf = lp.read(self.fn)
         lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0) | (lasf.classification == 40)]
         dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
@@ -902,7 +861,6 @@ class LASFile(XYZDataset):
             yield(this_xyz)
 
         lasf = dataset = None
-        
         if self.verbose:
             utils.echo_msg(
                 'parsed {} data records from {}{}'.format(
@@ -921,19 +879,15 @@ class RasterFile(XYZDataset):
         self.ds_open_p = False
         self.outf = outf
         super().__init__(**kwargs)
-        
-        if self.epsg is None:
+        if self.src_srs is None:
             self._open_ds()
-            self.get_epsg()
+            self.get_srs()
             self._close_ds()
-            self.set_transform()
+            
+        self.set_transform()
 
     def _open_ds(self):
-        """open the gdal datasource and gather infos 
-
-        Returns:
-          raster_parser: self
-        """
+        """open the gdal datasource and gather infos"""
 
         if not self.ds_open_p:
             if self.fn is not None:
@@ -961,11 +915,7 @@ class RasterFile(XYZDataset):
         return(self)
 
     def _close_ds(self):
-        """close the gdal datasource
-
-        Returns:
-          raster_parser: self
-        """
+        """close the gdal datasource"""
         
         self.src_ds = None
         self.ds_config = None
@@ -973,11 +923,7 @@ class RasterFile(XYZDataset):
         return(self)
 
     def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the raster dataset
-
-        Returns:
-          dict: a data-entry infos dictionary
-        """
+        """generate a infos dictionary from the raster dataset"""
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
@@ -995,8 +941,7 @@ class RasterFile(XYZDataset):
             except:
                 zr = [None, None]
                 
-            this_region.zmin = zr[0]
-            this_region.zmax = zr[1]
+            this_region.zmin, this_region.zmax = zr[0], zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = self.src_ds.RasterXSize * self.src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
@@ -1004,19 +949,20 @@ class RasterFile(XYZDataset):
         self._close_ds()
         return(self.infos)
 
-    def get_epsg(self):
+    def get_srs(self):
         if self.ds_open_p:
             proj = self.src_ds.GetProjectionRef()
-            src_srs = osr.SpatialReference()
-            src_srs.ImportFromWkt(proj)
-            src_srs.AutoIdentifyEPSG()
-            srs_auth = src_srs.GetAuthorityCode(None)
-            if srs_auth is not None:
-                self.epsg = utils.int_or(srs_auth)
+            return(proj)
+            # src_srs = osr.SpatialReference()
+            # src_srs.SetFromUserInput(proj)
+            # src_srs.AutoIdentifyEPSG()
+            # srs_auth = src_srs.GetAuthorityCode(None)
+            # if srs_auth is not None:
+            #     self.epsg = srs_auth
         
-    def set_epsg(self, epsg = 4326):
+    def set_srs(self, src_srs='epsg:4326'):
         if self.ds_open_p:
-            self.src_ds.SetProjection(sr_wkt(int(epsg)))
+            self.src_ds.SetProjection(utils.sr_wkt(src_srs))
             
     def cut(self):
         if self.ds_open_p:
@@ -1044,14 +990,12 @@ class RasterFile(XYZDataset):
                 ds_config['ndv'],
                 ds_config['fmt']
             )
-
             return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
-        else: return(None, -1)
+        else:
+            return(None, -1)
         
     def set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
-        """set a datasource config dictionary
-            
-        returns gdal_config dict."""
+        """set a datasource config dictionary"""
         
         return({
             'nx': nx,
@@ -1065,11 +1009,7 @@ class RasterFile(XYZDataset):
         })
     
     def gather_infos(self, scan=False):
-        """gather information from `src_ds` GDAL dataset
-
-        Returns:
-          raster_parser: self
-        """
+        """gather information from `src_ds` GDAL dataset"""
 
         if self.ds_open_p:
             self.gt = self.src_ds.GetGeoTransform()
@@ -1116,9 +1056,8 @@ class RasterFile(XYZDataset):
                 )
                 
             src_band = self.src_ds.GetRasterBand(1)
-            self.get_epsg()            
-            self.x_count = self.srcwin[2]
-            self.y_count = self.srcwin[3]
+            self.get_srs()            
+            self.x_count, self.y_count = self.srcwin[2], self.srcwin[3]
             self.dt = src_band.DataType
             self.dtn = gdal.GetDataTypeName(src_band.DataType)
             self.ndv = src_band.GetNoDataValue()
@@ -1135,11 +1074,7 @@ class RasterFile(XYZDataset):
         return(self)
     
     def yield_xyz(self):
-        """parse the data from gdal dataset src_ds (first band only)
-
-        Yields:
-          xyz: the parsed xyz data
-        """
+        """parse the data from gdal dataset src_ds (first band only)"""
 
         if self.verbose and self.parent is None:
             _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
@@ -1150,6 +1085,7 @@ class RasterFile(XYZDataset):
             ln = 0
             band = self.src_ds.GetRasterBand(1)
             gt = self.gt
+            ## account for 'grid-node' rasters
             # mt = self.src_ds.GetMetadata()
             # node = 'pixel'
             # if 'AREA_OR_POINT' in mt.keys():
@@ -1206,11 +1142,11 @@ class RasterFile(XYZDataset):
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
-                        
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
-                        ln += 1
+                            
                         yield(out_xyz)
+                        ln += 1
                             
             band = src_mask = msk_band = None
             if self.verbose:
@@ -1221,7 +1157,6 @@ class RasterFile(XYZDataset):
                 )
                 
         self._close_ds()
-
         if self.verbose and self.parent is None:
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
@@ -1242,23 +1177,13 @@ class MBSParser(XYZDataset):
         except: pass
             
         return(self.infos)
-
-    def yield_xyz(self):
-        for line in utils.yield_cmd(
-                'mblist -MA -OXYZ -I{}'.format(self.fn),
-                verbose=True,
-        ):
-            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-            this_xyz.weight = self.weight
-            yield(this_xyz)
             
     def inf_parse(self):
         self.infos['name'] = self.fn
         self.infos['minmax'] = [0,0,0,0,0,0]
         self.infos['hash'] = None
-        dims = []
         this_row = 0
-
+        dims = []
         with open('{}.inf'.format(self.fn)) as iob:
             for il in iob:
                 til = il.split()
@@ -1295,16 +1220,13 @@ class MBSParser(XYZDataset):
         mbs_region = regions.Region().from_list(self.infos['minmax'])
         xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
         yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
-
         if abs(xinc) > 0 and abs(yinc) > 0:
             xcount, ycount, dst_gt = mbs_region.geo_transform(
                 x_inc=xinc, y_inc=yinc
             )
-
             ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
-                         'geoT': dst_gt, 'proj': utils.sr_wkt(self.epsg),
+                         'geoT': dst_gt, 'proj': utils.sr_wkt(self.src_srs),
                          'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
-
             driver = gdal.GetDriverByName('MEM')
             ds = driver.Create(
                 'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
@@ -1314,13 +1236,10 @@ class MBSParser(XYZDataset):
             ds_band = ds.GetRasterBand(1)
             ds_band.SetNoDataValue(ds_config['ndv'])
             ds_band.WriteArray(cm_array)
-
             tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
             tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-
             gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
-
             multi = ogr.Geometry(ogr.wkbMultiPolygon)
             for feat in tmp_layer:
                 feat.geometry().CloseRings()
@@ -1333,4 +1252,13 @@ class MBSParser(XYZDataset):
 
         self.infos['wkt'] = wkt
         return(self)
+
+    def yield_xyz(self):
+        for line in utils.yield_cmd(
+                'mblist -MA -OXYZ -I{}'.format(self.fn),
+                verbose=True,
+        ):
+            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+            this_xyz.weight = self.weight
+            yield(this_xyz)
 ### End

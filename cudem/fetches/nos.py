@@ -193,8 +193,8 @@ class NOS(f_utils.FetchModule):
                         ypos=1,
                         zpos=3,
                         z_scale=-1,
-                        epsg=4326,
-                        warp=self.warp,
+                        src_srs='epsg:4326',
+                        dst_srs=self.dst_srs,
                         name=nos_f_r,
                         src_region=self.region,
                         verbose=self.verbose,
@@ -212,7 +212,7 @@ class NOS(f_utils.FetchModule):
                     _ds = datasets.RasterFile(
                         fn=src_bag,
                         data_format=200,
-                        warp=self.warp,
+                        dst_srs=self.dst_srs,
                         name=src_bag,
                         src_region=self.region,
                         verbose=self.verbose

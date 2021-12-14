@@ -26,21 +26,12 @@ import sys
 
 from osgeo import gdal
 from osgeo import ogr
-
+from osgeo import osr
+        
 from cudem import utils
 
 class XYZPoint:
-    """represnting an xyz data point
-    
-    Attributes:
-      x (float): longitude/x
-      y (float): latitude/y
-      z (float): elevation/z
-      w (float): weight/w
-      epsg (int): the EPSG code representing the xy projection
-      z_units (str): units of the z value
-      z_datum (str): vertical datum of the z_value
-    """
+    """represnting an xyz data point"""
     
     def __init__(
             self,
@@ -48,7 +39,7 @@ class XYZPoint:
             y=None,
             z=None,
             w=1,
-            epsg=4326,
+            src_srs='epsg:4326',
             z_units='m',
             z_datum='msl'
     ):
@@ -58,7 +49,7 @@ class XYZPoint:
           y (float): latitude/y
           z (float): elevation/z
           w (float): weight/w
-          epsg (int): the EPSG code representing the xy projection
+          src_srs (str): the data projection
           z_units (str): units of the z value
           z_datum (str): vertical datum of the z_value
         """
@@ -67,7 +58,7 @@ class XYZPoint:
         self.y = utils.float_or(y)
         self.z = utils.float_or(z)
         self.w = utils.float_or(w)
-        self.epsg = utils.int_or(epsg)
+        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
         self.z_units = z_units
         self.z_datum = z_datum
 
@@ -90,7 +81,7 @@ class XYZPoint:
     def reset(self):
         self.x = self.y = self.z = None
         self.w = 1
-        self.epsg = 4326
+        self.src_srs = 'epsg:4326'
         self.z_units = 'm'
         self.z_datum = 'msl'
     
@@ -250,27 +241,18 @@ class XYZPoint:
 
         return(self)
         
-    def warp(self, warp_epsg=4326):
-        """transform the x/y using the warp_epsg code
-
-        Args:
-          warp_epsg (int): an epsg code to warp to
-
-        Returns:
-          xyz: self
-        """
-
-        from osgeo import osr
+    def warp(self, dst_srs='epsg:4326'):
+        """transform the x/y using dst_srs"""
         
-        warp_epsg = utils.int_or(warp_epsg)
-        if warp_epsg is None or self.epsg is None:
+        dst_srs = utils.str_or(dst_srs, 'epsg:4326')
+        if dst_srs is None or self.src_srs is None:
             return(self)
 
         src_srs = osr.SpatialReference()
-        src_srs.ImportFromEPSG(self.epsg)
+        src_srs.SetFromUserInput(self.src_srs)
 
         dst_srs = osr.SpatialReference()
-        dst_srs.ImportFromEPSG(warp_epsg)
+        dst_srs.SetFromUserInput(self.src_srs)
         try:
             src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)

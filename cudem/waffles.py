@@ -89,7 +89,7 @@ class Waffle:
             ysample=None,
             clip=None,
             chunk=None,
-            epsg=4326,
+            src_srs='epsg:4326',
             verbose=False,
             archive=False,
             mask=False,
@@ -114,7 +114,7 @@ class Waffle:
         self.fltr = fltr
         self.clip = clip
         self.chunk = chunk
-        self.epsg = utils.int_or(epsg)
+        self.src_srs = src_srs
         self.mod = None
         self.mod_args = {}
         self.archive = archive
@@ -147,8 +147,8 @@ class Waffle:
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region, verbose=self.verbose,
-            epsg=self.epsg, weight=self.weights).acquire_dataset() for dl in self.data_]
-
+            src_srs=self.src_srs, weight=self.weights
+        ).acquire_dataset() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
         
     def _coast_region(self):
@@ -325,7 +325,7 @@ class Waffle:
         xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
-            xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.epsg),
+            xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.src_srs),
             gdal.GDT_Float32, -9999, 'GTiff'
         )
         for this_xyz in src_xyz:
@@ -352,7 +352,7 @@ class Waffle:
                     src_region=self.p_region,
                     inc=self.xinc,
                     extend=self.extend,
-                    epsg=self.epsg,
+                    src_srs=self.src_srs,
                     node=self.node,
                     name=self.name,
                     verbose=self.verbose,
@@ -444,7 +444,7 @@ class Waffle:
                     node=self.node,
                     extend=self.extend+12,
                     weights=self.weights,
-                    epsg=self.epsg,
+                    src_srs=self.src_srs,
                     clobber=True,
                     verbose=self.verbose,
                 ).acquire().generate()
@@ -462,7 +462,7 @@ class Waffle:
         ## update when vertical datum support
         self.vepsg = 'NAVD88'
         demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg))
-        demfun.set_epsg(fn, self.epsg)
+        demfun.set_srs(fn, self.src_srs)
         if self.fmt != 'GTiff':
             out_dem = utils.gdal2gdal(fn, dst_fmt=self.fmt)
             if out_dem is not None:
@@ -795,7 +795,7 @@ class WafflesNum(Waffle):
             ycount,
             xcount * ycount,
             dst_gt,
-            utils.sr_wkt(self.epsg),
+            utils.sr_wkt(self.src_srs),
             gdt,
             -9999,
             'GTiff'
@@ -898,7 +898,7 @@ class WafflesUIDW(Waffle):
             ycount,
             xcount * ycount,
             dst_gt,
-            utils.sr_wkt(self.epsg),
+            utils.sr_wkt(self.src_srs),
             gdal.GDT_Float32,
             -9999,
             self.fmt
@@ -1036,7 +1036,7 @@ class WafflesVDatum(Waffle):
             fn='empty.tif',
             data_format=200,
             src_region=self.region,
-            epsg=self.epsg,
+            src_srs=self.src_srs,
             name=self.name,
             verbose=self.verbose,
             weight=None
@@ -1050,7 +1050,7 @@ class WafflesVDatum(Waffle):
                 fn='result/empty.xyz',
                 data_format=168,
                 src_region=self.region,
-                epsg=self.epsg,
+                src_srs=self.src_srs,
                 name=self.name,
                 verbose=self.verbose,
                 weight=None
@@ -1064,7 +1064,7 @@ class WafflesVDatum(Waffle):
                 src_region=self.region,
                 xinc=self.xinc,
                 yinc=self.yinc,
-                epsg=self.epsg,
+                src_srs=self.src_srs,
                 verbose=self.verbose,
                 tension=0,
                 upper_limit=lu,
@@ -1232,7 +1232,7 @@ class WafflesCUDEM(Waffle):
                 extend_proc=self.extend_proc+6,
                 #fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None and not self.mask_p else [],
                 weights=1,
-                epsg=self.epsg,
+                src_srs=self.src_srs,
                 clobber=True,
                 verbose=self.verbose,
             ).acquire().generate()
@@ -1275,7 +1275,7 @@ class WafflesCUDEM(Waffle):
                     node=self.node,
                     extend=self.extend+12,
                     weights=self.weights,
-                    epsg=self.epsg,
+                    src_srs=self.src_srs,
                     clobber=True,
                     verbose=self.verbose,
                 ).acquire().generate()
@@ -1295,7 +1295,7 @@ class WafflesCUDEM(Waffle):
                 extend_proc=self.extend_proc+2,
                 fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
                 weights=1,
-                epsg=self.epsg,
+                src_srs=self.src_srs,
                 clobber=True,
                 verbose=self.verbose,
                 xsample=utils.str2inc(self.xinc),
@@ -1317,7 +1317,7 @@ class WafflesCUDEM(Waffle):
                 extend_proc=self.extend_proc+2,
                 fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
                 weights=1,
-                epsg=self.epsg,
+                src_srs=self.src_srs,
                 clobber=True,
                 verbose=self.verbose,
                 #sample=utils.str2inc(self.inc),
@@ -1337,7 +1337,7 @@ class WafflesCUDEM(Waffle):
             extend=self.extend,
             extend_proc=self.extend_proc,
             weights=self.weights,
-            epsg=self.epsg,
+            src_srs=self.src_srs,
             clobber=True,
             verbose=self.verbose,
         ).acquire().generate()
@@ -1366,9 +1366,9 @@ class WafflesCoastline(Waffle):
 
         self.f_region = self.p_region.copy()
         self.f_region.buffer(x_bv=(self.xinc*10), y_bv=(self.yinc*10))
-        self.f_region.epsg = self.epsg
+        self.f_region.src_srs = self.src_srs
         self.wgs_region = self.f_region.copy()
-        self.wgs_region.warp(4326)        
+        self.wgs_region.warp('epsg:4326')        
         self.mod = 'coastline'
 
     def run(self):
@@ -1415,7 +1415,7 @@ class WafflesCoastline(Waffle):
             ycount,
             xcount * ycount,
             gt,
-            utils.sr_wkt(self.epsg),
+            utils.sr_wkt(self.src_srs),
             gdal.GDT_Int32,
             -9999,
             'GTiff'
@@ -1441,7 +1441,7 @@ class WafflesCoastline(Waffle):
         gmrt_tif = this_gmrt.results[0]
 
         dst_srs = osr.SpatialReference()
-        dst_srs.ImportFromEPSG(int(self.epsg))
+        dst_srs.SetFromUserInput(self.src_srs)
         driver = gdal.GetDriverByName('MEM')
         out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
             
@@ -1449,7 +1449,7 @@ class WafflesCoastline(Waffle):
         out_ds.SetProjection(self.ds_config['proj'])
         out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
             
-        gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg = gdal.GRA_CubicSpline)
+        gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg=gdal.GRA_CubicSpline)
             
         gmrt_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
@@ -1474,7 +1474,7 @@ class WafflesCoastline(Waffle):
         fr.join()
         
         dst_srs = osr.SpatialReference()
-        dst_srs.ImportFromEPSG(int(self.epsg))
+        dst_srs.SetFromUserInput(self.src_srs)
         for i, cop_tif in enumerate(this_cop.results):
             driver = gdal.GetDriverByName('MEM')
             out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
@@ -1597,7 +1597,7 @@ class WafflesCoastline(Waffle):
                 self.name, self.name)
         )
 
-        utils.gdal_prj_file(self.name + '.prj', self.epsg)
+        utils.gdal_prj_file(self.name + '.prj', self.src_srs)
                 
 class WaffleFactory():
     """Find and generate a WAFFLE object for DEM generation."""
@@ -1775,7 +1775,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
             ysample=None,
             clip=None,
             chunk=None,
-            epsg=4326,
+            src_srs='epsg:4326',
             verbose=False,
             archive=False,
             mask=False,
@@ -1801,7 +1801,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
         self.fltr = fltr
         self.clip = clip
         self.chunk = chunk
-        self.epsg = utils.int_or(epsg)
+        self.src_srs = src_srs
         self.archive = archive
         self.mask = mask
         self.spat = spat
@@ -1850,7 +1850,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
             'fltr': self.fltr,
             'clip': self.clip,
             'chunk': self.chunk,
-            'epsg': self.epsg,
+            'src_srs': self.src_srs,
             'verbose': self.verbose,
             'archive': self.archive,
             'mask': self.mask,
@@ -1880,7 +1880,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
                     sample=self.sample,
                     clip=self.clip,
                     chunk=self.chunk,
-                    epsg=self.epsg,
+                    src_srs=self.src_srs,
                     archive=self.archive,
                     mask=self.mask,
                     spat=self.spat,
@@ -1934,7 +1934,7 @@ Options:
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
   -O, --output-name\tBASENAME for all outputs.
-  -P, --epsg\t\tHorizontal projection of data as EPSG code [4326]
+  -P, --src_srs\t\tProjection of REGION and output DEM.
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION and processing REGION.
 \t\t\tWhere EXTEND is dem-extend[:processing-extend]
 \t\t\te.g. -X6:12 to extend the DEM REGION by 6 cells and the processing region by 12 cells.
@@ -2084,10 +2084,10 @@ def waffles_cli(argv = sys.argv):
             wg['chunk'] = utils.int_or(argv[i + 1], None)
             i = i + 1
         elif arg[:2] == '-K': wg['chunk'] = utils.int_or(arg[2:], None)
-        elif arg == '--epsg' or arg == '-P':
-            wg['epsg'] = utils.int_or(argv[i + 1], 4326)
+        elif arg == '--src_srs' or arg == '-P':
+            wg['src_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
-        elif arg[:2] == '-P': wg['epsg'] = utils.int_or(arg[2:], 4326)
+        elif arg[:2] == '-P': wg['src_srs'] = utils.str_or(arg[2:], 'epsg:4326')
         
         elif arg == '-w' or arg == '--weights':
             if 'weights' not in wg.keys():
