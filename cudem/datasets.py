@@ -767,13 +767,13 @@ class LASFile(XYZDataset):
                  lasf.header.z_max]
             )
 
-        ## gather the projection info if it exists - testing
-        print(lasf.header.vlrs[2].record_id)
-        print(lasf.header.vlrs[2].description)
-        #lasf.header.vlrs[2].parse_record_data(lasf.header.vlrs[2].record_data)
-        #print(lasf.header.vlrs[2].record_data_bytes())
-        print(lasf.header.vlrs[2].geo_keys)
-        [print(x.id) for x in lasf.header.vlrs[2].geo_keys]
+        # ## gather the projection info if it exists - testing
+        # print(lasf.header.vlrs[2].record_id)
+        # print(lasf.header.vlrs[2].description)
+        # #lasf.header.vlrs[2].parse_record_data(lasf.header.vlrs[2].record_data)
+        # #print(lasf.header.vlrs[2].record_data_bytes())
+        # print(lasf.header.vlrs[2].geo_keys)
+        # [print(x.id) for x in lasf.header.vlrs[2].geo_keys]
 
         
         self.infos['minmax'] = this_region.export_as_list(
