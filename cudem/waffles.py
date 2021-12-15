@@ -38,10 +38,11 @@ import sys
 import os
 import math
 import json
+import time
 
 import numpy as np
 from scipy import spatial
-        
+import threading        
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
@@ -870,11 +871,10 @@ class WafflesNum(Waffle):
             
         return(self)
 
-class Invdisttree:
+class Invdisttree():
     """ inverse-distance-weighted interpolation using KDTree:
-@Denis via https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
-
-https://creativecommons.org/licenses/by-nc-sa/3.0/
+    @Denis via https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
+    https://creativecommons.org/licenses/by-nc-sa/3.0/
 
 invdisttree = Invdisttree( X, z )  -- data points, values
 interpol = invdisttree( q, nnear=3, eps=0, p=1, weights=None, stat=0 )
@@ -934,7 +934,7 @@ is exceedingly sensitive to distance and to h.
         self.wn = 0
         self.wsum = None;
 
-    def __call__( self, q, nnear=6, eps=0, p=1, weights=None ):
+    def __call__(self, q, nnear=6, eps=0, p=1, weights=None):
         # nnear nearest neighbours of each query point --
         q = np.asarray(q)
         qdim = q.ndim
@@ -1015,6 +1015,33 @@ class WafflesIDW(Waffle):
         xi, yi = np.meshgrid(xi, yi)
         xi, yi = xi.flatten(), yi.flatten()
         ask = np.vstack((xi, yi)).T
+
+        # invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
+        # idw = threading.Thread(target=invdisttree, args=(ask, self.min_points, .1, self.power, w if self.weights else None))
+        # idw.daemon = True
+        # _p = utils.CliProgress('generating IDW grid')
+        
+        # status = 0
+        # try:
+        #     idw.start()
+        #     while True:
+        #         time.sleep(2)
+        #         sys.stderr.write('\x1b[2K\r')
+        #         #perc = float((len(x_f.results)-fr.fetch_q.qsize())) / len(x_f.results)*100 if len(x_f.results) > 0 else 1
+        #         if self.verbose:
+        #             _p.update()
+        #             sys.stderr.flush()
+        #             if not idw.is_alive():
+        #                 break
+                        
+        # except (KeyboardInterrupt, SystemExit):
+        #     utils.echo_error_msg('user breakage...please wait for while waffles exits.')
+        #     status = -1
+        #     stop_threads = True
+
+        # idw.join()
+        # _p.end(status, 'generated IDW')
+        
         invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
         interpol = invdisttree(
             ask,
