@@ -466,7 +466,7 @@ class Region:
         dst_srs_ = osr.SpatialReference()
         dst_srs_.SetFromUserInput(dst_srs)
         try:
-            src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+            #src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
         except: pass
         
