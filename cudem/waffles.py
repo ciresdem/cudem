@@ -1577,7 +1577,6 @@ class WafflesCoastline(Waffle):
         self.wgs_region = self.f_region.copy()
         self.wgs_region.warp('epsg:4326')
         self.mod = 'coastline'
-        print(self.wgs_region)
         
     def run(self):
         self._load_coast_mask()
