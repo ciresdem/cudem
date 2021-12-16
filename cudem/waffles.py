@@ -1017,32 +1017,9 @@ class WafflesIDW(Waffle):
         xi, yi = np.meshgrid(xi, yi)
         xi, yi = xi.flatten(), yi.flatten()
         ask = np.vstack((xi, yi)).T
-
-        # invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
-        # idw = threading.Thread(target=invdisttree, args=(ask, self.min_points, .1, self.power, w if self.weights else None))
-        # idw.daemon = True
-        # _p = utils.CliProgress('generating IDW grid')
-        
-        # status = 0
-        # try:
-        #     idw.start()
-        #     while True:
-        #         time.sleep(2)
-        #         sys.stderr.write('\x1b[2K\r')
-        #         #perc = float((len(x_f.results)-fr.fetch_q.qsize())) / len(x_f.results)*100 if len(x_f.results) > 0 else 1
-        #         if self.verbose:
-        #             _p.update()
-        #             sys.stderr.flush()
-        #             if not idw.is_alive():
-        #                 break
-                        
-        # except (KeyboardInterrupt, SystemExit):
-        #     utils.echo_error_msg('user breakage...please wait for while waffles exits.')
-        #     status = -1
-        #     stop_threads = True
-
-        # idw.join()
-        # _p.end(status, 'generated IDW')
+        # if no data break now...
+        if len(obs) == 0:
+            return(self)
         
         invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
         interpol = invdisttree(
@@ -1908,6 +1885,21 @@ as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
 < IDW:min_points=8:power=1:block=False >
+ :power=[val] - weight**power
+ :min_points=[val] - minimum neighbor points for IDW
+ :block=[True/False] - block the data before performing the IDW routine""",
+        },
+        'UIDW': {
+            'name': 'IDW',
+            'datalist-p': True,
+            'class': WafflesUIDW,
+            'description': """Uncertainty Weighted INVERSE DISTANCE WEIGHTED DEM\n
+Generate a DEM using an Inverse Distance Weighted algorithm.
+If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
+as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+
+< UIDW:radius=None,min_points=None:power=2:block=False >
+ :radius=[val] - search radius
  :power=[val] - weight**power
  :min_points=[val] - minimum neighbor points for IDW
  :block=[True/False] - block the data before performing the IDW routine""",
