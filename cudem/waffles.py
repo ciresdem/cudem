@@ -135,7 +135,7 @@ class Waffle:
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
-
+                
     def _init_regions(self):
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
@@ -1074,9 +1074,9 @@ class WafflesIDW(Waffle):
         )        
         return(self)    
 
-## old IDW class...slow!
-class WafflesIDW_(Waffle):
-    """Inverse Distance Weighted.
+## old IDW class...slow, but low mem!
+class WafflesUIDW(Waffle):
+    """Uncertainty Weighted Inverse Distance Weighted.
     see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
@@ -1224,7 +1224,7 @@ class WafflesVDatum(Waffle):
             ycount,
             xcount * ycount,
             gt,
-            utils.sr_wkt(4326),
+            utils.sr_wkt('epsg:4326'),
             gdal.GDT_Float32,
             nodata,
             outformat
@@ -1557,6 +1557,7 @@ class WafflesCoastline(Waffle):
         """Generate a landmask from various sources."""
 
         super().__init__(**kwargs)
+
         self.want_nhd = want_nhd
         self.want_gmrt = want_gmrt
         self.invert = invert
@@ -1574,9 +1575,9 @@ class WafflesCoastline(Waffle):
         self.f_region.buffer(x_bv=(self.xinc*10), y_bv=(self.yinc*10))
         self.f_region.src_srs = self.src_srs
         self.wgs_region = self.f_region.copy()
-        self.wgs_region.warp('epsg:4326')        
+        self.wgs_region.warp('epsg:4326')
         self.mod = 'coastline'
-
+        
     def run(self):
         self._load_coast_mask()
 
