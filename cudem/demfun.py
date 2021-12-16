@@ -259,7 +259,7 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False):
     """
 
     gi = infos(src_dem)
-    g_region = regions.Region().from_geo_transform(geoT=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
+    g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
     tmp_ply = '__tmp_clp_ply.shp'
     
     out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=True)

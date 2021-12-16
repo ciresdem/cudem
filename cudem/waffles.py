@@ -922,6 +922,8 @@ is the same for distances 1 2 3, or 10 20 30 -- only the ratios matter.
 In contrast, the commonly-used Gaussian kernel exp( - (distance/h)**2 )
 is exceedingly sensitive to distance and to h.
 
+quite heavy on memory when large grid-size...
+
     """
 # anykernel( dj / av dj ) is also scale-free
 # error analysis, |f(x) - idw(x)| ? todo: regular grid, nnear ndim+1, 2*ndim
