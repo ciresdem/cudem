@@ -945,8 +945,8 @@ quite heavy on memory when large grid-size...
         if self.wsum is None:
             self.wsum = np.zeros(nnear)
 
-        self.distances, self.ix = self.tree.query( q, k=nnear, eps=eps, distance_upper_bounds=dub )
-        interpol = np.zeros( (len(self.distances),) + np.shape(self.z[0]) )
+        self.distances, self.ix = self.tree.query(q, k=nnear, eps=eps)
+        interpol = np.zeros((len(self.distances),) + np.shape(self.z[0]))
         jinterpol = 0
         for dist, ix in zip( self.distances, self.ix ):
             if nnear == 1:
@@ -1029,7 +1029,6 @@ class WafflesIDW(Waffle):
             nnear=self.min_points,
             eps=.1,
             p=self.power,
-            dub=.01,
             weights=w if self.weights else None
         )
 
@@ -1519,7 +1518,7 @@ class WafflesCUDEM(Waffle):
             ).acquire().generate()
             
             #self.bathy = self.idw
-        
+
         self.surface = WaffleFactory(
             mod='surface:tension=1',
             data=self.data_ + ['{},200,{}'.format(self.bathy.fn, self.min_weight)],
@@ -1952,7 +1951,7 @@ Generate a coastline (land/sea mask) using a variety of sources.
             'name': 'cudem',
             'datalist-p': True,
             'class': WafflesCUDEM,
-            'description': """CUDEM integrated DEM generation.
+            'description': """CUDEM integrated DEM generation. <beta>
 Generate an topo/bathy integrated DEM using a variety of data sources.
 
 < cudem:coastline=None:bathy_xinc=1s:bathy_yinc=1s:mask_z=0:min_weight=.5:smoothing=10 >
