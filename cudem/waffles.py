@@ -936,7 +936,7 @@ quite heavy on memory when large grid-size...
         self.wn = 0
         self.wsum = None;
 
-    def __call__(self, q, nnear=6, eps=0, p=1, weights=None):
+    def __call__(self, q, nnear=6, eps=0, p=1, dub=np.inf, weights=None):
         # nnear nearest neighbours of each query point --
         q = np.asarray(q)
         qdim = q.ndim
@@ -945,7 +945,7 @@ quite heavy on memory when large grid-size...
         if self.wsum is None:
             self.wsum = np.zeros(nnear)
 
-        self.distances, self.ix = self.tree.query( q, k=nnear, eps=eps )
+        self.distances, self.ix = self.tree.query( q, k=nnear, eps=eps, distance_upper_bounds=dub )
         interpol = np.zeros( (len(self.distances),) + np.shape(self.z[0]) )
         jinterpol = 0
         for dist, ix in zip( self.distances, self.ix ):
@@ -969,11 +969,13 @@ quite heavy on memory when large grid-size...
 class WafflesIDW(Waffle):
     """Inverse Distance Weighted."""
     
-    def __init__(self, power=1, min_points=8, block=False, **kwargs):
+    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, **kwargs):
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
         self.block_p = block
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)
         self.mod = 'IDW'
 
     def run(self):
@@ -1027,9 +1029,16 @@ class WafflesIDW(Waffle):
             nnear=self.min_points,
             eps=.1,
             p=self.power,
+            dub=.01,
             weights=w if self.weights else None
         )
 
+        if self.upper_limit is not None:
+            interpol[interpol > self.upper_limit] = self.upper_limit
+
+        if self.lower_limit is not None:
+            interpol[interpol < self.lower_limit] = self.lower_limit
+        
         # fill the grid, interpol.reshape((ycount, xcount)) is flipped...
         for n, this_z in enumerate(interpol):
             xpos, ypos = utils._geo2pixel(
