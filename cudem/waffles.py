@@ -1897,21 +1897,6 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
  :min_points=[val] - minimum neighbor points for IDW
  :block=[True/False] - block the data before performing the IDW routine""",
         },
-        'UIDW': {
-            'name': 'IDW',
-            'datalist-p': True,
-            'class': WafflesUIDW,
-            'description': """Uncertainty Weighted INVERSE DISTANCE WEIGHTED DEM\n
-Generate a DEM using an Inverse Distance Weighted algorithm.
-If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
-as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-
-< UIDW:radius=None,min_points=None:power=2:block=False >
- :radius=[val] - search radius
- :power=[val] - weight**power
- :min_points=[val] - minimum neighbor points for IDW
- :block=[True/False] - block the data before performing the IDW routine""",
-        },
         'vdatum': {
             'name': 'vdatum',
             'datalist-p': False,
