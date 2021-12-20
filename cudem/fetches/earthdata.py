@@ -108,6 +108,10 @@ class EarthData(f_utils.FetchModule):
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
         
     def run(self):
+        if self.short_name not in PROVIDERS.keys():
+            utils.echo_error_msg('invalid short_name {0}'.format(self.short_name))
+            quit()
+        
         url_list = cmr_search(
             self.short_name,
             self.version,
@@ -194,9 +198,29 @@ CMR_PAGE_SIZE = 2000
 # following PROVIDERS dictionary. The PROVIDERS dictionary
 # also holds the current dataset version.
 PROVIDERS = {
-    'ATL': ['NSIDC_ECS', '004'],
-    'GEDI': ['LPDAAC_ECS', '002'],
-    'AST': ['LPCLOUD', '003'],
+    'ATL03': ['NSIDC_ECS', '005'],
+    'ATL06': ['NSIDC_ECS', '005'],
+    'ATL07': ['NSIDC_ECS', '005'],
+    'ATL08': ['NSIDC_ECS', '005'],
+    'GLAH06': ['NSIDC_ECS', '034'],
+    'GLAH14': ['NSIDC_ECS', '034'],
+    'GEDI01_B': ['LPDAAC_ECS', '002'],
+    'GEDI02_A': ['LPDAAC_ECS', '002'],
+    'GEDI02_B': ['LPDAAC_ECS', '002'],
+    'ASTGTM': ['LPCLOUD', '003'],
+    'ASTGTM_NC': ['LPCLOUD', '003'],
+    'ASTL1A': ['LPCLOUD', '031'],
+    'ASTL1T': ['LPCLOUD', '003'],
+    'SRTMGL1': ['LPDAAC_ECS', '003'],
+    'SRTMGL1_NC': ['LPDAAC_ECS', '003'],
+    'SRTMGL3': ['LPDAAC_ECS', '003'],
+    'SRTMGL3S': ['LPDAAC_ECS', '003'],
+    'SRTMGL30': ['LPDAAC_ECS', '002'],
+    'NASADEM_HGT': ['LPDAAC_ECS', '001'],
+    'NASADEM_NC': ['LPDAAC_ECS', '001'],
+    'NASADEM_SHHP': ['LPDAAC_ECS', '001'],
+    'NASADEM_NUMNC': ['LPDAAC_ECS', '001'],
+    'NASADEM_SIM': ['LPDAAC_ECS', '001'],
 }
 #CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
 #                '&sort_key[]=start_date&sort_key[]=producer_granule_id'
@@ -280,7 +304,7 @@ def build_version_query_params(version):
         #quit()
         ## assume version is short_name, find version from PROVIDERS
         for key in PROVIDERS.keys():
-            if key in version:
+            if key == version:
                 version = PROVIDERS[key][1]
                 break
     version = str(int(version))  # Strip off any leading zeros
@@ -304,7 +328,7 @@ def filter_add_wildcards(filter):
 def build_provider_params(short_name):
     params = ''
     for key in PROVIDERS.keys():
-        if key in short_name:
+        if key == short_name:
             params = '&provider={0}'.format(PROVIDERS[key][0])
             break
     return params

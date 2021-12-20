@@ -250,11 +250,8 @@ ways to discover, access, and use the data.
 
 If version is omitted, will attempt to find the latest version...
 Supported datasets include:
-IceSat - 'ATL08', 'ATL06'
-ASTER - 'ASTGTM'
-GEDI - 'GEDI02_A', 'GEDI01_B'
-
-< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
+{0}
+< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""".format(' '.join(earthdata.PROVIDERS.keys())),
         },
     }
     
