@@ -248,10 +248,9 @@ private industry, academia, and the general public. In order to meet the needs o
 communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
 ways to discover, access, and use the data.
 
-If version is omitted, will attempt to find the latest version...
-Supported datasets include:
-{0}
-< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""".format(' '.join(earthdata.PROVIDERS.keys())),
+If version is omitted, will fetch all versions
+
+< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
         },
     }
     

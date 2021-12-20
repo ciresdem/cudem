@@ -37,7 +37,7 @@
 ## ways to discover, access, and use the data.
 ##
 ## nsidc_download.py updated for fetches integration 12/21
-## Updated from nsidc.py to earthdata.py to support more datasets
+## Updated from nsidc.py to earthdata.py to support all earthdata datasets
 ##
 ### Code:
 
@@ -62,6 +62,8 @@ try:
 except ImportError:
     from urlparse import urlparse
     from urllib2 import urlopen, Request, HTTPError, URLError, build_opener, HTTPCookieProcessor
+
+import numpy as np
 
 from cudem import utils
 from cudem import regions
@@ -110,10 +112,6 @@ class EarthData(f_utils.FetchModule):
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
         
     def run(self):
-        if self.short_name not in PROVIDERS.keys():
-            utils.echo_error_msg('invalid short_name {0}'.format(self.short_name))
-            quit()
-        
         url_list = cmr_search(
             self.short_name,
             self.provider,
@@ -130,11 +128,12 @@ class EarthData(f_utils.FetchModule):
             self.results.append([url, url.split('/')[-1], 'earthdata'])
 
     def yield_xyz(self, entry):
+
+        ## IceSat Data
         import h5py
-        import numpy as np
         ln = 0
         
-        if entry[1].split('.')[-1] == 'h5':
+        if entry[1].split('.')[-1] == 'h5' and 'ATL' in self.short_name:
             if f_utils.Fetch(
                     entry[0],
                     callback=self.callback,
@@ -195,40 +194,10 @@ class EarthData(f_utils.FetchModule):
 CMR_URL = 'https://cmr.earthdata.nasa.gov'
 URS_URL = 'https://urs.earthdata.nasa.gov'
 CMR_PAGE_SIZE = 2000
-# Comments from Matthew Love:
-# Each dataset requires the associated provider, add
-# base of short_name along with it's provider in the
-# following PROVIDERS dictionary. The PROVIDERS dictionary
-# also holds the current dataset version.
-PROVIDERS = {
-    'ATL03': ['NSIDC_ECS', '005'],
-    'ATL06': ['NSIDC_ECS', '005'],
-    'ATL07': ['NSIDC_ECS', '005'],
-    'ATL08': ['NSIDC_ECS', '005'],
-    'GLAH06': ['NSIDC_ECS', '034'],
-    'GLAH14': ['NSIDC_ECS', '034'],
-    'GEDI01_B': ['LPDAAC_ECS', '002'],
-    'GEDI02_A': ['LPDAAC_ECS', '002'],
-    'GEDI02_B': ['LPDAAC_ECS', '002'],
-    'ASTGTM': ['LPCLOUD', '003'],
-    'ASTGTM_NC': ['LPCLOUD', '003'],
-    'ASTL1A': ['LPCLOUD', '031'],
-    'ASTL1T': ['LPCLOUD', '003'],
-    'SRTMGL1': ['LPDAAC_ECS', '003'],
-    'SRTMGL1_NC': ['LPDAAC_ECS', '003'],
-    'SRTMGL3': ['LPDAAC_ECS', '003'],
-    'SRTMGL3S': ['LPDAAC_ECS', '003'],
-    'SRTMGL30': ['LPDAAC_ECS', '002'],
-    'NASADEM_HGT': ['LPDAAC_ECS', '001'],
-    'NASADEM_NC': ['LPDAAC_ECS', '001'],
-    'NASADEM_SHHP': ['LPDAAC_ECS', '001'],
-    'NASADEM_NUMNC': ['LPDAAC_ECS', '001'],
-    'NASADEM_SIM': ['LPDAAC_ECS', '001'],
-}
+# leave provider out of url, so we can search other datasets:
 #CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
 #                '&sort_key[]=start_date&sort_key[]=producer_granule_id'
 #                '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
-
 CMR_FILE_URL = ('{0}/search/granules.json?'
                 'sort_key[]=start_date&sort_key[]=producer_granule_id'
                 '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
@@ -302,35 +271,17 @@ def get_credentials(url):
 def build_version_query_params(version):    
     desired_pad_length = 3
     if len(version) > desired_pad_length:
-        #print('Version string too long: "{0}"'.format(version))
-        #quit()
-        ## assume version is short_name, find version from PROVIDERS
-        for key in PROVIDERS.keys():
-            if key == version:
-                version = PROVIDERS[key][1]
-                break
+        print('Version string too long: "{0}"'.format(version))
+        quit()
+        
     version = str(int(version))  # Strip off any leading zeros
     query_params = ''
-
     while len(version) <= desired_pad_length:
         padded_version = version.zfill(desired_pad_length)
         query_params += '&version={0}'.format(padded_version)
         desired_pad_length -= 1
-    return query_params
-
-
-def build_provider_params(provider):
-    params = ''
-    #if provider is None:
-    for key in PROVIDERS.keys():
-        if key == provider:
-            #params = '&provider={0}'.format(PROVIDERS[key][0])
-            provider = PROVIDERS[key][0]
-            break
-        #else:
-    params = '&provider={0}'.format(provider)
         
-    return params
+    return query_params
 
 
 def filter_add_wildcards(filter):
@@ -353,9 +304,10 @@ def build_cmr_query_url(short_name, version, provider, time_start, time_end,
                         bounding_box=None, polygon=None,
                         filename_filter=None):
     params = '&short_name={0}'.format(short_name)
-    #params += '&provider={0}'.format(provider)
-    params += build_provider_params(short_name if provider is None else provider)
-    params += build_version_query_params(short_name if version is None else version)
+    if provider is not None:
+        params += '&provider={0}'.format(provider)
+    if version is not None:
+        params += build_version_query_params(version)
     params += '&temporal[]={0},{1}'.format(time_start, time_end)
     if polygon:
         params += '&polygon={0}'.format(polygon)
