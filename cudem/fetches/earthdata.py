@@ -75,6 +75,7 @@ class EarthData(f_utils.FetchModule):
     def __init__(
             self,
             short_name='ATL08',
+            provider=None,
             version=None,
             time_start='',
             time_end='',
@@ -85,13 +86,14 @@ class EarthData(f_utils.FetchModule):
         self.CMR_URL = 'https://cmr.earthdata.nasa.gov'
         self.URS_URL = 'https://urs.earthdata.nasa.gov'
         self.CMR_PAGE_SIZE = 2000
-        self.CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
-                             '&sort_key[]=start_date&sort_key[]=producer_granule_id'
+        self.CMR_FILE_URL = ('{0}/search/granules.json?'
+                             'sort_key[]=start_date&sort_key[]=producer_granule_id'
                              '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
         self.name = 'earthdata'
         self._outdir = os.path.join(os.getcwd(), 'earthdata')
         
         self.short_name = short_name
+        self.provider = provider
         self.version = version
         self.time_start = time_start
         self.time_end = time_end
@@ -114,6 +116,7 @@ class EarthData(f_utils.FetchModule):
         
         url_list = cmr_search(
             self.short_name,
+            self.provider,
             self.version,
             self.time_start,
             self.time_end,
@@ -296,8 +299,7 @@ def get_credentials(url):
     return credentials
 
 
-def build_version_query_params(version):
-    
+def build_version_query_params(version):    
     desired_pad_length = 3
     if len(version) > desired_pad_length:
         #print('Version string too long: "{0}"'.format(version))
@@ -317,21 +319,26 @@ def build_version_query_params(version):
     return query_params
 
 
+def build_provider_params(provider):
+    params = ''
+    #if provider is None:
+    for key in PROVIDERS.keys():
+        if key == provider:
+            #params = '&provider={0}'.format(PROVIDERS[key][0])
+            provider = PROVIDERS[key][0]
+            break
+        #else:
+    params = '&provider={0}'.format(provider)
+        
+    return params
+
+
 def filter_add_wildcards(filter):
     if not filter.startswith('*'):
         filter = '*' + filter
     if not filter.endswith('*'):
         filter = filter + '*'
     return filter
-
-
-def build_provider_params(short_name):
-    params = ''
-    for key in PROVIDERS.keys():
-        if key == short_name:
-            params = '&provider={0}'.format(PROVIDERS[key][0])
-            break
-    return params
 
 
 def build_filename_filter(filename_filter):
@@ -342,11 +349,12 @@ def build_filename_filter(filename_filter):
     return result
 
 
-def build_cmr_query_url(short_name, version, time_start, time_end,
+def build_cmr_query_url(short_name, version, provider, time_start, time_end,
                         bounding_box=None, polygon=None,
                         filename_filter=None):
     params = '&short_name={0}'.format(short_name)
-    params += build_provider_params(short_name)
+    #params += '&provider={0}'.format(provider)
+    params += build_provider_params(short_name if provider is None else provider)
     params += build_version_query_params(short_name if version is None else version)
     params += '&temporal[]={0},{1}'.format(time_start, time_end)
     if polygon:
@@ -514,11 +522,11 @@ def cmr_filter_urls(search_results):
     return urls
 
 
-def cmr_search(short_name, version, time_start, time_end,
+def cmr_search(short_name, provider, version, time_start, time_end,
                bounding_box='', polygon='', filename_filter='', quiet=False):
     """Perform a scrolling CMR query for files matching input criteria."""
     cmr_query_url = build_cmr_query_url(short_name=short_name, version=version,
-                                        time_start=time_start, time_end=time_end,
+                                        provider=provider, time_start=time_start, time_end=time_end,
                                         bounding_box=bounding_box,
                                         polygon=polygon, filename_filter=filename_filter)
     if not quiet:
@@ -562,6 +570,7 @@ def cmr_search(short_name, version, time_start, time_end,
 
 
 def download_granules(short_name = 'ATL08',
+                      provider = 'NSIDC_ECS',
                       version = '004',
                       time_start = '',
                       time_end = '',
@@ -584,6 +593,8 @@ def download_granules(short_name = 'ATL08',
                 all have the format "ATLXX", with XX being the 2-digist product data
                 number, e.g. "ATL03". ATLAS product documentation can be found here:
                 https://icesat-2.gsfc.nasa.gov/science/data-products
+
+    provider: dataset Provider. e.g. "NSIDC_ECS"
 
     version: Version number of the dataset, as a 3-digit integer string. e.g. "004"
 
@@ -664,7 +675,7 @@ def download_granules(short_name = 'ATL08',
 
     try:
         if not url_list:
-            url_list = cmr_search(short_name, version, time_start, time_end,
+            url_list = cmr_search(short_name, provider, version, time_start, time_end,
                                   bounding_box=bounding_box, polygon=polygon,
                                   filename_filter=filename_filter, quiet=quiet)
 
