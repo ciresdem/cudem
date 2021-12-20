@@ -146,7 +146,7 @@ class EarthData(f_utils.FetchModule):
             bounding_box=self.region.format('bbox'),
             polygon=self.polygon,
             filename_filter=self.filename_filter,
-            quiet=False
+            quiet=self.quiet
         )
 
         for url in url_list:
