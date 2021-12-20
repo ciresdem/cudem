@@ -39,6 +39,31 @@
 ## nsidc_download.py updated for fetches integration 12/21
 ## Updated from nsidc.py to earthdata.py to support all earthdata datasets
 ##
+## some notable datasets:
+##     ATL03
+##     ATL06
+##     ATL07
+##     ATL08
+##     GLAH06
+##     GLAH14
+##     GEDI01_B
+##     GEDI02_A
+##     GEDI02_B
+##     ASTGTM
+##     ASTGTM_NC
+##     ASTL1A
+##     ASTL1T
+##     SRTMGL1
+##     SRTMGL1_NC
+##     SRTMGL3
+##     SRTMGL3S
+##     SRTMGL30
+##     NASADEM_HGT
+##     NASADEM_NC
+##     NASADEM_SHHP
+##     NASADEM_NUMNC
+##     NASADEM_SIM
+##
 ### Code:
 
 from __future__ import print_function
