@@ -57,7 +57,7 @@ import cudem.fetches.nasadem as nasadem
 import cudem.fetches.tides as tides
 import cudem.fetches.vdatum as vdatum
 import cudem.fetches.buoys as buoys
-import cudem.fetches.nsidc as nsidc
+import cudem.fetches.earthdata as earthdata
 
 ## ==============================================
 ## Fetches Module Parser
@@ -240,15 +240,21 @@ to changes in weather, climate, oceans and coast.
 
 < buoys >""",
         },
-        'nsidc': {
-            'class': nsidc.NSIDC,
-            'description': """NSIDC Downloads.
+        'earthdata': {
+            'class': earthdata.EarthData,
+            'description': """EarthData Downloads.
 NASA promotes the full and open sharing of all its data to research and applications communities, 
 private industry, academia, and the general public. In order to meet the needs of these different 
 communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
 ways to discover, access, and use the data.
 
-< nsidc:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
+If version is omitted, will attempt to find the latest version...
+Supported datasets include:
+IceSat - 'ATL08', 'ATL06'
+ASTER - 'ASTGTM'
+GEDI - 'GEDI02_A', 'GEDI01_B'
+
+< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
         },
     }
     

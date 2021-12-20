@@ -528,9 +528,9 @@ class GMTSurface(Waffle):
     Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
     """
     
-    def __init__(self, tension = .35, relaxation = 1.2,
-                 lower_limit = 'd', upper_limit = 'd',
-                 breakline=None, **kwargs):
+    def __init__(self, tension=.35, relaxation=1.2,
+                 lower_limit='d', upper_limit='d',
+                 breakline=None, convergence=.5 **kwargs):
         """generate a DEM with GMT surface"""
 
         super().__init__(**kwargs)
@@ -1064,7 +1064,8 @@ class WafflesIDW(Waffle):
 ## old IDW class...slow, but low mem!
 class WafflesUIDW(Waffle):
     """Uncertainty Weighted Inverse Distance Weighted.
-    see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+    
+see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
     def __init__(
@@ -1167,7 +1168,8 @@ class WafflesUIDW(Waffle):
     
 class WafflesVDatum(Waffle):
     """vertical datum transformation grid via NOAA's VDATUM.
-    U.S. and territories only.
+
+U.S. and territories only.
     """
     
     def __init__(self, ivert='navd88', overt='mhw', region='4', jar=None, **kwargs):
@@ -1275,7 +1277,8 @@ class WafflesVDatum(Waffle):
 
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
-    see gdal_grid for more info and gridding algorithms
+
+see gdal_grid for more info and gridding algorithms
     """
     
     def __init__(self, block=False, **kwargs):
@@ -1617,8 +1620,9 @@ class WafflesCoastline(Waffle):
         self.coast_array = np.zeros( (ycount, xcount) )
 
     def _load_gmrt(self):
-        """GMRT - Global low-res
-        Used to fill un-set cells.
+        """GMRT - Global low-res.
+
+Used to fill un-set cells.
         """
         
         this_gmrt = cudem.fetches.gmrt.GMRT(

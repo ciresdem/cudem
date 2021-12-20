@@ -1,4 +1,4 @@
-### NSIDC Data Download Script
+### EarthData Download Script
 ##
 ## Copyright (c) 2021 Regents of the University of Colorado
 ## Permission is hereby granted, free of charge, to any person obtaining
@@ -37,6 +37,7 @@
 ## ways to discover, access, and use the data.
 ##
 ## nsidc_download.py updated for fetches integration 12/21
+## Updated from nsidc.py to earthdata.py to support more datasets
 ##
 ### Code:
 
@@ -69,12 +70,12 @@ from cudem import xyzfun
 
 import cudem.fetches.utils as f_utils
 
-class NSIDC(f_utils.FetchModule):
+class EarthData(f_utils.FetchModule):
 
     def __init__(
             self,
             short_name='ATL08',
-            version='004',
+            version=None,
             time_start='',
             time_end='',
             filename_filter = '',
@@ -87,8 +88,8 @@ class NSIDC(f_utils.FetchModule):
         self.CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
                              '&sort_key[]=start_date&sort_key[]=producer_granule_id'
                              '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
-        self.name = 'nsidc'
-        self._outdir = os.path.join(os.getcwd(), 'nsidc')
+        self.name = 'earthdata'
+        self._outdir = os.path.join(os.getcwd(), 'earthdata')
         
         self.short_name = short_name
         self.version = version
@@ -115,11 +116,11 @@ class NSIDC(f_utils.FetchModule):
             bounding_box=self.region.format('bbox'),
             polygon=self.polygon,
             filename_filter=self.filename_filter,
-            quiet=self.quiet
+            quiet=False
         )
 
         for url in url_list:
-            self.results.append([url, url.split('/')[-1], 'nsidc'])
+            self.results.append([url, url.split('/')[-1], 'earthdata'])
 
     def yield_xyz(self, entry):
         import h5py
@@ -187,8 +188,22 @@ class NSIDC(f_utils.FetchModule):
 CMR_URL = 'https://cmr.earthdata.nasa.gov'
 URS_URL = 'https://urs.earthdata.nasa.gov'
 CMR_PAGE_SIZE = 2000
-CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
-                '&sort_key[]=start_date&sort_key[]=producer_granule_id'
+# Comments from Matthew Love:
+# Each dataset requires the associated provider, add
+# base of short_name along with it's provider in the
+# following PROVIDERS dictionary. The PROVIDERS dictionary
+# also holds the current dataset version.
+PROVIDERS = {
+    'ATL': ['NSIDC_ECS', '004'],
+    'GEDI': ['LPDAAC_ECS', '002'],
+    'AST': ['LPCLOUD', '003'],
+}
+#CMR_FILE_URL = ('{0}/search/granules.json?provider=NSIDC_ECS'
+#                '&sort_key[]=start_date&sort_key[]=producer_granule_id'
+#                '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
+
+CMR_FILE_URL = ('{0}/search/granules.json?'
+                'sort_key[]=start_date&sort_key[]=producer_granule_id'
                 '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
 
 # Comments from Mike MacFerrin:
@@ -258,11 +273,16 @@ def get_credentials(url):
 
 
 def build_version_query_params(version):
+    
     desired_pad_length = 3
     if len(version) > desired_pad_length:
-        print('Version string too long: "{0}"'.format(version))
-        quit()
-
+        #print('Version string too long: "{0}"'.format(version))
+        #quit()
+        ## assume version is short_name, find version from PROVIDERS
+        for key in PROVIDERS.keys():
+            if key in version:
+                version = PROVIDERS[key][1]
+                break
     version = str(int(version))  # Strip off any leading zeros
     query_params = ''
 
@@ -281,6 +301,15 @@ def filter_add_wildcards(filter):
     return filter
 
 
+def build_provider_params(short_name):
+    params = ''
+    for key in PROVIDERS.keys():
+        if key in short_name:
+            params = '&provider={0}'.format(PROVIDERS[key][0])
+            break
+    return params
+
+
 def build_filename_filter(filename_filter):
     filters = filename_filter.split(',')
     result = '&options[producer_granule_id][pattern]=true'
@@ -293,7 +322,8 @@ def build_cmr_query_url(short_name, version, time_start, time_end,
                         bounding_box=None, polygon=None,
                         filename_filter=None):
     params = '&short_name={0}'.format(short_name)
-    params += build_version_query_params(version)
+    params += build_provider_params(short_name)
+    params += build_version_query_params(short_name if version is None else version)
     params += '&temporal[]={0},{1}'.format(time_start, time_end)
     if polygon:
         params += '&polygon={0}'.format(polygon)
