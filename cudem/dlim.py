@@ -233,7 +233,7 @@ class DatasetFactory:
                   'nasadem',
                   'tides',
                   'vdatum',
-                  'nsidc'
+                  'earthdata'
               ],
               'class': lambda k: fetches.Fetcher(remote=True, **k),
               },
