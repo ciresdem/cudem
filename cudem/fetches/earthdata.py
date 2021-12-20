@@ -328,18 +328,26 @@ def build_filename_filter(filename_filter):
 def build_cmr_query_url(short_name, version, provider, time_start, time_end,
                         bounding_box=None, polygon=None,
                         filename_filter=None):
-    params = '&short_name={0}'.format(short_name)
+    if '*' in short_name:
+        params = '&short_name={0}&options[short_name][pattern]=true'.format(short_name)
+    else:
+        params = '&short_name={0}'.format(short_name)
+        
     if provider is not None:
         params += '&provider={0}'.format(provider)
+        
     if version is not None:
         params += build_version_query_params(version)
+        
     params += '&temporal[]={0},{1}'.format(time_start, time_end)
     if polygon:
         params += '&polygon={0}'.format(polygon)
     elif bounding_box:
         params += '&bounding_box={0}'.format(bounding_box)
+        
     if filename_filter:
         params += build_filename_filter(filename_filter)
+        
     return CMR_FILE_URL + params
 
 
