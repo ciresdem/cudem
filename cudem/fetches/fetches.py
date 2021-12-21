@@ -452,11 +452,11 @@ def fetches_cli(argv = sys.argv):
                     else:
                         these_regions.append(i)
 
-    if len(these_regions) == 0:
-        these_regions = [None]
-    else:
-        if want_verbose:
-            utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
+    #if len(these_regions) == 0:
+    #    these_regions = [None]
+    #else:
+    if want_verbose:
+        utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 
     for rn, this_region in enumerate(these_regions):
         if stop_threads:
