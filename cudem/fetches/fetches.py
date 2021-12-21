@@ -23,6 +23,7 @@
 ##
 ## Fetch elevation and related data from a variety of sources.
 ## Use CLI command 'fetches'
+## or use FetchesFactory() to acquire and use a fetch module.
 ##
 ### Code:
 
@@ -63,7 +64,8 @@ import cudem.fetches.earthdata as earthdata
 ## Fetches Module Parser
 ## ==============================================
 class FetchesFactory:
-
+    """Acquire a fetches module."""
+    
     mods = {
         'gmrt': {
             'class': gmrt.GMRT,
@@ -291,6 +293,8 @@ Use wildcards in 'short_name' to return granules for all matching short_name ent
             self.mods[key] = type_def[key]
 
     def acquire(self, **kwargs):
+        """Acquire the fetches module self.mod"""
+        
         return(
             self.mods[self.mod]['class'](
                 src_region=self.region,
@@ -303,6 +307,10 @@ Use wildcards in 'short_name' to return granules for all matching short_name ent
         )
             
 class Fetcher(datasets.XYZDataset):
+    """The fetches dataset type.
+
+This is used in waffles/dlim for on-the-fly remote data
+parsing and processing."""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -317,11 +325,7 @@ class Fetcher(datasets.XYZDataset):
             pass
         
     def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the Fetches dataset
-
-        Returns:
-          dict: a data-entry infos dictionary
-        """
+        """generate a infos dictionary from the Fetches dataset"""
 
         self.infos['name'] = self.fn
         self.infos['hash'] = None
@@ -379,7 +383,7 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 def fetches_cli(argv = sys.argv):
     """run fetches from command-line
 
-    See `fetches_cli_usage` for full cli options.
+See `fetches_cli_usage` for full cli options.
     """
 
     i_regions = []
@@ -412,12 +416,18 @@ def fetches_cli(argv = sys.argv):
             sys.stderr.write(fetches_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
-            print('{}, version {}'.format(os.path.basename(sys.argv[0]), fetches.__version__))
+            print('{}, version {}'.format(
+                os.path.basename(sys.argv[0]), fetches.__version__)
+                  )
             sys.exit(1)
         elif arg == '--modules' or arg == '-m':
             try:
                 if argv[i + 1] in FetchesFactory.mods.keys():
-                    sys.stderr.write(_fetches_module_long_desc({k: FetchesFactory.mods[k] for k in (argv[i + 1],)}))
+                    sys.stderr.write(
+                        _fetches_module_long_desc(
+                            {k: FetchesFactory.mods[k] for k in (argv[i + 1],)}
+                        )
+                    )
                 else:
                     sys.stderr.write(_fetches_module_long_desc(FetchesFactory.mods))
                     
@@ -448,13 +458,14 @@ def fetches_cli(argv = sys.argv):
             for i in tmp_region:
                 if i.valid_p():
                     if len(i_region_s) > 1:
-                        these_regions.append(regions.Region().from_string('/'.join([i.format('str'), i_region_s[1]])))
+                        these_regions.append(
+                            regions.Region().from_string(
+                                '/'.join([i.format('str'), i_region_s[1]])
+                            )
+                        )
                     else:
                         these_regions.append(i)
 
-    #if len(these_regions) == 0:
-    #    these_regions = [None]
-    #else:
     if want_verbose:
         utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 
@@ -472,11 +483,17 @@ def fetches_cli(argv = sys.argv):
                 continue
             
             if want_verbose:
-                utils.echo_msg('running fetch module {} on region {}...'.format(x_f.name, this_region.format('str')))
+                utils.echo_msg(
+                    'running fetch module {} on region {}...'.format(
+                        x_f.name, this_region.format('str')
+                    )
+                )
             
             x_f.run()
             if want_verbose:
-                utils.echo_msg('found {} data files.'.format(len(x_f.results)))
+                utils.echo_msg(
+                    'found {} data files.'.format(len(x_f.results))
+                )
                 
             if len(x_f.results) == 0:
                 break

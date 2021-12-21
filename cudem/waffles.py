@@ -530,7 +530,7 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.2,
                  lower_limit='d', upper_limit='d',
-                 breakline=None, convergence=.5 **kwargs):
+                 breakline=None, convergence=.5, **kwargs):
         """generate a DEM with GMT surface"""
 
         super().__init__(**kwargs)

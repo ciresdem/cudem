@@ -35,6 +35,7 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
+from cudem import vdatums
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -104,6 +105,9 @@ class NauticalCharts(f_utils.FetchModule):
                 utils.echo_msg('added {} surveys from {}'.format(len(surveys), dt))
                 
         self.FRED._close_ds()
+
+    def generate_tidal_vdatum(self, src_vdatum, dst_vdatum):
+        self.vdatum_grid = vdatums._tidal_transform(self.region, src_vdatum, dst_vdatum)
         
     def run(self):
         """Search for data in the reference vector file"""
@@ -115,7 +119,16 @@ class NauticalCharts(f_utils.FetchModule):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, i.split('/')[-1], surv['DataType']])
 
+        self.generate_tidal_vdatum('mhw', 'tss')
+
     def yield_xyz(self, entry):
+        """ENC data comes as a .000 file in a zip.
+
+The data is referenced to MHW and is represente as a depth.
+In U.S. waters, MHW can be transformed to MSL or the local GEOID using
+VDatum and/or it's associated grids (mhw.gtx or tss.gtx)"""
+
+        ## create the tidal transformation grid from mhw to geoid
         src_zip = os.path.basename(entry[1])
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
             if entry[2].lower() == 'enc':
@@ -131,7 +144,6 @@ class NauticalCharts(f_utils.FetchModule):
                                     g = json.loads(f.GetGeometryRef().ExportToJson())
                                     for xyz in g['coordinates']:
                                         xyzfun.XYZPoint().from_list([float(x) for x in xyz]).dump(dst_port=o_xyz, encode=False)
-                                        #xyz_line([float(x) for x in xyz], o_xyz, False)
                         ds_ogr = layer_s = None
                     except:
                         utils.echo_warning_msg('could not parse {}'.format(src_ch))
@@ -140,7 +152,8 @@ class NauticalCharts(f_utils.FetchModule):
                         fn=dst_xyz,
                         data_format=168,
                         z_scale=-1,
-                        src_srs='epsg:4326',
+                        #src_srs='epsg:4326',
+                        src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./{}'.format(vdatum_grid),
                         dst_srs=self.dst_srs,
                         name=dst_xyz,
                         src_region=self.region,
