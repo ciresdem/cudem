@@ -12,6 +12,8 @@
 ##
 ### Commentary:
 ##
+## https://earthdata.nasa.gov/
+##
 ## Commentary from nsidc_download.py
 ## Tested in Python 2.7 and Python 3.4, 3.6, 3.7
 ##
@@ -30,6 +32,8 @@
 ## read this file. The .netrc file should have the following format:
 ##    machine urs.earthdata.nasa.gov login myusername password mypassword
 ## where 'myusername' and 'mypassword' are your Earthdata credentials.
+##
+## you might need to `chmod 0600 ~/.netrc`
 ##
 ## NASA promotes the full and open sharing of all its data to research and applications communities, 
 ## private industry, academia, and the general public. In order to meet the needs of these different 
