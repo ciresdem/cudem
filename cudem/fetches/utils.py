@@ -356,6 +356,10 @@ class Fetch:
                     if 'Content-length' in req_h:
                         req_s = int(req_h['Content-length'])
                     else: req_s = -1
+
+                    if req.status_code == 300:
+                        #if req_h['Location']
+                        pass
                     
                     ## ==============================================
                     ## hack for earthdata credential redirect...

@@ -66,7 +66,7 @@ class XYZDataset():
             fn=None,
             data_format=None,
             weight=1,
-            src_srs="epsg:4326",
+            src_srs=None,
             dst_srs=None,
             name="XYZDataset",
             title=None,
@@ -280,9 +280,13 @@ class XYZDataset():
                             inf.write(json.dumps(self.infos))
                     except:
                         #if self.parent is not None:
-                        with open('{}_{}.inf'.format(
-                                'dlim_tmp', self.region.format('fn')), 'w') as inf:
-                            inf.write(json.dumps(self.infos))
+                        if self.region is not None:
+                            with open('{}_{}.inf'.format(
+                                    'dlim_tmp', self.region.format('fn')), 'w') as inf:
+                                inf.write(json.dumps(self.infos))
+                        else:
+                            with open('dlim_tmp.inf', 'w') as inf:
+                                inf.write(json.dumps(self.infos))
                             
             self.infos['src_srs'] = self.src_srs
             #if self.parent is not None:
@@ -879,11 +883,12 @@ class RasterFile(XYZDataset):
         self.ds_open_p = False
         self.outf = outf
         super().__init__(**kwargs)
+        #print(self.src_srs)
         if self.src_srs is None:
             self._open_ds()
-            self.get_srs()
+            self.src_srs = self.get_srs()
             self._close_ds()
-            
+        #print(self.src_srs)
         self.set_transform()
 
     def _open_ds(self):
@@ -891,14 +896,14 @@ class RasterFile(XYZDataset):
 
         if not self.ds_open_p:
             if self.fn is not None:
-                if os.path.exists(str(self.fn)):
-                    try:
-                        self.src_ds = gdal.Open(self.fn)
-                    except:
-                        self.src_ds = None
-                        
-                else:
+                #if os.path.exists(str(self.fn)):
+                try:
+                    self.src_ds = gdal.Open(self.fn)
+                except:
                     self.src_ds = None
+                        
+                #else:
+                #    self.src_ds = None
                     
             else:
                 self.src_ds = None
@@ -952,6 +957,7 @@ class RasterFile(XYZDataset):
     def get_srs(self):
         if self.ds_open_p:
             proj = self.src_ds.GetProjectionRef()
+            #print(proj)
             return(proj)
             # src_srs = osr.SpatialReference()
             # src_srs.SetFromUserInput(proj)

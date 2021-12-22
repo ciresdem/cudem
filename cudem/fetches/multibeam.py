@@ -128,10 +128,13 @@ class Multibeam(f_utils.FetchModule):
                     for survs in these_surveys[key][keys]:
                         self.results.append(survs)
 
-        for entry in self.results:
-            self.echo_inf(entry)
+        #for entry in self.results:
+        #    self.echo_inf(entry)
 
-    def echo_inf(self, entry, keep_inf=False):
+    def echo_inf(self, entry):
+        print(self.parse_entry_inf(entry))
+        
+    def parse_entry_inf(self, entry, keep_inf=False):
         src_data = os.path.basename(entry[1])
         src_mb = src_data[:-4]
         survey = entry[0].split('/')[7]
@@ -139,24 +142,35 @@ class Multibeam(f_utils.FetchModule):
             mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
             mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
             mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
-            print(survey, src_data, mb_fmt, mb_perc, mb_date)
             if not keep_inf:
                 utils.remove_glob('{}.inf'.format(src_mb))
+            return(survey, src_data, mb_fmt, mb_perc, mb_date)
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
-        src_mb = src_data[:-4]
+        src_mb = src_data[:-4]        
+        survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
-            out, status = utils.run_cmd('mblist -MA -OXYZ -I{}  > {}'.format(src_data, src_xyz), verbose=False)
+            out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
             if status != 0:
                 if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
                     mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
-                    utils.remove_glob('{}.inf'.format(entry[0]))
-                    out, status = utils.run_cmd('mblist -F{} -MA -OXYZ -I{}  > {}'.format(mb_fmt, src_data, src_xyz), verbose=False)
+                    mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
+                    out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
             if status == 0:
-                _ds = datasets.XYZFile(fn=src_xyz, delim='\t', data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                       name=os.path.basename(entry[1]), src_region=self.region, verbose=self.verbose, remote=True)
+                _ds = datasets.XYZFile(
+                    fn=src_xyz,
+                    delim='\t',
+                    data_format=168,
+                    src_srs='epsg:4326',
+                    dst_srs=self.dst_srs,
+                    name=os.path.basename(entry[1]),
+                    src_region=self.region,
+                    verbose=self.verbose,
+                    weight=(float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.,
+                    remote=True
+                )
 
                 if self.inc is not None:
                     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
@@ -172,10 +186,10 @@ class Multibeam(f_utils.FetchModule):
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
 
-                utils.remove_glob(src_data, src_xyz)
+                utils.remove_glob(src_data, src_xyz, '{}*.inf'.format(entry[0]))
             else:
-                echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
-                with open('{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self._name, region_format(self.region, 'fn')))), 'a') as mb_err:
+                utils.echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
+                with open('{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self.name, self.region.format('fn')))), 'a') as mb_err:
                     mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
                 os.rename(src_data, os.path.join(self._outdir, src_data))
                 utils.remove_glob(src_xyz)

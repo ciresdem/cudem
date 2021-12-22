@@ -35,7 +35,7 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
-from cudem import vdatums
+#from cudem import vdatums
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -119,7 +119,7 @@ class NauticalCharts(f_utils.FetchModule):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, i.split('/')[-1], surv['DataType']])
 
-        self.generate_tidal_vdatum('mhw', 'tss')
+        #self.generate_tidal_vdatum('mhw', 'tss')
 
     def yield_xyz(self, entry):
         """ENC data comes as a .000 file in a zip.
@@ -152,8 +152,8 @@ VDatum and/or it's associated grids (mhw.gtx or tss.gtx)"""
                         fn=dst_xyz,
                         data_format=168,
                         z_scale=-1,
-                        #src_srs='epsg:4326',
-                        src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./{}'.format(vdatum_grid),
+                        src_srs='epsg:4326',
+                        #src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./{}'.format(vdatum_grid),
                         dst_srs=self.dst_srs,
                         name=dst_xyz,
                         src_region=self.region,

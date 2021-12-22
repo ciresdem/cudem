@@ -46,14 +46,14 @@ import cudem.fetches.FRED as FRED
 
 class DigitalCoast(f_utils.FetchModule):
 
-    def __init__(self, where=[], datatype=None, inc=None, **kwargs):
+    def __init__(self, where='', datatype=None, inc=None, **kwargs):
         super().__init__(**kwargs)
         self._dc_url = 'https://coast.noaa.gov'
         self._dc_htdata_url = 'https://coast.noaa.gov/htdata/'
         #self._dc_dirs = ['lidar1_z', 'lidar2_z', 'lidar3_z', 'lidar4_z', 'raster1', 'raster2', 'raster5']
         self._dc_dirs = ['lidar1_z', 'raster1']
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
-        self.where = where
+        self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
         self.inc = utils.str2inc(inc)
         self.name = 'dc'
