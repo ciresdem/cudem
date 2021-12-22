@@ -46,7 +46,6 @@ import cudem.fetches.ngs as ngs
 import cudem.fetches.nos as nos
 import cudem.fetches.charts as charts
 import cudem.fetches.digital_coast as digital_coast
-import cudem.fetches.dav as dav
 import cudem.fetches.ncei_thredds as ncei_thredds
 import cudem.fetches.tnm as tnm
 import cudem.fetches.emodnet as emodnet
