@@ -152,12 +152,20 @@ class Multibeam(f_utils.FetchModule):
         survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
-            out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
+            out, status = utils.run_cmd(
+                'mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz),
+                verbose=True
+            )
+            
             if status != 0:
                 if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
                     mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
                     mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
-                    out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
+                    out, status = utils.run_cmd(
+                        'mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz),
+                        verbose=True
+                    )
+                    
             if status == 0:
                 _ds = datasets.XYZFile(
                     fn=src_xyz,
@@ -186,14 +194,20 @@ class Multibeam(f_utils.FetchModule):
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
 
-                utils.remove_glob(src_data, src_xyz, '{}*.inf'.format(entry[0]))
+                utils.remove_glob(src_data, src_xyz, '{}*.inf'.format(src_mb))
             else:
                 utils.echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
-                with open('{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self.name, self.region.format('fn')))), 'a') as mb_err:
+                with open(
+                        '{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self.name, self.region.format('fn')))),
+                        'a'
+                ) as mb_err:
                     mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
+                    
                 os.rename(src_data, os.path.join(self._outdir, src_data))
                 utils.remove_glob(src_xyz)
         else:
-            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            utils.echo_error_msg(
+                'failed to fetch remote file, {}...'.format(src_data)
+            )
 
 ### End

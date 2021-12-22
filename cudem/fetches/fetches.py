@@ -144,16 +144,10 @@ and its territories.
 < charts >""",
         },
         'digital_coast': {
-            'class': digital_coast.DigitalCoast,
+            'class': digital_coast.DAV,
             'description': """NOAA DIGITAL COAST elevation data
 
-< digital_coast >""",
-        },
-        'dav': {
-            'class': dav.DAV,
-            'description': """NOAA DIGITAL COAST elevation data
-
-< dav >""",
+< digital_coast:where=None:inc=None >""",
         },
         'ncei_thredds': {
             'class': ncei_thredds.NCEIThreddsCatalog,
