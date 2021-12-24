@@ -222,7 +222,8 @@ increment to save space.
                         
                 else:
                     for xyz in _ds.yield_xyz():
-                        yield(xyz)                        
+                        yield(xyz)
+                utils.remove_glob(src_dc)
         elif dt == 'raster':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 _ds = datasets.RasterFile(
