@@ -1106,7 +1106,7 @@ class RasterFile(XYZDataset):
             #     gt[0] = gt[0] - (gt[1]/2)
             #     gt[3] = gt[3] - (gt[5]/2)
             #     gt = tuple(gt)
-            print(gt)
+            #print(gt)
             msk_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
