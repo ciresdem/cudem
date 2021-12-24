@@ -2150,7 +2150,7 @@ Options:
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
   -O, --output-name\tBASENAME for all outputs.
-  -P, --dst_srs\t\tProjection of REGION and output DEM.
+  -P, --t_srs\t\tProjection of REGION and output DEM.
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION and processing REGION.
 \t\t\tWhere EXTEND is dem-extend[:processing-extend]
 \t\t\te.g. -X6:12 to extend the DEM REGION by 6 cells and the processing region by 12 cells.
@@ -2300,7 +2300,7 @@ def waffles_cli(argv = sys.argv):
             wg['chunk'] = utils.int_or(argv[i + 1], None)
             i = i + 1
         elif arg[:2] == '-K': wg['chunk'] = utils.int_or(arg[2:], None)
-        elif arg == '--dst_srs' or arg == '-P':
+        elif arg == '--t_srs' or arg == '-P':
             wg['dst_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
         elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')

@@ -332,6 +332,7 @@ dataset sub-class.
         else:
             self.dst_trans = None
 
+        ##!!!-bug here...
         if self.region is not None:
             if self.dst_trans is not None:
                 self.trans_region = self.region.copy()
@@ -906,13 +907,13 @@ class RasterFile(XYZDataset):
     """providing a GDAL raster dataset parser."""
 
     def __init__(self, mask=None, step=1, outf=None, **kwargs):
-        super().__init__(**kwargs)
         self.mask = mask
         self.step = step
         self.src_ds = None
         self.ds_config = None
         self.ds_open_p = False
         self.outf = outf
+        super().__init__(**kwargs)
         if self.src_srs is None:
             self._open_ds()
             self.src_srs = self.get_srs()
@@ -969,8 +970,9 @@ class RasterFile(XYZDataset):
                 x_count=self.src_ds.RasterXSize,
                 y_count=self.src_ds.RasterYSize
             )
-            if self.dst_srs is not None:
-                this_region.warp(self.dst_srs)
+            ## not sure if we should do this...test with no inf and run dlim/waffles...
+            #if self.dst_srs is not None:
+            #    this_region.warp(self.dst_srs)
             try:
                 zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except:
@@ -1104,7 +1106,7 @@ class RasterFile(XYZDataset):
             #     gt[0] = gt[0] - (gt[1]/2)
             #     gt[3] = gt[3] - (gt[5]/2)
             #     gt = tuple(gt)
-            #print(gt)
+            print(gt)
             msk_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)

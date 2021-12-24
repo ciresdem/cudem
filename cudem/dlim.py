@@ -34,7 +34,6 @@ import glob
 import json
 
 import cudem
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -147,6 +146,9 @@ class Datalist(datasets.XYZDataset):
                                     )
                                     inf_region.wmin = data_set.weight
                                     inf_region.wmax = data_set.weight
+                                    #print(data_set.infos)
+                                    #print(data_set.infos['minmax'])
+                                    #print(inf_region, self.region)
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
