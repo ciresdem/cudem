@@ -104,7 +104,8 @@ setuptools.setup(
         'scripts/smooth_dem_bathy.py',
         'scripts/vdatum_cmd.py',
         'scripts/x360.py',
-        'scripts/xyztindex.py'
+        'scripts/xyztindex.py',
+        'scripts/update_dem.sh'
     ],
     python_requires = '>=3.0',
     project_urls = {
