@@ -247,7 +247,7 @@ class DatasetFactory:
             fn=None,
             data_format=None,
             weight=1,
-            src_srs='epsg:4326',
+            src_srs=None,
             dst_srs=None,
             name="xyz_dataset",
             title=None,

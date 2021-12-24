@@ -184,8 +184,12 @@ class Multibeam(f_utils.FetchModule):
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
-        src_mb = src_data[:-4]        
-        survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
+        src_mb = src_data[:-4]
+        try:
+            survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
+        except TypeError:
+            return
+        
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
             out, status = utils.run_cmd(

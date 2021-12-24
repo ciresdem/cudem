@@ -45,20 +45,24 @@ from cudem import demfun
 
 class XYZDataset():
     """representing an Elevation Dataset
-
-    This is the super class for all datalist (dlim) datasets.
-    Each dataset sub-class should define a dataset-specific
+    
+    This is the super class for all datalist (dlim) datasets.    
+    Each dataset sub-class should define a dataset-specific    
     data parser (to xyz) and a generate_inf function to generate
     inf files. 
 
     Specifically, each sub-dataset should minimally define the following:
+    
+    sub_ds.generate_inf()
+    sub_ds.yield_xyz()
+    
+    Where:
+    generate_inf() generates a dlim compatible inf file,
+    yield_xyz() yields the xyz elevation data (xyzfun.XYZPoint) from the dataset.
 
-      sub_ds.generate_inf()
-      sub_ds.yield_xyz()
+    ----
+    Parameters:
 
-    where:
-      generate_inf() generates a dlim compatible inf file,
-      yield_xyz() yields the xyz elevation data (xyzfun.XYZPoint) from the dataset.
     """
 
     def __init__(
@@ -115,7 +119,7 @@ class XYZDataset():
             else:
                 self.inf()
             self.set_transform()
-
+            
     def __str__(self):
         return(self.echo_())
             
@@ -229,9 +233,9 @@ class XYZDataset():
     def inf(self, check_hash = False, **kwargs):
         """read/write an inf file
 
-        If the inf file is not found, will attempt to generate one.
-        The function `generate_inf()` should be defined for each specific
-        dataset sub-class.
+If the inf file is not found, will attempt to generate one.
+The function `generate_inf()` should be defined for each specific
+dataset sub-class.
         """
         
         inf_path = '{}.inf'.format(self.fn)
@@ -273,6 +277,8 @@ class XYZDataset():
                 
             self.infos = self.generate_inf(_pu)
             self.infos['format'] = self.data_format
+            self.infos['src_srs'] = self.src_srs
+            
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
                     try:
@@ -288,7 +294,6 @@ class XYZDataset():
                             with open('dlim_tmp.inf', 'w') as inf:
                                 inf.write(json.dumps(self.infos))
                             
-            self.infos['src_srs'] = self.src_srs
             #if self.parent is not None:
             #    #self.parent.infos = {}
             #    self.parent.inf(check_hash=True)
@@ -298,12 +303,21 @@ class XYZDataset():
             
             if self.verbose:
                 _prog.end(0, 'generated inf for {}'.format(self.fn))
-                
-        self.infos['format'] = self.data_format
+
+        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+            self.infos['src_srs'] = self.src_srs
+        else:
+            self.src_srs = self.infos['src_srs']
+            
+        if 'format' not in self.infos.keys():
+            self.infos['format'] = self.data_format
+
         return(self.infos)
 
     def set_transform(self):
-        if self.dst_srs is not None and self.src_srs is not None:
+        """Set an srs transform, if needed."""
+        #print(self.src_srs)
+        if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -320,13 +334,18 @@ class XYZDataset():
 
         if self.region is not None:
             if self.dst_trans is not None:
-                trans_region = self.region.copy()
-                trans_region.src_srs = self.dst_srs
-                trans_region.transform(self.dst_trans)
+                self.trans_region = self.region.copy()
+                self.trans_region.src_srs = self.dst_srs
+                self.trans_region.warp(self.src_srs)
+                self.infos['minmax'] = regions.Region(src_srs=self.src_srs).from_list(self.infos['minmax']).warp(self.dst_srs).export_as_list(include_z=True)
+                poly = ogr.CreateGeometryFromWkt(self.infos['wkt'])
+                poly.Transform(self.dst_trans)
+                self.infos['wkt'] = poly.ExportToWkt()
+                self.infos['src_srs'] = self.dst_srs
     
     def parse(self):
         """Parse the datasets from the dataset.
-
+        
         Re-define this method when defining a dataset sub-class
         that represents recursive data structures (datalists, zip, etc).
         """
@@ -747,7 +766,6 @@ class LASFile(XYZDataset):
     """representing an LAS/LAZ dataset."""
 
     def __init__(self, classes=[2,29], **kwargs):
-
         self.classes = classes
         self._known_fmts = ['las', 'laz']
         super().__init__(**kwargs)
@@ -837,11 +855,19 @@ class LASFile(XYZDataset):
         """LAS file parsing generator"""
 
         ln = 0
-        this_xyz = xyzfun.XYZPoint(w=1)
+        #this_xyz = xyzfun.XYZPoint(w=1)
         lasf = lp.read(self.fn)
-        lasf.points = lasf.points[(lasf.classification == 2) | (lasf.classification == 29) | (lasf.classification == 0) | (lasf.classification == 40)]
+        lasf.points = lasf.points[
+            (lasf.classification == 2) | \
+            (lasf.classification == 29) | \
+            (lasf.classification == 0) | \
+            (lasf.classification == 40)
+        ]
         dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
-
+        if self.dst_trans is not None:
+            self.region.src_srs = self.dst_srs
+            self.region.warp(self.src_srs)
+            
         if self.region is not None  and self.region.valid_p():        
             dataset = dataset[dataset[:,0] > self.region.xmin,:]
             dataset = dataset[dataset[:,0] < self.region.xmax,:]
@@ -853,16 +879,20 @@ class LASFile(XYZDataset):
                 dataset = dataset[dataset[:,2] < self.region.zmax,:]
                 
         for point in dataset:
-            this_xyz.x = point[0]
-            this_xyz.y = point[1]
-            this_xyz.z = point[2]
-            this_xyz.w = self.weight
-                    
-            if self.dst_trans is not None:
-                this_xyz.transform(self.dst_trans)
-                
             ln += 1
-            yield(this_xyz)
+            yield(xyzfun.XYZPoint(
+                x=point[0], y=point[1], z=point[2], w=self.weight
+            ))
+            # this_xyz.x = point[0]
+            # this_xyz.y = point[1]
+            # this_xyz.z = point[2]
+            # this_xyz.w = self.weight
+                    
+            # #if self.dst_trans is not None:
+            # #    this_xyz.transform(self.dst_trans)
+                
+            # ln += 1
+            # yield(this_xyz)
 
         lasf = dataset = None
         if self.verbose:
@@ -876,21 +906,19 @@ class RasterFile(XYZDataset):
     """providing a GDAL raster dataset parser."""
 
     def __init__(self, mask=None, step=1, outf=None, **kwargs):
+        super().__init__(**kwargs)
         self.mask = mask
         self.step = step
         self.src_ds = None
         self.ds_config = None
         self.ds_open_p = False
         self.outf = outf
-        super().__init__(**kwargs)
-        #print(self.src_srs)
         if self.src_srs is None:
             self._open_ds()
             self.src_srs = self.get_srs()
             self._close_ds()
-        #print(self.src_srs)
-        self.set_transform()
-
+            self.set_transform()
+            
     def _open_ds(self):
         """open the gdal datasource and gather infos"""
 
@@ -936,11 +964,13 @@ class RasterFile(XYZDataset):
 
         if self.ds_open_p:
             gt = self.src_ds.GetGeoTransform()
-            this_region = regions.Region().from_geo_transform(
+            this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
                 geo_transform=gt,
                 x_count=self.src_ds.RasterXSize,
                 y_count=self.src_ds.RasterYSize
             )
+            if self.dst_srs is not None:
+                this_region.warp(self.dst_srs)
             try:
                 zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except:
@@ -957,63 +987,15 @@ class RasterFile(XYZDataset):
     def get_srs(self):
         if self.ds_open_p:
             proj = self.src_ds.GetProjectionRef()
-            #print(proj)
-            return(proj)
-            # src_srs = osr.SpatialReference()
-            # src_srs.SetFromUserInput(proj)
-            # src_srs.AutoIdentifyEPSG()
-            # srs_auth = src_srs.GetAuthorityCode(None)
-            # if srs_auth is not None:
-            #     self.epsg = srs_auth
-        
-    def set_srs(self, src_srs='epsg:4326'):
-        if self.ds_open_p:
-            self.src_ds.SetProjection(utils.sr_wkt(src_srs))
-            
-    def cut(self):
-        if self.ds_open_p:
-            ds_config = self.gather_infos()
-            gt = ds_config['geoT']
-            srcwin = region.srcwin(gt, ds_config['nx'], ds_config['ny'])
-            ds_arr = self.src_ds.GetRasterBand(1).ReadAsArray(
-                srcwin[0], srcwin[1], srcwin[2], srcwin[3]
-            )
-            dst_gt = (
-                gt[0] + (srcwin[0] * gt[1]),
-                gt[1],
-                0.,
-                gt[3] + (srcwin[1] * gt[5]),
-                0.,
-                gt[5]
-            )
-            out_ds_config = self.set_infos(
-                srcwin[2],
-                srcwin[3],
-                srcwin[2] * srcwin[3],
-                dst_gt,
-                ds_config['proj'],
-                ds_config['dt'],
-                ds_config['ndv'],
-                ds_config['fmt']
-            )
-            return(utils.gdal_write(ds_arr, dst_fn, out_ds_config))
-        else:
-            return(None, -1)
-        
-    def set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
-        """set a datasource config dictionary"""
-        
-        return({
-            'nx': nx,
-            'ny': ny,
-            'nb': nb,
-            'geoT': geoT,
-            'proj': proj,
-            'dt': dt,
-            'ndv': ndv,
-            'fmt': fmt
-        })
-    
+            src_srs = osr.SpatialReference()
+            src_srs.SetFromUserInput(proj)
+            src_srs.AutoIdentifyEPSG()
+            srs_auth = src_srs.GetAuthorityCode(None)
+            if srs_auth is not None:
+                return('epsg:{}'.format(srs_auth))
+            else:
+                return(src_srs.ExportToProj4())
+                        
     def gather_infos(self, scan=False):
         """gather information from `src_ds` GDAL dataset"""
 
@@ -1043,9 +1025,22 @@ class RasterFile(XYZDataset):
                     if self.trans_region is not None and self.trans_region.valid_p(
                             check_xy = True
                     ):
+                        # reset geotransform
+                        #t = xyzfun.XYZPoint(x=self.gt[0], y=self.gt[3], src_srs=self.src_srs).warp(self.dst_srs)
+                        #tmp_gt  = [t.x, 0.5, 0.0, t.y, 0.0, -0.5]
+                        #print(tmp_gt)
+                        #print(self.src_ds.RasterXSize, self.src_ds.RasterYSize)
+                        this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize).warp(self.dst_srs)
+                        #print(this_region.geo_transform(x_inc=))
+                        xinc=((this_region.xmax - this_region.xmin) / self.src_ds.RasterXSize)
+                        yinc=((this_region.ymin - this_region.ymax) / self.src_ds.RasterYSize)
+                        
+                        #print(self.gt)
+                        #print(self.region)
                         self.srcwin = self.trans_region.srcwin(
                             self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
                         )
+                        self.gt = (this_region.xmin, xinc, 0.0, this_region.ymax, 0.0, yinc)
                     else:
                         self.srcwin = (
                             0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize
@@ -1061,8 +1056,9 @@ class RasterFile(XYZDataset):
                     0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize
                 )
                 
+            #print(self.gt, self.srcwin)
             src_band = self.src_ds.GetRasterBand(1)
-            self.get_srs()            
+            self.src_srs = self.get_srs()            
             self.x_count, self.y_count = self.srcwin[2], self.srcwin[3]
             self.dt = src_band.DataType
             self.dtn = gdal.GetDataTypeName(src_band.DataType)
@@ -1108,6 +1104,7 @@ class RasterFile(XYZDataset):
             #     gt[0] = gt[0] - (gt[1]/2)
             #     gt[3] = gt[3] - (gt[5]/2)
             #     gt = tuple(gt)
+            #print(gt)
             msk_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
@@ -1148,8 +1145,8 @@ class RasterFile(XYZDataset):
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
-                        if self.dst_trans is not None:
-                            out_xyz.transform(self.dst_trans)
+                        #if self.dst_trans is not None:
+                        #    out_xyz.transform(self.dst_trans)
                             
                         yield(out_xyz)
                         ln += 1
