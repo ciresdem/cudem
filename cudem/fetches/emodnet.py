@@ -52,25 +52,26 @@ class EMODNet(f_utils.FetchModule):
         
         if self.region is None: return([])
 
-        desc_data = {
+        _data = {
             'request': 'DescribeCoverage',
             'version': '2.0.1',
             'CoverageID': 'emodnet:mean',
             'service': 'WCS',
             }
-        desc_req = f_utils.Fetch(self._emodnet_grid_url).fetch_req(params=desc_data)
-        desc_results = lxml.etree.fromstring(desc_req.text.encode('utf-8'))
-        g_env = desc_results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces = f_utils.namespaces)[0]
+        _req = f_utils.Fetch(self._emodnet_grid_url).fetch_req(params=_data)
+        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
+        g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=f_utils.namespaces)[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
 
-        g_bbox = desc_results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
+        g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
         lc = [float(x) for x in  g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
         uc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}upperCorner').text.split()]
         
-        ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
+        ds_region = regions.Region().from_list(
+            [lc[1], uc[1], lc[0], uc[0]]
+        )
         resx = (uc[1] - lc[1]) / hl[0]
         resy = (uc[0] - lc[0]) / hl[1]
-
         if regions.regions_intersect_ogr_p(self.region, ds_region):
             emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
                                       .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
@@ -81,8 +82,15 @@ class EMODNet(f_utils.FetchModule):
     def yield_xyz(self, entry):
         src_emodnet = 'emodnet_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_emodnet) == 0:
-            _ds = datasets.RasterFile(fn=src_emodnet, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                      name=src_emodnet, src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=src_emodnet,
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                name=src_emodnet,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
                 

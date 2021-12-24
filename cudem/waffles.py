@@ -528,7 +528,7 @@ class GMTSurface(Waffle):
     Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
     """
     
-    def __init__(self, tension=.35, relaxation=1.2,
+    def __init__(self, tension=.35, relaxation=1.2, max_radius=None,
                  lower_limit='d', upper_limit='d',
                  breakline=None, convergence=.5, **kwargs):
         """generate a DEM with GMT surface"""
@@ -545,6 +545,7 @@ class GMTSurface(Waffle):
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
         self.breakline = breakline
+        self.max_radius = utils.str2inc(max_radius)
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
@@ -553,7 +554,7 @@ class GMTSurface(Waffle):
         
     def run(self):        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}'.format(
+            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -567,6 +568,7 @@ class GMTSurface(Waffle):
                 self.lower_limit,
                 self.upper_limit,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
+                ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
             )
         )
         

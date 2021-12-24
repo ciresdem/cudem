@@ -38,7 +38,7 @@ from cudem import fetches
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.multibeam as mb
-import cudem.fetches.usace as usace
+import cudem.fetches.ehydro as ehydro
 import cudem.fetches.gmrt as gmrt
 import cudem.fetches.srtm as srtm
 import cudem.fetches.mar_grav as mar_grav
@@ -59,6 +59,8 @@ import cudem.fetches.tides as tides
 import cudem.fetches.vdatum as vdatum
 import cudem.fetches.buoys as buoys
 import cudem.fetches.earthdata as earthdata
+import cudem.fetches.usiei as usiei
+import cudem.fetches.trackline as trackline
 
 ## ==============================================
 ## Fetches Module Parser
@@ -76,6 +78,8 @@ reviewed, processed and gridded by the GMRT Team and merged into a single contin
 of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
 to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
 the global and coastal oceans.
+
+layers: 'topo' or 'topo-mask'
 
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
         },
@@ -100,8 +104,14 @@ worldwide.
 
 < multibeam:inc=None >""",
         },
-        'usace': {
-            'class': usace.USACE,
+        'trackline': {
+            'class': trackline.Trackline,
+            'description': """NOAA TRACKLINE bathymetric data.
+
+< trackline >""",
+        },
+        'ehydro': {
+            'class': ehydro.eHydro,
             'description': """USACE eHydro bathymetric data.
 Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
 harbors throughout the United States requires extensive surveying and mapping services, including 
@@ -116,7 +126,7 @@ accuracy, and maintaining harbors and rivers —and Inland Electronic Navigation
 navigational charts provided in a highly structured data format for use in navigation systems and to increase 
 overall navigational safety.. 
 
-< usace:s_type=None >""",
+< ehydro:where=None >""",
         },
         'ngs': {
             'class': ngs.NGS,
@@ -127,14 +137,17 @@ Note some survey markers installed by other organizations may not be available t
 < ngs:datum=geoidHt >""",
         },
         'nos': {
-            'class': nos.NOS,
+            'class': nos.HydroNOS,
             'description': """NOS Soundings (bag/hydro)
 NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
 Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
 Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
 and its territories. 
 
-< nos:datatype=None >""",
+Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
+Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
+
+< nos:where=None:layer=0 >""",
         },
         'charts': {
             'class': charts.NauticalCharts,
@@ -254,6 +267,21 @@ If version is omitted, will fetch all versions
 Use wildcards in 'short_name' to return granules for all matching short_name entries.
 
 < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
+        },
+        'usiei': {
+            'class': usiei.USIEI,
+            'description': """US Interagency Elevation Inventory
+
+No data is fetched with this module. Will list out query results from the USIEI.
+
+layers:
+  0 - Lidar-Topobathy
+  1 - Lidar-Bathy
+  2 - Lidar-Topo
+  3 - IfSAR/InSAR
+  4 - Other Bathy
+
+< usiei:where=None:layer=0 >""",
         },
     }
     
@@ -466,6 +494,8 @@ See `fetches_cli_usage` for full cli options.
                     else:
                         these_regions.append(i)
 
+    if not these_regions:
+        these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
     if want_verbose:
         utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
 

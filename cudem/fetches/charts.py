@@ -40,10 +40,42 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
+## ==============================================
+## MapServer testing
+## ==============================================
+class Charts(f_utils.FetchModule):
+    """charts"""
+    
+    def __init__(self, where='1=1', **kwargs):
+        super().__init__(**kwargs)
+        #self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer'
+        self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer'
+        self._charts_query_url = '{0}/queryDatasets?'.format(self._charts_url)
+        self._outdir = os.path.join(os.getcwd(), 'charts')
+        self.name = 'charts'
+        self.where = where
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {
+            'where': self.where,
+            'outFields': '*',
+            'geometry': self.region.format('bbox'),
+            'inSR':4326,
+            'outSR':4326,
+            'f':'pjson',
+            'returnGeometry':'False',
+        }
+        _req = f_utils.Fetch(self._charts_query_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            print(_req.text)
+
 class NauticalCharts(f_utils.FetchModule):
     """Fetch digital chart data from NOAA"""
 
-    def __init__(self, where=[], datatype=None, **kwargs):
+    def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(**kwargs)
         
         self._charts_url = 'https://www.charts.noaa.gov/'
@@ -51,13 +83,15 @@ class NauticalCharts(f_utils.FetchModule):
         self._rnc_data_catalog = 'https://charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
         self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
         self._outdir = os.path.join(os.getcwd(), 'charts')
-        self._dt_xml = { 'ENC':self._enc_data_catalog,
-                         'RNC':self._rnc_data_catalog }
-
-        self.where = where
+        self._dt_xml = {
+            'ENC':self._enc_data_catalog,
+            'RNC':self._rnc_data_catalog
+        }
+        self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
         self.name = 'charts'
         self.v_datum = 'mhw'
+        
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
         
@@ -126,7 +160,8 @@ class NauticalCharts(f_utils.FetchModule):
 
 The data is referenced to MHW and is represente as a depth.
 In U.S. waters, MHW can be transformed to MSL or the local GEOID using
-VDatum and/or it's associated grids (mhw.gtx or tss.gtx)"""
+VDatum and/or it's associated grids (mhw.gtx or tss.gtx)
+"""
 
         ## create the tidal transformation grid from mhw to geoid
         src_zip = os.path.basename(entry[1])

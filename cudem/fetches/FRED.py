@@ -142,7 +142,8 @@ class FRED:
             layer_defn = self.layer.GetLayerDefn()
             feat = ogr.Feature(layer_defn)
             geom = ogr.CreateGeometryFromJson(survey[1])
-            feat.SetGeometry(geom)
+            geom_valid = geom.MakeValid()
+            feat.SetGeometry(geom_valid)
             for field in self._fields:
                 try:
                     feat.SetField(field, survey[0][field])

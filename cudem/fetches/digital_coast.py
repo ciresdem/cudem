@@ -32,6 +32,74 @@
 ##
 ## update to DAV to remove dependence on FRED.
 ##
+## This map service presents spatial information about Elevation Data Access Viewer services across the United States
+## and Territories in the Web Mercator projection. The service was developed by the National Oceanic and Atmospheric
+## Administration (NOAA), but may contain data and information from a variety of data sources, including non-NOAA data.
+## NOAA provides the information “as-is” and shall incur no responsibility or liability as to the completeness or accuracy
+## of this information. NOAA assumes no responsibility arising from the use of this information. The NOAA Office for Coastal
+## Management will make every effort to provide continual access to this service but it may need to be taken down during
+## routine IT maintenance or in case of an emergency. If you plan to ingest this service into your own application and would
+## like to be informed about planned and unplanned service outages or changes to existing services, please register for our
+## Data Services Newsletter (http://coast.noaa.gov/digitalcoast/publications/subscribe). For additional information, please
+## contact the NOAA Office for Coastal Management (coastal.info@noaa.gov).
+##
+##
+## Fields:
+##
+##     OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
+##     Shape ( type: esriFieldTypeGeometry, alias: Shape )
+##     OBJECTID_1 ( type: esriFieldTypeInteger, alias: OBJECTID_1 )
+##     ID ( type: esriFieldTypeInteger, alias: ID )
+##     FileSize ( type: esriFieldTypeDouble, alias: FileSize )
+##     pixbytes ( type: esriFieldTypeInteger, alias: pixbytes )
+##     DataTypeID ( type: esriFieldTypeInteger, alias: DataTypeID )
+##     provider_results ( type: esriFieldTypeString, alias: provider_results, length: 1000 )
+##     provider_details ( type: esriFieldTypeString, alias: provider_details, length: 1000 )
+##     licStatus ( type: esriFieldTypeInteger, alias: licStatus )
+##     Name ( type: esriFieldTypeString, alias: Name, length: 200 )
+##     provider_results_name ( type: esriFieldTypeString, alias: provider_results_name, length: 2147483647 )
+##     provider_details_name ( type: esriFieldTypeString, alias: provider_details_name, length: 2147483647 )
+##     DataType ( type: esriFieldTypeString, alias: DataType, length: 7 )
+##     DataBin ( type: esriFieldTypeString, alias: DataBin, length: 9 )
+##     Year ( type: esriFieldTypeInteger, alias: Year )
+##     ProjectID ( type: esriFieldTypeInteger, alias: ProjectID )
+##     Project ( type: esriFieldTypeString, alias: Project, length: 150 )
+##     Project_Description ( type: esriFieldTypeString, alias: Project_Description, length: 8000 )
+##     dclink ( type: esriFieldTypeString, alias: dclink, length: 200 )
+##     Metalink ( type: esriFieldTypeString, alias: Metalink, length: 4000 )
+##     licLink ( type: esriFieldTypeString, alias: licLink, length: 256 )
+##     imgname ( type: esriFieldTypeString, alias: imgname, length: 250 )
+##     InfoLink ( type: esriFieldTypeString, alias: InfoLink, length: 200 )
+##     SpecialNote ( type: esriFieldTypeString, alias: SpecialNote, length: 8000 )
+##     ProvisioningDetails ( type: esriFieldTypeString, alias: ProvisioningDetails, length: 8000 )
+##     ExternalProviderLink ( type: esriFieldTypeString, alias: ExternalProviderLink, length: 2147483647 )
+##     ExternalProviderLinkLabel ( type: esriFieldTypeString, alias: ExternalProviderLinkLabel, length: 14 )
+##     ExternalParameters ( type: esriFieldTypeString, alias: ExternalParameters, length: 100 )
+##     ExternalParametersAlias ( type: esriFieldTypeString, alias: ExternalParametersAlias, length: 100 )
+##     Vertical_Accuracy ( type: esriFieldTypeString, alias: Vertical_Accuracy, length: 313 )
+##     Horizontal_Accuracy ( type: esriFieldTypeString, alias: Horizontal_Accuracy, length: 313 )
+##     Nominal_Ground_Spacing ( type: esriFieldTypeDouble, alias: Nominal_Ground_Spacing )
+##     Data_Classes_Available ( type: esriFieldTypeString, alias: Data_Classes_Available, length: 2147483647 )
+##     TideControlled ( type: esriFieldTypeString, alias: TideControlled, length: 3 )
+##     NativeVdatum ( type: esriFieldTypeString, alias: NativeVdatum, length: 20 )
+##     Classified ( type: esriFieldTypeString, alias: Classified, length: 2147483647 )
+##     ReturnsOption ( type: esriFieldTypeInteger, alias: ReturnsOption )
+##     AncillaryData ( type: esriFieldTypeString, alias: AncillaryData, length: 100 )
+##     AncillaryOpt ( type: esriFieldTypeInteger, alias: AncillaryOpt )
+##     AllowLAS ( type: esriFieldTypeInteger, alias: AllowLAS )
+##     CellSizeFt ( type: esriFieldTypeDouble, alias: CellSizeFt )
+##     CellSizeM ( type: esriFieldTypeDouble, alias: CellSizeM )
+##     MinCellSizeFt ( type: esriFieldTypeDouble, alias: MinCellSizeFt )
+##     MinCellSizeMeters ( type: esriFieldTypeDouble, alias: MinCellSizeMeters )
+##     MinContourIntervalFt ( type: esriFieldTypeString, alias: MinContourIntervalFt, length: 100 )
+##     ImageService_Server ( type: esriFieldTypeString, alias: ImageService_Server, length: 4000 )
+##     ImageService_Service ( type: esriFieldTypeString, alias: ImageService_Service, length: 200 )
+##     ImageService_Key ( type: esriFieldTypeString, alias: ImageService_Key, length: 50 )
+##     ImageService_Value ( type: esriFieldTypeString, alias: ImageService_Value, length: 50 )
+##     ImageService_FullURL ( type: esriFieldTypeString, alias: ImageService_FullURL, length: 4000 )
+##     Shape_Length ( type: esriFieldTypeDouble, alias: Shape_Length )
+##     Shape_Area ( type: esriFieldTypeDouble, alias: Shape_Area )
+##
 ### Code:
 
 import os
@@ -62,8 +130,8 @@ increment to save space.
     def __init__(self, where='1=1', inc=None, **kwargs):
         super().__init__(**kwargs)
         self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
-        self._outdir = os.path.join(os.getcwd(), 'dav')
-        self.name = 'dav'
+        self._outdir = os.path.join(os.getcwd(), 'digital_coast')
+        self.name = 'digital_coast'
         self.where = where
         self.inc = utils.str2inc(inc)
         
@@ -76,7 +144,6 @@ increment to save space.
         _data = {
             'where': self.where,
             'outFields': '*',
-            #'outFields': 'externalproviderlink',
             'geometry': self.region.format('bbox'),
             'inSR':4326,
             'outSR':4326,

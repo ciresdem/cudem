@@ -34,6 +34,42 @@
 ##
 ## https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
 ##
+## Update for use of NOS Mapserver
+##
+## A map service showing the location and coverage of National Ocean Service (NOS) Hydrographic Surveys.
+## The NOS Hydrographic Database (NOSHDB) and Hydrographic Survey Metadata Database (HSMDB), both maintained
+## by NOS and NOAA's National Centers for Environmental Information (NCEI), provide extensive survey 
+## coverage and ISO metadata of the coastal waters and Exclusive Economic Zone (EEZ) of the United States 
+## and its territories. The NOSHDB contains digitized data from smooth sheets of hydrographic surveys 
+## completed between 1837 and 1965, and from survey data acquired digitally on NOS survey vessels since 1965. 
+## Data products from NOS surveys, including Bathymetric Attributed Grid (BAG) files, Descriptive Reports, 
+## smooth sheet images, survey data images, textual gridded data, and geo-referenced sidescan sonar mosaics, 
+## ISO metadata, and survey statistics are available for download from NCEI.
+##
+##Fields:
+##
+## SURVEY_ID ( type: esriFieldTypeString, alias: Survey ID, length: 10 )
+## DATE_SURVEY_BEGIN ( type: esriFieldTypeDate, alias: Begin Date, length: 8 )
+## DATE_SURVEY_END ( type: esriFieldTypeDate, alias: End Date, length: 8 )
+## DATE_MODIFY_DATA ( type: esriFieldTypeDate, alias: Modify Data Date, length: 8 )
+## DATE_SURVEY_APPROVAL ( type: esriFieldTypeDate, alias: Survey Approval Date, length: 8 )
+## DATE_ADDED ( type: esriFieldTypeDate, alias: Date Added, length: 8 )
+## SURVEY_YEAR ( type: esriFieldTypeDouble, alias: Survey Year )
+## DIGITAL_DATA ( type: esriFieldTypeString, alias: Digital Data?, length: 15 )
+## LOCALITY ( type: esriFieldTypeString, alias: Locality, length: 150 )
+## SUBLOCALITY ( type: esriFieldTypeString, alias: Sublocality, length: 150 )
+## PLATFORM ( type: esriFieldTypeString, alias: Platform Name, length: 150 )
+## PRODUCT_ID ( type: esriFieldTypeString, alias: Product ID, length: 24 )
+## BAGS_EXIST ( type: esriFieldTypeString, alias: BAGS_EXIST, length: 4 )
+## DOWNLOAD_URL ( type: esriFieldTypeString, alias: Download URL, length: 256 )
+## DECADE ( type: esriFieldTypeDouble, alias: Decade )
+## PUBLISH ( type: esriFieldTypeString, alias: PUBLISH, length: 1 )
+## OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
+## SHAPE ( type: esriFieldTypeGeometry, alias: SHAPE )
+##
+## Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
+## Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
+##
 ### Code:
 
 import os
@@ -45,10 +81,110 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
+class HydroNOS(f_utils.FetchModule):
+    """NOSHydro"""
+    
+    def __init__(self, where='1=1', layer=1, datatype=None, **kwargs):
+        super().__init__(**kwargs)
+        self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
+        self._nos_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro/MapServer'
+        self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
+        self._nos_query_url = '{0}/{1}/query?'.format(self._nos_dynamic_url, layer)
+        self._outdir = os.path.join(os.getcwd(), 'hydronos')
+        self.name = 'hydronos'
+        self.where = where
+        self.datatype = datatype
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {
+            'where': self.where,
+            'outFields': '*',
+            'geometry': self.region.format('bbox'),
+            'inSR':4326,
+            'outSR':4326,
+            'f':'pjson',
+            'returnGeometry':'False',
+        }
+        _req = f_utils.Fetch(self._nos_query_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            features = _req.json()
+            for feature in features['features']:
+                ID = feature['attributes']['SURVEY_ID']
+                link = feature['attributes']['DOWNLOAD_URL']
+                nos_dir = link.split('/')[-2]
+                data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
+
+                if self.datatype is None or 'bag' in self.datatype.lower():
+                    if feature['attributes']['BAGS_EXIST'] == 'TRUE':
+                        page = f_utils.Fetch(data_link + 'BAG').fetch_html()
+                        bags = page.xpath('//a[contains(@href, ".bag")]/@href')
+                        [self.results.append(['{0}BAG/{1}'.format(data_link, bag), bag, 'bag']) for bag in bags]
+
+                if self.datatype is None or 'xyz' in self.datatype.lower():
+                    page = f_utils.Fetch(data_link).fetch_html()
+                    geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
+                    if geodas:
+                        xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
+                        self.results.append([xyz_link, xyz_link.split('/')[-1], 'xyz'])                
+
+    def yield_xyz(self, entry):
+        src_nos = os.path.basename(entry[1])
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
+            if entry[2] == 'xyz':
+                nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
+                for src_xyz in nos_fns:
+                    _ds = datasets.XYZFile(
+                        fn=src_xyz,
+                        data_format=168,
+                        skip=1,
+                        xpos=2,
+                        ypos=1,
+                        zpos=3,
+                        z_scale=-1,
+                        src_srs='epsg:4326',
+                        dst_srs=self.dst_srs,
+                        name=src_xyz,
+                        src_region=self.region,
+                        verbose=self.verbose,
+                        remote=True
+                    )
+                    for xyz in _ds.yield_xyz():
+                        yield(xyz)
+                        
+                utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
+
+            elif entry[2] == 'bag':
+                src_bags = utils.p_unzip(src_nos, exts=['bag'])
+                for src_bag in src_bags:
+                    _ds = datasets.RasterFile(
+                        fn=src_bag,
+                        data_format=200,
+                        dst_srs=self.dst_srs,
+                        name=src_bag,
+                        src_region=self.region,
+                        verbose=self.verbose
+                    )
+                    for xyz in _ds.yield_xyz():
+                        yield(xyz)
+                        
+                utils.remove_glob(*src_bags)
+        utils.remove_glob(src_nos)
+                        
+## ==============================================
+## the NOS class is the old NOS fetches module.
+## This module scrapes the data from NOAA and generates
+## a reference vector to discover dataset footprints. This is prone
+## to possible error and can miss newer datasets if the reference
+## vector is not up-to-date. Use HydroNOS class instead, which uses
+## the NOAA MapServer to discover dataset footprints.
+## ==============================================
 class NOS(f_utils.FetchModule):
     """Fetch NOS BAG and XYZ sounding data from NOAA"""
 
-    def __init__(self, where=[], datatype=None, update=False, **kwargs):
+    def __init__(self, where='', datatype=None, update=False, **kwargs):
         super().__init__(**kwargs)
         self._nos_url = 'https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html'
         self._nos_xml_url = lambda nd: 'https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/NOS/%siso_u/xml/' %(nd)
@@ -63,8 +199,7 @@ class NOS(f_utils.FetchModule):
 
         self._outdir = os.path.join(os.getcwd(), 'nos')
         self._nos_fmts = ['.xyz.gz', '.bag.gz', '.bag']
-
-        self.where = where
+        self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
 
         if self.datatype is not None:

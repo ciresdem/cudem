@@ -217,7 +217,7 @@ class DatasetFactory:
               'fmts': [
                   'gmrt',
                   'multibeam',
-                  'usace',
+                  'ehydro',
                   'mar_grav',
                   'srtm_plus',
                   'ngs',

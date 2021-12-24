@@ -40,15 +40,13 @@ import cudem.fetches.FRED as FRED
 class NASADEM(f_utils.FetchModule):
     '''Fetch NASADEM data'''
     
-    def __init__(self, where=[], datatype=None, **kwargs):
+    def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(**kwargs)
         self.nasadem_rurl = 'https://opentopography.s3.sdsc.edu/minio/raster/NASADEM/NASADEM_be/'
         self.nasadem_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/NASADEM/NASADEM_be/'
         self.nasadem_vrt_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/NASADEM/NASADEM_be.vrt?token='
-
-        self.where = where
+        self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
-        
         self._outdir = os.path.join(os.getcwd(), 'nasadem')
         self.name = 'nasadem'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
@@ -70,23 +68,21 @@ class NASADEM(f_utils.FetchModule):
         """Crawl the COP30 database and update/generate the NASADEM reference vector."""
         
         self.FRED._open_ds(1)
-        surveys = []
-                    
+        surveys = []                    
         f = f_utils.Fetch(self.nasadem_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
 
-        if self.verbose: _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.nasadem_url))
+        if self.verbose:
+            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.nasadem_url))
         
         for i, fn in enumerate(fns):
-
             sid = fn.text.split('/')[-1].split('.')[0]
             if self.verbose:
                 _prog.update_perc((i, len(fns)))
                 
             self.FRED._attribute_filter(["ID = '{}'".format(sid)])
             if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            
                 spat = fn.text.split('_HGT_')[-1].split('.')[0]
                 xsplit = 'e' if 'e' in spat else 'w'
                 ysplit = 's' if 's' in spat else 'n'
@@ -124,11 +120,19 @@ class NASADEM(f_utils.FetchModule):
         """yield the xyz data from the nasadem fetch module"""
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
-            _ds = datasets.RasterFile(fn=entry[1], data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                      name=entry[1], src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=entry[1],
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                name=entry[1],
+                src_region=self.region,
+                verbose=self.verbose
+            )
             for xyz in _ds.yield_xyz():
                 if xyz.z != 0:
                     yield(xyz)
+                    
         utils.remove_glob(entry[1])
 
 if __name__ == '__main__':

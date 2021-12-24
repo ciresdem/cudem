@@ -43,7 +43,7 @@ import cudem.fetches.FRED as FRED
 class CopernicusDEM(f_utils.FetchModule):
     '''Fetch COPERNICUS data'''
     
-    def __init__(self, where=[], datatype=None, **kwargs):
+    def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(**kwargs)
         self.cop30_rurl = 'https://opentopography.s3.sdsc.edu/minio/raster/COP30/COP30_hh/'
         self.cop30_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/COP30/COP30_hh/'
@@ -51,9 +51,8 @@ class CopernicusDEM(f_utils.FetchModule):
         self.cop_10_url = 'https://gisco-services.ec.europa.eu/dem/copernicus/outD/'
         self.cop_10_aux_url = 'https://gisco-services.ec.europa.eu/dem/copernicus/outA/'
         self.cop_10_web = 'https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation'
-        self.where = where
-        self.datatype = datatype
-        
+        self.where = [where] if len(where) > 0 else []
+        self.datatype = datatype        
         self._outdir = os.path.join(os.getcwd(), 'copernicus')
         self.name = 'copernicus'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
@@ -79,7 +78,6 @@ class CopernicusDEM(f_utils.FetchModule):
         surveys = []
         page = f_utils.Fetch(self.cop_10_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
-
         if self.verbose:
             _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(rows), self.cop_10_url))
         
@@ -87,14 +85,15 @@ class CopernicusDEM(f_utils.FetchModule):
             sid = row.split('.')[0]
             if self.verbose:
                 _prog.update_perc((i, len(rows)))
+                
             self.FRED._attribute_filter(["ID = '{}'".format(sid)])
             if self.FRED.layer is None or len(self.FRED.layer) == 0:
-
                 spat = row.split('.')[0].split('_')[-1]
                 x = int(spat.split('x')[-1])
                 y = int(spat.split('x')[0].split('y')[-1])
-                this_region = regions.Region().from_list([x, x + 10, y, y + 10])
-
+                this_region = regions.Region().from_list(
+                    [x, x + 10, y, y + 10]
+                )
                 geom = this_region.export_as_geom()
                 if geom is not None:
                     surveys.append({'Name': row.split('.')[0], 'ID': sid, 'Agency': 'EU', 'Date': utils.this_date(),
@@ -108,18 +107,16 @@ class CopernicusDEM(f_utils.FetchModule):
         f = f_utils.Fetch(self.cop30_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
-
-        if self.verbose: _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.cop30_url))
+        if self.verbose:
+            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.cop30_url))
         
         for i, fn in enumerate(fns):
-
             sid = fn.text.split('/')[-1].split('.')[0]
             if self.verbose:
                 _prog.update_perc((i, len(fns)))
                 
             self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            
+            if self.FRED.layer is None or len(self.FRED.layer) == 0:            
                 spat = fn.text.split('_10_')[-1].split('_DEM')[0]
                 xsplit = '_E' if 'E' in spat else '_W'
                 ysplit = 'S' if 'S' in spat else 'N'

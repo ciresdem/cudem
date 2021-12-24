@@ -44,6 +44,7 @@ except: import queue as queue
 
 from cudem import utils
 from cudem import fetches
+from cudem import regions
 
 r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 namespaces = {
@@ -139,9 +140,14 @@ class iso_xml:
         if polygon is not None:
             nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
             [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
-            if geom: return(utils.wkt2geom(regions.create_wkt_polygon(opoly)))
-            else: return(opoly)
-        else: return(None)
+            if opoly[0][0] != opoly[-1][0] or opoly[0][1] != opoly[-1][1]:
+                opoly.append(opoly[0])
+            if geom:
+                return(utils.wkt2geom(regions.create_wkt_polygon(opoly)))
+            else:
+                return(opoly)
+        else:
+            return(None)
         
     def date(self):
         dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces = self.namespaces)

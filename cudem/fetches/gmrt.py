@@ -25,6 +25,7 @@
 ##
 ## fetch extracts of the GMRT. - Global Extents
 ## https://www.gmrt.org/index.php
+## https://www.gmrt.org/services/gridserverinfo.php#!/services/getGMRTGridURLs
 ##
 ## The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
 ## compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
@@ -32,6 +33,26 @@
 ## of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
 ## to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
 ## the global and coastal oceans.
+##
+## The GridServer service provides access to gridded data from the Global Multi-resolution Topography (GMRT) Synthesis.
+## Requested data may be up to 2GB, or approximately 20 by 20 degrees at 100 meters per node (maximum available resolution).
+## A variety of output formats are supported.
+##
+##    Data Formats
+##        GMT v3 Compatible NetCDF (GMT id=cf)
+##        COARDS/CF1.6 Compliant NetCDF (GMT id=nd)
+##        ESRI ArcASCII
+##        GeoTIFF
+##    Metadata Formats
+##        XML (metadata)
+##        JSON (metadata)
+##        Plain text (metadata)
+##
+## Layers:
+##  topo - gmrt with gebco behind mb
+##  topo-mask - gmrt mb surveys with gebco masked
+##
+## Data is assumed instantaneous MSL
 ##
 ### Code:
 
@@ -56,7 +77,11 @@ class GMRT(f_utils.FetchModule):
         self.name = 'gmrt'
         self.res = res
         self.fmt = fmt
-        self.layer = layer
+        if layer != 'topo' and layer != 'topo-mask':
+            self.layer = 'topo'
+        else:
+            self.layer = layer
+            
         self.bathy_only = bathy_only
         
     def run(self):
@@ -75,19 +100,26 @@ class GMRT(f_utils.FetchModule):
             'format':self.fmt,
         }
 
-        ## specifying the layer in the url builder breaks it!
-        #'layer':self.layer,
-        
-        req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(params=self.data, tries=10, timeout=2)
+        req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(
+            params=self.data, tries=10, timeout=2
+        )
         if req is not None:
             gmrt_urls = req.json()
             for url in gmrt_urls:
+                if self.layer == 'topo-mask':
+                    url = url.replace('topo', 'topo-mask')
+                    
                 opts = {}
                 for url_opt in url.split('?')[1].split('&'):
                     opt_kp = url_opt.split('=')
                     opts[opt_kp[0]] = opt_kp[1]
                     
-                url_region = regions.Region().from_list([float(opts['west']), float(opts['east']), float(opts['south']), float(opts['north'])])
+                url_region = regions.Region().from_list([
+                    float(opts['west']),
+                    float(opts['east']),
+                    float(opts['south']),
+                    float(opts['north'])
+                ])
                 outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
                 self.results.append([url, outf, 'gmrt'])
                 
@@ -95,13 +127,15 @@ class GMRT(f_utils.FetchModule):
 
     def yield_xyz(self, entry):
         src_data = 'gmrt_tmp.tif'
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose
+        ).fetch_file(src_data) == 0:
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                weight=1,
+                weight=.25,
                 name=src_data,
                 src_region=self.region,
                 verbose=self.verbose

@@ -45,7 +45,7 @@ class CHS(f_utils.FetchModule):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        #self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
+        self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
         self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
         self._outdir = os.path.join(os.getcwd(), 'chs')
         self.name = 'chs'
@@ -54,23 +54,25 @@ class CHS(f_utils.FetchModule):
         """Run the CHS fetching module"""
         
         if self.region is None: return([])
-        desc_data = {
+        _data = {
             'request': 'DescribeCoverage',
             'version': '2.0.1',
             'CoverageID': 'caris:NONNA 100',
             'service': 'WCS',
             }
-        desc_req = f_utils.Fetch(self._chs_url).fetch_req(params=desc_data)
-
-        desc_results = lxml.etree.fromstring(desc_req.text.encode('utf-8'))
-        g_env = desc_results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces = f_utils.namespaces)[0]
+        _req = f_utils.Fetch(self._chs_url).fetch_req(params=_data)
+        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
+        
+        g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=f_utils.namespaces)[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
 
-        g_bbox = desc_results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
+        g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
         lc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
         uc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}upperCorner').text.split()]
 
-        ds_region = regions.Region().from_list([lc[1], uc[1], lc[0], uc[0]])
+        ds_region = regions.Region().from_list(
+            [lc[1], uc[1], lc[0], uc[0]]
+        )
         resx = (uc[1] - lc[1]) / hl[0]
         resy = (uc[0] - lc[0]) / hl[1]
 
@@ -84,11 +86,21 @@ class CHS(f_utils.FetchModule):
     def yield_xyz(self, entry):
         src_chs = 'chs_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_chs) == 0:
-            _ds = datasets.RasterFile(fn=src_chs, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                      name=src_chs, src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=src_chs,
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                name=src_chs,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
-        else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
+            
         utils.remove_glob(src_chs)
 
 ## ==============================================

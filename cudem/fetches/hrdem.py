@@ -42,17 +42,14 @@ import cudem.fetches.FRED as FRED
 class HRDEM(f_utils.FetchModule):
     """Fetch HRDEM data from Canada (NRCAN)"""
     
-    def __init__(self, where = [], **kwargs):
+    def __init__(self, where='', **kwargs):
         super().__init__(**kwargs)
         self._hrdem_footprints_url = 'ftp://ftp.maps.canada.ca/pub/elevation/dem_mne/highresolution_hauteresolution/Datasets_Footprints.zip'
         self._hrdem_info_url = 'https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6'
         self._outdir = os.path.join(os.getcwd(), 'hrdem')
-        self.where = where
+        self.where = [where] if len(where) > 0 else []
         self.name = 'hrdem'
-        self._info = '''Collection of lidar-derived DTMs across Canada.'''
-        self._title = '''High Resolution DEMs from NCAR'''
-        self._usage = '''< hrdem >'''
-        self._urls = [self._hrdem_info_url, self._hrdem_footprints_url]
+        
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
         
@@ -193,12 +190,20 @@ class HRDEM(f_utils.FetchModule):
 
         if src_ds is not None:
 
-            _ds = datasets.RasterFile(fn=src_dc, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                      name=src_dc, src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=src_dc,
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                name=src_dc,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             _ds.src_ds = src_ds
             _ds.ds_open_p = True
             for xyz in _ds.yield_xyz():
                 yield(xyz)
+                
         src_ds = None
         utils.remove_glob(src_dc)
                     

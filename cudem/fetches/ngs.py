@@ -49,7 +49,7 @@ class NGS(f_utils.FetchModule):
         self._outdir = os.path.join(os.getcwd(), 'ngs')
         self.name = 'ngs'
         if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
-            utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(self.datum))
+            utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
             self.datum = 'geoidHt'
         else:
             self.datum = datum
@@ -60,14 +60,14 @@ class NGS(f_utils.FetchModule):
         if self.region is None:
             return([])
         
-        self.data = {
+        _data = {
             'maxlon':self.region.xmax,
             'minlon':self.region.xmin,
             'maxlat':self.region.ymax,
             'minlat':self.region.ymin,
         }
 
-        _req = f_utils.Fetch(self._ngs_search_url).fetch_req(params=self.data)
+        _req = f_utils.Fetch(self._ngs_search_url).fetch_req(params=_data)
         if _req is not None:
             self.results.append([_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'])
             
@@ -78,19 +78,19 @@ class NGS(f_utils.FetchModule):
         
         src_data = 'ngs_tmp.json'
         src_csv = 'ngs_tmp.csv'
-        
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose
+        ).fetch_file(src_data) == 0:
             with open(src_data, 'r') as json_file:
                 r = json.load(json_file)
             
             if len(r) > 0:
                 for row in r:
-                    lon = float(row['lon'])
-                    lat = float(row['lat'])
                     z = utils.float_or(row[self.datum])
-
                     if z is not None:
-                        xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                        xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list(
+                            [float(row['lon']), float(row['lat']), z]
+                        )
                         if self.dst_srs is not None:
                             xyz.warp(dst_srs=self.dst_srs)
                             
