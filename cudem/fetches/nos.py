@@ -73,6 +73,7 @@
 ### Code:
 
 import os
+import json
 
 from cudem import utils
 from cudem import regions
@@ -84,7 +85,7 @@ import cudem.fetches.FRED as FRED
 class HydroNOS(f_utils.FetchModule):
     """NOSHydro"""
     
-    def __init__(self, where='1=1', layer=1, datatype=None, **kwargs):
+    def __init__(self, where='1=1', layer=1, datatype=None, index=False, **kwargs):
         super().__init__(**kwargs)
         self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
         self._nos_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro/MapServer'
@@ -94,6 +95,7 @@ class HydroNOS(f_utils.FetchModule):
         self.name = 'hydronos'
         self.where = where
         self.datatype = datatype
+        self.index = index
         
     def run(self):
         if self.region is None:
@@ -112,6 +114,8 @@ class HydroNOS(f_utils.FetchModule):
         if _req is not None:
             features = _req.json()
             for feature in features['features']:
+                if self.index:
+                    print(json.dumps(feature['attributes'], indent=4))
                 ID = feature['attributes']['SURVEY_ID']
                 link = feature['attributes']['DOWNLOAD_URL']
                 nos_dir = link.split('/')[-2]

@@ -856,44 +856,43 @@ class LASFile(XYZDataset):
         """LAS file parsing generator"""
 
         ln = 0
-        #this_xyz = xyzfun.XYZPoint(w=1)
-        lasf = lp.read(self.fn)
-        lasf.points = lasf.points[
-            (lasf.classification == 2) | \
-            (lasf.classification == 29) | \
-            (lasf.classification == 0) | \
-            (lasf.classification == 40)
-        ]
-        dataset = np.vstack((lasf.x, lasf.y, lasf.z)).transpose()
-        if self.dst_trans is not None:
-            self.region.src_srs = self.dst_srs
-            self.region.warp(self.src_srs)
+
+        with lp.open(self.fn) as lasf:
+            for points in lasf.chunk_iterator(2_000_000):
+                points = points[(points.classification == 2) | \
+                                (points.classification == 29) | \
+                                (points.classification == 0) | \
+                                (points.classification == 40)]
+                
+                # lasf = lp.read(self.fn)
+                # lasf.points = lasf.points[
+                #     (lasf.classification == 2) | \
+                #     (lasf.classification == 29) | \
+                #     (lasf.classification == 0) | \
+                #     (lasf.classification == 40)
+                # ]
+                dataset = np.vstack((points.x, points.y, points.z)).transpose()
             
-        if self.region is not None  and self.region.valid_p():        
-            dataset = dataset[dataset[:,0] > self.region.xmin,:]
-            dataset = dataset[dataset[:,0] < self.region.xmax,:]
-            dataset = dataset[dataset[:,1] > self.region.ymin,:]
-            dataset = dataset[dataset[:,1] < self.region.ymax,:]
-            if self.region.zmin is not None:
-                dataset = dataset[dataset[:,2] > self.region.zmin,:]
-            if self.region.zmax is not None:
-                dataset = dataset[dataset[:,2] < self.region.zmax,:]
+                if self.region is not None  and self.region.valid_p():
+
+                    if self.dst_trans is not None:
+                        self.region.src_srs = self.dst_srs
+                        self.region.warp(self.src_srs)
+            
+                    dataset = dataset[dataset[:,0] > self.region.xmin,:]
+                    dataset = dataset[dataset[:,0] < self.region.xmax,:]
+                    dataset = dataset[dataset[:,1] > self.region.ymin,:]
+                    dataset = dataset[dataset[:,1] < self.region.ymax,:]
+                    if self.region.zmin is not None:
+                        dataset = dataset[dataset[:,2] > self.region.zmin,:]
+                    if self.region.zmax is not None:
+                        dataset = dataset[dataset[:,2] < self.region.zmax,:]
                 
-        for point in dataset:
-            ln += 1
-            yield(xyzfun.XYZPoint(
-                x=point[0], y=point[1], z=point[2], w=self.weight
-            ))
-            # this_xyz.x = point[0]
-            # this_xyz.y = point[1]
-            # this_xyz.z = point[2]
-            # this_xyz.w = self.weight
-                    
-            # #if self.dst_trans is not None:
-            # #    this_xyz.transform(self.dst_trans)
-                
-            # ln += 1
-            # yield(this_xyz)
+                for point in dataset:
+                    ln += 1
+                    yield(xyzfun.XYZPoint(
+                        x=point[0], y=point[1], z=point[2], w=self.weight
+                    ))
 
         lasf = dataset = None
         if self.verbose:

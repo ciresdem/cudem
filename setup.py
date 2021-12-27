@@ -105,7 +105,8 @@ setuptools.setup(
         'scripts/vdatum_cmd.py',
         'scripts/x360.py',
         'scripts/xyztindex.py',
-        'scripts/update_dem.sh'
+        'scripts/update_dem.sh',
+        'scripts/gdal_mask.py'
     ],
     python_requires = '>=3.0',
     project_urls = {

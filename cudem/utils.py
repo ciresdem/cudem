@@ -230,7 +230,7 @@ def args2dict(args, dict_args={}):
     """
     
     for arg in args:
-        this_entry = re.findall(r'[^"\s]\S*|".+?"', arg)
+        #this_entry = re.findall(r'[^"\s]\S*|".+?"', arg)
         p_arg = arg.split('=')
         dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else \
             True if p_arg[1].lower() == 'true' else \

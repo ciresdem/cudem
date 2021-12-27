@@ -127,20 +127,21 @@ If inc is set, upon processing the data, will blockmedian it at `inc`
 increment to save space.
 """
     
-    def __init__(self, where='1=1', inc=None, **kwargs):
+    def __init__(self, where='1=1', inc=None, index=False, **kwargs):
         super().__init__(**kwargs)
         self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.name = 'digital_coast'
         self.where = where
         self.inc = utils.str2inc(inc)
+        self.index = index
         
     def run(self):
         '''Run the DAV fetching module'''
         
         if self.region is None:
             return([])
-        
+
         _data = {
             'where': self.where,
             'outFields': '*',
@@ -155,41 +156,45 @@ increment to save space.
             features = _req.json()
             for feature in features['features']:
                 links = json.loads(feature['attributes']['ExternalProviderLink'])
-                for link in links['links']:
-                    if link['serviceID'] == 46:
-                        urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                        index_zipfile = 'tileindex.zip'
-                        index_zipurl = link['link'] + '/' + index_zipfile
-                        if f_utils.Fetch(link['link'] + '/' + urllist, verbose=True).fetch_file(urllist) == 0:
-                            with open(urllist, 'r') as ul:
-                                for line in ul:
-                                    if 'tileindex' in line:
-                                        index_zipurl = line.strip()
-                                        break
-                                    
-                            utils.remove_glob(urllist)
+                if self.index:
+                    feature['attributes']['ExternalProviderLink'] = links
+                    print(json.dumps(feature['attributes'], indent=4))
+                else:
+                    for link in links['links']:
+                        if link['serviceID'] == 46:
+                            urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
+                            index_zipfile = 'tileindex.zip'
+                            index_zipurl = link['link'] + '/' + index_zipfile
+                            if f_utils.Fetch(link['link'] + '/' + urllist, verbose=True).fetch_file(urllist) == 0:
+                                with open(urllist, 'r') as ul:
+                                    for line in ul:
+                                        if 'tileindex' in line:
+                                            index_zipurl = line.strip()
+                                            break
 
-                        if f_utils.Fetch(
-                                index_zipurl, callback=self.callback, verbose=self.verbose
-                        ).fetch_file(index_zipfile) == 0:
-                            index_shps = utils.p_unzip('tileindex.zip', ['shp', 'shx', 'dbf', 'prj'])
-                            index_shp = None
-                            for v in index_shps:
-                                if v.split('.')[-1] == 'shp':
-                                    index_shp = v
-                                    
-                            index_ds = ogr.Open(index_shp)
-                            index_layer = index_ds.GetLayer(0)
-                            for index_feature in index_layer:
-                                index_geom = index_feature.GetGeometryRef()
-                                if index_geom.Intersects(self.region.export_as_geom()):
-                                    tile_url = index_feature.GetField('URL').strip()
-                                    self.results.append([tile_url, '{}/{}'.format(
-                                        feature['attributes']['ID'], tile_url.split('/')[-1]
-                                    ), feature['attributes']['DataType']])
-                                    
-                            index_ds = index_layer = None
-                            utils.remove_glob(index_zipfile, *index_shps)
+                                utils.remove_glob(urllist)
+
+                            if f_utils.Fetch(
+                                    index_zipurl, callback=self.callback, verbose=self.verbose
+                            ).fetch_file(index_zipfile) == 0:
+                                index_shps = utils.p_unzip('tileindex.zip', ['shp', 'shx', 'dbf', 'prj'])
+                                index_shp = None
+                                for v in index_shps:
+                                    if v.split('.')[-1] == 'shp':
+                                        index_shp = v
+
+                                index_ds = ogr.Open(index_shp)
+                                index_layer = index_ds.GetLayer(0)
+                                for index_feature in index_layer:
+                                    index_geom = index_feature.GetGeometryRef()
+                                    if index_geom.Intersects(self.region.export_as_geom()):
+                                        tile_url = index_feature.GetField('URL').strip()
+                                        self.results.append([tile_url, '{}/{}'.format(
+                                            feature['attributes']['ID'], tile_url.split('/')[-1]
+                                        ), feature['attributes']['DataType']])
+
+                                index_ds = index_layer = None
+                                utils.remove_glob(index_zipfile, *index_shps)
 
         return(self)
 

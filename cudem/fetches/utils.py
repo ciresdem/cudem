@@ -353,58 +353,68 @@ class Fetch:
                 os.makedirs(os.path.dirname(dst_fn))
             except: pass
             
-        if not os.path.exists(dst_fn) or overwrite:
-            try:
-                with requests.get(self.url, stream=True, params=params, headers=self.headers,
-                                  timeout=(timeout,read_timeout), verify=self.verify) as req:
+        #if not os.path.exists(dst_fn) or overwrite:
+        try:
+            with requests.get(self.url, stream=True, params=params, headers=self.headers,
+                              timeout=(timeout,read_timeout), verify=self.verify) as req:
 
-                    req_h = req.headers
-                    if 'Content-length' in req_h:
-                        req_s = int(req_h['Content-length'])
-                    else: req_s = -1
+                req_h = req.headers
+                if 'Content-length' in req_h:
+                    req_s = int(req_h['Content-length'])
+                else: req_s = -1
 
-                    if req.status_code == 300:
-                        #if req_h['Location']
-                        pass
+                try:
+                    if not overwrite and req_s == os.path.getsize(dst_fn):
+                        raise UnboundLocalError('File exists, skipping')
+                except OSError:
+                    pass
+
+                if req.status_code == 300:
+                    #if req_h['Location']
+                    pass
+
+                ## ==============================================
+                ## hack for earthdata credential redirect...
+                ## recursion here may never end with incorrect user/pass
+                ## ==============================================
+                if req.status_code == 401:
+                    ## ==============================================
+                    ## we're hoping for a redirect url here.
+                    ## ==============================================
+                    if self.url == req.url:
+                        raise UnboundLocalError('Incorrect Authentication')
+
+                    Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                        dst_fn,
+                        params=params,
+                        datatype=datatype,
+                        overwrite=overwrite,
+                        timeout=timeout,
+                        read_timeout=read_timeout
+                    )
+
+                elif req.status_code == 200:
+                    curr_chunk = 0
+                    with open(dst_fn, 'wb') as local_file:
+                        for chunk in req.iter_content(chunk_size = 8196):
+                            if self.callback():
+                                break
+                            if self.verbose:
+                                progress.update_perc((curr_chunk, req_s))
+                                curr_chunk += 8196
+                            if chunk:
+                                local_file.write(chunk)
+
+                else:
+                    utils.echo_error_msg('server returned: {}'.format(req.status_code))
+
+        except UnboundLocalError as e:
+            utils.echo_error_msg(e)
+            status = 0
                     
-                    ## ==============================================
-                    ## hack for earthdata credential redirect...
-                    ## recursion here may never end with incorrect user/pass
-                    ## ==============================================
-                    if req.status_code == 401:
-                        ## ==============================================
-                        ## we're hoping for a redirect url here.
-                        ## ==============================================
-                        if self.url == req.url:
-                            raise UnboundLocalError('Incorrect Authentication')
-                        
-                        Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
-                            dst_fn,
-                            params=params,
-                            datatype=datatype,
-                            overwrite=overwrite,
-                            timeout=timeout,
-                            read_timeout=read_timeout
-                        )
-                        
-                    elif req.status_code == 200:
-                        curr_chunk = 0
-                        with open(dst_fn, 'wb') as local_file:
-                            for chunk in req.iter_content(chunk_size = 8196):
-                                if self.callback():
-                                    break
-                                if self.verbose:
-                                    progress.update_perc((curr_chunk, req_s))
-                                    curr_chunk += 8196
-                                if chunk:
-                                    local_file.write(chunk)
-                                    
-                    else:
-                        utils.echo_error_msg('server returned: {}'.format(req.status_code))
-                        
-            except Exception as e:
-                utils.echo_error_msg(e)
-                status = -1
+        except Exception as e:
+            utils.echo_error_msg(e)
+            status = -1
                 
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             status = -1

@@ -293,8 +293,13 @@ class DatasetFactory:
         if os.path.exists(self.fn):
             return(self.fn)
 
+        #p_fn = self.fn.split(':')
+        #import shlex
+        #this_entry = shlex.split(self.fn.strip(), posix=False)
+        #this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.split(':')[1].rstrip())
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
-
+        #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.fn) if p.strip()]
+        #print(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
