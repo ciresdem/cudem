@@ -116,23 +116,24 @@ class HydroNOS(f_utils.FetchModule):
             for feature in features['features']:
                 if self.index:
                     print(json.dumps(feature['attributes'], indent=4))
-                ID = feature['attributes']['SURVEY_ID']
-                link = feature['attributes']['DOWNLOAD_URL']
-                nos_dir = link.split('/')[-2]
-                data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
+                else:
+                    ID = feature['attributes']['SURVEY_ID']
+                    link = feature['attributes']['DOWNLOAD_URL']
+                    nos_dir = link.split('/')[-2]
+                    data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
 
-                if self.datatype is None or 'bag' in self.datatype.lower():
-                    if feature['attributes']['BAGS_EXIST'] == 'TRUE':
-                        page = f_utils.Fetch(data_link + 'BAG').fetch_html()
-                        bags = page.xpath('//a[contains(@href, ".bag")]/@href')
-                        [self.results.append(['{0}BAG/{1}'.format(data_link, bag), bag, 'bag']) for bag in bags]
+                    if self.datatype is None or 'bag' in self.datatype.lower():
+                        if feature['attributes']['BAGS_EXIST'] == 'TRUE':
+                            page = f_utils.Fetch(data_link + 'BAG').fetch_html()
+                            bags = page.xpath('//a[contains(@href, ".bag")]/@href')
+                            [self.results.append(['{0}BAG/{1}'.format(data_link, bag), bag, 'bag']) for bag in bags]
 
-                if self.datatype is None or 'xyz' in self.datatype.lower():
-                    page = f_utils.Fetch(data_link).fetch_html()
-                    geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
-                    if geodas:
-                        xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
-                        self.results.append([xyz_link, xyz_link.split('/')[-1], 'xyz'])                
+                    if self.datatype is None or 'xyz' in self.datatype.lower():
+                        page = f_utils.Fetch(data_link).fetch_html()
+                        geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
+                        if geodas:
+                            xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
+                            self.results.append([xyz_link, xyz_link.split('/')[-1], 'xyz'])                
 
     def yield_xyz(self, entry):
         src_nos = os.path.basename(entry[1])
