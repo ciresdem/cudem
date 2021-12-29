@@ -710,5 +710,9 @@ def datalists_cli(argv=sys.argv):
                         print(out_json)
 
                 else:
-                    xdl.dump_xyz()
+                    try:
+                        xdl.dump_xyz()
+                    except KeyboardInterrupt:
+                        utils.echo_error_msg('Killed by user')
+                        break
 ### End
