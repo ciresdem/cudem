@@ -126,7 +126,10 @@ def set_srs(src_dem, src_srs='epsg:4326'):
         ds = gdal.Open(src_dem, gdal.GA_Update)
     except: ds = None
     if ds is not None:
-        ds.SetProjection(utils.sr_wkt(src_srs))
+        try:
+            ds.SetProjection(utils.sr_wkt(src_srs))
+        except Exception as e:
+            utils.echo_warning_msg('could not set projection {}'.format(src_srs))
         ds = None
         return(0)
     else: return(None)

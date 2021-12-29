@@ -723,10 +723,13 @@ def gdal_write(
     else:
         ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
                            ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES', 'PREDICTOR=3'])
-        
+
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])
-        ds.SetProjection(ds_config['proj'])
+        try:
+            ds.SetProjection(ds_config['proj'])
+        except Exception as e:
+            echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
         ds.GetRasterBand(1).WriteArray(src_arr)
         ds = None

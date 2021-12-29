@@ -124,16 +124,24 @@ class Datalist(datasets.ElevationDataset):
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                                if data_set.infos['minmax'] is not None:
+                                #if data_set.infos['minmax'] is not None:
+                                try:
                                     inf_region = regions.Region().from_string(
                                         data_set.infos['wkt']
                                     )
-                                    inf_region.wmin = data_set.weight
-                                    inf_region.wmax = data_set.weight
-                                    if regions.regions_intersect_p(inf_region, self.region):
-                                        for ds in data_set.parse():
-                                            self.data_entries.append(ds)
-                                            yield(ds)
+                                except:
+                                    inf_region = regions.Region().from_list(
+                                        data_set.infos['minmax']
+                                    )
+                                finally:
+                                    inf_region = self.region.copy()
+                                        
+                                inf_region.wmin = data_set.weight
+                                inf_region.wmax = data_set.weight
+                                if regions.regions_intersect_p(inf_region, self.region):
+                                    for ds in data_set.parse():
+                                        self.data_entries.append(ds)
+                                        yield(ds)
                             else:
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)

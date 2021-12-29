@@ -149,9 +149,11 @@ class Waffle:
     def _init_data(self):
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=self.p_region, verbose=self.verbose,
-            dst_srs=self.dst_srs, weight=self.weights
-        ).acquire_dataset() for dl in self.data_]
+            src_region=self.p_region,
+            verbose=self.verbose,
+            dst_srs=self.dst_srs,
+            weight=self.weights
+        ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
         
     def _coast_region(self):
@@ -604,8 +606,15 @@ class GMTTriangulate(Waffle):
         self.mod = 'triangulate'
         
     def run(self):
-        dem_tri_cmd = 'gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
-            self.ps_region.format('gmt'), self.xinc, self.yinc, self.name
+        dem_tri_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
+            self.ps_region.format('gmt'),
+            self.xinc,
+            self.yinc,
+            ' -W' if self.weights else '',
+            self.ps_region.format('gmt'),
+            self.xinc,
+            self.yinc,
+            self.name
         )
         out, status = utils.run_cmd(
             dem_tri_cmd,
@@ -2381,11 +2390,11 @@ def waffles_cli(argv = sys.argv):
         )
         sys.exit(-1)
                 
-    # if WaffleFactory()._modules['mod']['datalist-p']:
-    #     if len(dls) == 0:
-    #         sys.stderr.write(waffles_cli_usage)
-    #         utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
-    #         sys.exit(-1)
+    if WaffleFactory()._modules[module.split(':')[0]]['datalist-p']:
+        if len(dls) == 0:
+            sys.stderr.write(waffles_cli_usage)
+            utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
+            sys.exit(-1)
 
     ## ==============================================
     ## check the increment
