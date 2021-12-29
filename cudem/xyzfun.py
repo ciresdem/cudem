@@ -214,11 +214,15 @@ class XYZPoint:
         
         from osgeo import ogr
         point = ogr.CreateGeometryFromWkt(
-            'POINT ({} {})'.format(self.x, self.y)
+            'POINT ({} {} {})'.format(self.x, self.y, self.z)
         )
-        point.Transform(dst_trans)
-        self.x = point.GetX()
-        self.y = point.GetY()
+        try:
+            point.Transform(dst_trans)
+            self.x = point.GetX()
+            self.y = point.GetY()
+            self.z = point.GetZ()
+        except Exception as e:
+            utils.echo_error_msg(e)
         return(self)
         
     def warp(self, dst_srs=None):

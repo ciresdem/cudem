@@ -117,7 +117,7 @@ class SpatialMetadata:
             self,
             data=[],
             src_region=None,
-            inc=None,
+            #inc=None,
             xinc=None,
             yinc=None,
             name='waffles_sm',
@@ -131,7 +131,7 @@ class SpatialMetadata:
         """generate spatial-metadata"""
         
         self.data = data
-        self.inc = utils.float_or(inc)
+        #self.inc = utils.float_or(inc)
         self.xinc = utils.float_or(xinc)
         self.yinc = utils.float_or(yinc)
         self.src_srs = utils.str_or(src_srs, 'epsg:4326')
@@ -152,14 +152,21 @@ class SpatialMetadata:
     def dist_region(self):
             
         dr = regions.Region().from_region(self.region)
-        return(dr.buffer((self.inc*self.extend)))
+        return(
+            dr.buffer(
+                x_bv=(self.xinc*self.extend),
+                y_bv=(self.yinc*self.extend)
+            )
+        )
 
     def _init_data(self):
 
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=self.d_region, verbose=self.verbose,
-            src_srs=self.src_srs).acquire_dataset() for dl in self.data]
+            src_region=self.d_region,
+            verbose=self.verbose,
+            src_srs=self.src_srs
+        ).acquire() for dl in self.data]
 
         self.data = [d for d in self.data if d is not None]
         
@@ -206,6 +213,7 @@ class SpatialMetadata:
     def run(self):
         for xdl in self.data:
             dls = {}
+            #xdl.parse_data_lists()
             for e in xdl.parse():
                 while e.parent != xdl:
                     e = e.parent
@@ -298,7 +306,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
   -E, --increment\tGridding INCREMENT in native units or GMT-style increments.
 \t\t\tWhere INCREMENT is x-inc[/y-inc]
   -O, --output-name\tBASENAME for all outputs.
-  -P, --src_srs\t\PROJECTION of the data and output.
+  -P, --src_srs\t\tPROJECTION of the data and output.
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
   -F, --format\t\tOutput OGR format. (ESRI Shapefile)
 
@@ -362,11 +370,6 @@ def spat_meta_cli(argv = sys.argv):
                 yinc = utils.str2inc(xy_inc[1])
             else:
                 yinc = utils.str2inc(xy_inc[0])
-        # elif arg == '--increment' or arg == '-E':
-        #     inc = utils.str2inc(argv[i + 1])
-        #     i = i + 1
-        # elif arg[:2] == '-E':
-        #     inc = utils.str2inc(arg[2:])
         elif arg == '--extend' or arg == '-X':
             exts = argv[i + 1].split(':')
             extend = utils.int_or(exts[0], 0)
@@ -379,12 +382,6 @@ def spat_meta_cli(argv = sys.argv):
             i += 1
         elif arg[:2] == '-F':
             ogr_format = argv[2:]
-
-        # elif arg == '--extend' or arg == '-X':
-        #     extend = utils.int_or(argv[i + 1], 0)
-        #     i = i + 1
-        # elif arg[:2] == '-X':
-        #     extend = utils.int_or(arg[2:], 0)
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
         elif arg == '-p' or arg == '--prefix': want_prefix = True
         elif arg == '--quiet' or arg == '-q': want_verbose = False

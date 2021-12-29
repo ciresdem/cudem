@@ -125,7 +125,7 @@ class Datalist(datasets.ElevationDataset):
                         ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:
-                                    inf_region = regions.Region().from_list(
+                                    inf_region = regions.Region().from_string(
                                         data_set.infos['wkt']
                                     )
                                     inf_region.wmin = data_set.weight
