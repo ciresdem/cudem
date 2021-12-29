@@ -190,7 +190,7 @@ VDatum and/or it's associated grids (mhw.gtx or tss.gtx)
                         src_srs='epsg:4326',
                         #src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./{}'.format(vdatum_grid),
                         dst_srs=self.dst_srs,
-                        name=dst_xyz,
+                        #name=dst_xyz,
                         src_region=self.region,
                         verbose=self.verbose,
                         remote=True

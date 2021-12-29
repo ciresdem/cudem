@@ -222,7 +222,7 @@ specify `inc` to blockmedian the data when processing
                     src_srs=this_proj,
                     dst_srs=self.dst_srs,
                     src_region=src_region,
-                    name=src_usace,
+                    #name=src_usace,
                     verbose=self.verbose,
                     remote=True
                 )

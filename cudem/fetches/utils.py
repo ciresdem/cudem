@@ -33,6 +33,7 @@
 
 import os
 import sys
+#import time
 import requests
 import urllib
 import lxml.etree
@@ -103,6 +104,8 @@ def xml2py(node):
                 
     return(texts)
 
+## ==============================================
+## ==============================================
 class iso_xml:
     def __init__(self, xml_url, timeout=2, read_timeout=10):
         self.url = xml_url
@@ -210,6 +213,8 @@ class iso_xml:
                     
         return(dd)
 
+## ==============================================
+## ==============================================
 class WCS:
     def __init__(self, url):
         self.url = url
@@ -299,8 +304,9 @@ class WCS:
         c_url = self._get_coverage_url(coverage, region)
         return(Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data))
 
+## ==============================================
+## ==============================================
 class Fetch:
-
     def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers, verify=True):
         self.url = url
         self.callback = callback
@@ -344,7 +350,8 @@ class Fetch:
     
         status = 0
         req = None
-
+        #start = time.perf_counter()
+        
         if self.verbose:
             progress = utils.CliProgress('fetching remote file: {}...'.format(self.url))
             
@@ -400,6 +407,8 @@ class Fetch:
                             if self.callback():
                                 break
                             if self.verbose:
+                                done = int(50 * curr_chunk / req_s)
+                                #utils.echo_msg_inline("[%s%s] %s bps" % ('=' * done, ' ' * (50-done), curr_chunk//(time.perf_counter() - start)))
                                 progress.update_perc((curr_chunk, req_s))
                                 curr_chunk += 8196
                             if chunk:
@@ -409,8 +418,9 @@ class Fetch:
                     utils.echo_error_msg('server returned: {}'.format(req.status_code))
 
         except UnboundLocalError as e:
-            utils.echo_error_msg(e)
-            status = 0
+            #utils.echo_error_msg(e)
+            #status = 0
+            pass
                     
         except Exception as e:
             utils.echo_error_msg(e)
@@ -419,8 +429,10 @@ class Fetch:
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             status = -1
             
-        if self.verbose:
+        if self.verbose and status == 0:
             progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
+            #utils.echo_msg_inline('fetched remote file as: {}'.format(dst_fn))
+            #utils.echo_msg('fetched remote file as: {} @ {}'.format(dst_fn, time.perf_counter() - start))
             
         return(status)
 
@@ -454,6 +466,8 @@ class Fetch:
                 
         return(status)
 
+## ==============================================
+## ==============================================
 def fetch_queue(q, m, p=False):
     """fetch queue `q` of fetch results\
     each fetch queue should be a list of the following:
@@ -505,6 +519,8 @@ def fetch_queue(q, m, p=False):
                     except: pass
         q.task_done()
 
+## ==============================================
+## ==============================================
 class fetch_results(threading.Thread):
     """fetch results gathered from a fetch module.
     results is a list of URLs with data type

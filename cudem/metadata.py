@@ -30,6 +30,7 @@ import sys
 
 from osgeo import ogr
 from osgeo import gdal
+
 from cudem import utils
 from cudem import dlim
 from cudem import regions
@@ -208,22 +209,22 @@ class SpatialMetadata:
             for e in xdl.parse():
                 while e.parent != xdl:
                     e = e.parent
-                if e.name not in dls.keys():
-                    dls[e.name] = {'data': [e] ,'dl': e}
+                if e.metadata['name'] not in dls.keys():
+                    dls[e.metadata['name']] = {'data': [e] ,'dl': e}
 
             for x in dls.keys():
                 utils.echo_msg('Working on {}'.format(x))
                 xdl.data_entries = dls[x]['data']
                 p = dls[x]['dl']
                 o_v_fields = [
-                    p.title if p.title is not None else x,
-                    p.source,
-                    p.date,
-                    p.data_type,
-                    p.resolution,
-                    p.hdatum,
-                    p.vdatum,
-                    p.url
+                    p.metadata['title'] if p.metadata['title'] is not None else x,
+                    p.metadata['source'],
+                    p.metadata['date'],
+                    p.metadata['data_type'],
+                    p.metadata['resolution'],
+                    p.metadata['hdatum'],
+                    p.metadata['vdatum'],
+                    p.metadata['url']
                 ]
 
                 defn = None if self.layer is None else self.layer.GetLayerDefn()

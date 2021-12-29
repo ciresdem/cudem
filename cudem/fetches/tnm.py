@@ -320,8 +320,15 @@ class TheNationalMap(f_utils.FetchModule):
             if datatype == 'raster':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
-                    _ds = datasets.RasterFile(fn=src_tnm, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                              name=src_tnm, src_region=self.region, verbose=self.verbose)
+                    _ds = datasets.RasterFile(
+                        fn=src_tnm,
+                        data_format=200,
+                        src_srs='epsg:4326',
+                        dst_srs=self.dst_srs,
+                        #name=src_tnm,
+                        src_region=self.region,
+                        verbose=self.verbose
+                    )
                     for xyz in _ds.yield_xyz():
                         if xyz.z != 0:
                             yield(xyz)

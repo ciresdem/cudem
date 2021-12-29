@@ -7,7 +7,7 @@
 #  Adapted from https://topex.ucsd.edu/pub/srtm15_plus/update_grid
 #
 if [ ${#@} -lt 2 ]; then
-   echo " Usage: update_dem.sh topo.xyz dem lon0 lonf lat0 latf dlon dlat edit"
+   echo " Usage: update_dem.sh topo.xyz dem"
    echo "        topo.xyz   -  file of lon, lat, depth (neg meters); dlim supported"
    echo "        dem        -  existing dem to update"
    echo "Example: update_dem.sh german_iceland.xyz topo_old.tif"

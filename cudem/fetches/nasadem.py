@@ -125,7 +125,7 @@ class NASADEM(f_utils.FetchModule):
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                name=entry[1],
+                #name=entry[1],
                 src_region=self.region,
                 verbose=self.verbose
             )

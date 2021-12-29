@@ -210,7 +210,7 @@ increment to save space.
                     fn=src_dc,
                     data_format=400,
                     dst_srs=self.dst_srs,
-                    name=src_dc,
+                    #name=src_dc,
                     src_region=self.region,
                     verbose=self.verbose,
                     remote=True
@@ -235,7 +235,7 @@ increment to save space.
                     fn=src_dc,
                     data_format=200,
                     dst_srs=self.dst_srs,
-                    src_srs=None,
+                    #src_srs=None,
                     name=src_dc,
                     src_region=self.region,
                     verbose=self.verbose

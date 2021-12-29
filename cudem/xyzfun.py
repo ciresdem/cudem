@@ -23,12 +23,8 @@
 ### Code:
 
 import sys
-
-from osgeo import gdal
-from osgeo import ogr
-from osgeo import osr
-        
-from cudem import utils
+from cudem.utils import float_or
+from cudem.utils import str_or
 
 class XYZPoint:
     """represnting an xyz data point"""
@@ -43,22 +39,11 @@ class XYZPoint:
             z_units='m',
             z_datum='msl'
     ):
-        """
-        Args:
-          x (float): longitude/x
-          y (float): latitude/y
-          z (float): elevation/z
-          w (float): weight/w
-          src_srs (str): the data projection
-          z_units (str): units of the z value
-          z_datum (str): vertical datum of the z_value
-        """
-        
-        self.x = utils.float_or(x)
-        self.y = utils.float_or(y)
-        self.z = utils.float_or(z)
-        self.w = utils.float_or(w)
-        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
+        self.x = float_or(x)
+        self.y = float_or(y)
+        self.z = float_or(z)
+        self.w = float_or(w)
+        self.src_srs = str_or(src_srs, 'epsg:4326')
         self.z_units = z_units
         self.z_datum = z_datum
 
@@ -74,7 +59,10 @@ class XYZPoint:
                 x=self.x,
                 y=self.y,
                 z=self.z,
-                w=self.w
+                w=self.w,
+                src_srs=self.src_srs,
+                z_units=self.z_units,
+                z_datum=self.z_datum
             )
         )
 
@@ -86,7 +74,6 @@ class XYZPoint:
         self.z_datum = 'msl'
     
     def valid_p(self):
-        
         if self.x is None:
             return(False)
         
@@ -116,16 +103,16 @@ class XYZPoint:
         """
 
         if len(xyz_list) > x_pos:
-            self.x = utils.float_or(xyz_list[x_pos])
+            self.x = float_or(xyz_list[x_pos])
             
         if len(xyz_list) > y_pos:
-            self.y = utils.float_or(xyz_list[y_pos])
+            self.y = float_or(xyz_list[y_pos])
             
         if len(xyz_list) > z_pos:
-            self.z = utils.float_or(xyz_list[z_pos])
+            self.z = float_or(xyz_list[z_pos])
             
         if len(xyz_list) > w_pos:
-            self.w = utils.float_or(xyz_list[w_pos])
+            self.w = float_or(xyz_list[w_pos])
             
         return(self)
     
@@ -216,41 +203,34 @@ class XYZPoint:
             delim, include_z=include_z, include_w=include_w
         )
         
-        if encode:
-            l = l.encode('utf-8')
-            
-        dst_port.write(l)
+        dst_port.write(l.encode('utf-8') if encode else l)
 
     def transform(self, dst_trans):
-        """transform the x/y using the dst_trans
+        """transform the x/y using the dst_trans osr transformation (2d)
 
         Args:
           dst_trans: an srs transformation object
-
-        Returns:
-          xyz: self
         """
         
+        from osgeo import ogr
         point = ogr.CreateGeometryFromWkt(
             'POINT ({} {})'.format(self.x, self.y)
         )
-        
         point.Transform(dst_trans)
         self.x = point.GetX()
         self.y = point.GetY()
-
         return(self)
         
-    def warp(self, dst_srs='epsg:4326'):
+    def warp(self, dst_srs=None):
         """transform the x/y using dst_srs"""
-        
-        dst_srs = utils.str_or(dst_srs, 'epsg:4326')
+
+        from osgeo import osr
+        dst_srs = str_or(dst_srs)
         if dst_srs is None or self.src_srs is None:
             return(self)
 
         src_srs = osr.SpatialReference()
         src_srs.SetFromUserInput(self.src_srs)
-
         dst_srs_ = osr.SpatialReference()
         dst_srs_.SetFromUserInput(dst_srs)
         try:
@@ -259,12 +239,10 @@ class XYZPoint:
         except: pass
         
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
-        
         if dst_trans is None:
             return(self)
         
         self.transform(dst_trans)
-        
         return(self)
 
 def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
@@ -282,8 +260,7 @@ def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
     delim = ' '
     
     l = '{}\n'.format(delim.join(['{:.7f}'.format(x) for x in xyz_line]))
-    if encode: l = l.encode('utf-8')
-    dst_port.write(l)
+    dst_port.write(l.encode('utf-8') if encode else l)
 
 def xyz_chunks():
     pass

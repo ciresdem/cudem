@@ -213,7 +213,7 @@ class Multibeam(f_utils.FetchModule):
                     data_format=168,
                     src_srs='epsg:4326',
                     dst_srs=self.dst_srs,
-                    name=os.path.basename(entry[1]),
+                    #name=os.path.basename(entry[1]),
                     src_region=self.region,
                     verbose=self.verbose,
                     weight=(float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.,

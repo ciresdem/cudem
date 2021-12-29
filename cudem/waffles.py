@@ -2234,7 +2234,6 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--increment' or arg == '-E':
             incs = argv[i + 1].split(':')
             xy_inc = incs[0].split('/')
-            #wg['inc'] = utils.str2inc(incs[0])
             wg['xinc'] = utils.str2inc(xy_inc[0])
             if len(xy_inc) > 1:
                 wg['yinc'] = utils.str2inc(xy_inc[1])
@@ -2264,9 +2263,6 @@ def waffles_cli(argv = sys.argv):
                 else:
                     wg['ysample'] = utils.str2inc(xy_samples[0])
 
-            #incs = arg[2:].split(':')
-            #wg['inc'] = utils.str2inc(arg[2:].split(':')[0])
-            #if len(incs) > 1: wg['sample'] = utils.str2inc(incs[1])
         elif arg == '--outname' or arg == '-O':
             wg['name'] = argv[i + 1]
             i += 1

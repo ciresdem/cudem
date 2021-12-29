@@ -30,20 +30,18 @@
 import os
 import sys
 import re
-import glob
-import json
 
 import cudem
 from cudem import utils
 from cudem import regions
 from cudem import datasets
 
-import cudem.fetches.fetches as fetches
+from cudem.fetches.fetches import Fetcher
 
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
-class Datalist(datasets.XYZDataset):
+class Datalist(datasets.ElevationDataset):
     """representing a datalist parser
     
     A datalist is an extended MB-System style datalist.
@@ -51,7 +49,7 @@ class Datalist(datasets.XYZDataset):
 
     def __init__(self, fmt=None, **kwargs):
         super().__init__(**kwargs)
-        self.name = os.path.basename('.'.join(self.fn.split('.')[:-1]))
+        self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
         
     def generate_inf(self, callback=lambda: False):
         """return the region of the datalist and generate
@@ -59,9 +57,9 @@ class Datalist(datasets.XYZDataset):
         """
         
         _region = self.region
-        self.region = None
-        out_regions = []
         out_region = None
+        out_regions = []
+        self.region = None
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
@@ -72,17 +70,15 @@ class Datalist(datasets.XYZDataset):
             out_regions.append(entry.infos['minmax'])
             if 'numpts' in self.infos.keys():
                 self.infos['numpts'] += entry.infos['numpts']
-
-        l = 0
+                
+        count = 0
         for this_region in out_regions:
-            if l == 0:
-                tmp_region = regions.Region().from_list(this_region)
-                if tmp_region.valid_p():
-                    out_region = regions.Region().from_list(this_region)
-                    l += 1
-            else:
-                tmp_region = regions.Region().from_list(this_region)
-                if tmp_region.valid_p():
+            tmp_region = regions.Region().from_list(this_region)
+            if tmp_region.valid_p():
+                if count == 0:
+                    out_region = tmp_region
+                    count += 1
+                else:
                     out_region = regions.regions_merge(out_region, tmp_region)
                     
         if out_region is not None:
@@ -116,39 +112,24 @@ class Datalist(datasets.XYZDataset):
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line,
+                            weight=self.weight,
                             parent=self,
-                            name=self.name,
                             src_region=self.region,
-                            source=self.source,
-                            date=self.date,
-                            data_type=self.data_type,
-                            resolution=self.resolution,
-                            hdatum=self.hdatum,
-                            vdatum=self.vdatum,
-                            url=self.url,
-                            title=self.title,
+                            metadata=self.metadata,
                             src_srs=self.src_srs,
                             dst_srs=self.dst_srs,
-                            weight=self.weight,
                             verbose=self.verbose
-                        ).acquire_dataset()
-                        
+                        ).acquire()
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
                                 if data_set.infos['minmax'] is not None:
-                                    # inf_region = regions.Region().from_string(
-                                    #     data_set.infos['wkt']
-                                    # )
                                     inf_region = regions.Region().from_list(
-                                        data_set.infos['minmax']
+                                        data_set.infos['wkt']
                                     )
                                     inf_region.wmin = data_set.weight
                                     inf_region.wmax = data_set.weight
-                                    #print(data_set.infos)
-                                    #print(data_set.infos['minmax'])
-                                    #print(inf_region, self.region)
                                     if regions.regions_intersect_p(inf_region, self.region):
                                         for ds in data_set.parse():
                                             self.data_entries.append(ds)
@@ -163,7 +144,9 @@ class Datalist(datasets.XYZDataset):
             )
             
         if self.verbose:
-            _prog.end(0, 'parsed datalist {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+            _prog.end(0, 'parsed datalist {}{}'.format(
+                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+            ))
            
     def yield_xyz(self):
         """parse the data from the datalist"""
@@ -193,27 +176,28 @@ class DatasetFactory:
     data_types = {
         -1: {'name': 'datalist',
              'fmts': ['datalist', 'mb-1'],
-             'class': lambda k: Datalist(**k),
+             'opts': '< -1 >',
+             'class': Datalist,
              },
-        167: {'name': 'yxz',
-              'fmts': ['yxz'],
-              'class': lambda k: datasets.XYZFile(**k),
-              },
         168: {'name': 'xyz',
               'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'],
-              'class': lambda k: datasets.XYZFile(**k),
+              'opts': '< 168:delim=None:xpos=0:ypos=1:zpos=2:skip=0:x_scale=1:y_scale=1:z_scale=1:x_offset=0:y_offset=0 >',
+              'class': datasets.XYZFile,
               },
         200: {'name': 'raster',
               'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
-              'class': lambda k: datasets.RasterFile(**k),
+              'opts': '< 200 >',
+              'class': datasets.RasterFile,
               },
         300: {'name': 'las',
               'fmts': ['las', 'laz'],
-              'class': lambda k: datasets.LASFile(**k),
+              'opts': '< 300:classes=0/2/29/40 >',
+              'class': datasets.LASFile,
               },
         301: {'name': 'mbs',
               'fmts': ['fbt'],
-              'class': lambda k: datasets.MBSParser(**k),
+              'opts': '< 301 >',
+              'class': datasets.MBSParser,
               },
         -11: {'name': 'fetches',
               'fmts': [
@@ -237,7 +221,8 @@ class DatasetFactory:
                   'vdatum',
                   'earthdata'
               ],
-              'class': lambda k: fetches.Fetcher(remote=True, **k),
+              'opts': '< -11 >',
+              'class': Fetcher,
               },
     }
     datalist_cols = ['path', 'format', 'weight', 'name', 'source',
@@ -251,55 +236,47 @@ class DatasetFactory:
             weight=1,
             src_srs=None,
             dst_srs=None,
-            name="xyz_dataset",
-            title=None,
-            source=None,
-            date=None,
-            data_type=None,
-            resolution=None,
-            hdatum=None,
-            vdatum=None,
-            url=None,
+            x_inc=None,
+            y_inc=None,
+            metadata={
+                'name':None,
+                'title':None,
+                'source':None,
+                'date':None,
+                'data_type':None,
+                'resolution':None,
+                'hdatum':None,
+                'vdatum':None,
+                'url':None
+            },
             parent=None,
             src_region=None,
             verbose=False
     ):
-        
-        self.name = name
-        self.title = title
+        self.fn = fn
         self.data_format = data_format
         self.weight = weight
-        self.source = source
-        self.date = date
-        self.data_type = data_type
-        self.resolution = resolution
         self.src_srs = src_srs
         self.dst_srs = dst_srs
-        self.hdatum = hdatum
-        self.vdatum = vdatum
-        self.url = url
+        self.metadata = metadata
         self.region = src_region
         self.parent = parent
         self.verbose = verbose
-        self.fn = fn
+        self.ds_args = {}
         self.parse_fn()
-        if self.data_format is None:
-            self.guess_data_format()
+        self.x_inc = x_inc
+        self.y_inc = y_inc
             
     def parse_fn(self):
         """parse the datalist entry line"""
         
         if self.fn is None: return(self)
         if os.path.exists(self.fn):
+            self.guess_data_format()
             return(self.fn)
-
-        #p_fn = self.fn.split(':')
-        #import shlex
-        #this_entry = shlex.split(self.fn.strip(), posix=False)
-        #this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.split(':')[1].rstrip())
+        
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
-        #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.fn) if p.strip()]
-        #print(this_entry)
+
         try:
             entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
@@ -307,8 +284,11 @@ class DatasetFactory:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
             return(self)
 
+        ## ==============================================
         ## data format
+        ## ==============================================
         if len(entry) < 2:
+            ## guess format based on fn
             for key in self.data_types.keys():
                 se = entry[0].split('.')
                 see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
@@ -320,12 +300,24 @@ class DatasetFactory:
                 utils.echo_error_msg('could not parse entry {}'.format(self.fn))
                 return(self)
 
+        else:
+            ## parse format for dataset specific opts.
+            opts = this_entry[1].split(':')
+            if len(opts) > 1:
+                self.ds_args = utils.args2dict(list(opts[1:]), {})
+                this_entry[1] = opts[0]
+            else:
+                self.ds_args = {}
+
+        ## ==============================================
         ## weight
+        ## ==============================================
         if len(entry) < 3:
             entry.append(1)
         elif entry[2] is None:
             entry[2] = 1
 
+        ## inherit weight of parent
         if self.parent is not None:
             if self.weight is not None:
                 self.weight *= entry[2]
@@ -334,55 +326,73 @@ class DatasetFactory:
         else:
             self.weight = entry[2]
 
+        ## ==============================================
         ## title
+        ## ==============================================
         if len(entry) < 4:
-            entry.append(self.title)
+            entry.append(self.metadata['title'])
         else:
-            self.title = entry[3]
+            self.metadata['title'] = entry[3]
 
+        ## ==============================================
         ## source
+        ## ==============================================
         if len(entry) < 5:
-            entry.append(self.source)
+            entry.append(self.metadata['source'])
         else:
-            self.source = entry[4]
+            self.metadata['source'] = entry[4]
 
+        ## ==============================================
         ## date
+        ## ==============================================
         if len(entry) < 6:
-            entry.append(self.date)
+            entry.append(self.metadata['date'])
         else:
-            self.date = entry[5]
+            self.metadata['date'] = entry[5]
 
+        ## ==============================================
         ## data type
+        ## ==============================================
         if len(entry) < 7:
-            entry.append(self.data_type)
+            entry.append(self.metadata['data_type'])
         else:
-            self.data_type = entry[6]
+            self.metadata['data_type'] = entry[6]
 
+        ## ==============================================
         ## resolution
+        ## ==============================================
         if len(entry) < 8:
-            entry.append(self.resolution)
+            entry.append(self.metadata['resolution'])
         else:
-            self.resolution = entry[7]
+            self.metadata['resolution'] = entry[7]
 
+        ## ==============================================
         ## hdatum
+        ## ==============================================
         if len(entry) < 9:
-            entry.append(self.hdatum)
+            entry.append(self.metadata['hdatum'])
         else:
-            self.hdatum = entry[8]
+            self.metadata['hdatum'] = entry[8]
 
+        ## ==============================================
         ## vdatum
+        ## ==============================================
         if len(entry) < 10:
-            entry.append(self.vdatum)
+            entry.append(self.metadata['vdatum'])
         else:
-            self.vdatum = entry[9]
+            self.metadata['vdatum'] = entry[9]
 
+        ## ==============================================
         ## url
+        ## ==============================================
         if len(entry) < 11:
-            entry.append(self.url)
+            entry.append(self.metadata['url'])
         else:
-            self.url = entry[10]
+            self.metadata['url'] = entry[10]
 
+        ## ==============================================
         ## file-name
+        ## ==============================================
         if self.parent is None or entry[1] == -11:
             self.fn = entry[0]
         else:
@@ -391,13 +401,14 @@ class DatasetFactory:
             )
         
         self.data_format = entry[1]
-        if self.data_format is None:
-            self.guess_data_format()
-
+        self.guess_data_format()
         return(self)
 
     def guess_data_format(self):
         """guess a data format based on the file-name"""
+
+        if self.data_format is not None:
+            return
         
         if self.fn is not None:
             for key in self.data_types.keys():
@@ -409,155 +420,6 @@ class DatasetFactory:
         for key in type_def.keys():
             self.data_types[key] = type_def[key]
 
-    def acquire_datalist(self, **kwargs):
-        return(
-            Datalist(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                **kwargs
-            )
-        )
-
-    def acquire_xyz_file(self, **kwargs):
-        return(
-            datasets.XYZFile(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                xpos=0,
-                ypos=1,
-                zpos=2,
-                **kwargs
-            )
-        )
-
-    def acquire_las_file(self, **kwargs):
-        return(
-            datasets.LASFile(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                classes=[2,29],
-                **kwargs
-            )
-        )
-
-    def acquire_mbs_file(self, **kwargs):
-        return(
-            datasets.MBSParser(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                **kwargs
-            )
-        )
-    
-    def acquire_raster_file(self, **kwargs):
-        return(
-            datasets.RasterFile(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                **kwargs
-            )
-        )
-
-    def acquire_fetcher(self, **kwargs):
-        return(
-            fetches.Fetcher(
-                fn=self.fn,
-                data_format=self.data_format,
-                weight=self.weight,
-                src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                name=self.name,
-                parent=self.parent,
-                verbose=self.verbose,
-                remote=True,
-                **kwargs
-            )
-        )
-
     def acquire(self, **kwargs):
         return(
             self.data_types[self.data_format]['class'](
@@ -565,41 +427,17 @@ class DatasetFactory:
                 data_format=self.data_format,
                 weight=self.weight,
                 src_region=self.region,
-                title=self.title,
-                source=self.source,
-                date=self.date,
-                data_type=self.data_type,
-                resolution=self.resolution,
-                hdatum=self.hdatum,
-                vdatum=self.vdatum,
-                url=self.url,
+                metadata=self.metadata,
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
-                name=self.name,
                 parent=self.parent,
                 verbose=self.verbose,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                **self.ds_args,
                 **kwargs
             )
         )
-    
-    def acquire_dataset(self, **kwargs):
-        if self.data_format == -1:
-            return(self.acquire_datalist(**kwargs))
-        
-        if self.data_format == 168:
-            return(self.acquire_xyz_file(**kwargs))
-        
-        if self.data_format == 200:
-            return(self.acquire_raster_file(**kwargs))
-        
-        if self.data_format == 300:
-            return(self.acquire_las_file(**kwargs))
-
-        if self.data_format == 301:
-            return(self.acquire_mbs_file(**kwargs))
-
-        if self.data_format == -11:
-            return(self.acquire_fetcher(**kwargs))
 
 _datalist_fmts_long_desc = lambda: '\n  '.join(
     ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
@@ -614,7 +452,7 @@ _datalist_fmts_short_desc = lambda: ',  '.join(
 ## ==============================================
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
-usage: {cmd} [ -acdghijqwFPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
+usage: {cmd} [ -acdghijqwEPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -623,9 +461,10 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+  -E, --increment\tBlock data to INCREMENT in native units.
+\t\t\tWhere INCREMENT is x-inc[/y-inc]
   -P, --s_srs\t\tSet the SOURCE projection.
   -W, --t_srs\t\tSet the TARGET projection.
-  -F, --format\t\tOnly process the given data FORMAT.
 
   --archive\t\tARCHIVE the datalist to the given REGION
   --glob\t\tGLOB the datasets in the current directory to stdout
@@ -658,9 +497,9 @@ def datalists_cli(argv=sys.argv):
     dls = []
     src_srs = None
     dst_srs = None
-    fmt = None
     i_regions = []
     these_regions = []
+    xy_inc = [None, None]
     want_weights = False
     want_inf = False
     want_list = False
@@ -683,14 +522,16 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
+        elif arg == '--increment' or arg == '-E':
+            xy_inc = argv[i + 1].split('/')
+            i = i + 1
+        elif arg[:2] == '-E':
+            xy_inc = arg[2:].split('/')
         elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
             src_srs = argv[i + 1]
             i = i + 1
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
             dst_srs = argv[i + 1]
-            i = i + 1
-        elif arg == '--format' or arg == '-F':
-            fmt = utils.int_or(argv[i + 1])
             i = i + 1
         elif arg == '--archive' or arg == '-a':
             want_archive = True
@@ -727,7 +568,14 @@ def datalists_cli(argv=sys.argv):
         
         i = i + 1
 
+    if len(xy_inc) < 2:
+        xy_inc.append(xy_inc[0])
+        
+    elif len(xy_inc) == 0:
+        xy_inc = [None, None]
+
     if want_glob:
+        import glob
         for key in DatasetFactory().data_types.keys():
             if key != -1:
                 for f in DatasetFactory().data_types[key]['fmts']:
@@ -770,20 +618,25 @@ def datalists_cli(argv=sys.argv):
         if len(dls) == 0:
             print(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
+            
         xdls = [DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=this_region, verbose=want_verbose,
-            src_srs=src_srs, dst_srs=dst_srs).acquire_dataset() for dl in dls]
+            src_region=this_region,
+            verbose=want_verbose,
+            src_srs=src_srs,
+            dst_srs=dst_srs,
+            x_inc=xy_inc[0],
+            y_inc=xy_inc[1]
+        ).acquire() for dl in dls]
 
         for xdl in xdls:
             if xdl is not None and xdl.valid_p(
                     fmts=DatasetFactory.data_types[xdl.data_format]['fmts']
             ):
-               
-                #xdl.parse()
                 if not want_weights:
                     xdl.weight = None
                 if want_datalists:
+                    import json
                     j = open('{}.json'.format(xdl.name), 'w')
                     xdl.parse_data_lists()
                     for x in xdl.data_lists.keys():
@@ -811,7 +664,7 @@ def datalists_cli(argv=sys.argv):
                 elif want_inf:
                     print(xdl.inf())
                 elif want_list:
-                    xdl.echo()
+                    xdl.echo_()
                 elif want_archive:
                     [x for x in xdl.archive_xyz()]
                 elif want_region:
@@ -826,14 +679,14 @@ def datalists_cli(argv=sys.argv):
                                 [
                                     '"{}"'.format(str(y)) for y in [
                                         x,
-                                        p.title if p.title is not None else x,
-                                        p.source,
-                                        p.date,
-                                        p.data_type,
-                                        p.resolution,
-                                        p.hdatum,
-                                        p.vdatum,
-                                        p.url
+                                        p.metadata['title'] if p.metadata['title'] is not None else x,
+                                        p.metadata['source'],
+                                        p.metadata['date'],
+                                        p.metadata['data_type'],
+                                        p.metadata['resolution'],
+                                        p.metadata['hdatum'],
+                                        p.metadata['vdatum'],
+                                        p.metadata['url']
                                     ]
                                 ]
                             )
@@ -856,5 +709,6 @@ def datalists_cli(argv=sys.argv):
                         }
                         print(out_json)
 
-                else: xdl.dump_xyz()
+                else:
+                    xdl.dump_xyz()
 ### End

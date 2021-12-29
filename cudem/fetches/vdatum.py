@@ -212,7 +212,7 @@ class VDATUM(f_utils.FetchModule):
                 data_format=200,
                 dst_srs=self.dst_srs,
                 src_srs=None,
-                name=src_tif,
+                #name=src_tif,
                 src_region=self.region,
                 verbose=self.verbose
             )

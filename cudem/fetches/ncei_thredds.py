@@ -184,7 +184,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                name=src_ncei,
+                #name=src_ncei,
                 src_region=self.region,
                 verbose=self.verbose
             )

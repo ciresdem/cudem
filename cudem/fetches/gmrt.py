@@ -104,7 +104,12 @@ class GMRT(f_utils.FetchModule):
             params=self.data, tries=10, timeout=2
         )
         if req is not None:
-            gmrt_urls = req.json()
+            try:
+                gmrt_urls = req.json()
+            except Exception as e:
+                utils.echo_error_msg(e)
+                gmrt_urls = []
+                
             for url in gmrt_urls:
                 if self.layer == 'topo-mask':
                     url = url.replace('topo', 'topo-mask')
@@ -136,7 +141,7 @@ class GMRT(f_utils.FetchModule):
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
                 weight=.25,
-                name=src_data,
+                #name=src_data,
                 src_region=self.region,
                 verbose=self.verbose
             )

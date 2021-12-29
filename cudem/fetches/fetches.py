@@ -333,8 +333,11 @@ layers:
                 **self.mod_args
             )
         )
-            
-class Fetcher(datasets.XYZDataset):
+
+## ==============================================
+## dlim Fetcher dataset class
+## ==============================================
+class Fetcher(datasets.ElevationDataset):
     """The fetches dataset type.
 
 This is used in waffles/dlim for on-the-fly remote data
@@ -342,7 +345,8 @@ parsing and processing."""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.name = self.fn
+        self.remote=True
+        self.metadata['name'] = self.fn
         self.fetch_module = FetchesFactory(
             mod=self.fn,
             src_region=self.region,
