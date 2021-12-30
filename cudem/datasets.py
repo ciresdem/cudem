@@ -114,8 +114,8 @@ class ElevationDataset():
         if self.valid_p():
             self.set_transform()
             self.set_yield()
-            if self.region is not None and self.region.valid_p():
-                self.inf(check_hash=True if self.data_format == -1 else True)
+            #if self.region is not None and self.region.valid_p():
+            self.inf(check_hash=True if self.data_format == -1 else True)
 
     def set_yield(self):
         if self.x_inc is not None:
