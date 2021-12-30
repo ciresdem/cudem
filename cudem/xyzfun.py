@@ -211,7 +211,7 @@ class XYZPoint:
         Args:
           dst_trans: an srs transformation object
         """
-        
+
         from osgeo import ogr
         point = ogr.CreateGeometryFromWkt(self.export_as_wkt(include_z=True))
         try:

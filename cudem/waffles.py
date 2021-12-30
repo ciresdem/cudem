@@ -2036,7 +2036,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
         if self.mod is not None:
             self._parse_mod(self.mod)
 
-        self._set_config()
+        #self._set_config()
         
     def _parse_mod(self, mod):
         opts = mod.split(':')
@@ -2051,16 +2051,34 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
             return(None)
         return(self.mod_name, self.mod_args)
         
-    def _set_config(self):
+    def _export_config(self, parse_data=False):
         """export the waffles config info as a dictionary"""
+
+        def _init_data():
+            data = [dlim.DatasetFactory(
+                fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+                src_region=self.region.copy().buffer(pct=.25),
+                verbose=self.verbose,
+                dst_srs=self.dst_srs,
+                weight=self.weights
+            ).acquire() for dl in self.data]
+            
+            return([d for d in data if d is not None])
         
+        if parse_data:
+            _data = _init_data()
+            _data = ["{} {} {}".format(
+                os.path.abspath(i.fn), i.data_format, i.weight
+            ) for s in [[x for x in d.parse()] for d in _data] for i in s]
+        else:
+            _data = self.data
+
         self._config = {
             'mod': self.mod,
-            'data': self.data,
+            'data': _data,
             'src_region': self.region.export_as_list(
                 include_z=True, include_w=True
             ) if self.region is not None else None,
-            'inc': self.inc,
             'xinc': self.xinc,
             'yinc': self.yinc,
             'sample': self.sample,
@@ -2449,7 +2467,9 @@ def waffles_cli(argv = sys.argv):
                 name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc']
             )
         if want_config:
-            this_wg = WaffleFactory(mod=module, **wg)._config
+            this_waffle = WaffleFactory(mod=module, **wg)
+            this_wg = this_waffle._export_config(parse_data=True)
+            #this_wg = this_wg._config
             utils.echo_msg(json.dumps(this_wg, indent = 4, sort_keys = True))
             with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))

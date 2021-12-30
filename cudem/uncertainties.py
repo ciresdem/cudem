@@ -22,11 +22,14 @@
 
 import os
 import sys
-from osgeo import gdal
 import numpy as np
 import math
 import json
+
+from osgeo import gdal
+
 import cudem
+
 from cudem import utils
 from cudem import regions
 from cudem import dlim
@@ -640,19 +643,14 @@ def uncertainties_cli(argv = sys.argv):
                 wg = json.load(wgj)
 
                 for key in wg.keys():
-                    #this_waffle = WaffleFactory()._modules[key]['class'](wg[key])
-                    this_waffle = waffles.WaffleFactory().acquire_from_config(wg)
+                    this_waffle = waffles.WaffleFactory(**wg).acquire()
                     this_waffle.mask = True
                     this_waffle.clobber = False
                     if not this_waffle.valid_p():
                         this_waffle.generate()
 
-                    #print(wf.mod)
-                    #print(wf.mod_args)
                     i = InterpolationUncertainty(dem=this_waffle).run()
                     utils.echo_msg(this_waffle)
-
-                    #this_waffle.generate()
 
                 sys.exit(0)
             # except Exception as e:

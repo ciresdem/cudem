@@ -272,7 +272,7 @@ class SpatialMetadata:
                             utils.echo_msg('creating feature {}...'.format(dl_name))
                             for i, f in enumerate(self.v_fields):
                                 out_feat.SetField(f, o_v_fields[i])
-
+                                
                             self.layer.CreateFeature(out_feat)
 
                         if self.verbose:

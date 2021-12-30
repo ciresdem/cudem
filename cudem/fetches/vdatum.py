@@ -25,6 +25,9 @@
 ##
 ## Fetch vertical datum conversion grids from NOAA's VDATUM project
 ##
+## also here (has more)
+## https://www.agisoft.com/downloads/geoids/
+##
 ### Code:
 
 import os

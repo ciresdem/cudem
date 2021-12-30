@@ -111,11 +111,21 @@ class ElevationDataset():
         if utils.fn_url_p(self.fn):
             self.remote = True
 
+        ##self.v_fields = [
+        ##    'Path',
+        ##    'Format',
+        ##    'Weight',
+        ##]
+        ##self.t_fields = [
+        ##    ogr.OFTString,
+        ##    ogr.OFTString,
+        ##    ogr.OFTString
+        ##]
         if self.valid_p():
             self.set_transform()
             self.set_yield()
             #if self.region is not None and self.region.valid_p():
-            self.inf(check_hash=True if self.data_format == -1 else True)
+            self.inf(check_hash=True if self.data_format == -1 else False)
 
     def set_yield(self):
         if self.x_inc is not None:

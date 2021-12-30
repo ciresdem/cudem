@@ -25,11 +25,15 @@
 ## data-path data-format data-weight data-name data-source data-date data-resolution data-type data-horz data-vert data-url
 ## Minimally, data-path is all that is needed.
 ##
+## todo datalist.json for all datalists for faster data discovery
+##
 ### Code:
 
 import os
 import sys
 import re
+
+from osgeo import ogr
 
 import cudem
 from cudem import utils
@@ -51,6 +55,28 @@ class Datalist(datasets.ElevationDataset):
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
         
+    def _init_datalist_vector(self):
+        #print(self.metadata)
+        self.dst_layer = '{}'.format(self.fn)
+        self.dst_vector = self.dst_layer + '.json'
+
+        utils.remove_glob('{}.json'.format(self.dst_layer))
+        if self.src_srs is not None:
+            utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
+            
+        self.ds = ogr.GetDriverByName('GeoJSON').CreateDataSource(self.dst_vector)
+        if self.ds is not None: 
+            self.layer = self.ds.CreateLayer(
+                '{}'.format(self.dst_layer), None, ogr.wkbMultiPolygon
+            )
+            [self.layer.CreateField(
+                ogr.FieldDefn('{}'.format(f), self.t_fields[i])
+            ) for i, f in enumerate(self.v_fields)]
+            
+            [self.layer.SetFeature(feature) for feature in self.layer]
+        else:
+            self.layer = None
+        
     def generate_inf(self, callback=lambda: False):
         """return the region of the datalist and generate
         an associated `.inf` file if `inf_file` is True.
@@ -63,14 +89,40 @@ class Datalist(datasets.ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        ## TODO:
+        ## _init_datalist_vector if one doesn't exist or has has changed...
+        ##
+        ##self._init_datalist_vector()
+            
         for entry in self.parse():
             if self.verbose:
                 callback()
-                
+
+            ## TODO:
+            ## generate json feature for each entry here
+            ##
+            ##o_v_fields = [
+            ##    os.path.abspath(entry.fn),
+            ##    entry.data_format,
+            ##    entry.weight                
+            ##]
+            ##dst_defn = self.layer.GetLayerDefn()
+            ##entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
+            ##out_feat = ogr.Feature(dst_defn)
+            ##out_feat.SetGeometry(entry_geom)
+            ##for i, f in enumerate(self.v_fields):
+            ##    #print(i, f)
+            ##    out_feat.SetField(f, o_v_fields[i])
+            ##self.layer.CreateFeature(out_feat)
+            
             out_regions.append(entry.infos['minmax'])
             if 'numpts' in self.infos.keys():
                 self.infos['numpts'] += entry.infos['numpts']
-                
+
+        ## TODO:
+        ## generate datalist json here.
+        ##
+        ##self.ds = self.layer = None
         count = 0
         for this_region in out_regions:
             tmp_region = regions.Region().from_list(this_region)
@@ -103,7 +155,10 @@ class Datalist(datasets.ElevationDataset):
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
-                
+
+            ## TODO:
+            ## parse datalst json here and yield each dataset found within.
+            ##
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
                     if self.verbose:
@@ -122,22 +177,23 @@ class Datalist(datasets.ElevationDataset):
                         ).acquire()
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                        ):
+                        ):                            
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                                #if data_set.infos['minmax'] is not None:
                                 try:
                                     inf_region = regions.Region().from_string(
                                         data_set.infos['wkt']
                                     )
                                 except:
-                                    inf_region = regions.Region().from_list(
-                                        data_set.infos['minmax']
-                                    )
-                                finally:
-                                    inf_region = self.region.copy()
+                                    try:
+                                        inf_region = regions.Region().from_list(
+                                            data_set.infos['minmax']
+                                        )
+                                    except:
+                                        inf_region = self.region.copy()
                                         
                                 inf_region.wmin = data_set.weight
                                 inf_region.wmax = data_set.weight
+
                                 if regions.regions_intersect_p(inf_region, self.region):
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
@@ -281,6 +337,7 @@ class DatasetFactory:
         if self.fn is None: return(self)
         if os.path.exists(self.fn):
             self.guess_data_format()
+            self.metadata['name'] = self.fn.split('.')[0]
             return(self.fn)
         
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())

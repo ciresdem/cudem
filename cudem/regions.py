@@ -381,8 +381,8 @@ class Region:
 
         if self.valid_p():
             if pct is not None:
-                ewp = (self.xmax - self.xmin) * (pctv * .01)
-                nsp = (self.ymax - self.ymin) * (pctv * .01)
+                ewp = (self.xmax - self.xmin) * (pct * .01)
+                nsp = (self.ymax - self.ymin) * (pct * .01)
                 bv = (ewp + nsp) / 2
 
             self.xmin -= x_bv

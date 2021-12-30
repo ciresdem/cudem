@@ -29,11 +29,12 @@ dlim $1 $region -t_srs $proj | gdal_query.py $2 -d_format "xyd" | gmt blockmedia
 #
 #  make a difference grid
 #
-gmt blockmedian diffs.xyz $region -I$xinc/$yinc -rp -V | gmt surface $region -I$xinc/$yinc -Gdiff.tif=gd+n-9999:GTiff -T1. -Z1.2 -C.5 -V -rp -M2c
+gmt blockmedian diffs.xyz $region -I$xinc/$yinc -rp -V | gmt surface $region -I$xinc/$yinc -Gdiff.tif=gd+n-9999:GTiff -T1. -Z1.2 -C.5 -V -rp #-M2c
+mv diff.tif diff2.tif
 #
 # nan/nodata to 0
 #
-gdal_findreplace.py -s_value -9999 -t_value 0 diff.tif diff2.tif
+#gdal_findreplace.py -s_value -9999 -t_value 0 diff.tif diff2.tif
 #
 #  add the two grids
 #
