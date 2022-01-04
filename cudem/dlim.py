@@ -731,7 +731,7 @@ def datalists_cli(argv=sys.argv):
                 elif want_inf:
                     print(xdl.inf())
                 elif want_list:
-                    xdl.echo_()
+                    xdl.echo()
                 elif want_archive:
                     [x for x in xdl.archive_xyz()]
                 elif want_region:
