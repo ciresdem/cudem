@@ -194,6 +194,8 @@ class Datalist(datasets.ElevationDataset):
                                 inf_region.wmin = data_set.weight
                                 inf_region.wmax = data_set.weight
 
+                                ## check region prj
+                                
                                 if regions.regions_intersect_p(inf_region, self.region):
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
@@ -250,7 +252,7 @@ class DatasetFactory:
               },
         200: {'name': 'raster',
               'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
-              'opts': '< 200 >',
+              'opts': '< 200:open_options="OPT1=KEY"/"OPT2=KEY2" >',
               'class': datasets.RasterFile,
               },
         300: {'name': 'las',

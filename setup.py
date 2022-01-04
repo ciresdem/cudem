@@ -106,7 +106,8 @@ setuptools.setup(
         'scripts/x360.py',
         'scripts/xyztindex.py',
         'scripts/update_dem.sh',
-        'scripts/gdal_mask.py'
+        'scripts/gdal_mask.py',
+        'scripts/vrbag2tif2chunks2xyz.sh'
     ],
     python_requires = '>=3.0',
     project_urls = {

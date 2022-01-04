@@ -302,8 +302,11 @@ class ElevationDataset():
 
     def set_transform(self):
         """Set an srs transform, if needed."""
-
-        if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
+        if self.src_srs == '': self.src_srs = None
+        if self.dst_srs == '': self.dst_srs = None
+        if self.dst_srs is not None and \
+           self.src_srs is not None and \
+           self.src_srs != self.dst_srs:
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -315,21 +318,19 @@ class ElevationDataset():
                 pass
             
             self.dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
-        else:
-            self.dst_trans = None
-
-        ##!!!-bug here...
-        self.trans_region = None
-        if self.region is not None:
-            if self.dst_trans is not None:
+            if self.region is not None:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = self.dst_srs
                 self.trans_region.warp(self.src_srs)
-                self.infos['minmax'] = regions.Region(src_srs=self.src_srs).from_list(self.infos['minmax']).warp(self.dst_srs).export_as_list(include_z=True)
-                poly = ogr.CreateGeometryFromWkt(self.infos['wkt'])
-                poly.Transform(self.dst_trans)
-                self.infos['wkt'] = poly.ExportToWkt()
-                self.infos['src_srs'] = self.dst_srs
+                # self.infos['minmax'] = regions.Region(src_srs=self.src_srs).from_list(self.infos['minmax']).warp(self.dst_srs).export_as_list(include_z=True)
+                # poly = ogr.CreateGeometryFromWkt(self.infos['wkt'])
+                # poly.Transform(self.dst_trans)
+                # self.infos['wkt'] = poly.ExportToWkt()
+                # self.infos['src_srs'] = self.dst_srs
+                
+        else:
+            self.dst_trans = None
+            self.trans_region = None
     
     def parse(self):
         """Parse the datasets from the dataset.
@@ -447,12 +448,16 @@ class ElevationDataset():
         yields mean xyz data for each block with data
         """
 
+        ds_region = regions.Region().from_list(self.infos['minmax'])
+        if self.dst_trans is not None:
+            ds_region.transform(self.dst_trans)
+            
         if self.region is not None and self.region.valid_p():
             block_region = regions.regions_reduce(
-                self.region, regions.Region().from_list(self.infos['minmax'])
+                self.region, ds_region
             )
         else:
-            block_region = regions.Region().from_list(self.infos['minmax'])
+            block_region = ds_region.copy()
 
         if block_region.valid_p():
             if want_gmt:
@@ -473,6 +478,8 @@ class ElevationDataset():
             else:
                 xcount, ycount, dst_gt = block_region.geo_transform(x_inc=self.x_inc)
                 sum_array = np.zeros((ycount, xcount))
+                x_sum_array = np.zeros((ycount, xcount))
+                y_sum_array = np.zeros((ycount, xcount))
                 count_array = np.zeros((ycount, xcount))
                 if self.weight is not None:
                     weight_array = np.zeros((ycount, xcount))
@@ -486,23 +493,31 @@ class ElevationDataset():
                         )
 
                     for this_xyz in self.yield_xyz():
-                        if regions.xyz_in_region_p(this_xyz, block_region):
-                            this_z = this_xyz.z * this_xyz.w if self.weight is not None else this_xyz.z
-                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
-                            try:
-                                sum_array[ypos, xpos] += this_z
-                                count_array[ypos, xpos] += 1
-                                if self.weight is not None:
-                                    weight_array[ypos, xpos] += this_xyz.w
-                            except: pass
+                        #if regions.xyz_in_region_p(this_xyz, block_region):
+                        this_z = this_xyz.z * this_xyz.w if self.weight is not None else this_xyz.z
+                        this_x = this_xyz.x * this_xyz.w if self.weight is not None else this_xyz.x
+                        this_y = this_xyz.y * this_xyz.w if self.weight is not None else this_xyz.y
+                        xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
+                        try:
+                            sum_array[ypos, xpos] += this_z
+                            x_sum_array[ypos, xpos] += this_x
+                            y_sum_array[ypos, xpos] += this_y
+                            count_array[ypos, xpos] += 1
+                            if self.weight is not None:
+                                weight_array[ypos, xpos] += this_xyz.w
+                        except: pass
 
                     count_array[count_array == 0] = np.nan
-                    if self.weight:
+                    if self.weight is not None:
                         weight_array[weight_array == 0] = np.nan
                         out_weight_array = (weight_array/count_array)
                         out_array = (sum_array/out_weight_array)/count_array
+                        out_x_array = (x_sum_array/out_weight_array)/count_array
+                        out_y_array = (y_sum_array/out_weight_array)/count_array
                     else:
                         out_array = (sum_array/count_array)
+                        out_x_array = (x_sum_array/count_array)
+                        out_y_array = (y_sum_array/count_array)
                         
                     if self.verbose:
                         _prog.end(
@@ -512,18 +527,37 @@ class ElevationDataset():
                             )
                         )
                         
-                    sum_array = count_array = weight_array = None
-                    for y in range(0, ycount):
-                        for x in range(0, xcount):
-                            z = out_array[y,x]
-                            if not np.isnan(z):
-                                geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-                                out_xyz = xyzfun.XYZPoint(
-                                    x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x] if self.weight is not None else None
-                                )
-                                yield(out_xyz)
+                    sum_array = x_sum_array = y_sum_array = count_array = weight_array = None
+                    #print(out_x_array)
+                    #print(out_y_array)
+                    out_array = out_array[~np.isnan(out_array)]
+                    out_x_array = out_x_array[~np.isnan(out_x_array)]
+                    out_y_array = out_y_array[~np.isnan(out_y_array)]
+                    dataset = np.vstack((out_x_array, out_y_array, out_array)).transpose()
+                    #print(dataset)
+                    for point in dataset:
+                        if not np.isnan(point[2]):
+                            #count += 1
+                            this_xyz = xyzfun.XYZPoint(
+                                x=point[0], y=point[1], z=point[2], w=point[3] if self.weight is not None else 1
+                            )
+                            #if self.dst_trans is not None:
+                            #    out_xyz.transform(self.dst_trans)
+                    
+                            yield(this_xyz)
+                    dataset = out_x_array = out_y_array = out_array = out_weight_array = None
+                    
+                    # for y in range(0, ycount):
+                    #     for x in range(0, xcount):
+                    #         z = out_array[y,x]
+                    #         if not np.isnan(z):
+                    #             geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                    #             out_xyz = xyzfun.XYZPoint(
+                    #                 x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x] if self.weight is not None else None
+                    #             )
+                    #             yield(out_xyz)
 
-                    out_array = out_weight_array = None
+                    # out_array = out_weight_array = None
         
     def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
         """Create a num grid mask of xyz data. The output grid
@@ -871,9 +905,13 @@ class LASFile(ElevationDataset):
                 
                 for point in dataset:
                     count += 1
-                    yield(xyzfun.XYZPoint(
+                    this_xyz = xyzfun.XYZPoint(
                         x=point[0], y=point[1], z=point[2], w=self.weight
-                    ))
+                    )
+                    if self.dst_trans is not None:
+                        out_xyz.transform(self.dst_trans)
+                    
+                    yield(this_xyz)
                 dataset = None
 
         if self.verbose:
@@ -888,31 +926,37 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
-    def __init__(self, mask=None, **kwargs):
+    def __init__(self, mask=None, open_options=None, **kwargs):
         self.mask = mask
         self.src_ds = None
         self.ds_config = None
         self.ds_open_p = False
+        self.open_options = open_options.split('/') if open_options is not None else []
         super().__init__(**kwargs)
         if self.src_srs is None:
-            self._open_ds()
+            self._open_ds(self.open_options)
             self.src_srs = self.get_srs()
             self._close_ds()
-            self.set_transform()
             
-    def _open_ds(self):
+        self.set_transform()
+            
+    def _open_ds(self, oo=[]):
         """open the gdal datasource and gather infos"""
 
+        if self.ds_open_p: self._close_ds()
         if not self.ds_open_p:
             if self.fn is not None:
-                #if os.path.exists(str(self.fn)):
-                try:
-                    self.src_ds = gdal.Open(self.fn)
-                except:
-                    self.src_ds = None
+                if os.path.exists(self.fn) or utils.fn_url_p(self.fn):
+                    #try:
+                    if oo:
+                        self.src_ds = gdal.OpenEx(self.fn, open_options=oo)
+                    else:
+                        self.src_ds = gdal.Open(self.fn)
+                    #except:
+                    #    self.src_ds = None
                         
-                #else:
-                #    self.src_ds = None
+                else:
+                    self.src_ds = None
                     
             else:
                 self.src_ds = None
@@ -941,8 +985,7 @@ class RasterFile(ElevationDataset):
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self._open_ds()
-
+        self._open_ds(self.open_options)
         if self.ds_open_p:
             gt = self.src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
@@ -950,9 +993,6 @@ class RasterFile(ElevationDataset):
                 x_count=self.src_ds.RasterXSize,
                 y_count=self.src_ds.RasterYSize
             )
-            ## not sure if we should do this...test with no inf and run dlim/waffles...
-            #if self.dst_srs is not None:
-            #    this_region.warp(self.dst_srs)
             try:
                 zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except:
@@ -983,8 +1023,7 @@ class RasterFile(ElevationDataset):
 
         if self.ds_open_p:
             self.gt = self.src_ds.GetGeoTransform()
-
-            #mt = self.src_ds.GetMetadata()
+                    
             # node = 'pixel'
             # if 'AREA_OR_POINT' in mt.keys():
             #     if mt['AREA_OR_POINT'].lower() == 'point':
@@ -1006,15 +1045,15 @@ class RasterFile(ElevationDataset):
                     if self.trans_region is not None and self.trans_region.valid_p(
                             check_xy = True
                     ):
-                        this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
-                            self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
-                        ).warp(self.dst_srs)
-                        xinc=((this_region.xmax - this_region.xmin) / self.src_ds.RasterXSize)
-                        yinc=((this_region.ymin - this_region.ymax) / self.src_ds.RasterYSize)                        
+                        #this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                            #self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
+                            #).warp(self.dst_srs)
+                        #xinc=((this_region.xmax - this_region.xmin) / self.src_ds.RasterXSize)
+                        #yinc=((this_region.ymin - this_region.ymax) / self.src_ds.RasterYSize)                        
                         self.srcwin = self.trans_region.srcwin(
                             self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
                         )
-                        self.gt = (this_region.xmin, xinc, 0.0, this_region.ymax, 0.0, yinc)
+                        #self.gt = (this_region.xmin, xinc, 0.0, this_region.ymax, 0.0, yinc)
                     else:
                         self.srcwin = (
                             0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize
@@ -1053,8 +1092,19 @@ class RasterFile(ElevationDataset):
 
         if self.verbose and self.parent is None:
             _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
-        
-        self._open_ds()
+
+        self._open_ds(self.open_options)
+        # mt = self.src_ds.GetMetadata()
+        # if 'HAS_SUPERGRIDS' in mt.keys():
+        #     if mt['HAS_SUPERGRIDS'] == 'TRUE':
+        #         self._close_ds()
+        #         oo = ["MODE=RESAMPLED_GRID"]
+        #         [oo.append(o) for o in self.open_options]
+        #         #if self.x_inc is not None:
+        #         #    oo.append("RESX={}".format(self.x_inc))
+        #         #    oo.append("RESY={}".format(self.y_inc))
+        #         self._open_ds(oo=oo)
+
         out_xyz = xyzfun.XYZPoint(w=1)
         if self.src_ds is not None:
             count = 0
@@ -1112,13 +1162,16 @@ class RasterFile(ElevationDataset):
                    
                 band_data = np.reshape(band_data, (self.srcwin[2], ))
                 for x_i in range(0, self.srcwin[2], 1):
-                    x = x_i + self.srcwin[0]
                     z = band_data[x_i]
                     if '{:g}'.format(z) not in nodata:
+                        x = x_i + self.srcwin[0]
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
                         count += 1
+                        if self.dst_trans is not None:
+                            out_xyz.transform(self.dst_trans)
+
                         yield(out_xyz)
                             
             band = src_mask = msk_band = None

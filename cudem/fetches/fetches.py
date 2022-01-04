@@ -341,7 +341,8 @@ class Fetcher(datasets.ElevationDataset):
     """The fetches dataset type.
 
 This is used in waffles/dlim for on-the-fly remote data
-parsing and processing."""
+parsing and processing.
+"""
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -369,6 +370,22 @@ parsing and processing."""
         self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
         return(self.infos)
+
+    def parse_(self):
+        self.fetch_module.run()
+        for result in self.fetch_module.results:
+            data_set = DatasetFactory(
+                result,
+                weight=self.weight,
+                parent=self,
+                src_region=self.region,
+                metadata=self.metadata,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                verbose=self.verbose
+            ).acquire()
+            
+            yield(data_set)
     
     def yield_xyz(self):
         for xyz in self.fetch_module.yield_results_to_xyz():
