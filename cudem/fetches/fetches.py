@@ -351,7 +351,8 @@ parsing and processing.
         self.fetch_module = FetchesFactory(
             mod=self.fn,
             src_region=self.region,
-            verbose=self.verbose
+            verbose=self.verbose,
+            weight=self.weight
         ).acquire(dst_srs=self.dst_srs)
 
         if self.fetch_module is None:

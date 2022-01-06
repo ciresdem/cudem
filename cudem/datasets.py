@@ -920,231 +920,120 @@ class LASFile(ElevationDataset):
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
-
+            
 ## ==============================================
 ## ==============================================
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
     def __init__(self, mask=None, open_options=None, **kwargs):
-        self.mask = mask
-        self.src_ds = None
-        self.ds_config = None
-        self.ds_open_p = False
-        self.open_options = open_options.split('/') if open_options is not None else []
         super().__init__(**kwargs)
+        self.open_options = open_options.split('/') if open_options is not None else []
+        self.mask = mask
         if self.src_srs is None:
-            self._open_ds(self.open_options)
             self.src_srs = self.get_srs()
-            self._close_ds()
             
         self.set_transform()
-            
-    def _open_ds(self, oo=[]):
-        """open the gdal datasource and gather infos"""
-
-        if self.ds_open_p: self._close_ds()
-        if not self.ds_open_p:
-            if self.fn is not None:
-                if os.path.exists(self.fn) or utils.fn_url_p(self.fn):
-                    #try:
-                    if oo:
-                        self.src_ds = gdal.OpenEx(self.fn, open_options=oo)
-                    else:
-                        self.src_ds = gdal.Open(self.fn)
-                    #except:
-                    #    self.src_ds = None
-                        
-                else:
-                    self.src_ds = None
-                    
-            else:
-                self.src_ds = None
-
-            if self.src_ds is not None:
-                self.ds_open_p = True
-                self.gather_infos()
-            else:
-                self.ds_open_p = False
-                
-        else:
-            self.gather_infos()
-            
-        return(self)
-
-    def _close_ds(self):
-        """close the gdal datasource"""
-        
-        self.src_ds = None
-        self.ds_config = None
-        self.ds_open_p = False
-        return(self)
 
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self._open_ds(self.open_options)
-        if self.ds_open_p:
-            gt = self.src_ds.GetGeoTransform()
+        src_ds = gdal.Open(self.fn)
+        if src_ds is not None:
+            gt = src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
                 geo_transform=gt,
-                x_count=self.src_ds.RasterXSize,
-                y_count=self.src_ds.RasterYSize
+                x_count=src_ds.RasterXSize,
+                y_count=src_ds.RasterYSize
             )
             try:
-                zr = self.src_ds.GetRasterBand(1).ComputeRasterMinMax()
+                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
             except:
                 zr = [None, None]
                 
             this_region.zmin, this_region.zmax = zr[0], zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
-            self.infos['numpts'] = self.src_ds.RasterXSize * self.src_ds.RasterYSize
+            self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
             
-        self._close_ds()
+        src_ds = None
         return(self.infos)
 
     def get_srs(self):
-        if self.ds_open_p:
-            proj = self.src_ds.GetProjectionRef()
-            src_srs = osr.SpatialReference()
-            src_srs.SetFromUserInput(proj)
-            src_srs.AutoIdentifyEPSG()
-            srs_auth = src_srs.GetAuthorityCode(None)
-            if srs_auth is not None:
-                return('epsg:{}'.format(srs_auth))
-            else:
-                return(src_srs.ExportToProj4())
-                        
-    def gather_infos(self, scan=False):
-        """gather information from `src_ds` GDAL dataset"""
+        src_ds = gdal.Open(self.fn)
+        proj = src_ds.GetProjectionRef()
+        src_srs = osr.SpatialReference()
+        src_srs.SetFromUserInput(proj)
+        src_srs.AutoIdentifyEPSG()
+        srs_auth = src_srs.GetAuthorityCode(None)
+        src_ds = None
+        if srs_auth is not None:
+            return('epsg:{}'.format(srs_auth))
+        else:
+            return(src_srs.ExportToProj4())
 
-        if self.ds_open_p:
-            self.gt = self.src_ds.GetGeoTransform()
-                    
-            # node = 'pixel'
-            # if 'AREA_OR_POINT' in mt.keys():
-            #     if mt['AREA_OR_POINT'].lower() == 'point':
-            #         node = 'grid'
-            # elif 'NC_GLOBAL#node_offset' in mt.keys():
-            #     if mt['NC_GLOBAL#node_offset'] == '0':
-            #         node = 'grid'
-            # else:
-            #     node = 'pixel'
-
-            # if node == 'grid':
-            #     self.gt = list(self.gt)
-            #     self.gt[0] = self.gt[0] - (self.gt[1]/2)
-            #     self.gt[3] = self.gt[3] - (self.gt[5]/2)
-            #     self.gt = tuple(self.gt)
-            
-            if self.region is not None:
-                if self.dst_trans is not None:
-                    if self.trans_region is not None and self.trans_region.valid_p(
-                            check_xy = True
-                    ):
-                        #this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
-                            #self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
-                            #).warp(self.dst_srs)
-                        #xinc=((this_region.xmax - this_region.xmin) / self.src_ds.RasterXSize)
-                        #yinc=((this_region.ymin - this_region.ymax) / self.src_ds.RasterYSize)                        
-                        self.srcwin = self.trans_region.srcwin(
-                            self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
-                        )
-                        #self.gt = (this_region.xmin, xinc, 0.0, this_region.ymax, 0.0, yinc)
-                    else:
-                        self.srcwin = (
-                            0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize
-                        )
-                        
-                else:
-                    self.srcwin = self.region.srcwin(
-                        self.gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize
+    def get_srcwin(self, gt, x_size, y_size):
+        if self.region is not None:
+            if self.dst_trans is not None:
+                if self.trans_region is not None and self.trans_region.valid_p(
+                        check_xy = True
+                ):
+                    srcwin = self.trans_region.srcwin(
+                        gt, x_size, y_size
                     )
-                    
+                else:
+                    srcwin = (
+                        0, 0, x_size, y_size
+                    )
+
             else:
-                self.srcwin = (
-                    0, 0, self.src_ds.RasterXSize, self.src_ds.RasterYSize
+                srcwin = self.region.srcwin(
+                    gt, x_size, y_size
                 )
-                
-            src_band = self.src_ds.GetRasterBand(1)
-            self.src_srs = self.get_srs()            
-            self.x_count, self.y_count = self.srcwin[2], self.srcwin[3]
-            self.dt = src_band.DataType
-            self.dtn = gdal.GetDataTypeName(src_band.DataType)
-            self.ndv = src_band.GetNoDataValue()
-            if self.ndv is None: self.ndv = -9999
-            self.fmt = self.src_ds.GetDriver().ShortName
-            self.zr = None
-            if scan:
-                src_arr = src_band.ReadAsArray(
-                    srcwin[0], self.srcwin[1], self.srcwin[2], self.srcwin[3]
-                )
-                self.zr = (np.amin(src_arr), np.amax(src_arr))
-                src_arr = None
-                
-        return(self)
-    
+
+        else:
+            srcwin = (
+                0, 0, x_size, y_size
+            )
+        return(srcwin)
+            
     def yield_xyz(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
         if self.verbose and self.parent is None:
             _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
-        self._open_ds(self.open_options)
-        # mt = self.src_ds.GetMetadata()
-        # if 'HAS_SUPERGRIDS' in mt.keys():
-        #     if mt['HAS_SUPERGRIDS'] == 'TRUE':
-        #         self._close_ds()
-        #         oo = ["MODE=RESAMPLED_GRID"]
-        #         [oo.append(o) for o in self.open_options]
-        #         #if self.x_inc is not None:
-        #         #    oo.append("RESX={}".format(self.x_inc))
-        #         #    oo.append("RESY={}".format(self.y_inc))
-        #         self._open_ds(oo=oo)
-
+        if self.open_options:
+            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+        else:
+            src_ds = gdal.Open(self.fn)
+            
         out_xyz = xyzfun.XYZPoint(w=1)
-        if self.src_ds is not None:
+        if src_ds is not None:
             count = 0
-            band = self.src_ds.GetRasterBand(1)
-            gt = self.gt
-            ## account for 'grid-node' rasters
-            # mt = self.src_ds.GetMetadata()
-            # node = 'pixel'
-            # if 'AREA_OR_POINT' in mt.keys():
-            #     if mt['AREA_OR_POINT'].lower() == 'point':
-            #         node = 'grid'
-            # elif 'NC_GLOBAL#node_offset' in mt.keys():
-            #     if mt['NC_GLOBAL#node_offset'] == '0':
-            #         node = 'grid'
-            # else:
-            #     node = 'pixel'
-
-            # if node == 'grid':
-            #     gt = list(gt)
-            #     gt[0] = gt[0] - (gt[1]/2)
-            #     gt[3] = gt[3] - (gt[5]/2)
-            #     gt = tuple(gt)
-            #print(gt)
+            band = src_ds.GetRasterBand(1)
+            gt = src_ds.GetGeoTransform()
+            ndv = band.GetNoDataValue()
             msk_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
                 msk_band = src_mask.GetRasterBand(1)
-
+            
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-            if self.ndv is not None:
+            if ndv is not None:
                 nodata.append('{:g}'.format(self.ndv))
 
+            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
             for y in range(
-                    self.srcwin[1], self.srcwin[1] + self.srcwin[3], 1
+                    srcwin[1], srcwin[1] + srcwin[3], 1
             ):
                 if self.verbose and self.parent is None:
-                    _prog.update_perc((y, self.srcwin[1] + self.srcwin[3]))
+                    _prog.update_perc((y, srcwin[1] + srcwin[3]))
                     
                 band_data = band.ReadAsArray(
-                    self.srcwin[0], y, self.srcwin[2], 1
+                    srcwin[0], y, srcwin[2], 1
                 )
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
@@ -1160,11 +1049,11 @@ class RasterFile(ElevationDataset):
                    )
                    band_data[msk_data==0]=-9999
                    
-                band_data = np.reshape(band_data, (self.srcwin[2], ))
-                for x_i in range(0, self.srcwin[2], 1):
+                band_data = np.reshape(band_data, (srcwin[2], ))
+                for x_i in range(0, srcwin[2], 1):
                     z = band_data[x_i]
                     if '{:g}'.format(z) not in nodata:
-                        x = x_i + self.srcwin[0]
+                        x = x_i + srcwin[0]
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
                         out_xyz.w = self.weight
@@ -1174,18 +1063,66 @@ class RasterFile(ElevationDataset):
 
                         yield(out_xyz)
                             
-            band = src_mask = msk_band = None
+            band = msk_band = src_mask = None
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}{}'.format(
                         count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                     )
                 )
-                
-        self._close_ds()
+        src_ds = None
         if self.verbose and self.parent is None:
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
+## ==============================================
+## bag file testing
+## ==============================================
+class BAGFile(RasterFile):
+    """providing a BAG raster dataset parser."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def generate_inf(self, callback=lambda: False):
+        for entry in self.parse():
+            if self.verbose:
+                callback()
+                
+    def parse(self):
+        if self.verbose:
+            _prog = utils.CliProgress(
+                'parsing BAG {}{}'.format(
+                    self.fn,
+                    ' @{}'.format(self.weight) if self.weight is not None else '')
+            )
+        
+        #self.mt = self.src_ds.GetMetadata()
+        mt = gdal.Info(self.fn, format='json')['metadata']['']
+        #print(mt['metadata'][''])
+        if 'HAS_SUPERGRIDS' in mt.keys():
+            if mt['HAS_SUPERGRIDS'] == 'TRUE':            
+                print(gdal.Info(self.fn))
+                #oo = ["MODE=LIST_SUPERGRIDS"]
+                #self._open_ds(oo=oo)
+                #print(gdal.Info(self.fn, options=['-oo', 'MODE=LIST_SUPERGRIDS']))
+            # else:
+            #     if self.region is not None:
+            #         inf_region = regions.Region().from_string(self.infos['wkt'])
+            #         if regions.regions_intersect_p(inf_region, self.region):
+            #             self.data_entries.append(self)
+            #             yield(self)
+            #     else:
+            #         self.data_entries.append(self)
+            #         yield(self)
+                    
+        if self.verbose:
+            _prog.end(0, 'parsed datalist {}{}'.format(
+                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+            ))
+
+    def yield_xyz(self):
+        pass
+            
 ## ==============================================
 ## ==============================================
 class MBSParser(ElevationDataset):
