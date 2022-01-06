@@ -25,7 +25,8 @@
 ## data-path data-format data-weight data-name data-source data-date data-resolution data-type data-horz data-vert data-url
 ## Minimally, data-path is all that is needed.
 ##
-## todo datalist.json for all datalists for faster data discovery
+## an associated inf and geojson file will be gerenated for each datalist
+## only an associated inf file will be genereated for individual datasets
 ##
 ### Code:
 
@@ -39,9 +40,10 @@ import cudem
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem.fetches import fetches
 
-from cudem.fetches.fetches import Fetcher
-
+#from cudem.fetches.fetches import Fetcher    
+        
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
@@ -52,11 +54,20 @@ class Datalist(datasets.ElevationDataset):
     """
 
     def __init__(self, fmt=None, **kwargs):
+        self.v_fields = [
+           'Path',
+           'Format',
+           'Weight',
+        ]
+        self.t_fields = [
+           ogr.OFTString,
+           ogr.OFTString,
+           ogr.OFTString
+        ]
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
-        
+
     def _init_datalist_vector(self):
-        #print(self.metadata)
         self.dst_layer = '{}'.format(self.fn)
         self.dst_vector = self.dst_layer + '.json'
 
@@ -76,6 +87,21 @@ class Datalist(datasets.ElevationDataset):
             [self.layer.SetFeature(feature) for feature in self.layer]
         else:
             self.layer = None
+
+    def _create_entry_feature(self, entry):
+        entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
+        o_v_fields = [
+            entry_path,
+            entry.data_format,
+            entry.weight
+        ]
+        dst_defn = self.layer.GetLayerDefn()
+        entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
+        out_feat = ogr.Feature(dst_defn)
+        out_feat.SetGeometry(entry_geom)
+        for i, f in enumerate(self.v_fields):
+            out_feat.SetField(f, o_v_fields[i])
+        self.layer.CreateFeature(out_feat)
         
     def generate_inf(self, callback=lambda: False):
         """return the region of the datalist and generate
@@ -89,40 +115,17 @@ class Datalist(datasets.ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        ## TODO:
-        ## _init_datalist_vector if one doesn't exist or has has changed...
-        ##
-        ##self._init_datalist_vector()
-            
+        self._init_datalist_vector()        
         for entry in self.parse():
             if self.verbose:
                 callback()
 
-            ## TODO:
-            ## generate json feature for each entry here
-            ##
-            ##o_v_fields = [
-            ##    os.path.abspath(entry.fn),
-            ##    entry.data_format,
-            ##    entry.weight                
-            ##]
-            ##dst_defn = self.layer.GetLayerDefn()
-            ##entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
-            ##out_feat = ogr.Feature(dst_defn)
-            ##out_feat.SetGeometry(entry_geom)
-            ##for i, f in enumerate(self.v_fields):
-            ##    #print(i, f)
-            ##    out_feat.SetField(f, o_v_fields[i])
-            ##self.layer.CreateFeature(out_feat)
-            
+            self._create_entry_feature(entry)
             out_regions.append(entry.infos['minmax'])
             if 'numpts' in self.infos.keys():
                 self.infos['numpts'] += entry.infos['numpts']
 
-        ## TODO:
-        ## generate datalist json here.
-        ##
-        ##self.ds = self.layer = None
+        self.ds = self.layer = None
         count = 0
         for this_region in out_regions:
             tmp_region = regions.Region().from_list(this_region)
@@ -233,6 +236,170 @@ class Datalist(datasets.ElevationDataset):
                 
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
+
+## ==============================================
+## ZIPlist Class - Recursive data structure - testing
+## ==============================================
+class ZIPlist(datasets.ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def generate_inf(self, callback=lambda: False):
+        """return the region of the datalist and generate
+        an associated `.inf` file if `inf_file` is True.
+        """
+        
+        _region = self.region
+        out_region = None
+        out_regions = []
+        self.region = None
+        self.infos['name'] = self.fn
+        self.infos['numpts'] = 0
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+            
+        for entry in self.parse_():
+            if self.verbose:
+                callback()
+
+            out_regions.append(entry.infos['minmax'])
+            if 'numpts' in self.infos.keys():
+                self.infos['numpts'] += entry.infos['numpts']
+
+        count = 0
+        for this_region in out_regions:
+            tmp_region = regions.Region().from_list(this_region)
+            if tmp_region.valid_p():
+                if count == 0:
+                    out_region = tmp_region
+                    count += 1
+                else:
+                    out_region = regions.regions_merge(out_region, tmp_region)
+                    
+        if out_region is not None:
+            self.infos['minmax'] = out_region.export_as_list(include_z=True)
+            self.infos['wkt'] = out_region.export_as_wkt()
+        else:
+            self.infos['minmax'] = None
+
+        self.region = _region
+        return(self.infos)
+        
+    def parse_(self):
+        import zipfile
+        exts = [DatasetFactory().data_types[x]['fmts'] for x in DatasetFactory().data_types.keys()]
+        exts = [x for y in exts for x in y]
+        datalist = []
+        if self.fn.split('.')[-1].lower() == 'zip':
+            with zipfile.ZipFile(self.fn) as z:
+                zfs = z.namelist()
+                for ext in exts:
+                    for zf in zfs:
+                        if ext == zf.split('.')[-1]:
+                            datalist.append(os.path.basename(zf))
+                            
+        for this_data in datalist:
+            this_line = utils.p_f_unzip(self.fn, [this_data])[0]
+            data_set = DatasetFactory(
+                this_line,
+                weight=self.weight,
+                parent=self,
+                src_region=self.region,
+                metadata=self.metadata,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                verbose=self.verbose
+            ).acquire()
+            if data_set is not None and data_set.valid_p(
+                    fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+            ):                            
+                if self.region is not None and self.region.valid_p(check_xy=True):
+                    try:
+                        inf_region = regions.Region().from_string(
+                            data_set.infos['wkt']
+                        )
+                    except:
+                        try:
+                            inf_region = regions.Region().from_list(
+                                data_set.infos['minmax']
+                            )
+                        except:
+                            inf_region = self.region.copy()
+                            
+                    inf_region.wmin = data_set.weight
+                    inf_region.wmax = data_set.weight
+                    if regions.regions_intersect_p(inf_region, self.region):
+                        for ds in data_set.parse():
+                            self.data_entries.append(ds)
+                            yield(ds)
+                else:
+                    for ds in data_set.parse():
+                        self.data_entries.append(ds)
+                        yield(ds)
+            
+            utils.remove_glob('{}*'.format(this_data))
+
+    def yield_xyz(self):
+        for ds in self.parse_():
+            for xyz in ds.yield_xyz():
+                yield(xyz)
+
+## ==============================================
+## dlim Fetcher dataset class
+## ==============================================
+class Fetcher(datasets.ElevationDataset):
+    """The fetches dataset type.
+
+This is used in waffles/dlim for on-the-fly remote data
+parsing and processing.
+"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.remote=True
+        self.metadata['name'] = self.fn
+        self.fetch_module = fetches.FetchesFactory(
+            mod=self.fn,
+            src_region=self.region,
+            verbose=self.verbose,
+            weight=self.weight
+        ).acquire(dst_srs=self.dst_srs)
+
+        if self.fetch_module is None:
+            pass
+        
+    def generate_inf(self, callback=lambda: False):
+        """generate a infos dictionary from the Fetches dataset"""
+
+        self.infos['name'] = self.fn
+        self.infos['hash'] = None
+        self.infos['numpts'] = 0
+        if self.region is None:
+            #self.region = self.fetch_module.region
+            self.region = regions.Region().from_list([-180,180,-90,90])
+            
+        self.infos['minmax'] = self.region.export_as_list()
+        self.infos['wkt'] = self.region.export_as_wkt()
+        return(self.infos)
+
+    def parse_(self):
+        self.fetch_module.run()
+        for result in self.fetch_module.results:
+            data_set = DatasetFactory(
+                result[0],
+                weight=self.weight,
+                parent=self,
+                src_region=self.region,
+                metadata=self.metadata,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                verbose=self.verbose,
+            ).acquire(remote=True)
+            
+            yield(data_set)
+    
+    def yield_xyz(self):
+        for xyz in self.fetch_module.yield_results_to_xyz():
+            yield(xyz)
                 
 ## ==============================================
 ## Dataset generator
@@ -244,6 +411,11 @@ class DatasetFactory:
              'fmts': ['datalist', 'mb-1'],
              'opts': '< -1 >',
              'class': Datalist,
+             },
+        -2: {'name': 'zip',
+             'fmts': ['zip'],
+             'opts': '< -2 >',
+             'class': ZIPlist,
              },
         168: {'name': 'xyz',
               'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'],

@@ -33,7 +33,7 @@ import time
 
 from cudem import utils
 from cudem import regions
-from cudem import datasets
+#from cudem import datasets
 from cudem import fetches
 
 import cudem.fetches.utils as f_utils
@@ -333,64 +333,6 @@ layers:
                 **self.mod_args
             )
         )
-
-## ==============================================
-## dlim Fetcher dataset class
-## ==============================================
-class Fetcher(datasets.ElevationDataset):
-    """The fetches dataset type.
-
-This is used in waffles/dlim for on-the-fly remote data
-parsing and processing.
-"""
-    
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.remote=True
-        self.metadata['name'] = self.fn
-        self.fetch_module = FetchesFactory(
-            mod=self.fn,
-            src_region=self.region,
-            verbose=self.verbose,
-            weight=self.weight
-        ).acquire(dst_srs=self.dst_srs)
-
-        if self.fetch_module is None:
-            pass
-        
-    def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the Fetches dataset"""
-
-        self.infos['name'] = self.fn
-        self.infos['hash'] = None
-        self.infos['numpts'] = 0
-        if self.region is None:
-            #self.region = self.fetch_module.region
-            self.region = regions.Region().from_list([-180,180,-90,90])
-            
-        self.infos['minmax'] = self.region.export_as_list()
-        self.infos['wkt'] = self.region.export_as_wkt()
-        return(self.infos)
-
-    def parse_(self):
-        self.fetch_module.run()
-        for result in self.fetch_module.results:
-            data_set = DatasetFactory(
-                result,
-                weight=self.weight,
-                parent=self,
-                src_region=self.region,
-                metadata=self.metadata,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                verbose=self.verbose
-            ).acquire()
-            
-            yield(data_set)
-    
-    def yield_xyz(self):
-        for xyz in self.fetch_module.yield_results_to_xyz():
-            yield(xyz)
         
 _fetches_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in FetchesFactory().mods])

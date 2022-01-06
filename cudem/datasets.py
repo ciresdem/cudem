@@ -91,7 +91,7 @@ class ElevationDataset():
             parent=None,
             src_region=None,
             verbose=False,
-            remote=None
+            remote=False
     ):
         self.fn = fn
         self._fn = None
@@ -111,38 +111,19 @@ class ElevationDataset():
         if utils.fn_url_p(self.fn):
             self.remote = True
 
-        ##self.v_fields = [
-        ##    'Path',
-        ##    'Format',
-        ##    'Weight',
-        ##]
-        ##self.t_fields = [
-        ##    ogr.OFTString,
-        ##    ogr.OFTString,
-        ##    ogr.OFTString
-        ##]
         if self.valid_p():
             self.set_transform()
             self.set_yield()
             #if self.region is not None and self.region.valid_p():
             self.inf(check_hash=True if self.data_format == -1 else False)
-
-    def set_yield(self):
-        if self.x_inc is not None:
-            self.x_inc = utils.str2inc(self.x_inc)
-            if self.y_inc is None:
-                self.y_inc = self.x_inc
-            else:
-                self.y_inc = utils.str2inc(self.y_inc)
-                
-            self.xyz_yield = self.block_xyz()
-        else:
-            self.xyz_yield = self.yield_xyz()
             
     def __str__(self):
-        return(self.echo_())
+        return(self.echo())
+    
+    def __repr__(self):
+        return(self.echo())
 
-    def generate_inf(self):
+    def generate_inf(self, callback=lambda: False):
         raise(NotImplementedError)
 
     def yield_xyz(self):
@@ -150,7 +131,7 @@ class ElevationDataset():
 
     def yield_xyz_from_entries(self):
         raise(NotImplementedError)
-    
+            
     def fetch(self):
         for entry in self.data_entries:
             if entry.remote:
@@ -216,7 +197,8 @@ class ElevationDataset():
         """print self.data_entries as a datalist entries."""
 
         for entry in self.parse():
-            l = [os.path.abspath(entry.fn), entry.data_format]
+            entry_path = os.path.abspath(entry.fn) if not self.remote else entry.fn
+            l = [entry_path, entry.data_format]
             if entry.weight is not None:
                 l.append(entry.weight)
                 
@@ -268,10 +250,12 @@ class ElevationDataset():
         if gen_inf:
             if self.verbose:
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
-                
+
+            #self._init_datalist_vector()
             self.infos = self.generate_inf(None if not self.verbose else _prog.update)
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
+                    #self._create_entry_feature()
                     try:
                         with open('{}.inf'.format(self.fn), 'w') as inf:
                             inf.write(json.dumps(self.infos))
@@ -284,9 +268,10 @@ class ElevationDataset():
                             with open('dlim_tmp.inf', 'w') as inf:
                                 inf.write(json.dumps(self.infos))
 
+            #self.ds = self.layer = None
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
-
+                
             if self.verbose:
                 _prog.end(0, 'generated inf for {}'.format(self.fn))
 
@@ -300,6 +285,18 @@ class ElevationDataset():
 
         return(self.infos)
 
+    def set_yield(self):
+        if self.x_inc is not None:
+            self.x_inc = utils.str2inc(self.x_inc)
+            if self.y_inc is None:
+                self.y_inc = self.x_inc
+            else:
+                self.y_inc = utils.str2inc(self.y_inc)
+                
+            self.xyz_yield = self.block_xyz()
+        else:
+            self.xyz_yield = self.yield_xyz()
+    
     def set_transform(self):
         """Set an srs transform, if needed."""
         if self.src_srs == '': self.src_srs = None
@@ -322,12 +319,6 @@ class ElevationDataset():
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = self.dst_srs
                 self.trans_region.warp(self.src_srs)
-                # self.infos['minmax'] = regions.Region(src_srs=self.src_srs).from_list(self.infos['minmax']).warp(self.dst_srs).export_as_list(include_z=True)
-                # poly = ogr.CreateGeometryFromWkt(self.infos['wkt'])
-                # poly.Transform(self.dst_trans)
-                # self.infos['wkt'] = poly.ExportToWkt()
-                # self.infos['src_srs'] = self.dst_srs
-                
         else:
             self.dst_trans = None
             self.trans_region = None
@@ -528,36 +519,17 @@ class ElevationDataset():
                         )
                         
                     sum_array = x_sum_array = y_sum_array = count_array = weight_array = None
-                    #print(out_x_array)
-                    #print(out_y_array)
                     out_array = out_array[~np.isnan(out_array)]
                     out_x_array = out_x_array[~np.isnan(out_x_array)]
                     out_y_array = out_y_array[~np.isnan(out_y_array)]
                     dataset = np.vstack((out_x_array, out_y_array, out_array)).transpose()
-                    #print(dataset)
                     for point in dataset:
                         if not np.isnan(point[2]):
-                            #count += 1
                             this_xyz = xyzfun.XYZPoint(
                                 x=point[0], y=point[1], z=point[2], w=point[3] if self.weight is not None else 1
                             )
-                            #if self.dst_trans is not None:
-                            #    out_xyz.transform(self.dst_trans)
-                    
                             yield(this_xyz)
                     dataset = out_x_array = out_y_array = out_array = out_weight_array = None
-                    
-                    # for y in range(0, ycount):
-                    #     for x in range(0, xcount):
-                    #         z = out_array[y,x]
-                    #         if not np.isnan(z):
-                    #             geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-                    #             out_xyz = xyzfun.XYZPoint(
-                    #                 x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x] if self.weight is not None else None
-                    #             )
-                    #             yield(out_xyz)
-
-                    # out_array = out_weight_array = None
         
     def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
         """Create a num grid mask of xyz data. The output grid
