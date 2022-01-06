@@ -1,6 +1,6 @@
 ### datasets.py - Datasets
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 CIRES Coastal DEM Team
 ##
 ## datasets.py is part of CUDEM
 ##
@@ -993,7 +993,7 @@ class RasterFile(ElevationDataset):
             
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
             if ndv is not None:
-                nodata.append('{:g}'.format(self.ndv))
+                nodata.append('{:g}'.format(ndv))
 
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
             for y in range(
@@ -1045,20 +1045,43 @@ class RasterFile(ElevationDataset):
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
 ## ==============================================
-## bag file testing
+## BAG files
+## process supergrids at native resolution if they
+## exist, otherwise process as normal grid
 ## ==============================================
-class BAGFile(RasterFile):
+class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser."""
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def generate_inf(self, callback=lambda: False):
-        for entry in self.parse():
-            if self.verbose:
-                callback()
+        """generate a infos dictionary from the raster dataset"""
+            
+        self.infos['name'] = self.fn
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        src_ds = gdal.Open(self.fn)
+        if src_ds is not None:
+            gt = src_ds.GetGeoTransform()
+            this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                geo_transform=gt,
+                x_count=src_ds.RasterXSize,
+                y_count=src_ds.RasterYSize
+            )
+            try:
+                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
+            except:
+                zr = [None, None]
                 
-    def parse(self):
+            this_region.zmin, this_region.zmax = zr[0], zr[1]
+            self.infos['minmax'] = this_region.export_as_list(include_z=True)
+            self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
+            self.infos['wkt'] = this_region.export_as_wkt()
+            
+        src_ds = None
+        return(self.infos)
+
+    def parse_(self):
         if self.verbose:
             _prog = utils.CliProgress(
                 'parsing BAG {}{}'.format(
@@ -1066,24 +1089,35 @@ class BAGFile(RasterFile):
                     ' @{}'.format(self.weight) if self.weight is not None else '')
             )
         
-        #self.mt = self.src_ds.GetMetadata()
         mt = gdal.Info(self.fn, format='json')['metadata']['']
-        #print(mt['metadata'][''])
-        if 'HAS_SUPERGRIDS' in mt.keys():
-            if mt['HAS_SUPERGRIDS'] == 'TRUE':            
-                print(gdal.Info(self.fn))
-                #oo = ["MODE=LIST_SUPERGRIDS"]
-                #self._open_ds(oo=oo)
-                #print(gdal.Info(self.fn, options=['-oo', 'MODE=LIST_SUPERGRIDS']))
-            # else:
-            #     if self.region is not None:
-            #         inf_region = regions.Region().from_string(self.infos['wkt'])
-            #         if regions.regions_intersect_p(inf_region, self.region):
-            #             self.data_entries.append(self)
-            #             yield(self)
-            #     else:
-            #         self.data_entries.append(self)
-            #         yield(self)
+        if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':            
+            oo = ["MODE=LIST_SUPERGRIDS"]
+            src_ds = gdal.OpenEx(self.fn, open_options=oo)
+            sub_datasets = src_ds.GetSubDatasets()
+            src_ds = None
+                
+            for sub_dataset in sub_datasets:
+                sub_ds = RasterFile(
+                    fn=sub_dataset[0],
+                    data_format=200,
+                    src_srs=self.src_srs,
+                    dst_srs=self.dst_srs,
+                    weight=self.weight,
+                    src_region=self.region,
+                    verbose=self.verbose
+                )
+                yield(sub_ds)
+        else:
+            sub_ds = RasterFile(
+                fn=self.fn,
+                data_format=200,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                weight=self.weight,
+                src_region=self.region,
+                verbose=self.verbose
+            )
+            yield(sub_ds)
                     
         if self.verbose:
             _prog.end(0, 'parsed datalist {}{}'.format(
@@ -1091,7 +1125,9 @@ class BAGFile(RasterFile):
             ))
 
     def yield_xyz(self):
-        pass
+        for ds in self.parse_():
+            for xyz in ds.yield_xyz():
+                yield(xyz)
             
 ## ==============================================
 ## ==============================================

@@ -1,6 +1,6 @@
 ### dlim.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 CIRES Coastal DEM Team
 ##
 ## dlim.py is part of CUDEM
 ##
@@ -42,8 +42,6 @@ from cudem import regions
 from cudem import datasets
 from cudem.fetches import fetches
 
-#from cudem.fetches.fetches import Fetcher    
-        
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
@@ -236,7 +234,7 @@ class Datalist(datasets.ElevationDataset):
                 
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
-
+                
 ## ==============================================
 ## ZIPlist Class - Recursive data structure - testing
 ## ==============================================
@@ -423,12 +421,12 @@ class DatasetFactory:
               'class': datasets.XYZFile,
               },
         200: {'name': 'raster',
-              'fmts': ['tif', 'img', 'grd', 'nc', 'vrt', 'bag'],
+              'fmts': ['tif', 'img', 'grd', 'nc', 'vrt'],
               'opts': '< 200:open_options="OPT1=KEY"/"OPT2=KEY2" >',
               'class': datasets.RasterFile,
               },
         201: {'name': 'bag',
-              'fmts': ['bag_NULL'],
+              'fmts': ['bag'],
               'opts': '< 201:open_options="OPT1=KEY"/"OPT2=KEY2" >',
               'class': datasets.BAGFile,
               },
