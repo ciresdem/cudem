@@ -2068,7 +2068,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
         if parse_data:
             _data = _init_data()
             _data = ["{} {} {}".format(
-                os.path.abspath(i.fn), i.data_format, i.weight
+                os.path.abspath(i.fn) if not i.remote else i.fn, i.data_format, i.weight
             ) for s in [[x for x in d.parse()] for d in _data] for i in s]
         else:
             _data = self.data

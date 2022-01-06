@@ -251,24 +251,22 @@ class ElevationDataset():
             if self.verbose:
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 
-            #self._init_datalist_vector()
             self.infos = self.generate_inf(None if not self.verbose else _prog.update)
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
-                    #self._create_entry_feature()
                     try:
                         with open('{}.inf'.format(self.fn), 'w') as inf:
                             inf.write(json.dumps(self.infos))
                     except:
-                        if self.region is not None:
-                            with open('{}_{}.inf'.format(
-                                    'dlim_tmp', self.region.format('fn')), 'w') as inf:
-                                inf.write(json.dumps(self.infos))
-                        else:
-                            with open('dlim_tmp.inf', 'w') as inf:
-                                inf.write(json.dumps(self.infos))
+                        pass
+                        # if self.region is not None:
+                        #     with open('{}_{}.inf'.format(
+                        #             'dlim_tmp', self.region.format('fn')), 'w') as inf:
+                        #         inf.write(json.dumps(self.infos))
+                        # else:
+                        #     with open('dlim_tmp.inf', 'w') as inf:
+                        #         inf.write(json.dumps(self.infos))
 
-            #self.ds = self.layer = None
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
                 
