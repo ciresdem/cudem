@@ -901,7 +901,7 @@ class RasterFile(ElevationDataset):
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
         if self.src_srs is None:
-            self.src_srs = self.get_srs()
+            self.src_srs = demfun.get_srs(self.fn)
             
         self.set_transform()
 
@@ -930,19 +930,6 @@ class RasterFile(ElevationDataset):
             
         src_ds = None
         return(self.infos)
-
-    def get_srs(self):
-        src_ds = gdal.Open(self.fn)
-        proj = src_ds.GetProjectionRef()
-        src_srs = osr.SpatialReference()
-        src_srs.SetFromUserInput(proj)
-        src_srs.AutoIdentifyEPSG()
-        srs_auth = src_srs.GetAuthorityCode(None)
-        src_ds = None
-        if srs_auth is not None:
-            return('epsg:{}'.format(srs_auth))
-        else:
-            return(src_srs.ExportToProj4())
 
     def get_srcwin(self, gt, x_size, y_size):
         if self.region is not None:
@@ -1054,7 +1041,11 @@ class BAGFile(ElevationDataset):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        if self.src_srs is None:
+            self.src_srs = demfun.get_srs(self.fn)
+            
+        self.set_transform()
+        
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
@@ -1090,12 +1081,23 @@ class BAGFile(ElevationDataset):
             )
         
         mt = gdal.Info(self.fn, format='json')['metadata']['']
-        if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':            
+        if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':
             oo = ["MODE=LIST_SUPERGRIDS"]
+            if self.region is not None and self.region.valid_p():
+                if self.dst_trans is not None:
+                    tmp_region = self.trans_region.copy()
+                else:
+                    tmp_region = self.region.copy()
+                    
+                oo.append('MINX={}'.format(tmp_region.xmin))
+                oo.append('MAXX={}'.format(tmp_region.xmax))
+                oo.append('MINY={}'.format(tmp_region.ymin))
+                oo.append('MAXY={}'.format(tmp_region.ymax))
+                    
             src_ds = gdal.OpenEx(self.fn, open_options=oo)
             sub_datasets = src_ds.GetSubDatasets()
             src_ds = None
-                
+            
             for sub_dataset in sub_datasets:
                 sub_ds = RasterFile(
                     fn=sub_dataset[0],

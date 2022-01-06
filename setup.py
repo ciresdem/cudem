@@ -107,7 +107,8 @@ setuptools.setup(
         'scripts/xyztindex.py',
         'scripts/update_dem.sh',
         'scripts/gdal_mask.py',
-        'scripts/vrbag2tif2chunks2xyz.sh'
+        'scripts/vrbag2tif2chunks2xyz.sh',
+        'scripts/explode_bags.sh'
     ],
     python_requires = '>=3.0',
     project_urls = {

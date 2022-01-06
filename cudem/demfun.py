@@ -119,6 +119,19 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
+def get_srs(src_dem):
+    src_ds = gdal.Open(src_dem)
+    proj = src_ds.GetProjectionRef()
+    src_srs = osr.SpatialReference()
+    src_srs.SetFromUserInput(proj)
+    src_srs.AutoIdentifyEPSG()
+    srs_auth = src_srs.GetAuthorityCode(None)
+    src_ds = None
+    if srs_auth is not None:
+        return('epsg:{}'.format(srs_auth))
+    else:
+        return(src_srs.ExportToProj4())
+
 def set_srs(src_dem, src_srs='epsg:4326'):
     """set the projection of gdal file src_fn to src_srs"""
     
