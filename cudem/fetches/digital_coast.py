@@ -228,7 +228,7 @@ increment to save space.
                 else:
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
-                utils.remove_glob(src_dc)
+                utils.remove_glob('{}*'.format(src_dc))
         elif dt == 'raster':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 _ds = datasets.RasterFile(
@@ -242,7 +242,7 @@ increment to save space.
                 )
                 for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
                     yield(xyz)
-                utils.remove_glob(src_dc)
+                utils.remove_glob('{}.*'.format(src_dc))
 
 ## ==============================================
 ## the DigitalCoast class is the old digital coast fetches module.
