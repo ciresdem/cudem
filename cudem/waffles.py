@@ -956,11 +956,14 @@ quite heavy on memory when large grid-size...
         if self.wsum is None:
             self.wsum = np.zeros(nnear)
 
-        self.distances, self.ix = self.tree.query(q, k=nnear, eps=eps)
+        eps = utils.float_or(eps, .1)
+        self.distances, self.ix = self.tree.query(q, k=nnear, eps=eps, distance_upper_bound=dub)
         interpol = np.zeros((len(self.distances),) + np.shape(self.z[0]))
         jinterpol = 0
         for dist, ix in zip( self.distances, self.ix ):
-            if nnear == 1:
+            if np.any(np.isinf(dist)):
+                wz = np.nan
+            elif nnear == 1:
                 wz = self.z[ix]
             elif dist[0] < 1e-10:
                 wz = self.z[ix[0]]
@@ -968,11 +971,13 @@ quite heavy on memory when large grid-size...
                 w = 1 / dist**p
                 if weights is not None:
                     w *= weights[ix]  # >= 0
+                    
                 w /= np.sum(w)
                 wz = np.dot( w, self.z[ix] )
                 if self.stat:
                     self.wn += 1
                     self.wsum += w
+                    
             interpol[jinterpol] = wz
             jinterpol += 1
         return interpol if qdim > 1  else interpol[0]
@@ -980,11 +985,11 @@ quite heavy on memory when large grid-size...
 class WafflesIDW(Waffle):
     """Inverse Distance Weighted."""
     
-    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, radius=0, **kwargs):
+    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, radius=None, **kwargs):
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
-        self.radius = radius
+        self.radius = np.inf if radius is None else utils.str2inc(radius) 
         self.block_p = block
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
@@ -1039,8 +1044,9 @@ class WafflesIDW(Waffle):
         interpol = invdisttree(
             ask,
             nnear=self.min_points,
-            eps=self.radius,
+            eps=.1,
             p=self.power,
+            dub=self.radius,
             weights=w if self.weights else None
         )
 
@@ -1073,7 +1079,10 @@ class WafflesIDW(Waffle):
         )        
         return(self)    
 
+## ==============================================
 ## old IDW class...slow, but low mem!
+## use WafflesIDW instead.
+## ==============================================
 class WafflesUIDW(Waffle):
     """Uncertainty Weighted Inverse Distance Weighted.
     
@@ -1911,22 +1920,7 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
 < IDW:min_points=8:power=1:block=False >
  :power=[val] - weight**power
  :min_points=[val] - minimum neighbor points for IDW
- :block=[True/False] - block the data before performing the IDW routine""",
-        },
-        'UIDW': {
-            'name': 'UIDW',
-            'datalist-p': True,
-            'class': WafflesUIDW,
-            'description': """Uncertainty Weighted INVERSE DISTANCE WEIGHTED DEM\n
-Generate a DEM using an Inverse Distance Weighted algorithm.
-If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
-as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
-
-< IDW:radius=None:min_points=None:power=2:block=False >
- :radius=[val] - search radius
- :power=[val] - weight**power
- :min_points=[val] - minimum neighbor points for IDW
+ :radius=[val] - search radius, set min_points=1 to get all data points
  :block=[True/False] - block the data before performing the IDW routine""",
         },
         'vdatum': {
