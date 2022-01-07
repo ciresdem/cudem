@@ -1,6 +1,6 @@
 ### setup.py
 ##
-## Copyright (c) 2020 CIRES Coastal DEM Team
+## Copyright (c) 2020 - 2022 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -25,7 +25,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.6.0',
+    version = '1.6.1',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',

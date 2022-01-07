@@ -1,6 +1,6 @@
 ### nos.py - NOS fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## nos.py is part of CUDEM
 ##

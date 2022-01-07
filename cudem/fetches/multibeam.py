@@ -1,6 +1,6 @@
 ### multibeam.py - NCEI Multibeam
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## multibeam.py is part of CUDEM
 ##
@@ -82,7 +82,7 @@ class MBDB(f_utils.FetchModule):
 class Multibeam(f_utils.FetchModule):
     """Fetch multibeam data from NOAA NCEI"""
     
-    def __init__(self, processed=False, inc=None, **kwargs):
+    def __init__(self, processed=False, inc=None, process=False, **kwargs):
         super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -93,6 +93,7 @@ class Multibeam(f_utils.FetchModule):
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
         self.name = 'multibeam'
         self.processed_p = processed
+        self.process = process
         self.inc = utils.str2inc(inc)
 
     def mb_inf_data_format(self, src_inf):
@@ -192,19 +193,27 @@ class Multibeam(f_utils.FetchModule):
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
-            out, status = utils.run_cmd(
-                'mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz),
-                verbose=True
-            )
+            if not self.process:
+                this_weight = self.weight
+                out, status = utils.run_cmd(
+                    'mblist -OXYZ -I{} -Ma > {}'.format(src_data), src_xyz),
+                    verbose=True
+                )
+            else:
+                this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
+                out, status = utils.run_cmd(
+                    'mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz),
+                    verbose=True
+                )
             
-            if status != 0:
-                if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
-                    mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
-                    mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
-                    out, status = utils.run_cmd(
-                        'mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz),
-                        verbose=True
-                    )
+                if status != 0:
+                    if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
+                        mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
+                        mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
+                        out, status = utils.run_cmd(
+                            'mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz),
+                            verbose=True
+                        )
                     
             if status == 0:
                 _ds = datasets.XYZFile(
@@ -216,7 +225,7 @@ class Multibeam(f_utils.FetchModule):
                     #name=os.path.basename(entry[1]),
                     src_region=self.region,
                     verbose=self.verbose,
-                    weight=(float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.,
+                    weight=this_weight,
                     remote=True
                 )
 

@@ -1,6 +1,6 @@
 ### dlim.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2022 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## dlim.py is part of CUDEM
 ##

@@ -1,6 +1,6 @@
 ### metadata.py
 ##
-## Copyright (c) 2019 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2019 - 2021 Regents of the University of Colorado
 ##
 ## metadata.py is part of CUDEM
 ##

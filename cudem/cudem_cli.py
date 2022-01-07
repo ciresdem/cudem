@@ -1,6 +1,6 @@
 ### cudem_cli.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## cudem_cli.py is part of CUDEM
 ##

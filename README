@@ -28,16 +28,16 @@ cudem - run CUDEM programs and scripts
 Programs and Scripts:
 ======================
 dlim                      process data
-                          formats: datalist (-1),  yxz (167),  xyz (168),  raster (200),
-			           las (300),  fetches (-11)
+                          formats: datalist (-1),  zip (-2),  xyz (168),  raster (200),  bag (201),
+			  las (300),  mbs (301),  fetches (-11)
 waffles                   generate Digital Elevation Models
-                          modules: surface, triangulate, num, linear, nearest, average, invdst, IDW, vdatum,
-	                           mbgrid, coastline
+                          modules: surface, triangulate, num, linear, nearest, average, invdst, IDW, UIDW,
+			  vdatum, mbgrid, coastline, cudem
 regions                   process REGIONS
 fetches                   fetch elevation data
-                          modules: gmrt, srtm_plus, mar_grav, multibeam, ehydro, ngs, nos, charts, digital_coast,
-	                           ncei_thredds, tnm, emodnet, chs, hrdem, osm, globalelus, copernicus, nasadem,
-				   tides, vdatum, buoys, earthdata, trackline, usiei
+                          modules: gmrt, srtm_plus, mar_grav, multibeam, trackline, ehydro, ngs, nos, charts,
+			  digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem, osm, copernicus, nasadem, tides,
+			  vdatum, buoys, earthdata, usiei
 spatial_metadata          generate spatial metadata
 uncertainties             calculate DEM uncertainties
 bag2tif2chunks2xyz.sh     convert a BAG to chunked XYZ
@@ -64,6 +64,7 @@ gdal_percentile.py        get a percentile from a grid
 gdal_histogram.py         generate an historgram from a grid
 gdal_hillshade.py         generate a hillshade image from a grid
 gdal_minmax.py            get min/max values from a grid
+gdal_mask.py		  generate a gdal mask grid
 grd2mesh.py               generate an unstructured grid
 has_nulls.py              check if a grid has nodata values
 hillshade.sh              generate a hillshade from a DEM
@@ -80,6 +81,9 @@ vdatum_cmd.py             run NOAAs vdatum from command-line
 x360.py                   flip a DEM
 xyz_clip.py               clip an xyz file based on a raster mask
 xyztindex.py              generate a tile index of xyz files.
+update_dem.sh		  update a DEM with new data.
+vrbag2tif2chunks2xyz.sh	  convert and chunk a VR BAG
+explode_bags.sh		  extract all supergrids from a BAG
 
 ==============================================
 Installation:
@@ -151,4 +155,4 @@ Generate a 1arc-second DEM in southern louisiana using data from 'fetches'
 Generate a 1 meter DEM in of all the lidar files in the current directory
 ======================
 
- % cudem waffles -R -90/-89.75/29.5/29.75 -E 1/1 -M invdst -O so_la -p -X 6 -w *.laz
+ % cudem waffles -R -90/-89.75/29.5/29.75 -E 1s/1s -M invdst -O so_la -p -X 6 -w *.laz

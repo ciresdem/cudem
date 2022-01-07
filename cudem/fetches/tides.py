@@ -1,6 +1,6 @@
 ### tides.py - TIDE stations fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2018 - 2022 Regents of the University of Colorado
 ##
 ## tides.py is part of CUDEM
 ##

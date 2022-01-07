@@ -1,6 +1,6 @@
 ### ncei_thredds.py - NOAA NCEI THREDDS DEM fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2015 - 2022 Regents of the University of Colorado
 ##
 ## ncei_thredds.py is part of CUDEM
 ##

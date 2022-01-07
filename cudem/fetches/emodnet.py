@@ -1,6 +1,6 @@
 ### emodnet.py - emodnet fetch - Europe
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2018 - 2022 Regents of the University of Colorado
 ##
 ## emodnet.py is part of CUDEM
 ##

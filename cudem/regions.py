@@ -1,6 +1,6 @@
 ### regions.py
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 CIRES Regents of the University of Colorado
 ##
 ## regions.py is part of CUDEM
 ##

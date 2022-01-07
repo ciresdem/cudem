@@ -1,6 +1,6 @@
 ### datasets.py - Datasets
 ##
-## Copyright (c) 2010 - 2022 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## datasets.py is part of CUDEM
 ##
@@ -685,14 +685,14 @@ class XYZFile(ElevationDataset):
 
         self.infos['minmax'] = this_region.export_as_list(include_z = True)
         if self.infos['numpts'] > 0:
-            try:
-                out_hull = [pts[i] for i in ConvexHull(
-                    pts, qhull_options='Qt'
-                ).vertices]
-                out_hull.append(out_hull[0])
-                self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
-            except:
-                self.infos['wkt'] = this_region.export_as_wkt()
+            # try:
+            #     out_hull = [pts[i] for i in ConvexHull(
+            #         pts, qhull_options='Qt'
+            #     ).vertices]
+            #     out_hull.append(out_hull[0])
+            #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
+            # except:
+            self.infos['wkt'] = this_region.export_as_wkt()
                 
         self.region = region_
         return(self.infos)
