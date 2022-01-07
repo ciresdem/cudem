@@ -980,10 +980,11 @@ quite heavy on memory when large grid-size...
 class WafflesIDW(Waffle):
     """Inverse Distance Weighted."""
     
-    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, **kwargs):
+    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, radius=0, **kwargs):
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
+        self.radius = radius
         self.block_p = block
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
@@ -1038,7 +1039,7 @@ class WafflesIDW(Waffle):
         interpol = invdisttree(
             ask,
             nnear=self.min_points,
-            eps=.1,
+            eps=self.radius,
             p=self.power,
             weights=w if self.weights else None
         )

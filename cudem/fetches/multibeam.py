@@ -165,8 +165,11 @@ class Multibeam(f_utils.FetchModule):
                     for survs in these_surveys[key][keys]:
                         self.results.append(survs)
 
-        #for entry in self.results:
-        #    self.echo_inf(entry)
+        with open('mb_inf.txt', 'w') as mb_inf_txt:
+            for entry in self.results:
+                mb_inf_txt.write(self.parse_entry_inf(entry))
+                mb_inf_txt.write('\n')
+                #self.echo_inf(entry)
 
     def echo_inf(self, entry):
         print(self.parse_entry_inf(entry))
@@ -195,25 +198,16 @@ class Multibeam(f_utils.FetchModule):
             src_xyz = os.path.basename(src_data) + '.xyz'
             if not self.process:
                 this_weight = self.weight
-                out, status = utils.run_cmd(
-                    'mblist -OXYZ -I{} -Ma > {}'.format(src_data), src_xyz),
-                    verbose=True
-                )
+                out, status = utils.run_cmd('mblist -OXYZ -I{} -Ma > {}'.format(src_data, src_xyz), verbose=True)
             else:
                 this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
-                out, status = utils.run_cmd(
-                    'mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz),
-                    verbose=True
-                )
+                out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
             
                 if status != 0:
                     if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
                         mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
                         mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
-                        out, status = utils.run_cmd(
-                            'mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz),
-                            verbose=True
-                        )
+                        out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
                     
             if status == 0:
                 _ds = datasets.XYZFile(
