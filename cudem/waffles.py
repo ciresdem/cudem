@@ -547,7 +547,7 @@ class GMTSurface(Waffle):
         self.lower_limit = lower_limit
         self.upper_limit = upper_limit
         self.breakline = breakline
-        self.max_radius = utils.str2inc(max_radius)
+        self.max_radius = max_radius
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
@@ -2318,7 +2318,7 @@ def waffles_cli(argv = sys.argv):
             wg['chunk'] = utils.int_or(argv[i + 1], None)
             i = i + 1
         elif arg[:2] == '-K': wg['chunk'] = utils.int_or(arg[2:], None)
-        elif arg == '--t_srs' or arg == '-P':
+        elif arg == '--t_srs' or arg == '-P' or arg == '-t_srs':
             wg['dst_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
         elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')

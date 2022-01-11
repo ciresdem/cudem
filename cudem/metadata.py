@@ -433,7 +433,7 @@ def spat_meta_cli(argv = sys.argv):
             utils.echo_error_msg('you must specify some type of data')
         else:
             if want_prefix or len(these_regions) > 1:
-                name_ = utils.append_fn(name, this_region, inc)
+                name_ = utils.append_fn(name, this_region, xinc)
 
             if os.path.exists('{}_sm.{}'.format(name_, utils.ogr_fext(ogr_format))):
                 utils.echo_msg(
