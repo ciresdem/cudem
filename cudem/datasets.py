@@ -30,6 +30,7 @@ import os
 import sys
 import json
 import laspy as lp
+import copy
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -105,7 +106,7 @@ class ElevationDataset():
         self.data_entries = []
         self.data_lists = {}        
         self.remote = remote
-        self.metadata = metadata
+        self.metadata = copy.deepcopy(metadata)
         self.x_inc = x_inc
         self.y_inc = y_inc
         if utils.fn_url_p(self.fn):
@@ -118,10 +119,10 @@ class ElevationDataset():
             self.inf(check_hash=True if self.data_format == -1 else False)
             
     def __str__(self):
-        return(self.echo())
+        return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
     
     def __repr__(self):
-        return(self.echo())
+        return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
 
     def generate_inf(self, callback=lambda: False):
         raise(NotImplementedError)
@@ -339,7 +340,7 @@ class ElevationDataset():
 
     def parse_data_lists(self, gather_data=True):
         """parse the data into a datalist dictionary"""
-
+        
         for e in self.parse():
             if e.parent is not None:
                 if e.parent.metadata['name'] in self.data_lists.keys():

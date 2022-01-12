@@ -193,7 +193,8 @@ class Multibeam(f_utils.FetchModule):
             survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
         except TypeError:
             return
-        
+        this_inf = self.parse_entry_inf(entry)
+
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
             if not self.process:

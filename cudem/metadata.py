@@ -213,17 +213,18 @@ class SpatialMetadata:
     def run(self):
         for xdl in self.data:
             dls = {}
-            #xdl.parse_data_lists()
-            for e in xdl.parse():
-                while e.parent != xdl:
-                    e = e.parent
-                if e.metadata['name'] not in dls.keys():
-                    dls[e.metadata['name']] = {'data': [e] ,'dl': e}
-
-            for x in dls.keys():
+            xdl.parse_data_lists()
+            #for e in xdl.parse():
+            #    while e.parent != xdl:
+            #        e = e.parent
+            #    if e.metadata['name'] not in dls.keys():
+            #        dls[e.metadata['name']] = {'data': [e] ,'dl': e}
+            for x in xdl.data_lists.keys():
                 utils.echo_msg('Working on {}'.format(x))
-                xdl.data_entries = dls[x]['data']
-                p = dls[x]['dl']
+                #xdl.data_entries = dls[x]['data']
+                xdl.data_entries = xdl.data_lists[x]['data']
+                #p = dls[x]['dl']
+                p = xdl.data_lists[x]['parent']
                 o_v_fields = [
                     p.metadata['title'] if p.metadata['title'] is not None else x,
                     p.metadata['source'],
@@ -234,7 +235,6 @@ class SpatialMetadata:
                     p.metadata['vdatum'],
                     p.metadata['url']
                 ]
-
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
 

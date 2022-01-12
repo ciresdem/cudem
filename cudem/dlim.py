@@ -33,7 +33,7 @@
 import os
 import sys
 import re
-
+import copy
 from osgeo import ogr
 
 import cudem
@@ -171,7 +171,7 @@ class Datalist(datasets.ElevationDataset):
                             weight=self.weight,
                             parent=self,
                             src_region=self.region,
-                            metadata=self.metadata,
+                            metadata=copy.deepcopy(self.metadata),
                             src_srs=self.src_srs,
                             dst_srs=self.dst_srs,
                             verbose=self.verbose
@@ -180,17 +180,17 @@ class Datalist(datasets.ElevationDataset):
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):                            
                             if self.region is not None and self.region.valid_p(check_xy=True):
+                               # try:
+                               #     inf_region = regions.Region().from_string(
+                               #         data_set.infos['wkt']
+                               #     )
+                               # except:
                                 try:
-                                    inf_region = regions.Region().from_string(
-                                        data_set.infos['wkt']
+                                    inf_region = regions.Region().from_list(
+                                        data_set.infos['minmax']
                                     )
                                 except:
-                                    try:
-                                        inf_region = regions.Region().from_list(
-                                            data_set.infos['minmax']
-                                        )
-                                    except:
-                                        inf_region = self.region.copy()
+                                    inf_region = self.region.copy()
                                         
                                 inf_region.wmin = data_set.weight
                                 inf_region.wmax = data_set.weight
@@ -302,7 +302,7 @@ class ZIPlist(datasets.ElevationDataset):
                 weight=self.weight,
                 parent=self,
                 src_region=self.region,
-                metadata=self.metadata,
+                metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
                 verbose=self.verbose
@@ -387,7 +387,7 @@ parsing and processing.
                 weight=self.weight,
                 parent=self,
                 src_region=self.region,
-                metadata=self.metadata,
+                metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
                 verbose=self.verbose,
@@ -480,7 +480,7 @@ class DatasetFactory:
             x_inc=None,
             y_inc=None,
             metadata={
-                'name':None,
+                'name':'xyz dataset',
                 'title':None,
                 'source':None,
                 'date':None,
@@ -499,7 +499,7 @@ class DatasetFactory:
         self.weight = weight
         self.src_srs = src_srs
         self.dst_srs = dst_srs
-        self.metadata = metadata
+        self.metadata = copy.deepcopy(metadata)
         self.region = src_region
         self.parent = parent
         self.verbose = verbose
@@ -669,7 +669,7 @@ class DatasetFactory:
                 data_format=self.data_format,
                 weight=self.weight,
                 src_region=self.region,
-                metadata=self.metadata,
+                metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
                 parent=self.parent,
