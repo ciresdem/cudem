@@ -438,7 +438,7 @@ class Waffle:
             clip_args = {}
             cp = self.clip.split(':')
             clip_args['src_ply'] = cp[0]
-            clip_args = utils.args2dict(cp[1:], clip_args)            
+            clip_args = utils.args2dict(cp[1:], clip_args)
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
                     mod='coastline:invert=True',
@@ -2145,6 +2145,7 @@ Options:
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
 
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc_nYYxYY_wXXxXX_YEAR info to output BASENAME).
+\t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X'
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 
@@ -2188,6 +2189,7 @@ def waffles_cli(argv = sys.argv):
     module = None
     wg_user = None
     want_prefix = False
+    prefix_args = {}
     want_config = False
     status = 0
     i = 1
@@ -2283,8 +2285,14 @@ def waffles_cli(argv = sys.argv):
                 wg['weights'] = 1
             else:
                 wg['weights'] += 1
+        elif arg == '-p' or arg == '--prefix':
+            want_prefix = True
+            prefix_opts = argv[i + 1].split(':')
+            prefix_args = utils.args2dict(prefix_opts, prefix_args)
+            if len(prefix_args) > 0:
+                i += 1
+
         elif arg == '-t' or arg == '--threads': want_threads = True
-        elif arg == '-p' or arg == '--prefix': want_prefix = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
         elif arg == '-m' or arg == '--mask': wg['mask'] = True
         elif arg == '-s' or arg == '--spat': wg['spat'] = True
@@ -2414,7 +2422,7 @@ def waffles_cli(argv = sys.argv):
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
-                name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc']
+                name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
             )
         if want_config:
             this_waffle = WaffleFactory(mod=module, **wg)

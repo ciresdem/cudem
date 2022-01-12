@@ -87,7 +87,7 @@ FIPS_TO_EPSG = {
     "5103": "26963", "5104": "26964", "5105": "26965", "5200": "32161"
 }
 
-def append_fn(fn, src_region, inc, version=1):
+def append_fn(fn, src_region, inc, version=None, year=None):
     """append the src_region, inc and version to a string filename"""
     
     return(
@@ -95,8 +95,8 @@ def append_fn(fn, src_region, inc, version=1):
             fn,
             inc2str(inc),
             src_region.format('fn'),
-            this_year(),
-            version
+            this_year() if year is None else year,
+            1 if version is None else version
         )
     )
 
@@ -232,11 +232,12 @@ def args2dict(args, dict_args={}):
     for arg in args:
         #this_entry = re.findall(r'[^"\s]\S*|".+?"', arg)
         p_arg = arg.split('=')
-        dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else \
-            True if p_arg[1].lower() == 'true' else \
-            None if p_arg[1].lower() == 'none' else \
-            '='.join(p_arg[1:]) if len(p_arg) > 2 else \
-            p_arg[1]
+        if len(p_arg) > 1:
+            dict_args[p_arg[0]] = False if p_arg[1].lower() == 'false' else \
+                True if p_arg[1].lower() == 'true' else \
+                None if p_arg[1].lower() == 'none' else \
+                '='.join(p_arg[1:]) if len(p_arg) > 2 else \
+                p_arg[1]
         
     return(dict_args)
 

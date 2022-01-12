@@ -311,6 +311,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
   -F, --format\t\tOutput OGR format. (ESRI Shapefile)
 
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
+\t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X'
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
   --help\t\tPrint the usage text
@@ -337,7 +338,8 @@ def spat_meta_cli(argv = sys.argv):
     extend = 0
     want_verbose = True
     want_prefix = False
-
+    prefix_args = {}
+            
     argv = sys.argv
     while i < len(argv):
         arg = sys.argv[i]
@@ -382,8 +384,14 @@ def spat_meta_cli(argv = sys.argv):
             i += 1
         elif arg[:2] == '-F':
             ogr_format = argv[2:]
+        elif arg == '-p' or arg == '--prefix':
+            want_prefix = True
+            prefix_opts = argv[i + 1].split(':')
+            prefix_args = utils.args2dict(prefix_opts, prefix_args)
+            if len(prefix_args) > 0:
+                i += 1
+                
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
-        elif arg == '-p' or arg == '--prefix': want_prefix = True
         elif arg == '--quiet' or arg == '-q': want_verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
@@ -433,8 +441,8 @@ def spat_meta_cli(argv = sys.argv):
             utils.echo_error_msg('you must specify some type of data')
         else:
             if want_prefix or len(these_regions) > 1:
-                name_ = utils.append_fn(name, this_region, xinc)
-
+                name_ = utils.append_fn(name, this_region, xinc, **prefix_args)
+                
             if os.path.exists('{}_sm.{}'.format(name_, utils.ogr_fext(ogr_format))):
                 utils.echo_msg(
                 'SPATIAL METADATA {} already exists, skipping...'.format('{}_sm.{}'.format(name_, utils.ogr_fext(ogr_format)))
