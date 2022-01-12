@@ -2144,8 +2144,9 @@ Options:
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
 
-  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc_nYYxYY_wXXxXX_YEAR info to output BASENAME).
-\t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X'
+  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
+\t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X', 
+\t\t\tleave blank for default of <CURRENT_YEAR> and <1>, respectively.
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 

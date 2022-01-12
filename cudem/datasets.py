@@ -131,8 +131,13 @@ class ElevationDataset():
         raise(NotImplementedError)
 
     def yield_xyz_from_entries(self):
-        raise(NotImplementedError)
-            
+        for this_entry in self.data_entries:
+            for xyz in this_entry.yield_xyz():
+                yield(xyz)
+                
+            if this_entry.remote:
+                utils.remove_glob('{}*'.format(this_entry.fn))
+    
     def fetch(self):
         for entry in self.data_entries:
             if entry.remote:

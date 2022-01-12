@@ -312,6 +312,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
 
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
 \t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X'
+\t\t\tleave blank for default of <CURRENT_YEAR> and <1>, respectively.
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
   --help\t\tPrint the usage text

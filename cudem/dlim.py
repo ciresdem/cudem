@@ -225,15 +225,15 @@ class Datalist(datasets.ElevationDataset):
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
                 
-    def yield_xyz_from_entries(self):
-        """parse the data from the datalist"""
+    # def yield_xyz_from_entries(self):
+    #     """parse the data from the datalist"""
 
-        for this_entry in self.data_entries:
-            for xyz in this_entry.yield_xyz():
-                yield(xyz)
+    #     for this_entry in self.data_entries:
+    #         for xyz in this_entry.yield_xyz():
+    #             yield(xyz)
                 
-            if this_entry.remote:
-                utils.remove_glob('{}*'.format(this_entry.fn))
+    #         if this_entry.remote:
+    #             utils.remove_glob('{}*'.format(this_entry.fn))
                 
 ## ==============================================
 ## ZIPlist Class - Recursive data structure - testing
