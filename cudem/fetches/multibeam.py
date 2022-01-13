@@ -82,7 +82,7 @@ class MBDB(f_utils.FetchModule):
 class Multibeam(f_utils.FetchModule):
     """Fetch multibeam data from NOAA NCEI"""
     
-    def __init__(self, processed=False, inc=None, process=False, **kwargs):
+    def __init__(self, processed=False, inc=None, process=False, min_year=None, **kwargs):
         super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -95,6 +95,7 @@ class Multibeam(f_utils.FetchModule):
         self.processed_p = processed
         self.process = process
         self.inc = utils.str2inc(inc)
+        self.min_year = utils.int_or(min_year)
 
     def mb_inf_data_format(self, src_inf):
         """extract the data format from the mbsystem inf file."""
@@ -155,21 +156,43 @@ class Multibeam(f_utils.FetchModule):
             if self.processed_p:
                 if '2' in these_surveys[key].keys():
                     for v2 in these_surveys[key]['2']:
-                        self.results.append(v2)
+                        if self.min_year is not None:
+                            try:
+                                s,d,f,p,t = self.parse_entry_inf(v2)
+                                if int(t) >= self.min_year:
+                                    self.results.append(v2)
+                            except: pass
+                        else:
+                            self.results.append(v2)
                 else:
                     for v1 in these_surveys[key]['1']:
-                        self.results.append(v1)
+                        if self.min_year is not None:
+                            try:
+                                s,d,f,p,t = self.parse_entry_inf(v1)
+                                if int(t) >= self.min_year:
+                                    self.results.append(v1)
+                            except:
+                                pass
+                        else:
+                            self.results.append(v1)
                         
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
-                        self.results.append(survs)
-
-        with open('mb_inf.txt', 'w') as mb_inf_txt:
-            for entry in self.results:
-                mb_inf_txt.write(self.parse_entry_inf(entry))
-                mb_inf_txt.write('\n')
-                #self.echo_inf(entry)
+                        if self.min_year is not None:
+                            try:
+                                s,d,f,p,t = self.parse_entry_inf(survs)
+                                if int(t) >= self.min_year:
+                                    self.results.append(survs)
+                            except: pass
+                        else:
+                            self.results.append(survs)
+                            
+        # with open('mb_inf.txt', 'w') as mb_inf_txt:
+        #     for entry in self.results:
+        #         mb_inf_txt.write(self.parse_entry_inf(entry))
+        #         mb_inf_txt.write('\n')
+        #         #self.echo_inf(entry)
 
     def echo_inf(self, entry):
         print(self.parse_entry_inf(entry))
@@ -178,13 +201,15 @@ class Multibeam(f_utils.FetchModule):
         src_data = os.path.basename(entry[1])
         src_mb = src_data[:-4]
         survey = entry[0].split('/')[7]
-        if f_utils.Fetch('{}.inf'.format(entry[0][:-4]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
+        if f_utils.Fetch('{}.inf'.format(entry[0][:-4]), callback=self.callback, verbose=False).fetch_file('{}.inf'.format(src_mb)) == 0:
             mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
             mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
             mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
             if not keep_inf:
                 utils.remove_glob('{}.inf'.format(src_mb))
             return(survey, src_data, mb_fmt, mb_perc, mb_date)
+        #else:
+        #    return(None)
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
@@ -201,7 +226,11 @@ class Multibeam(f_utils.FetchModule):
                 this_weight = self.weight
                 out, status = utils.run_cmd('mblist -OXYZ -I{} -Ma > {}'.format(src_data, src_xyz), verbose=True)
             else:
-                this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
+                #this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
+                this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+                if this_weight <= 0.: this_weight = 0.0000001
+                #this_weight = (float(mb_perc) * ((int(mb_date)-2000)/int(this_year) - 2000))/100.
                 out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
             
                 if status != 0:

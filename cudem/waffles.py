@@ -533,7 +533,7 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.2, max_radius=None,
                  lower_limit='d', upper_limit='d',
-                 breakline=None, convergence=.5, **kwargs):
+                 breakline=None, convergence=None, **kwargs):
         """generate a DEM with GMT surface"""
 
         super().__init__(**kwargs)
@@ -544,6 +544,7 @@ class GMTSurface(Waffle):
             return(None, -1)
         
         self.tension = tension
+        self.convergence = utils.float_or(convergence)
         self.relaxation = relaxation
         self.lower_limit = utils.float_or(lower_limit, 'd')
         self.upper_limit = utils.float_or(upper_limit, 'd')
@@ -557,7 +558,7 @@ class GMTSurface(Waffle):
         
     def run(self):        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}'.format(
+            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -572,6 +573,7 @@ class GMTSurface(Waffle):
                 self.upper_limit,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
+                ' -C{}'.format(self.convergence) if self.convergence is not None else '',
             )
         )
         
@@ -1396,7 +1398,7 @@ class WafflesCUDEM(Waffle):
             self,
             landmask=False,
             min_weight=1,
-            smoothing=10,
+            #smoothing=10,
             pre_xinc=None,
             pre_yinc=None,
             upper_limit=None,
@@ -1411,7 +1413,7 @@ class WafflesCUDEM(Waffle):
 
         self.landmask = landmask
         self.min_weight = utils.float_or(min_weight)
-        self.smoothing = utils.int_or(smoothing)
+        #self.smoothing = utils.int_or(smoothing)
         self.pre_xinc = self.xinc*3 if utils.float_or(pre_xinc) is None else utils.float_or(pre_xinc)
         self.pre_yinc = self.yinc*3 if utils.float_or(pre_yinc) is None else utils.float_or(pre_yinc)
         self.upper_limit = utils.float_or(upper_limit)
@@ -1484,7 +1486,7 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+2,
             extend_proc=self.extend_proc+2,
-            fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+            #fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
             weights=1,
             dst_srs=self.dst_srs,
             clobber=True,

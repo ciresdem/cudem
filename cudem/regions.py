@@ -566,14 +566,14 @@ def regions_merge(region_a, region_b):
         region_c.xmax = region_a.xmax if region_a.xmax > region_b.xmax else region_b.xmax
         region_c.ymin = region_a.ymin if region_a.ymin < region_b.ymin else region_b.ymin
         region_c.ymax = region_a.ymax if region_a.ymax > region_b.ymax else region_b.ymax
-        if region_a.zmin is not None or region_b.zmin is not None:
+        if region_a.zmin is not None and region_b.zmin is not None:
             #if region_a.zmin is None:
             #    region_c.zmin = region_b.zmin
             #elif region_b.zmin is None:
             #    region_c.zmin = region_a.zmin
             #else:
             region_c.zmin = region_a.zmin if region_a.zmin < region_b.zmin else region_b.zmin
-        if region_a.zmax is not None or region_b.zmax is not None:
+        if region_a.zmax is not None and region_b.zmax is not None:
             #if region_a.zmax is None:
             #    region_c.zmax = region_b.zmax
             #elif region_b.zmax is None:
