@@ -335,7 +335,14 @@ class ElevationDataset():
         """
         
         if self.region is not None:
-            inf_region = regions.Region().from_string(self.infos['wkt'])
+            try:
+                inf_region = regions.Region().from_string(self.infos['wkt'])
+            except:
+                try:
+                    inf_region = regions.Region().from_list(self.infos['minmax'])
+                except:
+                    inf_region = self.region.copy()
+                
             if regions.regions_intersect_p(inf_region, self.region):
                 self.data_entries.append(self)
                 yield(self)

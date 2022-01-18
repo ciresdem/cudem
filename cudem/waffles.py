@@ -738,7 +738,7 @@ class WafflesMBGrid(Waffle):
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
         ## xsize and ysize are mistaken when gridding for grid-node...make note.
         #xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc)
-        mbgrid_cmd = 'mbgrid -I{} {} -E{:.10f}/{:.10f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+        mbgrid_cmd = 'mbgrid -I{} {} -E{:.12f}/{:.12f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
             mb_region.format('gmt'),
             self.xinc,
