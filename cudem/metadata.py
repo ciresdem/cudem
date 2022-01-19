@@ -310,9 +310,9 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
   -X, --extend\t\tNumber of cells with which to EXTEND the REGION.
   -F, --format\t\tOutput OGR format. (ESRI Shapefile)
 
-  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append inc/region/year info to output BASENAME).
-\t\t\tnote: Set Year and Version by setting this to 'year=XXXX:version=X'
-\t\t\tleave blank for default of <CURRENT_YEAR> and <1>, respectively.
+  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
+\t\t\tnote: Set Resoluion, Year and Version by setting this to 'res=X:year=XXXX:version=X'
+\t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
   -r, --grid-node\tUse grid-node registration, default is pixel-node
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
   --help\t\tPrint the usage text
