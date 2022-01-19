@@ -1414,8 +1414,10 @@ class WafflesCUDEM(Waffle):
         self.landmask = landmask
         self.min_weight = utils.float_or(min_weight)
         #self.smoothing = utils.int_or(smoothing)
-        self.pre_xinc = self.xinc*3 if utils.float_or(pre_xinc) is None else utils.float_or(pre_xinc)
-        self.pre_yinc = self.yinc*3 if utils.float_or(pre_yinc) is None else utils.float_or(pre_yinc)
+        self.pre_xinc = utils.str2inc(pre_xinc)
+        self.pre_yinc = utils.str2inc(pre_yinc)
+        self.pre_xinc = self.xinc*3 if utils.float_or(self.pre_xinc) is None else utils.float_or(self.pre_xinc)
+        self.pre_yinc = self.yinc*3 if utils.float_or(self.pre_yinc) is None else utils.float_or(self.pre_yinc)
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
         self.pre_data = self.data_
@@ -1477,7 +1479,7 @@ class WafflesCUDEM(Waffle):
             #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
             
         self.pre_surface = WaffleFactory(
-            mod='surface:tension=1:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
+            mod='surface:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
             data=self.pre_data,
             src_region=pre_region,
             xinc=utils.str2inc(self.pre_xinc),
@@ -1497,7 +1499,7 @@ class WafflesCUDEM(Waffle):
         ).acquire().generate()
             
         self.surface = WaffleFactory(
-            mod='surface:tension=1',
+            mod='surface',
             data=self.data_ + ['{},200,{}'.format(self.pre_surface.fn, self.min_weight)],
             src_region=surface_region,
             xinc=self.xinc,

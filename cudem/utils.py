@@ -87,13 +87,13 @@ FIPS_TO_EPSG = {
     "5103": "26963", "5104": "26964", "5105": "26965", "5200": "32161"
 }
 
-def append_fn(fn, src_region, inc, version=None, year=None):
+def append_fn(fn, src_region, inc, version=None, year=None, res=None):
     """append the src_region, inc and version to a string filename"""
     
     return(
         '{}{}_{}_{}v{}'.format(
             fn,
-            inc2str(inc),
+            inc2str(inc) if res is None else res,
             src_region.format('fn'),
             this_year() if year is None else year,
             1 if version is None else version
