@@ -458,7 +458,8 @@ class Waffle:
 
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
-                
+
+        #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel')[1] == 0:                
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
@@ -654,6 +655,7 @@ class WafflesMBGrid(Waffle):
         self.dist = dist
         self.tension = tension
         self.use_datalists = use_datalists
+        self.mod = 'mbgrid'
                 
     def _gmt_num_msk(self, num_grd, dst_msk):
         """generate a num-msk from a NUM grid using GMT grdmath
@@ -737,12 +739,13 @@ class WafflesMBGrid(Waffle):
         mb_region = self.p_region.copy()
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
         ## xsize and ysize are mistaken when gridding for grid-node...make note.
-        #xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc)
-        mbgrid_cmd = 'mbgrid -I{} {} -E{:.12f}/{:.12f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
+        #mbgrid_cmd = 'mbgrid -I{} {} -E{:.10f}/{:.10f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
+        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
             mb_region.format('gmt'),
-            self.xinc,
-            self.yinc,
+            xsize,
+            ysize,
             self.name,
             self.dist,
             self.tension,
@@ -1398,7 +1401,7 @@ class WafflesCUDEM(Waffle):
             self,
             landmask=False,
             min_weight=1,
-            #smoothing=10,
+            smoothing=None,
             pre_xinc=None,
             pre_yinc=None,
             upper_limit=None,
@@ -1413,7 +1416,7 @@ class WafflesCUDEM(Waffle):
 
         self.landmask = landmask
         self.min_weight = utils.float_or(min_weight)
-        #self.smoothing = utils.int_or(smoothing)
+        self.smoothing = utils.int_or(smoothing)
         self.pre_xinc = utils.str2inc(pre_xinc)
         self.pre_yinc = utils.str2inc(pre_yinc)
         self.pre_xinc = self.xinc*3 if utils.float_or(self.pre_xinc) is None else utils.float_or(self.pre_xinc)
@@ -1488,7 +1491,7 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+2,
             extend_proc=self.extend_proc+2,
-            #fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+            fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
             weights=1,
             dst_srs=self.dst_srs,
             clobber=True,

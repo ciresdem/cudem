@@ -248,7 +248,7 @@ def split(src_dem, split_value = 0):
         return([dst_upper, dst_lower])
     else: return(None)
 
-def cut(src_dem, src_region, dst_dem):
+def cut(src_dem, src_region, dst_dem, node='pixel'):
     """cut src_fn gdal file to srcwin and output dst_fn gdal file
 
     returns [output-dem, status-code]
@@ -260,7 +260,7 @@ def cut(src_dem, src_region, dst_dem):
     if ds is not None:
         ds_config = gather_infos(ds)
         gt = ds_config['geoT']
-        srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize)
+        srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize, node=node)
         ds_arr = ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
         dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
         out_ds_config = set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,

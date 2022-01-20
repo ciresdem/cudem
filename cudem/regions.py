@@ -255,8 +255,8 @@ class Region:
             y_inc = y_inc * -1.
 
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
-        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt)
-        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt)
+        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node=node)
+        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node=node)
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
@@ -346,7 +346,7 @@ class Region:
         dst_feat = None
         dst_ds = None
 
-    def srcwin(self, geo_transform, x_count, y_count):
+    def srcwin(self, geo_transform, x_count, y_count, node='pixel'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
 
@@ -355,9 +355,9 @@ class Region:
 
         returns the gdal srcwin
         """
-
-        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform)]
-        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform)]
+        
+        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node=node)]
+        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
             this_size[0] = x_count - this_origin[0]
