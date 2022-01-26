@@ -23,16 +23,16 @@ yinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $2}' | 
 yinc=$(echo "$yinc * -1" | bc)
 radius=$(echo "$xinc * 9" | bc)
 proj='epsg:4269'
-max_diff=10
-min_diff=-10
+max_diff=1000
+min_diff=-1000
 #
 #  interpolate the new data through the old DEM
 #
 dlim $1 $region -t_srs $proj | \
     gdal_query.py $2 -d_format "xyd" | \
-    #awk '{if ($3 < "$max_diff" && $3 > "$min_diff") {print $1,$2,$3}}' | \
-    gmt blockmedian $region -I$xinc/$yinc | \
-    gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T1. -Z1.2 -V -rp -C.5 #-Lu${max_diff} -Ll${min_diff} #-M${radius}
+    awk '{if ($3 < "$max_diff" && $3 > "$min_diff") {print $1,$2,$3}}' | \
+    gmt blockmedian $region -I$xinc/$yinc | \ 
+    gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T1. -Z1.2 -V -rp -C.5 -Lu${max_diff} -Ll${min_diff} -M${radius}
 #
 #  make a difference grid
 #
@@ -42,10 +42,10 @@ dlim $1 $region -t_srs $proj | \
 #
 #  add the two grids
 #
-#gdal_findreplace.py -s_value -9999 -t_value 0 _diff.tif _diff2.tif
-#mv _diff2.tif _diff.tif
+gdal_findreplace.py -s_value -9999 -t_value 0 _diff.tif _diff2.tif
+mv _diff2.tif _diff.tif
 gdal_calc.py -A $2 -B _diff.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
 #
 #  clean up the mess
 #
-#rm _diff.*
+rm _diff.*

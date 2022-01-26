@@ -102,7 +102,7 @@ NCEI is the U.S. national archive for multibeam bathymetric data and holds more 
 nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
 worldwide.
 
-< multibeam:inc=None >""",
+< multibeam:inc=None:process=False:min_year=None:survey_id=None:exclude=None >""",
         },
         'trackline': {
             'class': trackline.Trackline,

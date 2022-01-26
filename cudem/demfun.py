@@ -119,7 +119,7 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
-def get_srs(src_dem):
+def get_srs(src_dem, vert_name=False):
     src_ds = gdal.Open(src_dem)
     proj = src_ds.GetProjectionRef()
     src_srs = osr.SpatialReference()
@@ -127,10 +127,21 @@ def get_srs(src_dem):
     src_srs.AutoIdentifyEPSG()
     srs_auth = src_srs.GetAuthorityCode(None)
     src_ds = None
-    if srs_auth is not None:
-        return('epsg:{}'.format(srs_auth))
+
+    #prj=ds.GetProjection()
+    #print prj
+
+    #srs=osr.SpatialReference(wkt=prj)
+    if vert_name:
+        #if src_srs.IsProjected:
+        #    return(src_srs.GetAttrValue('projcs'))
+        #return(src_srs.GetAttrValue('geogcs'))
+        return(src_srs.GetAttrValue('vert_cs'))
     else:
-        return(src_srs.ExportToProj4())
+        if srs_auth is not None:
+            return('epsg:{}'.format(srs_auth))
+        else:
+            return(src_srs.ExportToProj4())
 
 def set_srs(src_dem, src_srs='epsg:4326'):
     """set the projection of gdal file src_fn to src_srs"""
@@ -175,7 +186,7 @@ def set_nodata(src_dem, nodata=-9999, convert_array=False):
         return(0)
     else: return(None)
 
-def set_metadata(src_dem, node='pixel', cudem=False, vdatum='NAVD88'):
+def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
     """add metadata to the waffled raster
 
     Args: 
@@ -198,7 +209,18 @@ def set_metadata(src_dem, node='pixel', cudem=False, vdatum='NAVD88'):
         md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
         if cudem:
             md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
-            md['TIFFTAG_IMAGEDESCRIPTION'] = 'Topography-Bathymetry; {}'.format(vdatum)
+            infos = gather_infos(ds, scan=True)
+            if infos['zr'][1] < 0:
+                tb = 'Bathymetry'
+            elif infos['zr'][0] > 0:
+                tb = 'Topography'
+            else:
+                tb = 'Topography-Bathymetry'
+
+            prj=ds.GetProjection()
+            srs=osr.SpatialReference(wkt=prj)
+            vdatum=srs.GetAttrValue('vert_cs')
+            md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, vdatum)
         ds.SetMetadata(md)
         ds = None
         return(0)

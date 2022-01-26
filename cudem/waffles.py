@@ -466,10 +466,8 @@ class Waffle:
             except Exception as e:
                 utils.echo_error_msg(e)
                 
-        ## update when vertical datum support
-        self.vepsg = 'NAVD88'
-        demfun.set_metadata(fn, node=self.node, cudem=True, vdatum='{}'.format(self.vepsg))
         demfun.set_srs(fn, self.dst_srs)
+        demfun.set_metadata(fn, node=self.node, cudem=True)
         if self.fmt != 'GTiff':
             out_dem = utils.gdal2gdal(fn, dst_fmt=self.fmt)
             if out_dem is not None:
@@ -1430,6 +1428,7 @@ class WafflesCUDEM(Waffle):
         surface_region = self.p_region.copy()
         surface_region.wmin = self.min_weight
         pre_region = self.p_region.copy()
+        pre_region.buffer(x_bv=(self.pre_xinc*12), y_bv=(self.pre_yinc*12))
         pre_clip = None
         if self.upper_limit is not None:
             pre_region.zmax = self.upper_limit
@@ -1487,7 +1486,7 @@ class WafflesCUDEM(Waffle):
             src_region=pre_region,
             xinc=utils.str2inc(self.pre_xinc),
             yinc=utils.str2inc(self.pre_yinc),
-            name='_pre_surface',
+            name=utils.append_fn('_pre_surface', pre_region, self.pre_xinc),
             node=self.node,
             extend=self.extend+2,
             extend_proc=self.extend_proc+2,
@@ -1502,7 +1501,7 @@ class WafflesCUDEM(Waffle):
         ).acquire().generate()
             
         self.surface = WaffleFactory(
-            mod='surface',
+            mod='surface:tension=1',
             data=self.data_ + ['{},200,{}'.format(self.pre_surface.fn, self.min_weight)],
             src_region=surface_region,
             xinc=self.xinc,
@@ -1518,7 +1517,8 @@ class WafflesCUDEM(Waffle):
         ).acquire().generate()
 
         #utils.remove_glob('pre_surface*', 'tmp_coast*', '{}*'.format(self.coast_xyz))
-        utils.remove_glob('_pre_surface*', 'tmp_coast*')
+        #utils.remove_glob('_pre_surface*', 'tmp_coast*')
+        utils.remove_glob('{}*'.format(self.pre_surface.name), 'tmp_coast*')
         
         return(self)
         
