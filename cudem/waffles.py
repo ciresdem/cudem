@@ -1190,6 +1190,26 @@ see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
             outArray, '{}.tif'.format(self.name), ds_config
         )        
         return(self)    
+
+class WafflesVdatum_(Waffle):
+    """vertical datum transformation grid"""
+
+    def __init__(self, ivert=None, overt=None, **kwargs):
+        super().__init__(**kwargs)
+
+        # if self.gc['htdp'] is None:
+        #    utils.echo_error_msg('HTDP must be installed to use the VDATUM module')
+        #    return(None, -1)
+
+        self.mod = 'vdatum'
+        import cudem.fetches.vdatum
+
+    def run(self):
+
+        ## fetch appropriate grids
+        
+        pass
+        
     
 class WafflesVDatum(Waffle):
     """vertical datum transformation grid via NOAA's VDATUM.
@@ -1440,11 +1460,11 @@ class WafflesCUDEM(Waffle):
             if not os.path.exists(utils.str_or(self.landmask)):
 
                 coast_region = pre_region.copy()
-                if self.upper_limit is None:
-                    coast_region.zmax = 1
-                    
-                if self.lower_limit is None:
-                    coast_region.zmin = -1
+                #if self.upper_limit is None:
+                #    coast_region.zmax = 1
+                #    
+                #if self.lower_limit is None:
+                #    coast_region.zmin = -1
 
                 if self.min_weight is not None:
                     coast_region.wmin = self.min_weight

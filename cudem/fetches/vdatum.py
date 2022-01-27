@@ -23,7 +23,7 @@
 ##
 ## VDATUM Fetch - NOAA VDatum conversion grids
 ##
-## Fetch vertical datum conversion grids from NOAA's VDATUM project
+## Fetch vertical datum conversion grids from NOAA's VDATUM project and PROJ
 ##
 ## also here (has more)
 ## https://www.agisoft.com/downloads/geoids/
@@ -32,6 +32,8 @@
 
 import os
 import json
+
+from osgeo import ogr
 
 from cudem import utils
 from cudem import regions
@@ -43,7 +45,6 @@ import cudem.fetches.FRED as FRED
 def proc_vdatum_inf(vdatum_inf, name='vdatum'):
     
     _inf = open(vdatum_inf, 'r')
-
     _inf_areas = {}
 
     for line in _inf:
@@ -77,14 +78,16 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
     return(_inf_areas_fmt)
 
 class VDATUM(f_utils.FetchModule):
-    """Fetch vertical datum conversion grids from NOAA"""
+    """Fetch vertical datum conversion grids from NOAA, etc."""
 
-    def __init__(self, where=[], datatype=None, gtx=False, **kwargs):
+    def __init__(self, where=[], datatype=None, gtx=False, epsg=None, **kwargs):
         super().__init__(**kwargs)
         
         self._vdatum_data_url = 'https://vdatum.noaa.gov/download/data/'
+        self._proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
+        
         self._outdir = os.path.join(os.getcwd(), 'vdatum')
-
+        
         ## add others IGLD85
         self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
         #self._vdatums = ['GEOID03', 'TIDAL']
@@ -93,9 +96,6 @@ class VDATUM(f_utils.FetchModule):
         self.datatype = datatype
         self.gtx = gtx
         self.name = 'vdatum'
-        self._info = '''Vertical datum transformation grids'''
-        self._title = '''NOAA VDatum'''
-        self._usage = '''< vdatum >'''
         self.v_datum = 'varies'
         
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
@@ -113,8 +113,6 @@ class VDATUM(f_utils.FetchModule):
     def update(self):
         """Update or create the reference vector file"""
 
-        #vertical_datums = {}
-        
         self.FRED._open_ds(1)
         for vd in self._vdatums:
             surveys = []
@@ -124,7 +122,7 @@ class VDATUM(f_utils.FetchModule):
                 ## All tidal inf data is in each one, so we only
                 ## have to download one of the tidal zips to process
                 ## them all; lets use the smallest one
-                ## Keep this link up-tod-date!
+                ## Keep this link up-to-date!
                 ## ==============================================
                 if vd == 'TIDAL':
                     vd_ = 'DEVAemb12_8301'
@@ -191,7 +189,13 @@ class VDATUM(f_utils.FetchModule):
             #self.where.append("DataType = '{}'".format(self.datatype))
             w.append("DataType = '{}'".format(self.datatype))
 
-        #for surv in FRED._filter_FRED(self):
+        ## ==============================================
+        ## Search FRED for VDATUM TIDAL TRANSFORMATION GRIDS
+        ## FRED holds the VDATUM tidal grids,
+        ## mllw, mlw, mhhw, mhw, tss, mtl
+        ## where all convert to MSL and tss represents the
+        ## current geoid
+        ## ==============================================
         for surv in self.FRED._filter(self.region, w, [self.name]):
             if self.gtx:
                 dst_zip = '{}.zip'.format(surv['ID'])
@@ -202,6 +206,45 @@ class VDATUM(f_utils.FetchModule):
                     utils.remove_glob(dst_zip)
             else:
                 self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
+
+        ## ==============================================
+        ## Search PROJ CDN for all other transformation grids:
+        ## the PROJ CDN holds transformation grids from around the
+        ## world, including global transformations such as EGM
+        ## ==============================================
+        cdn_index = 'proj_cdn_files.geojson'
+        if f_utils.Fetch(self._proj_vdatum_index, verbose=True, callback=self.callback).fetch_file(cdn_index) == 0:
+            cdn_driver = ogr.GetDriverByName('GeoJSON')
+            cdn_ds = cdn_driver.Open(cdn_index, 0)
+            cdn_layer = cdn_ds.GetLayer()
+            _boundsGeom = self.region.export_as_geom()
+            _results = []
+
+            if self.datatype is not None:
+                cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(self.datatype.upper(), self.datatype.upper()))
+            else:
+                cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET'")
+             
+            for feat in cdn_layer:
+                if _boundsGeom is not None:
+                    geom = feat.GetGeometryRef()
+                    if geom is not None:
+                        if _boundsGeom.Intersects(geom):
+                            _results.append({})
+                            f_j = json.loads(feat.ExportToJson())
+                            for key in f_j['properties'].keys():
+                                _results[-1][key] = feat.GetField(key)
+                else:
+                    _results.append({})
+                    f_j = json.loads(feat.ExportToJson())
+                    for key in f_j['properties'].keys():
+                        _results[-1][key] = feat.GetField(key)
+                        
+            for _result in _results:
+                self.results.append([_result['url'], _result['name'], _result['source_id']])
+                
+            cdn_ds = None
+            utils.remove_glob(cdn_index)
             
     def yield_xyz(self, entry):
         src_zip = entry[1]
