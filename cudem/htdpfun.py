@@ -24,6 +24,7 @@
 ## wrapper and functions for using the htdp program
 ## https://geodesy.noaa.gov/TOOLS/Htdp/Htdp.shtml
 ##
+## version 3.3.0
 ##  1...NAD_83(2011/CORS96/2007)  (North American plate fixed) 
 ##  2...NAD_83(PA11/PACP00)       (Pacific plate fixed) 
 ##  3...NAD_83(MA11/MARP00)       (Mariana plate fixed)                                                  
@@ -38,6 +39,25 @@
 ## 13...ITRF89                      23...ITRF2008 or IGS08/IGb08
 ## 14...ITRF90 or (PNEOS90/NEOS90)  24...ITRF2014 or IGS14/IGb14
 ##
+## version 3.4.0
+##  1...NAD_83(2011/CORS96/2007)  North America plate fixed     
+##  2...NAD_83(PA11/PACP00)       Pacific plate fixed           
+##  3...NAD_83(MA11/MARP00)       Mariana plate fixed           
+                                                             
+##  4...WGS84 original (Transit)                                
+##  5...WGS84(G730)   ITRF91 used                               
+##  6...WGS84(G873)   ITRF94=ITRF96=ITRF97 used                 
+##  7...WGS84(G1150)  ITRF2000=IGS00=IGb00 used                 
+##  8...WGS84(G1674)  ITRF2008=IGS08=IGb08 used                 
+##  9...WGS84(G1762)  ITRF2008=IGS08=IGb08 used                 
+## 10...WGS84(G2139)  ITRF2014=IGS14=IGb14 used                                                                             
+## 11...ITRF88                      18...ITRF96 (=ITRF94=ITRF97)
+## 12...ITRF89                      19...ITRF97 (=ITRF94=ITRF96)
+## 13...ITRF90 (or PNEOS90/NEOS90)  20...ITRF2000 or IGS00/IGb00
+## 14...ITRF91 (or SIO/MIT_92)      21...ITRF2005 or IGS05      
+## 15...ITRF92                      22...ITRF2008 or IGS08/IGb08
+## 16...ITRF93                      23...ITRF2014 or IGS14/IGb14
+## 17...ITRF94 (=ITRF96=ITRF97) 
 ### Code:
 
 import os
@@ -63,94 +83,97 @@ class HTDP:
                'htdp_id': 3},
         # 4979: {'name': 'WGS_84(original)',
         #        'description': '(NAD_83(2011) used)',
-        #        'htdp_id': 5},
+        #        'htdp_id': 4},
         7815: {'name': 'WGS_84(original)',
                'description': '(NAD_83(2011) used)',
-               'htdp_id': 5},
+               'htdp_id': 4},
         7816: {'name': 'WGS_84(original)',
                'description': '(NAD_83(2011) used)',
-               'htdp_id': 5},
+               'htdp_id': 4},
         6319: {'name': 'WGS_84(original)',
                'description': '(NAD_83(2011) used)',
-               'htdp_id': 5},
+               'htdp_id': 4},
         7656: {'name': 'WGS_84(G730)',
                'description': '(ITRF91 used)',
-               'htdp_id': 6},
+               'htdp_id': 5},
         7657: {'name': 'WGS_84(G730)',
                'description': '(ITRF91 used)',
-               'htdp_id': 6},
+               'htdp_id': 5},
         7658: {'name': 'WGS_84(G873)',
                'description': '(ITRF94 used)',
-               'htdp_id': 7},
+               'htdp_id': 6},
         7659: {'name': 'WGS_84(G873)',
                'description': '(ITRF94 used)',
-               'htdp_id': 7},
+               'htdp_id': 6},
         7660: {'name': 'WGS_84(G1150)',
                'description': '(ITRF2000 used)',
-               'htdp_id': 8},
+               'htdp_id': 7},
         7661: {'name': 'WGS_84(G1150)',
                'description': '(ITRF2000 used)',
-               'htdp_id': 8},
+               'htdp_id': 7},
         4979: {'name': 'WGS_84(G1674)',
                'description': '(ITRF2008 used)',
-               'htdp_id': 9},
+               'htdp_id': 8},
         7662: {'name': 'WGS_84(G1674)',
                'description': '(ITRF2008 used)',
-               'htdp_id': 9},
+               'htdp_id': 8},
         7663: {'name': 'WGS_84(G1674)',
                'description': '(ITRF2008 used)',
-               'htdp_id': 9},
+               'htdp_id': 8},
         7664: {'name': 'WGS_84(G1762)',
                'description': '(IGb08 used)',
-               'htdp_id': 10},
+               'htdp_id': 9},
         7665: {'name': 'WGS_84(G1762)',
                'description': '(IGb08 used)',
+               'htdp_id': 9},
+        7666: {'name': 'WGS_84(G2139)',
+               'description': '(ITRF2014=IGS14=IGb14 used)',
                'htdp_id': 10},
-        7904: {'name': 'SIO/MIT_92',
-               'description': '(ITRF91 used)',
-               'htdp_id': 7904},
+        7667: {'name': 'WGS_84(G2139)',
+               'description': '(ITRF2014=IGS14=IGb14 used)',
+               'htdp_id': 10},
         4910: {'name': 'ITRF88',
                'description': '',
-               'htdp_id': 12},
+               'htdp_id': 11},
         4911: {'name': 'ITRF89',
                'description': '',
-               'htdp_id': 13},
+               'htdp_id': 12},
         7901: {'name': 'ITRF89',
                'description': '',
-               'htdp_id': 13},
+               'htdp_id': 12},
         7902: {'name': 'ITRF90',
                'description': '(PNEOS90/NEOS90)',
-               'htdp_id': 14},
+               'htdp_id': 13},
         7903: {'name': 'ITRF91',
                'description': '',
-               'htdp_id': 15},
+               'htdp_id': 14},
         7904: {'name': 'ITRF92',
                'description': '',
-               'htdp_id': 16},
+               'htdp_id': 15},
         7905: {'name': 'ITRF93',
                'description': '',
-               'htdp_id': 17},
+               'htdp_id': 16},
         7906: {'name': 'ITRF94',
                'description': '',
-               'htdp_id': 18},
+               'htdp_id': 17},
         7907: {'name': 'ITRF96',
                'description': '',
-               'htdp_id': 19},
+               'htdp_id': 18},
         7908: {'name': 'ITRF97',
                'description': 'IGS97',
-               'htdp_id': 20},
+               'htdp_id': 19},
         7909: {'name': 'ITRF2000',
                'description': 'IGS00/IGb00',
-               'htdp_id': 21},
+               'htdp_id': 20},
         7910: {'name': 'ITRF2005',
                'description': 'IGS05',
-               'htdp_id': 22},
+               'htdp_id': 21},
         7911: {'name': 'ITRF2008',
                'description': 'IGS08/IGb08',
-               'htdp_id': 23},
+               'htdp_id': 22},
         7912: {'name': 'ITRF2014',
                'description': 'IGS14/IGb14',
-               'htdp_id': 24},
+               'htdp_id': 23},
     }
     
     def __init__(self, htdp_bin='htdp', verbose=True):
