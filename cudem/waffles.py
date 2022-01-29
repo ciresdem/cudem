@@ -2163,6 +2163,7 @@ Options:
 \t\t\tAvailable FILTERS:
 \t\t\t1: perform a Gaussian filter at -T1:<factor>.
 \t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
+
 \t\t\t3: Spike Filter at -T3:<stand-dev. threshhold>.
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\tAppend :split_value=<num> to only filter values below z-value <num>.

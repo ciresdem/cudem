@@ -80,6 +80,30 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
 class VDATUM(f_utils.FetchModule):
     """Fetch vertical datum conversion grids from NOAA, etc."""
 
+    _tidal_references = {
+        1089: {'name': 'mllw',
+               'description': 'Mean Lower Low Water Height',
+               'grid': 'mllw.gtx'},
+        1091: {'name': 'mlw',
+               'description': 'Mean Low Water Height',
+               'grid': 'mlw.gtx'},
+        5868: {'name': 'mhw',
+               'description': 'Mean High Water',
+               'grid': 'mhw.gtx'},
+        5869: {'name': 'mhhw',
+               'description': 'Mean Higher High Water',
+               'grid': 'mhhw.gtx'},
+        5703: {'name': 'tss',
+               'description': 'NAVD88 tss geoid',
+               'grid': 'tss.gtx'},
+        6641: {'name': 'tss',
+               'description': 'PRVD02 tss geoid',
+               'grid': 'tss.gtx'},
+        6642: {'name': 'tss',
+               'description': 'VIVD09 tss geoid',
+               'grid': 'tss.gtx'},
+    }
+    
     def __init__(self, where=[], datatype=None, gtx=False, epsg=None, **kwargs):
         super().__init__(**kwargs)
         
@@ -89,11 +113,12 @@ class VDATUM(f_utils.FetchModule):
         self._outdir = os.path.join(os.getcwd(), 'vdatum')
         
         ## add others IGLD85
-        self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
-        #self._vdatums = ['GEOID03', 'TIDAL']
+        #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
+        self._vdatums = ['TIDAL']
         self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
         self.where = where
         self.datatype = datatype
+        self.epsg = int(epsg)
         self.gtx = gtx
         self.name = 'vdatum'
         self.v_datum = 'varies'
@@ -188,6 +213,8 @@ class VDATUM(f_utils.FetchModule):
         if self.datatype is not None:
             #self.where.append("DataType = '{}'".format(self.datatype))
             w.append("DataType = '{}'".format(self.datatype))
+        elif self.epsg is not None:
+            w.append("DataType = '{}'".format(self._tidal_references[self.epsg]['name']))
 
         ## ==============================================
         ## Search FRED for VDATUM TIDAL TRANSFORMATION GRIDS
@@ -213,7 +240,7 @@ class VDATUM(f_utils.FetchModule):
         ## world, including global transformations such as EGM
         ## ==============================================
         cdn_index = 'proj_cdn_files.geojson'
-        if f_utils.Fetch(self._proj_vdatum_index, verbose=True, callback=self.callback).fetch_file(cdn_index) == 0:
+        if f_utils.Fetch(self._proj_vdatum_index, callback=self.callback, verbose=self.verbose).fetch_file(cdn_index) == 0:
             cdn_driver = ogr.GetDriverByName('GeoJSON')
             cdn_ds = cdn_driver.Open(cdn_index, 0)
             cdn_layer = cdn_ds.GetLayer()
@@ -222,6 +249,8 @@ class VDATUM(f_utils.FetchModule):
 
             if self.datatype is not None:
                 cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(self.datatype.upper(), self.datatype.upper()))
+            elif self.epsg is not None:
+                cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(self.epsg, self.epsg))
             else:
                 cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET'")
              

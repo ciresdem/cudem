@@ -108,7 +108,8 @@ setuptools.setup(
         'scripts/update_dem.sh',
         'scripts/gdal_mask.py',
         'scripts/vrbag2tif2chunks2xyz.sh',
-        'scripts/explode_bags.sh'
+        'scripts/explode_bags.sh',
+        'scripts/vertical_datum_convert.py',
     ],
     python_requires = '>=3.0',
     project_urls = {
