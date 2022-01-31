@@ -212,7 +212,6 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                         break
     else:        
         cdn_results = search_proj_cdn(src_region, epsg=vdatum_in)
-        print(cdn_results)
         if len(cdn_results) > 0:
             for _result in cdn_results:
                 src_code = int(_result['source_crs_code'].split(':')[-1])
