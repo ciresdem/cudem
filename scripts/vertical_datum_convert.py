@@ -196,7 +196,7 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                             tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
                             #rr = regions.regions_reduce(tmp_region, regions.Region().from_list([-180,180,-90,90]))
                             #if not rr.valid_p(check_xy=True):
-                            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
+                            utils.run_cmd('gdalwarp {} {} -s_srs epsg:4326 --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
                             os.rename('_{}'.format(_trans_grid), _trans_grid)
                                 
                             demfun.cut(_trans_grid, src_region, '_{}'.format(_trans_grid))
@@ -212,6 +212,7 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                         break
     else:        
         cdn_results = search_proj_cdn(src_region, epsg=vdatum_in)
+        print(cdn_results)
         if len(cdn_results) > 0:
             for _result in cdn_results:
                 src_code = int(_result['source_crs_code'].split(':')[-1])
@@ -234,7 +235,7 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                 rr = regions.regions_reduce(tmp_region, regions.Region().from_list([-180,180,-90,90]))
                 #print(tmp_region)
                 #if not rr.valid_p(check_xy=True):
-                utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
+                utils.run_cmd('gdalwarp {} {} -s_srs epsg:4326 --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)), verbose=True)
                 os.rename('_{}'.format(_trans_grid), _trans_grid)
 
                 demfun.cut(_trans_grid, src_region, '_{}'.format(_trans_grid))
