@@ -165,7 +165,9 @@ increment to save space.
                             urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
                             index_zipfile = 'tileindex.zip'
                             index_zipurl = link['link'] + '/' + index_zipfile
-                            if f_utils.Fetch(link['link'] + '/' + urllist, verbose=True).fetch_file(urllist) == 0:
+                            urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                            #urllist_url = link['link'] + '/' + urllist
+                            if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) == 0:
                                 with open(urllist, 'r') as ul:
                                     for line in ul:
                                         if 'tileindex' in line:
