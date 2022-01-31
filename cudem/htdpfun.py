@@ -237,8 +237,8 @@ class HTDP:
         lon_steps = int(griddef[4])
         lat_steps = int(griddef[5])
 
-        lat_axis = np.linspace(lat_start,lat_end,lat_steps)
         lon_axis = np.linspace(lon_start,lon_end,lon_steps)
+        lat_axis = np.linspace(lat_start,lat_end,lat_steps)
 
         lon_list = []
         for i in range(lat_steps):

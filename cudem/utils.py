@@ -700,7 +700,8 @@ def gdal_write(
         dst_gdal,
         ds_config,
         dst_fmt='GTiff',
-        max_cache=False
+        max_cache=False,
+        verbose=False
 ):
     """write src_arr to gdal file dst_gdal using src_config
 
@@ -730,7 +731,9 @@ def gdal_write(
         try:
             ds.SetProjection(ds_config['proj'])
         except Exception as e:
-            echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
+            if verbose:
+                echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
+            else: pass
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
         ds.GetRasterBand(1).WriteArray(src_arr)
         ds = None

@@ -39,7 +39,7 @@ from cudem import htdpfun
 
 import cudem.fetches.utils as f_utils
 
-_version = '0.0.1'
+_version = '0.0.2'
 _htdp_epsg_desc = lambda x: 'htdp epsg:\n  ' + ' '.join(
     ['\033[1m{}\033[0m\t{}\n'.format(key, x[key]['name']) for key in x]) + '\n'
 
@@ -66,7 +66,33 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 #{htdp_epsg}
 #, htdp_epsg=_htdp_epsg_desc(htdpfun.HTDP()._reference_frames))
 
-def search_proj_cdn(region, epsg=None, crs_name=None, verbose=True):
+geoids = {'geoid18': 'us_noaa_g2018u0.tif',
+          'geoid12b': 'us_noaa_g2012bu0.tif',
+          'geoid99': 'us_noaa_g1999u01.tif',
+          'geoid03': 'us_noaa_geoid03_conus.tif',
+          'geoid09': 'us_noaa_geoid09_conus.tif'}
+
+def list_proj_cdn_epsg(verbose=False):
+    _proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
+    cdn_index = 'proj_cdn_files.geojson'
+    if f_utils.Fetch(_proj_vdatum_index, verbose=verbose).fetch_file(cdn_index) == 0:
+        cdn_driver = ogr.GetDriverByName('GeoJSON')
+        cdn_ds = cdn_driver.Open(cdn_index, 0)
+        cdn_layer = cdn_ds.GetLayer()
+
+        cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET'")
+
+        for feat in cdn_layer:
+            try:
+                print('{} {}-{}'.format(feat.GetField('target_crs_code').split(':')[-1], feat.GetField('target_crs_name'), feat.GetField('name')))
+            except:
+                pass
+                #print(feat.GetField('target_crs_code'))
+                #print(feat.GetField('source_crs_code'))
+                  
+        cdn_ds = None
+            
+def search_proj_cdn(region, epsg=None, crs_name=None, geoid=None, verbose=True):
     """Search PROJ CDN for transformation grids:
     the PROJ CDN holds transformation grids from around the
     world, including global transformations such as EGM
@@ -124,8 +150,8 @@ def transform_grid_vertical_htdp(src_grid, dst_grid, epsg_in, epsg_out):
     htdp._write_grid(grid, '_tmp_input.xyz')
     htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz', htdp._reference_frames[epsg_in]['htdp_id'], 2012.0, htdp._reference_frames[epsg_out]['htdp_id'], 2012.0)
     htdp.run('_tmp_control.txt')
-    
-    out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[4],griddef[5]))
+
+    out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
     src_ds = gdal.Open(src_grid)
     src_band = src_ds.GetRasterBand(1)
     src_array = src_band.ReadAsArray()
@@ -168,11 +194,10 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                         if f_utils.Fetch(_result['url'], verbose=verbose).fetch_file(_trans_grid) == 0:
                             tmp_infos = demfun.infos(_trans_grid)
                             tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
-                            rr = regions.regions_reduce(tmp_region, regions.Region().from_list([-180,180,-90,90]))
-                            
-                            if not rr.valid_p(check_xy=True):
-                                utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
-                                os.rename('_{}'.format(_trans_grid), _trans_grid)
+                            #rr = regions.regions_reduce(tmp_region, regions.Region().from_list([-180,180,-90,90]))
+                            #if not rr.valid_p(check_xy=True):
+                            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
+                            os.rename('_{}'.format(_trans_grid), _trans_grid)
                                 
                             demfun.cut(_trans_grid, src_region, '_{}'.format(_trans_grid))
                             os.rename('_{}'.format(_trans_grid), _trans_grid)
@@ -207,9 +232,10 @@ def transform_grid_vertical_datum(src_grid, dst_grid, vdatum_in, vdatum_out, ver
                 tmp_infos = demfun.infos(_trans_grid)
                 tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
                 rr = regions.regions_reduce(tmp_region, regions.Region().from_list([-180,180,-90,90]))
-                if not rr.valid_p(check_xy=True):
-                    utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
-                    os.rename('_{}'.format(_trans_grid), _trans_grid)
+                #print(tmp_region)
+                #if not rr.valid_p(check_xy=True):
+                utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(_trans_grid, '_{}'.format(_trans_grid)))
+                os.rename('_{}'.format(_trans_grid), _trans_grid)
 
                 demfun.cut(_trans_grid, src_region, '_{}'.format(_trans_grid))
                 os.rename('_{}'.format(_trans_grid), _trans_grid)
@@ -234,6 +260,7 @@ def main():
     vdatum_in = 5703
     vdatum_out = 7662
     verbose = False
+    #list_epsg = false
 
     i = 1
 
@@ -247,6 +274,10 @@ def main():
         elif arg == '-o' or arg == '--vdatum_out':
             vdatum_out = int(argv[i + 1])
             i = i + 1
+        elif arg == '--list-epsg':
+            print(_htdp_epsg_desc(htdpfun.HTDP()._reference_frames))
+            list_proj_cdn_epsg()
+            sys.exit(1)
         elif arg == '--verbose': verbose = True
         elif arg == '-help' or arg == '--help' or arg == '-h':
             print(_usage)
