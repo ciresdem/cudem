@@ -123,7 +123,7 @@ def main():
         src_infos = demfun.infos(src_grid)
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
         x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
-        tmp_x_inc, tmp_y_inc = src_region.increments(200, 200)
+        tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
         vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out)
         _trans_grid = vt.run()
         

@@ -243,6 +243,13 @@ class VerticalTransform:
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
         """generate tidal transformation grid"""
 
+        v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in).run()
+        v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out).run()
+
+        if v_in is None or v_out is None:
+            utils.echo_error_msg('could not locate {} or {} in the region {}'.format(vdatum_tidal_in, vdatum_tidal_out, self.src_region))
+            return(np.zeros( (self.ycount, self.xcount) ), None)
+        
         if vdatum_tidal_in != 5174 and vdatum_tidal_in != 'msl': 
             _trans_in = waffles.GMTSurface(
                 data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
@@ -309,6 +316,8 @@ class VerticalTransform:
                         if cudem.fetches.utils.Fetch(_result['url'], verbose=self.verbose).fetch_file(_trans_grid) == 0:
                             tmp_infos = demfun.infos(_trans_grid)
                             tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
+                            if os.path.exists('_{}'.format(_trans_grid)):
+                                utils.remove_glob('_{}'.format(_trans_grid))
                             utils.run_cmd('gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0'.format(
                                 _trans_grid, '_{}'.format(_trans_grid), self.src_region.format('te'), self.xcount, self.ycount
                             ), verbose=True)
@@ -321,7 +330,7 @@ class VerticalTransform:
                             return(_tmp_array, src_code)
                         
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
-        return(None, None)
+        return(np.zeros( (self.ycount, self.xcount) ), None)
             
     def _htdp_transform(self, epsg_in, epsg_out):
         """create an htdp transformation grid"""
@@ -347,7 +356,7 @@ class VerticalTransform:
     def _vertical_transform(self, epsg_in, epsg_out):
 
         trans_array = np.zeros( (self.ycount, self.xcount) )        
-        while epsg_in != epsg_out:
+        while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
             #print(epsg_in, epsg_out)
             if ref_in == 'tidal':
