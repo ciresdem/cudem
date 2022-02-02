@@ -28,17 +28,11 @@
 
 import os
 import sys
-import json
-from osgeo import gdal
-from osgeo import ogr
 
 from cudem import utils
 from cudem import regions
 from cudem import demfun
-# from cudem import htdpfun
 from cudem import vdatums
-
-#import cudem.fetches.utils as f_utils
 
 _version = '0.1.0'
 _epsg_desc = lambda t, x: '{}:\n '.format(t) + ' '.join(
