@@ -403,8 +403,11 @@ class VerticalTransform:
         else:
             trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)
             trans_infos = demfun.set_infos(self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff')
-            utils.gdal_write(trans_array, outfile, trans_infos)
 
-            return(outfile)
+            if outfile is not None:
+                utils.gdal_write(trans_array, outfile, trans_infos)
+                return(outfile)
+            else:
+                return(trans_array, trans_infos)
         
 ### End
