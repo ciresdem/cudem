@@ -1,6 +1,6 @@
 ### vdatumfun.py
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -18,12 +18,6 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
-### Code:
-
-import os
-from cudem import utils
-
-## =============================================================================
 ##
 ## VDatum - vdatumfun.py
 ## wrapper functions for NOAA's VDatum
@@ -31,7 +25,12 @@ from cudem import utils
 ## Currently only compatible with VDatum >= 4.0
 ##
 ## TODO: add all vdatum cli options
-## =============================================================================
+##
+### Code:
+
+import os
+from cudem import utils
+
 class Vdatum:
 
     def __init__(self, jar=None, ivert='navd88:m:height', overt='mhw:m:height',

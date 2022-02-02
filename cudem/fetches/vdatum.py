@@ -77,6 +77,49 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
             
     return(_inf_areas_fmt)
 
+def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True):
+    """Search PROJ CDN for transformation grids:
+    the PROJ CDN holds transformation grids from around the
+    world, including global transformations such as EGM
+    """
+    
+    _proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
+    cdn_index = 'proj_cdn_files.geojson'
+    if f_utils.Fetch(_proj_vdatum_index, verbose=verbose).fetch_file(cdn_index) == 0:
+        cdn_driver = ogr.GetDriverByName('GeoJSON')
+        cdn_ds = cdn_driver.Open(cdn_index, 0)
+        cdn_layer = cdn_ds.GetLayer()
+        _boundsGeom = region.export_as_geom()
+        _results = []
+
+        if crs_name is not None:
+            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(name.upper(), name.upper()))
+        elif epsg is not None:
+            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(epsg, epsg))
+        elif name is not None:
+            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND name LIKE '%{}%'".format(name))
+        else:
+            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET'")
+
+        for feat in cdn_layer:
+            if _boundsGeom is not None:
+                geom = feat.GetGeometryRef()
+                if geom is not None:
+                    if _boundsGeom.Intersects(geom):
+                        _results.append({})
+                        f_j = json.loads(feat.ExportToJson())
+                        for key in f_j['properties'].keys():
+                            _results[-1][key] = feat.GetField(key)
+            else:
+                _results.append({})
+                f_j = json.loads(feat.ExportToJson())
+                for key in f_j['properties'].keys():
+                    _results[-1][key] = feat.GetField(key)
+
+        cdn_ds = None
+        utils.remove_glob(cdn_index)
+        return(_results)
+
 class VDATUM(f_utils.FetchModule):
     """Fetch vertical datum conversion grids from NOAA, etc."""
 
@@ -118,7 +161,7 @@ class VDATUM(f_utils.FetchModule):
         self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
         self.where = where
         self.datatype = datatype
-        self.epsg = int(epsg)
+        self.epsg = utils.int_or(epsg)
         self.gtx = gtx
         self.name = 'vdatum'
         self.v_datum = 'varies'

@@ -227,7 +227,15 @@ def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
     else:
         utils.echo_error_msg('failed to set metadata')
         return(None)
-        
+
+def get_array(src_dem):
+    ds = gdal.Open(src_dem)
+    band = ds.GetRasterBand(1)
+    _array = band.ReadAsArray()
+    infos = gather_infos(ds)
+    ds = None
+    return(_array, infos)
+    
 def split(src_dem, split_value = 0):
     """split raster file `src_dem`into two files based on z value, 
     or if split_value is a filename, split raster by overlay, where upper is outside and lower is inside.

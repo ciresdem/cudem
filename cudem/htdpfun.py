@@ -70,111 +70,6 @@ from cudem import utils
 ## =============================================================================
 
 class HTDP:
-
-    _reference_frames = {
-        6781: {'name': 'NAD_83(2011/CORS96/2007)',
-               'description': '(North American plate fixed)',
-               'htdp_id': 1},
-        6321: {'name': 'NAD_83(PA11/PACP00)',
-               'description': '(Pacific plate fixed)',
-               'htdp_id': 2},
-        6324: {'name': 'NAD_83(MA11/MARP00)',
-               'description': '(Mariana plate fixed)',
-               'htdp_id': 3},
-        # 4979: {'name': 'WGS_84(original)',
-        #        'description': '(NAD_83(2011) used)',
-        #        'htdp_id': 4},
-        7815: {'name': 'WGS_84(original)',
-               'description': '(NAD_83(2011) used)',
-               'htdp_id': 4},
-        7816: {'name': 'WGS_84(original)',
-               'description': '(NAD_83(2011) used)',
-               'htdp_id': 4},
-        6319: {'name': 'WGS_84(original)',
-               'description': '(NAD_83(2011) used)',
-               'htdp_id': 4},
-        7656: {'name': 'WGS_84(G730)',
-               'description': '(ITRF91 used)',
-               'htdp_id': 5},
-        7657: {'name': 'WGS_84(G730)',
-               'description': '(ITRF91 used)',
-               'htdp_id': 5},
-        7658: {'name': 'WGS_84(G873)',
-               'description': '(ITRF94 used)',
-               'htdp_id': 6},
-        7659: {'name': 'WGS_84(G873)',
-               'description': '(ITRF94 used)',
-               'htdp_id': 6},
-        7660: {'name': 'WGS_84(G1150)',
-               'description': '(ITRF2000 used)',
-               'htdp_id': 7},
-        7661: {'name': 'WGS_84(G1150)',
-               'description': '(ITRF2000 used)',
-               'htdp_id': 7},
-        4979: {'name': 'WGS_84(G1674)',
-               'description': '(ITRF2008 used)',
-               'htdp_id': 8},
-        7662: {'name': 'WGS_84(G1674)',
-               'description': '(ITRF2008 used)',
-               'htdp_id': 8},
-        7663: {'name': 'WGS_84(G1674)',
-               'description': '(ITRF2008 used)',
-               'htdp_id': 8},
-        7664: {'name': 'WGS_84(G1762)',
-               'description': '(IGb08 used)',
-               'htdp_id': 9},
-        7665: {'name': 'WGS_84(G1762)',
-               'description': '(IGb08 used)',
-               'htdp_id': 9},
-        7666: {'name': 'WGS_84(G2139)',
-               'description': '(ITRF2014=IGS14=IGb14 used)',
-               'htdp_id': 10},
-        7667: {'name': 'WGS_84(G2139)',
-               'description': '(ITRF2014=IGS14=IGb14 used)',
-               'htdp_id': 10},
-        4910: {'name': 'ITRF88',
-               'description': '',
-               'htdp_id': 11},
-        4911: {'name': 'ITRF89',
-               'description': '',
-               'htdp_id': 12},
-        7901: {'name': 'ITRF89',
-               'description': '',
-               'htdp_id': 12},
-        7902: {'name': 'ITRF90',
-               'description': '(PNEOS90/NEOS90)',
-               'htdp_id': 13},
-        7903: {'name': 'ITRF91',
-               'description': '',
-               'htdp_id': 14},
-        7904: {'name': 'ITRF92',
-               'description': '',
-               'htdp_id': 15},
-        7905: {'name': 'ITRF93',
-               'description': '',
-               'htdp_id': 16},
-        7906: {'name': 'ITRF94',
-               'description': '',
-               'htdp_id': 17},
-        7907: {'name': 'ITRF96',
-               'description': '',
-               'htdp_id': 18},
-        7908: {'name': 'ITRF97',
-               'description': 'IGS97',
-               'htdp_id': 19},
-        7909: {'name': 'ITRF2000',
-               'description': 'IGS00/IGb00',
-               'htdp_id': 20},
-        7910: {'name': 'ITRF2005',
-               'description': 'IGS05',
-               'htdp_id': 21},
-        7911: {'name': 'ITRF2008',
-               'description': 'IGS08/IGb08',
-               'htdp_id': 22},
-        7912: {'name': 'ITRF2014',
-               'description': 'IGS14/IGb14',
-               'htdp_id': 23},
-    }
     
     def __init__(self, htdp_bin='htdp', verbose=True):
         self.htdp_bin = htdp_bin
@@ -293,18 +188,18 @@ class HTDP:
         utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
 
 
-if __name__ == '__main__':
+# if __name__ == '__main__':
 
-    in_epsg = 6781
-    out_epsg = 7912
+#     in_epsg = 6781
+#     out_epsg = 7912
 
-    htdp = HTDP()
-    griddef = (144.5, 13.75, 144.75, 13.5, 212, 212)
-    grid = htdp._new_create_grid(griddef)
-    htdp._write_grid(grid, '_tmp_input.xyz')
-    htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz', htdp._reference_frames[in_epsg]['htdp_id'], 2012.0, htdp._reference_frames[out_epsg]['htdp_id'], 2012.0)
-    htdp.run('_tmp_control.txt')
-    out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[4],griddef[5]))
-    print(out_grid)
+#     htdp = HTDP()
+#     griddef = (144.5, 13.75, 144.75, 13.5, 212, 212)
+#     grid = htdp._new_create_grid(griddef)
+#     htdp._write_grid(grid, '_tmp_input.xyz')
+#     htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz', htdp._reference_frames[in_epsg]['htdp_id'], 2012.0, htdp._reference_frames[out_epsg]['htdp_id'], 2012.0)
+#     htdp.run('_tmp_control.txt')
+#     out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[4],griddef[5]))
+#     print(out_grid)
         
 ### End

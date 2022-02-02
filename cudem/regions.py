@@ -346,6 +346,13 @@ class Region:
         dst_feat = None
         dst_ds = None
 
+    def increments(self, x_count, y_count):
+        """returns x_inc, y_inc"""
+        
+        x_inc = (self.xmax - self.xmin) / x_count
+        y_inc = (self.ymax - self.ymin) / y_count
+        return(x_inc, y_inc)
+        
     def srcwin(self, geo_transform, x_count, y_count, node='pixel'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
