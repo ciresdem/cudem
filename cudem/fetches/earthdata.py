@@ -117,7 +117,8 @@ class EarthData(f_utils.FetchModule):
             version=None,
             time_start='',
             time_end='',
-            filename_filter = '',
+            filename_filter='',
+            name=None,
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -135,12 +136,13 @@ class EarthData(f_utils.FetchModule):
         self.version = version
         self.time_start = time_start
         self.time_end = time_end
+        self.filename_filter = filename_filter
+        self.name = name
         self.bounding_box = ''
         self.polygon = ''
-        self.filename_filter = ''
         self.url_list = []
         self.dest_dir = None
-        self.quiet = True
+        self.quiet = False
 
         credentials = get_credentials(None)
 
@@ -161,7 +163,11 @@ class EarthData(f_utils.FetchModule):
         )
 
         for url in url_list:
-            self.results.append([url, url.split('/')[-1], 'earthdata'])
+            if self.name is not None:
+                if self.name in url:
+                    self.results.append([url, url.split('/')[-1], 'earthdata'])
+            else:
+                self.results.append([url, url.split('/')[-1], 'earthdata'])
 
     def yield_xyz(self, entry):
 
