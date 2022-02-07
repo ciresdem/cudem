@@ -247,7 +247,9 @@ class VerticalTransform:
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out).run()
 
         if v_in is None or v_out is None:
-            utils.echo_error_msg('could not locate {} or {} in the region {}'.format(vdatum_tidal_in, vdatum_tidal_out, self.src_region))
+            utils.echo_error_msg(
+                'could not locate {} or {} in the region {}'.format(vdatum_tidal_in, vdatum_tidal_out, self.src_region)
+            )
             return(np.zeros( (self.ycount, self.xcount) ), None)
         
         if vdatum_tidal_in != 5174 and vdatum_tidal_in != 'msl': 
@@ -358,7 +360,6 @@ class VerticalTransform:
         trans_array = np.zeros( (self.ycount, self.xcount) )        
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            #print(epsg_in, epsg_out)
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
@@ -397,12 +398,13 @@ class VerticalTransform:
         return(trans_array)
     
     def run(self, outfile='trans_grid.tif'):
-
         if self.epsg_in is None or self.epsg_out is None:
             return(None)
         else:
             trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)
-            trans_infos = demfun.set_infos(self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff')
+            trans_infos = demfun.set_infos(
+                self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff'
+            )
 
             if outfile is not None:
                 utils.gdal_write(trans_array, outfile, trans_infos)

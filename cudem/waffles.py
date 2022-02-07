@@ -1541,7 +1541,91 @@ class WafflesCUDEM(Waffle):
         utils.remove_glob('{}*'.format(self.pre_surface.name), 'tmp_coast*')
         
         return(self)
+
+class WafflesCUDEM_(Waffle):
+    def __init__(
+            self,
+            weight_step=.25,
+            min_weight=1,
+            smoothing=None,
+            pre_count=2,
+            **kwargs
+    ):
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
+
+        self.weight_step = utils.float_or(weight_step)
+        self.min_weight = utils.float_or(min_weight)
+        self.smoothing = utils.int_or(smoothing)
+        #self.pre_xinc = self.xinc*3
+        #self.pre_yinc = self.yinc*3
+        self.pre_data = self.data_
+        self.pre_count = int(pre_count)
+        self.mod = 'cudem'
+
+    def run(self):
+        #return(self)
+    
+        #def surface_stack(self):
+
+        ## run initial surface with no weight limit @ (self.inc * 3) * pre_count
+        ## increase pre_inc by x3 with each pre_count
+        ## if pre_count is 2, initial surface is 6arc-sec, next is 3 arc-sec finial is 1 arc-sec
+        #surface_region = self.p_region.copy()
+        #surface_region.wmin = self.min_weight
         
+        #for pre in range(0, self.pre_count):
+        pre = self.pre_count
+        while pre >= 0:
+            pre_weight = self.min_weight / (pre * 3) if pre > 0 else self.min_weight
+            pre_xinc = self.xinc + (pre * self.xinc)# * 3)
+            pre_yinc = self.yinc + (pre * self.yinc)# * 3)
+            pre_region = self.p_region.copy()   
+            pre_region.buffer(x_bv=(pre_xinc*12), y_bv=(pre_yinc*12))
+            
+            if pre == self.pre_count:
+                pre_data = self.data_
+                pre_region.wmin = None
+            else:
+                #pre_weight = self.weight_step
+                pre_data = self.data_ + ['{}.tif,200,{}'.format(pre_name, pre_weight)]
+                pre_region.wmin = pre_weight
+
+            if pre == 0:
+                pre_name = self.name
+                xsample = None
+                ysample = None
+            else:
+                pre_name = '_{}_pre_surface'.format(pre)
+                xsample = self.xinc + (((pre - 1) * self.xinc) * 3)
+                ysample = self.yinc + (((pre - 1) * self.yinc) * 3)
+                
+            pre_surface = WaffleFactory(
+                mod='surface',
+                data=pre_data,
+                src_region=pre_region,
+                xinc=pre_xinc,
+                yinc=pre_yinc,
+                name=pre_name,
+                node=self.node,
+                extend=self.extend + ((pre * self.extend) * 3),
+                extend_proc=self.extend_proc + ((pre * self.extend_proc) * 3),
+                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+                weights=1,
+                dst_srs=self.dst_srs,
+                clobber=True,
+                verbose=self.verbose,
+                xsample=xsample,
+                ysample=ysample,
+            ).acquire().generate()
+                
+            pre -= 1
+        
+        return(self)
+    
 class WafflesCoastline(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
         """Generate a landmask from various sources."""

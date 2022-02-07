@@ -220,7 +220,7 @@ def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
             prj=ds.GetProjection()
             srs=osr.SpatialReference(wkt=prj)
             vdatum=srs.GetAttrValue('vert_cs')
-            md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, vdatum)
+            md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, '' if vdatum is None else vdatum)
         ds.SetMetadata(md)
         ds = None
         return(0)
@@ -638,6 +638,9 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
         for srcwin in yield_srcwin(src_dem, n_chunk = n_chunk, step = n_step):
             band_data = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             band_data[band_data == ds_config['ndv']] = np.nan
+            
+            if np.all(np.isnan(band_data)):
+                continue
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
             dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
 
@@ -650,7 +653,9 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
                 while True:
                     nd = 0                    
                     srcwin_std = np.nanstd(band_data)
-                    slp_data = np.gradient(band_data, axis=0)
+                    #slp_data = np.gradient(band_data, axis=0)
+                    px, py = np.gradient(band_data, gt[1])
+                    slp_data = np.sqrt(px ** 2, py ** 2)
                     slp_srcwin_std = np.nanstd(slp_data)
                     if srcwin_std < ds_std and slp_srcwin_std < slp_std:
                         break
@@ -660,7 +665,7 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
                     iqr_p = (srcwin_perc75 - srcwin_perc25) * 1.5
                     upper_limit = srcwin_perc75 + iqr_p
                     lower_limit = srcwin_perc25 - iqr_p
-                    
+
                     slp_srcwin_perc75 = np.nanpercentile(slp_data, 75)
                     slp_srcwin_perc25 = np.nanpercentile(slp_data, 25)
                     slp_iqr_p = (slp_srcwin_perc75 - slp_srcwin_perc25) * 1.5
