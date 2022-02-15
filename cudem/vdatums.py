@@ -238,15 +238,19 @@ class VerticalTransform:
                     return(t)
         else:
             return(int(datum_name))
+        
         return(None)
     
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
         """generate tidal transformation grid"""
 
-        v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in).run()
-        v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out).run()
+        v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
+        v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
 
-        if v_in is None or v_out is None:
+        v_in.run()
+        v_out.run()
+
+        if not v_in.results or not v_out.results:
             utils.echo_error_msg(
                 'could not locate {} or {} in the region {}'.format(vdatum_tidal_in, vdatum_tidal_out, self.src_region)
             )
@@ -288,12 +292,12 @@ class VerticalTransform:
             if _trans_out is None:
                 return(None)
             else:
-                return(_trans_out_array*-1, self._tidal_datum_by_name(vdatum_tidal_out))
+                return(_trans_out_array*-1, self._datum_by_name(vdatum_tidal_out))
         else:
             if _trans_out is None:
-                return(_trans_in_array, self._tidal_datum_by_name(vdatum_tidal_out))
+                return(_trans_in_array, self._datum_by_name(vdatum_tidal_out))
             else:
-                return(_trans_in_array - _trans_out_array, self._tidal_datum_by_name(vdatum_tidal_out))
+                return(_trans_in_array - _trans_out_array, self._datum_by_name(vdatum_tidal_out))
             
     def _cdn_transform(self, epsg=None, name=None, invert=False):
         """create a cdn transofrmation grid"""
@@ -302,17 +306,19 @@ class VerticalTransform:
             cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, epsg=epsg)
         else: cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region)
 
+        #print(cdn_results)
+        
         for _result in cdn_results:
             for g in _geoids:
                 if g in _result['name']:
                     cdn_results = [_result]
-
+                    
         if len(cdn_results) > 0:
             for _result in cdn_results:
                 src_code = int(_result['source_crs_code'].split(':')[-1])
                 dst_code = int(_result['target_crs_code'].split(':')[-1])
                 #if epsg == dst_code or epsg == src_code or np.any([g in _result['name'] for g in self._geoids]):
-                if epsg == dst_code:
+                if epsg == dst_code or np.any([g in _result['name'] for g in _geoids]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = _result['name']
                         if cudem.fetches.utils.Fetch(_result['url'], verbose=self.verbose).fetch_file(_trans_grid) == 0:
@@ -330,9 +336,9 @@ class VerticalTransform:
                                 _tmp_array = _tmp_array * -1
                             
                             return(_tmp_array, src_code)
-                        
+
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
-        return(np.zeros( (self.ycount, self.xcount) ), None)
+        return(np.zeros( (self.ycount, self.xcount) ), epsg)
             
     def _htdp_transform(self, epsg_in, epsg_out):
         """create an htdp transformation grid"""
@@ -360,6 +366,7 @@ class VerticalTransform:
         trans_array = np.zeros( (self.ycount, self.xcount) )        
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
+            #print(ref_in, ref_out, epsg_in, epsg_out)
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
@@ -399,6 +406,7 @@ class VerticalTransform:
     
     def run(self, outfile='trans_grid.tif'):
         if self.epsg_in is None or self.epsg_out is None:
+            utils.echo_error_msg('failed to parse vertical input or output, check inputs')
             return(None)
         else:
             trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)

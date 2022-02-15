@@ -32,6 +32,8 @@
 ## coastline (CUDEM), cudem (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
 ## nearest (GDAL)
 ##
+## GMT, GDAL and MB-System are required for full functionality.
+##
 ### Code:
 
 import sys
@@ -190,7 +192,10 @@ class Waffle:
         )
                     
     def _xyz_ds(self, src_xyz):
-        """Make a point vector OGR DataSet Object from src_xyz"""
+        """Make a point vector OGR DataSet Object from src_xyz
+
+        for use in gdal gridding functions.
+        """
 
         dst_ogr = '{}'.format(self.name)
         self.ogr_ds = gdal.GetDriverByName('Memory').Create(
@@ -221,7 +226,6 @@ class Waffle:
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
         for this_xyz in self.yield_xyz():#src_xyz:
-            #print(this_xyz.x, this_xyz.y, this_xyz.z)
             f.SetField(0, this_xyz.x)
             f.SetField(1, this_xyz.y)
             f.SetField(2, float(this_xyz.z))
@@ -532,7 +536,8 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.2, max_radius=None,
                  lower_limit='d', upper_limit='d',
-                 breakline=None, convergence=None, **kwargs):
+                 breakline=None, convergence=None,
+                 **kwargs):
         """generate a DEM with GMT surface"""
 
         super().__init__(**kwargs)
@@ -736,9 +741,7 @@ class WafflesMBGrid(Waffle):
 
         mb_region = self.p_region.copy()
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
-        ## xsize and ysize are mistaken when gridding for grid-node...make note.
         xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
-        #mbgrid_cmd = 'mbgrid -I{} {} -E{:.10f}/{:.10f}/degrees! -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
         mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
             self.data[0].fn,
             mb_region.format('gmt'),
@@ -752,9 +755,6 @@ class WafflesMBGrid(Waffle):
         for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
             sys.stderr.write('{}'.format(out))
             
-        #out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
-        #self._gmt_grdsample('{}.grd'.format(self.name))
-        #self._gmt_grd2gdal('{}.grd'.format(self.name))
         utils.gdal2gdal('{}.grd'.format(self.name))
         utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
         if self.use_datalists and not self.archive:
@@ -1191,30 +1191,28 @@ see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
         )        
         return(self)    
 
-class WafflesVdatum_(Waffle):
+class WafflesVDatum(Waffle):
     """vertical datum transformation grid"""
 
-    def __init__(self, ivert=None, overt=None, **kwargs):
+    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
         super().__init__(**kwargs)
-
-        # if self.gc['htdp'] is None:
-        #    utils.echo_error_msg('HTDP must be installed to use the VDATUM module')
-        #    return(None, -1)
-
+        self.vdatum_in = vdatum_in
+        self.vdatum_out = vdatum_out
         self.mod = 'vdatum'
-        import cudem.fetches.vdatum
+        
+        import cudem.vdatums
 
     def run(self):
-
-        ## fetch appropriate grids
+        cudem.vdatums.VerticalTransform(
+            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out
+        ).run(outfile='{}.tif'.format(self.name))
         
-        pass
-        
+        return(self)
     
-class WafflesVDatum(Waffle):
+class WafflesVDatum_(Waffle):
     """vertical datum transformation grid via NOAA's VDATUM.
 
-U.S. and territories only.
+    U.S. and territories only.
     """
     
     def __init__(self, ivert='navd88', overt='mhw', region='4', jar=None, **kwargs):
@@ -1317,7 +1315,7 @@ U.S. and territories only.
             vd_out = {}
             status = -1
 
-        #utils.remove_glob('empty.*', 'result/*', 'result')
+        utils.remove_glob('empty.*', 'result/*', 'result')
         return(self)
 
 class WafflesGDALGrid(Waffle):
@@ -1567,6 +1565,8 @@ class WafflesCUDEM_(Waffle):
         self.mod = 'cudem'
 
     def run(self):
+        ## use dataset density instead of weight...
+        ## pass through num/nearest/idw?
         #return(self)
     
         #def surface_stack(self):

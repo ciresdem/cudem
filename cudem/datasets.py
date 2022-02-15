@@ -115,7 +115,6 @@ class ElevationDataset():
         if self.valid_p():
             self.set_transform()
             self.set_yield()
-            #if self.region is not None and self.region.valid_p():
             self.inf(check_hash=True if self.data_format == -1 else False)
             
     def __str__(self):
@@ -125,12 +124,18 @@ class ElevationDataset():
         return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
 
     def generate_inf(self, callback=lambda: False):
+        """set in dataset"""
+        
         raise(NotImplementedError)
 
     def yield_xyz(self):
+        """set in dataset"""
+        
         raise(NotImplementedError)
 
     def yield_xyz_from_entries(self):
+        """yield from self.data_entries, list of datasets"""
+        
         for this_entry in self.data_entries:
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
@@ -139,6 +144,8 @@ class ElevationDataset():
                 utils.remove_glob('{}*'.format(this_entry.fn))
     
     def fetch(self):
+        """fetch remote data from self.data_entries"""
+        
         for entry in self.data_entries:
             if entry.remote:
                 if entry._fn is None:
@@ -290,6 +297,8 @@ class ElevationDataset():
         return(self.infos)
 
     def set_yield(self):
+        """set the yield strategy, either default block or mask"""
+
         if self.x_inc is not None:
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
@@ -302,12 +311,12 @@ class ElevationDataset():
             self.xyz_yield = self.yield_xyz()
     
     def set_transform(self):
-        """Set an srs transform, if needed."""
+        """set an srs transform, if needed."""
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and \
            self.src_srs is not None and \
-           self.src_srs != self.dst_srs:
+           self.src_srs.split('+')[0] != self.dst_srs.split('+')[0]:
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -328,10 +337,12 @@ class ElevationDataset():
             self.trans_region = None
     
     def parse(self):
-        """Parse the datasets from the dataset.
+        """parse the datasets from the dataset.
         
         Re-define this method when defining a dataset sub-class
         that represents recursive data structures (datalists, zip, etc).
+
+        This will fill self.data_entries
         """
         
         if self.region is not None:
@@ -614,7 +625,6 @@ class ElevationDataset():
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the XYZ data from the dataset"""
         
-        #for this_xyz in self.yield_xyz(**kwargs):
         for this_xyz in self.xyz_yield:
             this_xyz.dump(
                 include_w=True if self.weight is not None else False,
@@ -626,7 +636,6 @@ class ElevationDataset():
         """return the XYZ data from the dataset as python list"""
         
         xyz_l = []
-        #for this_xyz in self.yield_xyz(**kwargs):
         for this_xyz in self.xyz_yield:
             xyz_l.append(this_xyz.copy())
         return(xyz_l)
@@ -1045,12 +1054,13 @@ class RasterFile(ElevationDataset):
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
 ## ==============================================
-## BAG files
-## process supergrids at native resolution if they
-## exist, otherwise process as normal grid
 ## ==============================================
 class BAGFile(ElevationDataset):
-    """providing a BAG raster dataset parser."""
+    """providing a BAG raster dataset parser.
+
+    process supergrids at native resolution if they
+    exist, otherwise process as normal grid
+    """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

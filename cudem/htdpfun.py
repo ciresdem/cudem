@@ -75,6 +75,9 @@ class HTDP:
         self.htdp_bin = htdp_bin
         self.verbose=verbose
 
+        if utils.config_check()['HTDP'] is None:
+            utils.echo_error_msg('you must have HTDP installed to perform vertical transformations')
+        
     def _next_point(self, fd):
 
         line = fd.readline().strip()
