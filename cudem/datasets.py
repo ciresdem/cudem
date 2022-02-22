@@ -317,6 +317,7 @@ class ElevationDataset():
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs.split('+')[0] != self.dst_srs.split('+')[0]:
+
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -981,7 +982,7 @@ class RasterFile(ElevationDataset):
     def yield_xyz(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
-        if self.verbose and self.parent is None:
+        if self.verbose: # and self.parent is None:
             _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
         if self.open_options:
@@ -1008,7 +1009,8 @@ class RasterFile(ElevationDataset):
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
-                if self.verbose and self.parent is None:
+                #if self.verbose and self.parent is None:
+                if self.verbose:
                     _prog.update_perc((y, srcwin[1] + srcwin[3]))
                     
                 band_data = band.ReadAsArray(
@@ -1037,8 +1039,8 @@ class RasterFile(ElevationDataset):
                         out_xyz.z = z
                         out_xyz.w = self.weight
                         count += 1
-                        if self.dst_trans is not None:
-                            out_xyz.transform(self.dst_trans)
+                        #if self.dst_trans is not None:
+                        #    out_xyz.transform(self.dst_trans)
 
                         yield(out_xyz)
                             

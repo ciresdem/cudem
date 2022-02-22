@@ -239,6 +239,61 @@ class Waffle:
             
         return(self.ogr_ds)
 
+    ## do an xyz_block that returns a fully blocked array
+
+    def _xyz_block_array(self, src_xyz):
+        """block the src_xyz data to the mean block value
+
+        Yields:
+          list: xyz data for each block with data
+        """
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc
+        )
+        gdt = gdal.GDT_Float32
+        sum_array = np.zeros((ycount, xcount))
+        count_array = np.zeros((ycount, xcount))
+        if self.weights:
+            weight_array = np.zeros((ycount, xcount))
+            
+        if self.verbose:
+            utils.echo_msg(
+                'blocking data to {}/{} grid'.format(ycount, xcount)
+            )
+        for this_xyz in src_xyz:
+            if regions.xyz_in_region_p(this_xyz, self.p_region):
+                if self.weights:
+                    this_z = this_xyz.z * this_xyz.w
+                else:
+                    this_z = this_xyz.z
+                
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
+                try:
+                    sum_array[ypos, xpos] += this_z
+                    count_array[ypos, xpos] += 1
+                    if self.weights:
+                        weight_array[ypos, xpos] += this_xyz.w
+                        
+                except: pass
+
+        count_array[count_array == 0] = np.nan
+        if self.weights:
+            weight_array[weight_array == 0] = np.nan
+            out_weight_array = (weight_array/count_array)
+            out_array = (sum_array/out_weight_array)/count_array
+        else:
+            out_array = (sum_array/count_array)
+            out_weight_array = np.ones((ycount, xcount))
+            
+        sum_array = count_array = None
+        if self.weights:
+            weight_array = None
+
+        return(out_array, dst_gt)
+    
     def _xyz_block(self, src_xyz):
         """block the src_xyz data to the mean block value
 
@@ -1534,8 +1589,6 @@ class WafflesCUDEM(Waffle):
             verbose=self.verbose,
         ).acquire().generate()
 
-        #utils.remove_glob('pre_surface*', 'tmp_coast*', '{}*'.format(self.coast_xyz))
-        #utils.remove_glob('_pre_surface*', 'tmp_coast*')
         utils.remove_glob('{}*'.format(self.pre_surface.name), 'tmp_coast*')
         
         return(self)
