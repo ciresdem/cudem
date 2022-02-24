@@ -2451,10 +2451,13 @@ def waffles_cli(argv = sys.argv):
                 wg['weights'] += 1
         elif arg == '-p' or arg == '--prefix':
             want_prefix = True
-            prefix_opts = argv[i + 1].split(':')
-            prefix_args = utils.args2dict(prefix_opts, prefix_args)
-            if len(prefix_args) > 0:
-                i += 1
+            try:
+                prefix_opts = argv[i + 1].split(':')
+                prefix_args = utils.args2dict(prefix_opts, prefix_args)
+                if len(prefix_args) > 0:
+                    i += 1
+            except:
+                pass
 
         elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
