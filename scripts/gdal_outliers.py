@@ -36,8 +36,9 @@ usage: gdal_outliers.py [ file ]
  Options:
   file\t\tThe input DEM file-name
 
-  --size\tThe size in pixels of the moving filter window
-  --step\tThe step size of the moving filter window
+  --size\t\tThe size in pixels of the moving filter window
+  --step\t\tThe step size of the moving filter window
+  --agg_level\tAggression level (1-5)
 
   --help\tPrint the usage text
   --version\tPrint the version information
@@ -53,16 +54,20 @@ if __name__ == "__main__":
     elev = None
     chunk_step = None
     chunk_size = None
+    agg_level = 3
     i = 1
     
     argv = sys.argv
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg == '-size' or arg == '--size' or arg == '-z':
-            chunk_size = argv[i + 1]
+            chunk_size = utils.int_or(argv[i + 1])
             i = i + 1
         elif arg == '-step' or arg == '--step' or arg == '-s':
-            chunk_step = argv[i + 1]
+            chunk_step = utils.int_or(argv[i + 1])
+            i = i + 1
+        elif arg == '-agg_level' or arg == '--agg_level' or arg == '-a':
+            agg_level = utils.int_or(argv[i + 1])
             i = i + 1
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
@@ -83,6 +88,6 @@ if __name__ == "__main__":
   
     dst_gdal = elev.split('.')[0] + '_fltr.tif'
     utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
-    demfun.filter_outliers_slp(elev, dst_gdal, chunk_size=chunk_size, chunk_step=chunk_step)
+    demfun.filter_outliers_slp(elev, dst_gdal, chunk_size=chunk_size, chunk_step=chunk_step, agg_level=agg_level)
 
 ### End

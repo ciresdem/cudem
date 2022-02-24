@@ -596,46 +596,48 @@ def filter_outliers(src_gdal, dst_gdal, threshhold=None, chunk_size=None, chunk_
         return(out, status)
     else: return(None)    
     
-def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
-                        chunk_size=None, chunk_step=None, slp=False, passes=2):
+def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_level=1):
     """scan a src_dem file for outliers and remove them
     
     aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
     for statistical outlier discovery, 55/45 will be more aggressive, etc. Using a large chunk size 
     will filter more cells and find potentially more or less outliers depending on the data.
+    agg_level is 1 to 5
     """
 
-    #scan_pass = 1
-    #for scan_pass in range(1, passes+1):
-    #while True:
-    #scan_pass += 1
-    #chunk_size=45
+    agg_level = utils.int_or(agg_level)
+        
+    if agg_level == 1:
+        percentile = 95
+    elif agg_level == 2:
+        percentile = 85
+    elif agg_level == 3:
+        percentile = 75
+    elif agg_level == 4:
+        percentile = 65
+    elif agg_level == 5:
+        percentile = 55
+    else:
+        percentile = 75
+        
+    max_percentile = percentile
+    min_percentile = 100 - percentile
+    
     try:
         ds = gdal.Open(src_dem)
     except: ds = None
 
     if ds is not None:
-        tnd = 0
-
+        tnd = 0        
         ds_config = gather_infos(ds)
         ds_band = ds.GetRasterBand(1)
         ds_array = ds_band.ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
         gt = ds_config['geoT']
-        #if threshhold is None:
-        ds_std = np.std(ds_array)
-        #else: ds_std = utils.float_or(threshhold)
-        #if slp_threshhold is None:
-        slp_std = ds_std
-        #else: slp_std = utils.float_or(slp_threshhold)
 
-        driver = gdal.GetDriverByName('MEM')
-        mem_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
-        mem_ds.SetGeoTransform(gt)
-        mem_ds.SetProjection(ds_config['proj'])
-        band = mem_ds.GetRasterBand(1)
-        band.SetNoDataValue(ds_config['ndv'])
-        band.WriteArray(ds_array)
-
+        #px, py = np.gradient(ds_array, gt[1])
+        #slp_data_ = np.sqrt(px ** 2, py ** 2)
+        #slp_array = np.degrees(np.arctan(slp_data_))
+        
         ds = None
         if chunk_size is None:
             n_chunk = int(ds_config['nx'] * .05)
@@ -645,19 +647,17 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
             n_step = int(n_chunk/4)
         else: n_step = chunk_step
 
-        #n_chunk = n_chunk * scan_pass
-        #n_step = n_step * scan_pass
-
-        #if n_chunk > ds_config['nx']:
-        #    break
-
-        utils.echo_msg('scanning {} for spikes with {}@{} MAX {}/{}...'.format(src_dem, n_chunk, n_step, ds_std, slp_std))
+        utils.echo_msg(
+            'scanning {} for outliers with {}@{} using aggression level {} ({}/{})...'.format(
+                src_dem, n_chunk, n_step, agg_level, max_percentile, min_percentile
+            )
+        )
         for srcwin in yield_srcwin(src_dem, n_chunk = n_chunk, step = n_step):
-            band_data = band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            nd = 0
+            band_data = ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
+            #slp_data = slp_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
             band_data[band_data == ds_config['ndv']] = np.nan
 
-            if np.all(np.isnan(band_data)):
-                continue
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
             dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
 
@@ -665,43 +665,39 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
             dst_config['nx'] = srcwin[2]
             dst_config['ny'] = srcwin[3]
             dst_config['geoT'] = dst_gt
+            
+            if np.all(np.isnan(band_data)):
+                continue
 
             if not np.all(band_data == band_data[0,:]):
-                #while True:
-                nd = 0                    
-                srcwin_std = np.nanstd(band_data)
                 px, py = np.gradient(band_data, gt[1])
+                slp_data = np.sqrt(px ** 2, py ** 2)
+                #slp_data = np.degrees(np.arctan(slp_data_))
+
+                px, py = np.gradient(slp_data, gt[1])
                 slp_data_ = np.sqrt(px ** 2, py ** 2)
                 slp_data = np.degrees(np.arctan(slp_data_))
-                slp_srcwin_std = np.nanstd(slp_data)
 
-                srcwin_perc75 = np.nanpercentile(band_data, 55)
-                srcwin_perc25 = np.nanpercentile(band_data, 45)
+                srcwin_perc75 = np.nanpercentile(band_data, max_percentile)
+                srcwin_perc25 = np.nanpercentile(band_data, min_percentile)
                 iqr_p = (srcwin_perc75 - srcwin_perc25) * 1.5
                 upper_limit = srcwin_perc75 + iqr_p
                 lower_limit = srcwin_perc25 - iqr_p
 
-                slp_srcwin_perc75 = np.nanpercentile(slp_data, 55)
-                slp_srcwin_perc25 = np.nanpercentile(slp_data, 45)
+                slp_srcwin_perc75 = np.nanpercentile(slp_data, max_percentile)
+                slp_srcwin_perc25 = np.nanpercentile(slp_data, min_percentile)
                 slp_iqr_p = (slp_srcwin_perc75 - slp_srcwin_perc25) * 1.5
                 slp_upper_limit = slp_srcwin_perc75 + slp_iqr_p
                 slp_lower_limit = slp_srcwin_perc25 - slp_iqr_p
 
-                for i in range(0, srcwin[2]):
-                    for j in range(0, srcwin[3]):
-                        bandz = band_data[j][i]
-                        slpz = slp_data[j][i]
-                        if bandz > upper_limit or bandz < lower_limit:
-                            if slpz > slp_upper_limit or slpz < slp_lower_limit:
-                                ds_array[j+srcwin[1]][i+srcwin[0]] = ds_config['ndv']
-                                band.WriteArray(ds_array)
-                                band_data[j][i] = np.nan
-                                nd += 1
-                tnd += nd
-                #if nd == 0: break
-                band_data = slp_data = None
+                band_data[((band_data > upper_limit) | (band_data < lower_limit)) & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit))] = ds_config['ndv']
+                #slp_data[((band_data > upper_limit) | (band_data < lower_limit)) & ((slp_data > slp_upper_limit) | (slp_data < slp_upper_limit))] = np.nan
+                #slp_data[band_data == ds_config['ndv']] = np.nan
+                ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = band_data
+                #slp_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = slp_data
+                tnd += len(band_data[band_data == ds_config['ndv']])
 
-        utils.echo_msg('removing {} spikes...'.format(tnd))
+        utils.echo_msg('filtering {} outliers...'.format(tnd))
         if tnd > 0:
             driver = gdal.GetDriverByName('MEM')
             tmp_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
@@ -709,9 +705,15 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
             tmp_ds.SetProjection(ds_config['proj'])
             ds_band = tmp_ds.GetRasterBand(1)
             ds_band.SetNoDataValue(ds_config['ndv'])
+            ds_array[np.isnan(ds_array)] = ds_config['ndv']
             ds_band.WriteArray(ds_array)
-            result = gdal.FillNodata(targetBand=ds_band, maskBand=None, maxSearchDist=100,
-                                     smoothingIterations=4, callback=gdal.TermProgress)
+            result = gdal.FillNodata(
+                targetBand=ds_band,
+                maskBand=None,
+                maxSearchDist=100,
+                smoothingIterations=4,
+                callback=gdal.TermProgress
+            )
 
             ds_array = ds_band.ReadAsArray()
             tmp_ds = None
@@ -720,10 +722,7 @@ def filter_outliers_slp(src_dem, dst_dem, threshhold=None, slp_threshhold=None,
         out, status = utils.gdal_write(ds_array, dst_dem, ds_config)
         mem_ds = None
         return(out, status)
-        #src_dem = out
-        #chunk_size *= scan_pass
     else: return(None, -1)
-    #return(src_dem, status)
 
 def filter_outliers_slp_(src_dem, dst_dem, chunk_size=None, chunk_step=None, percentile=75):
     """scan a src_dem file for outliers, remove and fill them"""

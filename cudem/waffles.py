@@ -1572,7 +1572,7 @@ class WafflesCUDEM(Waffle):
             ysample=utils.str2inc(self.yinc),
             clip=pre_clip,
         ).acquire().generate()
-            
+
         self.surface = WaffleFactory(
             mod='surface:tension=1',
             data=self.data_ + ['{},200,{}'.format(self.pre_surface.fn, self.min_weight)],
@@ -1588,7 +1588,6 @@ class WafflesCUDEM(Waffle):
             clobber=True,
             verbose=self.verbose,
         ).acquire().generate()
-
         utils.remove_glob('{}*'.format(self.pre_surface.name), 'tmp_coast*')
         
         return(self)
@@ -2298,10 +2297,9 @@ Options:
   -T, --filter\t\tFILTER the output DEM using one or multiple filters. 
 \t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
 \t\t\tAvailable FILTERS:
-\t\t\t1: perform a Gaussian filter at -T1:<factor>.
+\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
 \t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-
-\t\t\t3: Spike Filter at -T3:<stand-dev. threshhold>.
+\t\t\t3: perform an Outlier Filter at -T3:<aggression>.
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
 \t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
