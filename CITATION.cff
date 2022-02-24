@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-  - family-names: CIRES
-    orcid: https://orcid.org/0000-0000-0000-0000
+  - name: "CIRES DEM Team"
+    website: https://http://ciresgroups.colorado.edu/coastalDEM
 title: "CUDEM"
 version: 1.6.1
 date-released: 2022-02-01
