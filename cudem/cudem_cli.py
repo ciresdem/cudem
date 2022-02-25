@@ -176,6 +176,9 @@ class CUDEMFactory:
         },
         'xyztindex.py': {
             'description': 'generate a tile index of xyz files.'
+        },
+        'vertical_datum_convert.py': {
+            'description': 'transform the vertical datum of a DEM.'
         }
     }
     

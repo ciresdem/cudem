@@ -84,6 +84,7 @@ xyztindex.py              generate a tile index of xyz files.
 update_dem.sh		  update a DEM with new data.
 vrbag2tif2chunks2xyz.sh	  convert and chunk a VR BAG
 explode_bags.sh		  extract all supergrids from a BAG
+vertical_datum_convert.py transform the vertical datum of a DEM.
 
 ==============================================
 Installation:

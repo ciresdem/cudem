@@ -100,19 +100,19 @@ def main():
         elif dst_grid is None:
             dst_grid = arg
         else:
-            print(_usage)
+            sys.stderr.write(_usage)
             sys.exit(1)
         i = i + 1
 
     if src_grid is None:
-        print(_usage)
+        sys.stderr.write(_usage)
         sys.exit(1)
 
     if dst_grid is None:
         dst_grid = '.'.join(src_grid.split('.')[:-1]) + '_' + str(vdatum_out.replace('(', '_').replace(')', '_')) + '.' + src_grid.split('.')[-1]
 
     if not os.path.exists(src_grid):
-        print('Error: {} is not a valid file'.format(src_grid))
+        utils.echo_error_msg('Error: {} is not a valid file'.format(src_grid))
     else:
         src_infos = demfun.infos(src_grid)
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
