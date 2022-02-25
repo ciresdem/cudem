@@ -1090,11 +1090,13 @@ class WafflesIDW(Waffle):
 
         x, y, z, w = np.array(x), np.array(y), np.array(z), np.array(w)        
         obs = np.vstack((x, y)).T
+        x = y = None
         xi = np.linspace(self.p_region.xmin, self.p_region.xmax, xcount+1)
         yi = np.linspace(self.p_region.ymin, self.p_region.ymax, ycount+1)
         xi, yi = np.meshgrid(xi, yi)
         xi, yi = xi.flatten(), yi.flatten()
         ask = np.vstack((xi, yi)).T
+        #xi = yi = None
         # if no data break now...
         if len(obs) == 0:
             return(self)
@@ -1108,7 +1110,8 @@ class WafflesIDW(Waffle):
             dub=self.radius,
             weights=w if self.weights else None
         )
-
+        z = obs = ask = None
+        
         if self.upper_limit is not None:
             interpol[interpol > self.upper_limit] = self.upper_limit
 

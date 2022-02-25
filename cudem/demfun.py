@@ -33,6 +33,7 @@ import numpy as np
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
+from cudem import waffles
 
 def infos(src_dem, region = None, scan = False):
     """scan gdal file src_fn and gather region info.
@@ -671,12 +672,12 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
 
             if not np.all(band_data == band_data[0,:]):
                 px, py = np.gradient(band_data, gt[1])
-                slp_data = np.sqrt(px ** 2, py ** 2)
-                #slp_data = np.degrees(np.arctan(slp_data_))
-
-                px, py = np.gradient(slp_data, gt[1])
                 slp_data_ = np.sqrt(px ** 2, py ** 2)
                 slp_data = np.degrees(np.arctan(slp_data_))
+
+                px, py = np.gradient(slp_data, gt[1])
+                curv_data_ = np.sqrt(px ** 2, py ** 2)
+                curv_data = np.degrees(np.arctan(curv_data_))
 
                 srcwin_perc75 = np.nanpercentile(band_data, max_percentile)
                 srcwin_perc25 = np.nanpercentile(band_data, min_percentile)
@@ -690,7 +691,14 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                 slp_upper_limit = slp_srcwin_perc75 + slp_iqr_p
                 slp_lower_limit = slp_srcwin_perc25 - slp_iqr_p
 
-                band_data[((band_data > upper_limit) | (band_data < lower_limit)) & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit))] = ds_config['ndv']
+                curv_srcwin_perc75 = np.nanpercentile(curv_data, max_percentile)
+                curv_srcwin_perc25 = np.nanpercentile(curv_data, min_percentile)
+                curv_iqr_p = (curv_srcwin_perc75 - curv_srcwin_perc25) * 1.5
+                curv_upper_limit = curv_srcwin_perc75 + curv_iqr_p
+                curv_lower_limit = curv_srcwin_perc25 - curv_iqr_p
+                
+                band_data[((band_data > upper_limit) | (band_data < lower_limit)) & (slp_data > slp_upper_limit) & (curv_data > curv_upper_limit)] = ds_config['ndv']
+                #band_data[((band_data > upper_limit) | (band_data < lower_limit)) & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit)) & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit))] = ds_config['ndv']
                 #slp_data[((band_data > upper_limit) | (band_data < lower_limit)) & ((slp_data > slp_upper_limit) | (slp_data < slp_upper_limit))] = np.nan
                 #slp_data[band_data == ds_config['ndv']] = np.nan
                 ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = band_data
@@ -698,6 +706,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                 tnd += len(band_data[band_data == ds_config['ndv']])
 
         utils.echo_msg('filtering {} outliers...'.format(tnd))
+        out, status = utils.gdal_write(ds_array, dst_dem, ds_config)
         if tnd > 0:
             driver = gdal.GetDriverByName('MEM')
             tmp_ds = driver.Create('tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])

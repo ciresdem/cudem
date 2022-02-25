@@ -1,7 +1,17 @@
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
 authors:
-  - name: "CIRES DEM Team"
+  - family-names: Love
+    given-names: Matthew
+  - family-names: Amante
+    given-names: Christopher
+  - family-names: MacFerrin
+    given-names: Michael
+  - family-names: Carignan
+    given-names: Kelly
+  - family-names: Lim
+    given-names: Elliot
+  
     website: https://http://ciresgroups.colorado.edu/coastalDEM
 title: "CUDEM"
 version: 1.6.1
