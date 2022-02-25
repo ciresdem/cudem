@@ -33,7 +33,6 @@ import numpy as np
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
-from cudem import waffles
 
 def infos(src_dem, region = None, scan = False):
     """scan gdal file src_fn and gather region info.
