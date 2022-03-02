@@ -238,16 +238,16 @@ class ElevationDataset():
                 with open(inf_path) as i_ob:
                     self.infos = json.load(i_ob)
             except ValueError:
-                #try:
-                self.infos = MBSParser(
-                    fn=self.fn, src_srs=self.src_srs).inf_parse().infos
-                self.check_hash = False
-                mb_inf = True
-                #except:
-                #    if self.verbose:
-                #        utils.echo_error_msg(
-                #            'failed to parse inf {}'.format(inf_path)
-                #        )
+                try:
+                    self.infos = MBSParser(
+                        fn=self.fn, src_srs=self.src_srs).inf_parse().infos
+                    self.check_hash = False
+                    mb_inf = True
+                except:
+                    if self.verbose:
+                        utils.echo_error_msg(
+                            'failed to parse inf {}'.format(inf_path)
+                        )
             except:
                 if self.verbose:
                     utils.echo_error_msg(
