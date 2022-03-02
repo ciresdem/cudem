@@ -238,16 +238,16 @@ class ElevationDataset():
                 with open(inf_path) as i_ob:
                     self.infos = json.load(i_ob)
             except ValueError:
-                try:
-                    self.infos = MBSParser(
-                        fn=self.fn, src_srs=self.src_srs).inf_parse().infos
-                    self.check_hash = False
-                    mb_inf = True
-                except:
-                    if self.verbose:
-                        utils.echo_error_msg(
-                            'failed to parse inf {}'.format(inf_path)
-                        )
+                #try:
+                self.infos = MBSParser(
+                    fn=self.fn, src_srs=self.src_srs).inf_parse().infos
+                self.check_hash = False
+                mb_inf = True
+                #except:
+                #    if self.verbose:
+                #        utils.echo_error_msg(
+                #            'failed to parse inf {}'.format(inf_path)
+                #        )
             except:
                 if self.verbose:
                     utils.echo_error_msg(
@@ -1291,7 +1291,8 @@ class MBSParser(ElevationDataset):
                 'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
             )
             ds.SetGeoTransform(ds_config['geoT'])
-            ds.SetProjection(ds_config['proj'])
+            if ds_config['proj'] is not None:
+                ds.SetProjection(ds_config['proj'])
             ds_band = ds.GetRasterBand(1)
             ds_band.SetNoDataValue(ds_config['ndv'])
             ds_band.WriteArray(cm_array)
