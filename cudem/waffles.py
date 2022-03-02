@@ -686,6 +686,52 @@ class GMTTriangulate(Waffle):
             )
         )        
         return(self)
+    
+class GMTNearNeighbor(Waffle):
+    """Waffles GMT nearneighbor module
+    Grid the data using GMT 'nearneighbor'.
+    """
+    
+    def __init__(self, radius=None, sectors=None, **kwargs):
+        """generate a DEM with GMT nearneighbor"""
+
+        super().__init__(**kwargs) 
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg(
+                'GMT must be installed to use the NEARNEIGHBOR module'
+            )
+            return(None, -1)
+
+        out, status = utils.run_cmd(
+            'gmt gmtset IO_COL_SEPARATOR = SPACE',
+            verbose = False
+        )        
+        self.mod = 'nearneighbor'
+        self.radius = radius
+        self.sectors = sectors
+        
+    def run(self):
+        dem_nn_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt nearneighbor -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff{}{}{}'.format(
+            self.ps_region.format('gmt'),
+            self.xinc,
+            self.yinc,
+            ' -W' if self.weights else '',
+            self.ps_region.format('gmt'),
+            self.xinc,
+            self.yinc,
+            self.name,
+            ' -W' if self.weights else '',
+            ' -N{}'.format(self.sectors) if self.sectors is not None else '',
+            ' -S{}'.format(self.radius) if self.radius is not None else '',
+        )
+        out, status = utils.run_cmd(
+            dem_nn_cmd,
+            verbose = self.verbose,
+            data_fun = lambda p: self.dump_xyz(
+                dst_port=p, encode=True
+            )
+        )        
+        return(self)
 
 class WafflesMBGrid(Waffle):
     """Waffles MBGrid module
@@ -1470,7 +1516,7 @@ class WafflesNearest(WafflesGDALGrid):
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, nodata)
 
-class WafflesCUDEM(Waffle):
+class WafflesCUDEM_(Waffle):
     def __init__(
             self,
             landmask=False,
@@ -1490,7 +1536,7 @@ class WafflesCUDEM(Waffle):
 
         self.landmask = landmask
         self.min_weight = utils.float_or(min_weight)
-        self.smoothing = utils.int_or(smoothing)
+        self.smoothing = smoothing
         self.pre_xinc = utils.str2inc(pre_xinc)
         self.pre_yinc = utils.str2inc(pre_yinc)
         self.pre_xinc = self.xinc*3 if utils.float_or(self.pre_xinc) is None else utils.float_or(self.pre_xinc)
@@ -1566,7 +1612,8 @@ class WafflesCUDEM(Waffle):
             node=self.node,
             extend=self.extend+2,
             extend_proc=self.extend_proc+2,
-            fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+            fltr=['1:{}:split_value=0'.format(self.smoothing)] if self.smoothing is not None else [],
+            #fltr=['2:{}'.format(self.smoothing)] if self.smoothing is not None else [],
             weights=1,
             dst_srs=self.dst_srs,
             clobber=True,
@@ -1595,10 +1642,9 @@ class WafflesCUDEM(Waffle):
         
         return(self)
 
-class WafflesCUDEM_(Waffle):
+class WafflesCUDEM(Waffle):
     def __init__(
             self,
-            weight_step=.25,
             min_weight=1,
             smoothing=None,
             pre_count=2,
@@ -1610,53 +1656,52 @@ class WafflesCUDEM_(Waffle):
             utils.echo_error_msg(e)
             sys.exit()
 
-        self.weight_step = utils.float_or(weight_step)
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
-        #self.pre_xinc = self.xinc*3
-        #self.pre_yinc = self.yinc*3
-        self.pre_data = self.data_
         self.pre_count = int(pre_count)
+        self.pre_data = self.data_
         self.mod = 'cudem'
 
     def run(self):
         ## use dataset density instead of weight...
         ## pass through num/nearest/idw?
-        #return(self)
-    
-        #def surface_stack(self):
-
-        ## run initial surface with no weight limit @ (self.inc * 3) * pre_count
-        ## increase pre_inc by x3 with each pre_count
-        ## if pre_count is 2, initial surface is 6arc-sec, next is 3 arc-sec finial is 1 arc-sec
-        #surface_region = self.p_region.copy()
-        #surface_region.wmin = self.min_weight
         
         #for pre in range(0, self.pre_count):
+        
         pre = self.pre_count
-        while pre >= 0:
-            pre_weight = self.min_weight / (pre * 3) if pre > 0 else self.min_weight
-            pre_xinc = self.xinc + (pre * self.xinc)# * 3)
-            pre_yinc = self.yinc + (pre * self.yinc)# * 3)
-            pre_region = self.p_region.copy()   
-            pre_region.buffer(x_bv=(pre_xinc*12), y_bv=(pre_yinc*12))
+        pre_region = self.p_region.copy()
+        
+        while pre > 0:
+            
+            pre_xinc = self.xinc * pre
+            pre_yinc = self.yinc * pre
+            xsample = pre_xinc * (pre - 1)
+            ysample = pre_yinc * (pre - 1)            
+            pre_name = '_{}_pre_surface'.format(pre)
+            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
             
             if pre == self.pre_count:
+                # initial run
+                pre_weight = 0
                 pre_data = self.data_
                 pre_region.wmin = None
-            else:
-                #pre_weight = self.weight_step
-                pre_data = self.data_ + ['{}.tif,200,{}'.format(pre_name, pre_weight)]
+            elif pre > 1:
+                pre_weight = self.min_weight/pre
+                pre_data = self.data_ + ['{}.tif,200,{}'.format('_{}_pre_surface'.format(pre+1), pre_weight)]
                 pre_region.wmin = pre_weight
-
-            if pre == 0:
-                pre_name = self.name
+            else:
+                ## final run
                 xsample = None
                 ysample = None
-            else:
-                pre_name = '_{}_pre_surface'.format(pre)
-                xsample = self.xinc + (((pre - 1) * self.xinc) * 3)
-                ysample = self.yinc + (((pre - 1) * self.yinc) * 3)
+                pre_name = self.name
+                pre_xinc = self.xinc
+                pre_yinc = self.yinc
+                pre_weight = self.min_weight
+                pre_region.wmin = self.min_weight
+                pre_filter = []
+                pre_data = self.data_ + ['{}.tif,200,{}'.format('_2_pre_surface', pre_weight)]
+
+            print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
                 
             pre_surface = WaffleFactory(
                 mod='surface',
@@ -1666,19 +1711,19 @@ class WafflesCUDEM_(Waffle):
                 yinc=pre_yinc,
                 name=pre_name,
                 node=self.node,
-                extend=self.extend + ((pre * self.extend) * 3),
-                extend_proc=self.extend_proc + ((pre * self.extend_proc) * 3),
-                fltr=['1:{}'.format(self.smoothing)] if self.smoothing is not None else [],
+                fltr=pre_filter,
                 weights=1,
                 dst_srs=self.dst_srs,
                 clobber=True,
                 verbose=self.verbose,
                 xsample=xsample,
                 ysample=ysample,
+                extend=self.extend * pre,
+                extend_proc=self.extend_proc * pre,
             ).acquire().generate()
                 
             pre -= 1
-        
+        utils.remove_glob('*_pre_surface*')
         return(self)
     
 class WafflesCoastline(Waffle):
@@ -1965,6 +2010,17 @@ Generate a DEM using GMT's triangulate command.
         
 < triangulate >''',
         },
+        'nearneighbor': {
+            'name': 'nearneihbor',
+            'datalist-p': True,
+            'class': GMTNearNeighbor,
+            'description': """NEARNEIGHBOR DEM via GMT nearneighbor\n
+Generate a DEM using GMT's nearneighbor command.
+
+< nearneighbor:radius=None:sector=None >
+ :radius=[val] - search radius
+ :sectors=[val] - sector information""",
+        },
         'num': {
             'name': 'num',
             'datalist-p': True,
@@ -2009,7 +2065,7 @@ see gdal_grid --help for more info
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< nearest:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
+< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
  :radius1=[val] - search radius
  :radius2=[val] - search radius
  :min_points=[val] - minimum points per bucket (use to fill entire DEM)""",
@@ -2183,7 +2239,7 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
         
         if parse_data:
             _data = _init_data()
-            _data = ["{} {} {}".format(
+            _data = ["{},{},{}".format(
                 os.path.abspath(i.fn) if not i.remote else i.fn, i.data_format, i.weight
             ) for s in [[x for x in d.parse()] for d in _data] for i in s]
         else:
@@ -2598,10 +2654,10 @@ def waffles_cli(argv = sys.argv):
             this_waffle = WaffleFactory(mod=module, **wg)
             this_wg = this_waffle._export_config(parse_data=True)
             #this_wg = this_wg._config
-            utils.echo_msg(json.dumps(this_wg, indent = 4, sort_keys = True))
+            utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
             with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
-                wg_json.write(json.dumps(this_wg, indent = 4, sort_keys = True))
+                wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
             this_waffle = WaffleFactory(mod=module, **wg).acquire()
             if this_waffle is not None:

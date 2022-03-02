@@ -96,6 +96,8 @@ if __name__ == "__main__":
         dst_ds = demfun.copy_infos(ds_config)
         if mk_ndata is True: dst_ds['ndv'] = float(ndata)
         utils.gdal_write(outarray, outgrd, dst_ds)
+    else:
+        print('no {}'.format(t))
         
     ds = None
 #--END
