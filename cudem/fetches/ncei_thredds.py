@@ -54,9 +54,10 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/demCatalog.xml"
         self._ngdc_url = "https://www.ngdc.noaa.gov"
         self._outdir = os.path.join(os.getcwd(), 'ncei_thredds')        
-        self.where = where
-        #self.where.append(where)
-
+        ##self.where = where
+        ##self.where.append(where)
+        self.where = [where] if len(where) > 0 else []
+        
         self.name = 'ncei_thredds'
         self._urls = [self._nt_catalog, self._ngdc_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
