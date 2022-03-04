@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ##
 import sys
-from geomods import waffles
+pfrom geomods import waffles
 
 if __name__ == '__main__':
     '''adjust the x value in an xyz file by 360'''

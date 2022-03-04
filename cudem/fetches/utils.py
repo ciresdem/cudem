@@ -72,7 +72,7 @@ def xml2py(node):
     texts = {}
     if node is None:
         return(None)
-    
+
     for child in list(node):
         child_key = lxml.etree.QName(child).localname
         if 'name' in child.attrib.keys():

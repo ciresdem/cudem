@@ -61,6 +61,7 @@ import cudem.fetches.buoys as buoys
 import cudem.fetches.earthdata as earthdata
 import cudem.fetches.usiei as usiei
 import cudem.fetches.trackline as trackline
+import cudem.fetches.mgds as mgds
 
 ## ==============================================
 ## Fetches Module Parser
@@ -103,6 +104,15 @@ nautical miles of ship trackline data recorded from over 2400 cruises and receiv
 worldwide.
 
 < multibeam:inc=None:process=False:min_year=None:survey_id=None:exclude=None >""",
+        },
+        'mgds': {
+            'class': mgds.MGDS,
+            'description': """The Marine Geoscience Data System (MGDS) is a trusted data 
+repository that provides free public access to a curated collection of marine geophysical 
+data products and complementary data related to understanding the formation and evolution 
+of the seafloor and sub-seafloor.
+
+< mgds >""",
         },
         'trackline': {
             'class': trackline.Trackline,

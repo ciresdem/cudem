@@ -1720,7 +1720,7 @@ class WafflesCUDEM(Waffle):
             pre_yinc = self.yinc * (pre * self.inc_factor)
             xsample = self.xinc * ((pre - 1) * self.inc_factor)
             ysample = self.yinc * ((pre - 1) * self.inc_factor)
-            pre_name = '_{}_pre_surface'.format(pre)
+            pre_name = utils.append_fn('_pre_surface_{}'.format(pre), pre_region, pre_xinc)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
 
             if xsample == 0:
@@ -1730,6 +1730,7 @@ class WafflesCUDEM(Waffle):
             
             if pre != self.pre_count:
                 pre_weight = self.min_weight/pre
+                if pre_weight == 0: pre_weight = self.min_weight
                 pre_data = self.data_ + ['{}.tif,200,{}'.format('_{}_pre_surface'.format(pre+1), pre_weight)]
                 pre_region.wmin = pre_weight
                 
@@ -2027,7 +2028,7 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 1" {}.shp tmp_c_{}.shp'.format(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 2" {}.shp tmp_c_{}.shp'.format(
                 self.name, self.name, self.name),
             verbose=True
         )
