@@ -1720,7 +1720,7 @@ class WafflesCUDEM(Waffle):
             pre_yinc = self.yinc * (pre * self.inc_factor)
             xsample = self.xinc * ((pre - 1) * self.inc_factor)
             ysample = self.yinc * ((pre - 1) * self.inc_factor)
-            pre_name = utils.append_fn('_pre_surface_{}'.format(pre), pre_region, pre_xinc)
+            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
 
             if xsample == 0:
@@ -1731,7 +1731,7 @@ class WafflesCUDEM(Waffle):
             if pre != self.pre_count:
                 pre_weight = self.min_weight/pre
                 if pre_weight == 0: pre_weight = self.min_weight
-                pre_data = self.data_ + ['{}.tif,200,{}'.format('_{}_pre_surface'.format(pre+1), pre_weight)]
+                pre_data = self.data_ + ['{}.tif,200,{}'.format(utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight)]
                 pre_region.wmin = pre_weight
                 
             #print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)

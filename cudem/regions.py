@@ -821,7 +821,7 @@ def regions_cli(argv = sys.argv):
             dst_srs = argv[i + 1]
             i = i + 1
         elif arg == '-b' or arg == '-B' or arg == '--buffer':
-            bv = utils.int_or(argv[i+1])
+            bv = utils.float_or(argv[i+1])
             i = i + 1
         elif arg == '-e' or arg == '--echo' or arg == '-ee':
             echo = True
