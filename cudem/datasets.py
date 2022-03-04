@@ -725,14 +725,6 @@ class XYZFile(ElevationDataset):
         self.region = region_
         return(self.infos)
 
-    def line_delim_(self, xyz_line):
-        """guess a line delimiter"""
-        
-        for delim in self._known_delims:
-            this_xyz = xyz_line.split(delim)
-            if len(this_xyz) > 1:
-                return(delim)
-
     def line_delim(self, xyz_line):
         """guess a line delimiter"""
         
@@ -741,55 +733,14 @@ class XYZFile(ElevationDataset):
             if len(this_xyz) > 1:
                 return(this_xyz)
 
-    def yield_xyz_(self):
-        """LAS file parsing generator"""
-
-        count = 0
-        self.delim = " "
-        # if self.delim is None:
-        #     if self.fn is not None:
-        #         if os.path.exists(str(self.fn)):
-        #             self.src_data = open(self.fn, "r")
-            
-        #             self.delim = self.line_delim(self.src_data.readline())
-        #             self.src_data.close()
-                
-        dataset = np.loadtxt(self.fn, delimiter=self.delim, usecols=(self.xpos, self.ypos, self.zpos), unpack=False)
-        #dataset = np.vstack((x, y, z)).transpose()
+    def line_delim_(self, xyz_line):
+        """guess a line delimiter"""
         
-        if self.region is not None  and self.region.valid_p():
-            if self.dst_trans is not None:
-                self.region.src_srs = self.dst_srs
-                self.region.warp(self.src_srs)
+        for delim in self._known_delims:
+            this_xyz = xyz_line.split(delim)
+            if len(this_xyz) > 1:
+                return(delim)
 
-            dataset = dataset[dataset[:,0] > self.region.xmin,:]
-            dataset = dataset[dataset[:,0] < self.region.xmax,:]
-            dataset = dataset[dataset[:,1] > self.region.ymin,:]
-            dataset = dataset[dataset[:,1] < self.region.ymax,:]
-            if self.region.zmin is not None:
-                dataset = dataset[dataset[:,2] > self.region.zmin,:]
-
-            if self.region.zmax is not None:
-                dataset = dataset[dataset[:,2] < self.region.zmax,:]
-
-        for point in dataset:
-            count += 1
-            this_xyz = xyzfun.XYZPoint(
-                x=point[0], y=point[1], z=point[2], w=self.weight
-            )
-            if self.dst_trans is not None:
-                out_xyz.transform(self.dst_trans)
-
-            yield(this_xyz)
-        dataset = None
-
-        if self.verbose:
-            utils.echo_msg(
-                'parsed {} data records from {}{}'.format(
-                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-                )
-            )
-            
     def yield_xyz(self):
         """xyz file parsing generator"""
         
@@ -844,6 +795,55 @@ class XYZFile(ElevationDataset):
             )
             
         self.src_data.close()
+            
+    def yield_xyz_(self):
+        """LAS file parsing generator"""
+
+        count = 0
+        self.delim = " "
+        # if self.delim is None:
+        #     if self.fn is not None:
+        #         if os.path.exists(str(self.fn)):
+        #             self.src_data = open(self.fn, "r")
+            
+        #             self.delim = self.line_delim(self.src_data.readline())
+        #             self.src_data.close()
+                
+        dataset = np.loadtxt(self.fn, delimiter=self.delim, usecols=(self.xpos, self.ypos, self.zpos), unpack=False)
+        #dataset = np.vstack((x, y, z)).transpose()
+        
+        if self.region is not None  and self.region.valid_p():
+            if self.dst_trans is not None:
+                self.region.src_srs = self.dst_srs
+                self.region.warp(self.src_srs)
+
+            dataset = dataset[dataset[:,0] > self.region.xmin,:]
+            dataset = dataset[dataset[:,0] < self.region.xmax,:]
+            dataset = dataset[dataset[:,1] > self.region.ymin,:]
+            dataset = dataset[dataset[:,1] < self.region.ymax,:]
+            if self.region.zmin is not None:
+                dataset = dataset[dataset[:,2] > self.region.zmin,:]
+
+            if self.region.zmax is not None:
+                dataset = dataset[dataset[:,2] < self.region.zmax,:]
+
+        for point in dataset:
+            count += 1
+            this_xyz = xyzfun.XYZPoint(
+                x=point[0], y=point[1], z=point[2], w=self.weight
+            )
+            if self.dst_trans is not None:
+                out_xyz.transform(self.dst_trans)
+
+            yield(this_xyz)
+        dataset = None
+
+        if self.verbose:
+            utils.echo_msg(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )            
 
 ## ==============================================
 ## ==============================================

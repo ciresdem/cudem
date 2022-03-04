@@ -1648,6 +1648,10 @@ class WafflesCUDEM(Waffle):
             min_weight=1,
             smoothing=None,
             pre_count=2,
+            inc_factor=1,
+            landmask=False,
+            upper_limit=None,
+            lower_limit=None,
             **kwargs
     ):
         try:
@@ -1656,55 +1660,82 @@ class WafflesCUDEM(Waffle):
             utils.echo_error_msg(e)
             sys.exit()
 
+        self.landmask = landmask
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)            
         self.min_weight = utils.float_or(min_weight)
         self.smoothing = utils.int_or(smoothing)
         self.pre_count = int(pre_count)
         self.pre_data = self.data_
+        self.inc_factor = utils.int_or(inc_factor)
         self.mod = 'cudem'
 
     def run(self):
-        ## use dataset density instead of weight...
-        ## pass through num/nearest/idw?
-        
-        #for pre in range(0, self.pre_count):
-        
         pre = self.pre_count
         pre_region = self.p_region.copy()
+        surface_region = self.p_region.copy()
+        surface_region.wmin = self.min_weight
+
+        pre_weight = 0
+        pre_data = self.data_
+        pre_region.wmin = None
+        pre_clip = None
+        
+        if self.upper_limit is not None:
+            pre_region.zmax = self.upper_limit
+            
+        if self.lower_limit is not None:
+            pre_region.zmin = self.lower_limit
+
+        if self.landmask:
+            if not os.path.exists(utils.str_or(self.landmask)):
+
+                coast_region = self.p_region.copy()
+
+                if self.min_weight is not None:
+                    coast_region.wmin = self.min_weight
+                    
+                self.coast = WaffleFactory(
+                    mod=self.landmask,
+                    data=self.data_,
+                    src_region=coast_region,
+                    xinc=self.xinc,
+                    yinc=self.yinc,
+                    name='tmp_coast',
+                    node=self.node,
+                    extend=self.extend+12,
+                    weights=self.weights,
+                    dst_srs=self.dst_srs,
+                    clobber=True,
+                    verbose=self.verbose,
+                ).acquire().generate()
+                coastline = '{}.shp'.format(self.coast.name)
+            else:
+                coastline = self.landmask
+            pre_clip = '{}:invert=True'.format(coastline)
         
         while pre > 0:
-            
-            pre_xinc = self.xinc * pre
-            pre_yinc = self.yinc * pre
-            xsample = pre_xinc * (pre - 1)
-            ysample = pre_yinc * (pre - 1)            
+
+            pre_xinc = self.xinc * (pre * self.inc_factor)
+            pre_yinc = self.yinc * (pre * self.inc_factor)
+            xsample = self.xinc * ((pre - 1) * self.inc_factor)
+            ysample = self.yinc * ((pre - 1) * self.inc_factor)
             pre_name = '_{}_pre_surface'.format(pre)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+
+            if xsample == 0:
+                xsample = self.xinc
+            if ysample == 0:
+                ysample = self.yinc
             
-            if pre == self.pre_count:
-                # initial run
-                pre_weight = 0
-                pre_data = self.data_
-                pre_region.wmin = None
-            elif pre > 1:
+            if pre != self.pre_count:
                 pre_weight = self.min_weight/pre
                 pre_data = self.data_ + ['{}.tif,200,{}'.format('_{}_pre_surface'.format(pre+1), pre_weight)]
                 pre_region.wmin = pre_weight
-            else:
-                ## final run
-                xsample = None
-                ysample = None
-                pre_name = self.name
-                pre_xinc = self.xinc
-                pre_yinc = self.yinc
-                pre_weight = self.min_weight
-                pre_region.wmin = self.min_weight
-                pre_filter = []
-                pre_data = self.data_ + ['{}.tif,200,{}'.format('_2_pre_surface', pre_weight)]
-
-            print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
                 
+            #print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
             pre_surface = WaffleFactory(
-                mod='surface',
+                mod='surface:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc,
@@ -1718,12 +1749,34 @@ class WafflesCUDEM(Waffle):
                 verbose=self.verbose,
                 xsample=xsample,
                 ysample=ysample,
-                extend=self.extend * pre,
-                extend_proc=self.extend_proc * pre,
+                extend=self.extend,
+                extend_proc=self.extend_proc,
+                clip=pre_clip,
             ).acquire().generate()
                 
             pre -= 1
-        utils.remove_glob('*_pre_surface*')
+
+        pre_region.wmin = self.min_weight
+        pre_surface = WaffleFactory(
+            mod='surface',
+            data=self.data_ + ['{}.tif,200,{}'.format('_1_pre_surface', pre_weight)],
+            src_region=surface_region,
+            xinc=self.xinc,
+            yinc=self.yinc,
+            name=self.name,
+            node=self.node,
+            fltr=[],
+            weights=1,
+            dst_srs=self.dst_srs,
+            clobber=True,
+            verbose=self.verbose,
+            xsample=None,
+            ysample=None,
+            extend=self.extend,
+            extend_proc=self.extend_proc,
+        ).acquire().generate()
+            
+        utils.remove_glob('*_pre_surface*', 'tmp_coast*')
         return(self)
     
 class WafflesCoastline(Waffle):
@@ -1809,7 +1862,7 @@ class WafflesCoastline(Waffle):
     def _load_gmrt(self):
         """GMRT - Global low-res.
 
-Used to fill un-set cells.
+        Used to fill un-set cells.
         """
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
@@ -1870,8 +1923,9 @@ Used to fill un-set cells.
             
             gdal.Warp(out_ds, cop_tif[1], dstSRS = dst_srs, resampleAlg = gdal.GRA_CubicSpline)
             c_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
-            c_ds_arr[c_ds_arr > 0] = 1
-            self.coast_array += c_ds_arr
+            #c_ds_arr[c_ds_arr > 0] = 1
+            #self.coast_array += c_ds_arr
+            self.coast_array[c_ds_arr > 0] += 1
             out_ds = c_ds_arr = None
             utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
     
@@ -1929,8 +1983,10 @@ Used to fill un-set cells.
             tnm_ds = gdal.Open('nhdArea_merge.tif')
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-                tnm_ds_arr[tnm_ds_arr < 1] = 0
-                self.coast_array -= tnm_ds_arr
+                #tnm_ds_arr[tnm_ds_arr < 1] = 0
+                #self.coast_array -= tnm_ds_arr
+                self.coast_array[tnm_ds_arr == 1] -= 1
+                self.coast_array[tnm_ds_arr == 0] += 1
                 tnm_ds = tnm_ds_arr = None
                 
             utils.remove_glob('nhdArea_merge.*')
@@ -1971,7 +2027,7 @@ Used to fill un-set cells.
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 4" {}.shp tmp_c_{}.shp'.format(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 1" {}.shp tmp_c_{}.shp'.format(
                 self.name, self.name, self.name),
             verbose=True
         )
