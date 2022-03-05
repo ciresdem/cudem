@@ -1734,7 +1734,7 @@ class WafflesCUDEM(Waffle):
                 pre_data = self.data_ + ['{}.tif,200,{}'.format(utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight)]
                 pre_region.wmin = pre_weight
                 
-            #print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
+            print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
             pre_surface = WaffleFactory(
                 mod='surface:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
                 data=pre_data,
@@ -1760,7 +1760,7 @@ class WafflesCUDEM(Waffle):
         pre_region.wmin = self.min_weight
         pre_surface = WaffleFactory(
             mod='surface',
-            data=self.data_ + ['{}.tif,200,{}'.format('_1_pre_surface', pre_weight)],
+            data=self.data_ + ['{}.tif,200,{}'.format(utils.append_fn('_pre_surface', pre_region, 1), self.min_weight)],
             src_region=surface_region,
             xinc=self.xinc,
             yinc=self.yinc,
