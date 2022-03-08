@@ -1383,8 +1383,8 @@ class WafflesCUDEM(Waffle):
     def __init__(
             self,
             min_weight=1,
-            pre_count=2,
             inc_factor=1,
+            pre_count=2,
             smoothing=None,
             landmask=False,
             keep_auxilary=False,
@@ -1397,8 +1397,8 @@ class WafflesCUDEM(Waffle):
             sys.exit()
             
         self.min_weight = utils.float_or(min_weight)
-        self.pre_count = int(pre_count)
         self.inc_factor = utils.int_or(inc_factor)
+        self.pre_count = int(pre_count)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
         self.keep_auxilary = keep_auxilary
@@ -1458,12 +1458,13 @@ class WafflesCUDEM(Waffle):
                 pre_weight = self.min_weight/(pre + 1)
                 if pre_weight == 0: pre_weight = 1-e20
                 pre_data = [
-                    '{},200:weight_mask={},1', '{}.tif,200,{}'.format(
-                        n, w, utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                    '{},200:weight_mask={},1'.format(n, w),
+                    '{}.tif,200,{}'.format(
+                        utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
                     )
                 ]
                 pre_region.wmin = pre_weight
-                
+
             pre_surface = WaffleFactory(
                 mod='surface:upper_limit={}'.format(upper_limit),
                 data=pre_data,
@@ -1486,13 +1487,19 @@ class WafflesCUDEM(Waffle):
                 
             pre -= 1
 
+        if self.pre_count == 0:
+            final_data = ['{},200:weight_mask={},1'.format(n, w)]
+        else:
+            final_data = [
+                '{},200:weight_mask={},1'.format(n, w),
+                '{}.tif,200,{}'.format(
+                    utils.append_fn('_pre_surface', pre_region, 1), self.min_weight
+                )
+            ]
+            
         pre_surface = WaffleFactory(
             mod='surface',
-            data=[
-                '{},200:weight_mask={},1', '{}.tif,200,{}'.format(
-                    n, w, utils.append_fn('_pre_surface', pre_region, 1), self.min_weight
-                )
-            ],
+            data=final_data,
             src_region=surface_region,
             xinc=self.xinc,
             yinc=self.yinc,
@@ -2094,8 +2101,8 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
                 )
             )
         except Exception as e:
-            utils.echo_error_msg(e)
-            return(None)
+           utils.echo_error_msg(e)
+           return(None)
     
     def acquire_from_config(self, config):
         def waffles_config(wc):
@@ -2372,8 +2379,7 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## Otherwise run from cli options...
     ## set the dem module
-    ## ==============================================
-        
+    ## ==============================================        
     if module is None:
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg(
