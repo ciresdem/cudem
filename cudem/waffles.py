@@ -1383,7 +1383,7 @@ class WafflesCUDEM(Waffle):
     def __init__(
             self,
             min_weight=1,
-            inc_factor=1,
+            inc_factor=3,
             pre_count=2,
             smoothing=None,
             landmask=False,
