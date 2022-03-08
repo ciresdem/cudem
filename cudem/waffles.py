@@ -241,7 +241,7 @@ class Waffle:
 
     ## do an xyz_block that returns a fully blocked array
 
-    def _xyz_block_array(self, src_xyz):
+    def _xyz_block_array(self, src_xyz, out_name=None):
         """block the src_xyz data to the mean block value
 
         Yields:
@@ -288,11 +288,24 @@ class Waffle:
             out_array = (sum_array/count_array)
             out_weight_array = np.ones((ycount, xcount))
             
-        sum_array = count_array = None
-        if self.weights:
-            weight_array = None
-
-        return(out_array, dst_gt)
+        sum_array = None
+        if out_name is not None:
+            ds_config = demfun.set_infos(
+                xcount,
+                ycount,
+                xcount * ycount,
+                dst_gt,
+                self.dst_srs,
+                gdal.GDT_Float32,
+                -9999,
+                'GTiff'
+            )
+            utils.gdal_write(out_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
+            utils.gdal_write(out_weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
+            utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
+            return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
+        else:
+            return(out_array, out_weight_array, count_array, dst_gt)
     
     def _xyz_block(self, src_xyz):
         """block the src_xyz data to the mean block value
@@ -301,61 +314,19 @@ class Waffle:
           list: xyz data for each block with data
         """
 
-        xcount, ycount, dst_gt = self.p_region.geo_transform(
-            x_inc=self.xinc, y_inc=self.yinc
-        )
-        gdt = gdal.GDT_Float32
-        sum_array = np.zeros((ycount, xcount))
-        count_array = np.zeros((ycount, xcount))
-        if self.weights:
-            weight_array = np.zeros((ycount, xcount))
-            
-        if self.verbose:
-            utils.echo_msg(
-                'blocking data to {}/{} grid'.format(ycount, xcount)
-            )
-        for this_xyz in src_xyz:
-            if regions.xyz_in_region_p(this_xyz, self.p_region):
-                if self.weights:
-                    this_z = this_xyz.z * this_xyz.w
-                else:
-                    this_z = this_xyz.z
-                
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, dst_gt
-                )
-                try:
-                    sum_array[ypos, xpos] += this_z
-                    count_array[ypos, xpos] += 1
-                    if self.weights:
-                        weight_array[ypos, xpos] += this_xyz.w
-                        
-                except: pass
-
-        count_array[count_array == 0] = np.nan
-        if self.weights:
-            weight_array[weight_array == 0] = np.nan
-            out_weight_array = (weight_array/count_array)
-            out_array = (sum_array/out_weight_array)/count_array
-        else:
-            out_array = (sum_array/count_array)
-            out_weight_array = np.ones((ycount, xcount))
-            
-        sum_array = count_array = None
-        if self.weights:
-            weight_array = None
-            
+        z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz)
+        
         for y in range(0, ycount):
             for x in range(0, xcount):
-                z = out_array[y,x]
+                z = z_array[y,x]
                 if not np.isnan(z):
                     geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
                     out_xyz = xyzfun.XYZPoint(
-                        x=geo_x, y=geo_y, z=z, w=out_weight_array[y,x]
+                        x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
                     )
                     yield(out_xyz)
 
-        out_array = out_weight_array = None
+        z_array = weight_array = count_array = None
 
     def _xyz_block_t(self, src_xyz):
         """block the src_xyz data for fast lookup"""
@@ -452,10 +423,10 @@ class Waffle:
             )
             utils.remove_glob('__tmp_clip.*')
 
-    def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
+    def dump_xyz(self, dst_port=sys.stdout, encode=False, block=False, **kwargs):
         """dump the xyz data to dst_port"""
         
-        for xyz in self.yield_xyz(**kwargs):
+        for xyz in self.yield_xyz(block=block, **kwargs):
             xyz.dump(
                 include_w = True if self.weights is not None else False,
                 dst_port=dst_port,
@@ -722,8 +693,9 @@ class GMTNearNeighbor(Waffle):
             self.name,
             ' -W' if self.weights else '',
             ' -N{}'.format(self.sectors) if self.sectors is not None else '',
-            ' -S{}'.format(self.radius) if self.radius is not None else '',
+            ' -S{}'.format(self.radius) if self.radius is not None else ' -S{}'.format(self.xinc),
         )
+        #print(dem_nn_cmd)
         out, status = utils.run_cmd(
             dem_nn_cmd,
             verbose = self.verbose,
@@ -1194,7 +1166,7 @@ class WafflesIDW(Waffle):
 class WafflesUIDW(Waffle):
     """Uncertainty Weighted Inverse Distance Weighted.
     
-see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+    see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
     """
     
     def __init__(
@@ -1425,7 +1397,7 @@ class WafflesVDatum_(Waffle):
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
 
-see gdal_grid for more info and gridding algorithms
+    see gdal_grid for more info and gridding algorithms
     """
     
     def __init__(self, block=False, **kwargs):
@@ -1516,142 +1488,15 @@ class WafflesNearest(WafflesGDALGrid):
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, nodata)
 
-class WafflesCUDEM_(Waffle):
-    def __init__(
-            self,
-            landmask=False,
-            min_weight=1,
-            smoothing=None,
-            pre_xinc=None,
-            pre_yinc=None,
-            upper_limit=None,
-            lower_limit=None,
-            **kwargs
-    ):
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            utils.echo_error_msg(e)
-            sys.exit()
-
-        self.landmask = landmask
-        self.min_weight = utils.float_or(min_weight)
-        self.smoothing = smoothing
-        self.pre_xinc = utils.str2inc(pre_xinc)
-        self.pre_yinc = utils.str2inc(pre_yinc)
-        self.pre_xinc = self.xinc*3 if utils.float_or(self.pre_xinc) is None else utils.float_or(self.pre_xinc)
-        self.pre_yinc = self.yinc*3 if utils.float_or(self.pre_yinc) is None else utils.float_or(self.pre_yinc)
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self.pre_data = self.data_
-        self.mod = 'cudem'
-        
-    def run(self):
-        surface_region = self.p_region.copy()
-        surface_region.wmin = self.min_weight
-        pre_region = self.p_region.copy()
-        pre_region.buffer(x_bv=(self.pre_xinc*12), y_bv=(self.pre_yinc*12))
-        pre_clip = None
-        if self.upper_limit is not None:
-            pre_region.zmax = self.upper_limit
-            
-        if self.lower_limit is not None:
-            pre_region.zmin = self.lower_limit
-
-        if self.landmask:
-            if not os.path.exists(utils.str_or(self.landmask)):
-
-                coast_region = pre_region.copy()
-                #if self.upper_limit is None:
-                #    coast_region.zmax = 1
-                #    
-                #if self.lower_limit is None:
-                #    coast_region.zmin = -1
-
-                if self.min_weight is not None:
-                    coast_region.wmin = self.min_weight
-                    
-                self.coast = WaffleFactory(
-                    mod='coastline',
-                    data=self.data_,
-                    src_region=coast_region,
-                    xinc=self.xinc,
-                    yinc=self.yinc,
-                    name='tmp_coast',
-                    node=self.node,
-                    extend=self.extend+12,
-                    weights=self.weights,
-                    dst_srs=self.dst_srs,
-                    clobber=True,
-                    verbose=self.verbose,
-                ).acquire().generate()
-                coastline = '{}.shp'.format(self.coast.name)
-            else:
-                coastline = self.landmask
-            pre_clip = '{}:invert=True'.format(coastline)
-
-            ## coastline to xyz
-            #self.coast_xyz = '{}_coast.xyz'.format(self.name)
-            #c_cmd = 'coastline2xyz.sh -I {} -O {} -Z 0 -W {} -E {} -S {} -N {}'.format(
-            #    self.coastline,
-            #    self.coast_xyz,
-            #    self.c_region.xmin,
-            #    self.c_region.xmax,
-            #    self.c_region.ymin,
-            #    self.c_region.ymax)
-            #out, status = utils.run_cmd(c_cmd, verbose=True)
-            #bathy_data = self.data_ + ['{},168,0.1'.format(self.coast_xyz)]
-            
-        self.pre_surface = WaffleFactory(
-            mod='surface:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
-            data=self.pre_data,
-            src_region=pre_region,
-            xinc=utils.str2inc(self.pre_xinc),
-            yinc=utils.str2inc(self.pre_yinc),
-            name=utils.append_fn('_pre_surface', pre_region, self.pre_xinc),
-            node=self.node,
-            extend=self.extend+2,
-            extend_proc=self.extend_proc+2,
-            fltr=['1:{}:split_value=0'.format(self.smoothing)] if self.smoothing is not None else [],
-            #fltr=['2:{}'.format(self.smoothing)] if self.smoothing is not None else [],
-            weights=1,
-            dst_srs=self.dst_srs,
-            clobber=True,
-            verbose=self.verbose,
-            xsample=utils.str2inc(self.xinc),
-            ysample=utils.str2inc(self.yinc),
-            clip=pre_clip,
-        ).acquire().generate()
-
-        self.surface = WaffleFactory(
-            mod='surface:tension=1',
-            data=self.data_ + ['{},200,{}'.format(self.pre_surface.fn, self.min_weight)],
-            src_region=surface_region,
-            xinc=self.xinc,
-            yinc=self.yinc,
-            name=self.name,
-            node=self.node,
-            extend=self.extend,
-            extend_proc=self.extend_proc,
-            weights=self.weights,
-            dst_srs=self.dst_srs,
-            clobber=True,
-            verbose=self.verbose,
-        ).acquire().generate()
-        utils.remove_glob('{}*'.format(self.pre_surface.name), 'tmp_coast*')
-        
-        return(self)
-
 class WafflesCUDEM(Waffle):
     def __init__(
             self,
             min_weight=1,
-            smoothing=None,
             pre_count=2,
             inc_factor=1,
+            smoothing=None,
             landmask=False,
-            upper_limit=None,
-            lower_limit=None,
+            keep_auxilary=False,
             **kwargs
     ):
         try:
@@ -1659,49 +1504,40 @@ class WafflesCUDEM(Waffle):
         except Exception as e:
             utils.echo_error_msg(e)
             sys.exit()
-
-        self.landmask = landmask
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)            
+            
         self.min_weight = utils.float_or(min_weight)
-        self.smoothing = utils.int_or(smoothing)
         self.pre_count = int(pre_count)
-        self.pre_data = self.data_
         self.inc_factor = utils.int_or(inc_factor)
-        self.mod = 'cudem'
-
+        self.smoothing = utils.int_or(smoothing)
+        self.landmask = landmask
+        self.keep_auxilary = keep_auxilary
+        self.mod = 'cudem'            
+        
     def run(self):
         pre = self.pre_count
         pre_region = self.p_region.copy()
+        pre_weight = 0
+        pre_region.wmin = None
+        pre_clip = None        
+            
         surface_region = self.p_region.copy()
         surface_region.wmin = self.min_weight
 
-        pre_weight = 0
-        pre_data = self.data_
-        pre_region.wmin = None
-        pre_clip = None
-        
-        if self.upper_limit is not None:
-            pre_region.zmax = self.upper_limit
-            
-        if self.lower_limit is not None:
-            pre_region.zmin = self.lower_limit
+        upper_limit = None
 
+        coast = '{}_cst'.format(self.name)
+        n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
+        pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         if self.landmask:
-            if not os.path.exists(utils.str_or(self.landmask)):
-
-                coast_region = self.p_region.copy()
-
-                if self.min_weight is not None:
-                    coast_region.wmin = self.min_weight
-                    
+            upper_limit = -0.1
+            if not os.path.exists(utils.str_or(self.landmask)):                    
                 self.coast = WaffleFactory(
                     mod=self.landmask,
-                    data=self.data_,
-                    src_region=coast_region,
+                    data=pre_data,
+                    src_region=surface_region,
                     xinc=self.xinc,
                     yinc=self.yinc,
-                    name='tmp_coast',
+                    name=coast,
                     node=self.node,
                     extend=self.extend+12,
                     weights=self.weights,
@@ -1715,11 +1551,10 @@ class WafflesCUDEM(Waffle):
             pre_clip = '{}:invert=True'.format(coastline)
         
         while pre > 0:
-
-            pre_xinc = self.xinc * (pre * self.inc_factor)
-            pre_yinc = self.yinc * (pre * self.inc_factor)
-            xsample = self.xinc * ((pre - 1) * self.inc_factor)
-            ysample = self.yinc * ((pre - 1) * self.inc_factor)
+            pre_xinc = self.xinc * (self.inc_factor**pre)
+            pre_yinc = self.yinc * (self.inc_factor**pre)
+            xsample = self.xinc * (self.inc_factor**(pre - 1))
+            ysample = self.yinc * (self.inc_factor**(pre - 1))
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
 
@@ -1729,14 +1564,17 @@ class WafflesCUDEM(Waffle):
                 ysample = self.yinc
             
             if pre != self.pre_count:
-                pre_weight = self.min_weight/pre
-                if pre_weight == 0: pre_weight = self.min_weight
-                pre_data = self.data_ + ['{}.tif,200,{}'.format(utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight)]
+                pre_weight = self.min_weight/(pre + 1)
+                if pre_weight == 0: pre_weight = 1-e20
+                pre_data = [
+                    '{},200:weight_mask={},1', '{}.tif,200,{}'.format(
+                        n, w, utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                    )
+                ]
                 pre_region.wmin = pre_weight
                 
-            print(pre, pre_name, pre_xinc, pre_yinc, xsample, ysample, pre_weight, pre_data, pre_region, pre_filter)
             pre_surface = WaffleFactory(
-                mod='surface:upper_limit={}:lower_limit={}'.format(self.upper_limit, self.lower_limit),
+                mod='surface:upper_limit={}'.format(upper_limit),
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc,
@@ -1757,10 +1595,13 @@ class WafflesCUDEM(Waffle):
                 
             pre -= 1
 
-        pre_region.wmin = self.min_weight
         pre_surface = WaffleFactory(
             mod='surface',
-            data=self.data_ + ['{}.tif,200,{}'.format(utils.append_fn('_pre_surface', pre_region, 1), self.min_weight)],
+            data=[
+                '{},200:weight_mask={},1', '{}.tif,200,{}'.format(
+                    n, w, utils.append_fn('_pre_surface', pre_region, 1), self.min_weight
+                )
+            ],
             src_region=surface_region,
             xinc=self.xinc,
             yinc=self.yinc,
@@ -1777,7 +1618,10 @@ class WafflesCUDEM(Waffle):
             extend_proc=self.extend_proc,
         ).acquire().generate()
             
-        utils.remove_glob('*_pre_surface*', 'tmp_coast*')
+        utils.remove_glob('*_pre_surface*')
+        if not self.keep_auxilary:
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+            
         return(self)
     
 class WafflesCoastline(Waffle):
@@ -1924,9 +1768,8 @@ class WafflesCoastline(Waffle):
             
             gdal.Warp(out_ds, cop_tif[1], dstSRS = dst_srs, resampleAlg = gdal.GRA_CubicSpline)
             c_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
-            #c_ds_arr[c_ds_arr > 0] = 1
-            #self.coast_array += c_ds_arr
-            self.coast_array[c_ds_arr > 0] += 1
+            c_ds_arr[c_ds_arr > 0] = 1
+            self.coast_array += c_ds_arr
             out_ds = c_ds_arr = None
             utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
     
@@ -1984,10 +1827,8 @@ class WafflesCoastline(Waffle):
             tnm_ds = gdal.Open('nhdArea_merge.tif')
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-                #tnm_ds_arr[tnm_ds_arr < 1] = 0
-                #self.coast_array -= tnm_ds_arr
-                self.coast_array[tnm_ds_arr == 1] -= 1
-                self.coast_array[tnm_ds_arr == 0] += 1
+                tnm_ds_arr[tnm_ds_arr < 1] = 0
+                self.coast_array -= tnm_ds_arr
                 tnm_ds = tnm_ds_arr = None
                 
             utils.remove_glob('nhdArea_merge.*')

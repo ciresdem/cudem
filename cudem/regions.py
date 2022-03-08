@@ -678,9 +678,19 @@ def xyz_in_region_p(xyz, this_region):
         if this_region.zmin is not None:
             if xyz.z < this_region.zmin:
                 pass_d = False
+                return(pass_d)
         if this_region.zmax is not None:
             if xyz.z > this_region.zmax:
                 pass_d = False
+                return(pass_d)
+        if this_region.wmin is not None:
+            if xyz.w < this_region.wmin:
+                pass_d = False
+                return(pass_d)
+        if this_region.wmax is not None:
+            if xyz.w > this_region.wmax:
+                pass_d = False
+                return(pass_d)
 
     return(pass_d)
 

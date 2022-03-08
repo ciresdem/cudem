@@ -656,6 +656,7 @@ class XYZFile(ElevationDataset):
             xpos=0,
             ypos=1,
             zpos=2,
+            wpos=None,
             skip=0,
             x_scale=1,
             y_scale=1,
@@ -667,6 +668,7 @@ class XYZFile(ElevationDataset):
         self.xpos = xpos
         self.ypos = ypos
         self.zpos = zpos
+        self.wpos = wpos
         self.skip = skip
         self.x_scale = x_scale
         self.y_scale = y_scale
@@ -733,14 +735,6 @@ class XYZFile(ElevationDataset):
             if len(this_xyz) > 1:
                 return(this_xyz)
 
-    def line_delim_(self, xyz_line):
-        """guess a line delimiter"""
-        
-        for delim in self._known_delims:
-            this_xyz = xyz_line.split(delim)
-            if len(this_xyz) > 1:
-                return(delim)
-
     def yield_xyz(self):
         """xyz file parsing generator"""
         
@@ -757,6 +751,11 @@ class XYZFile(ElevationDataset):
         for xyz_line in self.src_data:
             if count >= skip:
                 this_xyz = self.line_delim(xyz_line)
+                if self.wpos is not None:
+                    w = float(this_xyz[self.wpos])
+                else:
+                    w = 1
+
                 try:
                     this_xyz = xyzfun.XYZPoint(
                         x=this_xyz[self.xpos],
@@ -773,7 +772,7 @@ class XYZFile(ElevationDataset):
                         this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                         this_xyz.z *= self.z_scale
 
-                    this_xyz.w = self.weight
+                    this_xyz.w = self.weight * w                        
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
 
@@ -795,7 +794,16 @@ class XYZFile(ElevationDataset):
             )
             
         self.src_data.close()
-            
+
+    ## Testing_
+    def line_delim_(self, xyz_line):
+        """guess a line delimiter"""
+        
+        for delim in self._known_delims:
+            this_xyz = xyz_line.split(delim)
+            if len(this_xyz) > 1:
+                return(delim)
+        
     def yield_xyz_(self):
         """LAS file parsing generator"""
 
@@ -981,10 +989,11 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
-    def __init__(self, mask=None, open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
+        self.weight_mask = weight_mask
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
             
@@ -1059,9 +1068,13 @@ class RasterFile(ElevationDataset):
             gt = src_ds.GetGeoTransform()
             ndv = band.GetNoDataValue()
             msk_band = None
+            weight_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
                 msk_band = src_mask.GetRasterBand(1)
+            if self.weight_mask is not None:
+                src_weight = gdal.Open(self.weight_mask)
+                weight_band = src_weight.GetRasterBand(1)
             
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
             if ndv is not None:
@@ -1078,13 +1091,26 @@ class RasterFile(ElevationDataset):
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
+                if weight_band is not None:
+                    weight_data = weight_band.ReadAsArray(
+                        srcwin[0], y, srcwin[2], 1
+                    )
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
+                    w_region = self.region.w_region()
                     if z_region[0] is not None:
                         band_data[band_data < z_region[0]] = -9999
                         
                     if z_region[1] is not None:
                         band_data[band_data > z_region[1]] = -9999
+
+                    if weight_band is not None:
+                        if w_region[0] is not None:
+                            band_data[weight_data < w_region[0]] = -9999
+                        
+                        if w_region[1] is not None:
+                            band_data[weight_data > w_region[1]] = -9999
+                        
                         
                 if msk_band is not None:
                    msk_data = msk_band.ReadAsArray(
@@ -1093,20 +1119,25 @@ class RasterFile(ElevationDataset):
                    band_data[msk_data==0]=-9999
                    
                 band_data = np.reshape(band_data, (srcwin[2], ))
+                if weight_band is not None:
+                    weight_data = np.reshape(weight_data, (srcwin[2], ))
                 for x_i in range(0, srcwin[2], 1):
                     z = band_data[x_i]
                     if '{:g}'.format(z) not in nodata:
                         x = x_i + srcwin[0]
                         out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
                         out_xyz.z = z
-                        out_xyz.w = self.weight
+                        if weight_band is not None:
+                            out_xyz.w = weight_data[x_i]
+                        else:
+                            out_xyz.w = self.weight
                         count += 1
                         #if self.dst_trans is not None:
                         #    out_xyz.transform(self.dst_trans)
 
                         yield(out_xyz)
                             
-            band = msk_band = src_mask = None
+            band = msk_band = weight_band = src_weight = src_mask = None
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}{}'.format(
@@ -1116,7 +1147,7 @@ class RasterFile(ElevationDataset):
         src_ds = None
         if self.verbose and self.parent is None:
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
-
+           
 ## ==============================================
 ## ==============================================
 class BAGFile(ElevationDataset):
