@@ -31,6 +31,7 @@ import sys
 import json
 import laspy as lp
 import copy
+import csv
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -772,7 +773,7 @@ class XYZFile(ElevationDataset):
                         this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                         this_xyz.z *= self.z_scale
 
-                    this_xyz.w = self.weight * w                        
+                    this_xyz.w = w if self.weight is None else self.weight * w                        
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
 
@@ -803,7 +804,7 @@ class XYZFile(ElevationDataset):
             this_xyz = xyz_line.split(delim)
             if len(this_xyz) > 1:
                 return(delim)
-        
+            
     def yield_xyz_(self):
         """LAS file parsing generator"""
 
@@ -817,8 +818,11 @@ class XYZFile(ElevationDataset):
         #             self.delim = self.line_delim(self.src_data.readline())
         #             self.src_data.close()
                 
-        dataset = np.loadtxt(self.fn, delimiter=self.delim, usecols=(self.xpos, self.ypos, self.zpos), unpack=False)
+        #dataset = np.loadtxt(self.fn, delimiter=self.delim, usecols=(self.xpos, self.ypos, self.zpos), unpack=False)
         #dataset = np.vstack((x, y, z)).transpose()
+
+        with open(self.fn, 'r') as f:
+            dataset = np.array([l for l in csv.reader(f, delimiter=' ')])
         
         if self.region is not None  and self.region.valid_p():
             if self.dst_trans is not None:
@@ -1049,12 +1053,107 @@ class RasterFile(ElevationDataset):
                 0, 0, x_size, y_size
             )
         return(srcwin)
-            
+
     def yield_xyz(self):
+        """parse the data from gdal dataset src_ds using numpy - testing"""
+
+        if self.open_options:
+            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+        else:
+            src_ds = gdal.Open(self.fn)
+
+        if src_ds is not None:
+            count = 0
+            band = src_ds.GetRasterBand(1)
+            gt = src_ds.GetGeoTransform()
+            ndv = band.GetNoDataValue()
+            #xcount = src_ds.RasterXSize
+            #ycount = src_ds.RasterYSize
+            dem_infos = demfun.gather_infos(src_ds)
+
+            if self.weight_mask is not None:
+                src_weight = gdal.Open(self.weight_mask)
+                weight_band = src_weight.GetRasterBand(1)
+            
+            for srcwin in demfun.yield_srcwin(self.fn, n_chunk=1000, step=1000, verbose=self.verbose):
+                src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
+                src_arr = src_arr.flatten()
+
+                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
+                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], gt)
+                dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
+
+                srcwin_region = regions.Region().from_geo_transform(geo_transform=dst_gt, x_count=srcwin[2], y_count=srcwin[3])
+                
+                #xi = np.linspace(this_geo_x_origin+(.5*dst_gt[1]), this_geo_x_end+(.5*dst_gt[1]), srcwin[2])
+                #yi = np.linspace(this_geo_y_origin+(.5*(-1*dst_gt[5])), this_geo_y_end+(.5*(-1*dst_gt[5])), srcwin[3])
+                #xi = np.linspace(srcwin_region.xmax+(.5*dst_gt[1]), srcwin_region.xmin+(.5*dst_gt[1]), srcwin[2])
+                #yi = np.linspace(srcwin_region.ymax-(.5*(-1*dst_gt[5])), srcwin_region.ymin+(.5*(-1*dst_gt[5])), srcwin[3])
+                xi = np.linspace(srcwin_region.xmin, srcwin_region.xmax, srcwin[2])
+                yi = np.linspace(srcwin_region.ymax, srcwin_region.ymin, srcwin[3])
+                xi, yi = np.meshgrid(xi, yi)
+                xi, yi = xi.flatten(), yi.flatten()
+
+                if self.weight_mask is not None:
+                    weight_arr = weight_band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
+                    weight_arr = weight_arr.flatten()
+                    dataset = np.vstack((xi, yi, src_arr, weight_arr)).T
+                else:
+                    dataset = np.vstack((xi, yi, src_arr)).T
+
+                dataset = dataset[dataset[:,2] != ndv]
+                if self.region is not None  and self.region.valid_p():
+                    #if self.dst_trans is not None:
+                    #self.region.src_srs = self.dst_srs
+                    #self.region.warp(self.src_srs)
+
+                    dataset = dataset[dataset[:,0] > self.region.xmin,:]
+                    dataset = dataset[dataset[:,0] < self.region.xmax,:]
+                    dataset = dataset[dataset[:,1] > self.region.ymin,:]
+                    dataset = dataset[dataset[:,1] < self.region.ymax,:]
+                    if self.region.zmin is not None:
+                        dataset = dataset[dataset[:,2] > self.region.zmin,:]
+
+                    if self.region.zmax is not None:
+                        dataset = dataset[dataset[:,2] < self.region.zmax,:]
+
+                    if self.weight_mask is not None:
+                        
+                        if self.region.wmin is not None:
+                            dataset = dataset[dataset[:,3] > self.region.wmin,:]
+
+                        if self.region.wmax is not None:
+                            dataset = dataset[dataset[:,3] < self.region.wmax,:]
+
+                for point in dataset:
+                    count += 1
+                    this_xyz = xyzfun.XYZPoint(
+                        x=point[0], y=point[1], z=point[2], w=self.weight if self.weight_mask is None else point[3]
+                    )
+                    #if self.dst_trans is not None:
+                    #out_xyz.transform(self.dst_trans)
+                    #
+                    yield(this_xyz)
+                dataset = src_arr = weight_arr = None
+
+            src_ds = src_weight = None
+            if self.verbose:
+                utils.echo_msg(
+                    'parsed {} data records from {}{}'.format(
+                        count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                    )
+                )
+            
+        #if self.verbose and self.parent is None:
+        #    _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+            
+    def yield_xyz_(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
         if self.verbose: # and self.parent is None:
-            _prog = utils.CliProgress('parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+            _prog = utils.CliProgress(
+                'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
+            )
 
         if self.open_options:
             src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1097,7 +1196,6 @@ class RasterFile(ElevationDataset):
                     )
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
-                    w_region = self.region.w_region()
                     if z_region[0] is not None:
                         band_data[band_data < z_region[0]] = -9999
                         
@@ -1105,12 +1203,12 @@ class RasterFile(ElevationDataset):
                         band_data[band_data > z_region[1]] = -9999
 
                     if weight_band is not None:
+                        w_region = self.region.w_region()
                         if w_region[0] is not None:
                             band_data[weight_data < w_region[0]] = -9999
                         
                         if w_region[1] is not None:
                             band_data[weight_data > w_region[1]] = -9999
-                        
                         
                 if msk_band is not None:
                    msk_data = msk_band.ReadAsArray(

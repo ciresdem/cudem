@@ -239,9 +239,7 @@ class Waffle:
             
         return(self.ogr_ds)
 
-    ## do an xyz_block that returns a fully blocked array
-
-    def _xyz_block_array(self, src_xyz, out_name=None):
+    def _xyz_block_array(self, src_xyz, min_count=None, out_name=None):
         """block the src_xyz data to the mean block value
 
         Yields:
@@ -252,7 +250,7 @@ class Waffle:
             x_inc=self.xinc, y_inc=self.yinc
         )
         gdt = gdal.GDT_Float32
-        sum_array = np.zeros((ycount, xcount))
+        z_array = np.zeros((ycount, xcount))
         count_array = np.zeros((ycount, xcount))
         if self.weights:
             weight_array = np.zeros((ycount, xcount))
@@ -262,33 +260,38 @@ class Waffle:
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for this_xyz in src_xyz:
-            if regions.xyz_in_region_p(this_xyz, self.p_region):
+            #if regions.xyz_in_region_p(this_xyz, self.p_region):
+            #if self.weights:
+            #    this_z = this_xyz.z * this_xyz.w
+            #else:
+            #    this_z = this_xyz.z
+
+            xpos, ypos = utils._geo2pixel(
+                this_xyz.x, this_xyz.y, dst_gt
+            )
+            try:
+                #sum_array[ypos, xpos] += this_z
+                z_array[ypos, xpos] += this_xyz.z * this_xyz.w
+                count_array[ypos, xpos] += 1
                 if self.weights:
-                    this_z = this_xyz.z * this_xyz.w
-                else:
-                    this_z = this_xyz.z
-                
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, dst_gt
-                )
-                try:
-                    sum_array[ypos, xpos] += this_z
-                    count_array[ypos, xpos] += 1
-                    if self.weights:
-                        weight_array[ypos, xpos] += this_xyz.w
-                        
-                except: pass
+                    weight_array[ypos, xpos] += this_xyz.w
+
+            except: pass
 
         count_array[count_array == 0] = np.nan
         if self.weights:
             weight_array[weight_array == 0] = np.nan
-            out_weight_array = (weight_array/count_array)
-            out_array = (sum_array/out_weight_array)/count_array
+            weight_array = (weight_array/count_array)
+            z_array = (z_array/weight_array)/count_array
         else:
-            out_array = (sum_array/count_array)
-            out_weight_array = np.ones((ycount, xcount))
+            z_array = (z_array/count_array)
+            weight_array = np.ones((ycount, xcount))
+
+        if min_count is not None:
+            z_array[count_array < min_count] = np.nan
+            weight_array[count_array < min_count] = np.nan
             
-        sum_array = None
+        #sum_array = None
         if out_name is not None:
             ds_config = demfun.set_infos(
                 xcount,
@@ -300,12 +303,12 @@ class Waffle:
                 -9999,
                 'GTiff'
             )
-            utils.gdal_write(out_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
-            utils.gdal_write(out_weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
+            utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
+            utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
             utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
             return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
         else:
-            return(out_array, out_weight_array, count_array, dst_gt)
+            return(z_array, weight_array, count_array, dst_gt)
     
     def _xyz_block(self, src_xyz):
         """block the src_xyz data to the mean block value
@@ -852,7 +855,7 @@ class WafflesNum(Waffle):
     num methods include: mask, mean, num, landmask and any gmt grd2xyz -A option.
     """
     
-    def __init__(self, mode='n', **kwargs):
+    def __init__(self, mode='n', min_count=None, **kwargs):
         """generate an uninterpolated Grid
         `mode` of `n` generates a num grid
         `mode` of `m` generates a mean grid
@@ -863,6 +866,7 @@ class WafflesNum(Waffle):
 
         super().__init__(**kwargs)        
         self.mode = mode
+        self.min_count = min_count
         self.mod = 'num'
         
     def _xyz_num(self, src_xyz):
@@ -955,7 +959,14 @@ class WafflesNum(Waffle):
             )
         else:
             #self._xyz_num(self.yield_xyz(block=True))
-            self._xyz_num(self.yield_xyz(block=False))
+            #self._xyz_num(self.yield_xyz(block=False))
+            num, weight, count = _xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
+            if self.mode != 'm':
+                utils.remove_glob('{}_n.tif'.format(self.name))
+            if self.mode != 'n':
+                utils.remove_glob('{}_c.tif'.format(self.name))
+
+            utils.remove_glob('{}_w.tif'.format(self.name))
             
         return(self)
 
@@ -1384,9 +1395,10 @@ class WafflesCUDEM(Waffle):
             self,
             min_weight=1,
             inc_factor=3,
-            pre_count=2,
+            pre_count=1,
             smoothing=None,
             landmask=False,
+            poly_count=3,
             keep_auxilary=False,
             **kwargs
     ):
@@ -1401,6 +1413,7 @@ class WafflesCUDEM(Waffle):
         self.pre_count = int(pre_count)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
+        self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
         self.mod = 'cudem'            
         
@@ -1421,22 +1434,26 @@ class WafflesCUDEM(Waffle):
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         if self.landmask:
             upper_limit = -0.1
-            if not os.path.exists(utils.str_or(self.landmask)):                    
-                self.coast = WaffleFactory(
-                    mod=self.landmask,
-                    data=pre_data,
-                    src_region=surface_region,
-                    xinc=self.xinc,
-                    yinc=self.yinc,
-                    name=coast,
-                    node=self.node,
-                    extend=self.extend+12,
-                    weights=self.weights,
-                    dst_srs=self.dst_srs,
-                    clobber=True,
-                    verbose=self.verbose,
-                ).acquire().generate()
-                coastline = '{}.shp'.format(self.coast.name)
+            pre_region.zmax = 1
+            if not os.path.exists(utils.str_or(self.landmask)):
+                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
+                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
+                else:
+                    self.coast = WaffleFactory(
+                        mod='{}:polygonize={}'.format(self.landmask, self.poly_count),
+                        data=pre_data,
+                        src_region=surface_region,
+                        xinc=self.xinc,
+                        yinc=self.yinc,
+                        name=coast,
+                        node=self.node,
+                        extend=self.extend+12,
+                        weights=self.weights,
+                        dst_srs=self.dst_srs,
+                        clobber=True,
+                        verbose=self.verbose,
+                    ).acquire().generate()
+                    coastline = '{}.shp'.format(self.coast.name)
             else:
                 coastline = self.landmask
             pre_clip = '{}:invert=True'.format(coastline)
@@ -1466,7 +1483,7 @@ class WafflesCUDEM(Waffle):
                 pre_region.wmin = pre_weight
 
             pre_surface = WaffleFactory(
-                mod='surface:upper_limit={}'.format(upper_limit),
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit),
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc,
@@ -1498,7 +1515,7 @@ class WafflesCUDEM(Waffle):
             ]
             
         pre_surface = WaffleFactory(
-            mod='surface',
+            mod='surface:tension=1',
             data=final_data,
             src_region=surface_region,
             xinc=self.xinc,
@@ -1518,7 +1535,7 @@ class WafflesCUDEM(Waffle):
             
         utils.remove_glob('*_pre_surface*')
         if not self.keep_auxilary:
-            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             
         return(self)
     
@@ -1574,7 +1591,10 @@ class WafflesCoastline(Waffle):
         utils.echo_msg('writing array to {}.tif...'.format(self.name))        
         self._write_coast_array()
         if self.polygonize:
-            self._write_coast_poly()
+            if utils.int_or(self.polygonize) is not None:
+                self._write_coast_poly(poly_count=self.polygonize)
+            else:
+                self._write_coast_poly()
             
         return(self)
 
@@ -1753,7 +1773,7 @@ class WafflesCoastline(Waffle):
             self.coast_array, '{}.tif'.format(self.name), self.ds_config,
         )
 
-    def _write_coast_poly(self):
+    def _write_coast_poly(self, poly_count=3):
         """convert to coast_array vector"""
 
         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
@@ -1767,8 +1787,8 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit 2" {}.shp tmp_c_{}.shp'.format(
-                self.name, self.name, self.name),
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit {}" {}.shp tmp_c_{}.shp'.format(
+                self.name, poly_count, self.name, self.name),
             verbose=True
         )
         
@@ -1779,7 +1799,144 @@ class WafflesCoastline(Waffle):
         )
 
         utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
+
+class WafflesUpdateDEM(Waffle):
+    def __init__(
+            self,
+            radius=None,
+            min_weight=1,
+            max_diff=.25,
+            dem=None,
+            **kwargs
+    ):
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
+
+        self.radius = utils.str2inc(radius)
+        self.min_weight = utils.float_or(min_weight)
+        self.max_diff = utils.float_or(max_diff)
+
+        if dem is not None:
+            if os.path.exists(dem):
+                self.dem = dem
+        elif os.path.exists('{}.tif'.format(self.name)):
+            self.dem = '{}.tif'.format(self.name)
+            self.name = '{}_update'.format(self.name)
+        else:
+            utils.echo_error_msg('must specify DEM to update (:dem=fn) to run the update module.')
+            return(None)
+        
+        self.mod = 'update'
+
+    def yield_diff(self, src_dem, max_diff=.25):
+        '''query a gdal-compatible grid file with xyz data.
+        out_form dictates return values
+
+        yields out_form results'''
+
+        def con_dec(x, dec):
+            '''Return a float string with n decimals
+            (used for ascii output).'''
+
+            if x is None:
+                utils.echo_error_msg('Attempting to convert a None value.')
+                return
+            fstr = "%." + str(dec) + "f"
+            return fstr % x
+      
+        try:
+            ds = gdal.Open(src_dem)
+        except: ds = None
+        if ds is not None:
+            ds_config = demfun.gather_infos(ds)
+            ds_band = ds.GetRasterBand(1)
+            ds_gt = ds_config['geoT']
+            ds_nd = ds_config['ndv']
+            tgrid = ds_band.ReadAsArray()
+            dsband = ds = None
+
+            for xyz in self.yield_xyz():
+                #if xyz.x > ds_gt[0] and xyz.y < float(ds_gt[3]):
+                try: 
+                    xpos, ypos = utils._geo2pixel(xyz.x, xyz.y, ds_gt)
+                    g = tgrid[ypos, xpos]
+                except: g = ds_nd
                 
+                if g != ds_nd:
+                    d = xyz.z - g
+                    s = math.fabs(d / (xyz.z + (g+0.00000001)))
+
+                    if s < max_diff:
+                        xyz.z = d
+                        yield(xyz)
+            ds = None
+        
+    def query_dump(self, dst_port=sys.stdout, encode=False,  max_diff=.25, **kwargs):
+        for xyz in self.yield_diff(self.dem, max_diff):
+            xyz.dump(
+                include_w = True if self.weights is not None else False,
+                dst_port=dst_port,
+                encode=encode,
+                **kwargs
+            )
+        
+    def run(self):
+        dem_infos = demfun.infos(self.dem)
+        dem_region = regions.Region().from_geo_transform(geo_transform=dem_infos['geoT'], x_count=dem_infos['nx'], y_count=dem_infos['ny'])
+
+        if not regions.regions_intersect_p(self.region, dem_region):
+            utils.echo_error_msg('input region does not intersect with input DEM')
+        
+        # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
+        #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
+        # )
+        diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
+            region=self.region, xinc=self.xinc, yinc=self.yinc, radius=self.radius
+        )
+        out, status = utils.run_cmd(
+            diff_cmd,
+            verbose=self.verbose,
+            data_fun=lambda p: self.query_dump(
+                dst_port=p, encode=True, max_diff=self.max_diff
+            )
+        )
+
+        utils.echo_msg('smoothing diff grid...')
+        smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
+
+        #out, status = demfun.grdfilter('_diff.tif', '_tmp_smooth.tif', dist=self.radius, node='pixel', verbose=self.verbose)
+
+
+        if self.xinc != dem_infos['geoT']:
+            utils.echo_msg('resampling diff grid...')
+            if demfun.sample('_tmp_smooth', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5], dem_region)[1] == 0:
+                os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
+            else:
+                utils.echo_warning_msg('failed to resample diff grid')
+
+        #utils.remove_glob('{}.tif'.format(self.name))
+
+        utils.echo_msg('applying diff grid to dem')
+        diff_ds = gdal.Open('_tmp_smooth.tif')
+        diff_band = diff_ds.GetRasterBand(1)
+        diff_arr = diff_band.ReadAsArray()
+        diff_arr[diff_arr == dem_infos['ndv']] = 0
+        diff_arr[diff_arr == -9999] = 0
+        
+        dem_ds = gdal.Open(self.dem)
+        dem_band = dem_ds.GetRasterBand(1)
+        dem_arr = dem_band.ReadAsArray()
+
+        update_dem_arr = diff_arr + dem_arr
+        utils.gdal_write(update_dem_arr, '{}.tif'.format(self.name), dem_infos)
+        
+        diff_ds = dem_ds = None
+        utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
+        return(self)
+        
 class WaffleFactory():
     """Find and generate a WAFFLE object for DEM generation."""
     
@@ -1938,13 +2095,21 @@ Generate a coastline (land/sea mask) using a variety of sources.
             'description': """CUDEM integrated DEM generation. <beta>
 Generate an topo/bathy integrated DEM using a variety of data sources.
 
-< cudem:coastline=None:bathy_xinc=1s:bathy_yinc=1s:mask_z=0:min_weight=.5:smoothing=10 >
- :coastline=[path] - path to coastline vector mask
- :bathy_xinc=[val] - the bathymetry surface x increment
- :bathy_yinc=[val] - the bathymetry surface y increment
- :mask_z=[val] - the maximum z-value for the bathymetry surace
+< cudem:landmask=None:min_weight=.5:smoothing=5 >
+ :landmask=[path] - path to coastline vector mask or coastline to auto-generate
  :min_weight=[val] - the minumum weight to inclue in the final DEM
  :smoothing=[val] - the Gaussian bathymetry smoothing value""",
+        },
+        'update': {
+            'name': 'cudem',
+            'datalist-p': True,
+            'class': WafflesUpdateDEM,
+            'description': """UPDATE an existing DEM . <beta>
+Update an existing DEM with data from the datalist
+
+< update:min_weight=.5:dem=None >
+ :dem=[path] - the path the the DEM to update
+ :min_weight=[val] - the minumum weight to inclue in the final DEM""",
         },
     }
     

@@ -102,6 +102,7 @@ setuptools.setup(
         'scripts/nsidc_download.py',
         'scripts/rename_shp.py',
         'scripts/smooth_dem_bathy.py',
+        'scripts/smooth_dem.py',
         'scripts/vdatum_cmd.py',
         'scripts/x360.py',
         'scripts/xyztindex.py',

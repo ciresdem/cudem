@@ -388,7 +388,7 @@ def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region):
     #out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
     #'.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
     out, status = utils.run_cmd('gdalwarp -ts {} {} {} -r bilinear -te {} {}\
-    '.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem))
+    '.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem), verbose=True)
 
     return(out, status)
 
@@ -429,17 +429,26 @@ def chunks(src_dem, n_chunk):
                 c_n += 1                
     return(o_chunks)
 
-def yield_srcwin(src_dem, n_chunk = 10, step = 5):
+def yield_srcwin(src_dem, n_chunk=10, step=5, verbose=False):
     """yield source windows in n_chunks at step"""
     
     ds_config = infos(src_dem)
     gt = ds_config['geoT']
     x_chunk = n_chunk
+    y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
+    
+    #if verbose:
+        #_prog = utils.CliProgress(
+        #    'parsing dataset {}'.format(src_dem)
+        #)
     while True:
         y_chunk = n_chunk
-        utils.echo_msg_inline('[{:.2f}%]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
+        #if verbose:
+        #    _prog.update_perc((i_chunk*step, ds_config['nb']/step))
+        
+        #utils.echo_msg_inline('[{:.2f}%]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
         while True:
             this_x_chunk = ds_config['nx'] if x_chunk > ds_config['nx'] else x_chunk
             this_y_chunk = ds_config['ny'] if y_chunk > ds_config['ny'] else y_chunk
@@ -461,7 +470,9 @@ def yield_srcwin(src_dem, n_chunk = 10, step = 5):
         else:
             x_chunk += step
             x_i_chunk += 1
-    utils.echo_msg('[OK]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
+    #utils.echo_msg('[OK]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
+    #if verbose:
+    #    _prog.end(0, 'parsed dataset {}'.format(src_dem))
 
 def blur(src_dem, dst_dem, sf = 1):
     """gaussian blur on src_dem using a smooth-factor of `sf`
@@ -660,7 +671,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
 
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
             dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
-
+            
             dst_config = copy_infos(ds_config)
             dst_config['nx'] = srcwin[2]
             dst_config['ny'] = srcwin[3]
@@ -863,8 +874,8 @@ def grdfilter(src_dem, dst_dem, dist='3s', node='pixel', verbose=False):
       list: [cmd-output, cmd-return-code]
     """
     
-    #ft_cmd1 = ('gmt grdfilter -V {} -G{} -R{} -Fc{} -D1{}'.format(src_grd, dst_grd, src_grd, dist, ' -r' if node == 'pixel' else ''))
-    ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D0{}'.format(src_dem, dst_dem, dist, ' -r' if node == 'pixel' else ''))
+    ft_cmd1 = ('gmt grdfilter -V {} -G{} -R{} -Fc{} -D1{}'.format(src_dem, dst_dem, src_dem, dist, ' -rp' if node == 'pixel' else ''))
+    #ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp if node == 'pixel' else ''))
     return(utils.run_cmd(ft_cmd1, verbose=verbose))
 
 def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):

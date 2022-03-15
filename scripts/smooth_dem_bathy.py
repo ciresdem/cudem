@@ -223,7 +223,7 @@ if __name__ == '__main__':
         for lf in yield_file_list(in_list):
             proc_elev(lf, smooth_factor)
     else:
-        #proc_elev(elev, smooth_factor)
-        demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
+        proc_elev(elev, smooth_factor)
+        #demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
 
 ### End
