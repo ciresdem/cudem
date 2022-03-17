@@ -317,7 +317,11 @@ class Waffle:
         if min_count is not None:
             z_array[count_array < min_count] = np.nan
             weight_array[count_array < min_count] = np.nan
-            
+
+        z_array[np.isnan(z_array)] = -9999
+        weight_array[np.isnan(weight_array)] = -9999
+        count_array[np.isnan(count_array)] = -9999
+        
         #sum_array = None
         if out_name is not None:
             ds_config = demfun.set_infos(
