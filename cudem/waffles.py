@@ -190,7 +190,34 @@ class Waffle:
                 y_bv=(self.yinc*self.extend)
             )
         )
-                    
+
+    def copy(self):
+        return(Waffle(
+            data=self.data_,
+            src_region=self.region,
+            inc=self.inc,
+            xinc=self.xinc,
+            yinc=self.yinc,
+            name=self.name,
+            node=self.node,
+            fmt=self.fmt,
+            extend=self.extend,
+            extend_proc=self.extend_proc,
+            weights=self.weights,
+            fltr=self.fltr,
+            sample=self.sample,
+            xsample=self.xsample,
+            ysample=self.ysample,
+            clip=self.clip,
+            chunk=self.chunk,
+            dst_srs=self.dst_srs,
+            verbose=self.verbose,
+            archive=self.archive,
+            mask=self.mask,
+            spat=self.spat,
+            clobber=self.clobber
+        ))
+    
     def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz
 
@@ -318,7 +345,8 @@ class Waffle:
         """
 
         z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz)
-        
+        ycount, xcount = z_array.shape
+
         for y in range(0, ycount):
             for x in range(0, xcount):
                 z = z_array[y,x]
@@ -489,6 +517,8 @@ class Waffle:
                 ).acquire().generate()
                 clip_args['src_ply'] = 'tmp_coast.shp'
 
+            ## if clip vector is empty, will return surface with all upper_value :(
+            ## maybe have it remove all data in such cases (if invert is true)
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
@@ -521,17 +551,74 @@ class Waffle:
                         [x for x in self.yield_xyz()]
                         self._process(fn=self.mask_fn, filter_=False)
                 return(self)
-            
-        self.run()
-        if self.mask:
-            if os.path.exists(self.mask_fn):
-                self._process(fn=self.mask_fn, filter_=False)
+
+        if self.chunk is not None:
+            xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+            count = 0
+            chunks = []
+            for srcwin in utils.yield_srcwin((ycount, xcount), self.chunk):
+                count += 1
+                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], dst_gt)
+                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], dst_gt)
+                this_gt = [this_geo_x_origin, float(dst_gt[1]), 0.0, this_geo_y_origin, 0.0, float(dst_gt[5])]
+                this_region = self.region.copy()
+                this_region.from_geo_transform(geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3])
+
+                print(self.mod)
+                print(self.mod_args)
                 
-        self.waffled = True
-        if self.valid_p():
-            return(self._process(filter_=True))
-        else:
+                this_waffle = WaffleFactory(
+                    mod=self.mod,
+                    data=self.data_,
+                    src_region=this_region,
+                    inc=self.inc,
+                    xinc=self.xinc,
+                    yinc=self.yinc,
+                    name='{}_{}'.format(self.name, count),
+                    node=self.node,
+                    fmt=self.fmt,
+                    extend=self.extend+10,
+                    extend_proc=self.extend_proc+20,
+                    weights=self.weights,
+                    fltr=self.fltr,
+                    sample=self.sample,
+                    xsample=self.xsample,
+                    ysample=self.ysample,
+                    clip=self.clip,
+                    chunk=None,
+                    dst_srs=self.dst_srs,
+                    verbose=self.verbose,
+                    archive=self.archive,
+                    mask=self.mask,
+                    spat=self.spat,
+                    clobber=self.clobber,
+                    **self.mod_args
+                ).acquire()
+                
+                this_waffle.run()
+                if this_waffle.valid_p():
+                    this_waffle._process(filter_=True)
+                    chunks.append(this_waffle.fn)
+
+                
+            if len(chunks) > 0:
+                g = gdal.Warp(self.fn, chunks, format='GTiff',
+                              options=["COMPRESS=LZW", "TILED=YES"])
+                g = None
+            utils.remove_glob(*chunks)
             return(self)
+        else:
+            self.run()
+            
+            if self.mask:
+                if os.path.exists(self.mask_fn):
+                    self._process(fn=self.mask_fn, filter_=False)
+
+            self.waffled = True
+            if self.valid_p():
+                return(self._process(filter_=True))
+            else:
+                return(self)
         
     def valid_p(self):
         """check if the output WAFFLES DEM is valid"""
@@ -960,13 +1047,16 @@ class WafflesNum(Waffle):
         else:
             #self._xyz_num(self.yield_xyz(block=True))
             #self._xyz_num(self.yield_xyz(block=False))
-            num, weight, count = _xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
+            num, weight, count = self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
             if self.mode != 'm':
                 utils.remove_glob('{}_n.tif'.format(self.name))
+            else:
+                os.rename('{}_n.tif'.format(self.name), '{}.tif'.format(self.name))
             if self.mode != 'n':
                 utils.remove_glob('{}_c.tif'.format(self.name))
 
-            utils.remove_glob('{}_w.tif'.format(self.name))
+            if not self.weights:
+                utils.remove_glob('{}_w.tif'.format(self.name))
             
         return(self)
 
@@ -1073,7 +1163,7 @@ quite heavy on memory when large grid-size...
 class WafflesIDW(Waffle):
     """Inverse Distance Weighted."""
     
-    def __init__(self, power=1, min_points=8, block=False, upper_limit=None, lower_limit=None, radius=None, **kwargs):
+    def __init__(self, power=1, min_points=8, block=True, upper_limit=None, lower_limit=None, radius=None, **kwargs):
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
@@ -1084,6 +1174,11 @@ class WafflesIDW(Waffle):
         self.mod = 'IDW'
 
     def run(self):
+
+        ## load and block data into rasters
+        ## yield_srcwin through the dem generation
+        ## combine the srcwin DEMs
+        
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
@@ -1109,7 +1204,7 @@ class WafflesIDW(Waffle):
                     'generating IDW grid @ {}/{}'.format(ycount, xcount)
                 )
             i=0
-
+            
         x, y, z, w = [], [], [], []
         for xyz in self.yield_xyz(block=self.block_p):
             x.append(xyz.x)
@@ -1326,6 +1421,7 @@ class WafflesGDALGrid(Waffle):
         )
         _prog_update = lambda x, y, z: _prog.update()
         ds = self._xyz_ds(self.yield_xyz(block=self.block_p))
+        #ds = 
         if ds.GetLayer().GetFeatureCount() == 0:
             utils.echo_error_msg('no input data')
             
@@ -1904,15 +2000,15 @@ class WafflesUpdateDEM(Waffle):
             )
         )
 
-        utils.echo_msg('smoothing diff grid...')
-        smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
+        #utils.echo_msg('smoothing diff grid...')
+        #smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
 
         #out, status = demfun.grdfilter('_diff.tif', '_tmp_smooth.tif', dist=self.radius, node='pixel', verbose=self.verbose)
 
 
         if self.xinc != dem_infos['geoT']:
             utils.echo_msg('resampling diff grid...')
-            if demfun.sample('_tmp_smooth', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5], dem_region)[1] == 0:
+            if demfun.sample('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5], dem_region)[1] == 0:
                 os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
             else:
                 utils.echo_warning_msg('failed to resample diff grid')
@@ -1934,7 +2030,7 @@ class WafflesUpdateDEM(Waffle):
         utils.gdal_write(update_dem_arr, '{}.tif'.format(self.name), dem_infos)
         
         diff_ds = dem_ds = None
-        utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
+        #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
         
 class WaffleFactory():
@@ -2324,6 +2420,7 @@ Options:
 \t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
 \t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
   -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
+  -K, --chunk\t\tGenerate the DEM in CHUNKs
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
 

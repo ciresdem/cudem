@@ -42,6 +42,31 @@ from cudem import regions
 from cudem import datasets
 from cudem.fetches import fetches
 
+def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, verbose):
+    xdl = Datalist(
+        fn='<scratch-datalist>',
+        data_format=-1,
+        weight=None if not weight else 1,
+        src_region=region,
+        verbose=verbose,
+        parent=None,
+        src_srs=src_srs,
+        dst_srs=dst_srs,
+        x_inc=x_inc,
+        y_inc=y_inc
+    )
+    xdl.data_entries = [DatasetFactory(
+        fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+        src_region=region,
+        verbose=verbose,
+        src_srs=src_srs,
+        dst_srs=dst_srs,
+        x_inc=x_inc,
+        y_inc=y_inc,
+        parent=xdl
+    ).acquire() for dl in data_list]
+    return(xdl)
+    
 ## ==============================================
 ## Datalist Class - Recursive data structure
 ## ==============================================
@@ -205,10 +230,15 @@ class Datalist(datasets.ElevationDataset):
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
                                     yield(ds)
+        elif len(self.data_entries) > 0:
+            for data_set in self.data_entries:
+                for ds in data_set.parse():
+                    yield(ds)
         else:
-            utils.echo_warning_msg(
-                'could not open datalist/entry {}'.format(self.fn)
-            )
+            if self.verbose:
+                utils.echo_warning_msg(
+                    'could not open datalist/entry {}'.format(self.fn)
+                )
             
         if self.verbose:
             _prog.end(0, 'parsed datalist {}{}'.format(
@@ -752,6 +782,7 @@ def datalists_cli(argv=sys.argv):
     want_csv = False
     want_json = False
     want_datalists=False
+    want_separate=False
     
     ## ==============================================
     ## parse command line arguments.
@@ -775,6 +806,8 @@ def datalists_cli(argv=sys.argv):
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
             dst_srs = argv[i + 1]
             i = i + 1
+        elif arg == '--separate' or arg == '-s':
+            want_separate = True
         elif arg == '--archive' or arg == '-a':
             want_archive = True
         elif arg == '--weights' or arg == '-w':
@@ -858,9 +891,44 @@ def datalists_cli(argv=sys.argv):
 
     for rn, this_region in enumerate(these_regions):
         if len(dls) == 0:
-            print(datalists_usage)
+            sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
-            
+
+        # if want_separate:
+        #     xdls = [DatasetFactory(
+        #         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+        #         src_region=this_region,
+        #         verbose=want_verbose,
+        #         src_srs=src_srs,
+        #         dst_srs=dst_srs,
+        #         x_inc=xy_inc[0],
+        #         y_inc=xy_inc[1]
+        #     ).acquire() for dl in dls]
+        #     if not want_weights:
+        #         for xdl in xdls:
+        #             xdl.weight = None
+        # else:
+        #     xdls = [make_datalist(dls, want_weights, this_region, src_srs, dst_srs, xy_inc[0], xy_inc[1], want_verbose)]
+
+        # for xdl in xdls:
+        #     if xdl is not None and xdl.valid_p(
+        #             fmts=['<scratch-datalist>'] + DatasetFactory.data_types[xdl.data_format]['fmts']
+        #     ):
+        #         if want_inf:
+        #             print(xdl.inf())
+        #         elif want_list:
+        #             xdl.echo()
+        #         elif want_archive:
+        #             [x for x in xdl.archive_xyz()]
+        #         elif want_region:
+        #             print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
+        #         else:
+        #             try:
+        #                 xdl.dump_xyz()
+        #             except KeyboardInterrupt:
+        #                 utils.echo_error_msg('Killed by user')
+        #                 break
+
         xdls = [DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=this_region,
@@ -870,7 +938,7 @@ def datalists_cli(argv=sys.argv):
             x_inc=xy_inc[0],
             y_inc=xy_inc[1]
         ).acquire() for dl in dls]
-
+        
         for xdl in xdls:
             if xdl is not None and xdl.valid_p(
                     fmts=DatasetFactory.data_types[xdl.data_format]['fmts']

@@ -695,6 +695,40 @@ def p_f_unzip(src_file, fns=None):
             
     return(src_procs)
 
+def yield_srcwin(n_size=(), n_chunk=10, step=None):
+    """yield source windows in n_chunks at step"""
+    
+    if step is None:
+        step = n_chunk
+    x_chunk = n_chunk
+    y_chunk = 0
+    i_chunk = 0
+    x_i_chunk = 0
+    
+    while True:
+        y_chunk = n_chunk
+        while True:
+            this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
+            this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
+            this_x_origin = x_chunk - n_chunk
+            this_y_origin = y_chunk - n_chunk
+            this_x_size = int(this_x_chunk - this_x_origin)
+            this_y_size = int(this_y_chunk - this_y_origin)
+            if this_x_size == 0 or this_y_size == 0: break
+            srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
+            yield(srcwin)
+
+            if y_chunk > n_size[0]:
+                break
+            else:
+                y_chunk += step
+                i_chunk += 1
+        if x_chunk > n_size[1]:
+            break
+        else:
+            x_chunk += step
+            x_i_chunk += 1
+
 def gdal_write(
         src_arr,
         dst_gdal,

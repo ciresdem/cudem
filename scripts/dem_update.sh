@@ -25,21 +25,20 @@ radius=$(echo "$xinc * 3" | bc)
 proj='epsg:4269'
 max_diff=.25
 min_weight=1
-mode="diffs"
-#mode="ibcao"
+smoothing=5
+mode='waffles'
 #
 #  interpolate the new data through the old DEM
 #
-echo $region
-echo $xinc
-echo $yinc
-echo $radius
-echo $max_diff
-echo $min_weight
+echo REGION is $region
+echo INCREMENT is $xinc $yinc
+echo RADIUS is $radius
+echo MAXIMUM SCALED DIFF is$max_diff
+echo MINIMUM WEIGHT is $min_weight
+echo SMOOTHING FACTOR is $smoothing
+echo UPDATING $2 with $1 using DIFFs
 
-
-if [ "$mode" == "diffs" ]; then
-    echo UPDATING using DIFFs
+if [ "$mode" == "soest" ]; then
     #
     # grid the differences with surface
     #
@@ -47,43 +46,52 @@ if [ "$mode" == "diffs" ]; then
 	gdal_query.py $2 -d_format "xyds" | \
 	awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
 	gmt blockmedian $region -I$xinc/$yinc | \
-	gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M${radius}    
+	gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld #-M${radius}
+
+    dem_smooth.py _diff.tif -s $smoothing
+    
+    # generate a boundary of the dem_diffs and apply a buffer
+    dlim $region/-/-/${min_weight}/- $1 | bounds --verbose -k $xinc/$(echo ${region} | awk -FR '{print $2}') -g > diffs.gmt
+    ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from diffs" diffs.shp diffs.gmt
+    gdal_clip.py _diff_smooth${smoothing}.tif diffs.shp
+    mv _diff_smooth${smoothing}_cut.tif _diff.tif
+    
     #
     #  add the two grids
     #
     gdal_findreplace.py -s_value -9999 -t_value 0 _diff.tif _diff2.tif
     mv _diff2.tif _diff.tif
-    dem_smooth.py _diff.tif -s 5
-    gdal_calc.py -A $2 -B _diff_smooth5.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
+
+    #gdal_calc.py -A $2 -B _diff_smooth${smoothing}.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
+    gdal_calc.py -A $2 -B _diff.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
     #
     #
     #  clean up the mess
     #
     rm _diff*
+elif [ "$mode" == "waffles"]; then
+    echo "WAFFLES"
 
-else
+    waffles -M num:mode=m $region/-/-/${min_weight}/- $1 -O _tmp -E ${xinc} -w
+    waffles -M IDW:radius=${radius} $region/-/-/${min_weight}/- $1 -O _tmp -E ${xinc} -w -K 1000
+    waffles -M $region surface:tension=1 -w -P $proj -O ${basename $2 .tif)_u -E ${xinc}/${yinc} _tmp.tif,200:weight_mask=_tmp_w.tif,1 $2,200,$min_weight
+
+elif [ "$mode" == "ibcao" ]; then
     echo IBCAO REMOVE/RESTORE
 
     # grid new data by itself using mean num/nearneighbor:
-    #waffles $region $1 -E $xinc/$yinc -O dem_update -M num:mode=m:min_count=4 -w -P $proj
-    #waffles $region/-/-/${min_weight}/- $1 -E $xinc/$yinc -O dem_update -M nearneighbor:sectors=12+m10:radius=$radius -w -P $proj -T 1:5:split_level=0
-    waffles $region/-/-/${min_weight}/- $1,-1,2 $2,200,1 -E $xinc/$yinc -O dem_update -M surface:tension=1 -w -P $proj -T 1:5:split_level=0
+    waffles $region/-/-/${min_weight}/- $1 -E $xinc/$yinc -O dem_update -M nearneighbor:sectors=12+m10:radius=$radius -w -P $proj -T 1:5:split_level=0 -K 2000
 
     # generate a boundary of the dem_diffs and apply a buffer
+    # not needed since using nearneighbor
     #dlim dem_update.tif | bounds --verbose -k $xinc/$(echo ${region} | awk -FR '{print $2}') -g > diffs.gmt
     #dlim $region/-/-/${min_weight}/- $1 | bounds --verbose -k $xinc/$(echo ${region} | awk -FR '{print $2}') -g > diffs.gmt
     #ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from diffs" diffs.shp diffs.gmt
     #gdal_clip.py dem_update.tif diffs.shp
 
+    # calculate the difference between 
     gdal_calc.py -A dem_update_cut.tif -B $2 --calc "B-A" --outfile _diff.tif --NoDataValue -9999.
-    
-    # dlim dem_update.tif ${region}/-/-/${min_weight}/- -t_srs $proj --weights | \
-    # 	gdal_query.py $2 -d_format "xyds" | \
-    # 	awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
-    # 	gmt blockmedian $region -I$xinc/$yinc -W | \
-    # 	gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M${radius}
-    # #gmt nearneighbor $region -I$xinc/$yinc -Gdem_update.tif=gd+n-9999:GTiff -W -V -rp -N10+m7 -S${radius}
-    
+        
     # calculate the difference between the orig DEM and the nn grid with the data:
     #gmt grdmath -N $2 dem_update.tif SUB = dem_diffs.tif=gd:GTiff
     
@@ -105,5 +113,7 @@ else
     #  clean up the mess
     #
     rm _diff.*
-    
+else
+    echo "please choose an update method (soest, ibcao or waffles)
 fi
+### End

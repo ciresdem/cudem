@@ -34,6 +34,9 @@ from cudem import utils
 from cudem import regions
 from cudem import xyzfun
 
+## ==============================================
+## DEM functions, etc
+## ==============================================
 def infos(src_dem, region = None, scan = False):
     """scan gdal file src_fn and gather region info.
 
@@ -278,27 +281,40 @@ def split(src_dem, split_value = 0):
         return([dst_upper, dst_lower])
     else: return(None)
 
-def cut(src_dem, src_region, dst_dem, node='pixel'):
+def cut(src_dem, src_region, dst_dem, node='pixel', mode='translate'):
     """cut src_fn gdal file to srcwin and output dst_fn gdal file
 
     returns [output-dem, status-code]
     """
-    
-    try:
-        ds = gdal.Open(src_dem)
-    except: ds = None
-    if ds is not None:
-        ds_config = gather_infos(ds)
-        gt = ds_config['geoT']
-        srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize, node=node)
-        ds_arr = ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-        dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-        out_ds_config = set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
-                                  ds_config['proj'], ds_config['dt'], ds_config['ndv'],
-                                  ds_config['fmt'])
-        ds = None
-        return(utils.gdal_write(ds_arr, dst_dem, out_ds_config))
-    else: return(None, -1)
+
+    if mode == 'translate':
+
+        src_infos = infos(src_dem)
+        this_srcwin = src_region.srcwin(
+            geo_transform=src_infos['geoT'],
+            x_count=src_infos['nx'],
+            y_count=src_infos['ny']
+        )
+        
+        return(utils.run_cmd('gdal_translate {} {} -srcwin {} {} {} {}'.format(
+            src_dem, dst_dem, this_srcwin[0], this_srcwin[1], this_srcwin[2], this_srcwin[3]
+        ), verbose=True))
+    else:
+        try:
+            ds = gdal.Open(src_dem)
+        except: ds = None
+        if ds is not None:
+            ds_config = gather_infos(ds)
+            gt = ds_config['geoT']
+            srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize, node=node)
+            ds_arr = ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                      ds_config['proj'], ds_config['dt'], ds_config['ndv'],
+                                      ds_config['fmt'])
+            ds = None
+            return(utils.gdal_write(ds_arr, dst_dem, out_ds_config))
+        else: return(None, -1)
 
 def clip(src_dem, dst_dem, src_ply=None, invert=False):
     """clip dem to polygon `src_ply`, optionally invert the clip.
@@ -1009,6 +1025,101 @@ def percentile(src_gdal, perc = 95):
         return(p)
     else: return(None)
 
+# def xyz_block_array(src_xyz, region=None, xinc=None, yinc=None, weights=False, min_count=None, out_name=None, verbose=True):
+#     """block the src_xyz data to the mean block value
+#     src_xyz should be a list or generator of xyzfun.XYZPoint objects.
+
+#     Yields:
+#       list: xyz data for each block with data
+#     """
+
+#     xcount, ycount, dst_gt = region.geo_transform(
+#         x_inc=.xinc, y_inc=.yinc
+#     )
+#     gdt = gdal.GDT_Float32
+#     z_array = np.zeros((ycount, xcount))
+#     count_array = np.zeros((ycount, xcount))
+#     if weights:
+#         weight_array = np.zeros((ycount, xcount))
+
+#     if verbose:
+#         utils.echo_msg(
+#             'blocking data to {}/{} grid'.format(ycount, xcount)
+#         )
+#     for this_xyz in src_xyz:
+#         #if regions.xyz_in_region_p(this_xyz, self.p_region):
+#         #if self.weights:
+#         #    this_z = this_xyz.z * this_xyz.w
+#         #else:
+#         #    this_z = this_xyz.z
+
+#         xpos, ypos = utils._geo2pixel(
+#             this_xyz.x, this_xyz.y, dst_gt
+#         )
+#         try:
+#             z_array[ypos, xpos] += this_xyz.z * this_xyz.w
+#             count_array[ypos, xpos] += 1
+#             if self.weights:
+#                 weight_array[ypos, xpos] += this_xyz.w
+
+#         except: pass
+
+#     count_array[count_array == 0] = np.nan
+#     if self.weights:
+#         weight_array[weight_array == 0] = np.nan
+#         weight_array = (weight_array/count_array)
+#         z_array = (z_array/weight_array)/count_array
+#     else:
+#         z_array = (z_array/count_array)
+#         weight_array = np.ones((ycount, xcount))
+
+#     if min_count is not None:
+#         z_array[count_array < min_count] = np.nan
+#         weight_array[count_array < min_count] = np.nan
+
+#     if out_name is not None:
+#         ds_config = demfun.set_infos(
+#             xcount,
+#             ycount,
+#             xcount * ycount,
+#             dst_gt,
+#             self.dst_srs,
+#             gdal.GDT_Float32,
+#             -9999,
+#             'GTiff'
+#         )
+#         utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
+#         utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
+#         utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
+#         return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
+#     else:
+#         return(z_array, weight_array, count_array, dst_gt)
+
+# def xyz_block_yield(src_xyz, region=None, xinc=None, yinc=None, weights=False, verbose=True):
+#     """block the src_xyz data to the mean block value
+
+#     Yields:
+#       list: xyz data for each block with data
+#     """
+
+#     z_array, weight_array, count_array, dst_gt = _xyz_block_array(
+#         src_xyz, region=region, xinc=xinc, yinc=yinc, weights=weights, verbose=verbose
+#     )
+#     ycount, xcount = z_array.shape
+
+#     for y in range(0, ycount):
+#         for x in range(0, xcount):
+#             z = z_array[y,x]
+#             if not np.isnan(z):
+#                 geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+#                 out_xyz = xyzfun.XYZPoint(
+#                     x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
+#                 )
+#                 yield(out_xyz)
+
+#     z_array = weight_array = count_array = None
+
+    
 def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
     '''parse the data from gdal dataset src_ds (first band only)
     optionally mask the output with `mask` or transform the coordinates to `dst_srs`

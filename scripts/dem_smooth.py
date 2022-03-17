@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-### smooth_dem_bathy.py
+### dem_smooth.py
 ##
-## Copyright (c) 2012 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2012 - 2022 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -22,14 +22,13 @@
 
 import os
 import sys
-#from geomods import gdalfun
 from cudem import demfun
 
-_version = '0.0.7'
-_usage = '''smooth_dem_bathy.py ({}): smooth the bathymetry in a DEM
-smooth_dem_bathy.py: A script that smooths the bathy areas of DEM (below 0) and merges back with original, unsmoothed topo.
+_version = '0.1.0'
+_usage = '''dem_smooth.py ({}): smooth a DEM
+dem_smooth.py: Smooth a DEM with a Gaussian filter.
 
-usage: smooth_dem_bathy.py [ si [ args ] ] [ file ]
+usage: dem_smooth.py [ si [ args ] ] [ file ]
 
 Options:
   file\t\tThe input DEM file-name
@@ -40,7 +39,7 @@ Options:
   -version\tPrint the version information
 
 Example:
-smooth_dem_bathy.py input.tif -s 12
+dem_smooth.py input.tif -s 12
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>'''.format(_version)
 
 if __name__ == '__main__':    
@@ -82,3 +81,4 @@ if __name__ == '__main__':
         sys.exit(1)
 
     demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
+### End

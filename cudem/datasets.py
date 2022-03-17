@@ -116,6 +116,7 @@ class ElevationDataset():
         if self.valid_p():
             self.set_transform()
             self.set_yield()
+            #if self.parent is not None:
             self.inf(check_hash=True if self.data_format == -1 else False)
             
     def __str__(self):
@@ -160,7 +161,7 @@ class ElevationDataset():
             else:
                 utils.echo_warning_msg('nothing to fetch')
 
-    def valid_p(self, fmts=[]):
+    def valid_p(self, fmts=['<scratch-datalist>']):
         """check if self appears to be a valid dataset entry"""
         
         if self.fn is None:
@@ -202,9 +203,15 @@ class ElevationDataset():
             return(this_hash.hexdigest())
         except: return('0')
 
+    def format_entry(self, sep=' '):
+
+        dl_entry = sep.join([str(x) for x in [self.fn, self.data_format, self.weight]])
+        metadata = self.echo_()
+        return(sep.join([dl_entry, metadata]))
+        
     def echo_(self, sep=' ', **kwargs):
         """print self as a datalist entry string"""
-
+        
         return(sep.join([ '"{}"'.format(str(self.metadata[x])) for x in self.metadata.keys()]))
     
     def echo(self, **kwargs):
@@ -223,7 +230,7 @@ class ElevationDataset():
 
         return(self.echo_())
     
-    def inf(self, check_hash=False, recursive_check=False, **kwargs):
+    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
 
         If the inf file is not found, will attempt to generate one.
@@ -272,11 +279,12 @@ class ElevationDataset():
             self.infos = self.generate_inf(None if not self.verbose else _prog.update)
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
-                    try:
-                        with open('{}.inf'.format(self.fn), 'w') as inf:
-                            inf.write(json.dumps(self.infos))
-                    except:
-                        pass
+                    if write_inf:
+                        try:
+                            with open('{}.inf'.format(self.fn), 'w') as inf:
+                                inf.write(json.dumps(self.infos))
+                        except:
+                            pass
                         # if self.region is not None:
                         #     with open('{}_{}.inf'.format(
                         #             'dlim_tmp', self.region.format('fn')), 'w') as inf:
@@ -317,6 +325,7 @@ class ElevationDataset():
     
     def set_transform(self):
         """set an srs transform, if needed."""
+        
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and \
@@ -550,7 +559,10 @@ class ElevationDataset():
                     out_array = out_array[~np.isnan(out_array)]
                     out_x_array = out_x_array[~np.isnan(out_x_array)]
                     out_y_array = out_y_array[~np.isnan(out_y_array)]
-                    dataset = np.vstack((out_x_array, out_y_array, out_array)).transpose()
+                    if self.weight is not None:
+                        dataset = np.vstack((out_x_array, out_y_array, out_array, out_weight_array)).transpose()
+                    else:
+                        dataset = np.vstack((out_x_array, out_y_array, out_array)).transpose()
                     for point in dataset:
                         if not np.isnan(point[2]):
                             this_xyz = xyzfun.XYZPoint(
@@ -558,7 +570,52 @@ class ElevationDataset():
                             )
                             yield(this_xyz)
                     dataset = out_x_array = out_y_array = out_array = out_weight_array = None
-        
+
+    def vectorize_xyz(self):
+        """Make a point vector OGR DataSet Object from src_xyz
+
+        for use in gdal gridding functions
+        """
+
+        dst_ogr = '{}'.format(self.metadata['name'])
+        ogr_ds = gdal.GetDriverByName('Memory').Create(
+            '', 0, 0, 0, gdal.GDT_Unknown
+        )
+        layer = ogr_ds.CreateLayer(
+            dst_ogr,
+            geom_type=ogr.wkbPoint25D
+        )
+        fd = ogr.FieldDefn('long', ogr.OFTReal)
+        fd.SetWidth(10)
+        fd.SetPrecision(8)
+        layer.CreateField(fd)
+        fd = ogr.FieldDefn('lat', ogr.OFTReal)
+        fd.SetWidth(10)
+        fd.SetPrecision(8)
+        layer.CreateField(fd)
+        fd = ogr.FieldDefn('elev', ogr.OFTReal)
+        fd.SetWidth(12)
+        fd.SetPrecision(12)
+        layer.CreateField(fd)
+        fd = ogr.FieldDefn('weight', ogr.OFTReal)
+        fd.SetWidth(6)
+        fd.SetPrecision(6)
+        layer.CreateField(fd)
+            
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        for this_xyz in self.yield_xyz():
+            f.SetField(0, this_xyz.x)
+            f.SetField(1, this_xyz.y)
+            f.SetField(2, float(this_xyz.z))
+            f.SetField(3, this_xyz.w)
+                
+            wkt = this_xyz.export_as_wkt(include_z=True)
+            g = ogr.CreateGeometryFromWkt(wkt)
+            f.SetGeometryDirectly(g)
+            layer.CreateFeature(f)
+            
+        return(ogr_ds)
+                    
     def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
@@ -756,7 +813,7 @@ class XYZFile(ElevationDataset):
                     w = float(this_xyz[self.wpos])
                 else:
                     w = 1
-
+                    
                 try:
                     this_xyz = xyzfun.XYZPoint(
                         x=this_xyz[self.xpos],
@@ -993,7 +1050,7 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
-    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None, inc=None, open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
@@ -1067,15 +1124,14 @@ class RasterFile(ElevationDataset):
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
             ndv = band.GetNoDataValue()
-            #xcount = src_ds.RasterXSize
-            #ycount = src_ds.RasterYSize
             dem_infos = demfun.gather_infos(src_ds)
 
             if self.weight_mask is not None:
                 src_weight = gdal.Open(self.weight_mask)
                 weight_band = src_weight.GetRasterBand(1)
             
-            for srcwin in demfun.yield_srcwin(self.fn, n_chunk=1000, step=1000, verbose=self.verbose):
+            #for srcwin in demfun.yield_srcwin(self.fn, n_chunk=1000, step=1000, verbose=self.verbose):
+            for srcwin in utils.yield_srcwin((dem_infos['ny'], dem_infos['nx']), 2000):
                 src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
                 src_arr = src_arr.flatten()
 
@@ -1085,10 +1141,6 @@ class RasterFile(ElevationDataset):
 
                 srcwin_region = regions.Region().from_geo_transform(geo_transform=dst_gt, x_count=srcwin[2], y_count=srcwin[3])
                 
-                #xi = np.linspace(this_geo_x_origin+(.5*dst_gt[1]), this_geo_x_end+(.5*dst_gt[1]), srcwin[2])
-                #yi = np.linspace(this_geo_y_origin+(.5*(-1*dst_gt[5])), this_geo_y_end+(.5*(-1*dst_gt[5])), srcwin[3])
-                #xi = np.linspace(srcwin_region.xmax+(.5*dst_gt[1]), srcwin_region.xmin+(.5*dst_gt[1]), srcwin[2])
-                #yi = np.linspace(srcwin_region.ymax-(.5*(-1*dst_gt[5])), srcwin_region.ymin+(.5*(-1*dst_gt[5])), srcwin[3])
                 xi = np.linspace(srcwin_region.xmin, srcwin_region.xmax, srcwin[2])
                 yi = np.linspace(srcwin_region.ymax, srcwin_region.ymin, srcwin[3])
                 xi, yi = np.meshgrid(xi, yi)
