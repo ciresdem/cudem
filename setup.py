@@ -25,7 +25,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.6.1',
+    version = '1.6.2',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -113,6 +113,7 @@ setuptools.setup(
         'scripts/dem_combine_split.py',
         'scripts/dem_update.sh',
         'scripts/xyz_vs_dem.sh',
+        'scripts/dem_set_metadata.py',
     ],
     python_requires = '>=3.0',
     project_urls = {

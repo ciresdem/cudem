@@ -389,24 +389,31 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         ds_arr = ds.GetRasterBand(1)
         if verbose:
             utils.echo_msg('polygonizing {}...'.format(src_gdal))
-        status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback = gdal.TermProgress if verbose else None)
+        status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback=gdal.TermProgress if verbose else None)
         if verbose:
             utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
         return(0, 0)
     else: return(-1, -1)
     
-def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region):
+def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, verbose=False):
 
-    ## TODO use gdal.Warp
-    xcount, ycount, dst_gt = src_region.geo_transform(x_inc=x_sample_inc, y_inc=y_sample_inc)
-    
+    #xcount, ycount, dst_gt = src_region.geo_transform(x_inc=x_sample_inc, y_inc=y_sample_inc)
+
+    ## use gdalwarp cli:
     #out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
     #'.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
-    out, status = utils.run_cmd('gdalwarp -ts {} {} {} -r bilinear -te {} {}\
-    '.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem), verbose=True)
+    #out, status = utils.run_cmd('gdalwarp -ts {} {} {} -r bilinear -te {} {}\
+    #'.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem), verbose=True)
 
-    return(out, status)
+    #height = ycount, width = xcount
+    out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
+    dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
+                       dstNodata=-9999, outputBounds=out_region, resampleAlg='bilinear', targetAlignedPixels=True,
+                       options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
+    dst_ds = None
+    
+    return(dst_dem, 0)
 
 def chunks(src_dem, n_chunk):
     """split `src_fn` GDAL file into chunks with `n_chunk` cells squared.
@@ -972,17 +979,20 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
     else: return(-1)
 
 def slope(src_gdal, dst_gdal, s = 111120):
-    '''generate a slope grid with GDAL
+    """generate a slope grid with GDAL
 
-    return cmd output and status'''
+    return cmd output and status
+    """
     
     gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
     return(utils.run_cmd(gds_cmd))
     
 def proximity(src_fn, dst_fn):
-    '''compute a proximity grid via GDAL
+    """compute a proximity grid via GDAL
 
-    return 0 if success else None'''    
+    return 0 if success else None
+    """
+
     prog_func = None
     dst_ds = None
     try:
@@ -1007,7 +1017,8 @@ def proximity(src_fn, dst_fn):
 def percentile(src_gdal, perc = 95):
     """calculate the `perc` percentile of src_fn gdal file.
 
-    return the calculated percentile"""
+    return the calculated percentile
+    """
     
     try:
         ds = gdal.Open(src_gdal)
@@ -1118,13 +1129,13 @@ def percentile(src_gdal, perc = 95):
 #                 yield(out_xyz)
 
 #     z_array = weight_array = count_array = None
-
     
 def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
-    '''parse the data from gdal dataset src_ds (first band only)
+    """parse the data from gdal dataset src_ds (first band only)
     optionally mask the output with `mask` or transform the coordinates to `dst_srs`
 
-    yields the parsed xyz data'''
+    yields the parsed xyz data
+    """
 
     #if verbose: sys.stderr.write('waffles: parsing gdal file {}...'.format(src_ds.GetDescription()))
     ln = 0
@@ -1195,10 +1206,12 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbo
     if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
 
 def yield_query(src_xyz, src_grd, out_form):
-    '''query a gdal-compatible grid file with xyz data.
+    """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
 
-    yields out_form results'''
+    yields out_form results
+    """
+    
     try:
         ds = gdal.Open(src_grd)
     except: ds = None
@@ -1232,10 +1245,12 @@ def yield_query(src_xyz, src_grd, out_form):
                     yield(outs)
 
 def query(src_xyz, src_grd, out_form):
-    '''query a gdal-compatible grid file with xyz data.
+    """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
 
-    returns array of values'''
+    returns array of values
+    """
+    
     xyzl = []
     for out_q in yield_query(src_xyz, src_grd, out_form):
         xyzl.append(np.array(out_q))

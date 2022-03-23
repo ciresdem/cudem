@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-### gdal_cut.py
+### dem_set_metadata.py
 ##
-## Copyright (c) 2018 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2022 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -26,41 +26,63 @@
 
 import os
 import sys
-from osgeo import gdal
-from cudem import utils
 from cudem import demfun
-from cudem import regions
+from cudem import utils
 
 _version = '0.0.1'
-_usage = '''gdal_cut.py ({}): cut a DEM to a region
+_usage = '''dem_set_metadata.py ({}): set metadata for a CUDEM DEM
 
-usage: gdal_cut.py [ file ]
+usage: dem_set_meatadata.py [ file ]
 
  Options:
   file\t\tThe input DEM file-name
 
-  -R, --region\tThe region to cut the dem
+  -P, --dst_srs\tSet the projection
+  -N, --dst_srs\tSet the nodata value
+  -D, --dst_srs\tSet the node
+  -F, --dst_srs\tSet the output format
 
   --help\tPrint the usage text
   --version\tPrint the version information
 
+ Notes:
+  by default, will update the given DEM, to output a new file, set the -F switch
+
  Examples:
- % gdal_cut.py input.tif -R -90/-89/28/29
+ % dem_set_metadata.py input.tif -P epsg:4326 -D grid -N -9999 -F NetCDF
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 '''.format(_version)
-
+        
 if __name__ == '__main__':    
     elev = None
-    i_region = None
+    dst_srs = 'epsg:4269'
+    nodata = -9999
+    node = 'pixel'
+    fmt = None
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg == '--region' or arg == '-R':
-            i_region = str(sys.argv[i + 1])
+        if arg == '--dst_srs' or arg == '-P':
+            dst_srs = str(sys.argv[i + 1])
             i = i + 1
-        elif arg[:2] == '-R':
-            i_region = str(arg[2:])
+        elif arg[:2] == '-P':
+            dst_srs = str(arg[2:])
+        elif arg == '--nodata' or arg == '-N':
+            nodata = float(sys.argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-N':
+            nodata = float(arg[2:])
+        elif arg == '--node' or arg == '-D':
+            node = str(sys.argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-D':
+            node = str(arg[2:])
+        elif arg == '--fmt' or arg == '-F':
+            fmt = str(sys.argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-N':
+            fmt = str(arg[2:])
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
@@ -77,16 +99,15 @@ if __name__ == '__main__':
         sys.stderr.write(_usage)
         utils.echo_error_msg('you must enter an input file')
         sys.exit(1)
-
-    if i_region is None:
-        sys.stderr.write(_usage)
-        utils.echo_error_msg('you must enter an cut region')
-        sys.exit(1)
-    else:
-        src_region = regions.Region().from_string(i_region)
         
     if os.path.exists(elev):
-        output_name = elev[:-4] + '_cut.tif'
-        demfun.cut(elev, src_region, output_name)
+
+        if fmt is not  None:
+            elev = utils.gdal2gdal(elev, dst_fmt=fmt)
+                
+        demfun.set_nodata(elev, nodata=nodata, convert_array=False)
+        demfun.set_srs(elev, dst_srs)
+        demfun.set_metadata(elev, node=node, cudem=True)
+        
     else: utils.echo_error_msg('{} is not a valid file'.format(elev))
 ### End

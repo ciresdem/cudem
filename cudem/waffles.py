@@ -28,7 +28,7 @@
 ## datalist, las/laz, gdal, xyz, mbs, fetches
 ##
 ## Supported gridding modules include:
-## surface (GMT), triangulate (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
+## surface (GMT), triangulate (GMT), nearneighbor (GMR), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
 ## coastline (CUDEM), cudem (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
 ## nearest (GDAL)
 ##
@@ -103,6 +103,7 @@ class Waffle:
     ):
 
         self.data = data
+        self.datalist = None
         self.region = src_region
         self.inc = inc
         self.xinc = xinc
@@ -149,6 +150,9 @@ class Waffle:
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
         
     def _init_data(self):
+        ## specify x_inc and y_inc to warp/block data to given res.
+        ## x_inc=self.xinc,
+        ## y_inc=self.yinc
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region,
@@ -157,7 +161,7 @@ class Waffle:
             weight=self.weights
         ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
-        
+
     def _coast_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
         
@@ -217,6 +221,8 @@ class Waffle:
             spat=self.spat,
             clobber=self.clobber
         ))
+
+    ## TODO: move following functions to datasets
     
     def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz
@@ -287,17 +293,10 @@ class Waffle:
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for this_xyz in src_xyz:
-            #if regions.xyz_in_region_p(this_xyz, self.p_region):
-            #if self.weights:
-            #    this_z = this_xyz.z * this_xyz.w
-            #else:
-            #    this_z = this_xyz.z
-
             xpos, ypos = utils._geo2pixel(
                 this_xyz.x, this_xyz.y, dst_gt
             )
             try:
-                #sum_array[ypos, xpos] += this_z
                 z_array[ypos, xpos] += this_xyz.z * this_xyz.w
                 count_array[ypos, xpos] += 1
                 if self.weights:
@@ -322,7 +321,6 @@ class Waffle:
         weight_array[np.isnan(weight_array)] = -9999
         count_array[np.isnan(count_array)] = -9999
         
-        #sum_array = None
         if out_name is not None:
             ds_config = demfun.set_infos(
                 xcount,
@@ -526,8 +524,8 @@ class Waffle:
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
-        #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel')[1] == 0:                
-        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
+        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel')[1] == 0:                
+            #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
             except Exception as e:
@@ -789,7 +787,6 @@ class GMTNearNeighbor(Waffle):
             ' -N{}'.format(self.sectors) if self.sectors is not None else '',
             ' -S{}'.format(self.radius) if self.radius is not None else ' -S{}'.format(self.xinc),
         )
-        #print(dem_nn_cmd)
         out, status = utils.run_cmd(
             dem_nn_cmd,
             verbose = self.verbose,
@@ -1425,7 +1422,7 @@ class WafflesGDALGrid(Waffle):
         )
         _prog_update = lambda x, y, z: _prog.update()
         ds = self._xyz_ds(self.yield_xyz(block=self.block_p))
-        #ds = 
+        #ds = vectorize_xyz()
         if ds.GetLayer().GetFeatureCount() == 0:
             utils.echo_error_msg('no input data')
             
@@ -1633,8 +1630,8 @@ class WafflesCUDEM(Waffle):
             extend_proc=self.extend_proc,
         ).acquire().generate()
             
-        utils.remove_glob('*_pre_surface*')
         if not self.keep_auxilary:
+            utils.remove_glob('*_pre_surface*')
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             
         return(self)

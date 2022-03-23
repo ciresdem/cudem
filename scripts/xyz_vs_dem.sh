@@ -31,7 +31,7 @@ fi
 
 ## query the DEM with the input points and return
 ## in format of xyz(diff)(percentage diff)(scaled diff)
-dlim $in_xyz | gdal_query.py $q_dem -d_format xyzgdcs > ${in_xyz}.xyd
+dlim $in_xyz | gdal_query.py $q_dem -d_format xyzgdcs -return_all > ${in_xyz}.xyd
 
 ## remove points where the 'scaled difference' is above .2
 awk -v thresh="$thresh" '{if ($4 == "nan" || $7 < thresh) {print $1,$2,$3}}' ${in_xyz}.xyd > $(basename ${in_xyz} .xyz)_clean.xyz

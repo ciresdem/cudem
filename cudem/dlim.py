@@ -28,6 +28,8 @@
 ## an associated inf and geojson file will be gerenated for each datalist
 ## only an associated inf file will be genereated for individual datasets
 ##
+## recursive data-structures which point to datasets (see cudem.datasets) (datalist, zip, fetches, etc)
+##
 ### Code:
 
 import os
@@ -66,6 +68,46 @@ def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, ver
         parent=xdl
     ).acquire() for dl in data_list]
     return(xdl)
+
+def write_datalist(data_list, outname=None):
+    if outname is None:
+        outname = '{}_{}'.format(self.metadata['name'], utils.this_year())
+    
+    if os.path.exists('{}.datalist'.format(outname)):
+        utils.remove_glob('{}.datalist*'.format(outname))
+        
+    with open('{}.datalist'.format(outname), 'w') as tmp_dl:
+        [tmp_dl.write('{}\n'.format(x.format_entry())) for x in data_list]
+
+    return('{}.datalist'.format(outname))
+
+def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, want_verbose):
+
+    xdls = [DatasetFactory(
+        fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+        src_region=this_region,
+        verbose=want_verbose,
+        src_srs=src_srs,
+        dst_srs=dst_srs,
+        x_inc=xy_inc[0],
+        y_inc=xy_inc[1]
+    ).acquire() for dl in data_list]
+
+    if len(xdls) > 1:
+        dl_fn = write_datalist(xdls, 'dlim')
+        this_datalist = DatasetFactory(
+            fn=dl_fn,
+            src_region=this_region,
+            verbose=want_verbose,
+            src_srs=src_srs,
+            dst_srs=dst_srs,
+            x_inc=xy_inc[0],
+            y_inc=xy_inc[1]
+        ).acquire()
+    else:
+        this_datalist = xdls[0]
+
+    return(this_datalist)
     
 ## ==============================================
 ## Datalist Class - Recursive data structure
@@ -199,6 +241,8 @@ class Datalist(datasets.ElevationDataset):
                             metadata=copy.deepcopy(self.metadata),
                             src_srs=self.src_srs,
                             dst_srs=self.dst_srs,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
                             verbose=self.verbose
                         ).acquire()
                         if data_set is not None and data_set.valid_p(
@@ -254,16 +298,6 @@ class Datalist(datasets.ElevationDataset):
                 
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
-                
-    # def yield_xyz_from_entries(self):
-    #     """parse the data from the datalist"""
-
-    #     for this_entry in self.data_entries:
-    #         for xyz in this_entry.yield_xyz():
-    #             yield(xyz)
-                
-    #         if this_entry.remote:
-    #             utils.remove_glob('{}*'.format(this_entry.fn))
                 
 ## ==============================================
 ## ZIPlist Class - Recursive data structure - testing
@@ -436,7 +470,7 @@ class DatasetFactory:
 
     data_types = {
         -1: {'name': 'datalist',
-             'fmts': ['datalist', 'mb-1'],
+             'fmts': ['datalist', 'mb-1', 'dl'],
              'opts': '< -1 >',
              'class': Datalist,
              },
@@ -534,9 +568,10 @@ class DatasetFactory:
         self.parent = parent
         self.verbose = verbose
         self.ds_args = {}
-        self.parse_fn()
         self.x_inc = x_inc
         self.y_inc = y_inc
+
+        self.parse_fn()
             
     def parse_fn(self):
         """parse the datalist entry line"""
@@ -558,9 +593,10 @@ class DatasetFactory:
 
         ## ==============================================
         ## data format
+        ## guess format based on fn if not specified and
+        ## parse format for dataset specific opts.
         ## ==============================================
         if len(entry) < 2:
-            ## guess format based on fn
             for key in self.data_types.keys():
                 se = entry[0].split('.')
                 see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
@@ -573,7 +609,6 @@ class DatasetFactory:
                 return(self)
 
         else:
-            ## parse format for dataset specific opts.
             opts = this_entry[1].split(':')
             if len(opts) > 1:
                 self.ds_args = utils.args2dict(list(opts[1:]), {})
@@ -583,20 +618,19 @@ class DatasetFactory:
 
         ## ==============================================
         ## weight
+        ## inherit weight of parent
         ## ==============================================
         if len(entry) < 3:
             entry.append(1)
         elif entry[2] is None:
             entry[2] = 1
 
-        ## inherit weight of parent
         if self.parent is not None:
             if self.weight is not None:
                 self.weight *= entry[2]
-            else:
-                self.weight = entry[2]
         else:
-            self.weight = entry[2]
+            if self.weight is not None:
+                self.weight = entry[2]
 
         ## ==============================================
         ## title
@@ -893,97 +927,27 @@ def datalists_cli(argv=sys.argv):
         if len(dls) == 0:
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
-
-        # if want_separate:
-        #     xdls = [DatasetFactory(
-        #         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-        #         src_region=this_region,
-        #         verbose=want_verbose,
-        #         src_srs=src_srs,
-        #         dst_srs=dst_srs,
-        #         x_inc=xy_inc[0],
-        #         y_inc=xy_inc[1]
-        #     ).acquire() for dl in dls]
-        #     if not want_weights:
-        #         for xdl in xdls:
-        #             xdl.weight = None
-        # else:
-        #     xdls = [make_datalist(dls, want_weights, this_region, src_srs, dst_srs, xy_inc[0], xy_inc[1], want_verbose)]
-
-        # for xdl in xdls:
-        #     if xdl is not None and xdl.valid_p(
-        #             fmts=['<scratch-datalist>'] + DatasetFactory.data_types[xdl.data_format]['fmts']
-        #     ):
-        #         if want_inf:
-        #             print(xdl.inf())
-        #         elif want_list:
-        #             xdl.echo()
-        #         elif want_archive:
-        #             [x for x in xdl.archive_xyz()]
-        #         elif want_region:
-        #             print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
-        #         else:
-        #             try:
-        #                 xdl.dump_xyz()
-        #             except KeyboardInterrupt:
-        #                 utils.echo_error_msg('Killed by user')
-        #                 break
-
-        xdls = [DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=this_region,
-            verbose=want_verbose,
-            src_srs=src_srs,
-            dst_srs=dst_srs,
-            x_inc=xy_inc[0],
-            y_inc=xy_inc[1]
-        ).acquire() for dl in dls]
-        
-        for xdl in xdls:
-            if xdl is not None and xdl.valid_p(
-                    fmts=DatasetFactory.data_types[xdl.data_format]['fmts']
+        else:
+            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, want_verbose)        
+            if this_datalist is not None and this_datalist.valid_p(
+                    fmts=DatasetFactory.data_types[this_datalist.data_format]['fmts']
             ):
                 if not want_weights:
-                    xdl.weight = None
-                if want_datalists:
-                    import json
-                    j = open('{}.json'.format(xdl.name), 'w')
-                    xdl.parse_data_lists()
-                    for x in xdl.data_lists.keys():
-                        p = xdl.data_lists[x]['parent']
+                    this_datalist.weight = None
 
-                        out_json = {
-                            "Name": x,
-                            "Title": p.title if p.title is not None else x,
-                            "Source": p.source,
-                            "Date": p.date,
-                            "DataType": p.data_type,
-                            "Resolution": p.resolution,
-                            "HDatum": p.hdatum,
-                            "VDatum": p.vdatum,
-                            "URL": p.url
-                        }
-                        j.write(json.dumps(out_json))
-                        j.write('\n')
-                    j.close()
-                    
-                    for x in xdl.data_lists.keys():
-                        #print(xdl.data_lists[x]['parent'].echo_())
-                        print('{}'.format(xdl.data_lists[x]['parent'].fn))
-                        
-                elif want_inf:
-                    print(xdl.inf())
+                if want_inf:
+                    print(this_datalist.inf())
                 elif want_list:
-                    xdl.echo()
+                    this_datalist.echo()            
                 elif want_archive:
-                    [x for x in xdl.archive_xyz()]
+                    [x for x in this_datalist.archive_xyz()]
                 elif want_region:
-                    print(regions.Region().from_list(xdl.inf()['minmax']).format('gmt'))
+                    print(regions.Region().from_list(this_datalist.inf()['minmax']).format('gmt'))
                 elif want_csv:
-                    xdl.parse_data_lists()
-                    for x in xdl.data_lists.keys():
-                        xdl.data_entries = xdl.data_lists[x]['data']
-                        p = xdl.data_lists[x]['parent']
+                    this_datalist.parse_data_lists()
+                    for x in this_datalist.data_lists.keys():
+                        this_datalist.data_entries = this_datalist.data_lists[x]['data']
+                        p = this_datalist.data_lists[x]['parent']
                         print(
                             '|'.join(
                                 [
@@ -1001,28 +965,25 @@ def datalists_cli(argv=sys.argv):
                                 ]
                             )
                         )
-                elif want_json:
-                    xdl.parse_data_lists()
-                    for x in xdl.data_lists.keys():
-                        xdl.data_entries = xdl.data_lists[x]['data']
-                        p = xdl.data_lists[x]['parent']
-                        out_json = {
-                            'Name': x,
-                            'Title': p.title if p.title is not None else x,
-                            'Source': p.source,
-                            'Date': p.date,
-                            'DataType': p.data_type,
-                            'Resolution': p.resolution,
-                            'HDatum': p.hdatum,
-                            'VDatum': p.vdatum,
-                            'URL': p.url
-                        }
-                        print(out_json)
 
                 else:
-                    try:
-                        xdl.dump_xyz()
-                    except KeyboardInterrupt:
-                        utils.echo_error_msg('Killed by user')
-                        break
+                    if want_separate:
+                        try:
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        except KeyboardInterrupt:
+                            utils.echo_error_msg('Killed by user')
+                            break
+                        except BrokenPipeError:
+                            utils.echo_error_msg('Pipe Broken')
+                            break
+                    else:
+                        try:
+                            this_datalist.dump_xyz()
+                        except KeyboardInterrupt:
+                            utils.echo_error_msg('Killed by user')
+                            break
+                        except BrokenPipeError:
+                            utils.echo_error_msg('Pipe Broken')
+                            break
 ### End

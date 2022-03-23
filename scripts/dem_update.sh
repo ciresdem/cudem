@@ -26,7 +26,7 @@ proj='epsg:4269'
 max_diff=.25
 min_weight=1
 smoothing=5
-mode='waffles'
+mode='soest'
 #
 #  interpolate the new data through the old DEM
 #
@@ -46,15 +46,15 @@ if [ "$mode" == "soest" ]; then
 	gdal_query.py $2 -d_format "xyds" | \
 	awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
 	gmt blockmedian $region -I$xinc/$yinc | \
-	gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld #-M${radius}
+	gmt surface $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M${radius}
 
     dem_smooth.py _diff.tif -s $smoothing
     
-    # generate a boundary of the dem_diffs and apply a buffer
-    dlim $region/-/-/${min_weight}/- $1 | bounds --verbose -k $xinc/$(echo ${region} | awk -FR '{print $2}') -g > diffs.gmt
-    ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from diffs" diffs.shp diffs.gmt
-    gdal_clip.py _diff_smooth${smoothing}.tif diffs.shp
-    mv _diff_smooth${smoothing}_cut.tif _diff.tif
+    # # generate a boundary of the dem_diffs and apply a buffer
+    # dlim $region/-/-/${min_weight}/- $1 | bounds --verbose -k $xinc/$(echo ${region} | awk -FR '{print $2}') -g > diffs.gmt
+    # ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from diffs" diffs.shp diffs.gmt
+    # gdal_clip.py _diff_smooth${smoothing}.tif diffs.shp
+    # mv _diff_smooth${smoothing}_cut.tif _diff.tif
     
     #
     #  add the two grids
@@ -70,11 +70,11 @@ if [ "$mode" == "soest" ]; then
     #
     rm _diff*
 elif [ "$mode" == "waffles"]; then
-    echo "WAFFLES"
+    echo WAFFLES
 
     waffles -M num:mode=m $region/-/-/${min_weight}/- $1 -O _tmp -E ${xinc} -w
     waffles -M IDW:radius=${radius} $region/-/-/${min_weight}/- $1 -O _tmp -E ${xinc} -w -K 1000
-    waffles -M $region surface:tension=1 -w -P $proj -O ${basename $2 .tif)_u -E ${xinc}/${yinc} _tmp.tif,200:weight_mask=_tmp_w.tif,1 $2,200,$min_weight
+    waffles -M $region surface:tension=1 -w -P $proj -O $(basename $2 .tif)_u -E ${xinc}/${yinc} _tmp.tif,200:weight_mask=_tmp_w.tif,1 $2,200,$min_weight
 
 elif [ "$mode" == "ibcao" ]; then
     echo IBCAO REMOVE/RESTORE
@@ -114,6 +114,6 @@ elif [ "$mode" == "ibcao" ]; then
     #
     rm _diff.*
 else
-    echo "please choose an update method (soest, ibcao or waffles)
+    echo please choose an update method - soest, ibcao or waffles
 fi
 ### End

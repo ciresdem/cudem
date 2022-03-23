@@ -22,7 +22,7 @@
 ### Commentary:
 ##
 ## Dataset parsing.
-## datasets include: xyz, raster (gdal), las/laz (laspy), mbs (MBSystem)
+## datasets include: xyz, raster (gdal), las/laz (laspy), mbs (MBSystem), fetches
 ##
 ### Code:
 
@@ -108,15 +108,14 @@ class ElevationDataset():
         self.data_lists = {}        
         self.remote = remote
         self.metadata = copy.deepcopy(metadata)
-        self.x_inc = x_inc
-        self.y_inc = y_inc
+        self.x_inc = utils.str2inc(x_inc)
+        self.y_inc = utils.str2inc(y_inc)
         if utils.fn_url_p(self.fn):
             self.remote = True
 
         if self.valid_p():
             self.set_transform()
             self.set_yield()
-            #if self.parent is not None:
             self.inf(check_hash=True if self.data_format == -1 else False)
             
     def __str__(self):
@@ -135,16 +134,27 @@ class ElevationDataset():
         
         raise(NotImplementedError)
 
+    def yield_array(self):
+        """set in dataset"""
+        
+        raise(NotImplementedError)
+    
     def yield_xyz_from_entries(self):
         """yield from self.data_entries, list of datasets"""
         
         for this_entry in self.data_entries:
-            for xyz in this_entry.yield_xyz():
+            for xyz in this_entry.xyz_yield:
                 yield(xyz)
                 
             if this_entry.remote:
                 utils.remove_glob('{}*'.format(this_entry.fn))
-    
+
+    def yield_entries(self):
+        """yield from self.data_entries, list of datasets"""
+        
+        for this_entry in self.data_entries:
+            yield(this_entry)
+                
     def fetch(self):
         """fetch remote data from self.data_entries"""
         
@@ -412,7 +422,6 @@ class ElevationDataset():
             a_name = '{}_{}_{}'.format(
                 self.metadata['name'], self.region.format('fn'), utils.this_year())
             
-        [x for x in self.parse()]        
         self.parse_data_lists()
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
@@ -425,9 +434,9 @@ class ElevationDataset():
                 this_dir.append(a_dir)
                 tmp_dir = this_dir
                 dlf.write(
-                    '{}.datalist -1 {}\n'.format(
+                    '{}.datalist -1 {} {}\n'.format(
                         os.path.join(*(this_dir + [this_dir[-1]])),
-                        self.data_lists[x]['parent'].format_metadata()
+                        1 if self.weight is None else self.weight, self.data_lists[x]['parent'].format_metadata()
                     )
                 )
                 this_dir = os.path.join(os.getcwd(), *this_dir)
@@ -456,26 +465,26 @@ class ElevationDataset():
                         sub_dlf.write('{} 168\n'.format(sub_xyz_path))
                         
                         with open(this_xyz_path, 'w') as xp:
-                            for this_xyz in xyz_dataset.yield_xyz(**kwargs):
+                            for this_xyz in xyz_dataset.xyz_yield:
                                 yield(this_xyz)
                                 this_xyz.dump(
                                     include_w=True if self.weight is not None else False,
                                     dst_port=xp,
                                     encode=False
                                 )
-        #Datalist(fn='{}.datalist'.format(a_name)).parse()
 
-    def block_xyz(self, want_gmt=False):
+    def block_array(
+            self, want_mean=True, want_count=True, want_weights=True,
+            want_mask=True, want_gt=False, want_ds_config=False, min_count=None, out_name=None
+    ):
         """block the src_xyz data to the mean block value
 
-        set want_gmt to True to use `gmt blockmedian` to block data.
-        must have GMT installed to use blockmedian.
-
-        default will do a [weighted] mean block.
-
-        yields mean xyz data for each block with data
+        Yields:
+          list: an array for [weighted]mean, weights mask, and count
         """
 
+        out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}
+        
         ds_region = regions.Region().from_list(self.infos['minmax'])
         if self.dst_trans is not None:
             ds_region.transform(self.dst_trans)
@@ -488,7 +497,108 @@ class ElevationDataset():
             block_region = ds_region.copy()
 
         if block_region.valid_p():
-            if want_gmt:
+        
+            xcount, ycount, dst_gt = block_region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc
+            )
+            gdt = gdal.GDT_Float32
+            count_array = np.zeros((ycount, xcount))
+            
+            if want_mean:
+                z_array = np.zeros((ycount, xcount))
+                weight_array = np.zeros((ycount, xcount))
+
+            if self.verbose:
+                utils.echo_msg(
+                    'blocking data to {}/{} grid'.format(ycount, xcount)
+                )
+                
+            for this_xyz in self.yield_xyz():
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
+                try:
+                    count_array[ypos, xpos] += 1
+                    if want_mean:
+                        z_array[ypos, xpos] += this_xyz.z * this_xyz.w
+                        
+                    if want_weights and self.weight is not None:
+                        weight_array[ypos, xpos] += this_xyz.w
+
+                except: pass
+
+            count_array[count_array == 0] = np.nan
+            if not self.weight:
+                weight_array = np.ones((ycount, xcount))
+                
+            if want_mean and want_weights:
+                weight_array[weight_array == 0] = np.nan
+                weight_array = (weight_array/count_array)
+                z_array = (z_array/weight_array)/count_array
+                
+            elif want_mean:
+                z_array = (z_array/count_array)
+
+            if min_count is not None and want_mean:
+                z_array[count_array < min_count] = np.nan
+                weight_array[count_array < min_count] = np.nan
+
+            if want_mean:
+                z_array[np.isnan(z_array)] = -9999
+                out_arrays['mean'] = z_array
+                
+            if want_weights:
+                weight_array[np.isnan(weight_array)] = -9999
+                out_arrays['weight'] = weight_array
+                
+            if want_mask:
+                mask_array = count_array[~np.isnan(count_array)]
+                out_arrays['mask'] = mask_array
+                
+            if want_count:
+                count_array[np.isnan(count_array)] = -9999
+                out_arrays['count'] = count_array
+
+            ds_config = demfun.set_infos(
+                xcount,
+                ycount,
+                xcount * ycount,
+                dst_gt,
+                self.dst_srs,
+                gdal.GDT_Float32,
+                -9999,
+                'GTiff'
+            )
+
+            return(out_arrays, dst_gt if want_gt else None, ds_config if want_ds_config else None)
+        else:
+            utils.echo_error_msg('invalid region {}'.format(block_region))
+
+        #     utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
+        #     utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
+        #     utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
+        #     return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
+    
+    def block_xyz(self, want_gmt=False):
+        """block the src_xyz data to the mean block value
+
+        Yields:
+          list: xyz data for each block with data
+        """
+        
+        if want_gmt:
+            ds_region = regions.Region().from_list(self.infos['minmax'])
+            if self.dst_trans is not None:
+                ds_region.transform(self.dst_trans)
+
+            if self.region is not None and self.region.valid_p():
+                block_region = regions.regions_reduce(
+                    self.region, ds_region
+                )
+            else:
+                block_region = ds_region.copy()
+
+            if block_region.valid_p():                
                 if utils.config_check()['GMT'] is None:
                     utils.echo_error_msg(
                         'GMT must be installed to use blockmedian; install GMT or set `want_gmt` to False'
@@ -503,74 +613,84 @@ class ElevationDataset():
                             data_fun=xyz_func
                     ):
                         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-            else:
-                xcount, ycount, dst_gt = block_region.geo_transform(x_inc=self.x_inc)
-                sum_array = np.zeros((ycount, xcount))
-                x_sum_array = np.zeros((ycount, xcount))
-                y_sum_array = np.zeros((ycount, xcount))
-                count_array = np.zeros((ycount, xcount))
-                if self.weight is not None:
-                    weight_array = np.zeros((ycount, xcount))
-                    
-                if ycount != 0 and xcount != 0:
-                    if self.verbose:
-                        _prog = utils.CliProgress(
-                            'blocking {} points from {} to {}/{} grid...'.format(
-                                self.infos['numpts'], self.infos['name'], ycount, xcount
-                            )
+        else:
+            block_arrays, dst_gt, ds_config = self.block_array(
+                want_mean=True, want_weights=True, want_count=False, want_mask=False,
+                want_gt=True, want_ds_config=True
+            )
+            z_array = block_arrays['mean']
+            weight_array = block_arrays['weight']
+            for y in range(0, ds_config['ny']):
+                for x in range(0, ds_config['nx']):
+                    z = z_array[y,x]
+                    if not np.isnan(z) and '{:g}'.format(ds_config['ndv']) != '{:g}'.format(z):
+                        geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
                         )
+                        yield(out_xyz)
 
-                    for this_xyz in self.yield_xyz():
-                        #if regions.xyz_in_region_p(this_xyz, block_region):
-                        this_z = this_xyz.z * this_xyz.w if self.weight is not None else this_xyz.z
-                        this_x = this_xyz.x * this_xyz.w if self.weight is not None else this_xyz.x
-                        this_y = this_xyz.y * this_xyz.w if self.weight is not None else this_xyz.y
-                        xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, dst_gt)
-                        try:
-                            sum_array[ypos, xpos] += this_z
-                            x_sum_array[ypos, xpos] += this_x
-                            y_sum_array[ypos, xpos] += this_y
-                            count_array[ypos, xpos] += 1
-                            if self.weight is not None:
-                                weight_array[ypos, xpos] += this_xyz.w
-                        except: pass
+    def mask_array(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
 
-                    count_array[count_array == 0] = np.nan
-                    if self.weight is not None:
-                        weight_array[weight_array == 0] = np.nan
-                        out_weight_array = (weight_array/count_array)
-                        out_array = (sum_array/out_weight_array)/count_array
-                        out_x_array = (x_sum_array/out_weight_array)/count_array
-                        out_y_array = (y_sum_array/out_weight_array)/count_array
-                    else:
-                        out_array = (sum_array/count_array)
-                        out_x_array = (x_sum_array/count_array)
-                        out_y_array = (y_sum_array/count_array)
-                        
-                    if self.verbose:
-                        _prog.end(
-                            0,
-                            'blocked {} points from {} to {}/{} grid.'.format(
-                                self.infos['numpts'], self.infos['name'], ycount, xcount
-                            )
-                        )
-                        
-                    sum_array = x_sum_array = y_sum_array = count_array = weight_array = None
-                    out_array = out_array[~np.isnan(out_array)]
-                    out_x_array = out_x_array[~np.isnan(out_x_array)]
-                    out_y_array = out_y_array[~np.isnan(out_y_array)]
-                    if self.weight is not None:
-                        dataset = np.vstack((out_x_array, out_y_array, out_array, out_weight_array)).transpose()
-                    else:
-                        dataset = np.vstack((out_x_array, out_y_array, out_array)).transpose()
-                    for point in dataset:
-                        if not np.isnan(point[2]):
-                            this_xyz = xyzfun.XYZPoint(
-                                x=point[0], y=point[1], z=point[2], w=point[3] if self.weight is not None else 1
-                            )
-                            yield(this_xyz)
-                    dataset = out_x_array = out_y_array = out_array = out_weight_array = None
+        returns the gdal dataset and config
+        """
 
+        block_arrays, dst_gt, ds_config = self.block_array(
+            want_mean=False, want_weights=False, want_count=False, want_mask=True,
+            want_gt=True, want_ds_config=True
+        )
+
+        return(block_arrays['mask'], dst_gt, ds_config)
+
+    def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
+
+        yields the xyz data
+        """
+
+        # block_arrays, dst_gt, ds_config = self.block_array(
+        #     want_mean=False, want_weights=False, want_count=False, want_mask=True,
+        #     want_gt=True, want_ds_config=True
+        # )
+        # m_array = block_arrays['mask']
+        # for y in range(0, ds_config['ny']):
+        #     for x in range(0, ds_config['nx']):
+        #         z = z_array[y,x]
+        #         if not np.isnan(z) and '{:g}'.format(ds_config['ndv']) != '{:g}'.format(z):
+        #             geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+        #             out_xyz = xyzfun.XYZPoint(
+        #                 x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
+        #             )
+        #             yield(out_xyz)
+
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
+        ptArray = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            (xcount*ycount),
+            dst_gt,
+            utils.sr_wkt(self.src_srs),
+            gdal.GDT_Float32,
+            -9999,
+            'GTiff'
+        )
+
+        for this_xyz in self.yield_xyz_from_entries(**kwargs):
+            yield(this_xyz)
+            xpos, ypos = utils._geo2pixel(
+                this_xyz.x, this_xyz.y, dst_gt
+            )
+            try:
+                ptArray[ypos, xpos] = 1
+            except:
+                pass
+
+        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)
+    
     def vectorize_xyz(self):
         """Make a point vector OGR DataSet Object from src_xyz
 
@@ -616,75 +736,6 @@ class ElevationDataset():
             
         return(ogr_ds)
                     
-    def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
-        """Create a num grid mask of xyz data. The output grid
-        will contain 1 where data exists and 0 where no data exists.
-
-        returns the gdal dataset and config
-        """
-
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_x_inc, y_inc=dst_y_inc)
-        ptArray = np.zeros((ycount, xcount))
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            (xcount*ycount),
-            dst_gt,
-            utils.sr_wkt(self.src_srs),
-            gdal.GDT_Int32,
-            -9999,
-            'MEM'
-        )
-        for this_xyz in self.yield_xyz_from_entries(**kwargs):
-            xpos, ypos = utils._geo2pixel(
-                this_xyz.x, this_xyz.y, dst_gt
-            )
-            try:
-                ptArray[ypos, xpos] = 1
-            except: pass
-
-        driver = gdal.GetDriverByName(dst_format)
-        ds = driver.Create('MEM', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
-        if ds is not None:
-            ds.SetGeoTransform(ds_config['geoT'])
-            ds.SetProjection(ds_config['proj'])
-            ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
-            ds.GetRasterBand(1).WriteArray(ptArray)
-                
-        return(ds, ds_config)
-        
-    def mask_and_yield_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
-        """Create a num grid mask of xyz data. The output grid
-        will contain 1 where data exists and 0 where no data exists.
-
-        yields the xyz data
-        """
-
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
-        ptArray = np.zeros((ycount, xcount))
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            (xcount*ycount),
-            dst_gt,
-            utils.sr_wkt(self.src_srs),
-            gdal.GDT_Float32,
-            -9999,
-            'GTiff'
-        )
-
-        for this_xyz in self.yield_xyz_from_entries(**kwargs):
-            yield(this_xyz)
-            xpos, ypos = utils._geo2pixel(
-                this_xyz.x, this_xyz.y, dst_gt
-            )
-            try:
-                ptArray[ypos, xpos] = 1
-            except:
-                pass
-
-        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)
-        
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the XYZ data from the dataset"""
         
@@ -862,7 +913,7 @@ class XYZFile(ElevationDataset):
             if len(this_xyz) > 1:
                 return(delim)
             
-    def yield_xyz_(self):
+    def yield_xyz_np(self):
         """LAS file parsing generator"""
 
         count = 0
@@ -1050,7 +1101,7 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
-    def __init__(self, mask=None, weight_mask=None, inc=None, open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
@@ -1110,107 +1161,36 @@ class RasterFile(ElevationDataset):
                 0, 0, x_size, y_size
             )
         return(srcwin)
-
+            
     def yield_xyz(self):
-        """parse the data from gdal dataset src_ds using numpy - testing"""
-
-        if self.open_options:
-            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-        else:
-            src_ds = gdal.Open(self.fn)
-
-        if src_ds is not None:
-            count = 0
-            band = src_ds.GetRasterBand(1)
-            gt = src_ds.GetGeoTransform()
-            ndv = band.GetNoDataValue()
-            dem_infos = demfun.gather_infos(src_ds)
-
-            if self.weight_mask is not None:
-                src_weight = gdal.Open(self.weight_mask)
-                weight_band = src_weight.GetRasterBand(1)
-            
-            #for srcwin in demfun.yield_srcwin(self.fn, n_chunk=1000, step=1000, verbose=self.verbose):
-            for srcwin in utils.yield_srcwin((dem_infos['ny'], dem_infos['nx']), 2000):
-                src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
-                src_arr = src_arr.flatten()
-
-                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
-                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], gt)
-                dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
-
-                srcwin_region = regions.Region().from_geo_transform(geo_transform=dst_gt, x_count=srcwin[2], y_count=srcwin[3])
-                
-                xi = np.linspace(srcwin_region.xmin, srcwin_region.xmax, srcwin[2])
-                yi = np.linspace(srcwin_region.ymax, srcwin_region.ymin, srcwin[3])
-                xi, yi = np.meshgrid(xi, yi)
-                xi, yi = xi.flatten(), yi.flatten()
-
-                if self.weight_mask is not None:
-                    weight_arr = weight_band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
-                    weight_arr = weight_arr.flatten()
-                    dataset = np.vstack((xi, yi, src_arr, weight_arr)).T
-                else:
-                    dataset = np.vstack((xi, yi, src_arr)).T
-
-                dataset = dataset[dataset[:,2] != ndv]
-                if self.region is not None  and self.region.valid_p():
-                    #if self.dst_trans is not None:
-                    #self.region.src_srs = self.dst_srs
-                    #self.region.warp(self.src_srs)
-
-                    dataset = dataset[dataset[:,0] > self.region.xmin,:]
-                    dataset = dataset[dataset[:,0] < self.region.xmax,:]
-                    dataset = dataset[dataset[:,1] > self.region.ymin,:]
-                    dataset = dataset[dataset[:,1] < self.region.ymax,:]
-                    if self.region.zmin is not None:
-                        dataset = dataset[dataset[:,2] > self.region.zmin,:]
-
-                    if self.region.zmax is not None:
-                        dataset = dataset[dataset[:,2] < self.region.zmax,:]
-
-                    if self.weight_mask is not None:
-                        
-                        if self.region.wmin is not None:
-                            dataset = dataset[dataset[:,3] > self.region.wmin,:]
-
-                        if self.region.wmax is not None:
-                            dataset = dataset[dataset[:,3] < self.region.wmax,:]
-
-                for point in dataset:
-                    count += 1
-                    this_xyz = xyzfun.XYZPoint(
-                        x=point[0], y=point[1], z=point[2], w=self.weight if self.weight_mask is None else point[3]
-                    )
-                    #if self.dst_trans is not None:
-                    #out_xyz.transform(self.dst_trans)
-                    #
-                    yield(this_xyz)
-                dataset = src_arr = weight_arr = None
-
-            src_ds = src_weight = None
-            if self.verbose:
-                utils.echo_msg(
-                    'parsed {} data records from {}{}'.format(
-                        count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-                    )
-                )
-            
-        #if self.verbose and self.parent is None:
-        #    _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
-            
-    def yield_xyz_(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
         if self.verbose: # and self.parent is None:
             _prog = utils.CliProgress(
                 'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
             )
+            
+        if self.x_inc is not None and self.y_inc is not None:
+            
+            if self.verbose:
+                _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+            if self.region is not None:
+                dem_region = regions.Region().from_list(self.infos['minmax'])
+                warp_region = regions.regions_reduce(self.region, dem_region)
+                extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
+            else:
+                extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
-        if self.open_options:
-            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+            src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                               dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                               options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
+            if self.verbose:
+                _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
         else:
-            src_ds = gdal.Open(self.fn)
+            if self.open_options:
+                src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+            else:
+                src_ds = gdal.Open(self.fn)
             
         out_xyz = xyzfun.XYZPoint(w=1)
         if src_ds is not None:
@@ -1224,7 +1204,14 @@ class RasterFile(ElevationDataset):
                 src_mask = gdal.Open(self.mask)
                 msk_band = src_mask.GetRasterBand(1)
             if self.weight_mask is not None:
-                src_weight = gdal.Open(self.weight_mask)
+
+                if self.x_inc is not None and self.y_inc is not None:
+                    src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                                           dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           options=["COMPRESS=LZW", "TILED=YES"])
+                else:
+                    src_weight = gdal.Open(self.weight_mask)
+                    
                 weight_band = src_weight.GetRasterBand(1)
             
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
@@ -1294,10 +1281,134 @@ class RasterFile(ElevationDataset):
                         count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                     )
                 )
+                
         src_ds = None
         if self.verbose and self.parent is None:
             _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
-           
+
+    def yield_xyz_np(self):
+        """parse the data from gdal dataset src_ds using numpy - testing"""
+
+        if self.x_inc is not None and self.y_inc is not None:
+            src_ds = gdal.Open(self.fn)
+            gt = src_ds.GetGeoTransform()
+            src_ds = None
+            if '{:g}'.format(gt[1]) != '{:g}'.format(self.x_inc) and \
+               '{:g}'.format(gt[5]*-1) != '{:g}'.format(self.y_inc):
+                if self.verbose:
+                    _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+                if self.region is not None:
+                    extent = [self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax]
+                else:
+                    extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
+                src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                                   dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear',
+                                   options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
+                if self.verbose:
+                    _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+        else:
+        
+            if self.open_options:
+                src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+            else:
+                src_ds = gdal.Open(self.fn)
+
+        if src_ds is not None:
+            count = 0
+            band = src_ds.GetRasterBand(1)
+            gt = src_ds.GetGeoTransform()
+            ndv = float(band.GetNoDataValue())
+            dem_infos = demfun.gather_infos(src_ds)
+
+            if self.weight_mask is not None:
+                if self.x_inc is not None and self.y_inc is not None and \
+                   '{:g}'.format(gt[1]) != '{:g}'.format(self.x_inc) and \
+                       '{:g}'.format(gt[5]*-1) != '{:g}'.format(self.y_inc):
+                    if self.verbose:
+                        _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.weight_mask, self.x_inc, self.y_inc))
+                    if self.region is not None:
+                        extent = [self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax]
+                    else:
+                        extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
+                    src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                                           dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear',
+                                           options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp.update() if self.verbose else None)#gdal.TermProgress)
+                    if self.verbose:
+                        _warp.prog.end(0, 'warped dataset {} to {}/{}'.format(self.weight_mask, self.x_inc, self.y_inc))
+                else:
+                    src_weight = gdal.Open(self.weight_mask)
+                    
+                weight_band = src_weight.GetRasterBand(1)
+            
+            for srcwin in utils.yield_srcwin((dem_infos['ny'], dem_infos['nx']), 8000): #dem_infos['nb']/2):
+                src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
+                src_arr = src_arr.flatten()
+
+                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
+                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], gt)
+                dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
+
+                srcwin_region = regions.Region().from_geo_transform(geo_transform=dst_gt, x_count=srcwin[2], y_count=srcwin[3])
+                
+                xi = np.linspace(srcwin_region.xmin, srcwin_region.xmax, srcwin[2])
+                yi = np.linspace(srcwin_region.ymax, srcwin_region.ymin, srcwin[3])
+                xi, yi = np.meshgrid(xi, yi)
+                xi, yi = xi.flatten(), yi.flatten()
+
+                if self.weight_mask is not None:
+                    weight_arr = weight_band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
+                    weight_arr = weight_arr.flatten()
+                    dataset = np.vstack((xi, yi, src_arr, weight_arr)).T
+                else:
+                    dataset = np.vstack((xi, yi, src_arr)).T
+
+                if self.x_inc is not None and self.y_inc is not None:
+                    dataset = dataset[dataset[:,2] != -9999.,:]
+                else:
+                    dataset = dataset[dataset[:,2] != ndv,:]
+                    
+                if self.region is not None  and self.region.valid_p():
+                    #if self.dst_trans is not None:
+                    #self.region.src_srs = self.dst_srs
+                    #self.region.warp(self.src_srs)
+
+                    dataset = dataset[dataset[:,0] > self.region.xmin,:]
+                    dataset = dataset[dataset[:,0] < self.region.xmax,:]
+                    dataset = dataset[dataset[:,1] > self.region.ymin,:]
+                    dataset = dataset[dataset[:,1] < self.region.ymax,:]
+                    if self.region.zmin is not None:
+                        dataset = dataset[dataset[:,2] > self.region.zmin,:]
+
+                    if self.region.zmax is not None:
+                        dataset = dataset[dataset[:,2] < self.region.zmax,:]
+
+                    if self.weight_mask is not None:
+                        
+                        if self.region.wmin is not None:
+                            dataset = dataset[dataset[:,3] > self.region.wmin,:]
+
+                        if self.region.wmax is not None:
+                            dataset = dataset[dataset[:,3] < self.region.wmax,:]
+
+                for point in dataset:
+                    count += 1
+                    this_xyz = xyzfun.XYZPoint(
+                        x=point[0], y=point[1], z=point[2], w=self.weight if self.weight_mask is None else point[3]
+                    )
+                    #if self.dst_trans is not None:
+                    #out_xyz.transform(self.dst_trans)
+                    #
+                    yield(this_xyz)
+                dataset = src_arr = weight_arr = None
+
+            src_ds = src_weight = None
+            if self.verbose:
+                utils.echo_msg(
+                    'parsed {} data records from {}{}'.format(
+                        count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                    )
+                )
+            
 ## ==============================================
 ## ==============================================
 class BAGFile(ElevationDataset):
