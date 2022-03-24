@@ -114,9 +114,9 @@ class ElevationDataset():
             self.remote = True
 
         if self.valid_p():
-            self.set_transform()
             self.set_yield()
             self.inf(check_hash=True if self.data_format == -1 else False)
+            self.set_transform()
             
     def __str__(self):
         return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
@@ -341,7 +341,7 @@ class ElevationDataset():
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs.split('+')[0] != self.dst_srs.split('+')[0]:
-
+            #print(self.src_srs, self.dst_srs)
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -379,7 +379,8 @@ class ElevationDataset():
                 except:
                     inf_region = self.region.copy()
                 
-            if regions.regions_intersect_p(inf_region, self.region):
+            #if regions.regions_intersect_p(inf_region, self.region):
+            if regions.regions_intersect_p(inf_region, self.region if self.dst_trans is None else self.trans_region):
                 self.data_entries.append(self)
                 yield(self)
         else:
@@ -1101,7 +1102,7 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
 
-    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None,  open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
@@ -1165,10 +1166,10 @@ class RasterFile(ElevationDataset):
     def yield_xyz(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
-        if self.verbose: # and self.parent is None:
-            _prog = utils.CliProgress(
-                'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
-            )
+        # if self.verbose and self.parent is None:
+        #     _prog = utils.CliProgress(
+        #         'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
+        #     )
             
         if self.x_inc is not None and self.y_inc is not None:
             
@@ -1222,9 +1223,9 @@ class RasterFile(ElevationDataset):
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
-                #if self.verbose and self.parent is None:
-                if self.verbose:
-                    _prog.update_perc((y, srcwin[1] + srcwin[3]))
+                # if self.verbose and self.parent is None:
+                #     #if self.verbose:
+                #     _prog.update_perc((y, srcwin[1] + srcwin[3]))
                     
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
@@ -1269,8 +1270,8 @@ class RasterFile(ElevationDataset):
                         else:
                             out_xyz.w = self.weight
                         count += 1
-                        #if self.dst_trans is not None:
-                        #    out_xyz.transform(self.dst_trans)
+                        if self.dst_trans is not None:
+                            out_xyz.transform(self.dst_trans)
 
                         yield(out_xyz)
                             
@@ -1283,8 +1284,8 @@ class RasterFile(ElevationDataset):
                 )
                 
         src_ds = None
-        if self.verbose and self.parent is None:
-            _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
+        # if self.verbose and self.parent is None:
+        #     _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
     def yield_xyz_np(self):
         """parse the data from gdal dataset src_ds using numpy - testing"""
@@ -1368,9 +1369,9 @@ class RasterFile(ElevationDataset):
                     dataset = dataset[dataset[:,2] != ndv,:]
                     
                 if self.region is not None  and self.region.valid_p():
-                    #if self.dst_trans is not None:
-                    #self.region.src_srs = self.dst_srs
-                    #self.region.warp(self.src_srs)
+                    if self.dst_trans is not None:
+                        self.region.src_srs = self.dst_srs
+                        self.region.warp(self.src_srs)
 
                     dataset = dataset[dataset[:,0] > self.region.xmin,:]
                     dataset = dataset[dataset[:,0] < self.region.xmax,:]
@@ -1395,9 +1396,9 @@ class RasterFile(ElevationDataset):
                     this_xyz = xyzfun.XYZPoint(
                         x=point[0], y=point[1], z=point[2], w=self.weight if self.weight_mask is None else point[3]
                     )
-                    #if self.dst_trans is not None:
-                    #out_xyz.transform(self.dst_trans)
-                    #
+                    if self.dst_trans is not None:
+                        out_xyz.transform(self.dst_trans)
+                    
                     yield(this_xyz)
                 dataset = src_arr = weight_arr = None
 
@@ -1447,6 +1448,7 @@ class BAGFile(ElevationDataset):
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
+            #self.infos['src_srs'] = self.src_srs
             
         src_ds = None
         return(self.infos)

@@ -128,9 +128,10 @@ def get_srs(src_dem, vert_name=False):
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(proj)
     src_srs.AutoIdentifyEPSG()
-    srs_auth = src_srs.GetAuthorityCode(None)
+    #srs_auth = src_srs.GetAuthorityCode('EPSG')
+    srs_auth = src_srs.GetAttrValue('AUTHORITY', 1)
     src_ds = None
-
+    #print(srs_auth)
     #prj=ds.GetProjection()
     #print prj
 

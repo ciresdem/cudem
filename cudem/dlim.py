@@ -206,8 +206,13 @@ class Datalist(datasets.ElevationDataset):
             self.infos['wkt'] = out_region.export_as_wkt()
         else:
             self.infos['minmax'] = None
-
+            
         self.region = _region
+        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+            self.infos['src_srs'] = self.src_srs
+        else:
+            self.src_srs = self.infos['src_srs']
+        
         return(self.infos)
     
     def parse(self):
@@ -260,13 +265,18 @@ class Datalist(datasets.ElevationDataset):
                                     )
                                 except:
                                     inf_region = self.region.copy()
-                                        
-                                inf_region.wmin = data_set.weight
-                                inf_region.wmax = data_set.weight
 
                                 ## check region prj
+                                # if self.dst_trans is not None:
+                                #     if self.trans_region is not None and self.trans_region.valid_p(
+                                #             check_xy = True
+                                #     ):
+                                #         inf_region = self.trans_region.copy()
+                                    
+                                inf_region.wmin = data_set.weight
+                                inf_region.wmax = data_set.weight
                                 
-                                if regions.regions_intersect_p(inf_region, self.region):
+                                if regions.regions_intersect_p(inf_region, self.region if self.dst_trans is None else self.trans_region):
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
                                         yield(ds)
