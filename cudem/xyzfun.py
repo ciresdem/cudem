@@ -42,7 +42,7 @@ class XYZPoint:
         self.x = float_or(x)
         self.y = float_or(y)
         self.z = float_or(z)
-        self.w = float_or(w)
+        self.w = float_or(w, 1)
         self.src_srs = str_or(src_srs, 'epsg:4326')
         self.z_units = z_units
         self.z_datum = z_datum

@@ -1268,7 +1268,7 @@ class RasterFile(ElevationDataset):
                         if weight_band is not None:
                             out_xyz.w = weight_data[x_i]
                         else:
-                            out_xyz.w = self.weight
+                            out_xyz.w = utils.float_or(self.weight, 1)
                         count += 1
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
