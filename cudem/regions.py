@@ -478,6 +478,9 @@ class Region:
         except: pass
         
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
+        if dst_trans is None:
+            return(self)
+
         self.src_srs = dst_srs
         self.wkt = None
         
@@ -488,15 +491,19 @@ class Region:
 
         if dst_trans is None:
             return(self)
-
-        pointA = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(self.xmin, self.ymin))
-        pointB = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(self.xmax, self.ymax))
+            
+        pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
+        pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
         pointA.Transform(dst_trans)
         pointB.Transform(dst_trans)
-        self.xmin = pointA.GetX()
-        self.xmax = pointB.GetX()
-        self.ymin = pointA.GetY()
-        self.ymax = pointB.GetY()
+        try:
+            if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
+                self.xmin = pointA.GetX()
+                self.xmax = pointB.GetX()
+                self.ymin = pointA.GetY()
+                self.ymax = pointB.GetY()
+        except Exception as e:
+            sys.stderr.write('transform error: {}\n'.format(str(e)))
         return(self)
     
 ## ==============================================

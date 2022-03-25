@@ -153,7 +153,7 @@ class Datalist(datasets.ElevationDataset):
         else:
             self.layer = None
 
-    def _create_entry_feature(self, entry):
+    def _create_entry_feature(self, entry, entry_region):
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
         o_v_fields = [
             entry_path,
@@ -161,7 +161,8 @@ class Datalist(datasets.ElevationDataset):
             entry.weight
         ]
         dst_defn = self.layer.GetLayerDefn()
-        entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
+        #entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
+        entry_geom = ogr.CreateGeometryFromWkt(entry_region.export_as_wkt())
         out_feat = ogr.Feature(dst_defn)
         out_feat.SetGeometry(entry_geom)
         for i, f in enumerate(self.v_fields):
@@ -185,10 +186,20 @@ class Datalist(datasets.ElevationDataset):
             if self.verbose:
                 callback()
 
-            self._create_entry_feature(entry)
-            out_regions.append(entry.infos['minmax'])
-            if 'numpts' in self.infos.keys():
-                self.infos['numpts'] += entry.infos['numpts']
+            if entry.src_srs is not None and self.dst_srs is not None:
+                e_region = regions.Region().from_list(entry.infos['minmax'])
+                e_region.src_srs = entry.src_srs
+                e_region.warp(self.dst_srs)
+                entry_region = e_region.export_as_list(include_z=True)
+            else:
+                entry_region = entry.infos['minmax']
+
+            if regions.Region().from_list(entry_region).valid_p():
+                self._create_entry_feature(entry, regions.Region().from_list(entry_region))
+                #out_regions.append(entry.infos['minmax'])
+                out_regions.append(entry_region)
+                if 'numpts' in self.infos.keys():
+                    self.infos['numpts'] += entry.infos['numpts']
 
         self.ds = self.layer = None
         count = 0
@@ -276,7 +287,7 @@ class Datalist(datasets.ElevationDataset):
                                 inf_region.wmin = data_set.weight
                                 inf_region.wmax = data_set.weight
                                 
-                                if regions.regions_intersect_p(inf_region, self.region if self.dst_trans is None else self.trans_region):
+                                if regions.regions_intersect_p(inf_region, self.region if data_set.dst_trans is None else data_set.trans_region):
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
                                         yield(ds)

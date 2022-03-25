@@ -308,12 +308,12 @@ class ElevationDataset():
                 
             if self.verbose:
                 _prog.end(0, 'generated inf for {}'.format(self.fn))
-
+                
         if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
             self.infos['src_srs'] = self.src_srs
         else:
             self.src_srs = self.infos['src_srs']
-            
+
         if 'format' not in self.infos.keys():
             self.infos['format'] = self.data_format
 
