@@ -101,6 +101,8 @@ class ElevationDataset():
         self.weight = weight
         self.src_srs = src_srs
         self.dst_srs = dst_srs
+        self.dst_trans = None
+        self.trans_region = None
         self.region = src_region
         self.parent = parent
         self.verbose = verbose
@@ -112,7 +114,7 @@ class ElevationDataset():
         self.y_inc = utils.str2inc(y_inc)
         if utils.fn_url_p(self.fn):
             self.remote = True
-
+        
         if self.valid_p():
             self.set_yield()
             self.inf(check_hash=True if self.data_format == -1 else False)
@@ -334,14 +336,13 @@ class ElevationDataset():
             self.xyz_yield = self.yield_xyz()
     
     def set_transform(self):
-        """set an srs transform, if needed."""
-        
+        """set an srs transform, if needed/wanted."""
+
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs.split('+')[0] != self.dst_srs.split('+')[0]:
-            #print(self.src_srs, self.dst_srs)
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
@@ -351,15 +352,12 @@ class ElevationDataset():
                 dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             except:
                 pass
-            
+
             self.dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
             if self.region is not None:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = self.dst_srs
                 self.trans_region.warp(self.src_srs)
-        else:
-            self.dst_trans = None
-            self.trans_region = None
     
     def parse(self):
         """parse the datasets from the dataset.
@@ -478,7 +476,7 @@ class ElevationDataset():
             self, want_mean=True, want_count=True, want_weights=True,
             want_mask=True, want_gt=False, want_ds_config=False, min_count=None, out_name=None
     ):
-        """block the src_xyz data to the mean block value
+        """block the xyz data to the mean block value
 
         Yields:
           list: an array for [weighted]mean, weights mask, and count
@@ -574,11 +572,6 @@ class ElevationDataset():
             return(out_arrays, dst_gt if want_gt else None, ds_config if want_ds_config else None)
         else:
             utils.echo_error_msg('invalid region {}'.format(block_region))
-
-        #     utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
-        #     utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
-        #     utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
-        #     return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
     
     def block_xyz(self, want_gmt=False):
         """block the src_xyz data to the mean block value
@@ -630,67 +623,6 @@ class ElevationDataset():
                             x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
                         )
                         yield(out_xyz)
-
-    def mask_array(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
-        """Create a num grid mask of xyz data. The output grid
-        will contain 1 where data exists and 0 where no data exists.
-
-        returns the gdal dataset and config
-        """
-
-        block_arrays, dst_gt, ds_config = self.block_array(
-            want_mean=False, want_weights=False, want_count=False, want_mask=True,
-            want_gt=True, want_ds_config=True
-        )
-
-        return(block_arrays['mask'], dst_gt, ds_config)
-
-    def mask_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
-        """Create a num grid mask of xyz data. The output grid
-        will contain 1 where data exists and 0 where no data exists.
-
-        yields the xyz data
-        """
-
-        # block_arrays, dst_gt, ds_config = self.block_array(
-        #     want_mean=False, want_weights=False, want_count=False, want_mask=True,
-        #     want_gt=True, want_ds_config=True
-        # )
-        # m_array = block_arrays['mask']
-        # for y in range(0, ds_config['ny']):
-        #     for x in range(0, ds_config['nx']):
-        #         z = z_array[y,x]
-        #         if not np.isnan(z) and '{:g}'.format(ds_config['ndv']) != '{:g}'.format(z):
-        #             geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-        #             out_xyz = xyzfun.XYZPoint(
-        #                 x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
-        #             )
-        #             yield(out_xyz)
-
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
-        ptArray = np.zeros((ycount, xcount))
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            (xcount*ycount),
-            dst_gt,
-            utils.sr_wkt(self.src_srs),
-            gdal.GDT_Float32,
-            -9999,
-            'GTiff'
-        )
-
-        for this_xyz in self.yield_xyz_from_entries(**kwargs):
-            yield(this_xyz)
-            xpos, ypos = utils._geo2pixel(
-                this_xyz.x, this_xyz.y, dst_gt
-            )
-            try:
-                ptArray[ypos, xpos] = 1
-            except:
-                pass
-
-        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)
     
     def vectorize_xyz(self):
         """Make a point vector OGR DataSet Object from src_xyz
@@ -724,7 +656,7 @@ class ElevationDataset():
         layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        for this_xyz in self.yield_xyz():
+        for this_xyz in self.xyz_yield:
             f.SetField(0, this_xyz.x)
             f.SetField(1, this_xyz.y)
             f.SetField(2, float(this_xyz.z))

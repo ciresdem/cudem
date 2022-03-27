@@ -240,9 +240,6 @@ class Datalist(datasets.ElevationDataset):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
 
-            ## TODO:
-            ## parse datalst json here and yield each dataset found within.
-            ##
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
                     if self.verbose:
@@ -277,17 +274,12 @@ class Datalist(datasets.ElevationDataset):
                                 except:
                                     inf_region = self.region.copy()
 
-                                ## check region prj
-                                # if self.dst_trans is not None:
-                                #     if self.trans_region is not None and self.trans_region.valid_p(
-                                #             check_xy = True
-                                #     ):
-                                #         inf_region = self.trans_region.copy()
-                                    
                                 inf_region.wmin = data_set.weight
                                 inf_region.wmax = data_set.weight
-                                
-                                if regions.regions_intersect_p(inf_region, self.region if data_set.dst_trans is None else data_set.trans_region):
+                                if regions.regions_intersect_p(
+                                        inf_region,
+                                        self.region if data_set.dst_trans is None else data_set.trans_region
+                                ):
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
                                         yield(ds)

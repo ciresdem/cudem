@@ -95,6 +95,7 @@ class Waffle:
             clip=None,
             chunk=None,
             dst_srs=None,
+            srs_transform=False,
             verbose=False,
             archive=False,
             mask=False,
@@ -121,6 +122,7 @@ class Waffle:
         self.clip = clip
         self.chunk = chunk
         self.dst_srs = dst_srs
+        self.srs_transform = srs_transform
         self.mod = None
         self.mod_args = {}
         self.archive = archive
@@ -215,6 +217,7 @@ class Waffle:
             clip=self.clip,
             chunk=self.chunk,
             dst_srs=self.dst_srs,
+            srs_transform=self.srs_transform,
             verbose=self.verbose,
             archive=self.archive,
             mask=self.mask,
@@ -412,7 +415,22 @@ class Waffle:
     ## TODO: allow spat-meta and archive at same time...
     def yield_xyz(self, block=False, **kwargs):
         """yields the xyz data"""
-        
+
+        # this_datalist = dlim.init_data(self.data_, self.p_region, None, self.dst_srs if self.srs_transform else None, (self.xinc, self.yinc) if block else (None, None), self.verbose)
+        # if this_datalist is not None and this_datalist.valid_p(
+        #     fmts=dlim.DatasetFactory.data_types[this_datalist.data_format]['fmts']
+        # ):
+            
+        #     if self.archive:
+        #         xyz_yield = this_datalist.archive_xyz()
+        #     else:
+        #         xyz_yield = this_datalist.xyz_yield      
+        #     if self.mask:
+        #         xyz_yield = self._xyz_mask(xyz_yield, self.mask_fn)
+
+        #     for xyz in xyz_yield:
+        #         yield(xyz)
+                
         for xdl in self.data:
             if self.spat:
                 xyz_yield = metadata.SpatialMetadata(
@@ -514,6 +532,7 @@ class Waffle:
                     extend=self.extend+12,
                     weights=self.weights,
                     dst_srs=self.dst_srs,
+                    srs_transform=self.srs_transform,
                     clobber=True,
                     verbose=self.verbose,
                 ).acquire().generate()
@@ -589,6 +608,7 @@ class Waffle:
                     clip=self.clip,
                     chunk=None,
                     dst_srs=self.dst_srs,
+                    srs_transform=self.srs_transform,
                     verbose=self.verbose,
                     archive=self.archive,
                     mask=self.mask,
@@ -1547,6 +1567,7 @@ class WafflesCUDEM(Waffle):
                         extend=self.extend+12,
                         weights=self.weights,
                         dst_srs=self.dst_srs,
+                        srs_transform=self.srs_transform,
                         clobber=True,
                         verbose=self.verbose,
                     ).acquire().generate()
@@ -1590,6 +1611,7 @@ class WafflesCUDEM(Waffle):
                 fltr=pre_filter,
                 weights=1,
                 dst_srs=self.dst_srs,
+                srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
                 xsample=xsample,
@@ -1622,6 +1644,7 @@ class WafflesCUDEM(Waffle):
             fltr=[],
             weights=1,
             dst_srs=self.dst_srs,
+            srs_transform=self.srs_transform,
             clobber=True,
             verbose=self.verbose,
             xsample=None,
@@ -2231,6 +2254,7 @@ Update an existing DEM with data from the datalist
             clip=None,
             chunk=None,
             dst_srs=None,
+            srs_transform=False,
             verbose=False,
             archive=False,
             mask=False,
@@ -2257,6 +2281,7 @@ Update an existing DEM with data from the datalist
         self.clip = clip
         self.chunk = chunk
         self.dst_srs = dst_srs
+        self.srs_transform = srs_transform
         self.archive = archive
         self.mask = mask
         self.spat = spat
@@ -2324,6 +2349,7 @@ Update an existing DEM with data from the datalist
             'clip': self.clip,
             'chunk': self.chunk,
             'dst_srs': self.dst_srs,
+            'srs_transform': self.srs_transform,
             'verbose': self.verbose,
             'archive': self.archive,
             'mask': self.mask,
@@ -2354,6 +2380,7 @@ Update an existing DEM with data from the datalist
                     clip=self.clip,
                     chunk=self.chunk,
                     dst_srs=self.dst_srs,
+                    srs_transform=self.srs_transform,
                     archive=self.archive,
                     mask=self.mask,
                     spat=self.spat,
@@ -2425,6 +2452,7 @@ Options:
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
 
+  -f, --transform\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
 \t\t\tnote: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
 \t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
@@ -2479,6 +2507,8 @@ def waffles_cli(argv = sys.argv):
     wg['verbose'] = True
     wg['xsample'] = None
     wg['ysample'] = None
+    wg['dst_srs'] = None
+    wg['srs_transform'] = False
     wg['fltr'] = []
     wg['name'] = 'waffles'
     
@@ -2560,8 +2590,11 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--t_srs' or arg == '-P' or arg == '-t_srs':
             wg['dst_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
-        elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')
-        
+        elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')        
+        elif arg == '--trasform' or arg == '-f' or arg == '-transform':
+            wg['srs_transform'] = True
+            if wg['dst_srs'] is None:
+                wg['dst_srs'] = 'epsg:4326'
         elif arg == '-w' or arg == '--weights':
             if 'weights' not in wg.keys():
                 wg['weights'] = 1
