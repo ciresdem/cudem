@@ -389,6 +389,7 @@ class ElevationDataset():
         """parse the data into a datalist dictionary"""
         
         for e in self.parse():
+            print(e, e.parent)
             if e.parent is not None:
                 if e.parent.metadata['name'] in self.data_lists.keys():
                     self.data_lists[e.parent.metadata['name']]['data'].append(e)
@@ -623,7 +624,74 @@ class ElevationDataset():
                             x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
                         )
                         yield(out_xyz)
-    
+
+    def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
+        returns the gdal dataset and config
+        """
+
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_x_inc, y_inc=dst_y_inc)
+        ptArray = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            (xcount*ycount),
+            dst_gt,
+            utils.sr_wkt(self.src_srs),
+            gdal.GDT_Int32,
+            -9999,
+            'MEM'
+        )
+        for this_xyz in self.yield_xyz_from_entries(**kwargs):
+            xpos, ypos = utils._geo2pixel(
+                this_xyz.x, this_xyz.y, dst_gt
+            )
+            try:
+                ptArray[ypos, xpos] = 1
+            except: pass
+
+        driver = gdal.GetDriverByName(dst_format)
+        ds = driver.Create('MEM', ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+        if ds is not None:
+            ds.SetGeoTransform(ds_config['geoT'])
+            ds.SetProjection(ds_config['proj'])
+            ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
+            ds.GetRasterBand(1).WriteArray(ptArray)
+                
+        return(ds, ds_config)
+        
+    def mask_and_yield_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+        """Create a num grid mask of xyz data. The output grid
+        will contain 1 where data exists and 0 where no data exists.
+        yields the xyz data
+        """
+
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_inc)
+        ptArray = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            (xcount*ycount),
+            dst_gt,
+            utils.sr_wkt(self.src_srs),
+            gdal.GDT_Float32,
+            -9999,
+            'GTiff'
+        )
+
+        for this_xyz in self.yield_xyz_from_entries(**kwargs):
+            yield(this_xyz)
+            xpos, ypos = utils._geo2pixel(
+                this_xyz.x, this_xyz.y, dst_gt
+            )
+            try:
+                ptArray[ypos, xpos] = 1
+            except:
+                pass
+
+        out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)
+                        
     def vectorize_xyz(self):
         """Make a point vector OGR DataSet Object from src_xyz
 

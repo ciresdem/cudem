@@ -1,6 +1,6 @@
 ### metadata.py
 ##
-## Copyright (c) 2019 - 2021 Regents of the University of Colorado
+## Copyright (c) 2019 - 2022 Regents of the University of Colorado
 ##
 ## metadata.py is part of CUDEM
 ##
@@ -117,7 +117,6 @@ class SpatialMetadata:
             self,
             data=[],
             src_region=None,
-            #inc=None,
             xinc=None,
             yinc=None,
             name='waffles_sm',
@@ -126,18 +125,19 @@ class SpatialMetadata:
             extend=0,
             node='pixel',
             ogr_format='ESRI Shapefile',
+            recursive=False,
             verbose=False
     ):
         """generate spatial-metadata"""
         
         self.data = data
-        #self.inc = utils.float_or(inc)
         self.xinc = utils.float_or(xinc)
         self.yinc = utils.float_or(yinc)
         self.src_srs = utils.str_or(src_srs, 'epsg:4326')
         self.dst_srs = utils.str_or(dst_srs, 'epsg:4326')
         self.extend = extend
         self.node = node
+        self.recursive = recursive
         
         self.region = src_region
         self.d_region = self.dist_region()
@@ -212,19 +212,26 @@ class SpatialMetadata:
 
     def run(self):
         for xdl in self.data:
-            dls = {}
-            xdl.parse_data_lists()
-            #for e in xdl.parse():
-            #    while e.parent != xdl:
-            #        e = e.parent
-            #    if e.metadata['name'] not in dls.keys():
-            #        dls[e.metadata['name']] = {'data': [e] ,'dl': e}
-            for x in xdl.data_lists.keys():
+            data_lists = {}
+            if self.recursive:
+                xdl.parse_data_lists()
+                data_lists = xdl.data_lists
+            else:
+                for e in xdl.parse():
+                    while e.parent != xdl:
+                        e = e.parent
+                    if e.metadata['name'] not in data_lists.keys():
+                        data_lists[e.metadata['name']] = {'data': [e] ,'dl': e}
+
+            for x in data_lists.keys():
                 utils.echo_msg('Working on {}'.format(x))
-                #xdl.data_entries = dls[x]['data']
-                xdl.data_entries = xdl.data_lists[x]['data']
-                #p = dls[x]['dl']
-                p = xdl.data_lists[x]['parent']
+                xdl.data_entries = data_lists[x]['data']
+                
+                if self.recursive:
+                    p = data_lists[x]['parent']
+                else:
+                    p = data_lists[x]['dl']
+
                 o_v_fields = [
                     p.metadata['title'] if p.metadata['title'] is not None else x,
                     p.metadata['source'],
@@ -314,6 +321,7 @@ usage: spatial_metadata [ datalist [ OPTIONS ] ]
 \t\t\tnote: Set Resoluion, Year and Version by setting this to 'res=X:year=XXXX:version=X'
 \t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
   -r, --grid-node\tUse grid-node registration, default is pixel-node
+  -c, --recursive\tGenerate an entry for each end-level datalist.
   -q, --quiet\t\tLower verbosity to a quiet. (overrides --verbose)
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
@@ -330,7 +338,6 @@ def spat_meta_cli(argv = sys.argv):
     i_regions = []
     these_regions = []
     src_srs = 'epsg:4326'
-    #inc = utils.str2inc('1s')
     xinc = utils.str2inc('1s')
     yinc = utils.str2inc('1s')
     node = 'pixel'
@@ -339,6 +346,7 @@ def spat_meta_cli(argv = sys.argv):
     extend = 0
     want_verbose = True
     want_prefix = False
+    want_recursive = False
     prefix_args = {}
             
     argv = sys.argv
@@ -393,6 +401,7 @@ def spat_meta_cli(argv = sys.argv):
                 i += 1
                 
         elif arg == '-r' or arg == '--grid-node': node = 'grid'
+        elif arg == '-c' or arg == '--recursive': want_recursive = True
         elif arg == '--quiet' or arg == '-q': want_verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
@@ -460,6 +469,7 @@ def spat_meta_cli(argv = sys.argv):
                     node=node,
                     name=name_,
                     verbose=want_verbose,
+                    recursive=want_recursive,
                     ogr_format=ogr_format
                 ).run()
 ### End

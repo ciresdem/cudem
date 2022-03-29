@@ -1035,8 +1035,7 @@ echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv
 echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
 
 class CliProgress:
-    """geomods minimal progress indicator
-    """
+    '''cudem minimal progress indicator'''
 
     def __init__(self, message = None):
         self.tw = 7
