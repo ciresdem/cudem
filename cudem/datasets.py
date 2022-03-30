@@ -389,7 +389,6 @@ class ElevationDataset():
         """parse the data into a datalist dictionary"""
         
         for e in self.parse():
-            print(e, e.parent)
             if e.parent is not None:
                 if e.parent.metadata['name'] in self.data_lists.keys():
                     self.data_lists[e.parent.metadata['name']]['data'].append(e)
