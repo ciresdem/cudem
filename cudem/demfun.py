@@ -282,7 +282,7 @@ def split(src_dem, split_value = 0):
         return([dst_upper, dst_lower])
     else: return(None)
 
-def cut(src_dem, src_region, dst_dem, node='pixel', mode='translate'):
+def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
     """cut src_fn gdal file to srcwin and output dst_fn gdal file
 
     returns [output-dem, status-code]

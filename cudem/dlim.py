@@ -978,6 +978,35 @@ def datalists_cli(argv=sys.argv):
                                 ]
                             )
                         )
+                elif want_datalists:
+                    #import json
+                    #j = open('{}.json'.format(this_datalist.metadata['name']), 'w')
+                    this_datalist.parse_data_lists()
+                    # for x in this_datalist.data_lists.keys():
+                    #     p = this_datalist.data_lists[x]['parent']
+
+                    #     out_json = {
+                    #         "Name": x,
+                    #         "Title": p.title if p.title is not None else x,
+                    #         "Source": p.source,
+                    #         "Date": p.date,
+                    #         "DataType": p.data_type,
+                    #         "Resolution": p.resolution,
+                    #         "HDatum": p.hdatum,
+                    #         "VDatum": p.vdatum,
+                    #         "URL": p.url
+                    #     }
+                    #     j.write(json.dumps(out_json))
+                    #     j.write('\n')
+                    # j.close()
+                    
+                    for x in this_datalist.data_lists.keys():
+                        p = this_datalist.data_lists[x]['parent']
+                        print('{} ({})|{}'.format(p.metadata['title'], p.metadata['name'], p.weight))
+                        #print(xdl.data_lists[x]['parent'].echo_())
+                        #print('{}'.format(this_datalist.data_lists[x]['parent'].fn))
+                        #print(this_datalist.data_lists[x])
+                        #print('{} ({})|{}'.format(this_datalist.data_lists[x]['parent'].metadata['title'], this_datalist.data_lists[x]['parent'].metadata['name'], this_datalist.data_lists[x]['parent'].weight))
 
                 else:
                     if want_separate:

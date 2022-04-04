@@ -698,14 +698,16 @@ class GMTSurface(Waffle):
         )        
         self.mod = 'surface'
         
-    def run(self):        
+    def run(self):
+        #self.ps_region.format('gmt'),
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
-                self.ps_region.format('gmt'),
+            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}{}'.format(
+                self.p_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 ' -W' if self.weights else '',
-                self.ps_region.format('gmt'),
+                ' -rp' if self.node == 'pixel' else '',
+                self.p_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 self.name,
@@ -716,6 +718,7 @@ class GMTSurface(Waffle):
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
                 ' -C{}'.format(self.convergence) if self.convergence is not None else '',
+                ' -rp' if self.node == 'pixel' else '',
             )
         )
         
