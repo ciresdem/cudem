@@ -1111,6 +1111,31 @@ class RasterFile(ElevationDataset):
             
         self.set_transform()
 
+    def init_ds(self):
+        if self.x_inc is not None and self.y_inc is not None:
+            
+            if self.verbose:
+                _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+            if self.region is not None:
+                dem_region = regions.Region().from_list(self.infos['minmax'])
+                warp_region = regions.regions_reduce(self.region, dem_region)
+                extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
+            else:
+                extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
+
+            src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                               dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                               options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
+            if self.verbose:
+                _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *extent))
+        else:
+            if self.open_options:
+                src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+            else:
+                src_ds = gdal.Open(self.fn)
+
+        return(src_ds)
+        
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
@@ -1170,28 +1195,29 @@ class RasterFile(ElevationDataset):
         #         'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
         #     )
             
-        if self.x_inc is not None and self.y_inc is not None:
+        # if self.x_inc is not None and self.y_inc is not None:
             
-            if self.verbose:
-                _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
-            if self.region is not None:
-                dem_region = regions.Region().from_list(self.infos['minmax'])
-                warp_region = regions.regions_reduce(self.region, dem_region)
-                extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
-            else:
-                extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
+        #     if self.verbose:
+        #         _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+        #     if self.region is not None:
+        #         dem_region = regions.Region().from_list(self.infos['minmax'])
+        #         warp_region = regions.regions_reduce(self.region, dem_region)
+        #         extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
+        #     else:
+        #         extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
-            src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                               dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
-                               options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
-            if self.verbose:
-                _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
-        else:
-            if self.open_options:
-                src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-            else:
-                src_ds = gdal.Open(self.fn)
-            
+        #     src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+        #                        dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+        #                        options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
+        #     if self.verbose:
+        #         _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+        # else:
+        #     if self.open_options:
+        #         src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+        #     else:
+        #         src_ds = gdal.Open(self.fn)
+
+        src_ds = self.init_ds()
         out_xyz = xyzfun.XYZPoint(w=1)
         if src_ds is not None:
             count = 0

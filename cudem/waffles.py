@@ -160,7 +160,7 @@ class Waffle:
             src_region=self.p_region,
             verbose=self.verbose,
             dst_srs=self.dst_srs,
-            weight=self.weights
+            weight=self.weights,
         ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
 
@@ -700,14 +700,15 @@ class GMTSurface(Waffle):
         
     def run(self):
         #self.ps_region.format('gmt'),
+        #                ' -rp' if self.node == 'pixel' else '',
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}{}'.format(
-                self.p_region.format('gmt'),
+            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
+                self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 ' -W' if self.weights else '',
                 ' -rp' if self.node == 'pixel' else '',
-                self.p_region.format('gmt'),
+                self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
                 self.name,
@@ -717,8 +718,7 @@ class GMTSurface(Waffle):
                 self.upper_limit,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
-                ' -C{}'.format(self.convergence) if self.convergence is not None else '',
-                ' -rp' if self.node == 'pixel' else '',
+                ' -C{}'.format(self.convergence) if self.convergence is not None else ''
             )
         )
         
@@ -2059,7 +2059,22 @@ class WafflesUpdateDEM(Waffle):
         diff_ds = dem_ds = None
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
+
+class WafflesRasterStack(Waffle):
+    def __init__(
+            self, **kwargs
+    ):
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
+
+        self.mod = 'rstack'
         
+    def run(self):
+        return(self)
+    
 class WaffleFactory():
     """Find and generate a WAFFLE object for DEM generation."""
     
@@ -2234,6 +2249,15 @@ Update an existing DEM with data from the datalist
  :dem=[path] - the path the the DEM to update
  :min_weight=[val] - the minumum weight to inclue in the final DEM""",
         },
+        'rstack': {
+            'name': 'rstack',
+            'datalist-p': True,
+            'class': WafflesRasterStack,
+            'description': """Generate a DEM using a Raster Stacking method . <beta>
+
+< rstack >""",
+        },
+
     }
     
     def __init__(

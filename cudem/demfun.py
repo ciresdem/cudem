@@ -162,12 +162,13 @@ def set_srs(src_dem, src_srs='epsg:4326'):
         return(0)
     else: return(None)
 
-def set_nodata(src_dem, nodata=-9999, convert_array=False):
+def set_nodata(src_dem, nodata=-9999, convert_array=False, verbose=True):
     """set the nodata value of gdal file src_dem
 
     returns 0
     """
 
+    utils.echo_msg('setting nodata value of {} to {}'.format(src_dem, nodata))
     try:
         ds = gdal.Open(src_dem, gdal.GA_Update)
     except: ds = None
@@ -884,7 +885,7 @@ def filter_outliers_slp_(src_dem, dst_dem, chunk_size=None, chunk_step=None, per
     mem_ds = None
     return(out, status)
 
-def grdfilter(src_dem, dst_dem, dist='3s', node='pixel', verbose=False):
+def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
     """filter `src_dem` using GMT grdfilter
 
     Args:
@@ -898,8 +899,8 @@ def grdfilter(src_dem, dst_dem, dist='3s', node='pixel', verbose=False):
       list: [cmd-output, cmd-return-code]
     """
     
-    ft_cmd1 = ('gmt grdfilter -V {} -G{} -R{} -Fc{} -D1{}'.format(src_dem, dst_dem, src_dem, dist, ' -rp' if node == 'pixel' else ''))
-    #ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp if node == 'pixel' else ''))
+    #ft_cmd1 = ('gmt grdfilter -V {} -G{} -R{} -Fc{} -D1{}'.format(src_dem, dst_dem, src_dem, dist, ' -rp' if node == 'pixel' else ''))
+    ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp' if node == 'pixel' else ''))
     return(utils.run_cmd(ft_cmd1, verbose=verbose))
 
 def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):
