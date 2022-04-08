@@ -123,7 +123,7 @@ def main():
         
         if _trans_grid is not None:
             utils.run_cmd('gdalwarp {} {} -ts {} {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_infos['nx'], src_infos['ny']), verbose=True)
-            utils.run_cmd('gdal_calc.py -A {} -B {} --calc "A+B" --outfile {}'.format(src_grid, '_{}'.format(_trans_grid), dst_grid.replace(' ', '\ ')), verbose=True)
+            utils.run_cmd('gdal_calc.py -A {} -B {} --calc "A+B" --outfile {}'.format(src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ ')), verbose=True)
             utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
         else:
             utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
