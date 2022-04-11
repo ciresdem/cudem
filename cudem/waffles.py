@@ -2084,7 +2084,7 @@ class WafflesUpdateDEM(Waffle):
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
 
-class WafflesRasterStack(Waffle):
+class WafflesStacks(Waffle):
     def __init__(
             self, **kwargs
     ):
@@ -2343,11 +2343,11 @@ Update an existing DEM with data from the datalist
  :dem=[path] - the path the the DEM to update
  :min_weight=[val] - the minumum weight to inclue in the final DEM""",
         },
-        'rstack': {
-            'name': 'rstack',
+        'stacks': {
+            'name': 'stacks',
             'datalist-p': True,
-            'class': WafflesRasterStack,
-            'description': """Generate a DEM using a Raster Stacking method . <beta>
+            'class': WafflesStacks,
+            'description': """Generate a DEM using a raster Stacking method . <beta>
 
 < rstack >""",
         },
