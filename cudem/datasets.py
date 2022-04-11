@@ -1162,14 +1162,14 @@ class RasterFile(ElevationDataset):
         src_ds = None
         return(self.infos)
 
-    def get_srcwin(self, gt, x_size, y_size):
+    def get_srcwin(self, gt, x_size, y_size, node='pixel'):
         if self.region is not None:
             if self.dst_trans is not None:
                 if self.trans_region is not None and self.trans_region.valid_p(
                         check_xy = True
                 ):
                     srcwin = self.trans_region.srcwin(
-                        gt, x_size, y_size
+                        gt, x_size, y_size, node
                     )
                 else:
                     srcwin = (
@@ -1178,7 +1178,7 @@ class RasterFile(ElevationDataset):
 
             else:
                 srcwin = self.region.srcwin(
-                    gt, x_size, y_size
+                    gt, x_size, y_size, node
                 )
 
         else:
@@ -1186,36 +1186,9 @@ class RasterFile(ElevationDataset):
                 0, 0, x_size, y_size
             )
         return(srcwin)
-            
+    
     def yield_xyz(self):
         """parse the data from gdal dataset src_ds (first band only)"""
-
-        # if self.verbose and self.parent is None:
-        #     _prog = utils.CliProgress(
-        #         'parsing dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else '')
-        #     )
-            
-        # if self.x_inc is not None and self.y_inc is not None:
-            
-        #     if self.verbose:
-        #         _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
-        #     if self.region is not None:
-        #         dem_region = regions.Region().from_list(self.infos['minmax'])
-        #         warp_region = regions.regions_reduce(self.region, dem_region)
-        #         extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
-        #     else:
-        #         extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
-
-        #     src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-        #                        dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
-        #                        options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
-        #     if self.verbose:
-        #         _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
-        # else:
-        #     if self.open_options:
-        #         src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-        #     else:
-        #         src_ds = gdal.Open(self.fn)
 
         src_ds = self.init_ds()
         out_xyz = xyzfun.XYZPoint(w=1)
@@ -1312,6 +1285,41 @@ class RasterFile(ElevationDataset):
         # if self.verbose and self.parent is None:
         #     _prog.end(0, 'parsed dataset {}{}'.format(self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''))
 
+    ## TODO w region filter
+    ## TODO weight band
+    ## TODO mask band
+    def yield_array(self):
+        src_ds = self.init_ds()
+        if src_ds is not None:
+            band = src_ds.GetRasterBand(1)
+            gt = src_ds.GetGeoTransform()
+            ndv = float(band.GetNoDataValue())
+            dem_infos = demfun.gather_infos(src_ds)
+            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
+            src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
+            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
+            srcwin_region = regions.Region().from_geo_transform(geo_transform=gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0])
+            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
+            src_arr[src_arr == dem_infos['ndv']] = np.nan
+
+            if self.region is not None and self.region.valid_p():
+                z_region = self.region.z_region()
+                if z_region[0] is not None:
+                    src_arr[src_arr < z_region[0]] = np.nan
+                        
+                if z_region[1] is not None:
+                    src_arr[src_arr > z_region[1]] = np.nan
+            
+            yield(src_arr, dst_srcwin, dst_gt, self.weight)
+        src_ds = None
+
+        if self.verbose:
+            utils.echo_msg(
+                'parsed {} data records from {}{}'.format(
+                    (dst_srcwin[3] * dst_srcwin[2]), self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+        
     def yield_xyz_np(self):
         """parse the data from gdal dataset src_ds using numpy - testing"""
 

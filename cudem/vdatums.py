@@ -186,6 +186,14 @@ class VerticalTransform:
     
     def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, verbose=True):
         self.src_region = src_region
+        #print(self.src_region.full_region())
+        #print(self.src_region.valid_p())
+        #self.src_region.warp()
+        #print(self.src_region.full_region())
+        #print(self.src_region.valid_p())
+        #print(self.src_region)
+        #self.trans_region = src_region.copy()
+        #self.trans_region.warp()
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
         self.epsg_in = self._datum_by_name(str(epsg_in))
@@ -301,13 +309,11 @@ class VerticalTransform:
             
     def _cdn_transform(self, epsg=None, name=None, invert=False):
         """create a cdn transofrmation grid"""
-        
+
         if epsg is not None:
             cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, epsg=epsg)
         else: cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region)
 
-        #print(cdn_results)
-        
         for _result in cdn_results:
             for g in _geoids:
                 if g in _result['name']:

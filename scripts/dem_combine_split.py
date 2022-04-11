@@ -80,15 +80,15 @@ if __name__ == '__main__':
         sys.exit(1)
     else:
         tmp_combined = '__tmp_comb__.vrt'
-        # g = gdal.Warp(tmp_combined, dems, format='GTiff',
-        #               options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress)
-        # g = None
+        #g = gdal.Warp(tmp_combined, dems, format='GTiff', dstNodata=-9999, resampleAlg='bilinear',
+        #              options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress)
+        #g = None
 
-        #if tr is None:
-        #    utils.run_cmd('gdalbuildvrt -allow_projection_difference -r bilinear {} {}'.format(tmp_combined, ' '.join(dems)), verbose=True)
-        #else:
-        #utils.run_cmd('gdalbuildvrt -allow_projection_difference -resolution user -r bilinear -tr {} {} {} {}'.format(*tr, tmp_combined, ' '.join(dems)), verbose=True)
-        utils.run_cmd('gdalbuildvrt -allow_projection_difference -resolution highest -r bilinear {} {}'.format(tmp_combined, ' '.join(dems)), verbose=True)
+        if tr is None:
+            utils.run_cmd('gdalbuildvrt -allow_projection_difference -r bilinear {} {}'.format(tmp_combined, ' '.join(dems)), verbose=True)
+        else:
+            utils.run_cmd('gdalbuildvrt -allow_projection_difference -resolution user -r bilinear -tr {} {} {} {}'.format(*tr, tmp_combined, ' '.join(dems)), verbose=True)
+            #utils.run_cmd('gdalbuildvrt -allow_projection_difference -resolution highest -r average {} {}'.format(tmp_combined, ' '.join(dems)), verbose=True)
             
         c_ds = gdal.Open(tmp_combined)
         c_gt = c_ds.GetGeoTransform()
@@ -119,7 +119,9 @@ if __name__ == '__main__':
                             geo_transform=gt,
                             x_count=src_ds.RasterXSize,
                             y_count=src_ds.RasterYSize
-                    )
+                        )
+                    else:
+                        this_region = None
                 else:
                     this_region = regions.Region().from_geo_transform(
                         geo_transform=gt,
@@ -127,20 +129,21 @@ if __name__ == '__main__':
                         y_count=src_ds.RasterYSize
                     )
 
-                output_name = dem[:-4] + '_p.tif'
+                if this_region is not None:
+                    output_name = dem[:-4] + '_p.tif'
 
-                this_srcwin = this_region.srcwin(
-                    geo_transform=c_gt,
-                    x_count=c_xcount,
-                    y_count=c_ycount
-                )
+                    this_srcwin = this_region.srcwin(
+                        geo_transform=c_gt,
+                        x_count=c_xcount,
+                        y_count=c_ycount
+                    )
 
-                src_ds = None
+                    src_ds = None
 
-                utils.run_cmd('gdal_translate {} {} -srcwin {} {} {} {} -r bilinear -tr {} {}'.format(
-                    tmp_combined, output_name, this_srcwin[0], this_srcwin[1], this_srcwin[2], this_srcwin[3], gt[1], gt[5]*-1
-                ), verbose=True)
-                #demfun.cut(tmp_combined, this_region, output_name)
+                    utils.run_cmd('gdal_translate {} {} -srcwin {} {} {} {} -r bilinear -tr {} {}'.format(
+                        tmp_combined, output_name, this_srcwin[0], this_srcwin[1], this_srcwin[2], this_srcwin[3], gt[1], gt[5]*-1
+                    ), verbose=True)
+                    #demfun.cut(tmp_combined, this_region, output_name)
                 
         utils.remove_glob(tmp_combined)       
 ### End

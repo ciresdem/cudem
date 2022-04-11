@@ -367,8 +367,10 @@ class Region:
         this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
+            #print(this_size[0], x_count - this_origin[0])
             this_size[0] = x_count - this_origin[0]
         if this_size[1] > y_count - this_origin[1]:
+            #print(this_size[1], y_count - this_origin[1])
             this_size[1] = y_count - this_origin[1]
         if this_size[0] < 0: this_size[0] = 0
         if this_size[1] < 0: this_size[1] = 0
@@ -390,7 +392,8 @@ class Region:
             if pct is not None:
                 ewp = (self.xmax - self.xmin) * (pct * .01)
                 nsp = (self.ymax - self.ymin) * (pct * .01)
-                bv = (ewp + nsp) / 2
+                x_bv = (ewp + nsp) / 2
+                y_bv = (ewp + nsp) / 2
 
             self.xmin -= x_bv
             self.xmax += x_bv
@@ -479,6 +482,7 @@ class Region:
         
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
         if dst_trans is None:
+            utils.echo_error_msg('could not perform transformation')
             return(self)
 
         self.src_srs = dst_srs
@@ -490,6 +494,7 @@ class Region:
         """transform the region using dst_trans transformation."""
 
         if dst_trans is None:
+            utils.echo_error_msg('could not perform transformation')
             return(self)
             
         pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
@@ -498,10 +503,10 @@ class Region:
         pointB.Transform(dst_trans)
         try:
             if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
-                self.xmin = pointA.GetX()
-                self.xmax = pointB.GetX()
-                self.ymin = pointA.GetY()
-                self.ymax = pointB.GetY()
+                self.xmin = pointA.GetX() if pointA.GetX() < pointB.GetX() else pointB.GetX()
+                self.xmax = pointB.GetX() if pointB.GetX() > pointA.GetX() else pointA.GetX()
+                self.ymin = pointA.GetY() if pointA.GetY() < pointB.GetY() else pointB.GetY()
+                self.ymax = pointB.GetY() if pointB.GetY() > pointA.GetY() else pointA.GetY()
         except Exception as e:
             sys.stderr.write('transform error: {}\n'.format(str(e)))
         return(self)
@@ -819,6 +824,7 @@ def regions_cli(argv = sys.argv):
     echo = False
     echo_fn = False
     bv = None
+    te = False
     
     ## ==============================================
     ## parse command line arguments.
@@ -842,6 +848,9 @@ def regions_cli(argv = sys.argv):
             i = i + 1
         elif arg == '-e' or arg == '--echo' or arg == '-ee':
             echo = True
+        elif arg == '-te':
+            echo = True
+            te = True
         elif arg == '-n' or arg == '--name':
             echo_fn = True
         elif arg == '--quiet' or arg == '-q':
@@ -880,7 +889,10 @@ def regions_cli(argv = sys.argv):
             this_region.buffer(x_bv=bv, y_bv=bv)
             
         if echo:
-            print(this_region.format('gmt'))
+            if te:
+                print(this_region.format('te'))
+            else:
+                print(this_region.format('gmt'))
         elif echo_fn:
             print(this_region.format('fn'))
         else:

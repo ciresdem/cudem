@@ -150,8 +150,14 @@ class Waffle:
         self.c_region = self._coast_region()
         self.ps_region = self.p_region.copy()
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
+
+        if self.verbose:
+            utils.echo_msg('using buffered region {} for processing'.format(self.p_region))
+            utils.echo_msg('using region {} for coastline processing'.format(self.c_region))
+            utils.echo_msg('using shifted region {} for grid-node gridding'.format(self.ps_region))
+            utils.echo_msg('final output region is {}'.format(self.d_region))
         
-    def _init_data(self):
+    def _init_data(self, set_incs=False):
         ## specify x_inc and y_inc to warp/block data to given res.
         ## x_inc=self.xinc,
         ## y_inc=self.yinc
@@ -161,6 +167,8 @@ class Waffle:
             verbose=self.verbose,
             dst_srs=self.dst_srs,
             weight=self.weights,
+            x_inc=self.xinc if set_incs else None,
+            y_inc=self.yinc if set_incs else None
         ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
 
@@ -168,21 +176,32 @@ class Waffle:
         """processing region (extended by self.extend and self.extend_proc."""
         
         cr = regions.Region().from_region(self.region)
+        # return(
+        #     cr.buffer(
+        #         x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10),
+        #         y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)
+        #     )
+        # )
         return(
             cr.buffer(
-                x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10),
-                y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)
+                pct=self.extend_proc+5
             )
         )
+
     
     def _proc_region(self):
         """processing region (extended by self.extend and self.extend_proc."""
         
         pr = regions.Region().from_region(self.region)
+        #  return(
+        #     pr.buffer(
+        #         x_bv=((self.xinc*self.extend_proc) + (self.xinc*self.extend)),
+        #         y_bv=((self.yinc*self.extend_proc) + (self.yinc*self.extend))
+        #     )
+        # )
         return(
             pr.buffer(
-                x_bv=((self.xinc*self.extend_proc) + (self.xinc*self.extend)),
-                y_bv=((self.yinc*self.extend_proc) + (self.yinc*self.extend))
+                pct=self.extend_proc
             )
         )
     
@@ -412,6 +431,11 @@ class Waffle:
                 
         out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
 
+    def yield_array(self, **kwargs):
+        for xdl in self.data:
+            for array in xdl.yield_array():
+                yield(array)
+        
     ## TODO: allow spat-meta and archive at same time...
     def yield_xyz(self, block=False, **kwargs):
         """yields the xyz data"""
@@ -2070,9 +2094,79 @@ class WafflesRasterStack(Waffle):
             utils.echo_error_msg(e)
             sys.exit()
 
+        self._init_data(set_incs=True)
         self.mod = 'rstack'
         
     def run(self):
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc
+        )
+        gdt = gdal.GDT_Float32
+        z_array = np.zeros((ycount, xcount))
+        count_array = np.zeros((ycount, xcount))
+        if self.weights:
+            weight_array = np.zeros((ycount, xcount))
+            
+        if self.verbose:
+            utils.echo_msg(
+                'blocking data to {}/{} grid'.format(ycount, xcount)
+            )
+        for arr, srcwin, gt, w in self.yield_array():
+            #arr[np.isnan(arr)] = 0
+            #w = arr[
+            #arr *= w
+            w_arr = np.zeros((srcwin[3], srcwin[2]))
+            w_arr[~np.isnan(arr)] = w
+            w_arr[np.isnan(arr)] = 0
+            
+            c_arr = np.zeros((srcwin[3], srcwin[2]))
+            c_arr[~np.isnan(arr)] = 1
+
+            arr[np.isnan(arr)] = 0
+            
+            z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w
+            #arr[~np.isnan(arr)] = 1
+            #arr[np.isnan(arr)] = 0
+            count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
+            if self.weights:
+                #arr[arr == 1] = w
+                #arr[arr == 0] = 0
+                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
+            
+        count_array[count_array == 0] = np.nan
+        if self.weights:
+            weight_array[weight_array == 0] = np.nan
+            weight_array = (weight_array/count_array)
+            z_array = (z_array/weight_array)/count_array
+        else:
+            z_array = (z_array/count_array)
+            #weight_array = np.ones((ycount, xcount))
+
+        #if min_count is not None:
+        #    z_array[count_array < min_count] = np.nan
+        #    weight_array[count_array < min_count] = np.nan
+
+        z_array[np.isnan(z_array)] = -9999
+        weight_array[np.isnan(weight_array)] = -9999
+        count_array[np.isnan(count_array)] = -9999
+        
+        #if out_name is not None:
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            self.dst_srs,
+            gdal.GDT_Float32,
+            -9999,
+            'GTiff'
+        )
+        
+        utils.gdal_write(z_array, '{}.tif'.format(self.name), ds_config, verbose=True)
+        utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
+        utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
+        
         return(self)
     
 class WaffleFactory():

@@ -115,14 +115,17 @@ def main():
         utils.echo_error_msg('Error: {} is not a valid file'.format(src_grid))
     else:
         src_infos = demfun.infos(src_grid)
+        
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
+        src_region.src_srs = demfun.get_srs(src_grid)
+        src_region.warp()
         x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
         tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
         vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out)
         _trans_grid = vt.run()
         
         if _trans_grid is not None:
-            utils.run_cmd('gdalwarp {} {} -ts {} {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_infos['nx'], src_infos['ny']), verbose=True)
+            utils.run_cmd('gdalwarp {} {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_infos['nx'], src_infos['ny'], demfun.get_srs(src_grid)), verbose=True)
             utils.run_cmd('gdal_calc.py -A {} -B {} --calc "A+B" --outfile {}'.format(src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ ')), verbose=True)
             utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
         else:
