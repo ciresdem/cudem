@@ -494,7 +494,7 @@ class ElevationDataset():
             )
         else:
             block_region = ds_region.copy()
-
+        
         if block_region.valid_p():
         
             xcount, ycount, dst_gt = block_region.geo_transform(
@@ -507,10 +507,10 @@ class ElevationDataset():
                 z_array = np.zeros((ycount, xcount))
                 weight_array = np.zeros((ycount, xcount))
 
-            if self.verbose:
-                utils.echo_msg(
-                    'blocking data to {}/{} grid'.format(ycount, xcount)
-                )
+            #if self.verbose:
+            #    utils.echo_msg(
+            #        'blocking data to {}/{} grid'.format(ycount, xcount)
+            #    )
                 
             for this_xyz in self.yield_xyz():
                 xpos, ypos = utils._geo2pixel(
@@ -844,6 +844,30 @@ class XYZFile(ElevationDataset):
             if len(this_xyz) > 1:
                 return(this_xyz)
 
+    def yield_array(self):
+        blocks = self.block_array(
+            want_mean=True, want_count=False, want_weights=True,
+            want_mask=False, want_gt=True, want_ds_config=True
+        )
+
+        src_arr = blocks[0]['mean']
+        src_weight = blocks[0]['weight']
+        src_gt = blocks[1]
+        src_ds_config = blocks[2]
+
+        x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
+        srcwin_region = regions.Region().from_geo_transform(
+            geo_transform=src_gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0]
+        )
+        dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
+
+        src_arr[src_arr == src_ds_config['ndv']] = np.nan
+        src_weight[src_weight == src_ds_config['ndv']] = np.nan
+        ## FIXME!!
+        dst_srcwin = (dst_srcwin[0], dst_srcwin[1], src_arr.shape[1], src_arr.shape[0])
+                
+        yield(src_arr, dst_srcwin, src_gt, src_weight)
+
     def yield_xyz(self):
         """xyz file parsing generator"""
         
@@ -1119,15 +1143,15 @@ class RasterFile(ElevationDataset):
             if self.region is not None:
                 dem_region = regions.Region().from_list(self.infos['minmax'])
                 warp_region = regions.regions_reduce(self.region, dem_region)
-                extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
+                self.extent = [warp_region.xmin, warp_region.ymin, warp_region.xmax, warp_region.ymax]
             else:
-                extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
+                self.extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
             src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                               dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                               dstNodata=-9999, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
                                options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
             if self.verbose:
-                _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *extent))
+                _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *self.extent))
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1206,7 +1230,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1295,13 +1319,13 @@ class RasterFile(ElevationDataset):
             gt = src_ds.GetGeoTransform()
             ndv = float(band.GetNoDataValue())
             dem_infos = demfun.gather_infos(src_ds)
-            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
-            src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3])
-            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
+            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)#, node='grid')
+            src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
+            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)#, node='grid')
             srcwin_region = regions.Region().from_geo_transform(geo_transform=gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0])
-            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
+            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)#, node='grid')
             src_arr[src_arr == dem_infos['ndv']] = np.nan
-
+            
             if self.region is not None and self.region.valid_p():
                 z_region = self.region.z_region()
                 if z_region[0] is not None:
@@ -1309,9 +1333,27 @@ class RasterFile(ElevationDataset):
                         
                 if z_region[1] is not None:
                     src_arr[src_arr > z_region[1]] = np.nan
-            
-            yield(src_arr, dst_srcwin, dst_gt, self.weight)
-        src_ds = None
+
+            ## FIXME!!
+            dst_srcwin = (dst_srcwin[0], dst_srcwin[1], src_arr.shape[1], src_arr.shape[0])
+
+
+            if self.weight_mask is not None:
+
+                if self.x_inc is not None and self.y_inc is not None:
+                    src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
+                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           options=["COMPRESS=LZW", "TILED=YES"])
+                else:
+                    src_weight = gdal.Open(self.weight_mask)
+                    
+                weight_band = src_weight.GetRasterBand(1)
+                src_weight = weight_band.ReadAsArray()
+            else:
+                src_weight = self.weight
+                
+            yield(src_arr, dst_srcwin, dst_gt, src_weight)
+        src_ds = src_weight = None
 
         if self.verbose:
             utils.echo_msg(

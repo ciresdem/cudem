@@ -60,6 +60,9 @@ from cudem import demfun
 from cudem import metadata
 from cudem import vdatumfun
 
+this_dir, this_filename = os.path.split(__file__)
+wafflesdata = os.path.join(this_dir, 'waffles_data')
+
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
@@ -136,7 +139,7 @@ class Waffle:
         
         self._init_regions()        
         self.data_ = data
-        self._init_data()
+        self._init_data(set_incs=True)
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
@@ -152,10 +155,10 @@ class Waffle:
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
 
         if self.verbose:
-            utils.echo_msg('using buffered region {} for processing'.format(self.p_region))
-            utils.echo_msg('using region {} for coastline processing'.format(self.c_region))
-            utils.echo_msg('using shifted region {} for grid-node gridding'.format(self.ps_region))
-            utils.echo_msg('final output region is {}'.format(self.d_region))
+            utils.echo_msg('buffered region:\t{}'.format(self.p_region))
+            utils.echo_msg('grid-node region:\t{}'.format(self.ps_region))
+            utils.echo_msg('coastline region:\t{}'.format(self.c_region))
+            utils.echo_msg('output region:\t\t{}'.format(self.d_region))
         
     def _init_data(self, set_incs=False):
         ## specify x_inc and y_inc to warp/block data to given res.
@@ -689,7 +692,10 @@ class Waffle:
         """run the WAFFLES module (set via sub-module class)."""
         
         raise(NotImplementedError)
-    
+
+## ==============================================
+## GMT Surface
+## ==============================================
 class GMTSurface(Waffle):
     """Waffles GMT surface module.
     Grid the data using GMT 'surface'.
@@ -756,6 +762,9 @@ class GMTSurface(Waffle):
         
         return(self)
 
+## ==============================================
+## GMT Triangulate
+## ==============================================
 class GMTTriangulate(Waffle):
     """Waffles GMT triangulate module
     Grid the data using GMT 'triangulate'.
@@ -796,7 +805,10 @@ class GMTTriangulate(Waffle):
             )
         )        
         return(self)
-    
+
+## ==============================================
+## GMT Near Neighbor
+## ==============================================
 class GMTNearNeighbor(Waffle):
     """Waffles GMT nearneighbor module
     Grid the data using GMT 'nearneighbor'.
@@ -843,6 +855,9 @@ class GMTNearNeighbor(Waffle):
         )        
         return(self)
 
+## ==============================================
+## MB-System mbgrid
+## ==============================================
 class WafflesMBGrid(Waffle):
     """Waffles MBGrid module
     Does not use internal datalists processing,
@@ -984,7 +999,11 @@ class WafflesMBGrid(Waffle):
                     [x for x in self.yield_xyz()]
                     
         return(self)
-    
+
+
+## ==============================================
+## Waffles 'num' - no interpolation
+## ==============================================
 class WafflesNum(Waffle):
     """Generate an Uninterpolated grid from XYZ data;
     num methods include: mask, mean, num, landmask and any gmt grd2xyz -A option.
@@ -1108,6 +1127,10 @@ class WafflesNum(Waffle):
             
         return(self)
 
+
+## ==============================================
+## Waffles IDW
+## ==============================================
 class Invdisttree():
     """ inverse-distance-weighted interpolation using KDTree:
     @Denis via https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
@@ -1421,6 +1444,9 @@ class WafflesUIDW(Waffle):
         )        
         return(self)    
 
+## ==============================================
+## Waffles VDatum
+## ==============================================
 class WafflesVDatum(Waffle):
     """vertical datum transformation grid"""
 
@@ -1438,7 +1464,10 @@ class WafflesVDatum(Waffle):
         ).run(outfile='{}.tif'.format(self.name))
         
         return(self)
-    
+
+## ==============================================
+## GDAL gridding
+## ==============================================
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
 
@@ -1534,6 +1563,9 @@ class WafflesNearest(WafflesGDALGrid):
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, nodata)
 
+## ==============================================
+## Waffles 'CUDEM' gridding
+## ==============================================
 class WafflesCUDEM(Waffle):
     def __init__(
             self,
@@ -1544,6 +1576,7 @@ class WafflesCUDEM(Waffle):
             landmask=False,
             poly_count=3,
             keep_auxilary=False,
+            module='surface',
             **kwargs
     ):
         try:
@@ -1559,6 +1592,7 @@ class WafflesCUDEM(Waffle):
         self.landmask = landmask
         self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
+        self.module = module
         self.mod = 'cudem'            
         
     def run(self):
@@ -1606,15 +1640,15 @@ class WafflesCUDEM(Waffle):
         while pre > 0:
             pre_xinc = self.xinc * (self.inc_factor**pre)
             pre_yinc = self.yinc * (self.inc_factor**pre)
-            xsample = self.xinc * (self.inc_factor**(pre - 1))
-            ysample = self.yinc * (self.inc_factor**(pre - 1))
+            #xsample = self.xinc * (self.inc_factor**(pre - 1))
+            #ysample = self.yinc * (self.inc_factor**(pre - 1))
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
 
-            if xsample == 0:
-                xsample = self.xinc
-            if ysample == 0:
-                ysample = self.yinc
+            #if xsample == 0:
+            #    xsample = self.xinc
+            #if ysample == 0:
+            #    ysample = self.yinc
             
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1)
@@ -1628,7 +1662,8 @@ class WafflesCUDEM(Waffle):
                 pre_region.wmin = pre_weight
 
             pre_surface = WaffleFactory(
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit),
+                #mod='surface:tension=1:upper_limit={}'.format(upper_limit),
+                mod=self.module,
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc,
@@ -1641,8 +1676,8 @@ class WafflesCUDEM(Waffle):
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
-                xsample=xsample,
-                ysample=ysample,
+                #xsample=xsample,
+                #ysample=ysample,
                 extend=self.extend,
                 extend_proc=self.extend_proc,
                 clip=pre_clip,
@@ -1661,7 +1696,8 @@ class WafflesCUDEM(Waffle):
             ]
             
         pre_surface = WaffleFactory(
-            mod='surface:tension=1',
+            #mod='surface:tension=1',
+            mod=self.module,
             data=final_data,
             src_region=surface_region,
             xinc=self.xinc,
@@ -1674,8 +1710,8 @@ class WafflesCUDEM(Waffle):
             srs_transform=self.srs_transform,
             clobber=True,
             verbose=self.verbose,
-            xsample=None,
-            ysample=None,
+            #xsample=None,
+            #ysample=None,
             extend=self.extend,
             extend_proc=self.extend_proc,
         ).acquire().generate()
@@ -1685,7 +1721,10 @@ class WafflesCUDEM(Waffle):
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             
         return(self)
-    
+
+## ==============================================
+## Waffles Coastline/Landmask
+## ==============================================
 class WafflesCoastline(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
         """Generate a landmask from various sources."""
@@ -1947,6 +1986,9 @@ class WafflesCoastline(Waffle):
 
         utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
 
+## ==============================================
+## Waffles DEM update
+## ==============================================
 class WafflesUpdateDEM(Waffle):
     def __init__(
             self,
@@ -2084,16 +2126,19 @@ class WafflesUpdateDEM(Waffle):
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
 
+## ==============================================
+## Waffles Raster Stacking
+## ==============================================
 class WafflesStacks(Waffle):
     def __init__(
-            self, **kwargs
+            self, supercede=False, **kwargs
     ):
         try:
             super().__init__(**kwargs)
         except Exception as e:
             utils.echo_error_msg(e)
             sys.exit()
-
+        self.supercede = supercede
         self._init_data(set_incs=True)
         self.mod = 'rstack'
         
@@ -2113,35 +2158,46 @@ class WafflesStacks(Waffle):
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for arr, srcwin, gt, w in self.yield_array():
-            #arr[np.isnan(arr)] = 0
-            #w = arr[
-            #arr *= w
-            w_arr = np.zeros((srcwin[3], srcwin[2]))
-            w_arr[~np.isnan(arr)] = w
-            w_arr[np.isnan(arr)] = 0
-            
-            c_arr = np.zeros((srcwin[3], srcwin[2]))
-            c_arr[~np.isnan(arr)] = 1
+            if utils.float_or(w) is not None:
+                w_arr = np.zeros((srcwin[3], srcwin[2]))
+                w_arr[~np.isnan(arr)] = w
+                w_arr[np.isnan(arr)] = 0
+            else:
+                w_arr = w
+                w_arr[np.isnan(arr)] = 0
 
-            arr[np.isnan(arr)] = 0
+            c_arr = np.zeros((srcwin[3], srcwin[2]))
             
-            z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w
-            #arr[~np.isnan(arr)] = 1
-            #arr[np.isnan(arr)] = 0
-            count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
-            if self.weights:
-                #arr[arr == 1] = w
-                #arr[arr == 0] = 0
-                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
+            if not self.supercede:
+                c_arr[~np.isnan(arr)] = 1
+                arr[np.isnan(arr)] = 0
+
+                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w
+                count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
+                if self.weights:
+                    weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
+            else:
+                tmp_z = z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
+                tmp_w = weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
+                tmp_c = count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
+
+                tmp_z[w > tmp_w] = arr[w > tmp_w]
+                tmp_w[w > tmp_w] = w_arr[w > tmp_w]
+                tmp_c[w > tmp_w] = 1
+                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
+                count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_c
+                if self.weights:
+                    weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
             
         count_array[count_array == 0] = np.nan
-        if self.weights:
-            weight_array[weight_array == 0] = np.nan
-            weight_array = (weight_array/count_array)
-            z_array = (z_array/weight_array)/count_array
-        else:
-            z_array = (z_array/count_array)
-            #weight_array = np.ones((ycount, xcount))
+        if not self.supercede:
+            if self.weights:
+                weight_array[weight_array == 0] = np.nan
+                weight_array = (weight_array/count_array)
+                z_array = (z_array/weight_array)/count_array
+            else:
+                z_array = (z_array/count_array)
+                #weight_array = np.ones((ycount, xcount))
 
         #if min_count is not None:
         #    z_array[count_array < min_count] = np.nan
@@ -2164,8 +2220,8 @@ class WafflesStacks(Waffle):
         )
         
         utils.gdal_write(z_array, '{}.tif'.format(self.name), ds_config, verbose=True)
-        utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
-        utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
+        #utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
+        #utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
         
         return(self)
     

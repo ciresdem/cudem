@@ -163,23 +163,33 @@ increment to save space.
                     for link in links['links']:
                         if link['serviceID'] == 46:
                             urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                            index_zipfile = 'tileindex.zip'
+                            surv_name = '_'.join(link['link'].split('/')[-1].split('_')[:-1])
+                            #index_zipfile = 'tileindex.zip'
+                            index_zipfile = 'tileindex_{}.zip'.format(surv_name)
                             index_zipurl = link['link'] + '/' + index_zipfile
-                            urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                            #urllist_url = link['link'] + '/' + urllist
-                            if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) == 0:
-                                with open(urllist, 'r') as ul:
-                                    for line in ul:
-                                        if 'tileindex' in line:
-                                            index_zipurl = line.strip()
-                                            break
+                            #urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                            urllist_url = link['link'] + '/' + urllist
+                            while True:
+                                if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
+                                    if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
+                                        break
+                                    urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                else:
+                                    break
+                                
+                            with open(urllist, 'r') as ul:
+                                for line in ul:
+                                    if 'tileindex' in line:
+                                        index_zipurl = line.strip()
+                                        break
 
-                                utils.remove_glob(urllist)
-
+                            utils.remove_glob(urllist)
+                            
+                            #while True:
                             if f_utils.Fetch(
                                     index_zipurl, callback=self.callback, verbose=self.verbose
                             ).fetch_file(index_zipfile) == 0:
-                                index_shps = utils.p_unzip('tileindex.zip', ['shp', 'shx', 'dbf', 'prj'])
+                                index_shps = utils.p_unzip(index_zipfile, ['shp', 'shx', 'dbf', 'prj'])
                                 index_shp = None
                                 for v in index_shps:
                                     if v.split('.')[-1] == 'shp':

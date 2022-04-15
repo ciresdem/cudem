@@ -12,7 +12,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import demfun
 
-gfr_version = 0.1
+gfr_version = 0.2
 
 def Usage():
     print('Usage: gdal_mask.py [-eq value] [-gt value] [-lt value] [-nodata]')
@@ -98,6 +98,7 @@ if __name__ == "__main__":
         outarray[outarray<lt_data]=out_data
         
     if bin_mask:
+        outarray[outarray==ds_config['ndv']] = out_data
         outarray[outarray != out_data] = 1
         
     if applygrd is not None:

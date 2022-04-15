@@ -186,12 +186,6 @@ class VerticalTransform:
     
     def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, verbose=True):
         self.src_region = src_region
-        #print(self.src_region.full_region())
-        #print(self.src_region.valid_p())
-        #self.src_region.warp()
-        #print(self.src_region.full_region())
-        #print(self.src_region.valid_p())
-        #print(self.src_region)
         #self.trans_region = src_region.copy()
         #self.trans_region.warp()
         self.src_x_inc = utils.str2inc(src_x_inc)
