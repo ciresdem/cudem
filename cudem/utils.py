@@ -1005,7 +1005,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     sys.stderr.write('\x1b[2K\r')
     sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
 
-def echo_msg2(msg, prefix = 'waffles', nl = True):
+def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     """echo `msg` to stderr using `prefix`
 
     >> echo_msg2('message', 'test')
@@ -1019,7 +1019,10 @@ def echo_msg2(msg, prefix = 'waffles', nl = True):
     
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+    if bold:
+        sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+    else:
+        sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
     sys.stderr.flush()
     
 ## ==============================================
@@ -1028,6 +1031,7 @@ def echo_msg2(msg, prefix = 'waffles', nl = True):
 ## lambda runs: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
 ## ==============================================
 echo_msg = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]))
+echo_msg_bold = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), bold = True)
 echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]), nl = False)
 
 ## ==============================================

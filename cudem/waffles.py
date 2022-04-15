@@ -1645,7 +1645,7 @@ class WafflesCUDEM(Waffle):
             ).generate()
             n = stacked_dem.fn
             w = '{}_w.tif'.format('.'.join(n.split('.')[:-1]))
-            w = '{}_c.tif'.format('.'.join(n.split('.')[:-1]))
+            c = '{}_c.tif'.format('.'.join(n.split('.')[:-1]))
 
         else:
             n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
