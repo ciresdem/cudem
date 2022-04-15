@@ -2664,9 +2664,11 @@ Options:
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
   -O, --output-name\tBASENAME for all outputs.
   -P, --t_srs\t\tProjection of REGION and output DEM.
-  -X, --extend\t\tNumber of cells with which to EXTEND the REGION and processing REGION.
-\t\t\tWhere EXTEND is dem-extend[:processing-extend]
-\t\t\te.g. -X6:12 to extend the DEM REGION by 6 cells and the processing region by 12 cells.
+  -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
+\t\t\tpercentage to extend the processing REGION.
+\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
+\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\tpercent of the input REGION.
   -T, --filter\t\tFILTER the output DEM using one or multiple filters. 
 \t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
 \t\t\tAvailable FILTERS:
@@ -2681,8 +2683,8 @@ Options:
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
   -D, --cache-dir\tCACHE Directory for storing temp data.
-\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
-\t\tto retain the data, use the --keep-cache flag
+\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
+\t\t\tto retain the data, use the --keep-cache flag
 
   -f, --transform\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
