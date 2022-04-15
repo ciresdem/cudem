@@ -1319,11 +1319,11 @@ class RasterFile(ElevationDataset):
             gt = src_ds.GetGeoTransform()
             ndv = float(band.GetNoDataValue())
             dem_infos = demfun.gather_infos(src_ds)
-            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)#, node='grid')
+            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
             src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
-            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)#, node='grid')
+            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
             srcwin_region = regions.Region().from_geo_transform(geo_transform=gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0])
-            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)#, node='grid')
+            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
             src_arr[src_arr == dem_infos['ndv']] = np.nan
             
             if self.region is not None and self.region.valid_p():
@@ -1336,7 +1336,6 @@ class RasterFile(ElevationDataset):
 
             ## FIXME!!
             dst_srcwin = (dst_srcwin[0], dst_srcwin[1], src_arr.shape[1], src_arr.shape[0])
-
 
             if self.weight_mask is not None:
 

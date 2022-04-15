@@ -126,8 +126,8 @@ class Waffle:
         self.chunk = chunk
         self.dst_srs = dst_srs
         self.srs_transform = srs_transform
-        self.mod = None
-        self.mod_args = {}
+        #self.mod = None
+        #self.mod_args = {}
         self.archive = archive
         self.mask = mask
         self.clobber = clobber
@@ -137,6 +137,12 @@ class Waffle:
         self.spat = spat
         self.block_t = None
         self.ogr_ds = None
+
+        if self.verbose:
+            try:
+                utils.echo_msg('Waffles module:\t{}'.format(self.mod))
+            except:
+                utils.echo_msg('Waffles module:\tNone')
         
         self._init_regions()        
         self.data_ = data
@@ -146,7 +152,15 @@ class Waffle:
         self.waffled = False
 
         if self.verbose:
+            xcount, ycount, dst_gt = self.d_region.geo_transform(
+                x_inc=self.xinc, y_inc=self.yinc
+            )
+            utils.echo_msg('output increment:\t{}/{}'.format(self.xinc, self.yinc))
+            utils.echo_msg('output cell count:\t{}/{}'.format(xcount, ycount))
+            utils.echo_msg('input data:\t\t{}'.format(self.data_))
+            utils.echo_msg('output DEM:\t\t{}'.format(self.fn))
             utils.echo_msg('CACHE directory:\t{}'.format(self.cache_dir))
+            utils.echo_msg('------------')
                 
     def _init_regions(self):
         if self.node == 'grid':
@@ -712,6 +726,7 @@ class GMTSurface(Waffle):
                  **kwargs):
         """generate a DEM with GMT surface"""
 
+        self.mod = 'surface'
         super().__init__(**kwargs)
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -730,7 +745,6 @@ class GMTSurface(Waffle):
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
-        self.mod = 'surface'
         
     def run(self):
         #self.ps_region.format('gmt'),
@@ -777,6 +791,7 @@ class GMTTriangulate(Waffle):
     def __init__(self, **kwargs):
         """generate a DEM with GMT triangulate"""
 
+        self.mod = 'triangulate'
         super().__init__(**kwargs)        
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -788,7 +803,6 @@ class GMTTriangulate(Waffle):
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
-        self.mod = 'triangulate'
         
     def run(self):
         dem_tri_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
@@ -821,6 +835,7 @@ class GMTNearNeighbor(Waffle):
     def __init__(self, radius=None, sectors=None, **kwargs):
         """generate a DEM with GMT nearneighbor"""
 
+        self.mod = 'nearneighbor'
         super().__init__(**kwargs) 
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -832,7 +847,6 @@ class GMTNearNeighbor(Waffle):
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
-        self.mod = 'nearneighbor'
         self.radius = radius
         self.sectors = sectors
         
@@ -1021,11 +1035,11 @@ class WafflesNum(Waffle):
         `mode` of `w` generates a wet/dry mask grid
         `mode` of `A` generates via GMT 'xyz2grd'
         """
-
+        
+        self.mod = 'num'
         super().__init__(**kwargs)        
         self.mode = mode
         self.min_count = min_count
-        self.mod = 'num'
         
     def _xyz_num(self, src_xyz):
         """Create a GDAL supported grid from xyz data """
@@ -1239,6 +1253,7 @@ class WafflesIDW(Waffle):
     """Inverse Distance Weighted."""
     
     def __init__(self, power=1, min_points=8, block=True, upper_limit=None, lower_limit=None, radius=None, **kwargs):
+        self.mod = 'IDW'
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
@@ -1246,7 +1261,6 @@ class WafflesIDW(Waffle):
         self.block_p = block
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
-        self.mod = 'IDW'
 
     def run(self):
 
@@ -1353,6 +1367,7 @@ class WafflesUIDW(Waffle):
     def __init__(
             self, radius=None, power=2, block=False, min_points=None, **kwargs
     ):
+        self.mod = 'IDW'
         super().__init__(**kwargs)
         if radius is not None:
             self.radius = utils.str2inc(radius)
@@ -1362,7 +1377,6 @@ class WafflesUIDW(Waffle):
         self.power = utils.float_or(power)
         self.block_p = block
         self.min_points = utils.int_or(min_points)
-        self.mod = 'IDW'
         
     def _distance(self, pnt0, pnt1):
         return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
@@ -1455,10 +1469,10 @@ class WafflesVDatum(Waffle):
     """vertical datum transformation grid"""
 
     def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
+        self.mod = 'vdatum'
         super().__init__(**kwargs)
         self.vdatum_in = vdatum_in
         self.vdatum_out = vdatum_out
-        self.mod = 'vdatum'
         
         import cudem.vdatums
 
@@ -1487,11 +1501,10 @@ class WafflesGDALGrid(Waffle):
         Args: 
           alg_str (str): the gdal_grid algorithm string
         """
-        
+        self.mod = self.alg_str.split(':')[0]
         super().__init__(**kwargs)
         self.block_p = block
         self.alg_str = 'linear:radius=-1'
-        self.mod = self.alg_str.split(':')[0]
                 
     def run(self):
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
@@ -1583,6 +1596,7 @@ class WafflesCUDEM(Waffle):
             module='surface',
             **kwargs
     ):
+        self.mod = 'cudem'
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -1597,7 +1611,6 @@ class WafflesCUDEM(Waffle):
         self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
         self.module = module
-        self.mod = 'cudem'            
         
     def run(self):
         pre = self.pre_count
@@ -1612,7 +1625,30 @@ class WafflesCUDEM(Waffle):
         upper_limit = None
 
         coast = '{}_cst'.format(self.name)
-        n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
+        if self.module == 'stacks':
+            stacked_dem = WafflesStacks(
+                keep_weights=True,
+                keep_count=True,
+                data=self.data_,
+                src_region=self.p_region,
+                xinc=self.xinc,
+                yinc=self.yinc,
+                name='{}_n'.format(self.name),
+                node=self.node,
+                weights=1,
+                dst_srs=self.dst_srs,
+                srs_transform=self.srs_transform,
+                clobber=True,
+                verbose=self.verbose,
+                extend=self.extend,
+                extend_proc=self.extend_proc,
+            ).generate()
+            n = stacked_dem.fn
+            w = '{}_w.tif'.format('.'.join(n.split('.')[:-1]))
+            w = '{}_c.tif'.format('.'.join(n.split('.')[:-1]))
+
+        else:
+            n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         if self.landmask:
             upper_limit = -0.1
@@ -1733,6 +1769,7 @@ class WafflesCoastline(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
         """Generate a landmask from various sources."""
 
+        self.mod = 'coastline'
         super().__init__(**kwargs)
 
         self.want_nhd = want_nhd
@@ -1756,7 +1793,6 @@ class WafflesCoastline(Waffle):
             self.wgs_region.warp('epsg:4326')
         else:
             self.dst_srs = 'epsg:4326'
-        self.mod = 'coastline'
         
     def run(self):
         self._load_coast_mask()
@@ -2005,6 +2041,7 @@ class WafflesUpdateDEM(Waffle):
             dem=None,
             **kwargs
     ):
+        self.mod = 'update'
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -2024,8 +2061,6 @@ class WafflesUpdateDEM(Waffle):
         else:
             utils.echo_error_msg('must specify DEM to update (:dem=fn) to run the update module.')
             return(None)
-        
-        self.mod = 'update'
 
     def yield_diff(self, src_dem, max_diff=.25):
         '''query a gdal-compatible grid file with xyz data.
@@ -2138,16 +2173,20 @@ class WafflesUpdateDEM(Waffle):
 ## ==============================================
 class WafflesStacks(Waffle):
     def __init__(
-            self, supercede=False, **kwargs
+            self, supercede=False, keep_weights=False, keep_count=False, **kwargs
     ):
+        self.mod = 'stacks'
         try:
+            #print(kwargs)
+            #kwargs['mod'] = 'stacks'
             super().__init__(**kwargs)
         except Exception as e:
             utils.echo_error_msg(e)
             sys.exit()
         self.supercede = supercede
+        self.keep_weights = keep_weights
+        self.keep_count = keep_count
         self._init_data(set_incs=True)
-        self.mod = 'rstack'
         
     def run(self):
 
@@ -2227,8 +2266,10 @@ class WafflesStacks(Waffle):
         )
         
         utils.gdal_write(z_array, '{}.tif'.format(self.name), ds_config, verbose=True)
-        #utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
-        #utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
+        if self.keep_weights:
+            utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
+        if self.keep_count:
+            utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
         
         return(self)
     
