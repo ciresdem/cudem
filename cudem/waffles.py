@@ -2196,14 +2196,17 @@ class WafflesStacks(Waffle):
         gdt = gdal.GDT_Float32
         z_array = np.zeros((ycount, xcount))
         count_array = np.zeros((ycount, xcount))
-        if self.weights:
-            weight_array = np.zeros((ycount, xcount))
+        #if self.weights:
+        weight_array = np.zeros((ycount, xcount))
             
         if self.verbose:
             utils.echo_msg(
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for arr, srcwin, gt, w in self.yield_array():
+            if not self.weights:
+                w = 1
+                
             if utils.float_or(w) is not None:
                 w_arr = np.zeros((srcwin[3], srcwin[2]))
                 w_arr[~np.isnan(arr)] = w
@@ -2218,10 +2221,10 @@ class WafflesStacks(Waffle):
                 c_arr[~np.isnan(arr)] = 1
                 arr[np.isnan(arr)] = 0
 
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w
+                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w_arr
                 count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
-                if self.weights:
-                    weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
+                #if self.weights:
+                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
             else:
                 tmp_z = z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
                 tmp_w = weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
@@ -2232,18 +2235,18 @@ class WafflesStacks(Waffle):
                 tmp_c[w > tmp_w] = 1
                 z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
                 count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_c
-                if self.weights:
-                    weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
+                #if self.weights:
+                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
             
         count_array[count_array == 0] = np.nan
         if not self.supercede:
-            if self.weights:
-                weight_array[weight_array == 0] = np.nan
-                weight_array = (weight_array/count_array)
-                z_array = (z_array/weight_array)/count_array
-            else:
-                z_array = (z_array/count_array)
-                #weight_array = np.ones((ycount, xcount))
+            #if self.weights:
+            weight_array[weight_array == 0] = np.nan
+            weight_array = (weight_array/count_array)
+            z_array = (z_array/weight_array)/count_array
+            #else:
+            #z_array = (z_array/count_array)
+            #weight_array = np.ones((ycount, xcount))
 
         #if min_count is not None:
         #    z_array[count_array < min_count] = np.nan
