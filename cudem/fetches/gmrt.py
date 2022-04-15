@@ -126,7 +126,7 @@ class GMRT(f_utils.FetchModule):
                     float(opts['north'])
                 ])
                 outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
-                self.results.append([url, outf, 'gmrt'])
+                self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
                 
         return(self)
 

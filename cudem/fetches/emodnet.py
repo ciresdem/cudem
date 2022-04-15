@@ -76,7 +76,7 @@ class EMODNet(f_utils.FetchModule):
             emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
                                       .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
             outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-            self.results.append([emodnet_wcs, outf, 'emodnet'])
+            self.results.append([emodnet_wcs, os.path.join(self._outdir, outf), 'emodnet'])
         return(self)
 
     def yield_xyz(self, entry):
@@ -163,7 +163,7 @@ class EMODNetFRED(f_utils.FetchModule):
                 if regions_intersect_ogr_p(self.region, ds_region):
                     emod_url = emod_wcs._get_coverage_url(surv['ID'], region=self.region)
                     outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-                    self.results.append([emod_url, outf, surv['DataType']])
+                    self.results.append([emod_url, os.path.join(self._outdir, outf), surv['DataType']])
 
     def yield_xyz(self, entry):
         src_emodnet = 'emodnet_tmp.tif'

@@ -224,14 +224,14 @@ class TheNationalMap(f_utils.FetchModule):
                                             f_url = item['urls'][fmt]
                                             break
                                     if f_url is None: f_url = item['downloadURL']
-                                    self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
+                                    self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
                         else:
                             for fmt in fmts:
                                 if fmt in item['urls'].keys():
                                     f_url = item['urls'][fmt]
                                     break
                             if f_url is None:  f_url = item['downloadURL']
-                            self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
+                            self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
                 offset += 100
                 if offset >= total: break
         return(self)
@@ -310,7 +310,7 @@ class TheNationalMap(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             for d in surv['DataLink'].split(','):
                 if d != '':
-                    self.results.append([d, d.split('/')[-1], surv['DataType']])
+                    self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
         
     def yield_xyz(self, entry):
         """yield the xyz data from the tnm fetch module"""
@@ -449,7 +449,7 @@ class TNM(f_utils.FetchModule):
                             elif item['format'] == 'LAZ' or item['format'] == 'LAS':
                                 tnm_ds = 'lidar'
                             else: tnm_ds = 'tnm'
-                            self.results.append([f_url, f_url.split('/')[-1], tnm_ds])
+                            self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), tnm_ds])
                             #except: pass
                 else:
                     #try:
@@ -459,7 +459,7 @@ class TNM(f_utils.FetchModule):
                     elif item['format'] == 'LAZ' or item['format'] == 'LAS':
                         tnm_ds = 'lidar'
                     else: tnm_ds = 'tnm'
-                    self.results.append([f_url, f_url.split('/')[-1], tnm_ds])
+                    self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), tnm_ds])
                     #except: pass
         if self.verbose:
             utils.echo_msg('filtered \033[1m{}\033[m data files from TNM dataset results.'.format(len(self.results)))

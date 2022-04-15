@@ -149,12 +149,12 @@ class Multibeam(f_utils.FetchModule):
                     
                 if survey in these_surveys.keys():
                     if version in these_surveys[survey].keys():
-                        these_surveys[survey][version].append([data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb'])
+                        these_surveys[survey][version].append([data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb'])
                     else:
-                        these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
+                        these_surveys[survey][version] = [[data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb']]
                         
                 else:
-                    these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
+                    these_surveys[survey] = {version: [[data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb']]}
                     
         else: utils.echo_error_msg('{}'.format(_req.reason))
                     

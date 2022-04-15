@@ -165,9 +165,9 @@ class EarthData(f_utils.FetchModule):
         for url in url_list:
             if self.name is not None:
                 if self.name in url:
-                    self.results.append([url, url.split('/')[-1], 'earthdata'])
+                    self.results.append([url, os.path.join(self._outdir, url.split('/')[-1]), 'earthdata'])
             else:
-                self.results.append([url, url.split('/')[-1], 'earthdata'])
+                self.results.append([url, os.path.join(self._outdir, url.split('/')[-1]), 'earthdata'])
 
     def yield_xyz(self, entry):
 

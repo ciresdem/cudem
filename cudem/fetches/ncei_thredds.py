@@ -160,7 +160,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
             #self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
             for d in surv['DataLink'].split(','):
                 if d != '':
-                    self.results.append([d, d.split('/')[-1], surv['DataType']])
+                    self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
 
     def yield_xyz(self, entry):
         src_ncei = os.path.basename(entry[1])

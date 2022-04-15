@@ -201,8 +201,10 @@ increment to save space.
                                     index_geom = index_feature.GetGeometryRef()
                                     if index_geom.Intersects(self.region.export_as_geom()):
                                         tile_url = index_feature.GetField('URL').strip()
-                                        self.results.append([tile_url, '{}/{}'.format(
-                                            feature['attributes']['ID'], tile_url.split('/')[-1]
+                                        self.results.append([tile_url, os.path.join(
+                                            self._outdir, '{}/{}'.format(
+                                                feature['attributes']['ID'], tile_url.split('/')[-1]
+                                            )
                                         ), feature['attributes']['DataType']])
 
                                 index_ds = index_layer = None
@@ -365,7 +367,7 @@ class DigitalCoast(f_utils.FetchModule):
                     geom = sf1.GetGeometryRef()
                     if geom.Intersects(self.region.export_as_geom()):
                         tile_url = sf1.GetField('URL').strip()
-                        self.results.append([tile_url, '{}/{}'.format(surv['ID'], tile_url.split('/')[-1]), surv['DataType']])
+                        self.results.append([tile_url, os.path.join(self._outdir, '{}/{}'.format(surv['ID'], tile_url.split('/')[-1])), surv['DataType']])
                 v_ds = slay1 = None
                 #except: pass
                 utils.remove_glob(surv_shp_zip, *v_shps)

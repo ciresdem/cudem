@@ -52,6 +52,8 @@ import cudem
 ##
 ## ==============================================
 
+cudem_cache = os.path.join(os.path.expanduser('~'), '.cudem_cache')
+
 ## heaps of thanks to https://github.com/fitnr/stateplane
 FIPS_TO_EPSG = {
     "0101": "26929", "0102": "26930", "0201": "26948", "0202": "26949",
@@ -561,7 +563,7 @@ def x360(x):
 ## Archives (zip/gzip/etc.)
 ##
 ## ==============================================
-def unzip(zip_file):
+def unzip(zip_file, outdir='./'):
     """unzip (extract) `zip_file`
 
     Args:
@@ -574,7 +576,7 @@ def unzip(zip_file):
     try:
         zip_ref = zipfile.ZipFile(zip_file)
         zip_files = zip_ref.namelist()
-        zip_ref.extractall()
+        zip_ref.extractall(outdir)
         zip_ref.close()
         
         return(zip_files)

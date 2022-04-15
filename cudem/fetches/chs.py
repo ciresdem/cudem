@@ -80,7 +80,7 @@ class CHS(f_utils.FetchModule):
             chs_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=caris:NONNA+100&coverage=caris:NONNA+100&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
                                   .format(self._chs_url, self.region.format('bbox'), resx, resy)
             outf = 'chs_{}.tif'.format(self.region.format('fn'))
-            self.results.append([chs_wcs, outf, 'chs'])
+            self.results.append([chs_wcs, os.path.join(self._outdir, outf), 'chs'])
         return(self)
 
     def yield_xyz(self, entry):

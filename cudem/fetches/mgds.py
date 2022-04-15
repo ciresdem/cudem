@@ -68,7 +68,7 @@ class MGDS(f_utils.FetchModule):
             for req_result in req_results:
                 name = req_result.attrib['name']
                 link = req_result.attrib['download']
-                self.results.append([link, name, 'mgds'])            
+                self.results.append([link, os.path.join(self._outdir, name), 'mgds'])            
                 
         return(self)
 

@@ -63,7 +63,7 @@ class SRTMPlus(f_utils.FetchModule):
         _req = f_utils.Fetch(self._srtm_url, verify=False).fetch_req(params=self.data)
         if _req is not None:
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
-            self.results.append([_req.url, outf, 'srtm'])
+            self.results.append([_req.url, os.path.join(self._outdir, outf), 'srtm'])
             
         return(self)
 

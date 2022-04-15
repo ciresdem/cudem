@@ -116,7 +116,7 @@ specify `inc` to blockmedian the data when processing
             features = _req.json()
             for feature in features['features']:
                 fetch_fn = feature['attributes']['sourcedatalocation']
-                self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                self.results.append([fetch_fn, os.path.join(self._outdir, fetch_fn.split('/')[-1]), 'ehydro'])
                 
         return(self)
 

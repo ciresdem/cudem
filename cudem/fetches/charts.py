@@ -151,8 +151,8 @@ class NauticalCharts(f_utils.FetchModule):
         
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                self.results.append([i, i.split('/')[-1], surv['DataType']])
-
+                self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
+                
         #self.generate_tidal_vdatum('mhw', 'tss')
 
     def yield_xyz(self, entry):

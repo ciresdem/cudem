@@ -71,7 +71,7 @@ class OpenStreetMap(f_utils.FetchModule):
         osm_data = f_utils.urlencode({'data': osm_q_})
         osm_data_url = self._osm_api + '?' + osm_data
         
-        self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
+        self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
         
         
 ### End

@@ -62,7 +62,7 @@ class GlobalELUS(f_utils.FetchModule):
             survey_list = _req.json()
             print(survey_list)
             fetch_fn = survey_list['href']
-            self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'globalelus'])
+            self.results.append([fetch_fn, os.path.join(self._outdir, fetch_fn.split('/')[-1]), 'globalelus'])
             
         return(self)
 

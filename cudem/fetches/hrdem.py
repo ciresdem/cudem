@@ -112,7 +112,7 @@ class HRDEM(f_utils.FetchModule):
                         geom = feature.GetGeometryRef()
                         if geom.Intersects(self.region.export_as_geom()):
                             data_link = feature.GetField('Ftp_dtm').replace('http', 'ftp')
-                            self.results.append([data_link, data_link.split('/')[-1], surv['DataType']])
+                            self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), surv['DataType']])
             utils.remove_glob(v_zip, *v_shps)
             
     ## ==============================================

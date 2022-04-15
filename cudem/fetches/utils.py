@@ -532,7 +532,7 @@ class fetch_results(threading.Thread):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.mod = mod
-        self.outdir_ = self.mod._outdir
+        #self.outdir_ = self.mod._outdir
         self.want_proc = want_proc
         if len(self.mod.results) == 0:
             self.mod.run()
@@ -544,7 +544,8 @@ class fetch_results(threading.Thread):
             t.start()
         for row in self.mod.results:
             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), self.stop_threads, row[2], self.fetch_module])
-            self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), row[2], self.mod])
+            #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), row[2], self.mod])
+            self.fetch_q.put([row[0], row[1], row[2], self.mod])
         self.fetch_q.join()
 
 class FetchModule:

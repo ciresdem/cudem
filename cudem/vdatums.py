@@ -182,9 +182,20 @@ _geoids = [
     'geoid03',
 ]
 
+vdatum_cache = utils.cudem_cache
+
 class VerticalTransform:
     
-    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, verbose=True):
+    def __init__(
+            self,
+            src_region,
+            src_x_inc,
+            src_y_inc,
+            epsg_in,
+            epsg_out,
+            verbose=True,
+            cache_dir=vdatum_cache
+    ):
         self.src_region = src_region
         #self.trans_region = src_region.copy()
         #self.trans_region.warp()
@@ -192,7 +203,7 @@ class VerticalTransform:
         self.src_y_inc = utils.str2inc(src_y_inc)
         self.epsg_in = self._datum_by_name(str(epsg_in))
         self.epsg_out = self._datum_by_name(str(epsg_out))
-
+        self.cache_dir = cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
 
@@ -248,8 +259,9 @@ class VerticalTransform:
 
         v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
-
+        v_in._outdir = self.cach_dir
         v_in.run()
+        v_out._outdir = self.cach_dir
         v_out.run()
 
         if not v_in.results or not v_out.results:
@@ -305,8 +317,8 @@ class VerticalTransform:
         """create a cdn transofrmation grid"""
 
         if epsg is not None:
-            cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, epsg=epsg)
-        else: cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region)
+            cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, epsg=epsg, cache_dir=self.cache_dir)
+        else: cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, cache_dir=self.cache_dir)
 
         for _result in cdn_results:
             for g in _geoids:
@@ -320,18 +332,18 @@ class VerticalTransform:
                 #if epsg == dst_code or epsg == src_code or np.any([g in _result['name'] for g in self._geoids]):
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids]):
                     if src_code in _htdp_reference_frames.keys():
-                        _trans_grid = _result['name']
+                        _trans_grid = os.path.join(self.cache_dir, _result['name'])
                         if cudem.fetches.utils.Fetch(_result['url'], verbose=self.verbose).fetch_file(_trans_grid) == 0:
                             tmp_infos = demfun.infos(_trans_grid)
                             tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
-                            if os.path.exists('_{}'.format(_trans_grid)):
-                                utils.remove_glob('_{}'.format(_trans_grid))
+                            if os.path.exists('_{}'.format(os.path.basename(_trans_grid))):
+                                utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             utils.run_cmd('gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0'.format(
-                                _trans_grid, '_{}'.format(_trans_grid), self.src_region.format('te'), self.xcount, self.ycount
+                                _trans_grid, '_{}'.format(os.path.basename(_trans_grid)), self.src_region.format('te'), self.xcount, self.ycount
                             ), verbose=True)
                             
-                            _tmp_array, _tmp_infos = demfun.get_array('_{}'.format(_trans_grid))
-                            utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
+                            _tmp_array, _tmp_infos = demfun.get_array('_{}'.format(os.path.basename(_trans_grid)))
+                            utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
                             

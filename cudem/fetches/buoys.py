@@ -98,7 +98,7 @@ class BUOYS(f_utils.FetchModule):
                         if station_id not in current_stations:
                             current_stations.append(station_id)
             for station_id in current_stations:
-                self.results.append([self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys'])
+                self.results.append([self._buoy_station_realtime + station_id + '.txt', os.path.join(self._outdir, 'buoy_results_{}.txt'.format(station_id)), 'buoys'])
             
         return(self)
 

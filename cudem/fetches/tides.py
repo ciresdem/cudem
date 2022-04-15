@@ -97,7 +97,7 @@ class Tides(f_utils.FetchModule):
         }
         _req = f_utils.Fetch(self._stations_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            self.results.append([_req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides'])
+            self.results.append([_req.url, os.path.join(self._outdir, 'tides_results_{}.json'.format(self.region.format('fn'))), 'tides'])
             
         return(self)
 

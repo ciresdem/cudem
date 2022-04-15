@@ -60,8 +60,7 @@ from cudem import demfun
 from cudem import metadata
 from cudem import vdatumfun
 
-this_dir, this_filename = os.path.split(__file__)
-wafflesdata = os.path.join(this_dir, 'waffles_data')
+waffles_cache = utils.cudem_cache
 
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -103,7 +102,8 @@ class Waffle:
             archive=False,
             mask=False,
             spat=False,
-            clobber=True
+            clobber=True,
+            cache_dir=waffles_cache
     ):
 
         self.data = data
@@ -132,6 +132,7 @@ class Waffle:
         self.mask = mask
         self.clobber = clobber
         self.verbose = verbose
+        self.cache_dir = cache_dir
         self.gc = utils.config_check()
         self.spat = spat
         self.block_t = None
@@ -143,6 +144,9 @@ class Waffle:
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
+
+        if self.verbose:
+            utils.echo_msg('CACHE directory:\t{}'.format(self.cache_dir))
                 
     def _init_regions(self):
         if self.node == 'grid':
@@ -1817,7 +1821,7 @@ class WafflesCoastline(Waffle):
         this_gmrt = cudem.fetches.gmrt.GMRT(
             src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask'
         )
-        this_gmrt._outdir = './'
+        this_gmrt._outdir = self.cache_dir
         this_gmrt.run()
 
         fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
@@ -1852,14 +1856,14 @@ class WafflesCoastline(Waffle):
         this_cop = cudem.fetches.copernicus.CopernicusDEM(
             src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, datatype='1'
         )
-        this_cop._outdir = './'
+        this_cop._outdir = self.cache_dir
         this_cop.run()
 
         fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False)
         fr.daemon = True
         fr.start()
         fr.join()
-        
+
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         for i, cop_tif in enumerate(this_cop.results):
@@ -1875,7 +1879,7 @@ class WafflesCoastline(Waffle):
             c_ds_arr[c_ds_arr > 0] = 1
             self.coast_array += c_ds_arr
             out_ds = c_ds_arr = None
-            utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
+            #utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
     
     def _load_nhd(self):
         """USGS NHD (HIGH-RES U.S. Only)
@@ -1890,16 +1894,18 @@ class WafflesCoastline(Waffle):
             where=["Name LIKE '%Hydro%'"],
             extents='HU-8 Subbasin,HU-4 Subregion'
         )
-        this_tnm._outdir = './'
+        this_tnm._outdir = self.cache_dir
         this_tnm.run()
         fr = cudem.fetches.utils.fetch_results(this_tnm, want_proc=False)
         fr.daemon = True
         fr.start()
-        fr.join()            
+        fr.join()
+        print(this_tnm.results)
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
-                tnm_zips = utils.unzip(tnm_zip[1])
-                gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
+                tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
+                #gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
+                gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                         gdb, self.p_region.format('ul_lr')
@@ -1918,7 +1924,8 @@ class WafflesCoastline(Waffle):
                     ),
                     verbose=True
                 )
-                utils.remove_glob(tnm_zip[1], *tnm_zips, gdb)
+                #utils.remove_glob(tnm_zip[1], *tnm_zips, gdb)
+                utils.remove_glob(*tnm_zips, gdb)
 
             utils.run_cmd(
                 'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
@@ -2436,7 +2443,8 @@ Update an existing DEM with data from the datalist
             archive=False,
             mask=False,
             spat=False,
-            clobber=True
+            clobber=True,
+            cache_dir=waffles_cache
     ):
         self.mod = mod
         self.mod_args = {}
@@ -2464,6 +2472,7 @@ Update an existing DEM with data from the datalist
         self.spat = spat
         self.clobber = clobber
         self.verbose = verbose
+        self.cache_dir = cache_dir
 
         if self.mod is not None:
             self._parse_mod(self.mod)
@@ -2532,6 +2541,7 @@ Update an existing DEM with data from the datalist
             'mask': self.mask,
             'spat': self.spat,
             'clobber': self.clobber,
+            'cache_dir': self.cache_dir
         }
         return(self._config)
 
@@ -2563,6 +2573,7 @@ Update an existing DEM with data from the datalist
                     spat=self.spat,
                     clobber=self.clobber,
                     verbose=self.verbose,
+                    cache_dir=self.cache_dir,
                     **self.mod_args
                 )
             )
@@ -2628,6 +2639,9 @@ Options:
   -K, --chunk\t\tGenerate the DEM in CHUNKs
   -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\tGenerate a waffles_config JSON file using the --config flag.
+  -D, --cache-dir\tCACHE Directory for storing temp data.
+\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
+\t\tto retain the data, use the --keep-cache flag
 
   -f, --transform\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
@@ -2637,6 +2651,7 @@ Options:
   -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
 
   -a, --archive\t\tARCHIVE the datalist to the given region.
+  -k, --keep-cache\tKEEP the cache data intact after run
   -m, --mask\t\tGenerate a data MASK raster.
   -s, --spat\t\tGenerate SPATIAL-METADATA.
   -c, --continue\tDon't clobber existing files.
@@ -2678,6 +2693,7 @@ def waffles_cli(argv = sys.argv):
     want_prefix = False
     prefix_args = {}
     want_config = False
+    keep_cache = False
     status = 0
     i = 1
     wg = {}
@@ -2688,6 +2704,7 @@ def waffles_cli(argv = sys.argv):
     wg['srs_transform'] = False
     wg['fltr'] = []
     wg['name'] = 'waffles'
+    wg['cache_dir'] = waffles_cache
     
     while i < len(argv):
         arg = argv[i]
@@ -2768,6 +2785,10 @@ def waffles_cli(argv = sys.argv):
             wg['dst_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
         elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')        
+        elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
+            wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
+            i = i + 1
+        elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
         elif arg == '--trasform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
             if wg['dst_srs'] is None:
@@ -2787,6 +2808,7 @@ def waffles_cli(argv = sys.argv):
             except:
                 pass
 
+        elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
         elif arg == '-m' or arg == '--mask': wg['mask'] = True
@@ -2931,4 +2953,6 @@ def waffles_cli(argv = sys.argv):
             if this_waffle is not None:
                 this_waffle.generate()
             #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
+    if not keep_cache:
+        utils.remove_glob(wg['cache_dir'])
 ### End

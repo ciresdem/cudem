@@ -69,7 +69,7 @@ class NGS(f_utils.FetchModule):
 
         _req = f_utils.Fetch(self._ngs_search_url).fetch_req(params=_data)
         if _req is not None:
-            self.results.append([_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'])
+            self.results.append([_req.url, os.path.join(self._outdir, 'ngs_results_{}.json'.format(self.region.format('fn'))), 'ngs'])
             
         return(self)
 

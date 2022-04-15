@@ -1,6 +1,6 @@
 ### vdatum.py - vdatum conversion grids
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2022 Regents of the University of Colorado
 ##
 ## vdatum.py is part of CUDEM
 ##
@@ -77,14 +77,14 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
             
     return(_inf_areas_fmt)
 
-def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True):
+def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, cache_dir='./'):
     """Search PROJ CDN for transformation grids:
     the PROJ CDN holds transformation grids from around the
     world, including global transformations such as EGM
     """
     
     _proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
-    cdn_index = 'proj_cdn_files.geojson'
+    cdn_index = os.path.join(cache_dir, 'proj_cdn_files.geojson')
     if f_utils.Fetch(_proj_vdatum_index, verbose=verbose).fetch_file(cdn_index) == 0:
         cdn_driver = ogr.GetDriverByName('GeoJSON')
         cdn_ds = cdn_driver.Open(cdn_index, 0)
@@ -117,7 +117,7 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True):
                     _results[-1][key] = feat.GetField(key)
 
         cdn_ds = None
-        utils.remove_glob(cdn_index)
+        #utils.remove_glob(cdn_index)
         return(_results)
 
 class VDATUM(f_utils.FetchModule):
@@ -275,7 +275,7 @@ class VDATUM(f_utils.FetchModule):
                         os.rename(v_gtx, '{}.gtx'.format(surv['ID']))
                     utils.remove_glob(dst_zip)
             else:
-                self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
+                self.results.append([surv['DataLink'], os.path.join(self._outdir, '{}.zip'.format(surv['ID'])), surv['Name']])
 
         ## ==============================================
         ## Search PROJ CDN for all other transformation grids:
@@ -313,7 +313,7 @@ class VDATUM(f_utils.FetchModule):
                         _results[-1][key] = feat.GetField(key)
                         
             for _result in _results:
-                self.results.append([_result['url'], _result['name'], _result['source_id']])
+                self.results.append([_result['url'], os.path.join(self._outdir, _result['name']), _result['source_id']])
                 
             cdn_ds = None
             utils.remove_glob(cdn_index)

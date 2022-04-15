@@ -34,7 +34,7 @@ from cudem import regions
 from cudem import demfun
 from cudem import vdatums
 
-_version = '0.1.0'
+_version = '0.1.1'
 _epsg_desc = lambda t, x: '{}:\n '.format(t) + ' '.join(
     ['\033[1m{}\033[0m\t{}\n'.format(key, x[key]['name']) for key in x])
 
@@ -49,7 +49,11 @@ usage: {cmd} [OPTIONS] input_grid output_grid
 
   -i, --vdatum_in\tthe input vertical datum as EPSG code
   -o, --vdatum_out\tthe output vertical datum as EPSG code
+  -D, --cache-dir\tCACHE Directory for storing temp data.
+\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
+\t\tto retain the data, use the --keep-cache flag
 
+  -k, --keep-cache\tKEEP the cache data intact after run
   --list-epsg\t\tList the supported EPSG codes and their names
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
@@ -68,6 +72,8 @@ def main():
     vdatum_in = 5703
     vdatum_out = 7662
     verbose = False
+    keep_cache = False
+    cache_dir = utils.cudem_cache
 
     i = 1
 
@@ -81,6 +87,11 @@ def main():
         elif arg == '-o' or arg == '--vdatum_out':
             vdatum_out = argv[i + 1]
             i = i + 1
+
+        elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
+            cache_dir = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
+            i = i + 1
+        elif arg[:2] == '-D': cache_dir = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
         elif arg == '--list-epsg':
             #print(_epsg_desc(htdpfun.HTDP()._reference_frames))
             print(_epsg_desc('htdp epsg', vdatums._htdp_reference_frames))
@@ -88,6 +99,7 @@ def main():
             print(_epsg_desc('tidal epsg', vdatums._tidal_frames))
             #list_proj_cdn_epsg()
             sys.exit(1)
+        elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '--verbose': verbose = True
         elif arg == '-help' or arg == '--help' or arg == '-h':
             print(_usage)
@@ -121,7 +133,7 @@ def main():
         src_region.warp()
         x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
         tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
-        vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out)
+        vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
         
         if _trans_grid is not None:
@@ -130,7 +142,10 @@ def main():
             utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
         else:
             utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
-        
+
+        if not keep_cache:
+            utils.remove_glob(cache_dir)
+            
 if __name__ == '__main__':
     main()
 
