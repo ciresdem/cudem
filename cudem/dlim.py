@@ -1015,8 +1015,8 @@ def datalists_cli(argv=sys.argv):
                         #print(xdl.data_lists[x]['parent'].echo_())
                         #print('{}'.format(this_datalist.data_lists[x]['parent'].fn))
                         #print(this_datalist.data_lists[x])
-                        #print('{} ({})|{}'.format(this_datalist.data_lists[x]['parent'].metadata['title'], this_datalist.data_lists[x]['parent'].metadata['name'], this_datalist.data_lists[x]['parent'].weight))
 
+                        #print('{} ({})|{}'.format(this_datalist.data_lists[x]['parent'].metadata['title'], this_datalist.data_lists[x]['parent'].metadata['name'], this_datalist.data_lists[x]['parent'].weight))
                 else:
                     if want_separate:
                         try:

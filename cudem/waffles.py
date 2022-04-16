@@ -141,14 +141,14 @@ class Waffle:
         self.ogr_ds = None
 
         if self.verbose:
+            utils.echo_msg('------------------------------------------------')
             try:
-                utils.echo_msg('Waffles module:\t{}'.format(self.mod))
+                utils.echo_msg('Waffles module\t\t:\t{}'.format(self.mod))
             except:
-                utils.echo_msg('Waffles module:\tNone')
+                utils.echo_msg('Waffles module\t\t:\tNone')
         
-        self._init_regions()        
+        self._init_regions()
         self.data_ = data
-        self._init_data()
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
@@ -158,14 +158,16 @@ class Waffle:
             xcount, ycount, dst_gt = self.d_region.geo_transform(
                 x_inc=self.xinc, y_inc=self.yinc
             )
-            utils.echo_msg('output increment:\t{}/{}'.format(self.xinc, self.yinc))
-            utils.echo_msg('output cell count:\t{}/{}'.format(xcount, ycount))
-            utils.echo_msg('input data:\t\t{}'.format(self.data_))
-            utils.echo_msg('output DEM:\t\t{}'.format(self.fn))
-            utils.echo_msg('output NDV:\t\t{}'.format(self.ndv))
-            utils.echo_msg('CACHE directory:\t{}'.format(self.cache_dir))
-            utils.echo_msg('------------')
-                
+            utils.echo_msg('output increment\t:\t{}/{}'.format(self.xinc, self.yinc))
+            utils.echo_msg('output cell count\t:\t{}/{}'.format(xcount, ycount))
+            utils.echo_msg('input data\t\t:\t{}'.format(self.data_))
+            utils.echo_msg('output DEM\t\t:\t{}'.format(self.fn))
+            utils.echo_msg('output NDV\t\t:\t{}'.format(self.ndv))
+            utils.echo_msg('CACHE directory\t:\t{}'.format(self.cache_dir))
+            utils.echo_msg('------------------------------------------------')
+
+        self._init_data()
+            
     def _init_regions(self):
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
@@ -177,10 +179,10 @@ class Waffle:
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
 
         if self.verbose:
-            utils.echo_msg('buffered region:\t{}'.format(self.p_region))
-            utils.echo_msg('grid-node region:\t{}'.format(self.ps_region))
-            utils.echo_msg('coastline region:\t{}'.format(self.c_region))
-            utils.echo_msg('output region:\t\t{}'.format(self.d_region))
+            utils.echo_msg('buffered region\t:\t{}'.format(self.p_region))
+            utils.echo_msg('grid-node region\t:\t{}'.format(self.ps_region))
+            utils.echo_msg('coastline region\t:\t{}'.format(self.c_region))
+            utils.echo_msg('output region\t\t:\t{}'.format(self.d_region))
         
     def _init_data(self, set_incs=False):
         ## specify x_inc and y_inc to warp/block data to given res.
@@ -1640,7 +1642,7 @@ class WafflesCUDEM(Waffle):
                 keep_weights=True,
                 keep_count=True,
                 data=self.data_,
-                src_region=self.p_region,
+                src_region=pre_region,
                 xinc=self.xinc,
                 yinc=self.yinc,
                 name='{}_n'.format(self.name),
@@ -1650,8 +1652,8 @@ class WafflesCUDEM(Waffle):
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
-                extend=self.extend,
-                extend_proc=self.extend_proc,
+                #extend=self.extend,
+                #extend_proc=self.extend_proc,
             ).generate()
             n = stacked_dem.fn
             w = '{}_w.tif'.format('.'.join(n.split('.')[:-1]))
@@ -1676,7 +1678,7 @@ class WafflesCUDEM(Waffle):
                         yinc=self.yinc,
                         name=coast,
                         node=self.node,
-                        extend=self.extend+12,
+                        #extend=self.extend+12,
                         weights=self.weights,
                         dst_srs=self.dst_srs,
                         srs_transform=self.srs_transform,
@@ -1729,8 +1731,8 @@ class WafflesCUDEM(Waffle):
                 verbose=self.verbose,
                 xsample=xsample if self.module is not 'stacks' else None,
                 ysample=ysample if self.module is not 'stacks' else None,
-                extend=self.extend,
-                extend_proc=self.extend_proc,
+                #extend=self.extend,
+                #extend_proc=self.extend_proc,
                 clip=pre_clip,
             ).acquire().generate()
                 
@@ -1763,8 +1765,8 @@ class WafflesCUDEM(Waffle):
             verbose=self.verbose,
             #xsample=None,
             #ysample=None,
-            extend=self.extend,
-            extend_proc=self.extend_proc,
+            #extend=self.extend,
+            #extend_proc=self.extend_proc,
         ).acquire().generate()
             
         if not self.keep_auxilary:
@@ -2225,6 +2227,7 @@ class WafflesStacks(Waffle):
             else:
                 w_arr = w
                 w_arr[np.isnan(arr)] = 0
+                w_arr[np.isnan(w_arr)] = 0
 
             c_arr = np.zeros((srcwin[3], srcwin[2]))
             
