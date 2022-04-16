@@ -103,6 +103,7 @@ class Waffle:
             mask=False,
             spat=False,
             clobber=True,
+            ndv=-9999,
             cache_dir=waffles_cache
     ):
 
@@ -135,6 +136,7 @@ class Waffle:
         self.cache_dir = cache_dir
         self.gc = utils.config_check()
         self.spat = spat
+        self.ndv = ndv
         self.block_t = None
         self.ogr_ds = None
 
@@ -146,11 +148,12 @@ class Waffle:
         
         self._init_regions()        
         self.data_ = data
-        self._init_data(set_incs=True)
+        self._init_data()
         self.fn = '{}.tif'.format(self.name)
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
-
+        self.aux_dems = []
+        
         if self.verbose:
             xcount, ycount, dst_gt = self.d_region.geo_transform(
                 x_inc=self.xinc, y_inc=self.yinc
@@ -159,6 +162,7 @@ class Waffle:
             utils.echo_msg('output cell count:\t{}/{}'.format(xcount, ycount))
             utils.echo_msg('input data:\t\t{}'.format(self.data_))
             utils.echo_msg('output DEM:\t\t{}'.format(self.fn))
+            utils.echo_msg('output NDV:\t\t{}'.format(self.ndv))
             utils.echo_msg('CACHE directory:\t{}'.format(self.cache_dir))
             utils.echo_msg('------------')
                 
@@ -262,7 +266,8 @@ class Waffle:
             archive=self.archive,
             mask=self.mask,
             spat=self.spat,
-            clobber=self.clobber
+            clobber=self.clobber,
+            ndv=self.ndv
         ))
 
     ## TODO: move following functions to datasets
@@ -360,9 +365,9 @@ class Waffle:
             z_array[count_array < min_count] = np.nan
             weight_array[count_array < min_count] = np.nan
 
-        z_array[np.isnan(z_array)] = -9999
-        weight_array[np.isnan(weight_array)] = -9999
-        count_array[np.isnan(count_array)] = -9999
+        z_array[np.isnan(z_array)] = self.ndv
+        weight_array[np.isnan(weight_array)] = self.ndv
+        count_array[np.isnan(count_array)] = self.ndv
         
         if out_name is not None:
             ds_config = demfun.set_infos(
@@ -372,7 +377,7 @@ class Waffle:
                 dst_gt,
                 self.dst_srs,
                 gdal.GDT_Float32,
-                -9999,
+                self.ndv,
                 'GTiff'
             )
             utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
@@ -437,7 +442,7 @@ class Waffle:
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32, -9999, 'GTiff'
+            gdal.GDT_Float32, self.ndv, 'GTiff'
         )
         for this_xyz in src_xyz:
             yield(this_xyz)            
@@ -536,7 +541,7 @@ class Waffle:
         if fn is None:
             fn = self.fn
         
-        demfun.set_nodata(fn, nodata=-9999, convert_array=True)
+        demfun.set_nodata(fn, nodata=self.ndv, convert_array=True)
         if filter_:
             if len(self.fltr) > 0:
                 for f in self.fltr:
@@ -680,8 +685,11 @@ class Waffle:
             if self.mask:
                 if os.path.exists(self.mask_fn):
                     self._process(fn=self.mask_fn, filter_=False)
-
+                    
             self.waffled = True
+            
+            [self._process(fn=x, filter_=False) for x in self.aux_dems]
+            
             if self.valid_p():
                 return(self._process(filter_=True))
             else:
@@ -750,7 +758,7 @@ class GMTSurface(Waffle):
         #self.ps_region.format('gmt'),
         #                ' -rp' if self.node == 'pixel' else '',
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
+            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -760,6 +768,7 @@ class GMTSurface(Waffle):
                 self.xinc,
                 self.yinc,
                 self.name,
+                self.ndv,
                 self.tension,
                 self.relaxation,
                 self.lower_limit,
@@ -851,7 +860,7 @@ class GMTNearNeighbor(Waffle):
         self.sectors = sectors
         
     def run(self):
-        dem_nn_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt nearneighbor -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n-9999:GTiff{}{}{}'.format(
+        dem_nn_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt nearneighbor -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff{}{}{}'.format(
             self.ps_region.format('gmt'),
             self.xinc,
             self.yinc,
@@ -860,6 +869,7 @@ class GMTNearNeighbor(Waffle):
             self.xinc,
             self.yinc,
             self.name,
+            self.ndv,
             ' -W' if self.weights else '',
             ' -N{}'.format(self.sectors) if self.sectors is not None else '',
             ' -S{}'.format(self.radius) if self.radius is not None else ' -S{}'.format(self.xinc),
@@ -938,8 +948,8 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
         )        
-        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n-9999:{} -V'.format(
-            src_grd, dst_gdal, dst_fmt
+        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
+            src_grd, dst_gdal, self.ndv, dst_fmt
         )
         out, status = utils.run_cmd(
             grd2gdal_cmd, verbose=self.verbose
@@ -963,8 +973,8 @@ class WafflesMBGrid(Waffle):
         dst_gdal = '{}.{}'.format(
             os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
         )
-        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n-9999:{} -V'.format(
-            src_grd, dst_gdal, dst_fmt
+        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
+            src_grd, dst_gdal, self.ndv, dst_fmt
         )        
         out, status = utils.run_cmd(
             grdsample_cmd, verbose=self.verbose
@@ -1006,7 +1016,7 @@ class WafflesMBGrid(Waffle):
 
         if self.mask:
             num_grd = '{}_num.grd'.format(self.name)
-            dst_msk = '{}_m.tif=gd+n-9999:GTiff'.format(self.name)
+            dst_msk = '{}_m.tif=gd+n{}:GTiff'.format(self.name, self.ndv)
             self.mask_fn = dst_msk
             out, status = self._gmt_num_msk(
                 num_grd, dst_msk, verbose=self.verbose
@@ -1064,7 +1074,7 @@ class WafflesNum(Waffle):
             dst_gt,
             utils.sr_wkt(self.dst_srs),
             gdt,
-            -9999,
+            self.ndv,
             'GTiff'
         )
         
@@ -1094,7 +1104,7 @@ class WafflesNum(Waffle):
         else:
             out_array = count_array
 
-        out_array[np.isnan(out_array)] = -9999
+        out_array[np.isnan(out_array)] = self.ndv
         if self. verbose:
             progress.end(
                 0,
@@ -1276,7 +1286,7 @@ class WafflesIDW(Waffle):
             dst_gt,
             utils.sr_wkt(self.dst_srs),
             gdal.GDT_Float32,
-            -9999,
+            self.ndv,
             self.fmt
         )
         outArray = np.empty((ycount, xcount))
@@ -1348,7 +1358,7 @@ class WafflesIDW(Waffle):
                 )
             )
             
-        outArray[np.isnan(outArray)] = -9999
+        outArray[np.isnan(outArray)] = self.ndv
         out, status = utils.gdal_write(
             outArray, '{}.tif'.format(self.name), ds_config
         )        
@@ -1390,7 +1400,7 @@ class WafflesUIDW(Waffle):
             dst_gt,
             utils.sr_wkt(self.dst_srs),
             gdal.GDT_Float32,
-            -9999,
+            self.ndv,
             self.fmt
         )
         outArray = np.empty((ycount, xcount))
@@ -1456,7 +1466,7 @@ class WafflesUIDW(Waffle):
             )
 
         ds = None            
-        outArray[np.isnan(outArray)] = -9999
+        outArray[np.isnan(outArray)] = self.ndv
         out, status = utils.gdal_write(
             outArray, '{}.tif'.format(self.name), ds_config
         )        
@@ -1521,7 +1531,7 @@ class WafflesGDALGrid(Waffle):
             
         gd_opts = gdal.GridOptions(
             outputType = gdal.GDT_Float32,
-            noData = -9999,
+            noData = self.ndv,
             format = 'GTiff',
             width = xcount,
             height = ycount,
@@ -1538,7 +1548,7 @@ class WafflesGDALGrid(Waffle):
             '{}.tif'.format(self.name), ds, options = gd_opts
         )
         demfun.set_nodata(
-            '{}.tif'.format(self.name, nodata=-9999, convert_array=False)
+            '{}.tif'.format(self.name, nodata=self.ndv, convert_array=False)
         )
         _prog.end(
             0,
@@ -1649,6 +1659,7 @@ class WafflesCUDEM(Waffle):
 
         else:
             n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
+            
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         if self.landmask:
             upper_limit = -0.1
@@ -1680,8 +1691,8 @@ class WafflesCUDEM(Waffle):
         while pre > 0:
             pre_xinc = self.xinc * (self.inc_factor**pre)
             pre_yinc = self.yinc * (self.inc_factor**pre)
-            #xsample = self.xinc * (self.inc_factor**(pre - 1))
-            #ysample = self.yinc * (self.inc_factor**(pre - 1))
+            xsample = self.xinc * (self.inc_factor**(pre - 1))
+            ysample = self.yinc * (self.inc_factor**(pre - 1))
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
 
@@ -1703,7 +1714,7 @@ class WafflesCUDEM(Waffle):
 
             pre_surface = WaffleFactory(
                 #mod='surface:tension=1:upper_limit={}'.format(upper_limit),
-                mod=self.module,
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit) if self.module == 'surface' else self.module,
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc,
@@ -1716,8 +1727,8 @@ class WafflesCUDEM(Waffle):
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
-                #xsample=xsample,
-                #ysample=ysample,
+                xsample=xsample if self.module is not 'stacks' else None,
+                ysample=ysample if self.module is not 'stacks' else None,
                 extend=self.extend,
                 extend_proc=self.extend_proc,
                 clip=pre_clip,
@@ -1737,7 +1748,7 @@ class WafflesCUDEM(Waffle):
             
         pre_surface = WaffleFactory(
             #mod='surface:tension=1',
-            mod=self.module,
+            mod='surface:tension=1' if self.module is 'suface' else self.module,
             data=final_data,
             src_region=surface_region,
             xinc=self.xinc,
@@ -1843,7 +1854,7 @@ class WafflesCoastline(Waffle):
             gt,
             utils.sr_wkt(self.dst_srs),
             gdal.GDT_Int32,
-            -9999,
+            self.ndv,
             'GTiff'
         )        
         self.coast_array = np.zeros( (ycount, xcount) )
@@ -2124,8 +2135,8 @@ class WafflesUpdateDEM(Waffle):
         # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
         #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
         # )
-        diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
-            region=self.region, xinc=self.xinc, yinc=self.yinc, radius=self.radius
+        diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n{ndv}:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
+            region=self.region, xinc=self.xinc, yinc=self.yinc, ndv=self.ndv, radius=self.radius
         )
         out, status = utils.run_cmd(
             diff_cmd,
@@ -2155,7 +2166,7 @@ class WafflesUpdateDEM(Waffle):
         diff_band = diff_ds.GetRasterBand(1)
         diff_arr = diff_band.ReadAsArray()
         diff_arr[diff_arr == dem_infos['ndv']] = 0
-        diff_arr[diff_arr == -9999] = 0
+        diff_arr[diff_arr == self.ndv] = 0
         
         dem_ds = gdal.Open(self.dem)
         dem_band = dem_ds.GetRasterBand(1)
@@ -2252,9 +2263,9 @@ class WafflesStacks(Waffle):
         #    z_array[count_array < min_count] = np.nan
         #    weight_array[count_array < min_count] = np.nan
 
-        z_array[np.isnan(z_array)] = -9999
-        weight_array[np.isnan(weight_array)] = -9999
-        count_array[np.isnan(count_array)] = -9999
+        z_array[np.isnan(z_array)] = self.ndv
+        weight_array[np.isnan(weight_array)] = self.ndv
+        count_array[np.isnan(count_array)] = self.ndv
         
         #if out_name is not None:
         ds_config = demfun.set_infos(
@@ -2264,15 +2275,17 @@ class WafflesStacks(Waffle):
             dst_gt,
             self.dst_srs,
             gdal.GDT_Float32,
-            -9999,
+            self.ndv,
             'GTiff'
         )
         
         utils.gdal_write(z_array, '{}.tif'.format(self.name), ds_config, verbose=True)
         if self.keep_weights:
             utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
+            self.aux_dems.append('{}_w.tif'.format(self.name))
         if self.keep_count:
             utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
+            self.aux_dems.append('{}_c.tif'.format(self.name))
         
         return(self)
     
@@ -2488,6 +2501,7 @@ Update an existing DEM with data from the datalist
             mask=False,
             spat=False,
             clobber=True,
+            ndv=-9999,
             cache_dir=waffles_cache
     ):
         self.mod = mod
@@ -2516,6 +2530,7 @@ Update an existing DEM with data from the datalist
         self.spat = spat
         self.clobber = clobber
         self.verbose = verbose
+        self.ndv = ndv
         self.cache_dir = cache_dir
 
         if self.mod is not None:
@@ -2585,6 +2600,7 @@ Update an existing DEM with data from the datalist
             'mask': self.mask,
             'spat': self.spat,
             'clobber': self.clobber,
+            'ndv': self.ndv,
             'cache_dir': self.cache_dir
         }
         return(self._config)
@@ -2618,6 +2634,7 @@ Update an existing DEM with data from the datalist
                     clobber=self.clobber,
                     verbose=self.verbose,
                     cache_dir=self.cache_dir,
+                    ndv=self.ndv,
                     **self.mod_args
                 )
             )
@@ -2688,6 +2705,7 @@ Options:
   -D, --cache-dir\tCACHE Directory for storing temp data.
 \t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
 \t\t\tto retain the data, use the --keep-cache flag
+  -N, --nodata\t\tNODATA value of output DEM
 
   -f, --transform\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
@@ -2751,6 +2769,7 @@ def waffles_cli(argv = sys.argv):
     wg['fltr'] = []
     wg['name'] = 'waffles'
     wg['cache_dir'] = waffles_cache
+    wg['ndv'] = -9999
     
     while i < len(argv):
         arg = argv[i]
@@ -2835,6 +2854,11 @@ def waffles_cli(argv = sys.argv):
             wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
             i = i + 1
         elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
+        elif arg == '--nodata' or arg == '-N' or arg == '-ndv':
+            wg['ndv'] = utils.float_or(argv[i + 1], -9999)
+            i = i + 1
+        elif arg[:2] == '-D': wg['ndv'] = utils.float_or(argv[i + 1], -9999)
+        
         elif arg == '--trasform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
             if wg['dst_srs'] is None:

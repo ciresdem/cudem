@@ -474,7 +474,8 @@ class ElevationDataset():
 
     def block_array(
             self, want_mean=True, want_count=True, want_weights=True,
-            want_mask=True, want_gt=False, want_ds_config=False, min_count=None, out_name=None
+            want_mask=True, want_gt=False, want_ds_config=False, min_count=None,
+            out_name=None, ndv=-9999
     ):
         """block the xyz data to the mean block value
 
@@ -543,11 +544,11 @@ class ElevationDataset():
                 weight_array[count_array < min_count] = np.nan
 
             if want_mean:
-                z_array[np.isnan(z_array)] = -9999
+                z_array[np.isnan(z_array)] = ndv
                 out_arrays['mean'] = z_array
                 
             if want_weights:
-                weight_array[np.isnan(weight_array)] = -9999
+                weight_array[np.isnan(weight_array)] = ndv
                 out_arrays['weight'] = weight_array
                 
             if want_mask:
@@ -555,7 +556,7 @@ class ElevationDataset():
                 out_arrays['mask'] = mask_array
                 
             if want_count:
-                count_array[np.isnan(count_array)] = -9999
+                count_array[np.isnan(count_array)] = ndv
                 out_arrays['count'] = count_array
 
             ds_config = demfun.set_infos(
@@ -565,7 +566,7 @@ class ElevationDataset():
                 dst_gt,
                 self.dst_srs,
                 gdal.GDT_Float32,
-                -9999,
+                ndv,
                 'GTiff'
             )
 
@@ -624,7 +625,7 @@ class ElevationDataset():
                         )
                         yield(out_xyz)
 
-    def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', **kwargs):
+    def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', ndv=-9999, **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
         returns the gdal dataset and config
@@ -639,7 +640,7 @@ class ElevationDataset():
             dst_gt,
             utils.sr_wkt(self.src_srs),
             gdal.GDT_Int32,
-            -9999,
+            ndv,
             'MEM'
         )
         for this_xyz in self.yield_xyz_from_entries(**kwargs):
@@ -660,7 +661,7 @@ class ElevationDataset():
                 
         return(ds, ds_config)
         
-    def mask_and_yield_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', **kwargs):
+    def mask_and_yield_xyz(self, dst_gdal, dst_inc, dst_format='GTiff', ndv=-9999, **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
         yields the xyz data
@@ -675,7 +676,7 @@ class ElevationDataset():
             dst_gt,
             utils.sr_wkt(self.src_srs),
             gdal.GDT_Float32,
-            -9999,
+            ndv,
             'GTiff'
         )
 
@@ -1230,7 +1231,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1259,24 +1260,24 @@ class RasterFile(ElevationDataset):
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
                     if z_region[0] is not None:
-                        band_data[band_data < z_region[0]] = -9999
+                        band_data[band_data < z_region[0]] = ndv
                         
                     if z_region[1] is not None:
-                        band_data[band_data > z_region[1]] = -9999
+                        band_data[band_data > z_region[1]] = ndv
 
                     if weight_band is not None:
                         w_region = self.region.w_region()
                         if w_region[0] is not None:
-                            band_data[weight_data < w_region[0]] = -9999
+                            band_data[weight_data < w_region[0]] = ndv
                         
                         if w_region[1] is not None:
-                            band_data[weight_data > w_region[1]] = -9999
+                            band_data[weight_data > w_region[1]] = ndv
                         
                 if msk_band is not None:
                    msk_data = msk_band.ReadAsArray(
                        self.srcwin[0], y, self.srcwin[2], 1
                    )
-                   band_data[msk_data==0]=-9999
+                   band_data[msk_data==0]=ndv
                    
                 band_data = np.reshape(band_data, (srcwin[2], ))
                 if weight_band is not None:
@@ -1341,7 +1342,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg='bilinear', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1367,6 +1368,7 @@ class RasterFile(ElevationDataset):
         if self.x_inc is not None and self.y_inc is not None:
             src_ds = gdal.Open(self.fn)
             gt = src_ds.GetGeoTransform()
+            ndv = band.GetNoDataValue()
             src_ds = None
             if '{:g}'.format(gt[1]) != '{:g}'.format(self.x_inc) and \
                '{:g}'.format(gt[5]*-1) != '{:g}'.format(self.y_inc):
@@ -1377,7 +1379,7 @@ class RasterFile(ElevationDataset):
                 else:
                     extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
                 src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                   dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear',
+                                   dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear',
                                    options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
                 if self.verbose:
                     _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
@@ -1406,7 +1408,7 @@ class RasterFile(ElevationDataset):
                     else:
                         extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=extent, resampleAlg='bilinear',
+                                           dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear',
                                            options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp.update() if self.verbose else None)#gdal.TermProgress)
                     if self.verbose:
                         _warp.prog.end(0, 'warped dataset {} to {}/{}'.format(self.weight_mask, self.x_inc, self.y_inc))
@@ -1437,10 +1439,10 @@ class RasterFile(ElevationDataset):
                 else:
                     dataset = np.vstack((xi, yi, src_arr)).T
 
-                if self.x_inc is not None and self.y_inc is not None:
-                    dataset = dataset[dataset[:,2] != -9999.,:]
-                else:
-                    dataset = dataset[dataset[:,2] != ndv,:]
+                #if self.x_inc is not None and self.y_inc is not None:
+                #dataset = dataset[dataset[:,2] != -9999.,:]
+                #else:
+                dataset = dataset[dataset[:,2] != ndv,:]
                     
                 if self.region is not None  and self.region.valid_p():
                     if self.dst_trans is not None:
