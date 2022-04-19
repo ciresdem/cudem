@@ -162,6 +162,19 @@ def set_srs(src_dem, src_srs='epsg:4326'):
         return(0)
     else: return(None)
 
+def get_nodata(src_dem):
+    """get the nodata valiue of src_dem
+
+    return nodata value
+    """
+    
+    src_ds = gdal.Open(src_dem)
+    band = src_ds.GetRasterBand(1)
+    ndv = band.GetNoDataValue()
+    src_ds = None
+
+    return(ndv)
+    
 def set_nodata(src_dem, nodata=-9999, convert_array=False, verbose=True):
     """set the nodata value of gdal file src_dem
 

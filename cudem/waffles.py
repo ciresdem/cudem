@@ -366,12 +366,11 @@ class Waffle:
         if min_count is not None:
             z_array[count_array < min_count] = np.nan
             weight_array[count_array < min_count] = np.nan
-
-        z_array[np.isnan(z_array)] = self.ndv
-        weight_array[np.isnan(weight_array)] = self.ndv
-        count_array[np.isnan(count_array)] = self.ndv
         
         if out_name is not None:
+            z_array[np.isnan(z_array)] = self.ndv
+            weight_array[np.isnan(weight_array)] = self.ndv
+            count_array[np.isnan(count_array)] = self.ndv
             ds_config = demfun.set_infos(
                 xcount,
                 ycount,
@@ -385,18 +384,20 @@ class Waffle:
             utils.gdal_write(z_array, '{}_n.tif'.format(out_name), ds_config, verbose=True)
             utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
             utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
-            return('{}_n.tif'.format(out_name), '{}_w.tif'.format(out_name), '{}_c.tif'.format(out_name))
-        else:
-            return(z_array, weight_array, count_array, dst_gt)
+
+        z_array[z_array == self.ndv] = np.nan
+        weight_array[weight_array == self.ndv] = np.nan
+        count_array[count_array == self.ndv] = np.nan
+        return(z_array, weight_array, count_array, dst_gt)
     
-    def _xyz_block(self, src_xyz):
+    def _xyz_block(self, src_xyz, out_name=None):
         """block the src_xyz data to the mean block value
 
         Yields:
           list: xyz data for each block with data
         """
 
-        z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz)
+        z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz, out_name=out_name)
         ycount, xcount = z_array.shape
 
         for y in range(0, ycount):
@@ -506,7 +507,7 @@ class Waffle:
                 xyz_yield = self._xyz_mask(xyz_yield, self.mask_fn)
                 
             if block:
-                xyz_yield = self._xyz_block(xyz_yield)
+                xyz_yield = self._xyz_block(xyz_yield, out_name=block) if block else self._xyz_block(xyz_yield)
                 
             for xyz in xyz_yield:
                 yield(xyz)
@@ -1144,6 +1145,7 @@ class WafflesNum(Waffle):
         else:
             #self._xyz_num(self.yield_xyz(block=True))
             #self._xyz_num(self.yield_xyz(block=False))
+            ## TODO:FIXME TO NEW RETURN OF FUNC
             num, weight, count = self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
             if self.mode != 'm':
                 utils.remove_glob('{}_n.tif'.format(self.name))
@@ -1595,6 +1597,163 @@ class WafflesNearest(WafflesGDALGrid):
 ## ==============================================
 ## Waffles 'CUDEM' gridding
 ## ==============================================
+class WafflesCUDEM_(Waffle):
+    def __init__(
+            self,
+            min_weight=1,
+            inc_factor=3,
+            pre_count=1,
+            smoothing=None,
+            landmask=False,
+            poly_count=3,
+            keep_auxilary=False,
+            **kwargs
+    ):
+        self.mod = 'cudem'
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
+            
+        self.min_weight = utils.float_or(min_weight)
+        self.inc_factor = utils.int_or(inc_factor)
+        self.pre_count = int(pre_count)
+        self.smoothing = utils.int_or(smoothing)
+        self.landmask = landmask
+        self.poly_count = poly_count
+        self.keep_auxilary = keep_auxilary
+        
+    def run(self):
+        pre = self.pre_count
+        pre_region = self.p_region.copy()
+        pre_weight = 0
+        pre_region.wmin = None
+        pre_clip = None        
+        
+        n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
+
+        #self.min_weight = demfun.percentile(w, 75)
+        #utils.echo_msg('stacks min weight is: {}'.format(self.min_weight))
+        
+        surface_region = self.p_region.copy()
+        surface_region.wmin = self.min_weight
+
+        upper_limit = None
+
+        coast = '{}_cst'.format(self.name)
+        
+        pre_data = ['{},200:weight_mask={},1'.format(n, w)]
+        if self.landmask:
+            upper_limit = -0.1
+            pre_region.zmax = 1
+            if not os.path.exists(utils.str_or(self.landmask)):
+                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
+                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
+                else:
+                    self.coast = WaffleFactory(
+                        mod='coastline:polygonize={}'.format(self.poly_count),
+                        data=pre_data,
+                        src_region=surface_region,
+                        xinc=self.xinc,
+                        yinc=self.yinc,
+                        name=coast,
+                        node=self.node,
+                        #extend=self.extend+12,
+                        weights=self.weights,
+                        dst_srs=self.dst_srs,
+                        srs_transform=self.srs_transform,
+                        clobber=True,
+                        verbose=self.verbose,
+                    ).acquire().generate()
+                    coastline = '{}.shp'.format(self.coast.name)
+            else:
+                coastline = self.landmask
+            pre_clip = '{}:invert=True'.format(coastline)
+        
+        while pre > 0:
+            pre_xinc = self.xinc * (self.inc_factor**pre)
+            pre_yinc = self.yinc * (self.inc_factor**pre)
+            xsample = self.xinc * (self.inc_factor**(pre - 1))
+            ysample = self.yinc * (self.inc_factor**(pre - 1))
+            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
+            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+
+            if xsample == 0:
+                xsample = self.xinc
+            if ysample == 0:
+                ysample = self.yinc
+            
+            if pre != self.pre_count:
+                pre_weight = self.min_weight/(pre + 1)
+                if pre_weight == 0: pre_weight = 1-e20
+                pre_data = [
+                    '{},200:weight_mask={},1'.format(n, w),
+                    '{}.tif,200,{}'.format(
+                        utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                    )
+                ]
+                pre_region.wmin = pre_weight
+
+            pre_surface = WaffleFactory(
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit),
+                data=pre_data,
+                src_region=pre_region,
+                xinc=pre_xinc,
+                yinc=pre_yinc,
+                name=pre_name,
+                node=self.node,
+                fltr=pre_filter,
+                weights=1,
+                dst_srs=self.dst_srs,
+                srs_transform=self.srs_transform,
+                clobber=True,
+                verbose=self.verbose,
+                xsample=xsample,
+                ysample=ysample,
+                #extend=self.extend,
+                #extend_proc=self.extend_proc,
+                clip=pre_clip,
+            ).acquire().generate()
+
+            pre -= 1
+
+        if self.pre_count == 0:
+            final_data = ['{},200:weight_mask={},1'.format(n, w)]
+        else:
+            final_data = [
+                '{},200:weight_mask={},1'.format(n, w),
+                '{}.tif,200,{}'.format(
+                    utils.append_fn('_pre_surface', pre_region, 1), self.min_weight
+                )
+            ]
+            
+        pre_surface = WaffleFactory(
+            mod='surface:tension=1',
+            data=final_data,
+            src_region=surface_region,
+            xinc=self.xinc,
+            yinc=self.yinc,
+            name=self.name,
+            node=self.node,
+            fltr=[],
+            weights=1,
+            dst_srs=self.dst_srs,
+            srs_transform=self.srs_transform,
+            clobber=True,
+            verbose=self.verbose,
+            #xsample=None,
+            #ysample=None,
+            #extend=self.extend,
+            #extend_proc=self.extend_proc,
+        ).acquire().generate()
+            
+        if not self.keep_auxilary:
+            utils.remove_glob('*_pre_surface*')
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
+            
+        return(self)
+
 class WafflesCUDEM(Waffle):
     def __init__(
             self,
@@ -1630,38 +1789,67 @@ class WafflesCUDEM(Waffle):
         pre_weight = 0
         pre_region.wmin = None
         pre_clip = None        
-            
+
+        pre_xinc = self.xinc * (self.inc_factor**pre)
+        pre_yinc = self.yinc * (self.inc_factor**pre)
+        xsample = self.xinc * (self.inc_factor**(pre - 1))
+        ysample = self.yinc * (self.inc_factor**(pre - 1))
+        pre_name = utils.append_fn('_pre_surface', pre_region, pre)
+        pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+
+        if self.landmask:
+            upper_limit = -0.1
+            pre_region.zmax = 1
+        else:
+            upper_limit = 'd'
+        
+        if xsample == 0:
+            xsample = self.xinc
+        if ysample == 0:
+            ysample = self.yinc
+        
+        ## generate initial DEM and BLOCK ARRAYS
+        dem_surf_cmd = (
+            'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff -T1 -Z1.6 -Lld -Lu{}'.format(
+                pre_region.format('gmt'),
+                pre_xinc,
+                pre_yinc,
+                ' -W' if self.weights else '',
+                ' -rp' if self.node == 'pixel' else '',
+                pre_region.format('gmt'),
+                pre_xinc,
+                pre_yinc,
+                pre_name,
+                self.ndv,
+                upper_limit
+            )
+        )
+        
+        out, status = utils.run_cmd(
+            dem_surf_cmd,
+            verbose=self.verbose,
+            data_fun=lambda p: self.dump_xyz(
+                dst_port=p, encode=True, block='{}_n'.format(self.name)
+            )
+        )
+        n = '{}_n_n.tif'.format(self.name)
+        w = '{}_n_w.tif'.format(self.name)
+        c = '{}_n_c.tif'.format(self.name)
+
+        demfun.set_nodata(n, self.ndv)
+        demfun.set_nodata(w, self.ndv)
+        demfun.set_nodata(c, self.ndv)
+        
+        self.min_weight = demfun.percentile(w, 75)
+        utils.echo_msg('stacks min weight is: {}'.format(self.min_weight))
+        
         surface_region = self.p_region.copy()
         surface_region.wmin = self.min_weight
 
         upper_limit = None
 
         coast = '{}_cst'.format(self.name)
-        if self.module == 'stacks':
-            stacked_dem = WafflesStacks(
-                keep_weights=True,
-                keep_count=True,
-                data=self.data_,
-                src_region=pre_region,
-                xinc=self.xinc,
-                yinc=self.yinc,
-                name='{}_n'.format(self.name),
-                node=self.node,
-                weights=1,
-                dst_srs=self.dst_srs,
-                srs_transform=self.srs_transform,
-                clobber=True,
-                verbose=self.verbose,
-                #extend=self.extend,
-                #extend_proc=self.extend_proc,
-            ).generate()
-            n = stacked_dem.fn
-            w = '{}_w.tif'.format('.'.join(n.split('.')[:-1]))
-            c = '{}_c.tif'.format('.'.join(n.split('.')[:-1]))
-
-        else:
-            n, w, c = self._xyz_block_array(self.yield_xyz(), out_name=self.name)
-            
+        
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         if self.landmask:
             upper_limit = -0.1
@@ -1671,14 +1859,13 @@ class WafflesCUDEM(Waffle):
                     coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
                 else:
                     self.coast = WaffleFactory(
-                        mod='{}:polygonize={}'.format(self.landmask, self.poly_count),
+                        mod='coastline:polygonize={}'.format(self.poly_count),
                         data=pre_data,
                         src_region=surface_region,
                         xinc=self.xinc,
                         yinc=self.yinc,
                         name=coast,
                         node=self.node,
-                        #extend=self.extend+12,
                         weights=self.weights,
                         dst_srs=self.dst_srs,
                         srs_transform=self.srs_transform,
@@ -1689,92 +1876,46 @@ class WafflesCUDEM(Waffle):
             else:
                 coastline = self.landmask
             pre_clip = '{}:invert=True'.format(coastline)
-        
-        while pre > 0:
-            pre_xinc = self.xinc * (self.inc_factor**pre)
-            pre_yinc = self.yinc * (self.inc_factor**pre)
-            xsample = self.xinc * (self.inc_factor**(pre - 1))
-            ysample = self.yinc * (self.inc_factor**(pre - 1))
+
+        pre -= 1
+        while pre >= 0:
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
-            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+            #if pre != self.pre_count:
+            pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
+            if pre_weight == 0: pre_weight = 1-e20
 
-            #if xsample == 0:
-            #    xsample = self.xinc
-            #if ysample == 0:
-            #    ysample = self.yinc
-            
-            if pre != self.pre_count:
-                pre_weight = self.min_weight/(pre + 1)
-                if pre_weight == 0: pre_weight = 1-e20
-                pre_data = [
-                    '{},200:weight_mask={},1'.format(n, w),
-                    '{}.tif,200,{}'.format(
-                        utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
-                    )
-                ]
-                pre_region.wmin = pre_weight
-
+            pre_data = [
+                '{},200:weight_mask={},1'.format(n, w),
+                '{}.tif,200,{}'.format(
+                    utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                )
+            ]
+            pre_region.wmin = pre_weight
             pre_surface = WaffleFactory(
-                #mod='surface:tension=1:upper_limit={}'.format(upper_limit),
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit) if self.module == 'surface' else self.module,
+                mod='stacks',
                 data=pre_data,
-                src_region=pre_region,
-                xinc=pre_xinc,
-                yinc=pre_yinc,
-                name=pre_name,
+                src_region=pre_region if pre !=0 else surface_region,
+                xinc=pre_xinc if pre !=0 else self.xinc,
+                yinc=pre_yinc if pre != 0 else self.yinc,
+                name=pre_name if pre !=0 else self.name,
                 node=self.node,
-                fltr=pre_filter,
+                fltr=pre_filter if pre !=0 else [],
                 weights=1,
                 dst_srs=self.dst_srs,
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
-                xsample=xsample if self.module is not 'stacks' else None,
-                ysample=ysample if self.module is not 'stacks' else None,
-                #extend=self.extend,
-                #extend_proc=self.extend_proc,
-                clip=pre_clip,
+                clip=pre_clip if pre !=0 else None,
             ).acquire().generate()
-                
-            pre -= 1
 
-        if self.pre_count == 0:
-            final_data = ['{},200:weight_mask={},1'.format(n, w)]
-        else:
-            final_data = [
-                '{},200:weight_mask={},1'.format(n, w),
-                '{}.tif,200,{}'.format(
-                    utils.append_fn('_pre_surface', pre_region, 1), self.min_weight
-                )
-            ]
-            
-        pre_surface = WaffleFactory(
-            #mod='surface:tension=1',
-            mod='surface:tension=1' if self.module is 'suface' else self.module,
-            data=final_data,
-            src_region=surface_region,
-            xinc=self.xinc,
-            yinc=self.yinc,
-            name=self.name,
-            node=self.node,
-            fltr=[],
-            weights=1,
-            dst_srs=self.dst_srs,
-            srs_transform=self.srs_transform,
-            clobber=True,
-            verbose=self.verbose,
-            #xsample=None,
-            #ysample=None,
-            #extend=self.extend,
-            #extend_proc=self.extend_proc,
-        ).acquire().generate()
+            pre -= 1
             
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             
         return(self)
-
+    
 ## ==============================================
 ## Waffles Coastline/Landmask
 ## ==============================================
@@ -1995,7 +2136,8 @@ class WafflesCoastline(Waffle):
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
-        
+
+        ##TODO: use stacks instead
         for this_data in self.data:
             for this_xyz in this_data.yield_xyz():
                 xpos, ypos = utils._geo2pixel(
@@ -2190,8 +2332,6 @@ class WafflesStacks(Waffle):
     ):
         self.mod = 'stacks'
         try:
-            #print(kwargs)
-            #kwargs['mod'] = 'stacks'
             super().__init__(**kwargs)
         except Exception as e:
             utils.echo_error_msg(e)
@@ -2209,7 +2349,6 @@ class WafflesStacks(Waffle):
         gdt = gdal.GDT_Float32
         z_array = np.zeros((ycount, xcount))
         count_array = np.zeros((ycount, xcount))
-        #if self.weights:
         weight_array = np.zeros((ycount, xcount))
             
         if self.verbose:
@@ -2217,50 +2356,41 @@ class WafflesStacks(Waffle):
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for arr, srcwin, gt, w in self.yield_array():
-            if not self.weights:
-                w = 1
-                
+            w_arr = w if self.weights else 1
             if utils.float_or(w) is not None:
                 w_arr = np.zeros((srcwin[3], srcwin[2]))
                 w_arr[~np.isnan(arr)] = w
-                w_arr[np.isnan(arr)] = 0
+                
+            if w_arr.size == 1:
+                w_arr = w_arr[0,0]
             else:
-                w_arr = w
                 w_arr[np.isnan(arr)] = 0
                 w_arr[np.isnan(w_arr)] = 0
-
+                
             c_arr = np.zeros((srcwin[3], srcwin[2]))
+            c_arr[~np.isnan(arr)] = 1
+            arr[np.isnan(arr)] = 0
+
+            count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
             
             if not self.supercede:
-                c_arr[~np.isnan(arr)] = 1
-                arr[np.isnan(arr)] = 0
-
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += arr * w_arr
-                count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
-                #if self.weights:
+                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += (arr * w_arr)
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
             else:
                 tmp_z = z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
                 tmp_w = weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-                tmp_c = count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
 
                 tmp_z[w > tmp_w] = arr[w > tmp_w]
                 tmp_w[w > tmp_w] = w_arr[w > tmp_w]
-                tmp_c[w > tmp_w] = 1
+                
                 z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
-                count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_c
-                #if self.weights:
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
             
         count_array[count_array == 0] = np.nan
         if not self.supercede:
-            #if self.weights:
             weight_array[weight_array == 0] = np.nan
-            weight_array = (weight_array/count_array)
+            weight_array = weight_array/count_array
             z_array = (z_array/weight_array)/count_array
-            #else:
-            #z_array = (z_array/count_array)
-            #weight_array = np.ones((ycount, xcount))
 
         #if min_count is not None:
         #    z_array[count_array < min_count] = np.nan
@@ -2270,7 +2400,6 @@ class WafflesStacks(Waffle):
         weight_array[np.isnan(weight_array)] = self.ndv
         count_array[np.isnan(count_array)] = self.ndv
         
-        #if out_name is not None:
         ds_config = demfun.set_infos(
             xcount,
             ycount,
