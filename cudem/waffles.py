@@ -1840,7 +1840,7 @@ class WafflesCUDEM(Waffle):
         demfun.set_nodata(w, self.ndv)
         demfun.set_nodata(c, self.ndv)
         
-        self.min_weight = demfun.percentile(w, 75)
+        self.min_weight = demfun.percentile(w, 85)
         utils.echo_msg('stacks min weight is: {}'.format(self.min_weight))
         
         surface_region = self.p_region.copy()
@@ -2369,10 +2369,9 @@ class WafflesStacks(Waffle):
                 
             c_arr = np.zeros((srcwin[3], srcwin[2]))
             c_arr[~np.isnan(arr)] = 1
-            arr[np.isnan(arr)] = 0
-
             count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
-            
+            arr[np.isnan(arr)] = 0
+                            
             if not self.supercede:
                 z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += (arr * w_arr)
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
@@ -2387,8 +2386,10 @@ class WafflesStacks(Waffle):
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
             
         count_array[count_array == 0] = np.nan
+        weight_array[weight_array == 0] = np.nan
+        z_array[np.isnan(weight_array)] = np.nan
+        
         if not self.supercede:
-            weight_array[weight_array == 0] = np.nan
             weight_array = weight_array/count_array
             z_array = (z_array/weight_array)/count_array
 

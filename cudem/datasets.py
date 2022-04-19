@@ -853,7 +853,7 @@ class XYZFile(ElevationDataset):
         ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
             
         utils.run_cmd(
-            'mbgrid -Itmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -X0.1 -T35 -N'.format(
+            'mbgrid -Itmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -X0.1 -T35'.format(
                 self.region.format('gmt'), self.x_inc, self.y_inc, ofn
             ), verbose=False
         )
@@ -861,7 +861,7 @@ class XYZFile(ElevationDataset):
         utils.gdal2gdal('{}.grd'.format(ofn))
         utils.remove_glob('tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
 
-        #demfun.set_nodata('tmp.tif', nodata=-9999, convert_array=True, verbose=False)
+        #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
         
         xyz_ds = RasterFile(
             fn='{}.tif'.format(ofn),
@@ -1184,7 +1184,7 @@ class RasterFile(ElevationDataset):
                 self.extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
             src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                               dstNodata=-9999, outputBounds=self.extent, resampleAlg='cubicspline',
+                               dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline',
                                options=["COMPRESS=LZW", "TILED=YES"], callback=None)#lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
             #if self.verbose:
             #    _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *self.extent))
@@ -1357,7 +1357,7 @@ class RasterFile(ElevationDataset):
             srcwin_region = regions.Region().from_geo_transform(geo_transform=gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0])
             dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
             src_arr[src_arr == ndv] = np.nan
-                
+            
             if self.weight_mask is not None:
 
                 if self.x_inc is not None and self.y_inc is not None:
