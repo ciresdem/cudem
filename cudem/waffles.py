@@ -1601,7 +1601,7 @@ class WafflesNearest(WafflesGDALGrid):
 class WafflesCUDEM(Waffle):
     def __init__(
             self,
-            inc_factor=3,
+            min_weight=None
             pre_count=1,
             smoothing=None,
             landmask=False,
@@ -1615,70 +1615,31 @@ class WafflesCUDEM(Waffle):
         except Exception as e:
             utils.echo_error_msg(e)
             sys.exit()
-            
-        self.inc_factor = utils.int_or(inc_factor)
-        self.pre_count = int(pre_count)
+
+        self.min_weight = min_weight
+        self.pre_count = utils.int_or(pre_count, 1)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
         self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
         
     def run(self):
-
         pre = self.pre_count
+        pre_weight = 0
         pre_region = self.p_region.copy()
         pre_region.wmin = None
-        pre_weight = 0
-        pre_clip = None        
+        pre_clip = None 
         upper_limit = None
         coast = '{}_cst'.format(self.name)
-
-        # ## generate initial DEM and BLOCK ARRAYS
-        # dem_surf_cmd = (
-        #     'gmt blockmean {} -I{:.10f}/{:.10f}{}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff -T1 -Z1.6 -Lld -Lu{}'.format(
-        #         pre_region.format('gmt'),
-        #         pre_xinc,
-        #         pre_yinc,
-        #         ' -W' if self.weights else '',
-        #         ' -rp' if self.node == 'pixel' else '',
-        #         pre_region.format('gmt'),
-        #         pre_xinc,
-        #         pre_yinc,
-        #         pre_name,
-        #         self.ndv,
-        #         upper_limit
-        #     )
-        # )
         
-        # out, status = utils.run_cmd(
-        #     dem_surf_cmd,
-        #     verbose=self.verbose,
-        #     data_fun=lambda p: self.dump_xyz(
-        #         dst_port=p, encode=True, block='{}_n'.format(self.name)
-        #     )
-        # )
-        # n = '{}_n_n.tif'.format(self.name)
-        # w = '{}_n_w.tif'.format(self.name)
-        # c = '{}_n_c.tif'.format(self.name)
-
-        # demfun.set_nodata(n, self.ndv)
-        # demfun.set_nodata(w, self.ndv)
-        # demfun.set_nodata(c, self.ndv)
-
-        # self._process('{}.tif'.format(pre_name), filter_=True)
-
-        # if demfun.sample('{}.tif'.format(pre_name), '__tmp_sample.tif', xsample, ysample, pre_region)[1] == 0:
-        #     os.rename('__tmp_sample.tif', '{}.tif'.format(pre_name))
-        
-        # #self.min_weight = demfun.percentile(w, 75)
-        # utils.echo_msg('stacks min weight is: {}'.format(self.min_weight))
-
         self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         n = '{}_n.tif'.format(self.name)
         w = '{}_w.tif'.format(self.name)
         c = '{}_c.tif'.format(self.name)
 
-        self.min_weight = demfun.percentile(w, 85)
+        if self.min_weight is None:
+            self.min_weight = demfun.percentile(w, 85)
+            
         utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         
@@ -1707,18 +1668,17 @@ class WafflesCUDEM(Waffle):
             else:
                 coastline = self.landmask
             pre_clip = '{}:invert=True'.format(coastline)
-
         
         while pre >= 0:
-            pre_xinc = self.xinc * (self.inc_factor**pre)
-            pre_yinc = self.yinc * (self.inc_factor**pre)
-            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
-            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
-            xsample = self.xinc * (self.inc_factor**(pre - 1))
-            ysample = self.yinc * (self.inc_factor**(pre - 1))
+            pre_xinc = self.xinc * (3**pre)
+            pre_yinc = self.yinc * (3**pre)
+            xsample = self.xinc * (3**(pre - 1))
+            ysample = self.yinc * (3**(pre - 1))
             if xsample == 0: xsample = self.xinc
             if ysample == 0: ysample = self.yinc
-            
+
+            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
+            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
@@ -1758,7 +1718,7 @@ class WafflesCUDEM(Waffle):
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             
         return(self)
-
+    
 ## ==============================================
 ## Waffles Raster Stacking
 ## ==============================================
