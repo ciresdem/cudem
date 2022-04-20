@@ -1617,7 +1617,7 @@ class WafflesCUDEM(Waffle):
             utils.echo_error_msg(e)
             sys.exit()
 
-        self.min_weight = utils.int_or(min_weight)
+        self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
