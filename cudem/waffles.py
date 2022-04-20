@@ -1601,7 +1601,7 @@ class WafflesNearest(WafflesGDALGrid):
 class WafflesCUDEM(Waffle):
     def __init__(
             self,
-            min_weight=None
+            min_weight=None,
             pre_count=1,
             smoothing=None,
             landmask=False,
