@@ -1517,10 +1517,11 @@ class WafflesGDALGrid(Waffle):
         Args: 
           alg_str (str): the gdal_grid algorithm string
         """
-        self.mod = self.alg_str.split(':')[0]
+        self.mod = 'gdal_grid'
         super().__init__(**kwargs)
         self.alg_str = 'linear:radius=-1'
-                
+        self.mod = self.alg_str.split(':')[0]
+        
     def run(self):
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         _prog = utils.CliProgress(
