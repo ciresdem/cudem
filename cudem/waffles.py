@@ -25,11 +25,11 @@
 ## Use CLI command 'waffles'
 ##
 ## Supported input datatypes include:
-## datalist, las/laz, gdal, xyz, mbs, fetches
+## datalist, las/laz, gdal, bag, xyz, mbs, fetches
 ##
 ## Supported gridding modules include:
-## surface (GMT), triangulate (GMT), nearneighbor (GMR), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
-## coastline (CUDEM), cudem (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
+## surface (GMT), triangulate (GMT), nearneighbor (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
+## coastline (CUDEM), cudem (CUDEM), stacks (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
 ## nearest (GDAL)
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
@@ -142,12 +142,12 @@ class Waffle:
         self.block_t = None
         self.ogr_ds = None
 
-        if self.verbose:
-            utils.echo_msg('------------------------------------------------')
-            try:
-                utils.echo_msg('Waffles module\t\t:\t{}'.format(self.mod))
-            except:
-                utils.echo_msg('Waffles module\t\t:\tNone')
+        # if self.verbose:
+        #     utils.echo_msg('------------------------------------------------')
+        #     try:
+        #         utils.echo_msg('Waffles module\t\t:\t{}'.format(self.mod))
+        #     except:
+        #         utils.echo_msg('Waffles module\t\t:\tNone')
         
         self._init_regions()
         self.data_ = data
@@ -156,17 +156,17 @@ class Waffle:
         self.waffled = False
         self.aux_dems = []
         
-        if self.verbose:
-            xcount, ycount, dst_gt = self.d_region.geo_transform(
-                x_inc=self.xinc, y_inc=self.yinc
-            )
-            utils.echo_msg('output increment\t:\t{}/{}'.format(self.xinc, self.yinc))
-            utils.echo_msg('output cell count\t:\t{}/{}'.format(xcount, ycount))
-            utils.echo_msg('input data\t\t:\t{}'.format(self.data_))
-            utils.echo_msg('output DEM\t\t:\t{}'.format(self.fn))
-            utils.echo_msg('output NDV\t\t:\t{}'.format(self.ndv))
-            utils.echo_msg('CACHE directory\t:\t{}'.format(self.cache_dir))
-            utils.echo_msg('------------------------------------------------')
+        # if self.verbose:
+        #     xcount, ycount, dst_gt = self.d_region.geo_transform(
+        #         x_inc=self.xinc, y_inc=self.yinc
+        #     )
+        #     utils.echo_msg('output increment\t:\t{}/{}'.format(self.xinc, self.yinc))
+        #     utils.echo_msg('output cell count\t:\t{}/{}'.format(xcount, ycount))
+        #     utils.echo_msg('input data\t\t:\t{}'.format(self.data_))
+        #     utils.echo_msg('output DEM\t\t:\t{}'.format(self.fn))
+        #     utils.echo_msg('output NDV\t\t:\t{}'.format(self.ndv))
+        #     utils.echo_msg('CACHE directory\t:\t{}'.format(self.cache_dir))
+        #     utils.echo_msg('------------------------------------------------')
 
         self._init_data()
             
@@ -180,16 +180,20 @@ class Waffle:
         self.ps_region = self.p_region.copy()
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
 
-        if self.verbose:
-            utils.echo_msg('buffered region\t:\t{}'.format(self.p_region))
-            utils.echo_msg('grid-node region\t:\t{}'.format(self.ps_region))
-            utils.echo_msg('coastline region\t:\t{}'.format(self.c_region))
-            utils.echo_msg('output region\t\t:\t{}'.format(self.d_region))
+        # if self.verbose:
+        #     utils.echo_msg('buffered region\t:\t{}'.format(self.p_region))
+        #     utils.echo_msg('grid-node region\t:\t{}'.format(self.ps_region))
+        #     utils.echo_msg('coastline region\t:\t{}'.format(self.c_region))
+        #     utils.echo_msg('output region\t\t:\t{}'.format(self.d_region))
         
     def _init_data(self, set_incs=False):
-        ## specify x_inc and y_inc to warp/block data to given res.
-        ## x_inc=self.xinc,
-        ## y_inc=self.yinc
+        """Initialize the data for processing
+        parses data paths to dlim dataset objects.
+
+        set `set_incs` to True to block/sample datasets to given increment
+        this function sets `self.data` to a list of dataset objects.
+        """
+        
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region,
@@ -202,32 +206,19 @@ class Waffle:
         self.data = [d for d in self.data if d is not None]
 
     def _coast_region(self):
-        """processing region (extended by self.extend and self.extend_proc."""
+        """processing region (extended by self.extend_proc)"""
         
         cr = regions.Region().from_region(self.region)
-        # return(
-        #     cr.buffer(
-        #         x_bv=(self.xinc*self.extend)+ (self.xinc*self.extend) + (self.xinc*10),
-        #         y_bv=(self.yinc*self.extend) + (self.yinc*self.extend) + (self.yinc*10)
-        #     )
-        # )
         return(
             cr.buffer(
                 pct=self.extend_proc+5
             )
         )
 
-    
     def _proc_region(self):
-        """processing region (extended by self.extend and self.extend_proc."""
+        """processing region (extended by self.extend_proc)"""
         
         pr = regions.Region().from_region(self.region)
-        #  return(
-        #     pr.buffer(
-        #         x_bv=((self.xinc*self.extend_proc) + (self.xinc*self.extend)),
-        #         y_bv=((self.yinc*self.extend_proc) + (self.yinc*self.extend))
-        #     )
-        # )
         return(
             pr.buffer(
                 pct=self.extend_proc
@@ -246,6 +237,8 @@ class Waffle:
         )
 
     def copy(self):
+        """return a copy of the waffle object"""
+        
         return(Waffle(
             data=self.data_,
             src_region=self.region,
@@ -276,7 +269,7 @@ class Waffle:
         ))
 
     ## TODO: move following functions to datasets
-    
+    ##
     def _xyz_ds(self, src_xyz):
         """Make a point vector OGR DataSet Object from src_xyz
 
@@ -1600,6 +1593,12 @@ class WafflesNearest(WafflesGDALGrid):
 ## Waffles 'CUDEM' gridding
 ## ==============================================
 class WafflesCUDEM(Waffle):
+    """Waffles CUDEM gridding module
+
+    generate a DEM with `pre_surface`s which are generated
+    at lower resolution and with various weight threshholds.
+    """
+    
     def __init__(
             self,
             min_weight=None,
@@ -1724,6 +1723,20 @@ class WafflesCUDEM(Waffle):
 ## Waffles Raster Stacking
 ## ==============================================
 class WafflesStacks(Waffle):
+    """Waffles STACKS gridding module.
+
+    stack data to generate DEM. No interpolation
+    occurs with this module. To guarantee a full DEM,
+    use a background DEM with a low weight, such as GMRT or GEBCO,
+    which will be stacked upon to create the final DEM.
+
+    XYZ input data is converted to raster; currently uses `mbgrid` to
+    grid the XYZ data before stacking.
+
+    set `supercede` to True to have higher weighted data overwrite 
+    lower weighted data in overlapping cells. Default performs a weighted
+    mean of overlapping data.
+    """
     def __init__(
             self,
             supercede=False,
@@ -1830,7 +1843,14 @@ class WafflesStacks(Waffle):
 ## ==============================================
 class WafflesCoastline(Waffle):
     def __init__(self, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
-        """Generate a landmask from various sources."""
+        """Generate a landmask from various sources.
+        
+        set polyginize to False to skip polyginizing the landmask, set
+        polygonize to an integer to control how many output polygons will
+        be generated.
+
+        output raster mask will have 0 over water and 1 over land.
+        """
 
         self.mod = 'coastline'
         super().__init__(**kwargs)
@@ -2094,7 +2114,7 @@ class WafflesCoastline(Waffle):
         utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
-## Waffles DEM update
+## Waffles DEM update - testing
 ## ==============================================
 class WafflesUpdateDEM(Waffle):
     def __init__(
@@ -2242,6 +2262,7 @@ class WaffleFactory():
             'class':GMTSurface,
             'description': '''SPLINE DEM via GMT surface\n
 Generate a DEM using GMT's surface command
+see gmt surface --help for more info.
         
 < surface:tension=.35:relaxation=1.2:lower_limit=d:upper_limit=d >
  :tension=[0-1] - Spline tension.
@@ -2255,7 +2276,8 @@ Generate a DEM using GMT's surface command
             'class': GMTTriangulate,
             'description': '''TRIANGULATION DEM via GMT triangulate\n
 Generate a DEM using GMT's triangulate command.
-        
+see gmt triangulate --help for more info.        
+
 < triangulate >''',
         },
         'nearneighbor': {
@@ -2264,6 +2286,7 @@ Generate a DEM using GMT's triangulate command.
             'class': GMTNearNeighbor,
             'description': """NEARNEIGHBOR DEM via GMT nearneighbor\n
 Generate a DEM using GMT's nearneighbor command.
+see gmt nearneighbor --help for more info.
 
 < nearneighbor:radius=None:sector=None >
  :radius=[val] - search radius
@@ -2352,8 +2375,10 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
             'name': 'vdatum',
             'datalist-p': False,
             'class': WafflesVDatum,
-            'description': """VDATUM conversion grid.
-            """,
+            'description': """VDATUM transformation grid.
+Generate a Vertical DATUM transformation grid.
+
+< vdatum >""",
         },
         'mbgrid': {
             'name': 'mbgrid',
@@ -2390,13 +2415,14 @@ Generate a coastline (land/sea mask) using a variety of sources.
             'description': """CUDEM integrated DEM generation. <beta>
 Generate an topo/bathy integrated DEM using a variety of data sources.
 
-< cudem:landmask=None:min_weight=.5:smoothing=5 >
+< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1 >
  :landmask=[path] - path to coastline vector mask or coastline to auto-generate
- :min_weight=[val] - the minumum weight to inclue in the final DEM
- :smoothing=[val] - the Gaussian bathymetry smoothing value""",
+ :min_weight=[val] - the minumum weight to include in the final DEM
+ :smoothing=[val] - the Gaussian bathymetry smoothing value
+ :pre_count=[val] - number of pre-surface iterations to perform""",
         },
         'update': {
-            'name': 'cudem',
+            'name': 'update',
             'datalist-p': True,
             'class': WafflesUpdateDEM,
             'description': """UPDATE an existing DEM . <beta>
@@ -2410,9 +2436,16 @@ Update an existing DEM with data from the datalist
             'name': 'stacks',
             'datalist-p': True,
             'class': WafflesStacks,
-            'description': """Generate a DEM using a raster Stacking method . <beta>
+            'description': """STACK data into a DEM <beta>
+Generate a DEM using a raster STACKing method. By default, will calculate
+the [weighted]-mean where overlapping cells occur. Set supercede to True to
+overwrite overlapping cells with higher weighted data.
 
-< rstack >""",
+< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
+ :supercede=[True/False] - superced data cells with higher weighted data
+ :keep_weights=[True/False] - retain weight raster
+ :keep_count=[True/False] - retain count raster
+ :min_count=[val] - only retain data cells if they contain `min_count` overlapping data""",
         },
 
     }
@@ -2966,11 +2999,15 @@ def waffles_cli(argv = sys.argv):
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
                 wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
-            this_waffle = WaffleFactory(mod=module, **wg).acquire()
+            #this_waffle = WaffleFactory(mod=module, **wg).acquire()
+            this_waffle = WaffleFactory(mod=module, **wg)
             if this_waffle is not None:
-                #this_wg = this_waffle._export_config(parse_data=True)
-                #utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
-                this_waffle.generate()
+                if wg['verbose']:
+                    utils.echo_msg('------------------------------------------------ :config')
+                    this_wg = this_waffle._export_config(parse_data=False)
+                    utils.echo_msg(json.dumps(this_wg, sort_keys=True))
+                    utils.echo_msg('------------------------------------------------ :config')
+                this_waffle.acquire().generate()
             #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
     if not keep_cache:
         utils.remove_glob(wg['cache_dir'])
