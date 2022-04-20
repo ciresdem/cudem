@@ -422,6 +422,10 @@ def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, verbose=Fal
     #'.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem), verbose=True)
 
     #height = ycount, width = xcount
+
+    if verbose:
+        utils.echo_msg('sampling DEM {} to {}/{}'.format(src_dem, x_sample_inc, y_sample_inc))
+    
     out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
     dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
                        dstNodata=-9999, outputBounds=out_region, resampleAlg='bilinear', targetAlignedPixels=True,
@@ -929,7 +933,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
       0 for success or -1 for failure
     """
 
-    utils.echo_msg('filtering DEM using {}@{}'.format(fltr, fltr_val))
+    utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
 
     if os.path.exists(src_dem):
         if split_val is not None:
