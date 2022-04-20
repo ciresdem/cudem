@@ -1616,7 +1616,7 @@ class WafflesCUDEM(Waffle):
             utils.echo_error_msg(e)
             sys.exit()
 
-        self.min_weight = min_weight
+        self.min_weight = utils.int_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
@@ -1638,7 +1638,7 @@ class WafflesCUDEM(Waffle):
         c = '{}_c.tif'.format(self.name)
 
         if self.min_weight is None:
-            self.min_weight = demfun.percentile(w, 85)
+            self.min_weight = demfun.percentile(w, 75)
             
         utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
