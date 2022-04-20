@@ -1678,7 +1678,7 @@ class WafflesCUDEM(Waffle):
         w = '{}_w.tif'.format(self.name)
         c = '{}_c.tif'.format(self.name)
 
-        self.min_weight = demfun.percentile(w, 95)
+        self.min_weight = demfun.percentile(w, 75)
         utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         
