@@ -1842,7 +1842,7 @@ class WafflesStacks(Waffle):
 ## Waffles Coastline/Landmask
 ## ==============================================
 class WafflesCoastline(Waffle):
-    def __init__(self, want_nhd=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
+    def __init__(self, want_nhd=True, want_copernicus=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
         """Generate a landmask from various sources.
         
         set polyginize to False to skip polyginizing the landmask, set
@@ -1857,6 +1857,7 @@ class WafflesCoastline(Waffle):
 
         self.want_nhd = want_nhd
         self.want_gmrt = want_gmrt
+        self.want_copernicus = want_copernicus
         self.invert = invert
         self.polygonize = polygonize
 
@@ -1882,7 +1883,8 @@ class WafflesCoastline(Waffle):
 
         if self.want_gmrt:
             self._load_gmrt()
-        else:
+            
+        if self.want_copernicus:
             self._load_copernicus()
 
         if self.want_nhd:
@@ -1925,7 +1927,7 @@ class WafflesCoastline(Waffle):
             xcount * ycount,
             gt,
             utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Int32,
+            gdal.GDT_Float32,
             self.ndv,
             'GTiff'
         )        
@@ -1938,7 +1940,7 @@ class WafflesCoastline(Waffle):
         """
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo-mask'
+            src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo'
         )
         this_gmrt._outdir = self.cache_dir
         this_gmrt.run()
@@ -1958,16 +1960,16 @@ class WafflesCoastline(Waffle):
         out_ds.SetGeoTransform(self.ds_config['geoT'])
         out_ds.SetProjection(self.ds_config['proj'])
         out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
-            
-        gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg=gdal.GRA_CubicSpline)
+        #gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg=gdal.GRA_CubicSpline)
+        gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg=gdal.GRA_Bilinear)
             
         gmrt_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
-        gmrt_ds_arr[gmrt_ds_arr <= 0] = 0
-
-        self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]        
+        gmrt_ds_arr[gmrt_ds_arr < 0] = 0
+        #self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]
+        self.coast_array += gmrt_ds_arr
         out_ds = gmrt_ds_arr = None
-        utils.remove_glob(gmrt_tif[1])
+        #utils.remove_glob(gmrt_tif[1])
         
     def _load_copernicus(self):
         """copernicus"""
@@ -1996,6 +1998,7 @@ class WafflesCoastline(Waffle):
             gdal.Warp(out_ds, cop_tif[1], dstSRS = dst_srs, resampleAlg = gdal.GRA_CubicSpline)
             c_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
             c_ds_arr[c_ds_arr > 0] = 1
+            #c_ds_arr[c_ds_arr != 1] = -1
             self.coast_array += c_ds_arr
             out_ds = c_ds_arr = None
             #utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
@@ -2019,7 +2022,7 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-        print(this_tnm.results)
+        #print(this_tnm.results)
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
