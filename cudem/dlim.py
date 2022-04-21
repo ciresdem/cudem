@@ -244,7 +244,8 @@ class Datalist(datasets.ElevationDataset):
                 for l, this_line in enumerate(op):
                     if self.verbose:
                         _prog.update_perc((l, count))
-                        
+                    ## check for geojson vector here and yield the intersecting datasets,
+                    ## skip rest if exists and no need for re-generation...
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line,

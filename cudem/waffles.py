@@ -1631,7 +1631,7 @@ class WafflesCUDEM(Waffle):
         pre_clip = None 
         upper_limit = None
         coast = '{}_cst'.format(self.name)
-        
+
         self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         n = '{}_n.tif'.format(self.name)
         w = '{}_w.tif'.format(self.name)
@@ -1653,7 +1653,7 @@ class WafflesCUDEM(Waffle):
                     self.coast = WaffleFactory(
                         mod='coastline:polygonize={}'.format(self.poly_count),
                         data=pre_data,
-                        src_region=surface_region,
+                        src_region=pre_region,
                         xinc=self.xinc,
                         yinc=self.yinc,
                         name=coast,
@@ -1694,7 +1694,7 @@ class WafflesCUDEM(Waffle):
                 pre_region.zmax = None
 
             pre_surface = WaffleFactory(
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre == self.pre_count else 'stacks',
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre == self.pre_count else 'surface:tension=1',
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
@@ -1716,6 +1716,146 @@ class WafflesCUDEM(Waffle):
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
+            
+        return(self)
+
+class WafflesCUDEM_stacks(Waffle):
+    """Waffles CUDEM gridding module
+
+    generate a DEM with `pre_surface`s which are generated
+    at lower resolution and with various weight threshholds.
+    """
+    
+    def __init__(
+            self,
+            min_weight=None,
+            pre_count=1,
+            smoothing=None,
+            landmask=False,
+            poly_count=3,
+            keep_auxilary=False,
+            **kwargs
+    ):
+        self.mod = 'cudem'
+        try:
+            super().__init__(**kwargs)
+        except Exception as e:
+            utils.echo_error_msg(e)
+            sys.exit()
+
+        self.min_weight = utils.float_or(min_weight)
+        self.pre_count = utils.int_or(pre_count, 1)
+        self.smoothing = utils.int_or(smoothing)
+        self.landmask = landmask
+        self.poly_count = poly_count
+        self.keep_auxilary = keep_auxilary
+        
+    def run(self):
+        pre = self.pre_count
+        pre_weight = 0
+        pre_region = self.p_region.copy()
+        pre_region.wmin = None
+        pre_clip = None 
+        upper_limit = None
+        coast = '{}_cst'.format(self.name)
+
+        pre_stack = WaffleFactory(
+            mod='stacks:keep_weights=True',
+            data=self.data_,
+            src_region=pre_region,
+            xinc=self.xinc,
+            yinc=self.yinc,
+            name='{}_n'.format(self.name),
+            node=self.node,
+            weights=1,
+            dst_srs=self.dst_srs,
+            srs_transform=self.srs_transform,
+            clobber=True,
+            verbose=self.verbose,
+        ).acquire().generate()
+        
+        n = pre_stack.fn
+        w = '{}_w.tif'.format('.'.join(pre_stack.fn.split('.')[:-1]))
+
+        if self.min_weight is None:
+            self.min_weight = demfun.percentile(w, 75)
+            
+        utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
+        pre_data = ['{},200:weight_mask={},1'.format(n, w)]
+        
+        if self.landmask:
+            upper_limit = -0.1
+            pre_region.zmax = 1
+            if not os.path.exists(utils.str_or(self.landmask)):
+                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
+                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
+                else:
+                    self.coast = WaffleFactory(
+                        mod='coastline:polygonize={}'.format(self.poly_count),
+                        data=pre_data,
+                        src_region=pre_region,
+                        xinc=self.xinc,
+                        yinc=self.yinc,
+                        name=coast,
+                        node=self.node,
+                        weights=self.weights,
+                        dst_srs=self.dst_srs,
+                        srs_transform=self.srs_transform,
+                        clobber=True,
+                        verbose=self.verbose,
+                    ).acquire().generate()
+                    coastline = '{}.shp'.format(self.coast.name)
+            else:
+                coastline = self.landmask
+            pre_clip = '{}:invert=True'.format(coastline)
+        
+        while pre >= 0:
+            pre_xinc = self.xinc * (3**pre)
+            pre_yinc = self.yinc * (3**pre)
+            xsample = self.xinc * (3**(pre - 1))
+            ysample = self.yinc * (3**(pre - 1))
+            if xsample == 0: xsample = self.xinc
+            if ysample == 0: ysample = self.yinc
+
+            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
+            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+            if pre != self.pre_count:
+                pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
+                if pre_weight == 0: pre_weight = 1-e20
+                pre_data = [
+                    '{},200:weight_mask={},1'.format(n, w),
+                    '{}.tif,200,{}'.format(
+                        utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                    )
+                ]
+                pre_region.wmin = pre_weight
+
+            if pre == 0:
+                pre_region.zmax = None
+
+            pre_surface = WaffleFactory(
+                mod='stacks',
+                data=pre_data,
+                src_region=pre_region,
+                xinc=pre_xinc if pre !=0 else self.xinc,
+                yinc=pre_yinc if pre != 0 else self.yinc,
+                name=pre_name if pre !=0 else self.name,
+                node=self.node,
+                fltr=pre_filter if pre !=0 else [],
+                weights=1,
+                dst_srs=self.dst_srs,
+                srs_transform=self.srs_transform,
+                clobber=True,
+                xsample=xsample if pre == self.pre_count else None,
+                ysample=ysample if pre == self.pre_count else None,
+                verbose=self.verbose,
+                clip=pre_clip if pre !=0 else None,
+            ).acquire().generate()                
+            pre -= 1
+            
+        if not self.keep_auxilary:
+            utils.remove_glob('*_pre_surface*')
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}.*'.format(coast))
             
         return(self)
     
