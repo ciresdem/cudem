@@ -229,7 +229,7 @@ class ElevationDataset():
     def echo(self, **kwargs):
         """print self.data_entries as a datalist entries."""
 
-        for entry in self.parse():
+        for entry in self.parse_json():
             entry_path = os.path.abspath(entry.fn) if not self.remote else entry.fn
             l = [entry_path, entry.data_format]
             if entry.weight is not None:
@@ -358,6 +358,10 @@ class ElevationDataset():
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = self.dst_srs
                 self.trans_region.warp(self.src_srs)
+
+    def parse_json(self):
+        for ds in self.parse():
+            yield(ds)
     
     def parse(self):
         """parse the datasets from the dataset.

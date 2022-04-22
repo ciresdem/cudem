@@ -120,14 +120,14 @@ class Datalist(datasets.ElevationDataset):
 
     def __init__(self, fmt=None, **kwargs):
         self.v_fields = [
-           'Path',
-           'Format',
-           'Weight',
+            'Path',
+            'Format',
+            'Weight',
         ]
         self.t_fields = [
-           ogr.OFTString,
-           ogr.OFTString,
-           ogr.OFTString
+            ogr.OFTString,
+            ogr.OFTString,
+            ogr.OFTString,
         ]
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
@@ -155,10 +155,11 @@ class Datalist(datasets.ElevationDataset):
 
     def _create_entry_feature(self, entry, entry_region):
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
+        #entry_parent = 'None' if entry.parent is None else os.path.abspath(entry.parent.fn)
         o_v_fields = [
             entry_path,
             entry.data_format,
-            entry.weight
+            entry.weight,
         ]
         dst_defn = self.layer.GetLayerDefn()
         #entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
@@ -225,7 +226,80 @@ class Datalist(datasets.ElevationDataset):
             self.src_srs = self.infos['src_srs']
         
         return(self.infos)
-    
+
+    def parse_json(self):
+        if self.verbose:
+            _prog = utils.CliProgress(
+                'parsing datalist json {}{}'.format(
+                    self.fn,
+                    ' @{}'.format(self.weight) if self.weight is not None else '')
+            )
+
+        if os.path.exists('{}.json'.format(self.fn)):
+            driver = ogr.GetDriverByName('GeoJSON')
+            dl_ds = driver.Open('{}.json'.format(self.fn))
+            dl_layer = dl_ds.GetLayer()
+            ldefn = dl_layer.GetLayerDefn()
+            count = len(dl_layer)
+            
+            if self.region is not None:
+                _boundsGeom = self.region.export_as_geom()
+            else:
+                _boundsGeom = None
+                
+            for l,feat in enumerate(dl_layer):
+                _prog.update_perc((l, count))
+                if _boundsGeom is not None:
+                    geom = feat.GetGeometryRef()
+                    if geom is not None:
+                        if _boundsGeom.Intersects(geom):
+                            data_set = DatasetFactory(
+                                '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
+                                weight=self.weight,
+                                parent=self,
+                                src_region=self.region,
+                                metadata=copy.deepcopy(self.metadata),
+                                src_srs=self.src_srs,
+                                dst_srs=self.dst_srs,
+                                x_inc=self.x_inc,
+                                y_inc=self.y_inc,
+                                verbose=self.verbose
+                            ).acquire()
+                            if data_set is not None and data_set.valid_p(
+                                    fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                            ):
+                                for ds in data_set.parse():
+                                    self.data_entries.append(ds)
+                                    yield(ds)
+                else:
+                    data_set = DatasetFactory(
+                        '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
+                        weight=self.weight,
+                        parent=self,
+                        src_region=self.region,
+                        metadata=copy.deepcopy(self.metadata),
+                        src_srs=self.src_srs,
+                        dst_srs=self.dst_srs,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
+                        verbose=self.verbose
+                    ).acquire()
+                    if data_set is not None and data_set.valid_p(
+                            fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                    ):
+                        for ds in data_set.parse():
+                            self.data_entries.append(ds)
+                            yield(ds)
+        else:
+            for ds in self.parse():
+                yield(ds)
+            
+        if self.verbose:
+            _prog.end(0, 'parsed datalist {}{}'.format(
+                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+            ))
+
+                            
     def parse(self):
         """import a datalist entry from a string"""
         
@@ -235,7 +309,7 @@ class Datalist(datasets.ElevationDataset):
                     self.fn,
                     ' @{}'.format(self.weight) if self.weight is not None else '')
             )
-            
+                    
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
@@ -244,8 +318,7 @@ class Datalist(datasets.ElevationDataset):
                 for l, this_line in enumerate(op):
                     if self.verbose:
                         _prog.update_perc((l, count))
-                    ## check for geojson vector here and yield the intersecting datasets,
-                    ## skip rest if exists and no need for re-generation...
+                        
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
                             this_line,
@@ -306,7 +379,7 @@ class Datalist(datasets.ElevationDataset):
     def yield_xyz(self):
         """parse the data from the datalist"""
 
-        for this_entry in self.parse():
+        for this_entry in self.parse_json():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
                 
@@ -315,7 +388,7 @@ class Datalist(datasets.ElevationDataset):
 
     def yield_array(self):
 
-        for this_entry in self.parse():
+        for this_entry in self.parse_json():
             for arr in this_entry.yield_array():
                 yield(arr)
 

@@ -1694,7 +1694,7 @@ class WafflesCUDEM(Waffle):
                 pre_region.zmax = None
 
             pre_surface = WaffleFactory(
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre == self.pre_count else 'surface:tension=1',
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1',
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
@@ -1706,8 +1706,8 @@ class WafflesCUDEM(Waffle):
                 dst_srs=self.dst_srs,
                 srs_transform=self.srs_transform,
                 clobber=True,
-                xsample=xsample if pre == self.pre_count else None,
-                ysample=ysample if pre == self.pre_count else None,
+                xsample=xsample if pre !=0 else None,
+                ysample=ysample if pre !=0 else None,
                 verbose=self.verbose,
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
