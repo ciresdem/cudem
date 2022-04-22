@@ -269,6 +269,7 @@ class Datalist(datasets.ElevationDataset):
                     for ds in data_set.parse():
                         self.data_entries.append(ds)
                         yield(ds)
+            dl_ds = dl_layer = None
         else:
             for ds in self.parse():
                 yield(ds)
