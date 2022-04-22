@@ -240,65 +240,45 @@ class Datalist(datasets.ElevationDataset):
             dl_ds = driver.Open('{}.json'.format(self.fn))
             dl_layer = dl_ds.GetLayer()
             ldefn = dl_layer.GetLayerDefn()
-            count = len(dl_layer)
             
             if self.region is not None:
                 _boundsGeom = self.region.export_as_geom()
             else:
                 _boundsGeom = None
-                
+
+            dl_layer.SetSpatialFilter(_boundsGeom)
+            count = len(dl_layer)
+            
             for l,feat in enumerate(dl_layer):
                 _prog.update_perc((l, count))
-                if _boundsGeom is not None:
-                    geom = feat.GetGeometryRef()
-                    if geom is not None:
-                        if _boundsGeom.Intersects(geom):
-                            data_set = DatasetFactory(
-                                '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
-                                weight=self.weight,
-                                parent=self,
-                                src_region=self.region,
-                                metadata=copy.deepcopy(self.metadata),
-                                src_srs=self.src_srs,
-                                dst_srs=self.dst_srs,
-                                x_inc=self.x_inc,
-                                y_inc=self.y_inc,
-                                verbose=self.verbose
-                            ).acquire()
-                            if data_set is not None and data_set.valid_p(
-                                    fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                            ):
-                                for ds in data_set.parse():
-                                    self.data_entries.append(ds)
-                                    yield(ds)
-                else:
-                    data_set = DatasetFactory(
-                        '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
-                        weight=self.weight,
-                        parent=self,
-                        src_region=self.region,
-                        metadata=copy.deepcopy(self.metadata),
-                        src_srs=self.src_srs,
-                        dst_srs=self.dst_srs,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        verbose=self.verbose
-                    ).acquire()
-                    if data_set is not None and data_set.valid_p(
-                            fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                    ):
-                        for ds in data_set.parse():
-                            self.data_entries.append(ds)
-                            yield(ds)
+                data_set = DatasetFactory(
+                    '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
+                    weight=self.weight,
+                    parent=self,
+                    src_region=self.region,
+                    metadata=copy.deepcopy(self.metadata),
+                    src_srs=self.src_srs,
+                    dst_srs=self.dst_srs,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
+                    verbose=self.verbose
+                ).acquire()
+                if data_set is not None and data_set.valid_p(
+                        fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                ):
+                    for ds in data_set.parse():
+                        self.data_entries.append(ds)
+                        yield(ds)
         else:
             for ds in self.parse():
                 yield(ds)
             
         if self.verbose:
-            _prog.end(0, 'parsed datalist {}{}'.format(
-                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-            ))
-
+            _prog.end(
+                0, 'parsed {} datasets from datalist {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
                             
     def parse(self):
         """import a datalist entry from a string"""
