@@ -41,7 +41,8 @@ if __name__ == "__main__":
 
     overwrite = True
     verbose = True
-    print >> sys.stderr, "gdal_nan2null: nan--->%s" %(ndata)
+    #print >> sys.stderr, "gdal_nan2null: nan--->%s" %(ndata)
+    print("gdal_nan2null: nan--->%s" %(ndata))
     ds = gdal.Open(ingrd)
     band = ds.GetRasterBand(1)
     comp_geot = ds.GetGeoTransform()

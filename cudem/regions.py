@@ -187,7 +187,7 @@ class Region:
           region-object: self
         """
         
-        if geo_transform is not None and x_count is not None and y_count is not None:
+        if geo_transform is not None and x_count is not None and y_count is not None:            
             self.xmin = geo_transform[0]
             self.xmax = geo_transform[0] + geo_transform[1] * x_count
             self.ymin = geo_transform[3] + geo_transform[5] * y_count

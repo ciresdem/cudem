@@ -479,7 +479,7 @@ class ElevationDataset():
     def block_array(
             self, want_mean=True, want_count=True, want_weights=True,
             want_mask=True, want_gt=False, want_ds_config=False, min_count=None,
-            out_name=None, ndv=-9999
+            out_name=None, ndv=-9999, inc=None
     ):
         """block the xyz data to the mean block value
 
@@ -487,6 +487,13 @@ class ElevationDataset():
           list: an array for [weighted]mean, weights mask, and count
         """
 
+        if inc is None:
+            x_inc = self.x_inc
+            y_inc = self.y_inc
+        else:
+            x_inc = inc
+            y_inc = inc
+        
         out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}
         
         ds_region = regions.Region().from_list(self.infos['minmax'])
@@ -503,7 +510,7 @@ class ElevationDataset():
         if block_region.valid_p():
         
             xcount, ycount, dst_gt = block_region.geo_transform(
-                x_inc=self.x_inc, y_inc=self.y_inc
+                x_inc=x_inc, y_inc=y_inc
             )
             gdt = gdal.GDT_Float32
             count_array = np.zeros((ycount, xcount))
@@ -858,10 +865,10 @@ class XYZFile(ElevationDataset):
             
         utils.run_cmd(
             'mbgrid -Itmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -X0.1 -T35'.format(
-                self.region.format('gmt'), self.x_inc, self.y_inc, ofn
+                self.region.format('gmt'), self.x_inc*3, self.y_inc*3, ofn
             ), verbose=False
         )
-            
+
         utils.gdal2gdal('{}.grd'.format(ofn))
         utils.remove_glob('tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
 
@@ -886,7 +893,7 @@ class XYZFile(ElevationDataset):
 
         # blocks = self.block_array(
         #     want_mean=True, want_count=False, want_weights=True,
-        #     want_mask=False, want_gt=True, want_ds_config=True
+        #     want_mask=False, want_gt=True, want_ds_config=True, inc=(self.x_inc * 3)
         # )
         
         # src_arr = blocks[0]['mean']
@@ -1188,7 +1195,7 @@ class RasterFile(ElevationDataset):
                 self.extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
             src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                               dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline',
+                               dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
                                options=["COMPRESS=LZW", "TILED=YES"], callback=None)#lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
             #if self.verbose:
             #    _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *self.extent))
@@ -1213,10 +1220,13 @@ class RasterFile(ElevationDataset):
                 x_count=src_ds.RasterXSize,
                 y_count=src_ds.RasterYSize
             )
-            try:
-                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
-            except:
-                zr = [None, None]
+            # if check_z:
+            #     try:
+            #         zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
+            #     except:
+            #         zr = [None, None]
+            # else:
+            zr = [None, None]
                 
             this_region.zmin, this_region.zmax = zr[0], zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
@@ -1270,7 +1280,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='cubicspline',
+                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1366,7 +1376,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline',
+                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1463,7 +1473,7 @@ class RasterFile(ElevationDataset):
                     else:
                         extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear',
+                                           dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp.update() if self.verbose else None)#gdal.TermProgress)
                     if self.verbose:
                         _warp.prog.end(0, 'warped dataset {} to {}/{}'.format(self.weight_mask, self.x_inc, self.y_inc))

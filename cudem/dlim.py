@@ -251,6 +251,15 @@ class Datalist(datasets.ElevationDataset):
             
             for l,feat in enumerate(dl_layer):
                 _prog.update_perc((l, count))
+                if self.region is not None:
+                    w_region = self.region.w_region()
+                    if w_region[0] is not None:
+                        if float(feat.GetField('Weight')) < w_region[0]:
+                            continue
+                    if w_region[1] is not None:
+                        if float(feat.GetField('Weight')) > w_region[1]:
+                            continue
+                        
                 data_set = DatasetFactory(
                     '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
                     weight=self.weight,
