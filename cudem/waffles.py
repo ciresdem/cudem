@@ -2021,10 +2021,10 @@ class WafflesStacks(Waffle):
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for arr, srcwin, gt, w in self.yield_array():
-            w_arr = w if self.weights else 1
+            #w_arr = w if self.weights else 1
             if utils.float_or(w) is not None:
                 w_arr = np.zeros((srcwin[3], srcwin[2]))
-                w_arr[~np.isnan(arr)] = w
+                w_arr[~np.isnan(arr)] = w if self.weights else 1
                 
             if w_arr.size == 1:
                 w_arr = w_arr[0,0]
