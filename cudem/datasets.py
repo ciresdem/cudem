@@ -70,6 +70,11 @@ class ElevationDataset():
 
     """
 
+    gdal_sample_methods = [
+        'near', 'bilinear', 'cubic', 'cubicspline', 'lanczos',
+        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum'
+    ]
+    
     def __init__(
             self,
             fn=None,
@@ -79,6 +84,7 @@ class ElevationDataset():
             dst_srs=None,
             x_inc=None,
             y_inc=None,
+            sample_alg='bilinear',
             metadata={
                 'name':None,
                 'title':None,
@@ -112,6 +118,12 @@ class ElevationDataset():
         self.metadata = copy.deepcopy(metadata)
         self.x_inc = utils.str2inc(x_inc)
         self.y_inc = utils.str2inc(y_inc)
+        if sample_alg in self.gdal_sample_methods:
+            self.sample_alg = sample_alg
+        else:
+            utils.echo_warning_msg('{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(sample_alg))
+            self.sample_alg = 'bilinear'
+            
         if utils.fn_url_p(self.fn):
             self.remote = True
         
@@ -1170,7 +1182,7 @@ class LASFile(ElevationDataset):
 ## ==============================================
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
-
+    
     def __init__(self, mask=None, weight_mask=None,  open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
@@ -1186,7 +1198,7 @@ class RasterFile(ElevationDataset):
         if self.x_inc is not None and self.y_inc is not None:
             
             #if self.verbose:
-            #    _warp_prog = utils.CliProgress('warping dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
+            #    _warp_prog = utils.CliProgress('warping dataset {} to {}/{} using {}'.format(self.fn, self.x_inc, self.y_inc, self.sample_alg))
             if self.region is not None:
                 dem_region = regions.Region().from_list(self.infos['minmax'])
                 warp_region = regions.regions_reduce(self.region, dem_region)
@@ -1195,10 +1207,10 @@ class RasterFile(ElevationDataset):
                 self.extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
 
             src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                               dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
+                               dstNodata=ndv, outputBounds=self.extent, resampleAlg=self.sample_alg, targetAlignedPixels=True,
                                options=["COMPRESS=LZW", "TILED=YES"], callback=None)#lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
             #if self.verbose:
-            #    _warp_prog.end(0, 'warped dataset {} to {}/{} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, *self.extent))
+            #    _warp_prog.end(0, 'warped dataset {} to {}/{} using {} @ {}/{}/{}/{}'.format(self.fn, self.x_inc, self.y_inc, self.sample_alg, *self.extent))
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1280,7 +1292,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
+                                           dstNodata=-9999, outputBounds=self.extent, resampleAlg=self.sample_alg, targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1376,7 +1388,7 @@ class RasterFile(ElevationDataset):
 
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg='cubicspline', targetAlignedPixels=True,
+                                           dstNodata=ndv, outputBounds=self.extent, resampleAlg=self.sample_alg, targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"])
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1444,7 +1456,7 @@ class RasterFile(ElevationDataset):
                 else:
                     extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
                 src_ds = gdal.Warp('', self.fn, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                   dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear',
+                                   dstNodata=ndv, outputBounds=extent, resampleAlg=self.sample_alg,
                                    options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp_prog.update() if self.verbose else None)#gdal.TermProgress)
                 if self.verbose:
                     _warp_prog.end(0, 'warped dataset {} to {}/{}'.format(self.fn, self.x_inc, self.y_inc))
@@ -1473,7 +1485,7 @@ class RasterFile(ElevationDataset):
                     else:
                         extent = [self.infos['minmax'][0], self.infos['minmax'][2], self.infos['minmax'][1], self.infos['minmax'][3]]
                     src_weight = gdal.Warp('', self.weight_mask, format='MEM', xRes=self.x_inc, yRes=self.y_inc,
-                                           dstNodata=ndv, outputBounds=extent, resampleAlg='bilinear', targetAlignedPixels=True,
+                                           dstNodata=ndv, outputBounds=extent, resampleAlg=self.sample_alg, targetAlignedPixels=True,
                                            options=["COMPRESS=LZW", "TILED=YES"], callback=lambda x,y,z: _warp.update() if self.verbose else None)#gdal.TermProgress)
                     if self.verbose:
                         _warp.prog.end(0, 'warped dataset {} to {}/{}'.format(self.weight_mask, self.x_inc, self.y_inc))

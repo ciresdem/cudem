@@ -74,7 +74,6 @@ class Waffle:
       generate() - run and process the WAFFLES module
 
     """
-    
     def __init__(
             self,
             data=[],
@@ -91,7 +90,7 @@ class Waffle:
             extend_proc=0,
             weights=None,
             fltr=[],
-            sample=None,
+            sample='bilinear',
             xsample=None,
             ysample=None,
             clip=None,
@@ -201,7 +200,8 @@ class Waffle:
             dst_srs=self.dst_srs,
             weight=self.weights,
             x_inc=self.xinc if set_incs else None,
-            y_inc=self.yinc if set_incs else None
+            y_inc=self.yinc if set_incs else None,
+            sample_alg=self.sample
         ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
 
@@ -568,7 +568,7 @@ class Waffle:
                         os.rename('__tmp_fltr.tif', fn)
             
         if self.xsample is not None or self.ysample is not None:
-            if demfun.sample(fn, '__tmp_sample.tif', self.xsample, self.ysample, self.p_region, verbose=self.verbose)[1] == 0:
+            if demfun.sample(fn, '__tmp_sample.tif', self.xsample, self.ysample, self.p_region, sample_alg=self.sample, verbose=self.verbose)[1] == 0:
                 os.rename('__tmp_sample.tif', fn)
             
         if self.clip is not None:
@@ -2021,13 +2021,13 @@ class WafflesStacks(Waffle):
                 'blocking data to {}/{} grid'.format(ycount, xcount)
             )
         for arr, srcwin, gt, w in self.yield_array():
-            #w_arr = w if self.weights else 1
             if utils.float_or(w) is not None:
                 w_arr = np.zeros((srcwin[3], srcwin[2]))
                 w_arr[~np.isnan(arr)] = w if self.weights else 1
             else:
                 w_arr = w
 
+            ## Note:
             ## can't remember why this was here, but it breaks certain datasets...
             ## if this breaks again with something like err regarding array size of 1 or
             ## something, we can relook at this...
@@ -2922,6 +2922,7 @@ Options:
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -E, --increment\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
 \t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
+  -S, --sample_alg\tReSAMPLE algorithm to use (from gdalwarp)
   -F, --format\t\tOutput grid FORMAT. [GTiff]
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
@@ -3005,6 +3006,7 @@ def waffles_cli(argv = sys.argv):
     i = 1
     wg = {}
     wg['verbose'] = True
+    wg['sample'] = 'bilinear'
     wg['xsample'] = None
     wg['ysample'] = None
     wg['dst_srs'] = None
@@ -3056,6 +3058,11 @@ def waffles_cli(argv = sys.argv):
                 else:
                     wg['ysample'] = utils.str2inc(xy_samples[0])
 
+        elif arg == '--sample_alg' or arg == '-S':
+            wg['sample'] = argv[i + 1]
+            i += 1
+        elif arg[:2] == '-S': wg['sample'] = arg[2:]
+                    
         elif arg == '--outname' or arg == '-O':
             wg['name'] = argv[i + 1]
             i += 1

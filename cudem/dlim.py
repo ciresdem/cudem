@@ -44,7 +44,7 @@ from cudem import regions
 from cudem import datasets
 from cudem.fetches import fetches
 
-def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, verbose):
+def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
     xdl = Datalist(
         fn='<scratch-datalist>',
         data_format=-1,
@@ -55,7 +55,8 @@ def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, ver
         src_srs=src_srs,
         dst_srs=dst_srs,
         x_inc=x_inc,
-        y_inc=y_inc
+        y_inc=y_inc,
+        sample_alg=sample_alg
     )
     xdl.data_entries = [DatasetFactory(
         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
@@ -65,6 +66,7 @@ def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, ver
         dst_srs=dst_srs,
         x_inc=x_inc,
         y_inc=y_inc,
+        sample_alg=sample_alg,
         parent=xdl
     ).acquire() for dl in data_list]
     return(xdl)
@@ -81,7 +83,7 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, want_verbose):
+def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose):
 
     xdls = [DatasetFactory(
         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
@@ -90,7 +92,8 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, want_verbose):
         src_srs=src_srs,
         dst_srs=dst_srs,
         x_inc=xy_inc[0],
-        y_inc=xy_inc[1]
+        y_inc=xy_inc[1],
+        sample_alg=sample_alg
     ).acquire() for dl in data_list]
 
     if len(xdls) > 1:
@@ -102,7 +105,8 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, want_verbose):
             src_srs=src_srs,
             dst_srs=dst_srs,
             x_inc=xy_inc[0],
-            y_inc=xy_inc[1]
+            y_inc=xy_inc[1],
+            sample_alg=sample_alg
         ).acquire()
     else:
         this_datalist = xdls[0]
@@ -629,6 +633,7 @@ class DatasetFactory:
             dst_srs=None,
             x_inc=None,
             y_inc=None,
+            sample_alg='bilinear',
             metadata={
                 'name':'xyz dataset',
                 'title':None,
@@ -656,6 +661,7 @@ class DatasetFactory:
         self.ds_args = {}
         self.x_inc = x_inc
         self.y_inc = y_inc
+        self.sample_alg = sample_alg
 
         self.parse_fn()
             
@@ -826,6 +832,7 @@ class DatasetFactory:
                 verbose=self.verbose,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
+                sample_alg=self.sample_alg,
                 **self.ds_args,
                 **kwargs
             )

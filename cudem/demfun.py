@@ -411,7 +411,7 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         return(0, 0)
     else: return(-1, -1)
     
-def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, verbose=False):
+def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, sample_alg='bilinear', verbose=False):
 
     #xcount, ycount, dst_gt = src_region.geo_transform(x_inc=x_sample_inc, y_inc=y_sample_inc)
 
@@ -428,7 +428,7 @@ def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, verbose=Fal
     
     out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
     dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
-                       dstNodata=-9999, outputBounds=out_region, resampleAlg='bilinear', targetAlignedPixels=True,
+                       dstNodata=-9999, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
                        options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
     dst_ds = None
     
