@@ -2025,18 +2025,23 @@ class WafflesStacks(Waffle):
             if utils.float_or(w) is not None:
                 w_arr = np.zeros((srcwin[3], srcwin[2]))
                 w_arr[~np.isnan(arr)] = w if self.weights else 1
-                
-            if w_arr.size == 1:
-                w_arr = w_arr[0,0]
             else:
-                w_arr[np.isnan(arr)] = 0
-                w_arr[np.isnan(w_arr)] = 0
+                w_arr = w
+
+            ## can't remember why this was here, but it breaks certain datasets...
+            ## if this breaks again with something like err regarding array size of 1 or
+            ## something, we can relook at this...
+            #if w_arr.size == 1:
+            #    w_arr = w_arr[0,0]
+            #else:
+            w_arr[np.isnan(arr)] = 0
+            w_arr[np.isnan(w_arr)] = 0
 
             c_arr = np.zeros((srcwin[3], srcwin[2]))
             c_arr[~np.isnan(arr)] = 1
             count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
             arr[np.isnan(arr)] = 0
-                            
+            
             if not self.supercede:
                 z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += (arr * w_arr)
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
