@@ -274,6 +274,7 @@ class Datalist(datasets.ElevationDataset):
                     dst_srs=self.dst_srs,
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
+                    sample_alg=self.sample_alg,
                     verbose=self.verbose
                 ).acquire()
                 if data_set is not None and data_set.valid_p(
@@ -324,6 +325,7 @@ class Datalist(datasets.ElevationDataset):
                             dst_srs=self.dst_srs,
                             x_inc=self.x_inc,
                             y_inc=self.y_inc,
+                            sample_alg=self.sample_alg,
                             verbose=self.verbose
                         ).acquire()
                         if data_set is not None and data_set.valid_p(

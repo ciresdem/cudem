@@ -72,8 +72,8 @@ class Waffle:
       dump_xyz() - dump the xyz data from self.data to port
       run() - run the WAFFLES module (function set via module sub-class)
       generate() - run and process the WAFFLES module
-
     """
+    
     def __init__(
             self,
             data=[],

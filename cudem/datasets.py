@@ -1183,13 +1183,19 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
     
-    def __init__(self, mask=None, weight_mask=None,  open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
         super().__init__(**kwargs)
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
         self.weight_mask = weight_mask
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
+        # print(resample_alg)
+        # if resample_alg is not None:
+        #     if resample_alg in self.gdal_sample_methods:
+        #         self.sample_alg = resample_alg
+        #     else:
+        #         utils.echo_warning_msg('{} is not a valid gdal warp resample algorithm, falling back to {}'.format(resample_alg, self.sample_alg))
             
         self.set_transform()
 
