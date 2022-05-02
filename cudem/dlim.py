@@ -136,6 +136,9 @@ class Datalist(datasets.ElevationDataset):
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
 
+    ##TODO:
+    ## add more dataset parameters into json fields
+    ## including dataset specific options (ds_args)
     def _init_datalist_vector(self):
         self.dst_layer = '{}'.format(self.fn)
         self.dst_vector = self.dst_layer + '.json'
@@ -1023,7 +1026,7 @@ def datalists_cli(argv=sys.argv):
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
-            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, want_verbose)        
+            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose)
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory.data_types[this_datalist.data_format]['fmts']
             ):

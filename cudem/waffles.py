@@ -2728,7 +2728,7 @@ overwrite overlapping cells with higher weighted data.
             extend_proc=0,
             weights=None,
             fltr=[],
-            sample=None,
+            sample='bilinear',
             xsample=None,
             ysample=None,
             clip=None,
