@@ -35,7 +35,7 @@ from cudem import regions
 from cudem import xyzfun
 
 ## ==============================================
-## DEM functions, etc
+## DEM/GDAL/GMT functions, etc
 ## ==============================================
 def infos(src_dem, region = None, scan = False):
     """scan gdal file src_fn and gather region info.
@@ -128,18 +128,9 @@ def get_srs(src_dem, vert_name=False):
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(proj)
     src_srs.AutoIdentifyEPSG()
-    #srs_auth = src_srs.GetAuthorityCode('EPSG')
     srs_auth = src_srs.GetAttrValue('AUTHORITY', 1)
     src_ds = None
-    #print(srs_auth)
-    #prj=ds.GetProjection()
-    #print prj
-
-    #srs=osr.SpatialReference(wkt=prj)
     if vert_name:
-        #if src_srs.IsProjected:
-        #    return(src_srs.GetAttrValue('projcs'))
-        #return(src_srs.GetAttrValue('geogcs'))
         return(src_srs.GetAttrValue('vert_cs'))
     else:
         if srs_auth is not None:
@@ -411,29 +402,36 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         return(0, 0)
     else: return(-1, -1)
     
-def sample(src_dem, dst_dem, x_sample_inc, y_sample_inc, src_region, sample_alg='bilinear', verbose=False):
+def sample_warp(
+        src_dem, dst_dem, x_sample_inc, y_sample_inc,
+        src_region=None, sample_alg='bilinear',
+        ndv=-9999, verbose=False
+):
 
-    #xcount, ycount, dst_gt = src_region.geo_transform(x_inc=x_sample_inc, y_inc=y_sample_inc)
-
-    ## use gdalwarp cli:
-    #out, status = utils.run_cmd('gdalwarp -tr {:.10f} {:.10f} {} -r bilinear -te {} {}\
-    #'.format(x_sample_inc, y_sample_inc, src_dem, src_region.format('te'), dst_dem))
-    #out, status = utils.run_cmd('gdalwarp -ts {} {} {} -r bilinear -te {} {}\
-    #'.format(xcount, ycount, src_dem, src_region.format('te'), dst_dem), verbose=True)
-
-    #height = ycount, width = xcount
+    xcount, ycount, dst_gt = src_region.geo_transform(
+        x_inc=x_sample_inc, y_inc=y_sample_inc
+    )
 
     if verbose:
         utils.echo_msg('sampling DEM {} to {}/{}'.format(src_dem, x_sample_inc, y_sample_inc))
-    
-    out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
-    dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
-                       dstNodata=-9999, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
-                       options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
-    dst_ds = None
-    
-    return(dst_dem, 0)
 
+    if src_region is not None:
+        out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
+    else: 
+        out_region = None
+
+    if dst_dem is None:
+        dst_ds = gdal.Warp('', src_dem, format='MEM', width=xcount, height=ycount,
+                           dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg,
+                           options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
+        return(dst_ds, 0)
+    else:
+        dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
+                           dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
+                           options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
+        dst_ds = None
+        return(dst_dem, 0)
+    
 def chunks(src_dem, n_chunk):
     """split `src_fn` GDAL file into chunks with `n_chunk` cells squared.
 

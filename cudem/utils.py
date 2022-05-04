@@ -320,6 +320,15 @@ def str_or(instr, or_val=None):
         return(str(instr).replace('"', ''))
     except:
         return(or_val)
+
+def convert_size(size_bytes):
+   if size_bytes == 0:
+       return('0B')
+   size_name = ('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
+   i = int(math.floor(math.log(size_bytes, 1024)))
+   p = math.pow(1024, i)
+   s = round(size_bytes / p, 2)
+   return('{} {}'.format(s, size_name[i]))
     
 def euc_dst(pnt0, pnt1):
     """return the distance between pnt0 and pnt1,
