@@ -395,7 +395,10 @@ def polygonize(src_gdal, dst_layer, verbose=False):
         ds_arr = ds.GetRasterBand(1)
         if verbose:
             utils.echo_msg('polygonizing {}...'.format(src_gdal))
-        status = gdal.Polygonize(ds_arr, None, dst_layer, 0, callback=gdal.TermProgress if verbose else None)
+        status = gdal.Polygonize(
+            ds_arr, None, dst_layer, 0,
+            callback=gdal.TermProgress if verbose else None
+        )
         if verbose:
             utils.echo_msg('polygonized {}'.format(src_gdal))
         ds = ds_arr = None
@@ -413,7 +416,11 @@ def sample_warp(
     )
 
     if verbose:
-        utils.echo_msg('sampling DEM {} to {}/{}'.format(src_dem, x_sample_inc, y_sample_inc))
+        utils.echo_msg(
+            'sampling DEM {} to {}/{} using {}'.format(
+                src_dem, x_sample_inc, y_sample_inc, sample_alg
+            )
+        )
 
     if src_region is not None:
         out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
@@ -423,12 +430,14 @@ def sample_warp(
     if dst_dem is None:
         dst_ds = gdal.Warp('', src_dem, format='MEM', width=xcount, height=ycount,
                            dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg,
-                           options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
+                           options=["COMPRESS=LZW", "TILED=YES"],
+                           callback=gdal.TermProgress if verbose else None)
         return(dst_ds, 0)
     else:
         dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
                            dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
-                           options=["COMPRESS=LZW", "TILED=YES"], callback=gdal.TermProgress if verbose else None)
+                           options=["COMPRESS=LZW", "TILED=YES"],
+                           callback=gdal.TermProgress if verbose else None)
         dst_ds = None
         return(dst_dem, 0)
     

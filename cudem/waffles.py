@@ -652,15 +652,18 @@ class Waffle:
                 if this_waffle.valid_p():
                     this_waffle._process(filter_=True)
                     chunks.append(this_waffle.fn)
-
                 
             if len(chunks) > 0:
                 ## todo: use demfun.sample_warp
                 g = gdal.Warp(self.fn, chunks, format='GTiff',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
+                
             utils.remove_glob(*chunks)
-            return(self)
+            if self.valid_p():
+                return(self._process(filter_=True))
+            else:
+                return(self)
         else:
             self.run()
             
@@ -1572,7 +1575,7 @@ class WafflesNearest(WafflesGDALGrid):
 ## Waffles 'CUDEM' gridding
 ## ...and some tests
 ## ==============================================
-class WafflesCUDEM(Waffle):
+class WafflesCUDEM_surface(Waffle):
     """Waffles CUDEM gridding module
 
     generate a DEM with `pre_surface`s which are generated
@@ -1699,7 +1702,7 @@ class WafflesCUDEM(Waffle):
             
         return(self)
 
-class WafflesCUDEM_stacks(Waffle):
+class WafflesCUDEM(Waffle):
     """Waffles CUDEM gridding module
 
     generate a DEM with `pre_surface`s which are generated
@@ -1818,7 +1821,7 @@ class WafflesCUDEM_stacks(Waffle):
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
-                yinc=pre_yinc if pre != 0 else self.yinc,
+                yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
                 node=self.node,
                 fltr=pre_filter if pre !=0 else [],
@@ -1826,8 +1829,6 @@ class WafflesCUDEM_stacks(Waffle):
                 dst_srs=self.dst_srs,
                 srs_transform=self.srs_transform,
                 clobber=True,
-                xsample=xsample if pre == self.pre_count else None,
-                ysample=ysample if pre == self.pre_count else None,
                 verbose=self.verbose,
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
