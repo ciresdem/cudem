@@ -128,7 +128,7 @@ class Waffle:
         self.dst_srs = dst_srs
         self.srs_transform = srs_transform
         #self.mod = None
-        self.mod_args = {}
+        #self.mod_args = {}
         self.archive = archive
         self.mask = mask
         self.clobber = clobber
@@ -603,7 +603,8 @@ class Waffle:
                         [x for x in self.yield_xyz()]
                         self._process(fn=self.mask_fn, filter_=False)
                 return(self)
-
+            
+        ## Generate in Chunks of self.chunk by self.chunk
         if self.chunk is not None:
             xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
             count = 0
@@ -615,9 +616,7 @@ class Waffle:
                 this_gt = [this_geo_x_origin, float(dst_gt[1]), 0.0, this_geo_y_origin, 0.0, float(dst_gt[5])]
                 this_region = self.region.copy()
                 this_region.from_geo_transform(geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3])
-
-                this_waffle = WaffleFactory(
-                    mod=self.mod,
+                this_waffle = WaffleFactory()._modules[self.mod]['class'](
                     data=self.data_,
                     src_region=this_region,
                     inc=self.inc,
@@ -646,7 +645,7 @@ class Waffle:
                     ndv=self.ndv,
                     cache_dir=self.cache_dir,
                     **self.mod_args
-                ).acquire()
+                )
                 
                 this_waffle.run()
                 if this_waffle.valid_p():
@@ -720,6 +719,15 @@ class GMTSurface(Waffle):
         """generate a DEM with GMT surface"""
 
         self.mod = 'surface'
+        self.mod_args = {
+            'tension':tension,
+            'relaxation':relaxation,
+            'max_radius':max_radius,
+            'lower_limit':lower_limit,
+            'upper_limit':upper_limit,
+            'breakline':breakline,
+            'convergence':convergence
+        }
         super().__init__(**kwargs)
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -783,6 +791,7 @@ class GMTTriangulate(Waffle):
         """generate a DEM with GMT triangulate"""
 
         self.mod = 'triangulate'
+        self.mod_args = {}
         super().__init__(**kwargs)        
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -827,6 +836,10 @@ class GMTNearNeighbor(Waffle):
         """generate a DEM with GMT nearneighbor"""
 
         self.mod = 'nearneighbor'
+        self.mod_args = {
+            'radius':radius,
+            'sectors':sectors
+        }
         super().__init__(**kwargs) 
         if self.gc['GMT'] is None:
             utils.echo_error_msg(
@@ -877,6 +890,12 @@ class WafflesMBGrid(Waffle):
     
     def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
         self.mod = 'mbgrid'
+        self.mod_args = {
+            'dist':dist,
+            'tension':tension,
+            'use_datalists':use_datalists,
+            'nc':nc
+        }
         super().__init__(**kwargs)
         if self.gc['MBGRID'] is None:
             utils.echo_error_msg(
@@ -1029,6 +1048,10 @@ class WafflesNum(Waffle):
         """
         
         self.mod = 'num'
+        self.mod_args = {
+            'mode':mode,
+            'min_count':min_count
+        }
         super().__init__(**kwargs)        
         self.mode = mode
         self.min_count = min_count
@@ -1247,6 +1270,13 @@ class WafflesIDW(Waffle):
     
     def __init__(self, power=1, min_points=8, upper_limit=None, lower_limit=None, radius=None, **kwargs):
         self.mod = 'IDW'
+        self.mod_args = {
+            'power':power,
+            'min_points':min_points,
+            'upper_limit':upper_limit,
+            'lower_limit':lower_limit,
+            'radius':radius
+        }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
@@ -1360,6 +1390,11 @@ class WafflesUIDW(Waffle):
             self, radius=None, power=2, min_points=None, **kwargs
     ):
         self.mod = 'IDW'
+        self.mod_args = {
+            'radius':radius,
+            'power':power,
+            'min_points':min_points
+        }
         super().__init__(**kwargs)
         if radius is not None:
             self.radius = utils.str2inc(radius)
@@ -1461,6 +1496,10 @@ class WafflesVDatum(Waffle):
 
     def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
         self.mod = 'vdatum'
+        self.mod_args = {
+            'vdatum_in':vdatum_in,
+            'vdatum_out':vdatum_out
+        }
         super().__init__(**kwargs)
         self.vdatum_in = vdatum_in
         self.vdatum_out = vdatum_out
@@ -1492,7 +1531,8 @@ class WafflesGDALGrid(Waffle):
         Args: 
           alg_str (str): the gdal_grid algorithm string
         """
-        self.mod = 'gdal_grid'
+        #self.mod = 'gdal_grid'
+        #self.mod_args = {}
         super().__init__(**kwargs)
         self.alg_str = 'linear:radius=-1'
         self.mod = self.alg_str.split(':')[0]
@@ -1542,6 +1582,11 @@ class WafflesGDALGrid(Waffle):
 
 class WafflesLinear(WafflesGDALGrid):
     def __init__(self, radius=None, nodata=-9999, **kwargs):
+        self.mod = 'linear'
+        self.mod_args = {
+            'radius':radius,
+            'nodata':nodata
+        }
         super().__init__(**kwargs)        
         radius = self.xinc * 4 if radius is None else utils.str2inc(radius)
         self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
@@ -1549,6 +1594,17 @@ class WafflesLinear(WafflesGDALGrid):
 class WafflesInvDst(WafflesGDALGrid):
     def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
                    max_points = 0, min_points = 0, nodata = -9999, **kwargs):
+        self.mod = 'invdst'
+        self.mod_args = {
+            'power':power,
+            'smoothing':smoothing,
+            'radius1':radius1,
+            'radius2':radius2,
+            'angle':angle,
+            'max_points':max_points,
+            'min_points':min_points,
+            'nodata':nodata
+        }
         super().__init__(**kwargs)
         radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
         radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
@@ -1557,6 +1613,14 @@ class WafflesInvDst(WafflesGDALGrid):
                 
 class WafflesMovingAverage(WafflesGDALGrid):
     def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
+        self.mod = 'average'
+        self.mod_args = {
+            'radius1':radius1,
+            'radius2':radius2,
+            'angle':angle,
+            'min_points':min_points,
+            'nodata':nodata
+        }
         super().__init__(**kwargs)
         radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
         radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
@@ -1565,6 +1629,13 @@ class WafflesMovingAverage(WafflesGDALGrid):
                 
 class WafflesNearest(WafflesGDALGrid):
     def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
+        self.mod = 'nearest'
+        self.mod_args = {
+            'radius1':radius1,
+            'radius2':radius2,
+            'angle':angle,
+            'nodata':nodata
+        }
         super().__init__(**kwargs)
         radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
         radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
@@ -1593,6 +1664,14 @@ class WafflesCUDEM_surface(Waffle):
             **kwargs
     ):
         self.mod = 'cudem'
+        self.mod_args = {
+            'min_weight':min_weight,
+            'pre_count':pre_count,
+            'smoothing':smoothing,
+            'landmask':landmask,
+            'poly_count':poly_count,
+            'keep_auxilary':keep_auxilary
+        }
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -1720,6 +1799,14 @@ class WafflesCUDEM(Waffle):
             **kwargs
     ):
         self.mod = 'cudem'
+        self.mod_args = {
+            'min_weight':min_weight,
+            'pre_count':pre_count,
+            'smoothing':smoothing,
+            'landmask':landmask,
+            'poly_count':poly_count,
+            'keep_auxilary':keep_auxilary
+        }
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -1743,7 +1830,7 @@ class WafflesCUDEM(Waffle):
         coast = '{}_cst'.format(self.name)
 
         pre_stack = WaffleFactory(
-            mod='stacks:keep_weights=True',
+            mod='stacks:supercede=True:keep_weights=True',
             data=self.data_,
             src_region=pre_region,
             xinc=self.xinc,
@@ -1859,6 +1946,15 @@ class WafflesCUDEM_test(Waffle):
             **kwargs
     ):
         self.mod = 'cudem'
+        self.mod_args = {
+            'min_weight':min_weight,
+            'pre_count':pre_count,
+            'smoothing':smoothing,
+            'upper_limit':upper_limit,
+            'lower_limit':lower_limit,
+            'tension':tension,
+            'keep_auxilary':keep_auxilary
+        }
         try:
             super().__init__(**kwargs)
         except Exception as e:
@@ -1998,8 +2094,9 @@ class WafflesStacks(Waffle):
         count_array = np.zeros((ycount, xcount))
         weight_array = np.zeros((ycount, xcount))
 
-        if self.verbose:        
+        if self.verbose:
             utils.echo_msg('stacking data to {}/{} grid'.format(ycount, xcount))
+            utils.echo_msg('stacking method is {}'.format('supercede' if self.supercede else 'weighted mean'))
             #utils.echo_msg('size of stacked array is {}'.format(utils.convert_size(sys.getsizeof(z_array))))
             #utils.echo_msg('size of count array is {}'.format(utils.convert_size(sys.getsizeof(count_array))))
             #utils.echo_msg('size of weight array is {}'.format(utils.convert_size(sys.getsizeof(weight_array))))
@@ -2084,6 +2181,13 @@ class WafflesCoastline(Waffle):
         """
 
         self.mod = 'coastline'
+        self.mod_args = {
+            'want_nhd':want_nhd,
+            'want_copernicus':want_copernicus,
+            'want_gmrt':want_gmrt,
+            'invert':invert,
+            'polygonize':polygonize
+        }
         super().__init__(**kwargs)
 
         self.want_nhd = want_nhd
@@ -2359,6 +2463,12 @@ class WafflesUpdateDEM(Waffle):
             **kwargs
     ):
         self.mod = 'update'
+        self.mod_args = {
+            'radius':radius,
+            'min_weight':min_weight,
+            'max_diff':max_diff,
+            'dem':dem
+        }
         try:
             super().__init__(**kwargs)
         except Exception as e:
