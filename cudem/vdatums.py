@@ -197,8 +197,6 @@ class VerticalTransform:
             cache_dir=vdatum_cache
     ):
         self.src_region = src_region
-        #self.trans_region = src_region.copy()
-        #self.trans_region.warp()
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
         self.epsg_in = self._datum_by_name(str(epsg_in))

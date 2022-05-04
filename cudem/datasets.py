@@ -1234,14 +1234,14 @@ class RasterFile(ElevationDataset):
                 x_count=src_ds.RasterXSize,
                 y_count=src_ds.RasterYSize
             )
-            if check_z:
-                try:
-                    zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
-                except:
-                    zr = [None, None]
-            else:
-                zr = [None, None]
-            
+            # if check_z:
+            #     try:
+            #         zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
+            #     except:
+            #         zr = [None, None]
+            # else:
+            zr = [None, None]
+                
             this_region.zmin, this_region.zmax = zr[0], zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
