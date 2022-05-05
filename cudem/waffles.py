@@ -34,6 +34,8 @@
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
 ##
+## TODO: cache_dir -- proj_cdn / nhd
+##
 ### Code:
 
 import sys
@@ -654,7 +656,7 @@ class Waffle:
                 
             if len(chunks) > 0:
                 ## todo: use demfun.sample_warp
-                g = gdal.Warp(self.fn, chunks, format='GTiff',
+                g = gdal.Warp(self.fn, chunks, format='GTiff', resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
                 

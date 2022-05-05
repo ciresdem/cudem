@@ -257,9 +257,9 @@ class VerticalTransform:
 
         v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
-        v_in._outdir = self.cach_dir
+        v_in._outdir = self.cache_dir
         v_in.run()
-        v_out._outdir = self.cach_dir
+        v_out._outdir = self.cache_dir
         v_out.run()
 
         if not v_in.results or not v_out.results:
