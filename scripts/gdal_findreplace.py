@@ -36,6 +36,8 @@ if __name__ == "__main__":
     ndata = None
     row = None
     column = None
+    gt = False
+    lt = False
     
     i = 1
     while i < len(sys.argv):
@@ -56,6 +58,10 @@ if __name__ == "__main__":
             mk_ndata = True
             ndata = sys.argv[i+1]
             i = i + 1
+        elif arg == '-gt':
+            gt = True
+        elif arg == '-lt':
+            lt = True
         elif arg == '-overwrite':
             overwrite = True
         elif arg == '-verbose':
@@ -87,7 +93,12 @@ if __name__ == "__main__":
     elif np.isnan(float(fdata)):
         outarray[np.isnan(outarray)]=rdata
     else:
-        t = np.isclose(outarray, float(fdata))
+        if lt:
+            t = outarray <= float(fdata)
+        elif gt:
+            t = outarray >= float(fdata)
+        else:
+            t = np.isclose(outarray, float(fdata))
         if verbose: sys.stderr.write('{}.'.format(np.any(t)))
     
     # Create the output GDAL Raster
