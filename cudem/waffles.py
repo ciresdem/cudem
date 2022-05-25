@@ -62,6 +62,8 @@ from cudem import demfun
 from cudem import metadata
 from cudem import vdatumfun
 
+## Data cache directory
+## mostly stores fetches related data here
 waffles_cache = utils.cudem_cache
 
 class Waffle:
@@ -129,8 +131,6 @@ class Waffle:
         self.chunk = chunk
         self.dst_srs = dst_srs
         self.srs_transform = srs_transform
-        #self.mod = None
-        #self.mod_args = {}
         self.archive = archive
         self.mask = mask
         self.clobber = clobber
@@ -2242,11 +2242,9 @@ class WafflesStacks(Waffle):
         weight_array = np.zeros((ycount, xcount))
 
         if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid'.format(ycount, xcount))
-            utils.echo_msg('stacking method is {}'.format('supercede' if self.supercede else 'weighted mean'))
-            #utils.echo_msg('size of stacked array is {}'.format(utils.convert_size(sys.getsizeof(z_array))))
-            #utils.echo_msg('size of count array is {}'.format(utils.convert_size(sys.getsizeof(count_array))))
-            #utils.echo_msg('size of weight array is {}'.format(utils.convert_size(sys.getsizeof(weight_array))))
+            utils.echo_msg('stacking data to {}/{} grid using {} method'.format(
+                ycount, xcount, 'supercede' if self.supercede else 'weighted mean'
+            ))
 
         for arr, srcwin, gt, w in self.yield_array():
             if utils.float_or(w) is not None:
