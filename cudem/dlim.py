@@ -619,7 +619,8 @@ class DatasetFactory:
                   'nasadem',
                   'tides',
                   'vdatum',
-                  'earthdata'
+                  'earthdata',
+                  'bluetopo'
               ],
               'opts': '< -11 >',
               'class': Fetcher,

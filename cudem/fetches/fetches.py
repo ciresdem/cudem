@@ -62,6 +62,8 @@ import cudem.fetches.earthdata as earthdata
 import cudem.fetches.usiei as usiei
 import cudem.fetches.trackline as trackline
 import cudem.fetches.mgds as mgds
+import cudem.fetches.arcticdem as arcticdem
+import cudem.fetches.bluetopo as bluetopo
 
 ## ==============================================
 ## Fetches Module Parser
@@ -213,7 +215,20 @@ CHS NONNA 10m and 100m Bathymetric Survey Grids; Non-Navigational gridded bathym
 
 < hrdem >""",
         },
-        'osm': {
+        'arcticdem': {
+            'class': arcticdem.ArcticDEM,
+            'description': """Arctic DEM
+
+< arcticdem >""",
+        },
+
+        'bluetopo': {
+            'class': bluetopo.BlueTopo,
+            'description': """BlueTOPO DEM
+
+< bluetopo >""",
+        },
+'osm': {
             'class': osm.OpenStreetMap,
             'description': """OpenStreetMap data. 
 OpenStreetMap is a free, editable map of the whole world that is 

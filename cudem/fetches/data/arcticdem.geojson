@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "FRED",
+"features": [
+{ "type": "Feature", "properties": { "Name": "ArcticDEM", "ID": "ARCTICDEM-1", "Date": 2022, "Agency": "UMN", "MetadataLink": "https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/", "MetadataDate": "2022", "DataLink": "https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/indexes/ArcticDEM_Tile_Index_Rel7.zip", "IndexLink": "https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/indexes/ArcticDEM_Tile_Index_Rel7.zip", "Link": null, "DataType": "raster", "DataSource": "arcticdem", "Resolution": null, "HorizontalDatum": null, "VerticalDatum": null, "LastUpdate": "20220525152930", "Etcetra": null, "Info": "Arctic Only" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -180.0, 50.594892217490397, 0.0 ], [ 179.534190917235009, 50.594892217490397, 0.0 ], [ 179.534190917235009, 83.987241826967704, 0.0 ], [ -180.0, 83.987241826967704, 0.0 ], [ -180.0, 50.594892217490397, 0.0 ] ] ] } }
+]
+}
