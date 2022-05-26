@@ -105,11 +105,12 @@ class BlueTopo(f_utils.FetchModule):
                     if geom.Intersects(self.region.export_as_geom()):
                         tile_name = feature.GetField('TileName')
                         r = s3.list_objects(Bucket = 'noaa-ocs-nationalbathymetry-pds', Prefix='BlueTopo/{}'.format(tile_name))
-                        print(r)
-                        for key in r['Contents']:
-                            print(key)
-                            if key['Key'].split('.')[-1] == 'tiff':
-                                data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
+                        #print(r)
+                        if 'Contents' in r:
+                            for key in r['Contents']:
+                                print(key)
+                                if key['Key'].split('.')[-1] == 'tiff':
+                                    data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
                         if data_link is not None:
                             self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), surv['DataType']])
             utils.remove_glob('bluetopo.gpkg')
