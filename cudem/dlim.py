@@ -580,7 +580,7 @@ class DatasetFactory:
               'class': datasets.XYZFile,
               },
         200: {'name': 'raster',
-              'fmts': ['tif', 'img', 'grd', 'nc', 'vrt'],
+              'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'],
               'opts': '< 200:open_options="OPT1=KEY"/"OPT2=KEY2" >',
               'class': datasets.RasterFile,
               },

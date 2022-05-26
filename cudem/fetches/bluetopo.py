@@ -124,12 +124,9 @@ class BlueTopo(f_utils.FetchModule):
                 data_format=200,
                 dst_srs=self.dst_srs,
                 src_srs=None,
-                #name=src_dc,
                 src_region=self.region,
                 verbose=self.verbose
             )
-
-            #for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
             for xyz in _ds.yield_xyz():
                 yield(xyz)
 
