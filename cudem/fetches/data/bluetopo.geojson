@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "FRED",
+"features": [
+{ "type": "Feature", "properties": { "Name": "BlueTopo", "ID": "BLUETOPO-1", "Date": 2022, "Agency": "NOAA", "MetadataLink": "https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/BlueTopo-Tile-Scheme/BlueTopo_Tile_Scheme_20211214.gpkg", "MetadataDate": "2022", "DataLink": "https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/BlueTopo-Tile-Scheme/BlueTopo_Tile_Scheme_20211214.gpkg", "IndexLink": "https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/BlueTopo-Tile-Scheme/BlueTopo_Tile_Scheme_20211214.gpkg", "Link": null, "DataType": "raster", "DataSource": "bluetopo", "Resolution": null, "HorizontalDatum": null, "VerticalDatum": null, "LastUpdate": "20220525161811", "Etcetra": null, "Info": "Bathy Only" }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -98.4, 16.8, 0.0 ], [ -64.2, 16.8, 0.0 ], [ -64.2, 45.600000000000101, 0.0 ], [ -98.4, 45.600000000000101, 0.0 ], [ -98.4, 16.8, 0.0 ] ] ] } }
+]
+}
