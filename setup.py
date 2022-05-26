@@ -49,6 +49,7 @@ setuptools.setup(
         'matplotlib',
         'laspy[laszip]',
         'h5py',
+        'boto3',
     ], 
     entry_points = {
         'console_scripts': [
