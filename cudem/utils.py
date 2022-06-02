@@ -573,7 +573,7 @@ def x360(x):
 ## Archives (zip/gzip/etc.)
 ##
 ## ==============================================
-def unzip(zip_file, outdir='./'):
+def unzip(zip_file, outdir='./', overwrite=False):
     """unzip (extract) `zip_file`
 
     Args:
@@ -586,9 +586,14 @@ def unzip(zip_file, outdir='./'):
     try:
         zip_ref = zipfile.ZipFile(zip_file)
         zip_files = zip_ref.namelist()
-        zip_ref.extractall(outdir)
+        if not overwrite:
+            for fn in zip_files:
+                if not os.path.exists(os.path.join(outdir, fn)):
+                    zip_ref.extract(fn, outdir)
+        else:
+            zip_ref.extractall(outdir)
+            
         zip_ref.close()
-        
         return(zip_files)
     
     except Exception as e:

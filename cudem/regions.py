@@ -427,6 +427,9 @@ class Region:
           list: a list of chunked regions [<regions.region>, ...]
         """
 
+        if n_chunk is None:
+            return([self])
+        
         i_chunk = 0
         x_i_chunk = 0
         x_chunk = n_chunk
@@ -462,6 +465,7 @@ class Region:
                 x_chunk += n_chunk
                 x_i_chunk += 1
             else: break
+
         return(o_chunks)
 
     def warp(self, dst_srs='epsg:4326'):

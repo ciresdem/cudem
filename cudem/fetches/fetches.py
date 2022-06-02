@@ -64,6 +64,7 @@ import cudem.fetches.trackline as trackline
 import cudem.fetches.mgds as mgds
 import cudem.fetches.arcticdem as arcticdem
 import cudem.fetches.bluetopo as bluetopo
+import cudem.fetches.hydrolakes as hydrolakes
 
 ## ==============================================
 ## Fetches Module Parser
@@ -307,6 +308,12 @@ layers:
   4 - Other Bathy
 
 < usiei:where=None:layer=0 >""",
+        },
+        'hydrolakes': {
+            'class': hydrolakes.HydroLakes,
+            'description': """HydroLakes
+
+< hydrolakes >""",
         },
     }
     

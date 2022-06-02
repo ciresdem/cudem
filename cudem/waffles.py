@@ -1764,7 +1764,7 @@ class WafflesCUDEM(Waffle):
                 
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             pre_surface = WaffleFactory(
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface',
+                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1',
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
@@ -2315,7 +2315,17 @@ class WafflesStacks(Waffle):
 ## Waffles Coastline/Landmask
 ## ==============================================
 class WafflesCoastline(Waffle):
-    def __init__(self, want_nhd=True, want_copernicus=True, want_gmrt=False, invert=False, polygonize=True, **kwargs):
+    def __init__(
+            self,
+            want_nhd=True,
+            want_copernicus=True,
+            want_gmrt=False,
+            want_lakes=False,
+            want_buildings=False,
+            invert=False,
+            polygonize=True,
+            **kwargs
+    ):
         """Generate a landmask from various sources.
         
         set polyginize to False to skip polyginizing the landmask, set
@@ -2330,6 +2340,8 @@ class WafflesCoastline(Waffle):
             'want_nhd':want_nhd,
             'want_copernicus':want_copernicus,
             'want_gmrt':want_gmrt,
+            'want_lakes':want_lakes,
+            'want_buildings':want_buildings,
             'invert':invert,
             'polygonize':polygonize
         }
@@ -2338,6 +2350,8 @@ class WafflesCoastline(Waffle):
         self.want_nhd = want_nhd
         self.want_gmrt = want_gmrt
         self.want_copernicus = want_copernicus
+        self.want_lakes = want_lakes
+        self.want_buildings = want_buildings
         self.invert = invert
         self.polygonize = polygonize
 
@@ -2347,6 +2361,8 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.copernicus
         import cudem.fetches.tnm
         import cudem.fetches.gmrt
+        import cudem.fetches.hydrolakes
+        import cudem.fetches.osm
         import cudem.fetches.utils
 
         self.f_region = self.p_region.copy()
@@ -2369,7 +2385,13 @@ class WafflesCoastline(Waffle):
 
         if self.want_nhd:
             self._load_nhd()
-        
+
+        if self.want_lakes:
+            self._load_lakes()
+
+        if self.want_buildings:
+            self._load_bldgs()
+            
         if len(self.data) > 0:
             self._load_data()
 
@@ -2526,7 +2548,7 @@ class WafflesCoastline(Waffle):
                     verbose=True
                 )
                 #utils.remove_glob(tnm_zip[1], *tnm_zips, gdb)
-                utils.remove_glob(*tnm_zips, gdb)
+                #utils.remove_glob(*tnm_zips, gdb)
 
             utils.run_cmd(
                 'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
@@ -2544,6 +2566,99 @@ class WafflesCoastline(Waffle):
                 tnm_ds = tnm_ds_arr = None
                 
             utils.remove_glob('nhdArea_merge.*')
+
+    def _load_lakes(self):
+        """HydroLakes -- Global Lakes"""
+        
+        this_lakes = cudem.fetches.hydrolakes.HydroLakes(
+            src_region=self.f_region, weight=self.weights, verbose=self.verbose
+        )
+        this_lakes._outdir = self.cache_dir
+        this_lakes.run()
+
+        fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        lakes_shp = None
+        lakes_zip = this_lakes.results[0][1]
+        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
+        for i in lakes_shps:
+            if i.split('.')[-1] == 'shp':
+                lakes_shp = i
+        #lakes_shp = this_lakes.extract_shp(lakes_zip)
+        
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        driver = gdal.GetDriverByName('MEM')
+        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
+            
+        out_ds.SetGeoTransform(self.ds_config['geoT'])
+        out_ds.SetProjection(self.ds_config['proj'])
+        out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
+
+        ll = ogr.Open(lakes_shp)
+        lll = ll.GetLayer()
+        
+        gdal.RasterizeLayer(out_ds, [1], lll, burn_values=[-1])
+        
+        lakes_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
+        self.coast_array[lakes_ds_arr == -1] = 0
+        out_ds = lakes_ds_arr = None
+
+    def _load_bldgs(self):
+        """load buildings from OSM
+        
+        OSM has a size limit, so will chunk the region and
+        do multiple osm calls
+        """
+
+        x_delta = self.f_region.xmax - self.f_region.xmin
+        y_delta = self.f_region.ymax - self.f_region.ymin
+
+        if x_delta > .25 or y_delta > .25:
+            xcount, ycount, gt = self.f_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+            if x_delta >= y_delta:
+                n_chunk = int(xcount*(.25/x_delta))
+            elif y_delta > x_delta:
+                n_chunk = int(ycount*(.25/y_delta))
+            
+        else:
+            n_chunk = None
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        driver = gdal.GetDriverByName('MEM')
+        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
+        out_ds.SetGeoTransform(self.ds_config['geoT'])
+        out_ds.SetProjection(self.ds_config['proj'])
+        out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
+            
+        for this_region in self.f_region.chunk(self.xinc, n_chunk=n_chunk):
+        
+            this_osm = cudem.fetches.osm.OpenStreetMap(
+                src_region=this_region, weight=self.weights, verbose=self.verbose
+            )
+            this_osm._outdir = self.cache_dir
+            this_osm.run()
+            fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False)
+            fr.daemon = True
+            fr.start()
+            fr.join()
+
+            osm_vector = this_osm.results[0][1]
+            osm_ds = ogr.Open(osm_vector)
+            osm_layer = osm_ds.GetLayer('multipolygons')
+            osm_layer.SetAttributeFilter("building!=''")
+
+            gdal.RasterizeLayer(out_ds, [1], osm_layer, burn_values=[-1])
+
+            osm_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
+            self.coast_array[osm_ds_arr == -1] = 0
+            osm_ds_arr = None
+            
+        out_ds = None
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""

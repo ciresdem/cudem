@@ -414,6 +414,21 @@ class Fetch:
                             if chunk:
                                 local_file.write(chunk)
 
+                elif req.status_code == 429:
+                    utils.echo_warning_msg('server returned: {}, taking a nap and trying again...'.format(req.status_code))
+                    time.sleep(10)
+                    ## ==============================================
+                    ## pause a bit and retry...
+                    ## ==============================================
+                    Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                        dst_fn,
+                        params=params,
+                        datatype=datatype,
+                        overwrite=overwrite,
+                        timeout=timeout,
+                        read_timeout=read_timeout
+                    )
+                    
                 else:
                     utils.echo_error_msg('server returned: {}'.format(req.status_code))
 
