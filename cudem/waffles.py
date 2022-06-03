@@ -2614,18 +2614,18 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
-        x_delta = self.f_region.xmax - self.f_region.xmin
-        y_delta = self.f_region.ymax - self.f_region.ymin
+        # x_delta = self.f_region.xmax - self.f_region.xmin
+        # y_delta = self.f_region.ymax - self.f_region.ymin
 
-        if x_delta > .25 or y_delta > .25:
-            xcount, ycount, gt = self.f_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-            if x_delta >= y_delta:
-                n_chunk = int(xcount*(.25/x_delta))
-            elif y_delta > x_delta:
-                n_chunk = int(ycount*(.25/y_delta))
+        # if x_delta > .25 or y_delta > .25:
+        #     xcount, ycount, gt = self.f_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        #     if x_delta >= y_delta:
+        #         n_chunk = int(xcount*(.25/x_delta))
+        #     elif y_delta > x_delta:
+        #         n_chunk = int(ycount*(.25/y_delta))
             
-        else:
-            n_chunk = None
+        # else:
+        #     n_chunk = None
 
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
@@ -2635,19 +2635,22 @@ class WafflesCoastline(Waffle):
         out_ds.SetProjection(self.ds_config['proj'])
         out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
             
-        for this_region in self.f_region.chunk(self.xinc, n_chunk=n_chunk):
+        #for this_region in self.f_region.chunk(self.xinc, n_chunk=n_chunk):
         
-            this_osm = cudem.fetches.osm.OpenStreetMap(
-                src_region=this_region, weight=self.weights, verbose=self.verbose
-            )
-            this_osm._outdir = self.cache_dir
-            this_osm.run()
-            fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False)
-            fr.daemon = True
-            fr.start()
-            fr.join()
+        this_osm = cudem.fetches.osm.OpenStreetMap(
+            src_region=self.f_region, weight=self.weights, verbose=self.verbose
+        )
+        this_osm._outdir = self.cache_dir
+        this_osm.run()
+        #fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, n_threads=1)
+        #fr.daemon = True        
+        #fr.start()
+        #fr.join()
 
-            osm_vector = this_osm.results[0][1]
+        #for osm_result in this_osm.results:
+        for osm_result in this_osm.results:
+            cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1])
+            osm_vector = osm_result[1]
             osm_ds = ogr.Open(osm_vector)
             osm_layer = osm_ds.GetLayer('multipolygons')
             osm_layer.SetAttributeFilter("building!=''")

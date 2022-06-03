@@ -33,7 +33,7 @@
 
 import os
 import sys
-#import time
+import time
 import requests
 import urllib
 import lxml.etree
@@ -415,11 +415,11 @@ class Fetch:
                                 local_file.write(chunk)
 
                 elif req.status_code == 429:
-                    utils.echo_warning_msg('server returned: {}, taking a nap and trying again...'.format(req.status_code))
-                    time.sleep(10)
                     ## ==============================================
                     ## pause a bit and retry...
                     ## ==============================================
+                    utils.echo_warning_msg('server returned: {}, taking a nap and trying again...'.format(req.status_code))
+                    time.sleep(10)
                     Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                         dst_fn,
                         params=params,
@@ -428,6 +428,7 @@ class Fetch:
                         timeout=timeout,
                         read_timeout=read_timeout
                     )
+                    self.verbose=False
                     
                 else:
                     utils.echo_error_msg('server returned: {}'.format(req.status_code))
@@ -543,17 +544,18 @@ class fetch_results(threading.Thread):
     """
     
     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
-    def __init__(self, mod, want_proc=False):
+    def __init__(self, mod, want_proc=False, n_threads=3):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.mod = mod
         #self.outdir_ = self.mod._outdir
         self.want_proc = want_proc
+        self.n_threads = n_threads
         if len(self.mod.results) == 0:
             self.mod.run()
         
     def run(self):
-        for _ in range(3):
+        for _ in range(self.n_threads):
             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc))
             t.daemon = True
             t.start()

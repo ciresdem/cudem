@@ -55,26 +55,43 @@ class OpenStreetMap(f_utils.FetchModule):
         if self.region is None:
             return([])
 
-        c_bbox = self.region.format('osm_bbox')
-        out_fn = 'osm_{}'.format(self.region.format('fn'))
-
-        osm_q_bbox  = '''
-        {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
-
-        osm_q = '''
-        (node;
-        <;
-        >;
-        );
-        out meta;
-        '''
-
-        osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
+        x_delta = self.region.xmax - self.region.xmin
+        y_delta = self.region.ymax - self.region.ymin
+        incs = self.region.increments(1000,1000)
         
-        osm_data = f_utils.urlencode({'data': osm_q_})
-        osm_data_url = self._osm_api + '?' + osm_data
-        
-        self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
+        if x_delta > .25 or y_delta > .25:
+            xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
+            print(xcount, ycount)
+            if x_delta >= y_delta:
+                n_chunk = int(xcount*(.25/x_delta))
+            elif y_delta > x_delta:
+                n_chunk = int(ycount*(.25/y_delta))
+        else:
+            n_chunk = None
+
+        print(n_chunk)
+            
+        for this_region in self.region.chunk(incs[0], n_chunk=n_chunk):        
+            c_bbox = this_region.format('osm_bbox')
+            out_fn = 'osm_{}'.format(this_region.format('fn'))
+
+            osm_q_bbox  = '''
+            {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
+
+            osm_q = '''
+            (node;
+            <;
+            >;
+            );
+            out meta;
+            '''
+
+            osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
+
+            osm_data = f_utils.urlencode({'data': osm_q_})
+            osm_data_url = self._osm_api + '?' + osm_data
+
+            self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
         
         
 ### End
