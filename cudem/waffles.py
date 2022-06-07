@@ -148,6 +148,7 @@ class Waffle:
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
         self.aux_dems = []
+        #self._init_data(set_incs=True)
         self._init_data()
             
     def _init_regions(self):
@@ -307,6 +308,7 @@ class Waffle:
           list: xyz data for each block with data
         """
 
+        #power = utils.float_or(power, 1)
         xcount, ycount, dst_gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc
         )
@@ -315,6 +317,7 @@ class Waffle:
         count_array = np.zeros((ycount, xcount))
         if self.weights:
             weight_array = np.zeros((ycount, xcount))
+            #w_array = np.zeros((ycount, xcount))
             
         if self.verbose:
             utils.echo_msg(
@@ -329,6 +332,7 @@ class Waffle:
                 count_array[ypos, xpos] += 1
                 if self.weights:
                     weight_array[ypos, xpos] += this_xyz.w
+                    #w_array[ypos, xpos] += this_xyz.w * this_xyz.w
 
             except: pass
 
@@ -336,6 +340,7 @@ class Waffle:
         if self.weights:
             weight_array[weight_array == 0] = np.nan
             weight_array = (weight_array/count_array)
+            #weight_array = (w_array/weight_array)/count_array
             z_array = (z_array/weight_array)/count_array
         else:
             z_array = (z_array/count_array)
@@ -444,7 +449,7 @@ class Waffle:
                 yield(array)
         
     ## TODO: allow spat-meta and archive at same time...
-    def yield_xyz(self, **kwargs):
+    def yield_xyz(self, region=None, **kwargs):
         """yields the xyz data"""
 
         # this_datalist = dlim.init_data(self.data_, self.p_region, None, self.dst_srs if self.srs_transform else None, (self.xinc, self.yinc) if block else (None, None), self.verbose)
@@ -1689,6 +1694,8 @@ class WafflesCUDEM(Waffle):
         
     def run(self):
         pre = self.pre_count
+        #count = 3-self.pre_count
+        self.p_region.buffer(pct=self.pre_count)
         pre_weight = 0
         pre_region = self.p_region.copy()
         pre_region.wmin = None
@@ -1696,6 +1703,13 @@ class WafflesCUDEM(Waffle):
         upper_limit = None
         coast = '{}_cst'.format(self.name)
 
+        #block_region = self.p_region.copy()
+        #block_region.buffer(pct=self.pre_count)
+
+        utils.echo_msg('target region: {}'.format(self.region))
+        utils.echo_msg('processing region: {}'.format(self.p_region))
+        #utils.echo_msg('block region: {}'.format(block_region))
+        
         self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         n = '{}_n.tif'.format(self.name)
         w = '{}_w.tif'.format(self.name)
@@ -1717,7 +1731,7 @@ class WafflesCUDEM(Waffle):
                     self.coast = WaffleFactory(
                         mod='coastline:polygonize={}'.format(self.poly_count),
                         data=pre_data,
-                        src_region=pre_region,
+                        src_region=self.p_region,
                         xinc=self.xinc,
                         yinc=self.yinc,
                         name=coast,
@@ -1744,6 +1758,8 @@ class WafflesCUDEM(Waffle):
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
+                #pre_weight = self.min_weight/(3**pre) if pre > 0 else self.min_weight
+                #pre_weight = self.min_weight/(3/count) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
                 pre_data = [
                     '{},200:weight_mask={},1'.format(n, w),
@@ -1753,7 +1769,8 @@ class WafflesCUDEM(Waffle):
                 ]
                 pre_region.wmin = pre_weight
 
-            pre_region = self.p_region.copy()
+            #pre_region = self.p_region.copy()
+            pre_region = self._proc_region()
             pre_region.buffer(pct=pre)
 
             if pre == 0:
@@ -1763,6 +1780,8 @@ class WafflesCUDEM(Waffle):
                 pre_region.wmin = pre_weight
                 
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
+            utils.echo_msg('pre region: {}'.format(pre_region))
+            
             pre_surface = WaffleFactory(
                 mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1',
                 data=pre_data,
@@ -1783,6 +1802,7 @@ class WafflesCUDEM(Waffle):
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
             pre -= 1
+            #count += 1
             
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
