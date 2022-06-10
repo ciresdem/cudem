@@ -2442,6 +2442,11 @@ class WafflesLakes(Waffle):
             self.wgs_region.warp('epsg:4326')
         else:
             self.dst_srs = 'epsg:4326'
+            
+        self.wgs_region = self.p_region.copy()
+        if self.dst_srs is not None:
+            self.wgs_region.warp('epsg:4326')
+            
 
     def _load_bathy(self):
         """create a nodata grid"""
@@ -2493,12 +2498,37 @@ class WafflesLakes(Waffle):
         cudem.fetches.utils.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip)
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
         globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
+
+        
         with open(globathy_csv, mode='r') as globc:
             reader = csv.reader(globc)
             next(reader)
             globd = {int(row[0]):float(row[-1]) for row in reader}
         
         return(globd)
+
+    def _fetch_copernicus(self):
+        """copernicus"""
+
+        this_cop = cudem.fetches.copernicus.CopernicusDEM(
+            src_region=self.p_region, weight=self.weights, verbose=self.verbose, datatype='1'
+        )
+        this_cop._outdir = self.cache_dir
+        this_cop.run()
+
+        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+        
+        for i, cop_tif in enumerate(this_cop.results):
+            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+            
+        return(cop_ds)
     
     def generate_mem_ogr(self, geom, srs):
         """Create temporary polygon vector layer from feature geometry 
@@ -2537,7 +2567,9 @@ class WafflesLakes(Waffle):
     def run(self):        
         self._load_bathy()        
         lakes_shp = self._fetch_lakes()
-        globd = self._fetch_globathy()        
+        globd = self._fetch_globathy()
+        cop_ds = self._fetch_copernicus()
+        cop_band = cop_ds.GetRasterBand(1)
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
         msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
 
@@ -2572,7 +2604,7 @@ class WafflesLakes(Waffle):
             
             prox_arr = prox_band.ReadAsArray()
             msk_arr = msk_band.ReadAsArray()
-            self.bathy_arr += self.apply_calculation(prox_band.ReadAsArray(), max_depth=lk_depth_glb, shore_elev=lk_elevation)
+            self.bathy_arr += self.apply_calculation(prox_band.ReadAsArray(), max_depth=lk_depth_glb, shore_elev=cop_band.ReadAsArray())
             
             prox_arr[msk_arr == 1] = 0
             prox_ds.GetRasterBand(1).WriteArray(prox_arr)

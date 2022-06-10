@@ -1069,7 +1069,9 @@ def generate_mem_ds(ds_config, name='MEM'):
     mem_driver = gdal.GetDriverByName('MEM')
     mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
     mem_ds.SetGeoTransform(ds_config['geoT'])
-    mem_ds.SetProjection(ds_config['proj'])
+    if ds_config['proj'] is not None:
+        mem_ds.SetProjection(ds_config['proj'])
+        
     mem_band = mem_ds.GetRasterBand(1)
     mem_band.SetNoDataValue(ds_config['ndv'])
         

@@ -33,9 +33,12 @@
 import os
 import sys
 
+from osgeo import gdal
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -168,6 +171,7 @@ class CopernicusDEM(f_utils.FetchModule):
                     src_srs='epsg:4326',
                     dst_srs=self.dst_srs,
                     #name=src_cop_dem,
+                    weight=self.weight,
                     src_region=self.region,
                     verbose=self.verbose
                 )
@@ -178,6 +182,39 @@ class CopernicusDEM(f_utils.FetchModule):
                 utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
         utils.remove_glob(entry[1])
 
+    def yield_array(self, entry, x_inc, y_inc):
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+            src_cop_dems = utils.p_unzip(entry[1], ['tif'])
+            for src_cop_dem in src_cop_dems:
+
+                # ds = gdal.Open(src_cop_dem)
+                # ds_config = demfun.gather_infos(ds)
+                # band = ds.GetRasterBand(1)
+                # comp_geot = ds_config['geoT']
+                # outarray = ds.ReadAsArray()
+                # outarray[outarray == 0] = band.GetNoDataValue()
+                # band.WriteArray(outarray)
+                # ds = None
+
+                demfun.set_nodata(src_cop_dem, 0)
+                
+                _ds = datasets.RasterFile(
+                    fn=src_cop_dem,
+                    data_format=200,
+                    src_srs='epsg:4326',
+                    dst_srs=self.dst_srs,
+                    src_region=self.region,
+                    x_inc=x_inc,
+                    y_inc=y_inc,
+                    weight=self.weight,
+                    verbose=self.verbose
+                )
+                for arr in _ds.yield_array():
+                    yield(arr)
+                        
+                utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
+        utils.remove_glob(entry[1])
+        
 if __name__ == '__main__':
     cop_dem = CopernicusDEM()
     #cop_dem.update()

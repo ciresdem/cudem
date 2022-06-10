@@ -140,8 +140,7 @@ class GMRT(f_utils.FetchModule):
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                weight=.25,
-                #name=src_data,
+                weight=self.weight,
                 src_region=self.region,
                 verbose=self.verbose
             )
@@ -157,5 +156,40 @@ class GMRT(f_utils.FetchModule):
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
             
         utils.remove_glob('{}*'.format(src_data))
-    
+
+    def yield_array(self, entry, x_inc, y_inc):
+        src_data = 'gmrt_tmp.tif'
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose
+        ).fetch_file(src_data) == 0:
+            if self.bathy_only:
+                ds = gdal.Open(src_data)
+                ds_config = demfun.gather_infos(ds)
+                band = ds.GetRasterBand(1)
+                comp_geot = ds_config['geoT']
+                outarray = ds.ReadAsArray()
+                outarray[outarray > 0] = band.GetNoDataValue()
+                band.WriteArray(outarray)
+                ds = None
+
+            gmrt_ds = datasets.RasterFile(
+                fn=src_data,
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                x_inc=x_inc,
+                y_inc=y_inc,
+                weight=self.weight,
+                src_region=self.region,
+                verbose=self.verbose
+            )
+                
+            for arr in gmrt_ds.yield_array():
+                yield(arr)
+                    
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
+        utils.remove_glob('{}*'.format(src_data))
+        
 ### End

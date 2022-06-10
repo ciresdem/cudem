@@ -567,7 +567,7 @@ class fetch_results(threading.Thread):
 
 class FetchModule:
 
-    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, dst_srs=None):
+    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, dst_srs='epsg:4326'):
         self.region = src_region
         self.callback = callback
         self.weight = weight
@@ -581,7 +581,10 @@ class FetchModule:
     def run(self):
         raise(NotImplementedError)
 
-    def yield_xyz(self, **kwargs):
+    def yield_xyz(self, entry, **kwargs):
+        raise(NotImplementedError)
+
+    def yield_array(self, entry, x_inc, y_inc, **kwargs):
         raise(NotImplementedError)
     
     def fetch(self, entry):
@@ -620,4 +623,12 @@ class FetchModule:
                 encode=False
             )
 
+    def yield_results_to_array(self, x_inc=None, y_inc=None, **kwargs):
+        if len(self.results) == 0:
+            self.run()
+            
+        for entry in self.results:
+            for arr in self.yield_array(entry, x_inc, y_inc, **kwargs):
+                yield(arr)
+            
 ### End

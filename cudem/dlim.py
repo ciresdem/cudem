@@ -557,7 +557,14 @@ parsing and processing.
     def yield_xyz(self):
         for xyz in self.fetch_module.yield_results_to_xyz():
             yield(xyz)
-                
+
+    def yield_array(self):
+        """yield the data array
+        set x_inc and y_inc to warp data to target resolution
+        """
+        for arr in self.fetch_module.yield_results_to_array(x_inc=self.x_inc, y_inc=self.y_inc):
+            yield(arr)
+            
 ## ==============================================
 ## Dataset generator
 ## ==============================================
@@ -620,7 +627,8 @@ class DatasetFactory:
                   'tides',
                   'vdatum',
                   'earthdata',
-                  'bluetopo'
+                  'bluetopo',
+                  'hydrolakes'
               ],
               'opts': '< -11 >',
               'class': Fetcher,
