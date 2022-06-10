@@ -61,20 +61,16 @@ class OpenStreetMap(f_utils.FetchModule):
         
         if x_delta > .25 or y_delta > .25:
             xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
-            print(xcount, ycount)
             if x_delta >= y_delta:
                 n_chunk = int(xcount*(.25/x_delta))
             elif y_delta > x_delta:
                 n_chunk = int(ycount*(.25/y_delta))
         else:
             n_chunk = None
-
-        print(n_chunk)
             
         for this_region in self.region.chunk(incs[0], n_chunk=n_chunk):        
             c_bbox = this_region.format('osm_bbox')
             out_fn = 'osm_{}'.format(this_region.format('fn'))
-
             osm_q_bbox  = '''
             {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
 
@@ -92,6 +88,5 @@ class OpenStreetMap(f_utils.FetchModule):
             osm_data_url = self._osm_api + '?' + osm_data
 
             self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
-        
-        
+                
 ### End

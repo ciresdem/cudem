@@ -1063,6 +1063,18 @@ def percentile(src_gdal, perc = 95):
         return(p)
     else: return(None)
 
+def generate_mem_ds(ds_config, name='MEM'):
+    """Create temporary gdal mem dataset"""
+        
+    mem_driver = gdal.GetDriverByName('MEM')
+    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+    mem_ds.SetGeoTransform(ds_config['geoT'])
+    mem_ds.SetProjection(ds_config['proj'])
+    mem_band = mem_ds.GetRasterBand(1)
+    mem_band.SetNoDataValue(ds_config['ndv'])
+        
+    return(mem_ds)
+    
 # def xyz_block_array(src_xyz, region=None, xinc=None, yinc=None, weights=False, min_count=None, out_name=None, verbose=True):
 #     """block the src_xyz data to the mean block value
 #     src_xyz should be a list or generator of xyzfun.XYZPoint objects.

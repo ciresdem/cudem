@@ -519,8 +519,8 @@ def fetch_queue(q, m, p=False):
                     ).fetch_file(fetch_args[1])
             else:
                 if m.region is not None:
-                    o_x_fn = fetch_args[1] + m.region.format('fn') + '.xyz'
-                else: o_x_fn = fetch_args[1] + '.xyz'
+                    o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '_' + m.region.format('fn') + '.xyz'
+                else: o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '.xyz'
                 
                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
                 if not os.path.exists(o_x_fn):

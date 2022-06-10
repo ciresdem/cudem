@@ -335,7 +335,7 @@ class NOS(f_utils.FetchModule):
                         z_scale=-1,
                         src_srs='epsg:4326',
                         dst_srs=self.dst_srs,
-                        name=nos_f_r,
+                        #name=nos_f_r,
                         src_region=self.region,
                         verbose=self.verbose,
                         remote=True
@@ -353,7 +353,7 @@ class NOS(f_utils.FetchModule):
                         fn=src_bag,
                         data_format=200,
                         dst_srs=self.dst_srs,
-                        name=src_bag,
+                        #name=src_bag,
                         src_region=self.region,
                         verbose=self.verbose
                     )

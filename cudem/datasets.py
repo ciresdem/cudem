@@ -947,7 +947,7 @@ class XYZFile(ElevationDataset):
                     w = float(this_xyz[self.wpos])
                 else:
                     w = 1
-                    
+
                 try:
                     this_xyz = xyzfun.XYZPoint(
                         x=this_xyz[self.xpos],

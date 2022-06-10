@@ -2227,24 +2227,13 @@ class WafflesCoastline(Waffle):
         fr.join()
         
         gmrt_tif = this_gmrt.results[0]
-
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        driver = gdal.GetDriverByName('MEM')
-        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-            
-        out_ds.SetGeoTransform(self.ds_config['geoT'])
-        out_ds.SetProjection(self.ds_config['proj'])
-        out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
-        gdal.Warp(out_ds, gmrt_tif[1], dstSRS = dst_srs, resampleAlg=self.sample)
-            
-        gmrt_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
+        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr < 0] = 0
-        #self.coast_array[self.coast_array == self.ds_config['ndv']] = gmrt_ds_arr[self.coast_array == self.ds_config['ndv']]
         self.coast_array += gmrt_ds_arr
-        out_ds = gmrt_ds_arr = None
-        #utils.remove_glob(gmrt_tif[1])
+        gmrt_ds = gmrt_ds_arr = None
         
     def _load_copernicus(self):
         """copernicus"""
@@ -2263,20 +2252,13 @@ class WafflesCoastline(Waffle):
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         for i, cop_tif in enumerate(this_cop.results):
-            driver = gdal.GetDriverByName('MEM')
-            out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-            
-            out_ds.SetGeoTransform(self.ds_config['geoT'])
-            out_ds.SetProjection(self.ds_config['proj'])
-            out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
-            
-            gdal.Warp(out_ds, cop_tif[1], dstSRS = dst_srs, resampleAlg=self.sample)
-            c_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
-            c_ds_arr[c_ds_arr > 0] = 1
-            #c_ds_arr[c_ds_arr != 1] = -1
-            self.coast_array += c_ds_arr
-            out_ds = c_ds_arr = None
-            #utils.remove_glob(cop_tif[1]) #, '{}*'.format(out))            
+            cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+            cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
+            cop_ds_arr[cop_ds_arr > 0] = 1
+            #cop_ds_arr[c_ds_arr != 1] = -1
+            self.coast_array += cop_ds_arr
+            cop_ds = cop_ds_arr = None
     
     def _load_nhd(self):
         """USGS NHD (HIGH-RES U.S. Only)
@@ -2349,37 +2331,26 @@ class WafflesCoastline(Waffle):
         )
         this_lakes._outdir = self.cache_dir
         this_lakes.run()
-
+        
         fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False)
         fr.daemon = True
         fr.start()
         fr.join()
-
+        
         lakes_shp = None
         lakes_zip = this_lakes.results[0][1]
         lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
         for i in lakes_shps:
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
-        #lakes_shp = this_lakes.extract_shp(lakes_zip)
-        
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        driver = gdal.GetDriverByName('MEM')
-        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-            
-        out_ds.SetGeoTransform(self.ds_config['geoT'])
-        out_ds.SetProjection(self.ds_config['proj'])
-        out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
 
-        ll = ogr.Open(lakes_shp)
-        lll = ll.GetLayer()
-        
-        gdal.RasterizeLayer(out_ds, [1], lll, burn_values=[-1])
-        
-        lakes_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
+        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
+        lk_ds = ogr.Open(lakes_shp)
+        lk_layer = lk_ds.GetLayer()        
+        gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
+        lakes_ds_arr = lakes_ds.GetRasterBand(1).ReadAsArray()
         self.coast_array[lakes_ds_arr == -1] = 0
-        out_ds = lakes_ds_arr = None
+        lakes_ds = lk_ds = None
 
     def _load_bldgs(self):
         """load buildings from OSM
@@ -2388,54 +2359,22 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
-        # x_delta = self.f_region.xmax - self.f_region.xmin
-        # y_delta = self.f_region.ymax - self.f_region.ymin
-
-        # if x_delta > .25 or y_delta > .25:
-        #     xcount, ycount, gt = self.f_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        #     if x_delta >= y_delta:
-        #         n_chunk = int(xcount*(.25/x_delta))
-        #     elif y_delta > x_delta:
-        #         n_chunk = int(ycount*(.25/y_delta))
-            
-        # else:
-        #     n_chunk = None
-
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        driver = gdal.GetDriverByName('MEM')
-        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-        out_ds.SetGeoTransform(self.ds_config['geoT'])
-        out_ds.SetProjection(self.ds_config['proj'])
-        out_ds.GetRasterBand(1).SetNoDataValue(self.ds_config['ndv'])
-            
-        #for this_region in self.f_region.chunk(self.xinc, n_chunk=n_chunk):
-        
+        bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
             src_region=self.f_region, weight=self.weights, verbose=self.verbose
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
-        #fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, n_threads=1)
-        #fr.daemon = True        
-        #fr.start()
-        #fr.join()
-
-        #for osm_result in this_osm.results:
         for osm_result in this_osm.results:
             cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1])
-            osm_vector = osm_result[1]
-            osm_ds = ogr.Open(osm_vector)
+            osm_ds = ogr.Open(osm_result[1])
             osm_layer = osm_ds.GetLayer('multipolygons')
             osm_layer.SetAttributeFilter("building!=''")
-
-            gdal.RasterizeLayer(out_ds, [1], osm_layer, burn_values=[-1])
-
-            osm_ds_arr = out_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[osm_ds_arr == -1] = 0
-            osm_ds_arr = None
+            gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
+            bldg_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+            self.coast_array[bldg_arr == -1] = 0
             
-        out_ds = None
+        bldg_ds = None
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
@@ -2503,10 +2442,26 @@ class WafflesLakes(Waffle):
             self.wgs_region.warp('epsg:4326')
         else:
             self.dst_srs = 'epsg:4326'
+
+    def _load_bathy(self):
+        """create a nodata grid"""
         
-    def run(self):
-        
-        self._load_bathy()
+        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        self.ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            gt,
+            utils.sr_wkt(self.dst_srs),
+            gdal.GDT_Float32,
+            self.ndv,
+            'GTiff'
+        )        
+        self.bathy_arr = np.zeros( (ycount, xcount) )
+            
+    def _fetch_lakes(self):
+        """fetch hydrolakes polygons"""
+
         this_lakes = cudem.fetches.hydrolakes.HydroLakes(
             src_region=self.p_region, weight=self.weights, verbose=self.verbose
         )
@@ -2525,102 +2480,40 @@ class WafflesLakes(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        ## generate proximity array
-        prox_srs = osr.SpatialReference()
-        prox_srs.SetFromUserInput(self.dst_srs)
-        prox_driver = gdal.GetDriverByName('MEM')
-        prox_ds = prox_driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-        prox_ds.SetGeoTransform(self.ds_config['geoT'])
-        prox_ds.SetProjection(self.ds_config['proj'])
-        prox_band = prox_ds.GetRasterBand(1)
-        prox_band.SetNoDataValue(self.ds_config['ndv'])
+        return(lakes_shp)
 
-        ## generate mask array
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        driver = gdal.GetDriverByName('MEM')
-        out_ds = driver.Create('MEM', self.ds_config['nx'], self.ds_config['ny'], 1, self.ds_config['dt'])
-        out_ds.SetGeoTransform(self.ds_config['geoT'])
-        out_ds.SetProjection(self.ds_config['proj'])
-        msk_band = out_ds.GetRasterBand(1)
-        msk_band.SetNoDataValue(self.ds_config['ndv'])
+    def _fetch_globathy(self):
+        """fetch globathy csv data and process into dict"""
         
-        ## process polygons
-        ll = ogr.Open(lakes_shp)
-        lll = ll.GetLayer()
-
-        lll.SetSpatialFilter(self.p_region.export_as_geom())
-        lake_features = lll.GetFeatureCount()
-        _prog = utils.CliProgress('processing {} lakes'.format(lake_features))
-        bathy_arr = np.zeros( (self.ds_config['ny'], self.ds_config['nx']) )
+        import csv
+        import cudem.fetches.utils
         
-        for i, feat in enumerate(lll):
-            _prog.update_perc((i, lake_features))
-            lk_name = feat.GetField('Lake_name')
-            lk_elevation = feat.GetField('Elevation')
-            lk_depth = feat.GetField('Depth_avg')
-
-            utils.echo_msg('lake: {}'.format(lk_name))
-            utils.echo_msg('lake elevation: {}'.format(lk_elevation))
-            utils.echo_msg('lake_depth: {}'.format(lk_depth))
-            #feat_geom = feat.GetGeometryRef()
-
-            # Get feature geometry and extent envelope
-            geom = feat.GetGeometryRef()
-            
-            # Create temporary polygon vector layer from feature geometry so that we can rasterize it (Rasterize needs a layer)
-            ds = ogr.GetDriverByName('MEMORY').CreateDataSource('')
-            Layer = ds.CreateLayer('', geom_type=ogr.wkbPolygon, srs=lll.GetSpatialRef())  # Use projection from input vector layer
-            outfeature = ogr.Feature(Layer.GetLayerDefn())      # Create the output feature
-            outfeature.SetGeometry(geom)                        # Set geometry of output feature
-            Layer.SetFeature(outfeature)
-            
-            gdal.RasterizeLayer(out_ds, [1], Layer, burn_values=[1])
-            msk_band = out_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
-            #lakes_ds_arr = msk_band.ReadAsArray()
-            
-            proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-
-            stats = msk_band.GetStatistics(0, 1)                                 # Calculate statistics
-            print(stats)
-            gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
-            stats = prox_band.GetStatistics(0, 1)                                 # Calculate statistics
-            print(stats)
-            prox_arr = prox_band.ReadAsArray()
-            msk_arr = msk_band.ReadAsArray()
-            
-            bathy_arr += self.apply_calculation(prox_band.ReadAsArray(), max_depth=lk_depth, shore_elev=lk_elevation)
-            
-            prox_arr[msk_arr == 1] = 0
-            prox_ds.GetRasterBand(1).WriteArray(prox_arr)
-            msk_arr[msk_arr == 1] = 0
-            out_ds.GetRasterBand(1).WriteArray(msk_arr)
-            
-        _prog.end(0, 'processed {} lakes'.format(lake_features))
-        bathy_arr[bathy_arr == 0] = self.ndv        
-        utils.gdal_write(
-            bathy_arr, '{}.tif'.format(self.name), self.ds_config,
-        )            
-        out_ds = lakes_ds_arr = None
-        return(self)
+        _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
+        globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
+        cudem.fetches.utils.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip)
+        globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
+        globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
+        with open(globathy_csv, mode='r') as globc:
+            reader = csv.reader(globc)
+            next(reader)
+            globd = {int(row[0]):float(row[-1]) for row in reader}
+        
+        return(globd)
     
-    def _load_bathy(self):
-        """create a nodata grid"""
+    def generate_mem_ogr(self, geom, srs):
+        """Create temporary polygon vector layer from feature geometry 
+        so that we can rasterize it (Rasterize needs a layer)
+        """
         
-        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        self.ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            'GTiff'
-        )        
-        #self.coast_array = np.zeros( (ycount, xcount) )
-        
+        ds = ogr.GetDriverByName('MEMORY').CreateDataSource('')
+        Layer = ds.CreateLayer('', geom_type=ogr.wkbPolygon, srs=srs)
+        outfeature = ogr.Feature(Layer.GetLayerDefn())
+        outfeature.SetGeometry(geom)
+        Layer.SetFeature(outfeature)
+
+        return(ds)
+
+    ##
     ## From GLOBathy
     def apply_calculation(self, shore_distance_arr, max_depth=0, shore_elev=0):
         """
@@ -2633,13 +2526,67 @@ class WafflesLakes(Waffle):
         max_depth - Input value with maximum lake depth.
         NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
         """
-        # Process the distance to shore and max depth into bathymetry
+        
         bathy_arr = (shore_distance_arr * max_depth) / float(shore_distance_arr.max())
         bathy_arr[bathy_arr == 0] = np.nan
         if self.apply_elevations:
             bathy_arr = shore_elev - bathy_arr
         bathy_arr[np.isnan(bathy_arr)] = 0
         return(bathy_arr)
+    
+    def run(self):        
+        self._load_bathy()        
+        lakes_shp = self._fetch_lakes()
+        globd = self._fetch_globathy()        
+        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
+        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
+
+        lk_ds = ogr.Open(lakes_shp)
+        lk_layer = lk_ds.GetLayer()
+        lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
+        lk_features = lk_layer.GetFeatureCount()
+        lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
+
+        for i, feat in enumerate(lk_layer):
+            lk_prog.update_perc((i, lk_features))
+            lk_id = feat.GetField('Hylak_id')
+            lk_name = feat.GetField('Lake_name')
+            lk_elevation = feat.GetField('Elevation')
+            lk_depth = feat.GetField('Depth_avg')
+            lk_depth_glb = globd[lk_id]
+            
+            utils.echo_msg('lake: {}'.format(lk_name))
+            utils.echo_msg('lake elevation: {}'.format(lk_elevation))
+            utils.echo_msg('lake_depth: {}'.format(lk_depth))
+            utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
+
+            tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
+            tmp_layer = tmp_ds.GetLayer()            
+            gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+
+            prox_band = prox_ds.GetRasterBand(1)
+            proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+            gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
+            
+            prox_arr = prox_band.ReadAsArray()
+            msk_arr = msk_band.ReadAsArray()
+            self.bathy_arr += self.apply_calculation(prox_band.ReadAsArray(), max_depth=lk_depth_glb, shore_elev=lk_elevation)
+            
+            prox_arr[msk_arr == 1] = 0
+            prox_ds.GetRasterBand(1).WriteArray(prox_arr)
+            msk_arr[msk_arr == 1] = 0
+            msk_ds.GetRasterBand(1).WriteArray(msk_arr)
+            tmp_ds = None
+            
+        lk_prog.end(0, 'processed {} lakes'.format(lk_features))
+        self.bathy_arr[self.bathy_arr == 0] = self.ndv        
+        utils.gdal_write(
+            self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
+        )            
+        prox_ds = msk_ds = None
+        return(self)
     
 ## ==============================================
 ## Waffles DEM update - testing

@@ -124,6 +124,7 @@ class BlueTopo(f_utils.FetchModule):
                                     data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
                         if data_link is not None:
                             self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), surv['DataType']])
+                v_ds = None
             utils.remove_glob('bluetopo.gpkg')
         
         return(self)
