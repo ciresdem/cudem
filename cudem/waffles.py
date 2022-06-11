@@ -2438,16 +2438,13 @@ class WafflesLakes(Waffle):
         self._mask = None
         self.apply_elevations = apply_elevations
         self.ds_config = None
-        if self.dst_srs is not None:
-            self.wgs_region.warp('epsg:4326')
-        else:
-            self.dst_srs = 'epsg:4326'
             
         self.wgs_region = self.p_region.copy()
         if self.dst_srs is not None:
-            self.wgs_region.warp('epsg:4326')
+            self.wgs_region.warp('epsg:4326')            
+        else:
+            self.dst_srs = 'epsg:4326'
             
-
     def _load_bathy(self):
         """create a nodata grid"""
         
@@ -2545,7 +2542,7 @@ class WafflesLakes(Waffle):
 
     ##
     ## From GLOBathy
-    def apply_calculation(self, shore_distance_arr, max_depth=0, shore_elev=0):
+    def apply_calculation(self, shore_distance_arr, max_depth=0, shore_arr=None, shore_elev=0):
         """
         Apply distance calculation, which is each pixel's distance to shore, multiplied
         by the maximum depth, all divided by the maximum distance to shore. This provides
@@ -2556,11 +2553,14 @@ class WafflesLakes(Waffle):
         max_depth - Input value with maximum lake depth.
         NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
         """
-        
+
         bathy_arr = (shore_distance_arr * max_depth) / float(shore_distance_arr.max())
         bathy_arr[bathy_arr == 0] = np.nan
-        if self.apply_elevations:
+        if shore_arr is None or shore_arr[~np.isnan(bathy_arr)].max() == 0:
             bathy_arr = shore_elev - bathy_arr
+        else:
+            bathy_arr = shore_arr - bathy_arr
+            
         bathy_arr[np.isnan(bathy_arr)] = 0
         return(bathy_arr)
     
@@ -2604,7 +2604,12 @@ class WafflesLakes(Waffle):
             
             prox_arr = prox_band.ReadAsArray()
             msk_arr = msk_band.ReadAsArray()
-            self.bathy_arr += self.apply_calculation(prox_band.ReadAsArray(), max_depth=lk_depth_glb, shore_elev=cop_band.ReadAsArray())
+            self.bathy_arr += self.apply_calculation(
+                prox_band.ReadAsArray(),
+                max_depth=lk_depth_glb,
+                shore_arr=cop_band.ReadAsArray(),
+                shore_elev=lk_elevation
+            )
             
             prox_arr[msk_arr == 1] = 0
             prox_ds.GetRasterBand(1).WriteArray(prox_arr)
