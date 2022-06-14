@@ -254,9 +254,10 @@ class Region:
         elif y_inc > 0:
             y_inc = y_inc * -1.
 
+        ## geo_transform is considered in grid-node to properly capture the region
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
-        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node=node)
-        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node=node)
+        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node='grid')
+        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node='grid')
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
@@ -356,9 +357,6 @@ class Region:
     def srcwin(self, geo_transform, x_count, y_count, node='pixel'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
-
-        Args:
-          region (region): an input region
 
         returns the gdal srcwin (xoff, yoff, xsize, ysize)
         """
