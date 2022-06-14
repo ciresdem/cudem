@@ -152,6 +152,7 @@ increment to save space.
             'returnGeometry':'False',
         }
         _req = f_utils.Fetch(self._dav_api_url, verbose=self.verbose).fetch_req(params=_data)
+        print(_req.url)
         if _req is not None:
             features = _req.json()
             for feature in features['features']:

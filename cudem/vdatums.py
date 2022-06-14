@@ -204,7 +204,9 @@ class VerticalTransform:
         self.cache_dir = cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
-
+        print(self.xcount, self.ycount)
+        print(self.src_region)
+        print(self.src_x_inc, self.src_y_inc)
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         
     def _frames(self, epsg_in, epsg_out):
@@ -269,14 +271,18 @@ class VerticalTransform:
             return(np.zeros( (self.ycount, self.xcount) ), None)
         
         if vdatum_tidal_in != 5174 and vdatum_tidal_in != 'msl': 
-            _trans_in = waffles.GMTSurface(
+            _trans_in = waffles.WaffleFactory(
+                mod = 'surface',
                 data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
                 src_region = self.src_region,
                 xinc = self.src_x_inc,
                 yinc = self.src_y_inc,
                 name = '{}'.format(vdatum_tidal_in),
+                dst_srs='epsg:4326',
+                node = 'pixel',
                 verbose = True
-            ).generate()
+            ).acquire().generate()
+            
             utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
         else:
             _trans_in = None
@@ -287,7 +293,9 @@ class VerticalTransform:
                 src_region = self.src_region,
                 xinc = self.src_x_inc,
                 yinc = self.src_y_inc,
+                dst_srs='epsg:4326',
                 name = '{}'.format(vdatum_tidal_out),
+                node = 'pixel',
                 verbose = True
             ).generate()
             utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
@@ -298,7 +306,7 @@ class VerticalTransform:
         _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
         _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
 
-        utils.remove_glob('{}*'.format(_trans_in.fn), '{}*'.format(_trans_out.fn))
+        #utils.remove_glob('{}*'.format(_trans_in.fn), '{}*'.format(_trans_out.fn))
         
         if _trans_in is None:
             if _trans_out is None:

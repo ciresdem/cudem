@@ -324,7 +324,7 @@ class VDATUM(f_utils.FetchModule):
         src_tif = '{}.tif'.format(utils.fn_basename(src_zip, 'zip'))
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
             v_gtxs = utils.p_f_unzip(src_zip, [src_gtx])
-            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(src_gtx, src_tif))
+            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(src_gtx, src_tif), verbose=True)
             _ds = datasets.RasterFile(
                 fn=src_tif,
                 data_format=200,

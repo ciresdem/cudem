@@ -131,8 +131,15 @@ def main():
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
         src_region.src_srs = demfun.get_srs(src_grid)
         src_region.warp()
+        #x_inc = src_infos['geoT'][1]
+        #y_inc = -src_infos['geoT'][5]
         x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
-        tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
+        #tmp_x_inc = x_inc*(3**2)
+        #tmp_y_inc = y_inc*(3**2)
+        tmp_x_inc = 3/3600
+        tmp_y_inc = 3/3600
+        
+        #tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
         vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
         

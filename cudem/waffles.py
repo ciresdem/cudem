@@ -154,13 +154,13 @@ class Waffle:
     def _init_regions(self):
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
-        
-        self.p_region = self._proc_region()
+
         self.d_region = self._dist_region()
+        self.p_region = self._proc_region()
         self.c_region = self._coast_region()
         self.ps_region = self.p_region.copy()
         self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
-        
+
     def _init_data(self, set_incs=False):
         """Initialize the data for processing
         parses data paths to dlim dataset objects.
@@ -185,19 +185,33 @@ class Waffle:
         """processing region (extended by self.extend_proc)"""
         
         cr = regions.Region().from_region(self.region)
+        xcount, ycount, gt = cr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        ewp = xcount * ((self.extend_proc+5) * .01)
+        nsp = ycount * ((self.extend_proc+5) * .01)
+        x_bv = int((ewp + nsp) / 2)
+        y_bv = int((ewp + nsp) / 2)
+
         return(
             cr.buffer(
-                pct=self.extend_proc+5
+                x_bv=self.xinc*x_bv,
+                y_bv=self.yinc*y_bv
             )
         )
-
+    
     def _proc_region(self):
-        """processing region (extended by self.extend_proc)"""
+        """processing region (extended by percentage self.extend_proc)"""
         
-        pr = regions.Region().from_region(self.region)
+        pr = regions.Region().from_region(self.d_region)
+        xcount, ycount, gt = pr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        ewp = xcount * (self.extend_proc * .01)
+        nsp = ycount * (self.extend_proc * .01)
+        x_bv = int((ewp + nsp) / 2)
+        y_bv = int((ewp + nsp) / 2)
+
         return(
             pr.buffer(
-                pct=self.extend_proc
+                x_bv=self.xinc*x_bv,
+                y_bv=self.yinc*y_bv
             )
         )
     
@@ -581,13 +595,14 @@ class Waffle:
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
-        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel')[1] == 0:                
+        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode='translate')[1] == 0:
             #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
             except Exception as e:
                 utils.echo_error_msg(e)
-                
+
+        ## if set_srs fails, set_metadata will skip first entry...
         demfun.set_srs(fn, self.dst_srs)
         demfun.set_metadata(fn, node=self.node, cudem=True)
         if self.fmt != 'GTiff':

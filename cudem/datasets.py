@@ -1314,7 +1314,6 @@ class RasterFile(ElevationDataset):
                 # if self.verbose and self.parent is None:
                 #     #if self.verbose:
                 #     _prog.update_perc((y, srcwin[1] + srcwin[3]))
-                    
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )

@@ -349,8 +349,8 @@ class Region:
     def increments(self, x_count, y_count):
         """returns x_inc, y_inc"""
         
-        x_inc = (self.xmax - self.xmin) / x_count
-        y_inc = (self.ymax - self.ymin) / y_count
+        x_inc = float((self.xmax - self.xmin) / x_count)
+        y_inc = float((self.ymax - self.ymin) / y_count)
         return(x_inc, y_inc)
         
     def srcwin(self, geo_transform, x_count, y_count, node='pixel'):
@@ -360,20 +360,25 @@ class Region:
         Args:
           region (region): an input region
 
-        returns the gdal srcwin
+        returns the gdal srcwin (xoff, yoff, xsize, ysize)
         """
-        
-        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node=node)]
-        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)]
+
+        ## geo_transform is considered in grid-node to properly capture the region
+        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node='grid')]
+        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node='grid')]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
-            #print(this_size[0], x_count - this_origin[0])
             this_size[0] = x_count - this_origin[0]
+            
         if this_size[1] > y_count - this_origin[1]:
-            #print(this_size[1], y_count - this_origin[1])
             this_size[1] = y_count - this_origin[1]
-        if this_size[0] < 0: this_size[0] = 0
-        if this_size[1] < 0: this_size[1] = 0
+            
+        if this_size[0] < 0:
+            this_size[0] = 0
+            
+        if this_size[1] < 0:
+            this_size[1] = 0
+            
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
         
     def buffer(self, x_bv=0, y_bv=0, pct=None):
@@ -387,7 +392,7 @@ class Region:
         Returns:
           region-object: self
         """
-
+        
         if self.valid_p():
             if pct is not None:
                 ewp = (self.xmax - self.xmin) * (pct * .01)

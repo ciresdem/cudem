@@ -381,14 +381,26 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
       geo_x (float): geographic x coordinate
       geo_y (float): geographic y coordinate
       geo_transform (list): a geo-transform list describing a raster
+      node (str): the registration of the geo_transform
 
     Returns:
       list: a list of the pixel values [pixel-x, pixel-y]
     """
 
     if geo_transform[2] + geo_transform[4] == 0:
-        pixel_x = round((geo_x - geo_transform[0]) / geo_transform[1], 4)
-        pixel_y = round((geo_y - geo_transform[3]) / geo_transform[5], 4)
+        ## rounding for edges
+        #pixel_x = round((geo_x - geo_transform[0]) / geo_transform[1], 4)
+        #pixel_y = round((geo_y - geo_transform[3]) / geo_transform[5], 4)
+
+        ## numpy
+        #pixel_x = np.floor((geo_x - geo_transform[0]) / geo_transform[1]).astype(int)
+        #pixel_y = np.floor((geo_y - geo_transform[3]) / geo_transform[5]).astype(int)
+
+        ## query
+        pixel_x = (geo_x - geo_transform[0]) / geo_transform[1]
+        pixel_y = (geo_y - geo_transform[3]) / geo_transform[5]
+
+        ## grid-node geo_transform
         if node == 'grid':
             pixel_x += .5
             pixel_y += .5
@@ -397,7 +409,7 @@ def _geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
         
     return(int(pixel_x), int(pixel_y))
 
-def _geo2pixel_affine(geo_x, geo_y, geo_transform):
+def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
     note: use _geo2pixel instead

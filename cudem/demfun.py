@@ -140,7 +140,7 @@ def get_srs(src_dem, vert_name=False):
 
 def set_srs(src_dem, src_srs='epsg:4326'):
     """set the projection of gdal file src_fn to src_srs"""
-    
+
     try:
         ds = gdal.Open(src_dem, gdal.GA_Update)
     except: ds = None
@@ -148,6 +148,7 @@ def set_srs(src_dem, src_srs='epsg:4326'):
         try:
             ds.SetProjection(utils.sr_wkt(src_srs))
         except Exception as e:
+            ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
             utils.echo_warning_msg('could not set projection {}'.format(src_srs))
         ds = None
         return(0)
@@ -230,6 +231,7 @@ def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
             srs=osr.SpatialReference(wkt=prj)
             vdatum=srs.GetAttrValue('vert_cs')
             md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, '' if vdatum is None else vdatum)
+
         ds.SetMetadata(md)
         ds = None
         return(0)
@@ -313,7 +315,9 @@ def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
             ds_config = gather_infos(ds)
             gt = ds_config['geoT']
             srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize, node=node)
+            print(srcwin)
             ds_arr = ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            print(ds_arr.shape)
             dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
             out_ds_config = set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
                                       ds_config['proj'], ds_config['dt'], ds_config['ndv'],

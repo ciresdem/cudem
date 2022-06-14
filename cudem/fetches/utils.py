@@ -431,7 +431,7 @@ class Fetch:
                     self.verbose=False
                     
                 else:
-                    utils.echo_error_msg('server returned: {}'.format(req.status_code))
+                    utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
 
         except UnboundLocalError as e:
             #utils.echo_error_msg(e)
