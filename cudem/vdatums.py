@@ -306,7 +306,7 @@ class VerticalTransform:
         _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
         _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
 
-        #utils.remove_glob('{}*'.format(_trans_in.fn), '{}*'.format(_trans_out.fn))
+        utils.remove_glob('{}*'.format(_trans_in.fn), '{}*'.format(_trans_out.fn))
         
         if _trans_in is None:
             if _trans_out is None:
