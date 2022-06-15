@@ -144,7 +144,7 @@ def main():
         _trans_grid = vt.run()
         
         if _trans_grid is not None:
-            utils.run_cmd('gdalwarp {} {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_infos['nx'], src_infos['ny'], demfun.get_srs(src_grid)), verbose=True)
+            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_region.format('te'), src_infos['nx'], src_infos['ny'], demfun.get_srs(src_grid)), verbose=True)
             utils.run_cmd('gdal_calc.py -A {} -B {} --calc "A+B" --outfile {}'.format(src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ ')), verbose=True)
             utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
         else:
