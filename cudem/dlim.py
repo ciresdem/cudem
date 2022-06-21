@@ -235,6 +235,8 @@ class Datalist(datasets.ElevationDataset):
         return(self.infos)
 
     def parse_json(self):
+        status = 0
+        count = 0
         if self.verbose:
             _prog = utils.CliProgress(
                 'parsing datalist json {}{}'.format(
@@ -288,19 +290,21 @@ class Datalist(datasets.ElevationDataset):
                         yield(ds)
             dl_ds = dl_layer = None
         else:
+            status = -1
             for ds in self.parse():
                 yield(ds)
             
         if self.verbose:
             _prog.end(
-                0, 'parsed {} datasets from datalist {}{}'.format(
+                status, 'parsed {} datasets from datalist {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
                             
     def parse(self):
         """import a datalist entry from a string"""
-        
+
+        status = 0
         if self.verbose:
             _prog = utils.CliProgress(
                 'parsing datalist {}{}'.format(
@@ -369,9 +373,10 @@ class Datalist(datasets.ElevationDataset):
                 utils.echo_warning_msg(
                     'could not open datalist/entry {}'.format(self.fn)
                 )
+            status = -1
             
         if self.verbose:
-            _prog.end(0, 'parsed datalist {}{}'.format(
+            _prog.end(status, 'parsed datalist {}{}'.format(
                 self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
             ))
            

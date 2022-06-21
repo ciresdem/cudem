@@ -165,10 +165,11 @@ class CopernicusDEM(f_utils.FetchModule):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
+                demfun.set_nodata(src_cop_dem, 0)
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
-                    src_srs='epsg:4326',
+                    src_srs='epsg:4326+5773',
                     dst_srs=self.dst_srs,
                     #name=src_cop_dem,
                     weight=self.weight,
@@ -176,8 +177,8 @@ class CopernicusDEM(f_utils.FetchModule):
                     verbose=self.verbose
                 )
                 for xyz in _ds.yield_xyz():
-                    if xyz.z != 0:
-                        yield(xyz)
+                    #if xyz.z != 0:
+                    yield(xyz)
                         
                 utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
         utils.remove_glob(entry[1])
@@ -201,7 +202,7 @@ class CopernicusDEM(f_utils.FetchModule):
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
-                    src_srs='epsg:4326',
+                    src_srs='epsg:4326+5773',
                     dst_srs=self.dst_srs,
                     src_region=self.region,
                     x_inc=x_inc,

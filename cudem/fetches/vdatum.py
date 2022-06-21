@@ -93,9 +93,17 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
         _results = []
 
         if crs_name is not None:
-            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(name.upper(), name.upper()))
+            cdn_layer.SetAttributeFilter(
+                "type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(
+                    name.upper(), name.upper()
+                )
+            )
         elif epsg is not None:
-            cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(epsg, epsg))
+            cdn_layer.SetAttributeFilter(
+                "type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(
+                    epsg, epsg
+                )
+            )
         elif name is not None:
             cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND name LIKE '%{}%'".format(name))
         else:
@@ -254,7 +262,6 @@ class VDATUM(f_utils.FetchModule):
 
         w = []
         if self.datatype is not None:
-            #self.where.append("DataType = '{}'".format(self.datatype))
             w.append("DataType = '{}'".format(self.datatype))
         elif self.epsg is not None:
             w.append("DataType = '{}'".format(self._tidal_references[self.epsg]['name']))
@@ -291,9 +298,17 @@ class VDATUM(f_utils.FetchModule):
             _results = []
 
             if self.datatype is not None:
-                cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(self.datatype.upper(), self.datatype.upper()))
+                cdn_layer.SetAttributeFilter(
+                    "type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(
+                        self.datatype.upper(), self.datatype.upper()
+                    )
+                )
             elif self.epsg is not None:
-                cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(self.epsg, self.epsg))
+                cdn_layer.SetAttributeFilter(
+                    "type != 'HORIZONTAL_OFFSET' AND (target_crs_code LIKE '%{}%' OR source_crs_code LIKE '%{}%')".format(
+                        self.epsg, self.epsg
+                    )
+                )
             else:
                 cdn_layer.SetAttributeFilter("type != 'HORIZONTAL_OFFSET'")
              
@@ -330,7 +345,6 @@ class VDATUM(f_utils.FetchModule):
                 data_format=200,
                 dst_srs=self.dst_srs,
                 src_srs=None,
-                #name=src_tif,
                 src_region=self.region,
                 verbose=self.verbose
             )

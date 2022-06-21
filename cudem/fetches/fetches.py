@@ -334,7 +334,9 @@ layers:
         self.status = 0
         self.results = []
         if self.mod is not None:
-            self.parse_mod()
+            this_mod = self.parse_mod()
+            #if this_mod is None:
+            #    self.mod = None
             
     def parse_mod(self):
         opts = self.mod.split(':')
@@ -343,7 +345,7 @@ layers:
                 self.mod_args = utils.args2dict(list(opts[1:]), {})
             self.mod = opts[0]
         else:
-            utils.echo_error_msg('could not parse module `{}`'.format(opts[0]))
+            utils.echo_error_msg('could not parse fetch module `{}`'.format(opts[0]))
             return(None)
         
         return(self)
@@ -354,17 +356,20 @@ layers:
 
     def acquire(self, **kwargs):
         """Acquire the fetches module self.mod"""
-        
-        return(
-            self.mods[self.mod]['class'](
-                src_region=self.region,
-                callback=self.callback,
-                weight=self.weight,
-                verbose=self.verbose,
-                **kwargs,
-                **self.mod_args
+
+        if self.mod in self.mods.keys():
+            return(
+                self.mods[self.mod]['class'](
+                    src_region=self.region,
+                    callback=self.callback,
+                    weight=self.weight,
+                    verbose=self.verbose,
+                    **kwargs,
+                    **self.mod_args
+                )
             )
-        )
+        else:
+            return(None)
         
 _fetches_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in FetchesFactory().mods])

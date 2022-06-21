@@ -1356,8 +1356,16 @@ class WafflesIDW(Waffle):
         #xi = yi = None
         # if no data break now...
         if len(obs) == 0:
+            if self.verbose:
+                progress.end(
+                    -1,
+                    'generated IDW grid @ {}/{}'.format(
+                        ycount, xcount
+                    )
+                )
             return(self)
-        
+
+        utils.echo_msg('loaded {} observations for processing...'.format(len(obs)))
         invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
         interpol = invdisttree(
             ask,
@@ -1375,10 +1383,12 @@ class WafflesIDW(Waffle):
         if self.lower_limit is not None:
             interpol[interpol < self.lower_limit] = self.lower_limit
         
-        # fill the grid, interpol.reshape((ycount, xcount)) is flipped...
+        ## fill the grid, interpol.reshape((ycount, xcount)) is flipped...
+        ## use 'grid' option in _geo2pixel (nodes from linespace are
+        ## at ul corner of cells
         for n, this_z in enumerate(interpol):
             xpos, ypos = utils._geo2pixel(
-                xi[n], yi[n], dst_gt
+                xi[n], yi[n], dst_gt, 'grid'
             )
             try:
                 outArray[ypos, xpos] = this_z
@@ -2240,6 +2250,9 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
         
         gmrt_tif = this_gmrt.results[0]
         gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
@@ -2270,7 +2283,7 @@ class WafflesCoastline(Waffle):
             cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
             gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
-            cop_ds_arr[cop_ds_arr > 0] = 1
+            cop_ds_arr[cop_ds_arr !=0] = 1
             #cop_ds_arr[c_ds_arr != 1] = -1
             self.coast_array += cop_ds_arr
             cop_ds = cop_ds_arr = None
@@ -2359,13 +2372,16 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
+        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lk_ds = ogr.Open(lakes_shp)
-        lk_layer = lk_ds.GetLayer()        
-        gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
-        lakes_ds_arr = lakes_ds.GetRasterBand(1).ReadAsArray()
-        self.coast_array[lakes_ds_arr == -1] = 0
-        lakes_ds = lk_ds = None
+        if lk_ds is not None:
+            lk_layer = lk_ds.GetLayer()        
+            gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
+            lakes_ds_arr = lakes_ds.GetRasterBand(1).ReadAsArray()
+            self.coast_array[lakes_ds_arr == -1] = 0
+            lakes_ds = lk_ds = None
+        else:
+            utils.echo_error_msg('could not open {}'.format(lakes_shp))
 
     def _load_bldgs(self):
         """load buildings from OSM
@@ -2381,13 +2397,18 @@ class WafflesCoastline(Waffle):
         this_osm._outdir = self.cache_dir
         this_osm.run()
         for osm_result in this_osm.results:
-            cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1])
-            osm_ds = ogr.Open(osm_result[1])
-            osm_layer = osm_ds.GetLayer('multipolygons')
-            osm_layer.SetAttributeFilter("building!=''")
-            gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-            bldg_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[bldg_arr == -1] = 0
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1]) == 0:
+                osm_ds = ogr.Open(osm_result[1])
+                if osm_ds is not None:
+                    osm_layer = osm_ds.GetLayer('multipolygons')
+                    osm_layer.SetAttributeFilter("building!=''")
+                    gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
+                    bldg_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                    self.coast_array[bldg_arr == -1] = 0
+                else:
+                    utils.echo_error_msg('could not open ogr dataset {}'.format(osm_result[1]))
+            else:
+                utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             
         bldg_ds = None
         
@@ -2427,9 +2448,14 @@ class WafflesCoastline(Waffle):
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
             
+        # utils.run_cmd(
+        #     'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit {}" {}.shp tmp_c_{}.shp'.format(
+        #         self.name, poly_count, self.name, self.name),
+        #     verbose=True
+        # )
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 order by ST_AREA(geometry) desc limit {}" {}.shp tmp_c_{}.shp'.format(
-                self.name, poly_count, self.name, self.name),
+            'ogr2ogr {}.shp tmp_c_{}.shp'.format(
+                self.name, self.name, self.name),
             verbose=True
         )
         
@@ -3556,7 +3582,13 @@ def waffles_cli(argv = sys.argv):
                     this_wg = this_waffle._export_config(parse_data=False)
                     utils.echo_msg(json.dumps(this_wg, sort_keys=True))
                     utils.echo_msg('------------------------------------------------ :config')
-                this_waffle.acquire().generate()
+                this_waffle_module = this_waffle.acquire()
+                if this_waffle_module is not None:
+                    this_waffle_module.generate()
+                else:
+                    if wg['verbose']:
+                        utils.echo_error_msg('could not acquire waffles module {}'.format(module))
+                        
             #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
     if not keep_cache:
         utils.remove_glob(wg['cache_dir'])

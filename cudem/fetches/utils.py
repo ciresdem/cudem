@@ -414,7 +414,7 @@ class Fetch:
                             if chunk:
                                 local_file.write(chunk)
 
-                elif req.status_code == 429:
+                elif req.status_code == 429: # or req.status_code == 504:
                     ## ==============================================
                     ## pause a bit and retry...
                     ## ==============================================
@@ -432,6 +432,7 @@ class Fetch:
                     
                 else:
                     utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
+                    status = -1
 
         except UnboundLocalError as e:
             #utils.echo_error_msg(e)

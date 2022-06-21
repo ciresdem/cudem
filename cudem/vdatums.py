@@ -255,7 +255,10 @@ class VerticalTransform:
         return(None)
     
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
-        """generate tidal transformation grid"""
+        """generate tidal transformation grid
+
+        This will fail over land or outside of US waters...
+        """
 
         v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
@@ -306,11 +309,19 @@ class VerticalTransform:
         _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
         _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
 
-        utils.remove_glob('{}*'.format(_trans_in.fn), '{}*'.format(_trans_out.fn))
+        if _trans_in_array is None:
+            _trans_in = None
+        else:
+            utils.remove_glob('{}*'.format(_trans_in.fn))
+
+        if _trans_out_array is None:
+            _trans_out = None
+        else:
+            utils.remove_glob('{}*'.format(_trans_out.fn))
         
         if _trans_in is None:
             if _trans_out is None:
-                return(None)
+                return(np.zeros( (self.ycount, self.xcount) ), None)
             else:
                 return(_trans_out_array*-1, self._datum_by_name(vdatum_tidal_out))
         else:

@@ -39,7 +39,9 @@ class MGDS(f_utils.FetchModule):
 
         self._mgds_file_url = "https://www.marine-geo.org/services/FileServer?"
         self._mgds_filedownload_url = "http://www.marine-geo.org/services/FileDownloadServer?"
-        self._mgds_filemetadata_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"      
+        self._mgds_filemetadata_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
+        self._mgds_archive_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
+        self._mgds_search_url = "http://www.marine-geo.org/services/search/datasets??"
         self._outdir = os.path.join(os.getcwd(), 'mgds')
         self.name = 'mgds'
         
@@ -58,17 +60,45 @@ class MGDS(f_utils.FetchModule):
             'data_type':'Bathymetry',
         }
 
+        # self.data = {
+        #     'north':self.region.ymax,
+        #     'west':self.region.xmin,
+        #     'south':self.region.ymin,
+        #     'east':self.region.xmax,
+        #     'data_type':'Bathymetry',
+        # }
+        # req = f_utils.Fetch(self._mgds_search_url).fetch_req(
+        #     params=self.data, tries=10, timeout=2
+        # )
+
+        # if req is not None:
+        #     req_xml = lxml.etree.fromstring(req.content)
+                
+        #     #req_results = req_xml.findall('.//data_set')
+        #     for req_result in req_results:
+        #         #rr_results = req_result.findall('.//ds_entry')
+        #         for rr in rr_results:
+        #             ds_id = rr.attrib['id']
+        #             uids = req_result.attrib['uids'].split(',')
+        #             fmt = req_result.attrib['file_formats']
+        #             if fmt == 'MBSystem': fmt = 'MGD77'
+        #             if 'GEOTIFF' in fmt: fmt = 'tif'
+        #             print(ds_id, uids, fmt)
+        #             #link = req_result.attrib['url']
+        #             for uid in uids:
+        #                 link = '{}data_uid={}'.format(self._mgds_filedownload_url, uid)
+        #                 self.results.append([link, os.path.join(self._outdir, '{}_{}.{}'.format(ds_id, uid, fmt)), 'mgds'])            
+        
         req = f_utils.Fetch(self._mgds_file_url).fetch_req(
             params=self.data, tries=10, timeout=2
         )
         if req is not None:
             req_xml = lxml.etree.fromstring(req.content)
             req_results = req_xml.findall('.//{https://www.marine-geo.org/services/xml/mgdsDataService}file')
-
             for req_result in req_results:
                 name = req_result.attrib['name']
                 link = req_result.attrib['download']
-                self.results.append([link, os.path.join(self._outdir, name), 'mgds'])            
+                self.results.append([link, os.path.join(self._outdir, name), 'mgds'])
                 
         return(self)
 

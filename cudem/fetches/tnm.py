@@ -320,12 +320,12 @@ class TheNationalMap(f_utils.FetchModule):
             if datatype == 'raster':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
+                    src_srs = demfun.get_srs(src_tnm)
                     _ds = datasets.RasterFile(
                         fn=src_tnm,
                         data_format=200,
-                        src_srs='epsg:4326',
+                        src_srs=src_srs,
                         dst_srs=self.dst_srs,
-                        #name=src_tnm,
                         src_region=self.region,
                         verbose=self.verbose
                     )

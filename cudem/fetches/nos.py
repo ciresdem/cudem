@@ -130,10 +130,11 @@ class HydroNOS(f_utils.FetchModule):
 
                     if self.datatype is None or 'xyz' in self.datatype.lower():
                         page = f_utils.Fetch(data_link).fetch_html()
-                        geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
-                        if geodas:
-                            xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
-                            self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'xyz'])                
+                        if page is not None:
+                            geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
+                            if geodas:
+                                xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
+                                self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'xyz'])                
 
     def yield_xyz(self, entry):
         src_nos = os.path.basename(entry[1])
@@ -149,7 +150,7 @@ class HydroNOS(f_utils.FetchModule):
                         ypos=1,
                         zpos=3,
                         z_scale=-1,
-                        src_srs='epsg:4326',
+                        src_srs='epsg:4326+1089',
                         dst_srs=self.dst_srs,
                         #name=src_xyz,
                         src_region=self.region,
@@ -161,6 +162,7 @@ class HydroNOS(f_utils.FetchModule):
                         
                 utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
 
+            ## src_srs in embedded in bag data
             elif entry[2] == 'bag':
                 src_bags = utils.p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:

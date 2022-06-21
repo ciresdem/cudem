@@ -250,7 +250,7 @@ class Multibeam(f_utils.FetchModule):
                     fn=src_xyz,
                     delim='\t',
                     data_format=168,
-                    src_srs='epsg:4326',
+                    src_srs='epsg:4326+5773',
                     dst_srs=self.dst_srs,
                     #name=os.path.basename(entry[1]),
                     src_region=self.region,

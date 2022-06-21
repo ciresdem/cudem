@@ -76,7 +76,7 @@ class SRTMPlus(f_utils.FetchModule):
                 fn=src_data,
                 data_format=168,
                 skip=1,
-                src_srs='4326',
+                src_srs='4326+5773',
                 dst_srs=self.dst_srs,
                 #name=src_data,
                 src_region=self.region,

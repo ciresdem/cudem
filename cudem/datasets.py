@@ -354,22 +354,53 @@ class ElevationDataset():
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and \
            self.src_srs is not None and \
-           self.src_srs.split('+')[0] != self.dst_srs.split('+')[0]:
-            src_srs = osr.SpatialReference()
-            src_srs.SetFromUserInput(self.src_srs)
-            dst_srs = osr.SpatialReference()
-            dst_srs.SetFromUserInput(self.dst_srs)
+           self.src_srs != self.dst_srs:
+            if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
+                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O _tmp_trans_{}_{}_{} -c -k -D ./'.format(
+                    self.region.format('str'),
+                    self.src_srs.split('+')[-1],
+                    self.dst_srs.split('+')[-1],
+                    self.src_srs.split('+')[-1],
+                    self.dst_srs.split('+')[-1],
+                    self.region.format('fn')
+                )
+                if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
+                    ## convert epsg to proj string and append +geoidgrids=_tmp_trans.tif
+                    ## rename _tmp_trans to region-specific and save in cudem_cache for multiple files in same process
+                    tmp_srs = osr.SpatialReference()
+                    tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
+                    src_srs = '{} +geoidgrids=./_tmp_trans_{}_{}_{}.tif'.format(tmp_srs.ExportToProj4(), self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1], self.region.format('fn'))
+                    dst_srs = self.dst_srs.split('+')[0]
+                else:
+                    utils.echo_error_msg('failed to generate transformation grid between {} and {} for this region!'.format(self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]))
+                    src_srs = self.src_srs.split('+')[0]
+                    dst_srs = self.dst_srs.split('+')[0]
+                
+            elif utils.int_or(self.src_srs.split('+')[-1]) is not None:
+                src_srs = self.src_srs.split('+')[0]
+                dst_srs = self.dst_srs
+            elif utils.int_or(self.dst_srs.split('+')[-1]) is not None:
+                dst_srs = self.dst_srs.split('+')[0]
+                src_srs = self.src_srs
+            else:
+                src_srs = self.src_srs
+                dst_srs = self.dst_srs
+            
+            src_osr_srs = osr.SpatialReference()
+            src_osr_srs.SetFromUserInput(src_srs)
+            dst_osr_srs = osr.SpatialReference()
+            dst_osr_srs.SetFromUserInput(dst_srs)
             try:
-                src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                dst_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             except:
                 pass
 
-            self.dst_trans = osr.CoordinateTransformation(src_srs, dst_srs)
+            self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
             if self.region is not None:
                 self.trans_region = self.region.copy()
-                self.trans_region.src_srs = self.dst_srs
-                self.trans_region.warp(self.src_srs)
+                self.trans_region.src_srs = dst_srs
+                self.trans_region.warp(src_srs)
 
     def parse_json(self):
         for ds in self.parse():
@@ -1195,8 +1226,7 @@ class RasterFile(ElevationDataset):
         self.weight_mask = weight_mask
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
-
-        self.set_transform()
+            self.set_transform()
 
     def init_ds(self):
         """initialize the raster dataset"""
@@ -1290,8 +1320,8 @@ class RasterFile(ElevationDataset):
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
                 msk_band = src_mask.GetRasterBand(1)
+                
             if self.weight_mask is not None:
-
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
                         self.weight_mask, None, self.x_inc, self.y_inc,
@@ -1346,6 +1376,7 @@ class RasterFile(ElevationDataset):
                 band_data = np.reshape(band_data, (srcwin[2], ))
                 if weight_band is not None:
                     weight_data = np.reshape(weight_data, (srcwin[2], ))
+                    
                 for x_i in range(0, srcwin[2], 1):
                     z = band_data[x_i]
                     if '{:g}'.format(z) not in nodata:
@@ -1356,6 +1387,7 @@ class RasterFile(ElevationDataset):
                             out_xyz.w = weight_data[x_i]
                         else:
                             out_xyz.w = utils.float_or(self.weight, 1)
+                            
                         count += 1
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
@@ -1545,9 +1577,8 @@ class BAGFile(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.src_srs is None:
-            self.src_srs = demfun.get_srs(self.fn)
-            
-        self.set_transform()
+            self.src_srs = demfun.get_srs(self.fn)            
+            self.set_transform()
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""

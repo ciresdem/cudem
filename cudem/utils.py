@@ -606,6 +606,10 @@ def unzip(zip_file, outdir='./', overwrite=False):
             zip_ref.extractall(outdir)
             
         zip_ref.close()
+        if outdir != './':
+            for i, zf in enumerate(zip_files):
+                zip_files[i] = os.path.join(outdir, zf)
+                
         return(zip_files)
     
     except Exception as e:
@@ -994,6 +998,10 @@ def config_check(chk_vdatum=False, verbose=False):
     _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
     _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
     _waff_co['CUDEM'] = str(cudem.__version__)
+
+    for key in _waff_co.keys():
+        _waff_co[key] = None if _waff_co[key] == '0' else _waff_co[key]
+            
     return(_waff_co)
     
 ## ==============================================
