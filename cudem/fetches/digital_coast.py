@@ -111,6 +111,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import vdatums
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -157,6 +158,16 @@ increment to save space.
             features = _req.json()
             for feature in features['features']:
                 links = json.loads(feature['attributes']['ExternalProviderLink'])
+
+                ## get ept link to gather datum infos...for lidar only apparently...
+                for link in links['links']:
+                    if link['serviceID'] == 167:
+                        if link['label'] == 'EPT NOAA':
+                            ept_req = f_utils.Fetch(link['link'], verbose=True).fetch_req()
+                            ept_infos = ept_req.json()
+
+                ## get metadata for datum infos...for raster data
+                            
                 if self.index:
                     feature['attributes']['ExternalProviderLink'] = links
                     print(json.dumps(feature['attributes'], indent=4))
@@ -184,9 +195,7 @@ increment to save space.
                                         index_zipurl = line.strip()
                                         break
 
-                            utils.remove_glob(urllist)
-                            
-                            #while True:
+                            utils.remove_glob(urllist)                            
                             if f_utils.Fetch(
                                     index_zipurl, callback=self.callback, verbose=self.verbose
                             ).fetch_file(index_zipfile) == 0:
@@ -202,12 +211,23 @@ increment to save space.
                                     index_geom = index_feature.GetGeometryRef()
                                     if index_geom.Intersects(self.region.export_as_geom()):
                                         tile_url = index_feature.GetField('URL').strip()
-                                        self.results.append([tile_url, os.path.join(
-                                            self._outdir, '{}/{}'.format(
-                                                feature['attributes']['ID'], tile_url.split('/')[-1]
-                                            )
-                                        ), feature['attributes']['DataType']])
-
+                                        ## add vertical datum to output;
+                                        ## field is NativeVdatum
+                                        ## must get from metadata
+                                        #v_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
+                                        ## horizontal datum is wrong in ept, most seem to be nad83
+                                        #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
+                                        this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                        self.results.append(
+                                            [tile_url,
+                                             os.path.join(
+                                                 self._outdir, '{}/{}'.format(
+                                                     feature['attributes']['ID'], tile_url.split('/')[-1]
+                                                 )
+                                             ),
+                                             this_epsg,
+                                             feature['attributes']['DataType']])
+                                        
                                 index_ds = index_layer = None
                                 utils.remove_glob(index_zipfile, *index_shps)
 
@@ -216,16 +236,20 @@ increment to save space.
     def yield_xyz(self, entry):
         src_dc = os.path.basename(entry[1])
         src_ext = src_dc.split('.')[-1].lower()
-        if src_ext == 'laz' or src_ext == 'las': dt = 'lidar'
-        elif src_ext == 'tif' or src_ext == 'img': dt = 'raster'
-        else: dt = None
+        if src_ext == 'laz' or src_ext == 'las':
+            dt = 'lidar'
+        elif src_ext == 'tif' or src_ext == 'img':
+            dt = 'raster'
+        else:
+            dt = None
+
         if dt == 'lidar':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 _ds = datasets.LASFile(
                     fn=src_dc,
                     data_format=400,
+                    src_srs=entry[2],
                     dst_srs=self.dst_srs,
-                    #name=src_dc,
                     src_region=self.region,
                     verbose=self.verbose,
                     remote=True
@@ -243,20 +267,23 @@ increment to save space.
                 else:
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
+                        
                 utils.remove_glob('{}*'.format(src_dc))
         elif dt == 'raster':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 _ds = datasets.RasterFile(
                     fn=src_dc,
                     data_format=200,
+                    src_srs=entry[2],
                     dst_srs=self.dst_srs,
-                    #src_srs=None,
-                    name=src_dc,
+                    weight=self.weight,
                     src_region=self.region,
                     verbose=self.verbose
                 )
-                for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
+                #for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
+                for xyz in _ds.yield_xyz():
                     yield(xyz)
+                    
                 utils.remove_glob('{}.*'.format(src_dc))
 
 ## ==============================================

@@ -36,10 +36,6 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 from cudem import xyzfun
-#from cudem import vdatums
-
-#import cudem
-#import cudem.vdatums
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -158,14 +154,6 @@ class NauticalCharts(f_utils.FetchModule):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
 
-        # if self.dst_srs is not None:
-        #     if utils.int_or(self.dst_srs.split('+')[-1]) is not None:
-        #         utils.run_cmd('waffles -R {} -E 3s -M vdatum:vdatum_in=mhw:vdatum_out={} -O _tmp_trans -c'.format(self.region.format('str'), self.dst_srs.split('+')[-1]), verbose=True)
-        #         self.src_srs = "+proj=longlat +datum=WGS84 +geoidgrids=./_tmp_trans.tif"
-        #         self.dst_srs = self.dst_srs.split('+')[0]
-                
-        #self.generate_tidal_vdatum('mhw', 'tss')
-
     def yield_xyz(self, entry):
         """ENC data comes as a .000 file in a zip.
 
@@ -173,16 +161,6 @@ class NauticalCharts(f_utils.FetchModule):
         In U.S. waters, MHW can be transformed to MSL or the local GEOID using
         VDatum and/or it's associated grids (mhw.gtx or tss.gtx)
         """
-
-        ## create the tidal transformation grid from mhw to geoid
-
-        # src_srs='epsg:4326'
-        # if self.dst_srs is not None:
-        #     if utils.int_or(self.dst_srs.split('+')[-1]) is not None:
-        #         #vt = cudem.vdatums.VerticalTransform(self.region, utils.str2inc('3s'), utils.str2inc('3s'), 'mhw', self.dst_srs.split('+')[-1], cache_dir=self._outdir)
-        #         #_trans_grid = vt.run()
-        #         self.dst_srs = self.dst_srs.split('+')[0]
-        #         src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./_tmp_trans.tif',
             
         src_zip = os.path.basename(entry[1])
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:

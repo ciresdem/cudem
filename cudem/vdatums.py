@@ -34,7 +34,6 @@ from osgeo import ogr
 
 from cudem import regions
 from cudem import demfun
-from cudem import waffles
 from cudem import utils
 from cudem import htdpfun
 
@@ -160,6 +159,9 @@ _htdp_reference_frames = {
     7912: {'name': 'ITRF2014',
            'description': 'IGS14/IGb14',
            'htdp_id': 23},
+    7912: {'name': 'ELLIPSOID',
+           'description': 'IGS14/IGb14/WGS84 Ellipsoid',
+           'htdp_id': 23},
 }
 
 _cdn_reference_frames = {
@@ -181,6 +183,32 @@ _geoids = [
     'geoid09',
     'geoid03',
 ]
+
+def get_vdatum_by_name(datum_name):
+    ## tidal
+    if utils.int_or(datum_name) not in _tidal_frames.keys():
+        for t in _tidal_frames.keys():
+            if datum_name.lower() in _tidal_frames[t]['name'].lower():
+                return(t)
+    else:
+        return(int(datum_name))
+    ## htdp
+    if utils.int_or(datum_name) not in _htdp_reference_frames.keys():
+        for t in _htdp_reference_frames.keys():
+            if datum_name.lower() in _htdp_reference_frames[t]['name'].lower():
+                return(t)
+    else:
+        return(int(datum_name))
+    ## cdn
+    if utils.int_or(datum_name) not in _cdn_reference_frames.keys():
+        for t in _cdn_reference_frames.keys():
+            if datum_name.lower() in _cdn_reference_frames[t]['name'].lower():
+                return(t)
+    else:
+        return(int(datum_name))
+
+    return(None)
+
 
 vdatum_cache = utils.cudem_cache
 
@@ -260,6 +288,8 @@ class VerticalTransform:
         This will fail over land or outside of US waters...
         """
 
+        from cudem import waffles
+        
         v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
         v_in._outdir = self.cache_dir

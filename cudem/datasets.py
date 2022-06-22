@@ -355,18 +355,21 @@ class ElevationDataset():
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs != self.dst_srs:
+            
+            utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))
             if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O _tmp_trans_{}_{}_{} -c -k -D ./'.format(
-                    self.region.format('str'),
+                vd_region = self.region.copy()
+                vd_region.buffer(pct=2)
+                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O _tmp_trans_{}_{}_{} -c -k -D ./ -P {}'.format(
+                    vd_region.format('str'),
                     self.src_srs.split('+')[-1],
                     self.dst_srs.split('+')[-1],
                     self.src_srs.split('+')[-1],
                     self.dst_srs.split('+')[-1],
-                    self.region.format('fn')
+                    self.region.format('fn'),
+                    self.src_srs.split('+')[0]
                 )
                 if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
-                    ## convert epsg to proj string and append +geoidgrids=_tmp_trans.tif
-                    ## rename _tmp_trans to region-specific and save in cudem_cache for multiple files in same process
                     tmp_srs = osr.SpatialReference()
                     tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
                     src_srs = '{} +geoidgrids=./_tmp_trans_{}_{}_{}.tif'.format(tmp_srs.ExportToProj4(), self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1], self.region.format('fn'))
@@ -385,7 +388,8 @@ class ElevationDataset():
             else:
                 src_srs = self.src_srs
                 dst_srs = self.dst_srs
-            
+
+            utils.echo_msg('in srs: {}; out srs: {}'.format(src_srs, dst_srs))                
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -1182,9 +1186,9 @@ class LASFile(ElevationDataset):
                 points = points[(np.isin(points.classification, self.classes))]
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
-                    if self.dst_trans is not None:
-                        self.region.src_srs = self.dst_srs
-                        self.region.warp(self.src_srs)
+                    #if self.dst_trans is not None:
+                    #    self.region.src_srs = self.dst_srs
+                    #    self.region.warp(self.src_srs)
             
                     dataset = dataset[dataset[:,0] > self.region.xmin,:]
                     dataset = dataset[dataset[:,0] < self.region.xmax,:]
@@ -1199,10 +1203,13 @@ class LASFile(ElevationDataset):
                 for point in dataset:
                     count += 1
                     this_xyz = xyzfun.XYZPoint(
-                        x=point[0], y=point[1], z=point[2], w=self.weight
+                        x=point[0],
+                        y=point[1],
+                        z=point[2],
+                        w=self.weight
                     )
                     if self.dst_trans is not None:
-                        out_xyz.transform(self.dst_trans)
+                        this_xyz.transform(self.dst_trans)
                     
                     yield(this_xyz)
                 dataset = None
