@@ -64,7 +64,7 @@ gdal_fillnodata.py _update.tif _update_full.tif
 #    
 # add full diffs to dem
 #
-gdal_calc.py -A $2 -B _update_full.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
+gdal_calc.py -A $2 -B _update_full.tif --calc "A+B" --outfile $(basename $2 .tif)_patch.tif
 #
 # cleanup
 #
