@@ -173,7 +173,7 @@ class Waffle:
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region,
             verbose=self.verbose,
-            dst_srs=self.dst_srs,
+            dst_srs=self.dst_srs if self.srs_transform else None,
             weight=self.weights,
             x_inc=self.xinc if set_incs else None,
             y_inc=self.yinc if set_incs else None,
@@ -488,7 +488,7 @@ class Waffle:
                     src_region=self.p_region,
                     inc=self.xinc,
                     extend=self.extend,
-                    dst_srs=self.dst_srs,
+                    dst_srs=self.dst_srs if self.srs_transform else None,
                     node=self.node,
                     name=self.name,
                     verbose=self.verbose,
@@ -2669,7 +2669,7 @@ class WafflesLakes(Waffle):
 ## ==============================================
 ## Waffles DEM update - testing
 ## ==============================================
-class WafflesUpdateDEM(Waffle):
+class WafflesPatch(Waffle):
     def __init__(
             self,
             radius=None,
@@ -2763,39 +2763,55 @@ class WafflesUpdateDEM(Waffle):
 
         if not regions.regions_intersect_p(self.region, dem_region):
             utils.echo_error_msg('input region does not intersect with input DEM')
-        
-        # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
-        #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
+
+
+        ## grid the difference to array using query_dump / num
+        ## polygonize the differences and add small buffer (1% or so)
+        ## make zero array, inverse clipped to buffered polygonized diffs
+        ## surface zero array and diffs...
+        ## add surfaced diffs to self.dem
+                        
+        # # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
+        # #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
+        # # )
+        # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n{ndv}:GTiff -T.1 -Z1.2 -V -Lud -Lld'.format(
+        #     region=self.region, xinc=self.xinc, yinc=self.yinc, ndv=self.ndv, radius=self.radius
         # )
-        diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n{ndv}:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
-            region=self.region, xinc=self.xinc, yinc=self.yinc, ndv=self.ndv, radius=self.radius
-        )
-        out, status = utils.run_cmd(
-            diff_cmd,
-            verbose=self.verbose,
-            data_fun=lambda p: self.query_dump(
-                dst_port=p, encode=True, max_diff=self.max_diff
-            )
-        )
+
+        # out, status = utils.run_cmd(
+        #     diff_cmd,
+        #     verbose=self.verbose,
+        #     data_fun=lambda p: self.query_dump(
+        #         dst_port=p, encode=True, max_diff=self.max_diff
+        #     )
+        # )
 
         #utils.echo_msg('smoothing diff grid...')
         #smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
 
         #out, status = demfun.grdfilter('_diff.tif', '_tmp_smooth.tif', dist=self.radius, node='pixel', verbose=self.verbose)
 
+        # if self.xinc != dem_infos['geoT']:
+        #     utils.echo_msg('resampling diff grid...')
+        #     if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
+        #                      src_region=dem_region)[1] == 0:
+        #         os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
+        #     else:
+        #         utils.echo_warning_msg('failed to resample diff grid')
 
-        if self.xinc != dem_infos['geoT']:
-            utils.echo_msg('resampling diff grid...')
-            if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
-                             src_region=dem_region)[1] == 0:
-                os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
-            else:
-                utils.echo_warning_msg('failed to resample diff grid')
-
+        #if self.xinc != dem_infos['geoT']:
+        utils.echo_msg('resampling diff grid...')
+        diff_ds = demfun.sample_warp(
+            '_diff.tif',
+            None,
+            dem_infos['geoT'][1],
+            -1*dem_infos['geoT'][5],
+            src_region=dem_region)[0]
+        
         #utils.remove_glob('{}.tif'.format(self.name))
 
         utils.echo_msg('applying diff grid to dem')
-        diff_ds = gdal.Open('_tmp_smooth.tif')
+        #diff_ds = gdal.Open('_tmp_smooth.tif')
         diff_band = diff_ds.GetRasterBand(1)
         diff_arr = diff_band.ReadAsArray()
         diff_arr[diff_arr == dem_infos['ndv']] = 0
@@ -2982,13 +2998,13 @@ Generate an topo/bathy integrated DEM using a variety of data sources.
  :pre_count=[val] - number of pre-surface iterations to perform""",
         },
         'update': {
-            'name': 'update',
+            'name': 'patch',
             'datalist-p': True,
-            'class': WafflesUpdateDEM,
+            'class': WafflesPatch,
             'description': """UPDATE an existing DEM . <beta>
-Update an existing DEM with data from the datalist
+Patch an existing DEM with data from the datalist
 
-< update:min_weight=.5:dem=None >
+< patch:min_weight=.5:dem=None >
  :dem=[path] - the path the the DEM to update
  :min_weight=[val] - the minumum weight to inclue in the final DEM""",
         },

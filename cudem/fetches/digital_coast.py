@@ -111,6 +111,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 from cudem import vdatums
 
 import cudem.fetches.utils as f_utils
@@ -128,7 +129,7 @@ If inc is set, upon processing the data, will blockmedian it at `inc`
 increment to save space.
 """
     
-    def __init__(self, where='1=1', inc=None, index=False, **kwargs):
+    def __init__(self, where='1=1', inc=None, index=False, datatype=None, **kwargs):
         super().__init__(**kwargs)
         self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
@@ -136,6 +137,7 @@ increment to save space.
         self.where = where
         self.inc = utils.str2inc(inc)
         self.index = index
+        self.datatype = datatype
         
     def run(self):
         '''Run the DAV fetching module'''
@@ -157,15 +159,21 @@ increment to save space.
         if _req is not None:
             features = _req.json()
             for feature in features['features']:
+
+                if self.datatype is not None:
+                    if self.datatype.lower() != feature['attributes']['DataType'].lower():
+                        continue
+                
                 links = json.loads(feature['attributes']['ExternalProviderLink'])
 
+                ept_infos = None
                 ## get ept link to gather datum infos...for lidar only apparently...
                 for link in links['links']:
                     if link['serviceID'] == 167:
                         if link['label'] == 'EPT NOAA':
                             ept_req = f_utils.Fetch(link['link'], verbose=True).fetch_req()
                             ept_infos = ept_req.json()
-
+                            
                 ## get metadata for datum infos...for raster data
                             
                 if self.index:
@@ -214,10 +222,13 @@ increment to save space.
                                         ## add vertical datum to output;
                                         ## field is NativeVdatum
                                         ## must get from metadata
-                                        #v_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
-                                        ## horizontal datum is wrong in ept, most seem to be nad83
-                                        #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
-                                        this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                        if ept_infos is None:
+                                            this_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
+                                        else:
+                                            ## horizontal datum is wrong in ept, most seem to be nad83
+                                            #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
+                                            this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                            
                                         self.results.append(
                                             [tile_url,
                                              os.path.join(
@@ -245,10 +256,14 @@ increment to save space.
 
         if dt == 'lidar':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
+                ds_epsg = str(entry[2])
+                ## no ept epsg's...assume nad83, NAVD88
+                if len(ds_epsg.split(':')) == 1:
+                    ds_epsg = 'epsg:4269+{}'.format(ds_epsg)
                 _ds = datasets.LASFile(
                     fn=src_dc,
-                    data_format=400,
-                    src_srs=entry[2],
+                    data_format=300,
+                    src_srs=ds_epsg,
                     dst_srs=self.dst_srs,
                     src_region=self.region,
                     verbose=self.verbose,
@@ -271,10 +286,13 @@ increment to save space.
                 utils.remove_glob('{}*'.format(src_dc))
         elif dt == 'raster':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
+                ds_epsg = str(entry[2])
+                if len(ds_epsg.split(':')) == 1:
+                    ds_epsg = '{}+{}'.format(demfun.get_srs(src_dc), ds_epsg)
                 _ds = datasets.RasterFile(
                     fn=src_dc,
                     data_format=200,
-                    src_srs=entry[2],
+                    src_srs=ds_epsg,
                     dst_srs=self.dst_srs,
                     weight=self.weight,
                     src_region=self.region,

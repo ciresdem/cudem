@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-### gdal_null.py
+### gdal_zeros.py
 ##
 ## Copyright (c) 2018 - 2022 CIRES DEM Team
 ##
@@ -20,7 +20,7 @@
 ##
 ### Commentary:
 ##
-## Create a nodata grid
+## Create a zeros grid
 ##
 ### Code:
 
@@ -32,8 +32,8 @@ from cudem import utils
 from cudem import regions
 from cudem import demfun
 
-_version = '0.1.10'
-_usage = '''gdal_null.py ({}): generate a null grid
+_version = '0.0.1'
+_usage = '''gdal_zeros.py ({}): generate a zero grid
 usage: gdal_null.py [-region xmin xmax ymin ymax] [-cell_size value]
                     [-t_nodata value] [-d_format grid-format] [-overwrite]
                     [-copy grid] [-verbose] output_grid
@@ -55,21 +55,22 @@ def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
     ds_config = demfun.gather_infos(ds)
     gt = ds_config['geoT']
 
-    if nodata is None: nodata = ds_config['ndv']
-    if nodata is None: nodata = -9999
-    ds_config['ndv'] = nodata
-
-    ds = None
     dsArray = np.zeros([ds_config['ny'],ds_config['nx']])
-    dsArray[:] = float(nodata)
+    
+    if nodata is None:
+        nodata = ds_config['ndv']
+        if nodata is None:
+            nodata = -9999
+
+    ds_config['ndv'] = nodata
+    ds = None
     utils.gdal_write(dsArray, outfile, ds_config)
     
 def createGrid(outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
     '''create a nodata grid'''
     xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
     ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326), gdal.GDT_Float32, nodata, outformat)
-    nullArray = np.zeros( (ycount, xcount) )
-    nullArray[nullArray==0]=nodata
+    zeroArray = np.zeros( (ycount, xcount) )
     utils.gdal_write(nullArray, outfile, ds_config)
 
 if __name__ == '__main__':
@@ -129,7 +130,7 @@ if __name__ == '__main__':
 
     #Run the program given the user input
     if cpgrd is not None:
-        createNullCopy(cpgrd, output, nodata, d_format, verbose, overwrite)
+        createNullCopy(cpgrd, output, -9999, d_format, verbose, overwrite)
     else:
         createGrid(output, this_region, cellsize, nodata, d_format, verbose, overwrite)
 

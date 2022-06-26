@@ -196,7 +196,7 @@ class NauticalCharts(f_utils.FetchModule):
                     for xyz in _ds.yield_xyz():
                         yield(xyz)
 
-                utils.remove_glob(dst_xyz, o_xyz, *src_encs)
+                utils.remove_glob(dst_xyz, *src_encs)
         utils.remove_glob(src_zip)
     
 ### End

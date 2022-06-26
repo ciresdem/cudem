@@ -21,12 +21,13 @@ region=$(dlim -r $2)
 xinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $1}' | sed 's/ (/''/g')
 yinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $2}' | sed 's/)/''/g')
 yinc=$(echo "$yinc * -1" | bc)
-radius=$(echo "$xinc * 3" | bc)
+radius=$(echo "$xinc * 9" | bc)
 proj='epsg:4269'
-max_diff=.25
+max_diff=100.25
 min_weight=1
-mode="diffs"
+#mode="diffs"
 #mode="ibcao"
+mode="patch"
 #
 #  interpolate the new data through the old DEM
 #
@@ -44,6 +45,7 @@ if [ "$mode" == "diffs" ]; then
     # grid the differences with surface
     #
     dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
+
 	gdal_query.py $2 -d_format "xyds" | \
 	awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
 	gmt blockmedian $region -I$xinc/$yinc | \
@@ -61,6 +63,39 @@ if [ "$mode" == "diffs" ]; then
     #
     rm _diff*
 
+elif [ "$mode" == "patch" ]; then
+    echo UPDATING using PATCH
+    ## grid the difference to array using query_dump / num
+    dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
+	gdal_query.py $2 -d_format "xyds" | \
+	awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
+	gmt blockmedian $region -I$xinc/$yinc | \
+	gmt xyz2grd $region -I$xinc/$yinc -G_diff.tif=gd+n-9999:GTiff -V -rp
+    
+    ## polygonize the differences and add small buffer (1% or so)
+    gdal_polygonize.py _diff.tif _diff_ply.shp
+    ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from _diff_ply" _diff_ply_buff.shp _diff_ply.shp
+    
+    ## make zero array, inverse clipped to buffered polygonized diffs
+    gdal_null.py -copy $2 _zeros.tif
+    gdal_clip.py _zeros.tif _diff_ply_buff.shp
+    #gdal_clip.py $2 _diff_ply_buff.shp-i
+
+    waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -M stacks:supercede=True -w -P $proj
+
+    ## surface is nicer output, but slower than gdal_fillnodata
+    ## surface zero array and diffs...
+    gdal_fillnodata.py _update.tif _update_full.tif
+    #waffles $region _update.tif -E $xinc/$yinc -O _update_full -M surface:tension=1 -w -P $proj 
+    #waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -M surface:tension=1 -w -P $proj 
+
+    # dlim $1 ${region} | \
+    # 	gmt blockmedian $region -I$xinc/$yinc | \
+    # 	gmt surface $region -I$xinc/$yinc -G_update.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld
+    
+    ## add surfaced diffs to self.dem
+    gdal_calc.py -A $2 -B _update_full.tif --calc "A+B" --outfile $(basename $2 .tif)_update.tif
+    
 else
     echo IBCAO REMOVE/RESTORE
 

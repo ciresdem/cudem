@@ -66,6 +66,7 @@ setuptools.setup(
     },
     scripts = [
         'scripts/gdal_null.py',
+        'scripts/gdal_zeros.py',
         'scripts/gdal_outliers.py',
         'scripts/gdal_nan2null.py',
         'scripts/gdal_findreplace.py',
@@ -115,6 +116,7 @@ setuptools.setup(
         'scripts/dem_update.sh',
         'scripts/xyz_vs_dem.sh',
         'scripts/dem_set_metadata.py',
+        'scripts/dem_patch.sh'
     ],
     python_requires = '>=3.0',
     project_urls = {

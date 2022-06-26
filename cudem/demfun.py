@@ -148,7 +148,7 @@ def set_srs(src_dem, src_srs='epsg:4326'):
         try:
             ds.SetProjection(utils.sr_wkt(src_srs))
         except Exception as e:
-            ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
+            #ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
             utils.echo_warning_msg('could not set projection {}'.format(src_srs))
         ds = None
         return(0)
