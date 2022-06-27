@@ -25,9 +25,7 @@ radius=$(echo "$xinc * 9" | bc)
 proj='epsg:4269'
 max_diff=100.25
 min_weight=1
-#
-#  interpolate the new data through the old DEM
-#
+
 echo $region
 echo $xinc
 echo $yinc
@@ -49,7 +47,7 @@ dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
 gdal_polygonize.py _diff.tif _diff_ply.shp
 ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from _diff_ply" _diff_ply_buff.shp _diff_ply.shp
 #
-# make zero array, inverse clipped to buffered polygonized diffs
+# make zero array, clipped to buffered polygonized diffs
 #
 gdal_zeros.py -copy $2 _zeros.tif
 gdal_clip.py _zeros.tif _diff_ply_buff.shp
@@ -60,7 +58,7 @@ waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -
 #
 # fill nodata in stacked grid
 #
-gdal_fillnodata.py _update.tif _update_full.tif
+gdal_fillnodata.py _update.tif _update_full.tif -si 4
 #    
 # add full diffs to dem
 #
@@ -69,4 +67,6 @@ gdal_calc.py -A $2 -B _update_full.tif --calc "A+B" --outfile $(basename $2 .tif
 # cleanup
 #
 rm -rf _diff* _update* _zeros*
+#
 # End
+#
