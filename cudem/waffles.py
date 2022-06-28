@@ -3431,7 +3431,7 @@ def waffles_cli(argv = sys.argv):
             i = i + 1
         elif arg[:2] == '-D': wg['ndv'] = utils.float_or(argv[i + 1], -9999)
         
-        elif arg == '--trasform' or arg == '-f' or arg == '-transform':
+        elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
             if wg['dst_srs'] is None:
                 wg['dst_srs'] = 'epsg:4326'

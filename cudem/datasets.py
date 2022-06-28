@@ -906,7 +906,7 @@ class XYZFile(ElevationDataset):
     def yield_array(self, mode='mbgrid'):
 
         if mode == 'mbgrid':
-            with open('tmp.datalist', 'w') as tmp_dl:
+            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
                 tmp_dl.write('{} {} {}\n'.format(self.fn, 168, 1))
 
             ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
@@ -915,13 +915,13 @@ class XYZFile(ElevationDataset):
             mbgrid_region = mbgrid_region.buffer(x_bv=self.x_inc*-.5, y_bv=self.y_inc*-.5)
 
             utils.run_cmd(
-                'mbgrid -Itmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
                     mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                ), verbose=False
+                ), verbose=True
             )
 
             utils.gdal2gdal('{}.grd'.format(ofn))
-            utils.remove_glob('tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+            utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
 
             #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
 
@@ -1299,22 +1299,22 @@ class RasterFile(ElevationDataset):
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
         if self.x_inc is not None and self.y_inc is not None:
             dem_inf = demfun.infos(self.fn)
-            if '{:g}'.format(dem_inf['geoT'][1]) != '{:g}'.format(self.x_inc) or '{:g}'.format(-dem_inf['geoT'][5]) != '{:g}'.format(self.y_inc):
-                if self.region is not None:
-                    self.warp_region = self.region.copy()
-                else:
-                    self.warp_region = regions.Region().from_list(self.infos['minmax'])
-                
-                src_ds = demfun.sample_warp(
-                    self.fn, None, self.x_inc, self.y_inc,
-                    src_region=self.warp_region, sample_alg=self.sample_alg,
-                    ndv=ndv, verbose=self.verbose
-                )[0]
+            #if '{:g}'.format(dem_inf['geoT'][1]) != '{:g}'.format(self.x_inc) or '{:g}'.format(-dem_inf['geoT'][5]) != '{:g}'.format(self.y_inc):
+            if self.region is not None:
+                self.warp_region = self.region.copy()
             else:
-                if self.open_options:
-                    src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-                else:
-                    src_ds = gdal.Open(self.fn)
+                self.warp_region = regions.Region().from_list(self.infos['minmax'])
+                
+            src_ds = demfun.sample_warp(
+                self.fn, None, self.x_inc, self.y_inc,
+                src_region=self.warp_region, sample_alg=self.sample_alg,
+                ndv=ndv, verbose=self.verbose
+            )[0]
+            #else:
+            #    if self.open_options:
+            #        src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+            #    else:
+            #        src_ds = gdal.Open(self.fn)
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1348,8 +1348,8 @@ class RasterFile(ElevationDataset):
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
+            src_ds = None
             
-        src_ds = None
         return(self.infos)
 
     def get_srcwin(self, gt, x_size, y_size, node='pixel'):
@@ -1464,18 +1464,15 @@ class RasterFile(ElevationDataset):
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
                             
-                        src_ds = None
                         yield(out_xyz)
                             
-            band = msk_band = weight_band = src_weight = src_mask = None
+            band = msk_band = weight_band = src_weight = src_mask = src_ds = None
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}{}'.format(
                         count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                     )
                 )
-                
-        src_ds = None
 
     def yield_array(self):
         src_ds = self.init_ds()
