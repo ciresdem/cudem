@@ -319,9 +319,9 @@ def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
             ds_config = gather_infos(ds)
             gt = ds_config['geoT']
             srcwin = src_region.srcwin(gt, ds.RasterXSize, ds.RasterYSize, node=node)
-            print(srcwin)
+            #print(srcwin)
             ds_arr = ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            print(ds_arr.shape)
+            #print(ds_arr.shape)
             dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
             out_ds_config = set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
                                       ds_config['proj'], ds_config['dt'], ds_config['ndv'],

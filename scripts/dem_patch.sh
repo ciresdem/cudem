@@ -36,7 +36,8 @@ echo PATCHING DEM $2
 #
 # grid the difference to array using query_dump / num
 #
-dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
+#dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
+dlim $1 ${region}/-/-/${min_weight}/- | \
     gdal_query.py $2 -d_format "xyds" | \
     awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
     gmt blockmedian $region -I$xinc/$yinc | \

@@ -1463,7 +1463,8 @@ class RasterFile(ElevationDataset):
                         count += 1
                         if self.dst_trans is not None:
                             out_xyz.transform(self.dst_trans)
-
+                            
+                        src_ds = None
                         yield(out_xyz)
                             
             band = msk_band = weight_band = src_weight = src_mask = None

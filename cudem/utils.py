@@ -789,10 +789,10 @@ def gdal_write(
 
     if ds_config['dt'] == 5:
         ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
-                           ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES'])
+                           ds_config['dt'], options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
     else:
         ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
-                           ds_config['dt'], options=['COMPRESS=DEFLATE', 'TILED=YES', 'PREDICTOR=3'])
+                           ds_config['dt'], options=['COMPRESS=LZW', 'TILED=YES', 'PREDICTOR=3'])
 
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])

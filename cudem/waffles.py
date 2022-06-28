@@ -595,7 +595,7 @@ class Waffle:
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
-        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode='translate')[1] == 0:
+        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
             #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
