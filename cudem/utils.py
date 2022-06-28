@@ -601,6 +601,7 @@ def unzip(zip_file, outdir='./', overwrite=False):
         if not overwrite:
             for fn in zip_files:
                 if not os.path.exists(os.path.join(outdir, fn)):
+                    echo_msg('Extracting {}'.format(os.path.join(outdir, fn)))
                     zip_ref.extract(fn, outdir)
         else:
             zip_ref.extractall(outdir)

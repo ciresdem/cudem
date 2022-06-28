@@ -2375,7 +2375,8 @@ class WafflesCoastline(Waffle):
         lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lk_ds = ogr.Open(lakes_shp)
         if lk_ds is not None:
-            lk_layer = lk_ds.GetLayer()        
+            lk_layer = lk_ds.GetLayer()
+            lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
             gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
             lakes_ds_arr = lakes_ds.GetRasterBand(1).ReadAsArray()
             self.coast_array[lakes_ds_arr == -1] = 0
