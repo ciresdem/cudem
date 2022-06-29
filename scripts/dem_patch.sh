@@ -59,7 +59,8 @@ waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -
 #
 # fill nodata in stacked grid
 #
-gdal_fillnodata.py _update.tif _update_full.tif -si 4
+#gdal_fillnodata.py _update.tif _update_full.tif #-si 10
+waffles $region _update.tif -O _update_full -E $xinc/$yinc -M surface
 #    
 # add full diffs to dem
 #

@@ -131,20 +131,22 @@ def main():
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
         src_region.src_srs = demfun.get_srs(src_grid)
         src_region.warp()
-        #x_inc = src_infos['geoT'][1]
-        #y_inc = -src_infos['geoT'][5]
-        x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
+        trans_region = src_region.copy()
+        trans_region.buffer(pct=2)
+        x_inc = src_infos['geoT'][1]
+        y_inc = -src_infos['geoT'][5]
+        #x_inc, y_inc = src_region.increments(src_infos['nx'], src_infos['ny'])
         #tmp_x_inc = x_inc*(3**2)
         #tmp_y_inc = y_inc*(3**2)
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
         
-        #tmp_x_inc, tmp_y_inc = src_region.increments(src_infos['nx']/10, src_infos['ny']/10)
-        vt = vdatums.VerticalTransform(src_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
+        vt = vdatums.VerticalTransform(trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
         
         if _trans_grid is not None:
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_region.format('te'), src_infos['nx'], src_infos['ny'], demfun.get_srs(src_grid)), verbose=True)
+            #utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_region.format('te'), src_infos['nx'], src_infos['ny'], demfun.get_srs(src_grid)), verbose=True)
+            utils.run_cmd('gdalwarp {} {} -te {} -tr {} {} -s_srs epsg:4326 -t_srs {}'.format(_trans_grid, '_{}'.format(_trans_grid), src_region.format('te'), x_inc, y_inc, demfun.get_srs(src_grid)), verbose=True)
             utils.run_cmd('gdal_calc.py -A {} -B {} --calc "A+B" --outfile {}'.format(src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ ')), verbose=True)
             utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
         else:
