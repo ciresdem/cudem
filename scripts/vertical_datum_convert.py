@@ -129,8 +129,8 @@ def main():
         src_infos = demfun.infos(src_grid)
         
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
-        src_region.src_srs = demfun.get_srs(src_grid)
-        src_region.warp()
+        #src_region.src_srs = demfun.get_srs(src_grid)
+        #src_region.warp()
         trans_region = src_region.copy()
         trans_region.buffer(pct=2)
         x_inc = src_infos['geoT'][1]
