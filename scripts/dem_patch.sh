@@ -21,7 +21,8 @@ region=$(dlim -r $2)
 xinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $1}' | sed 's/ (/''/g')
 yinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $2}' | sed 's/)/''/g')
 yinc=$(echo "$yinc * -1" | bc)
-radius=$(echo "$xinc * 9" | bc)
+radius=$(echo "$xinc * 24" | bc)
+#radius2=$(echo "$xinc * 15" | bc)
 proj='epsg:4269'
 max_diff=100.25
 min_weight=1
@@ -59,8 +60,8 @@ waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -
 #
 # fill nodata in stacked grid
 #
-#gdal_fillnodata.py _update.tif _update_full.tif #-si 10
-waffles $region _update.tif -O _update_full -E $xinc/$yinc -M surface
+gdal_fillnodata.py _update.tif _update_full.tif -si 2
+#waffles $region _update.tif -O _update_full -E $xinc/$yinc -M surface:tension=1
 #    
 # add full diffs to dem
 #

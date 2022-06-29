@@ -345,7 +345,7 @@ class Fetch:
             utils.echo_error_msg('could not access {}'.format(self.url))
         return(results)
 
-    def fetch_file(self, dst_fn, params=None, datatype=None, overwrite=False, timeout=140, read_timeout=320):
+    def fetch_file(self, dst_fn, params=None, datatype=None, overwrite=False, timeout=140, read_timeout=320, tries=3):
         """fetch src_url and save to dst_fn"""
     
         status = 0
@@ -414,21 +414,26 @@ class Fetch:
                             if chunk:
                                 local_file.write(chunk)
 
-                elif req.status_code == 429: # or req.status_code == 504:
-                    ## ==============================================
-                    ## pause a bit and retry...
-                    ## ==============================================
-                    utils.echo_warning_msg('server returned: {}, taking a nap and trying again...'.format(req.status_code))
-                    time.sleep(10)
-                    Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
-                        dst_fn,
-                        params=params,
-                        datatype=datatype,
-                        overwrite=overwrite,
-                        timeout=timeout,
-                        read_timeout=read_timeout
-                    )
-                    self.verbose=False
+                elif req.status_code == 429 or req.status_code == 504:
+                    if tries < 0:
+                        utils.echo_warning_msg('max tries exhausted...')
+                        status = -1
+                    else:
+                        ## ==============================================
+                        ## pause a bit and retry...
+                        ## ==============================================
+                        utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
+                        time.sleep(10)
+                        Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                            dst_fn,
+                            params=params,
+                            datatype=datatype,
+                            overwrite=overwrite,
+                            timeout=timeout,
+                            read_timeout=read_timeout,
+                            tries=tries-1
+                        )
+                        self.verbose=False
                     
                 else:
                     utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
