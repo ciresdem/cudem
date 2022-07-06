@@ -250,7 +250,8 @@ class VDATUM(f_utils.FetchModule):
                                             'DataSource': 'vdatum', 'HorizontalDatum': 4326, 'VerticalDatum': v_dict[key]['vdatum'],
                                             'Info': "", 'geom': geom})
             self.FRED._add_surveys(surveys)
-            utils.remove_glob(*v_infs, '{}.zip'.format(vd))
+            #utils.remove_glob(*v_infs, '{}.zip'.format(vd))
+            utils.remove_glob(*v_infs)
             
         self.FRED._close_ds()
 
@@ -280,7 +281,7 @@ class VDATUM(f_utils.FetchModule):
                     v_gtxs = utils.p_f_unzip(dst_zip, [surv['Name']])
                     for v_gtx in v_gtxs:
                         os.rename(v_gtx, '{}.gtx'.format(surv['ID']))
-                    utils.remove_glob(dst_zip)
+                    #utils.remove_glob(dst_zip)
             else:
                 self.results.append([surv['DataLink'], os.path.join(self._outdir, '{}.zip'.format(surv['ID'])), surv['Name']])
 

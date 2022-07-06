@@ -348,7 +348,7 @@ def xyz_parse_line(xyz_line, xyz_c = _xyz_config):
                  float(this_xyz[xyz_c['ypos']]),
                  float(this_xyz[xyz_c['zpos']]) * float(xyz_c['z-scale'])]
     except IndexError as e:
-        if xyz_c['verbose']: utils.echo_error_msg(e)
+        if xyz_c['verbose']: utils.echo_error_msg('{}, {}'.format(e, this_xyz))
         return(None)
     except Exception as e:
         if xyz_c['verbose']: utils.echo_error_msg(e)

@@ -1289,7 +1289,7 @@ class RasterFile(ElevationDataset):
         self.open_options = open_options.split('/') if open_options is not None else []
         self.mask = mask
         self.weight_mask = weight_mask
-        if self.src_srs is None:
+        if self.valid_p() and self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
             self.set_transform()
 

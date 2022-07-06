@@ -20,9 +20,13 @@ fi
 region=$(dlim -r $2)
 xinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $1}' | sed 's/ (/''/g')
 yinc=$(gdalinfo $2 | grep Pixel | awk -F= '{print $2}' | awk -F, '{print $2}' | sed 's/)/''/g')
+xsize=$(gdalinfo $2 | grep "Size is" | awk -F, '{print $2}' | sed 's/ /''/g')
+ysize=$(gdalinfo $2 | grep "Size is" | awk '{print $3}' | sed 's/,//g')
 yinc=$(echo "$yinc * -1" | bc)
-radius=$(echo "$xinc * 24" | bc)
-#radius2=$(echo "$xinc * 15" | bc)
+cell_extend=$(echo "$xsize*.01" | bc)
+#radius=$(echo "$xinc * 24" | bc)
+radius=$(echo "$xinc * 12" | bc)
+#radius=$(echo "$xinc * $cell_extend" | bc)
 proj='epsg:4269'
 max_diff=100.25
 min_weight=1
@@ -30,6 +34,8 @@ min_weight=1
 echo $region
 echo $xinc
 echo $yinc
+echo $xsize
+echo $ysize
 echo $radius
 echo $max_diff
 echo $min_weight
@@ -37,7 +43,10 @@ echo PATCHING DEM $2
 #
 # grid the difference to array using query_dump / num
 #
-#dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj | \
+#waffles ${region} $1 -E $xinc/$yinc -O _new_data -M IDW:radius=$radius:min_points=3 -K 1000 -w 
+#gdal_calc.py -A _new_data.tif -B $2 --calc "B-A" --outfile _diff.tif
+
+# dlim $1 ${region}/-/-/${min_weight}/- -t_srs $proj |
 dlim $1 ${region} | \
     gdal_query.py $2 -d_format "xyds" | \
     awk -v max_diff="$max_diff" '{if ($4 < max_diff) {print $1,$2,$3}}' | \
@@ -46,6 +55,8 @@ dlim $1 ${region} | \
 #
 # polygonize the differences and add small buffer (1% or so)
 #
+# gdal_polygonize.py _diff.tif _diff_ply.gpkg -of GPKG
+# ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from _diff_ply" _diff_ply_buff.gpkg _diff_ply.gpkg -of GPKG
 gdal_polygonize.py _diff.tif _diff_ply.shp
 ogr2ogr -dialect SQLite -sql "select ST_Buffer(geometry, $radius) from _diff_ply" _diff_ply_buff.shp _diff_ply.shp
 #
@@ -60,8 +71,8 @@ waffles $region _diff.tif,200,2 _zeros_cut.tif,200,1 -E $xinc/$yinc -O _update -
 #
 # fill nodata in stacked grid
 #
-gdal_fillnodata.py _update.tif _update_full.tif -si 2
-#waffles $region _update.tif -O _update_full -E $xinc/$yinc -M surface:tension=1
+gdal_fillnodata.py _update.tif _update_full.tif -si 10
+#waffles $region _update.tif -O _update_full -E $xinc/$yinc -M surface
 #    
 # add full diffs to dem
 #

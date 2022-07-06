@@ -78,6 +78,7 @@ import json
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -152,7 +153,6 @@ class HydroNOS(f_utils.FetchModule):
                         z_scale=-1,
                         src_srs='epsg:4326+1089',
                         dst_srs=self.dst_srs,
-                        #name=src_xyz,
                         src_region=self.region,
                         verbose=self.verbose,
                         remote=True
@@ -162,15 +162,15 @@ class HydroNOS(f_utils.FetchModule):
                         
                 utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
 
-            ## src_srs in embedded in bag data
             elif entry[2] == 'bag':
                 src_bags = utils.p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:
+                    bag_epsg = demfun.get_srs(src_bag)
                     _ds = datasets.RasterFile(
                         fn=src_bag,
                         data_format=200,
+                        src_srs='{}+1089'.format(bag_epsg),
                         dst_srs=self.dst_srs,
-                        #name=src_bag,
                         src_region=self.region,
                         verbose=self.verbose
                     )

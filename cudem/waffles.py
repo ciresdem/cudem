@@ -1170,7 +1170,8 @@ class WafflesNum(Waffle):
             #self._xyz_num(self.yield_xyz(block=True))
             #self._xyz_num(self.yield_xyz(block=False))
             ## TODO:FIXME TO NEW RETURN OF FUNC
-            num, weight, count = self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
+            #num, weight, count, gt = self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
+            self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
             if self.mode != 'm':
                 utils.remove_glob('{}_n.tif'.format(self.name))
             else:

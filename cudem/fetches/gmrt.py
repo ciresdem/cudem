@@ -138,7 +138,8 @@ class GMRT(f_utils.FetchModule):
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                src_srs='epsg:4326+5773',
+                #src_srs='epsg:4326+5773',
+                src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
                 weight=self.weight,
                 src_region=self.region,
@@ -175,7 +176,8 @@ class GMRT(f_utils.FetchModule):
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                src_srs='epsg:4326+5773',
+                #src_srs='epsg:4326+5773',
+                src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
                 x_inc=x_inc,
                 y_inc=y_inc,
