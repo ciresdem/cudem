@@ -148,8 +148,8 @@ class Waffle:
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
         self.aux_dems = []
-        #self._init_data(set_incs=True)
-        self._init_data()
+        self._init_data(set_incs=True)
+        #self._init_data()
             
     def _init_regions(self):
         if self.node == 'grid':
@@ -2392,6 +2392,9 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
+        #os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        gdal.SetConfigOption('OGR_INTERLEAVED_READING', 'YES')
+        
         bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
             src_region=self.f_region, weight=self.weights, verbose=self.verbose
