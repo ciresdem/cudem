@@ -59,12 +59,12 @@ class OpenStreetMap(f_utils.FetchModule):
         y_delta = self.region.ymax - self.region.ymin
         incs = self.region.increments(1000,1000)
         
-        if x_delta > .25 or y_delta > .25:
+        if x_delta > .05 or y_delta > .05:
             xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
             if x_delta >= y_delta:
-                n_chunk = int(xcount*(.25/x_delta))
+                n_chunk = int(xcount*(.05/x_delta))
             elif y_delta > x_delta:
-                n_chunk = int(ycount*(.25/y_delta))
+                n_chunk = int(ycount*(.05/y_delta))
         else:
             n_chunk = None
             

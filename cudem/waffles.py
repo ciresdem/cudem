@@ -2393,7 +2393,7 @@ class WafflesCoastline(Waffle):
         """
 
         #os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
-        gdal.SetConfigOption('OGR_INTERLEAVED_READING', 'YES')
+        #gdal.SetConfigOption('OGR_INTERLEAVED_READING', 'YES')
         
         bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
