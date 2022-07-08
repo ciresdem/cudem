@@ -2846,10 +2846,10 @@ Generate a DEM using GMT's surface command
 see gmt surface --help for more info.
         
 < surface:tension=.35:relaxation=1.2:lower_limit=d:upper_limit=d >
- :tension=[0-1] - Spline tension.
- :relaxation=[val] - Spline relaxation factor.
- :lower_limit=[val] - Constrain interpolation to lower limit.
- :upper_limit=[val] - Constrain interpolation to upper limit.''',
+ :tension=[0-1]\t\tspline tension.
+ :relaxation=[val]\tspline relaxation factor.
+ :lower_limit=[val]\tconstrain interpolation to lower limit.
+ :upper_limit=[val]\tconstrain interpolation to upper limit.''',
         },
         'triangulate': {
             'name': 'triangulate',
@@ -2870,8 +2870,8 @@ Generate a DEM using GMT's nearneighbor command.
 see gmt nearneighbor --help for more info.
 
 < nearneighbor:radius=None:sector=None >
- :radius=[val] - search radius
- :sectors=[val] - sector information""",
+ :radius=[val]\t\tsearch radius
+ :sectors=[val]\t\tsector information""",
         },
         'num': {
             'name': 'num',
@@ -2882,9 +2882,10 @@ Generate an uninterpolated DEM using <mode> option.
 Using mode of 'A<mode>' uses GMT's xyz2grd command, 
 see gmt xyz2grd --help for more info.
 
+mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
+
 < num:mode=n >
- :mode=[key] - specify mode of grid population: 
-  keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)""",
+ :mode=[key]\tspecify mode of grid population""",
         },
         'linear': {
             'name': 'linear',
@@ -2895,7 +2896,7 @@ Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
 < linear:radius=-1 >
- :radius=[val] - search radius""",
+ :radius=[val]\t\tsearch radius""",
         },
         'nearest': {
             'name': 'nearest',
@@ -2906,8 +2907,10 @@ Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
 < nearest:radius1=0:radius2=0:angle=0:nodata=0 >
- :radius1=[val] - search radius
- :radius2=[val] - search radius""",
+ :radius1=[val]\t\tsearch radius 1
+ :radius2=[val]\t\tsearch radius 2
+ :angle=[val]\t\tangle
+ :nodata=[val]\t\tnodata""",
         },
         'average': {
             'name': 'average',
@@ -2918,9 +2921,9 @@ Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
 < average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
- :radius1=[val] - search radius
- :radius2=[val] - search radius
- :min_points=[val] - minimum points per bucket (use to fill entire DEM)""",
+ :radius1=[val]\t\tsearch radius 1
+ :radius2=[val]\t\tsearch radius 2
+ :min_points=[val]\tminimum points per bucket (use to fill entire DEM)""",
         },
         'invdst': {
             'name': 'invdst',
@@ -2931,10 +2934,10 @@ Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
 < invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
- :radius1=[val] - search radius
- :radius2=[val] - search radius
- :power=[val] - weight**power
- :min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)""",
+ :radius1=[val]\t\tsearch radius 1
+ :radius2=[val]\t\tsearch radius 2
+ :power=[val]\t\tweight**power
+ :min_points=[val]\tminimum points per IDW bucket (use to fill entire DEM)""",
         },
         'IDW': {
             'name': 'IDW',
@@ -2946,20 +2949,22 @@ If weights are used, will generate a UIDW DEM, using weight values as inverse un
 as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
-< IDW:min_points=8:power=1:block=False >
- :power=[val] - weight**power
- :min_points=[val] - minimum neighbor points for IDW
- :radius=[val] - search radius, set min_points=1 to get all data points
- :block=[True/False] - block the data before performing the IDW routine""",
+< IDW:min_points=8:radius=inf:power=1:block=False >
+ :power=[val]\t\tweight**power
+ :min_points=[val]\tminimum neighbor points for IDW
+ :radius=[val]\t\tsearch radius, only fill data cells within radius from data
+ :block=[True/False]\tblock the data before performing the IDW routine""",
         },
         'vdatum': {
             'name': 'vdatum',
             'datalist-p': False,
             'class': WafflesVDatum,
-            'description': """VDATUM transformation grid.
+            'description': """VDATUM transformation grid.\n
 Generate a Vertical DATUM transformation grid.
 
-< vdatum >""",
+< vdatum:vdatum_in=None:vdatum_out=None >
+ :vdatum_in=[vdatum]\tinput vertical datum
+ :vdatum_out=[vdatum]\toutput vertical datum""",
         },
         'mbgrid': {
             'name': 'mbgrid',
@@ -2967,74 +2972,85 @@ Generate a Vertical DATUM transformation grid.
             'class': WafflesMBGrid,
             'description': """SPLINE DEM via MB-System's mbgrid.\n
 Generate a DEM using MB-System's mbgrid command.
-By default, will use MB-Systems datalist processes, set 'use_datalist=True' to use
-CUDEM's dlim instead.
+By default, will use MB-Systems datalist processes.
+set `use_datalist=True` to use CUDEM's dlim instead.
 see mbgrid --help for more info
 
 < mbgrid:dist='10/3':tension=35:use_datalists=False >
- :dist=[val] - the dist variable to use in mbgrid
- :tension=[val] - the spline tension value (0-inf)
- :use_datalist=[True/False] - use built-in datalists rather than mbdatalist""",
+ :dist=[val]\t\t\tthe dist variable to use in mbgrid
+ :tension=[val]\t\t\tthe spline tension value (0-inf)
+ :use_datalist=[True/False]\tuse built-in datalists rather than mbdatalist""",
         },
         'coastline': {
             'name': 'coastline',
             'datalist-p': False,
             'class': WafflesCoastline,
-            'description': """COASTLINE generation.
-Generate a coastline (land/sea mask) using a variety of sources.
+            'description': """COASTLINE (land/etc-mask) generation.\n
+Generate a coastline (land/etc-mask) using a variety of sources. 
+User data can be provided to provide source for further land masking. 
+Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
+Output vector will polygonize land-areas.
 
-< coastline:wet=None:dry=None:want_gmrt=False:invert=False >
- :want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
- :want_nhd=[True/False] - use high-resolution NHD
- :invert=[True/False] - invert the output results
- :polygonize=[True/False] - polygonize the output""",
+< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
+ :want_gmrt=[True/False]\tuse GMRT to fill background (will use Copernicus otherwise)
+ :want_nhd=[True/False]\t\tuse high-resolution NHD to fill US coastal zones
+ :want_lakes=[True/False\tmask LAKES using HYDROLAKES
+ :want_buildings=[True/False]\tmask BUILDINGS using OSM
+ :invert=[True/False]\t\tinvert the output results
+ :polygonize=[True/False]\tpolygonize the output""",
         },
         'cudem': {
             'name': 'cudem',
             'datalist-p': True,
             'class': WafflesCUDEM,
-            'description': """CUDEM integrated DEM generation. <beta>
+            'description': """CUDEM integrated DEM generation. <beta>\n
 Generate an topo/bathy integrated DEM using a variety of data sources.
+Will iterate <pre_count> pre-surfaces at lower-resolutions.
+Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
+Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
 
 < cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1 >
- :landmask=[path] - path to coastline vector mask or coastline to auto-generate
- :min_weight=[val] - the minumum weight to include in the final DEM
- :smoothing=[val] - the Gaussian bathymetry smoothing value
- :pre_count=[val] - number of pre-surface iterations to perform""",
+ :landmask=[path]\tpath to coastline vector mask or set as `coastline` to auto-generate
+ :min_weight=[val]\tthe minumum weight to include in the final DEM
+ :smoothing=[val]\tthe Gaussian smoothing value to apply to pre-surface(s)
+ :pre_count=[val]\tnumber of pre-surface iterations to perform""",
         },
-        'update': {
+        'patch': {
             'name': 'patch',
             'datalist-p': True,
             'class': WafflesPatch,
-            'description': """UPDATE an existing DEM . <beta>
-Patch an existing DEM with data from the datalist
+            'description': """PATCH an existing DEM with new data. <beta>\n
+Patch an existing DEM with data from the datalist.
 
 < patch:min_weight=.5:dem=None >
- :dem=[path] - the path the the DEM to update
- :min_weight=[val] - the minumum weight to inclue in the final DEM""",
+ :dem=[path]\t\tthe path the the DEM to update
+ :min_weight=[val]\tthe minumum data weight to include in the patched DEM""",
         },
         'lakes': {
             'name': 'lakes',
             'datalist-p': False,
             'class': WafflesLakes,
-            'description': """estimate lake bathymetry
+            'description': """estimate lake bathymetry.\n
+By default, will return lake bathymetry as depth values (positive down), 
+to get elevations (positive up), set apply_elevations=True.
 
-< lakes >""",
+< lakes:apply_elevations=False >
+ :apply_elevations=[True/False]\t\tuse COPERNICUS to apply lake level elevations to output.""",
         },
         'stacks': {
             'name': 'stacks',
             'datalist-p': True,
             'class': WafflesStacks,
-            'description': """STACK data into a DEM <beta>
-Generate a DEM using a raster STACKing method. By default, will calculate
-the [weighted]-mean where overlapping cells occur. Set supercede to True to
-overwrite overlapping cells with higher weighted data.
+            'description': """STACK data into a DEM. <beta>\n
+Generate a DEM using a raster STACKing method. 
+By default, will calculate the [weighted]-mean where overlapping cells occur. 
+Set supercede to True to overwrite overlapping cells with higher weighted data.
 
 < stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
- :supercede=[True/False] - superced data cells with higher weighted data
- :keep_weights=[True/False] - retain weight raster
- :keep_count=[True/False] - retain count raster
- :min_count=[val] - only retain data cells if they contain `min_count` overlapping data""",
+ :supercede=[True/False]\tsuperced data cells with higher weighted data
+ :keep_weights=[True/False]\tretain weight raster
+ :keep_count=[True/False]\tretain count raster
+ :min_count=[val]\t\tonly retain data cells if they contain `min_count` overlapping data""",
         },
 
     }
