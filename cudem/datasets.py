@@ -389,23 +389,23 @@ class ElevationDataset():
                     dst_srs = self.dst_srs.split('+')[0]
                     
                     ## warp wgs84 (4326) transformation grid to src_srs horizontal datum
-                    if self.src_srs.split('+')[0] != 'epsg:4326':
-                        trans_warp_fn = '_tmp_trans_{}_{}_{}'.format(
-                            self.srs_srs.split('+')[0],
-                            self.src_srs.split('+')[-1],
-                            self.dst_srs.split('+')[-1],
-                            self.region.format('fn')
-                        )
-                        gdal.Warp(
-                            '{}.tif'.format(trans_warp_fn),
-                            '{}.tif'.format(trans_fn),
-                            dstSRS=self.src_srs.split('+')[0]
-                        )
-                        utils.remove_glob('{}.*'.format(trans_fn))
-                        src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_warp_fn)
-                    else:
-                        src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)
-                    
+                    # if self.src_srs.split('+')[0] != 'epsg:4326':
+                    #     trans_warp_fn = '_tmp_trans_{}_{}_{}'.format(
+                    #         self.src_srs.split('+')[0],
+                    #         self.src_srs.split('+')[-1],
+                    #         self.dst_srs.split('+')[-1],
+                    #         self.region.format('fn')
+                    #     )
+                    #     gdal.Warp(
+                    #         '{}.tif'.format(trans_warp_fn),
+                    #         '{}.tif'.format(trans_fn),
+                    #         dstSRS=self.src_srs.split('+')[0]
+                    #     )
+                    #     utils.remove_glob('{}.*'.format(trans_fn))
+                    #     src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_warp_fn)
+                    # else:
+                    src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)
+                        
                 else:
                     utils.echo_error_msg('failed to generate transformation grid between {} and {} for this region!'.format(self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]))
                     src_srs = self.src_srs.split('+')[0]
