@@ -323,6 +323,7 @@ layers:
             src_region=None,
             callback=lambda: False,
             weight=None,
+            dst_srs=None,
             verbose=True
     ):
         self.mod = mod
@@ -332,6 +333,7 @@ layers:
         self.weight = weight
         self.verbose = verbose
         self.status = 0
+        self.dst_srs = dst_srs
         self.results = []
         if self.mod is not None:
             this_mod = self.parse_mod()
@@ -363,6 +365,7 @@ layers:
                     src_region=self.region,
                     callback=self.callback,
                     weight=self.weight,
+                    dst_srs=self.dst_srs,
                     verbose=self.verbose,
                     **kwargs,
                     **self.mod_args
@@ -384,7 +387,7 @@ _fetches_module_long_desc = lambda x: 'fetches modules:\n% fetches ... <mod>:key
 ## ==============================================
 fetches_usage = """{cmd} ({f_version}): Fetches; Fetch and process remote elevation data
 
-usage: {cmd} [ -hlmpqR [ args ] ] MODULE ...
+usage: {cmd} [ -hlmpqRW [ args ] ] MODULE ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -393,8 +396,9 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+  -W, --t_srs\t\tSet the TARGET projection (for use with `-p`).
   -l, --list\t\tReturn a list of fetch URLs in the given region.
-  -p, --process\t\tProcess fetched elevation data to ASCII XYZ format in WGS84. <beta>
+  -p, --process\t\tProcess fetched elevation data to ASCII XYZ format. <beta>
   -q, --quiet\t\tLower the verbosity to a quiet
 
   --modules\t\tDisply the module descriptions and usage
@@ -423,6 +427,8 @@ See `fetches_cli_usage` for full cli options.
     want_proc = False
     want_verbose = True
     stop_threads = False
+    dst_srs = None
+    xy_inc = [None, None]
     
     ## ==============================================
     ## parse command line arguments.
@@ -435,6 +441,14 @@ See `fetches_cli_usage` for full cli options.
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
+        elif arg == '--increment' or arg == '-E':
+            xy_inc = argv[i + 1].split('/')
+            i = i + 1
+        elif arg[:2] == '-E':
+            xy_inc = arg[2:].split('/')
+        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
+            dst_srs = argv[i + 1]
+            i = i + 1
         elif arg == '--list' or arg == '-l':
             want_list = True
         elif arg == '--process' or arg == '-p':
@@ -507,8 +521,9 @@ See `fetches_cli_usage` for full cli options.
         x_fs = [FetchesFactory(
             mod=mod,
             src_region=this_region,
+            dst_srs=dst_srs,
             verbose=want_verbose
-        ).acquire(dst_srs='epsg:4326') for mod in mods]
+        ).acquire() for mod in mods]
         for x_f in x_fs:
             if x_f is None:
                 continue

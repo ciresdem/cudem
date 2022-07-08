@@ -289,7 +289,7 @@ class VerticalTransform:
         """
 
         from cudem import waffles
-        
+
         v_in = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
         v_out = cudem.fetches.vdatum.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
         v_in._outdir = self.cache_dir

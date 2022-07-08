@@ -326,8 +326,19 @@ class ElevationDataset():
         if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
             self.infos['src_srs'] = self.src_srs
         else:
-            self.src_srs = self.infos['src_srs']
+            if self.src_srs is None:
+                self.src_srs = self.infos['src_srs']
+                
+            if self.dst_trans is not None:
+                if self.trans_region is None:
+                    self.trans_region = regions.Region().from_list(self.infos['minmax'])
+                    self.trans_region.src_srs = self.infos['src_srs']
+                    self.trans_region.warp(self.dst_srs)
 
+                self.infos['minmax'] = self.trans_region.export_as_list(include_z=True)
+                self.infos['wkt'] = self.trans_region.export_as_wkt()
+                self.infos['src_srs'] = self.dst_srs
+            
         if 'format' not in self.infos.keys():
             self.infos['format'] = self.data_format
 
@@ -355,30 +366,52 @@ class ElevationDataset():
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs != self.dst_srs:
-            
             utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))
+            
+            ## vertical transform
             if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
                 vd_region = self.region.copy()
                 vd_region.buffer(pct=2)
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O _tmp_trans_{}_{}_{} -c -k -D ./'.format(
-                    vd_region.format('str'),
-                    self.src_srs.split('+')[-1],
-                    self.dst_srs.split('+')[-1],
+                trans_fn = '_tmp_trans_{}_{}_{}'.format(
                     self.src_srs.split('+')[-1],
                     self.dst_srs.split('+')[-1],
                     self.region.format('fn')
-                    #self.dst_srs.split('+')[0]
+                )
+                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -P epsg:4326 -c -k -D ./'.format(
+                    vd_region.format('str'),
+                    self.src_srs.split('+')[-1],
+                    self.dst_srs.split('+')[-1],
+                    trans_fn
                 )
                 if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
                     tmp_srs = osr.SpatialReference()
                     tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
-                    src_srs = '{} +geoidgrids=./_tmp_trans_{}_{}_{}.tif'.format(tmp_srs.ExportToProj4(), self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1], self.region.format('fn'))
                     dst_srs = self.dst_srs.split('+')[0]
+                    
+                    ## warp wgs84 (4326) transformation grid to src_srs horizontal datum
+                    if self.src_srs.split('+')[0] != 'epsg:4326':
+                        trans_warp_fn = '_tmp_trans_{}_{}_{}'.format(
+                            self.srs_srs.split('+')[0],
+                            self.src_srs.split('+')[-1],
+                            self.dst_srs.split('+')[-1],
+                            self.region.format('fn')
+                        )
+                        gdal.Warp(
+                            '{}.tif'.format(trans_warp_fn),
+                            '{}.tif'.format(trans_fn),
+                            dstSRS=self.src_srs.split('+')[0]
+                        )
+                        utils.remove_glob('{}.*'.format(trans_fn))
+                        src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_warp_fn)
+                    else:
+                        src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)
+                    
                 else:
                     utils.echo_error_msg('failed to generate transformation grid between {} and {} for this region!'.format(self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]))
                     src_srs = self.src_srs.split('+')[0]
                     dst_srs = self.dst_srs.split('+')[0]
-                
+
+            ## horizontal transform only
             elif utils.int_or(self.src_srs.split('+')[-1]) is not None:
                 src_srs = self.src_srs.split('+')[0]
                 dst_srs = self.dst_srs
@@ -833,16 +866,16 @@ class XYZFile(ElevationDataset):
             y_offset=0,
             **kwargs
     ):
-        self.xpos = xpos
-        self.ypos = ypos
-        self.zpos = zpos
-        self.wpos = wpos
-        self.skip = skip
-        self.x_scale = x_scale
-        self.y_scale = y_scale
-        self.z_scale = z_scale
-        self.x_offset = x_offset
-        self.y_offset = y_offset
+        self.xpos = utils.int_or(xpos, 0)
+        self.ypos = utils.int_or(ypos, 1)
+        self.zpos = utils.int_or(zpos, 2)
+        self.wpos = utils.int_or(wpos)
+        self.skip = utils.int_or(skip, 0)
+        self.x_scale = utils.float_or(x_scale, 1)
+        self.y_scale = utils.float_or(y_scale, 1)
+        self.z_scale = utils.float_or(z_scale, 1)
+        self.x_offset = utils.int_or(x_offset, 0)
+        self.y_offset = utils.int_or(y_offset, 0)
         self._known_delims = [None, ',', '/', ':'] ## space and tab are 'None'
         self.delim = delim
         if delim is not None:
@@ -893,6 +926,8 @@ class XYZFile(ElevationDataset):
             self.infos['wkt'] = this_region.export_as_wkt()
                 
         self.region = region_
+        self.infos['src_srs'] = self.src_srs
+        
         return(self.infos)
 
     def line_delim(self, xyz_line):
@@ -978,6 +1013,9 @@ class XYZFile(ElevationDataset):
         for xyz_line in self.src_data:
             if count >= skip:
                 this_xyz = self.line_delim(xyz_line)
+                if this_xyz is None:
+                    continue
+                
                 if self.wpos is not None:
                     w = float(this_xyz[self.wpos])
                 else:
@@ -990,7 +1028,7 @@ class XYZFile(ElevationDataset):
                         z=this_xyz[self.zpos]
                     )
                 except Exception as e:
-                    utils.echo_error_msg(e)
+                    utils.echo_error_msg('{} ; {}'.format(e, this_xyz))
                     this_xyz = xyzfun.XYZPoint()
                 if this_xyz.valid_p():
                     if self.scoff:
@@ -1122,6 +1160,7 @@ class LASFile(ElevationDataset):
         # print(lasf.header.vlrs[2].geo_keys)
         # [print(x.id) for x in lasf.header.vlrs[2].geo_keys]
 
+        self.infos['src_srs'] = self.src_srs
         
         self.infos['minmax'] = this_region.export_as_list(
             include_z=True
@@ -1328,6 +1367,7 @@ class RasterFile(ElevationDataset):
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
@@ -1655,6 +1695,7 @@ class BAGFile(ElevationDataset):
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
@@ -1672,9 +1713,8 @@ class BAGFile(ElevationDataset):
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
             self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
             self.infos['wkt'] = this_region.export_as_wkt()
-            #self.infos['src_srs'] = self.src_srs
+            src_ds = None
             
-        src_ds = None
         return(self.infos)
 
     def parse_(self):

@@ -31,7 +31,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.6.5',
+    version = '1.6.6',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',

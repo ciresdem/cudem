@@ -147,16 +147,25 @@ specify `inc` to blockmedian the data when processing
                 sys.exit()
 
             if src_epsg is None:
-                this_geom = src_region.export_as_geom()
+                ## keep buffering the src region until a match is found...
+
+                tmp_region = src_region.copy()
                 sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
                 sp = ogr.Open(sp_fn)
                 layer = sp.GetLayer()
-                
+
+                this_geom = tmp_region.export_as_geom()
+                layer.SetSpatialFilter(this_geom)
+
+                while len(layer) == 0:
+                    tmp_region.buffer(pct=2)
+                    this_geom = tmp_region.export_as_geom()
+                    layer.SetSpatialFilter(None)
+                    layer.SetSpatialFilter(this_geom)
+                    
                 for feature in layer:
-                    geom = feature.GetGeometryRef()
-                    if this_geom.Intersects(geom):
-                        src_epsg = feature.GetField('EPSG')
-                        break
+                    src_epsg = feature.GetField('EPSG')
+                    break
                     
                 sp = None
 
@@ -168,10 +177,9 @@ specify `inc` to blockmedian the data when processing
                     x_scale=.3048,
                     y_scale=.3048,
                     z_scale=-.3048,
-                    src_srs='epsg:{}'.format(src_epsg),
+                    src_srs='epsg:{}+5868'.format(src_epsg) if src_epsg is not None else None,
                     dst_srs=self.dst_srs,
                     src_region=src_region,
-                    name=src_usace,
                     verbose=self.verbose,
                     remote=True
                 )
@@ -222,7 +230,6 @@ specify `inc` to blockmedian the data when processing
                     src_srs=this_proj,
                     dst_srs=self.dst_srs,
                     src_region=src_region,
-                    #name=src_usace,
                     verbose=self.verbose,
                     remote=True
                 )

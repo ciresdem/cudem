@@ -194,17 +194,24 @@ class Datalist(datasets.ElevationDataset):
             if self.verbose:
                 callback()
 
-            if entry.src_srs is not None and self.dst_srs is not None:
-                e_region = regions.Region().from_list(entry.infos['minmax'])
-                e_region.src_srs = entry.src_srs
-                e_region.warp(self.dst_srs)
-                entry_region = e_region.export_as_list(include_z=True)
+            if entry.src_srs is not None:
+                if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+                    self.infos['src_srs'] = entry.src_srs
+                    
+                if self.dst_srs is not None:
+                    self.infos['src_srs'] = self.dst_srs
+                    e_region = regions.Region().from_list(entry.infos['minmax'])
+                    e_region.src_srs = entry.src_srs
+                    e_region.warp(self.dst_srs)
+                    entry_region = e_region.export_as_list(include_z=True)
+                else:
+                    entry_region = entry.infos['minmax']
+
             else:
                 entry_region = entry.infos['minmax']
 
             if regions.Region().from_list(entry_region).valid_p():
                 self._create_entry_feature(entry, regions.Region().from_list(entry_region))
-                #out_regions.append(entry.infos['minmax'])
                 out_regions.append(entry_region)
                 if 'numpts' in self.infos.keys():
                     self.infos['numpts'] += entry.infos['numpts']
@@ -249,9 +256,10 @@ class Datalist(datasets.ElevationDataset):
             dl_ds = driver.Open('{}.json'.format(self.fn))
             dl_layer = dl_ds.GetLayer()
             ldefn = dl_layer.GetLayerDefn()
-            
+
             if self.region is not None:
-                _boundsGeom = self.region.export_as_geom()
+                #self.region if data_set.dst_trans is None else data_set.trans_region
+                _boundsGeom = self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom()
             else:
                 _boundsGeom = None
 
@@ -384,6 +392,7 @@ class Datalist(datasets.ElevationDataset):
         """parse the data from the datalist"""
 
         for this_entry in self.parse_json():
+            #for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
                 
@@ -393,6 +402,7 @@ class Datalist(datasets.ElevationDataset):
     def yield_array(self):
 
         for this_entry in self.parse_json():
+            #for this_entry in self.parse():
             for arr in this_entry.yield_array():
                 yield(arr)
 
@@ -444,6 +454,8 @@ class ZIPlist(datasets.ElevationDataset):
             self.infos['minmax'] = None
 
         self.region = _region
+        self.infos['src_srs'] = self.src_srs
+        
         return(self.infos)
         
     def parse_(self):
@@ -522,9 +534,10 @@ parsing and processing.
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
+            dst_srs=self.dst_srs,
             verbose=self.verbose,
             weight=self.weight
-        ).acquire(dst_srs=self.dst_srs)
+        ).acquire()
 
         if self.fetch_module is None:
             pass

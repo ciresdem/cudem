@@ -195,9 +195,11 @@ class HydroLakes(f_utils.FetchModule):
         NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
         """
 
-        bathy_arr = (shore_distance_arr * max_depth) / float(shore_distance_arr.max())
+        max_dist = float(shore_distance_arr.max())
+        max_dist = .1 if max_dist <= 0 else max_dist
+        bathy_arr = (shore_distance_arr * max_depth) / max_dist
         bathy_arr[bathy_arr == 0] = np.nan
-        if shore_arr is None or shore_arr[~np.isnan(bathy_arr)].max() == 0:
+        if shore_arr is None or np.all(np.isnan(bathy_arr)) or shore_arr[~np.isnan(bathy_arr)].max() == 0:
             bathy_arr = shore_elev - bathy_arr
         else:
             bathy_arr = shore_arr - bathy_arr
@@ -251,8 +253,8 @@ class HydroLakes(f_utils.FetchModule):
                 lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
 
                 for i, feat in enumerate(lk_layer):
-                    lk_prog.update_perc((i, lk_features))
                     lk_id = feat.GetField('Hylak_id')
+                    lk_prog.update_perc((i, lk_features), msg='processing {} lakes: {}'.format(lk_features, lk_id))
                     lk_elevation = feat.GetField('Elevation')
                     lk_depth = feat.GetField('Depth_avg')
                     lk_depth_glb = globd[lk_id]
@@ -269,6 +271,7 @@ class HydroLakes(f_utils.FetchModule):
 
                     prox_arr = prox_band.ReadAsArray()
                     msk_arr = msk_band.ReadAsArray()
+                    
                     self.bathy_arr += self.apply_calculation(
                         prox_band.ReadAsArray(),
                         max_depth=lk_depth_glb,
