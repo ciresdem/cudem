@@ -195,11 +195,11 @@ class Datalist(datasets.ElevationDataset):
                 callback()
 
             if entry.src_srs is not None:
-                if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
-                    self.infos['src_srs'] = entry.src_srs
+                #if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+                #    self.infos['src_srs'] = entry.src_srs
                     
                 if self.dst_srs is not None:
-                    self.infos['src_srs'] = self.dst_srs
+                    #self.infos['src_srs'] = self.dst_srs
                     e_region = regions.Region().from_list(entry.infos['minmax'])
                     e_region.src_srs = entry.src_srs
                     e_region.warp(self.dst_srs)
@@ -345,13 +345,8 @@ class Datalist(datasets.ElevationDataset):
                         ).acquire()
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                        ):                            
+                        ):
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                               # try:
-                               #     inf_region = regions.Region().from_string(
-                               #         data_set.infos['wkt']
-                               #     )
-                               # except:
                                 try:
                                     inf_region = regions.Region().from_list(
                                         data_set.infos['minmax']
@@ -428,7 +423,8 @@ class ZIPlist(datasets.ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-            
+        self.infos['format'] = self.data_format
+        
         for entry in self.parse_():
             if self.verbose:
                 callback()
@@ -554,6 +550,7 @@ parsing and processing.
             
         self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
+        self.infos['format'] = self.data_format
         return(self.infos)
 
     def parse_(self):

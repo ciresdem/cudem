@@ -44,6 +44,8 @@ import cudem.fetches.vdatum
 _tidal_frames = {
     1089: {'name': 'mllw',
            'description': 'Mean Lower Low Water'},
+    5866: {'name': 'mllw',
+           'description': 'Mean Lower Low Water'},
     1091: {'name': 'mlw',
            'description': 'Mean Low Water'},
     1090: {'name': 'mhhw',

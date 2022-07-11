@@ -2166,7 +2166,7 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.utils
 
         self.f_region = self.p_region.copy()
-        self.f_region.buffer(x_bv=(self.xinc*10), y_bv=(self.yinc*10))
+        self.f_region.buffer(pct=5)
         self.f_region.src_srs = self.dst_srs
         self.wgs_region = self.f_region.copy()
         if self.dst_srs is not None:
@@ -2280,12 +2280,16 @@ class WafflesCoastline(Waffle):
 
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
+        dst_srs.AutoIdentifyEPSG()
+        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+       
         for i, cop_tif in enumerate(this_cop.results):
+            demfun.set_nodata(cop_tif[1], 0)            
             cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress, srcNodata=0)
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
-            cop_ds_arr[cop_ds_arr !=0] = 1
-            #cop_ds_arr[c_ds_arr != 1] = -1
+            cop_ds_arr[cop_ds_arr != 0] = 1
             self.coast_array += cop_ds_arr
             cop_ds = cop_ds_arr = None
     
@@ -2348,9 +2352,10 @@ class WafflesCoastline(Waffle):
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                 tnm_ds_arr[tnm_ds_arr < 1] = 0
                 self.coast_array -= tnm_ds_arr
+                #self.coast_array[tnm_ds_arr == 1] = 0
                 tnm_ds = tnm_ds_arr = None
                 
-            utils.remove_glob('nhdArea_merge.*')
+            #utils.remove_glob('nhdArea_merge.*')
 
     def _load_lakes(self):
         """HydroLakes -- Global Lakes"""

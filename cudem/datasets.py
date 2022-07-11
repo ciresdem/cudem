@@ -301,6 +301,7 @@ class ElevationDataset():
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 
             self.infos = self.generate_inf(None if not self.verbose else _prog.update)
+            
             if 'minmax' in self.infos:
                 if self.infos['minmax'] is not None:
                     if write_inf:
@@ -309,6 +310,7 @@ class ElevationDataset():
                                 inf.write(json.dumps(self.infos))
                         except:
                             pass
+                        
                         # if self.region is not None:
                         #     with open('{}_{}.inf'.format(
                         #             'dlim_tmp', self.region.format('fn')), 'w') as inf:
@@ -335,9 +337,9 @@ class ElevationDataset():
                     self.trans_region.src_srs = self.infos['src_srs']
                     self.trans_region.warp(self.dst_srs)
 
-                self.infos['minmax'] = self.trans_region.export_as_list(include_z=True)
-                self.infos['wkt'] = self.trans_region.export_as_wkt()
-                self.infos['src_srs'] = self.dst_srs
+                #self.infos['minmax'] = self.trans_region.export_as_list(include_z=True)
+                #self.infos['wkt'] = self.trans_region.export_as_wkt()
+                #self.infos['src_srs'] = self.dst_srs
             
         if 'format' not in self.infos.keys():
             self.infos['format'] = self.data_format
@@ -891,6 +893,7 @@ class XYZFile(ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
+        self.infos['format'] = self.data_format
         this_region = regions.Region()
         region_ = self.region
         self.region = None
@@ -1137,6 +1140,7 @@ class LASFile(ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['numpts'] = 0
+        self.infos['format'] = self.data_format
         this_region = regions.Region()
 
         with lp.open(self.fn) as lasf:
@@ -1349,6 +1353,7 @@ class RasterFile(ElevationDataset):
                 src_region=self.warp_region, sample_alg=self.sample_alg,
                 ndv=ndv, verbose=self.verbose
             )[0]
+            
             #else:
             #    if self.open_options:
             #        src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1368,6 +1373,7 @@ class RasterFile(ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
+        self.infos['format'] = self.data_format
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
@@ -1696,6 +1702,7 @@ class BAGFile(ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
+        self.infos['format'] = self.data_format
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
@@ -1788,6 +1795,7 @@ class MBSParser(ElevationDataset):
     def generate_inf(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = None
+        self.infos['format'] = self.data_format
         try:
             utils.run_cmd('mbdatalist -O -V -I{}'.format(self.fn))
             self.inf_parse()
