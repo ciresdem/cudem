@@ -34,8 +34,6 @@
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
 ##
-## TODO: cache_dir -- proj_cdn / nhd
-##
 ### Code:
 
 import sys
@@ -322,7 +320,6 @@ class Waffle:
           list: xyz data for each block with data
         """
 
-        #power = utils.float_or(power, 1)
         xcount, ycount, dst_gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc
         )
@@ -331,7 +328,6 @@ class Waffle:
         count_array = np.zeros((ycount, xcount))
         if self.weights:
             weight_array = np.zeros((ycount, xcount))
-            #w_array = np.zeros((ycount, xcount))
             
         if self.verbose:
             utils.echo_msg(
@@ -346,7 +342,6 @@ class Waffle:
                 count_array[ypos, xpos] += 1
                 if self.weights:
                     weight_array[ypos, xpos] += this_xyz.w
-                    #w_array[ypos, xpos] += this_xyz.w * this_xyz.w
 
             except: pass
 
@@ -354,7 +349,6 @@ class Waffle:
         if self.weights:
             weight_array[weight_array == 0] = np.nan
             weight_array = (weight_array/count_array)
-            #weight_array = (w_array/weight_array)/count_array
             z_array = (z_array/weight_array)/count_array
         else:
             z_array = (z_array/count_array)
@@ -596,11 +590,10 @@ class Waffle:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
-            #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif')[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
             except Exception as e:
-                utils.echo_error_msg(e)
+                utils.echo_error_msg('could not cut {}; {}'.format(fn, e))
 
         ## if set_srs fails, set_metadata will skip first entry...
         demfun.set_srs(fn, self.dst_srs)
@@ -1167,10 +1160,6 @@ class WafflesNum(Waffle):
                 )
             )
         else:
-            #self._xyz_num(self.yield_xyz(block=True))
-            #self._xyz_num(self.yield_xyz(block=False))
-            ## TODO:FIXME TO NEW RETURN OF FUNC
-            #num, weight, count, gt = self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
             self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
             if self.mode != 'm':
                 utils.remove_glob('{}_n.tif'.format(self.name))
@@ -1564,8 +1553,7 @@ class WafflesGDALGrid(Waffle):
         Args: 
           alg_str (str): the gdal_grid algorithm string
         """
-        #self.mod = 'gdal_grid'
-        #self.mod_args = {}
+        
         super().__init__(**kwargs)
         self.alg_str = 'linear:radius=-1'
         self.mod = self.alg_str.split(':')[0]
@@ -1684,6 +1672,10 @@ class WafflesCUDEM(Waffle):
 
     generate a DEM with `pre_surface`s which are generated
     at lower resolution and with various weight threshholds.
+
+To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
+Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
+DEM generation. 
     """
     
     def __init__(
@@ -1720,7 +1712,6 @@ class WafflesCUDEM(Waffle):
         
     def run(self):
         pre = self.pre_count
-        #count = 3-self.pre_count
         self.p_region.buffer(pct=self.pre_count)
         pre_weight = 0
         pre_region = self.p_region.copy()
@@ -1729,18 +1720,13 @@ class WafflesCUDEM(Waffle):
         upper_limit = None
         coast = '{}_cst'.format(self.name)
 
-        #block_region = self.p_region.copy()
-        #block_region.buffer(pct=self.pre_count)
-
         utils.echo_msg('target region: {}'.format(self.region))
         utils.echo_msg('processing region: {}'.format(self.p_region))
-        #utils.echo_msg('block region: {}'.format(block_region))
         
         self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         n = '{}_n.tif'.format(self.name)
         w = '{}_w.tif'.format(self.name)
         c = '{}_c.tif'.format(self.name)
-
         if self.min_weight is None:
             self.min_weight = demfun.percentile(w, 75)
             
@@ -1785,7 +1771,6 @@ class WafflesCUDEM(Waffle):
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 #pre_weight = self.min_weight/(3**pre) if pre > 0 else self.min_weight
-                #pre_weight = self.min_weight/(3/count) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
                 pre_data = [
                     '{},200:weight_mask={},1'.format(n, w),
@@ -1795,7 +1780,6 @@ class WafflesCUDEM(Waffle):
                 ]
                 pre_region.wmin = pre_weight
 
-            #pre_region = self.p_region.copy()
             pre_region = self._proc_region()
             pre_region.buffer(pct=pre)
 
@@ -1828,7 +1812,6 @@ class WafflesCUDEM(Waffle):
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
             pre -= 1
-            #count += 1
             
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
@@ -2287,7 +2270,10 @@ class WafflesCoastline(Waffle):
         for i, cop_tif in enumerate(this_cop.results):
             demfun.set_nodata(cop_tif[1], 0)            
             cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress, srcNodata=0)
+            gdal.Warp(
+                cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample,
+                callback=gdal.TermProgress, srcNodata=0
+            )
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
             cop_ds_arr[cop_ds_arr != 0] = 1
             self.coast_array += cop_ds_arr
@@ -2312,11 +2298,9 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-        #print(this_tnm.results)
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
-                #gdb = tnm_zip[1].split('.')[:-1][0] + '.gdb'
                 gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
@@ -2352,10 +2336,9 @@ class WafflesCoastline(Waffle):
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                 tnm_ds_arr[tnm_ds_arr < 1] = 0
                 self.coast_array -= tnm_ds_arr
-                #self.coast_array[tnm_ds_arr == 1] = 0
                 tnm_ds = tnm_ds_arr = None
                 
-            #utils.remove_glob('nhdArea_merge.*')
+            utils.remove_glob('nhdArea_merge.*')
 
     def _load_lakes(self):
         """HydroLakes -- Global Lakes"""
@@ -2397,9 +2380,6 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
-        #os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
-        #gdal.SetConfigOption('OGR_INTERLEAVED_READING', 'YES')
-        
         bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
             src_region=self.f_region, weight=self.weights, verbose=self.verbose
@@ -2407,7 +2387,7 @@ class WafflesCoastline(Waffle):
         this_osm._outdir = self.cache_dir
         this_osm.run()
         for osm_result in this_osm.results:
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1]) == 0:
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False) >= 0:
                 osm_ds = ogr.Open(osm_result[1])
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')
@@ -2417,8 +2397,8 @@ class WafflesCoastline(Waffle):
                     self.coast_array[bldg_arr == -1] = 0
                 else:
                     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_result[1]))
-            else:
-                utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
+            #else:
+            #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             
         bldg_ds = None
         

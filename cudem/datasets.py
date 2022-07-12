@@ -109,6 +109,8 @@ class ElevationDataset():
         self.dst_srs = dst_srs
         self.dst_trans = None
         self.trans_region = None
+        self.src_trans_srs = None
+        self.dst_trans_srs = None
         self.region = src_region
         self.parent = parent
         self.verbose = verbose
@@ -364,8 +366,7 @@ class ElevationDataset():
         if self.dst_srs is not None and \
            self.src_srs is not None and \
            self.src_srs != self.dst_srs:
-            utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))
-            
+            #utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))            
             ## vertical transform
             if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
                 vd_region = self.region.copy()
@@ -406,7 +407,7 @@ class ElevationDataset():
                 src_srs = self.src_srs
                 dst_srs = self.dst_srs
 
-            utils.echo_msg('in srs: {}; out srs: {}'.format(src_srs, dst_srs))                
+            #utils.echo_msg('in srs: {}; out srs: {}'.format(src_srs, dst_srs))                
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -417,6 +418,8 @@ class ElevationDataset():
             except:
                 pass
 
+            self.src_trans_srs = src_srs
+            self.dst_trans_srs = dst_srs
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
             if self.region is not None:
                 self.trans_region = self.region.copy()
@@ -1316,23 +1319,27 @@ class RasterFile(ElevationDataset):
             self.set_transform()
 
     def init_ds(self):
-        """initialize the raster dataset"""
+        """initialize the raster dataset
+
+        if x/y incs are set, will warp raster to that resolution.
+        """
         
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
         if self.x_inc is not None and self.y_inc is not None:
             dem_inf = demfun.infos(self.fn)
-            self.warp_region = regions.Region().from_list(self.infos['minmax']) if self.region is None else self.region.copy()
+            if self.region is None:
+                self.warp_region = regions.Region().from_list(self.infos['minmax'])
+            else:
+                self.warp_region = self.region.copy()
+                if self.dst_trans is not None:
+                    self.dst_trans = None
+
             src_ds = demfun.sample_warp(
                 self.fn, None, self.x_inc, self.y_inc,
+                src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
                 ndv=ndv, verbose=self.verbose
             )[0]
-            
-            #else:
-            #    if self.open_options:
-            #        src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-            #    else:
-            #        src_ds = gdal.Open(self.fn)
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1402,7 +1409,9 @@ class RasterFile(ElevationDataset):
 
         src_ds = self.init_ds()
         out_xyz = xyzfun.XYZPoint(w=1)
-        if src_ds is not None:
+        if src_ds is None:
+            utils.echo_error_msg('could not load raster {}'.format(self.fn))
+        else:
             count = 0
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
@@ -1700,12 +1709,12 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse_(self):
-        if self.verbose:
-            _prog = utils.CliProgress(
-                'parsing BAG {}{}'.format(
-                    self.fn,
-                    ' @{}'.format(self.weight) if self.weight is not None else '')
-            )
+        # if self.verbose:
+        #     _prog = utils.CliProgress(
+        #         'parsing BAG {}{}'.format(
+        #             self.fn,
+        #             ' @{}'.format(self.weight) if self.weight is not None else '')
+        #     )
 
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':
@@ -1715,7 +1724,7 @@ class BAGFile(ElevationDataset):
                     if self.dst_trans is not None:
                         tmp_region = self.trans_region.copy()
                     else:
-                        tmp_region = self.p_region.copy()
+                        tmp_region = self.region.copy()
 
                     oo.append('MINX={}'.format(tmp_region.xmin))
                     oo.append('MAXX={}'.format(tmp_region.xmax))
@@ -1734,6 +1743,8 @@ class BAGFile(ElevationDataset):
                         dst_srs=self.dst_srs,
                         weight=self.weight,
                         src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
                         verbose=self.verbose
                     )
                     yield(sub_ds)
@@ -1741,7 +1752,7 @@ class BAGFile(ElevationDataset):
             else:
                 oo = ["MODE=RESAMPLED_GRID"]
                 if self.region is not None and self.region.valid_p():
-                    tmp_region = self.p_region.copy() if self.dst_trans is None else self.trans_region.copy()
+                    tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
                     oo.append('MINX={}'.format(tmp_region.xmin))
                     oo.append('MAXX={}'.format(tmp_region.xmax))
                     oo.append('MINY={}'.format(tmp_region.ymin))
@@ -1755,6 +1766,8 @@ class BAGFile(ElevationDataset):
                     dst_srs=self.dst_srs,
                     weight=self.weight,
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose
                 )
                 yield(sub_ds)
@@ -1767,14 +1780,16 @@ class BAGFile(ElevationDataset):
                 dst_srs=self.dst_srs,
                 weight=self.weight,
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 verbose=self.verbose
             )
             yield(sub_ds)
                     
-        if self.verbose:
-            _prog.end(0, 'parsed datalist {}{}'.format(
-                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-            ))
+        # if self.verbose:
+        #     _prog.end(0, 'parsed datalist {}{}'.format(
+        #         self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+        #     ))
 
     def yield_xyz(self):
         for ds in self.parse_():

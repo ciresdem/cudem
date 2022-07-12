@@ -58,7 +58,9 @@ class OpenStreetMap(f_utils.FetchModule):
         x_delta = self.region.xmax - self.region.xmin
         y_delta = self.region.ymax - self.region.ymin
         incs = self.region.increments(1000,1000)
-        
+
+        ## break up the requests into .05 degree chunks for
+        ## better usage of the OSM API
         if x_delta > .05 or y_delta > .05:
             xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
             if x_delta >= y_delta:

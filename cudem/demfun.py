@@ -415,7 +415,7 @@ def polygonize(src_gdal, dst_layer, verbose=False):
     
 def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
-        src_region=None, sample_alg='bilinear',
+        src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, verbose=False
 ):
 
@@ -438,13 +438,13 @@ def sample_warp(
     if dst_dem is None:
         dst_ds = gdal.Warp('', src_dem, format='MEM', width=xcount, height=ycount,
                            dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg,
-                           options=["COMPRESS=LZW", "TILED=YES"],
+                           options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
                            callback=gdal.TermProgress if verbose else None)
         return(dst_ds, 0)
     else:
         dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
                            dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
-                           options=["COMPRESS=LZW", "TILED=YES"],
+                           options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
                            callback=gdal.TermProgress if verbose else None)
         dst_ds = None
         return(dst_dem, 0)

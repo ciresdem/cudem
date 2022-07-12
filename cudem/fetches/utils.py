@@ -345,7 +345,10 @@ class Fetch:
             utils.echo_error_msg('could not access {}'.format(self.url))
         return(results)
 
-    def fetch_file(self, dst_fn, params=None, datatype=None, overwrite=False, timeout=140, read_timeout=320, tries=3):
+    def fetch_file(
+            self, dst_fn, params=None, datatype=None, overwrite=False,
+            timeout=140, read_timeout=320, tries=3, check_size=True
+    ):
         """fetch src_url and save to dst_fn"""
     
         status = 0
@@ -359,20 +362,25 @@ class Fetch:
             try:
                 os.makedirs(os.path.dirname(dst_fn))
             except: pass
-            
-        #if not os.path.exists(dst_fn) or overwrite:
+
         try:
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
 
+                try:
+                    if not overwrite and not check_size and os.path.exists(dst_fn):
+                        raise UnboundLocalError('{} exists, '.format(dst_fn))
+                except OSError:
+                    pass
+                
                 req_h = req.headers
                 if 'Content-length' in req_h:
                     req_s = int(req_h['Content-length'])
                 else: req_s = -1
 
                 try:
-                    if not overwrite and req_s == os.path.getsize(dst_fn):
-                        raise UnboundLocalError('File exists, skipping')
+                    if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
+                        raise UnboundLocalError('{} exists, '.format(dst_fn))
                 except OSError:
                     pass
 
@@ -440,10 +448,9 @@ class Fetch:
                     status = -1
 
         except UnboundLocalError as e:
-            #utils.echo_error_msg(e)
-            #status = 0
-            pass
-                    
+            #utils.echo_warning_msg(e)
+            status = 1
+            
         except Exception as e:
             utils.echo_error_msg(e)
             status = -1
@@ -455,6 +462,8 @@ class Fetch:
             progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
             #utils.echo_msg_inline('fetched remote file as: {}'.format(dst_fn))
             #utils.echo_msg('fetched remote file as: {} @ {}'.format(dst_fn, time.perf_counter() - start))
+        elif self.verbose and status == 1:
+            progress.end(0, 'remote file already exists as: {}.'.format(dst_fn))
             
         return(status)
 
