@@ -449,7 +449,9 @@ class Fetch:
 
         except UnboundLocalError as e:
             #utils.echo_warning_msg(e)
-            status = 1
+            #status = 1
+            pass
+            #progress.end(0, 'remote file already exists as: {}.'.format(dst_fn))
             
         except Exception as e:
             utils.echo_error_msg(e)
@@ -462,8 +464,6 @@ class Fetch:
             progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
             #utils.echo_msg_inline('fetched remote file as: {}'.format(dst_fn))
             #utils.echo_msg('fetched remote file as: {} @ {}'.format(dst_fn, time.perf_counter() - start))
-        elif self.verbose and status == 1:
-            progress.end(0, 'remote file already exists as: {}.'.format(dst_fn))
             
         return(status)
 

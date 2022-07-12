@@ -301,7 +301,9 @@ class VerticalTransform:
 
         if not v_in.results or not v_out.results:
             utils.echo_error_msg(
-                'could not locate {} or {} in the region {}'.format(vdatum_tidal_in, vdatum_tidal_out, self.src_region)
+                'could not locate {} or {} in the region {}'.format(
+                    vdatum_tidal_in, vdatum_tidal_out, self.src_region
+                )
             )
             return(np.zeros( (self.ycount, self.xcount) ), None)
         
@@ -366,8 +368,13 @@ class VerticalTransform:
         """create a cdn transofrmation grid"""
 
         if epsg is not None:
-            cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, epsg=epsg, cache_dir=self.cache_dir)
-        else: cdn_results = cudem.fetches.vdatum.search_proj_cdn(self.src_region, cache_dir=self.cache_dir)
+            cdn_results = cudem.fetches.vdatum.search_proj_cdn(
+                self.src_region, epsg=epsg, cache_dir=self.cache_dir
+            )
+        else:
+            cdn_results = cudem.fetches.vdatum.search_proj_cdn(
+                self.src_region, cache_dir=self.cache_dir
+            )
 
         for _result in cdn_results:
             for g in _geoids:
@@ -378,20 +385,34 @@ class VerticalTransform:
             for _result in cdn_results:
                 src_code = int(_result['source_crs_code'].split(':')[-1])
                 dst_code = int(_result['target_crs_code'].split(':')[-1])
-                #if epsg == dst_code or epsg == src_code or np.any([g in _result['name'] for g in self._geoids]):
+                #if epsg == dst_code or epsg == src_code or
+                #np.any([g in _result['name'] for g in self._geoids]):
+                
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
-                        if cudem.fetches.utils.Fetch(_result['url'], verbose=self.verbose).fetch_file(_trans_grid) == 0:
+                        if cudem.fetches.utils.Fetch(
+                                _result['url'], verbose=self.verbose
+                        ).fetch_file(_trans_grid) == 0:
                             tmp_infos = demfun.infos(_trans_grid)
-                            tmp_region = regions.Region().from_geo_transform(tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny'])
+                            tmp_region = regions.Region().from_geo_transform(
+                                tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny']
+                            )
                             if os.path.exists('_{}'.format(os.path.basename(_trans_grid))):
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
-                            utils.run_cmd('gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0'.format(
-                                _trans_grid, '_{}'.format(os.path.basename(_trans_grid)), self.src_region.format('te'), self.xcount, self.ycount
-                            ), verbose=True)
+                            utils.run_cmd(
+                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0'.format(
+                                    _trans_grid,
+                                    '_{}'.format(os.path.basename(_trans_grid)),
+                                    self.src_region.format('te'),
+                                    self.xcount,
+                                    self.ycount
+                                ), verbose=True
+                            )
                             
-                            _tmp_array, _tmp_infos = demfun.get_array('_{}'.format(os.path.basename(_trans_grid)))
+                            _tmp_array, _tmp_infos = demfun.get_array(
+                                '_{}'.format(os.path.basename(_trans_grid))
+                            )
                             utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
