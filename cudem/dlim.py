@@ -162,14 +162,12 @@ class Datalist(datasets.ElevationDataset):
 
     def _create_entry_feature(self, entry, entry_region):
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
-        #entry_parent = 'None' if entry.parent is None else os.path.abspath(entry.parent.fn)
         o_v_fields = [
             entry_path,
             entry.data_format,
             entry.weight,
         ]
         dst_defn = self.layer.GetLayerDefn()
-        #entry_geom = ogr.CreateGeometryFromWkt(regions.Region().from_list(entry.infos['minmax']).export_as_wkt())
         entry_geom = ogr.CreateGeometryFromWkt(entry_region.export_as_wkt())
         out_feat = ogr.Feature(dst_defn)
         out_feat.SetGeometry(entry_geom)
@@ -195,9 +193,6 @@ class Datalist(datasets.ElevationDataset):
                 callback()
 
             if entry.src_srs is not None:
-                #if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
-                #    self.infos['src_srs'] = entry.src_srs
-                    
                 if self.dst_srs is not None:
                     #self.infos['src_srs'] = self.dst_srs
                     e_region = regions.Region().from_list(entry.infos['minmax'])
@@ -256,9 +251,7 @@ class Datalist(datasets.ElevationDataset):
             dl_ds = driver.Open('{}.json'.format(self.fn))
             dl_layer = dl_ds.GetLayer()
             ldefn = dl_layer.GetLayerDefn()
-
             if self.region is not None:
-                #self.region if data_set.dst_trans is None else data_set.trans_region
                 _boundsGeom = self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom()
             else:
                 _boundsGeom = None
@@ -384,7 +377,7 @@ class Datalist(datasets.ElevationDataset):
             ))
            
     def yield_xyz(self):
-        """parse the data from the datalist"""
+        """parse the data from the datalist and yield as xyz"""
 
         for this_entry in self.parse_json():
             #for this_entry in self.parse():
@@ -395,7 +388,8 @@ class Datalist(datasets.ElevationDataset):
                 utils.remove_glob('{}*'.format(this_entry.fn))
 
     def yield_array(self):
-
+        """parse the data from the datalist and yield as array"""
+        
         for this_entry in self.parse_json():
             #for this_entry in self.parse():
             for arr in this_entry.yield_array():

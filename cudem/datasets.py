@@ -336,11 +336,7 @@ class ElevationDataset():
                     self.trans_region = regions.Region().from_list(self.infos['minmax'])
                     self.trans_region.src_srs = self.infos['src_srs']
                     self.trans_region.warp(self.dst_srs)
-
-                #self.infos['minmax'] = self.trans_region.export_as_list(include_z=True)
-                #self.infos['wkt'] = self.trans_region.export_as_wkt()
-                #self.infos['src_srs'] = self.dst_srs
-            
+                    
         if 'format' not in self.infos.keys():
             self.infos['format'] = self.data_format
 
@@ -389,27 +385,13 @@ class ElevationDataset():
                     tmp_srs = osr.SpatialReference()
                     tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
                     dst_srs = self.dst_srs.split('+')[0]
-                    
-                    ## warp wgs84 (4326) transformation grid to src_srs horizontal datum
-                    # if self.src_srs.split('+')[0] != 'epsg:4326':
-                    #     trans_warp_fn = '_tmp_trans_{}_{}_{}'.format(
-                    #         self.src_srs.split('+')[0],
-                    #         self.src_srs.split('+')[-1],
-                    #         self.dst_srs.split('+')[-1],
-                    #         self.region.format('fn')
-                    #     )
-                    #     gdal.Warp(
-                    #         '{}.tif'.format(trans_warp_fn),
-                    #         '{}.tif'.format(trans_fn),
-                    #         dstSRS=self.src_srs.split('+')[0]
-                    #     )
-                    #     utils.remove_glob('{}.*'.format(trans_fn))
-                    #     src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_warp_fn)
-                    # else:
-                    src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)
-                        
+                    src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)                        
                 else:
-                    utils.echo_error_msg('failed to generate transformation grid between {} and {} for this region!'.format(self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]))
+                    utils.echo_error_msg(
+                        'failed to generate transformation grid between {} and {} for this region!'.format(
+                            self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]
+                        )
+                    )
                     src_srs = self.src_srs.split('+')[0]
                     dst_srs = self.dst_srs.split('+')[0]
 
@@ -1282,9 +1264,6 @@ class LASFile(ElevationDataset):
 
             utils.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-
-            #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
-
             xyz_ds = RasterFile(
                 fn='{}.tif'.format(ofn),
                 data_format=200,
@@ -1342,12 +1321,7 @@ class RasterFile(ElevationDataset):
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
         if self.x_inc is not None and self.y_inc is not None:
             dem_inf = demfun.infos(self.fn)
-            #if '{:g}'.format(dem_inf['geoT'][1]) != '{:g}'.format(self.x_inc) or '{:g}'.format(-dem_inf['geoT'][5]) != '{:g}'.format(self.y_inc):
-            if self.region is not None:
-                self.warp_region = self.region.copy()
-            else:
-                self.warp_region = regions.Region().from_list(self.infos['minmax'])
-                
+            self.warp_region = regions.Region().from_list(self.infos['minmax']) if self.region is None else self.region.copy()
             src_ds = demfun.sample_warp(
                 self.fn, None, self.x_inc, self.y_inc,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
@@ -1690,8 +1664,9 @@ class BAGFile(ElevationDataset):
     exist, otherwise process as normal grid
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, explode=False, **kwargs):
         super().__init__(**kwargs)
+        self.explode = explode
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)            
             self.set_transform()
@@ -1731,29 +1706,51 @@ class BAGFile(ElevationDataset):
                     self.fn,
                     ' @{}'.format(self.weight) if self.weight is not None else '')
             )
-        
+
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':
-            oo = ["MODE=LIST_SUPERGRIDS"]
-            if self.region is not None and self.region.valid_p():
-                if self.dst_trans is not None:
-                    tmp_region = self.trans_region.copy()
-                else:
-                    tmp_region = self.region.copy()
-                    
-                oo.append('MINX={}'.format(tmp_region.xmin))
-                oo.append('MAXX={}'.format(tmp_region.xmax))
-                oo.append('MINY={}'.format(tmp_region.ymin))
-                oo.append('MAXY={}'.format(tmp_region.ymax))
-                    
-            src_ds = gdal.OpenEx(self.fn, open_options=oo)
-            sub_datasets = src_ds.GetSubDatasets()
-            src_ds = None
-            
-            for sub_dataset in sub_datasets:
+            if self.explode:
+                oo = ["MODE=LIST_SUPERGRIDS"]
+                if self.region is not None and self.region.valid_p():
+                    if self.dst_trans is not None:
+                        tmp_region = self.trans_region.copy()
+                    else:
+                        tmp_region = self.p_region.copy()
+
+                    oo.append('MINX={}'.format(tmp_region.xmin))
+                    oo.append('MAXX={}'.format(tmp_region.xmax))
+                    oo.append('MINY={}'.format(tmp_region.ymin))
+                    oo.append('MAXY={}'.format(tmp_region.ymax))
+
+                src_ds = gdal.OpenEx(self.fn, open_options=oo)
+                sub_datasets = src_ds.GetSubDatasets()
+                src_ds = None
+
+                for sub_dataset in sub_datasets:
+                    sub_ds = RasterFile(
+                        fn=sub_dataset[0],
+                        data_format=200,
+                        src_srs=self.src_srs,
+                        dst_srs=self.dst_srs,
+                        weight=self.weight,
+                        src_region=self.region,
+                        verbose=self.verbose
+                    )
+                    yield(sub_ds)
+
+            else:
+                oo = ["MODE=RESAMPLED_GRID"]
+                if self.region is not None and self.region.valid_p():
+                    tmp_region = self.p_region.copy() if self.dst_trans is None else self.trans_region.copy()
+                    oo.append('MINX={}'.format(tmp_region.xmin))
+                    oo.append('MAXX={}'.format(tmp_region.xmax))
+                    oo.append('MINY={}'.format(tmp_region.ymin))
+                    oo.append('MAXY={}'.format(tmp_region.ymax))
+
                 sub_ds = RasterFile(
-                    fn=sub_dataset[0],
+                    fn=self.fn,
                     data_format=200,
+                    open_options=oo,
                     src_srs=self.src_srs,
                     dst_srs=self.dst_srs,
                     weight=self.weight,
@@ -1761,6 +1758,7 @@ class BAGFile(ElevationDataset):
                     verbose=self.verbose
                 )
                 yield(sub_ds)
+                
         else:
             sub_ds = RasterFile(
                 fn=self.fn,
