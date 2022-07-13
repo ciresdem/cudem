@@ -171,9 +171,10 @@ class CopernicusDEM(f_utils.FetchModule):
                     data_format=200,
                     src_srs='epsg:4326+5773',
                     dst_srs=self.dst_srs,
-                    #name=src_cop_dem,
                     weight=self.weight,
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose
                 )
                 for xyz in _ds.yield_xyz():
@@ -183,30 +184,21 @@ class CopernicusDEM(f_utils.FetchModule):
                 utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
         utils.remove_glob(entry[1])
 
-    def yield_array(self, entry, x_inc, y_inc):
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+    def yield_array(self, entry):
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers
+        ).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
-
-                # ds = gdal.Open(src_cop_dem)
-                # ds_config = demfun.gather_infos(ds)
-                # band = ds.GetRasterBand(1)
-                # comp_geot = ds_config['geoT']
-                # outarray = ds.ReadAsArray()
-                # outarray[outarray == 0] = band.GetNoDataValue()
-                # band.WriteArray(outarray)
-                # ds = None
-
                 demfun.set_nodata(src_cop_dem, 0)
-                
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
                     src_srs='epsg:4326+5773',
                     dst_srs=self.dst_srs,
                     src_region=self.region,
-                    x_inc=x_inc,
-                    y_inc=y_inc,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     weight=self.weight,
                     verbose=self.verbose
                 )

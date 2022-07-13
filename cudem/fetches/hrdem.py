@@ -195,8 +195,9 @@ class HRDEM(f_utils.FetchModule):
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                #name=src_dc,
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 verbose=self.verbose
             )
             _ds.src_ds = src_ds

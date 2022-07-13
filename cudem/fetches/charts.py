@@ -186,10 +186,10 @@ class NauticalCharts(f_utils.FetchModule):
                         data_format=168,
                         z_scale=-1,
                         src_srs=self.src_srs,
-                        #src_srs='+proj=longlat +datum=WGS84 +geoidgrids=./{}'.format(vdatum_grid),
                         dst_srs=self.dst_srs,
-                        #name=dst_xyz,
                         src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
                         verbose=self.verbose,
                         remote=True
                     )

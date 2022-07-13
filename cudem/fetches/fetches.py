@@ -85,17 +85,23 @@ the global and coastal oceans.
 
 layers: 'topo' or 'topo-mask'
 
+https://www.gmrt.org
+
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
         },
         'srtm_plus': {
             'class': srtm.SRTMPlus,
             'description': """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
 
+https://topex.ucsd.edu/WWW_html/srtm15_plus.html
+
 < srtm_plus >""",
         },
         'mar_grav': {
             'class': mar_grav.MarGrav,
-            'description': """MARine GRAVity Sattelite Altimetry Topography from Scripps.
+            'description': """MARine GRAVity Satellite Altimetry Topography from Scripps.
+
+https://topex.ucsd.edu/WWW_html/mar_grav.html
 
 < mar_grav >""",
         },
@@ -106,7 +112,9 @@ NCEI is the U.S. national archive for multibeam bathymetric data and holds more 
 nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
 worldwide.
 
-< multibeam:inc=None:process=False:min_year=None:survey_id=None:exclude=None >""",
+https://data.ngdc.noaa.gov/platforms/
+
+< multibeam:process=False:min_year=None:survey_id=None:exclude=None >""",
         },
         'mgds': {
             'class': mgds.MGDS,
@@ -115,11 +123,15 @@ repository that provides free public access to a curated collection of marine ge
 data products and complementary data related to understanding the formation and evolution 
 of the seafloor and sub-seafloor.
 
+https://www.marine-geo.org
+
 < mgds >""",
         },
         'trackline': {
             'class': trackline.Trackline,
             'description': """NOAA TRACKLINE bathymetric data.
+
+http://www.ngdc.noaa.gov/trackline/
 
 < trackline >""",
         },
@@ -139,6 +151,8 @@ accuracy, and maintaining harbors and rivers —and Inland Electronic Navigation
 navigational charts provided in a highly structured data format for use in navigation systems and to increase 
 overall navigational safety.. 
 
+https://navigation.usace.army.mil/Survey/Hydro
+
 < ehydro:where=None >""",
         },
         'ngs': {
@@ -146,6 +160,8 @@ overall navigational safety..
             'description': """NGS Monuments
 NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
 Note some survey markers installed by other organizations may not be available through NGS.
+
+http://geodesy.noaa.gov/
 
 < ngs:datum=geoidHt >""",
         },
@@ -160,11 +176,15 @@ and its territories.
 Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
 Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
 
+https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
+
 < nos:where=None:layer=0 >""",
         },
         'charts': {
             'class': charts.NauticalCharts,
             'description': """NOAA Nautical CHARTS
+
+https://www.charts.noaa.gov/
 
 < charts >""",
         },
@@ -172,7 +192,9 @@ Layer 1: Surveys with digital sounding data available for download (including th
             'class': digital_coast.DAV,
             'description': """NOAA DIGITAL COAST elevation data
 
-< digital_coast:where=None:inc=None >""",
+https://coast.noaa.gov
+
+< digital_coast:where=None >""",
         },
         'ncei_thredds': {
             'class': ncei_thredds.NCEIThreddsCatalog,
@@ -186,6 +208,8 @@ DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea
 etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
 community preparedness.
 
+https://www.ngdc.noaa.gov/thredds/demCatalog.xml
+
 < ncei_thredds:where=None >""",
         },
         'tnm': {
@@ -195,11 +219,15 @@ Various datasets from USGS's National Map. The National Map is a
 collaborative effort among the USGS and other Federal, State, and local partners to improve
 and deliver topographic information for the Nation.
 
+http://tnmaccess.nationalmap.gov/
+
 < tnm:formats=None:extents=None:q=None >""",
         },
         'emodnet': {
             'class': emodnet.EMODNet,
             'description': """EU elevation data extracts from EMOD DTM.
+
+https://portal.emodnet-bathymetry.eu/
 
 < emodnet >""",
         },
@@ -208,17 +236,26 @@ and deliver topographic information for the Nation.
             'description': """Canadian Hydrographic Surveys
 CHS NONNA 10m and 100m Bathymetric Survey Grids; Non-Navigational gridded bathymetric data based on charts and soundings.
 
+https://open.canada.ca
+
 < chs >""",
         },
         'hrdem': {
             'class': hrdem.HRDEM,
             'description': """High-Resolution Digital Elevation Model data for Canada
 
+https://open.canada.ca
+
 < hrdem >""",
         },
         'arcticdem': {
             'class': arcticdem.ArcticDEM,
             'description': """Arctic DEM
+ArcticDEM is an NGA-NSF public-private initiative to automatically produce a high-resolution, 
+high quality, digital surface model (DSM) of the Arctic using optical stereo imagery, 
+high-performance computing, and open source photogrammetry software.
+
+https://www.pgc.umn.edu/data/arcticdem/
 
 < arcticdem >""",
         },
@@ -226,6 +263,14 @@ CHS NONNA 10m and 100m Bathymetric Survey Grids; Non-Navigational gridded bathym
         'bluetopo': {
             'class': bluetopo.BlueTopo,
             'description': """BlueTOPO DEM
+BlueTopo is a compilation of the nation's best available bathymetric data. 
+In the same way that topographic map details the height of land, BlueTopo details the depth of 
+lake beds and seafloor beneath navigationally significant U.S. waters. Created as part of the 
+Office of Coast Survey nautical charting mission and its National Bathymetric Source project, 
+BlueTopo is curated bathymetric source data to provide a definitive nationwide model of the seafloor 
+and the Great Lakes.
+
+https://www.nauticalcharts.noaa.gov/data/bluetopo.html
 
 < bluetopo >""",
         },
@@ -236,6 +281,8 @@ OpenStreetMap is a free, editable map of the whole world that is
 being built by volunteers largely from scratch and released with an 
 open-content license.
 
+https://wiki.openstreetmap.org/
+
 < osm:q=None:fmt=osm >""",
         },
         'copernicus': {
@@ -244,17 +291,27 @@ open-content license.
 The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
 infrastructure and vegetation.
 
+https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation
+
 < copernicus >""",
         },
         'nasadem': {
             'class': nasadem.NASADEM,
             'description': """NASA Digital Elevation Model
+Our objective is to provide the scientific and civil communities with a state-of-the-art global 
+digital elevation model (DEM) derived from a combination of Shuttle Radar Topography Mission (SRTM) 
+processing improvements, elevation control, void-filling and merging with data unavailable at the 
+time of the original SRTM production.
+
+https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
 
 < nasadem >""",
         },
         'tides': {
             'class': tides.Tides,
             'description': """TIDE station information from NOAA/NOS
+
+https://tidesandcurrents.noaa.gov/
 
 < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >""",
         },
@@ -269,6 +326,9 @@ ellipsoidal vertical datums - allowing users to convert their data from differen
 references into a common system and enabling the fusion of diverse geospatial data in desired reference 
 levels.
 
+https://vdatum.noaa.gov
+https://cdn.proj.org
+
 < vdatum:datatype=None:gtx=False >""",
         },
         'buoys': {
@@ -278,6 +338,8 @@ A sustainable and resilient marine observation and monitoring infrastructure whi
 ecosystems, communities, and economies in the face of change and To provide quality observations in 
 the marine environment in a safe and sustainable manner to support the understanding of and predictions 
 to changes in weather, climate, oceans and coast. 
+
+https://www.ndbc.noaa.gov
 
 < buoys >""",
         },
@@ -291,6 +353,8 @@ ways to discover, access, and use the data.
 
 If version is omitted, will fetch all versions
 Use wildcards in 'short_name' to return granules for all matching short_name entries.
+
+https://cmr.earthdata.nasa.gov
 
 < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >""",
         },
@@ -307,11 +371,22 @@ layers:
   3 - IfSAR/InSAR
   4 - Other Bathy
 
+https://coast.noaa.gov/inventory/
+
 < usiei:where=None:layer=0 >""",
         },
         'hydrolakes': {
             'class': hydrolakes.HydroLakes,
-            'description': """HydroLakes
+            'description': """HydroLakes vector and derived elevations
+HydroLAKES aims to provide the shoreline polygons of all global lakes with a surface area 
+of at least 10 ha. HydroLAKES has been developed using a suite of auxiliary data sources of 
+lake polygons and gridded lake surface areas. All lakes are co-registered to the global 
+river network of the HydroSHEDS database via their lake pour points. The global coverage of 
+HydroLAKES encompasses 1.4 million individual lakes or reservoirs representing a total 
+surface area of 2.67 million km², a total shoreline length of 7.2 million km, and a total 
+storage volume of 181,900 km³.
+
+https://www.hydrosheds.org/products/hydrolakes
 
 < hydrolakes >""",
         },
@@ -324,6 +399,8 @@ layers:
             callback=lambda: False,
             weight=None,
             dst_srs=None,
+            x_inc=None,
+            y_inc=None,
             verbose=True
     ):
         self.mod = mod
@@ -334,6 +411,8 @@ layers:
         self.verbose = verbose
         self.status = 0
         self.dst_srs = dst_srs
+        self.x_inc = utils.str2inc(x_inc)
+        self.y_inc = utils.str2inc(y_inc)
         self.results = []
         if self.mod is not None:
             this_mod = self.parse_mod()
@@ -366,6 +445,8 @@ layers:
                     callback=self.callback,
                     weight=self.weight,
                     dst_srs=self.dst_srs,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose,
                     **kwargs,
                     **self.mod_args
@@ -387,7 +468,7 @@ _fetches_module_long_desc = lambda x: 'fetches modules:\n% fetches ... <mod>:key
 ## ==============================================
 fetches_usage = """{cmd} ({f_version}): Fetches; Fetch and process remote elevation data
 
-usage: {cmd} [ -hlmpqRW [ args ] ] MODULE ...
+usage: {cmd} [ -hlmpqERW [ args ] ] MODULE ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -397,6 +478,8 @@ Options:
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -W, --t_srs\t\tSet the TARGET projection (for use with `-p`).
+  -E, --increment\tBlock data to INCREMENT in native units.
+\t\t\tWhere INCREMENT is x-inc[/y-inc] (for use with `-p`).
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format. <beta>
   -q, --quiet\t\tLower the verbosity to a quiet
@@ -490,6 +573,12 @@ See `fetches_cli_usage` for full cli options.
         sys.stderr.write(fetches_usage)
         utils.echo_error_msg('you must select at least one fetch module')
         sys.exit(-1)
+
+    if len(xy_inc) < 2:
+        xy_inc.append(xy_inc[0])
+        
+    elif len(xy_inc) == 0:
+        xy_inc = [None, None]
         
     for i_region in i_regions:
         tmp_region = regions.Region().from_string(i_region)
@@ -522,6 +611,8 @@ See `fetches_cli_usage` for full cli options.
             mod=mod,
             src_region=this_region,
             dst_srs=dst_srs,
+            x_inc=xy_inc[0],
+            y_inc=xy_inc[1],
             verbose=want_verbose
         ).acquire() for mod in mods]
         for x_f in x_fs:

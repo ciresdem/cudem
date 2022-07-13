@@ -31,6 +31,7 @@
 ##
 ## https://nauticalcharts.noaa.gov/data/bluetopo_specs.html
 ## https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#
+## https://www.nauticalcharts.noaa.gov/data/bluetopo.html
 ##
 ### Code:
 
@@ -138,6 +139,8 @@ class BlueTopo(f_utils.FetchModule):
                 dst_srs=self.dst_srs,
                 src_srs=None,
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 verbose=self.verbose
             )
             for xyz in _ds.yield_xyz():

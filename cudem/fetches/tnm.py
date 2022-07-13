@@ -327,6 +327,8 @@ class TheNationalMap(f_utils.FetchModule):
                         src_srs=src_srs,
                         dst_srs=self.dst_srs,
                         src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
                         verbose=self.verbose
                     )
                     for xyz in _ds.yield_xyz():
@@ -487,8 +489,9 @@ class TNM(f_utils.FetchModule):
                     data_format=200,
                     src_srs='epsg:4326',
                     dst_srs=self.dst_srs,
-                    name=src_tnm,
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose
                 )
                 for xyz in _ds.yield_xyz():

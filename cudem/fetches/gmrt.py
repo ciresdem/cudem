@@ -52,7 +52,7 @@
 ##  topo - gmrt with gebco behind mb
 ##  topo-mask - gmrt mb surveys with gebco masked
 ##
-## Data is assumed instantaneous MSL
+## Data is assumed instantaneous MSL (5773?)
 ##
 ### Code:
 
@@ -138,9 +138,10 @@ class GMRT(f_utils.FetchModule):
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                #src_srs='epsg:4326+5773',
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 weight=self.weight,
                 src_region=self.region,
                 verbose=self.verbose
@@ -158,7 +159,7 @@ class GMRT(f_utils.FetchModule):
             
         utils.remove_glob('{}*'.format(src_data))
 
-    def yield_array(self, entry, x_inc, y_inc):
+    def yield_array(self, entry):
         src_data = 'gmrt_tmp.tif'
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
@@ -176,11 +177,10 @@ class GMRT(f_utils.FetchModule):
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                #src_srs='epsg:4326+5773',
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                x_inc=x_inc,
-                y_inc=y_inc,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 weight=self.weight,
                 src_region=self.region,
                 verbose=self.verbose

@@ -129,13 +129,12 @@ If inc is set, upon processing the data, will blockmedian it at `inc`
 increment to save space.
 """
     
-    def __init__(self, where='1=1', inc=None, index=False, datatype=None, **kwargs):
+    def __init__(self, where='1=1', index=False, datatype=None, **kwargs):
         super().__init__(**kwargs)
         self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
         self._outdir = os.path.join(os.getcwd(), 'digital_coast')
         self.name = 'digital_coast'
         self.where = where
-        self.inc = utils.str2inc(inc)
         self.index = index
         self.datatype = datatype
         
@@ -265,23 +264,26 @@ increment to save space.
                     data_format=300,
                     src_srs=ds_epsg,
                     dst_srs=self.dst_srs,
+                    weight=self.weight,
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose,
                     remote=True
                 )
-                if self.inc is not None:
-                    b_region = regions.regions_reduce(self.region, regions.Region().from_list(_ds.infos['minmax']))
-                    xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd(
-                            'gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')),
-                            verbose=self.verbose,
-                            data_fun=xyz_func
-                    ):
-                        yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                # if self.inc is not None:
+                #     b_region = regions.regions_reduce(self.region, regions.Region().from_list(_ds.infos['minmax']))
+                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                #     for xyz in utils.yield_cmd(
+                #             'gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')),
+                #             verbose=self.verbose,
+                #             data_fun=xyz_func
+                #     ):
+                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
                         
-                else:
-                    for xyz in _ds.yield_xyz():
-                        yield(xyz)
+                # else:
+                for xyz in _ds.yield_xyz():
+                    yield(xyz)
                         
                 utils.remove_glob('{}*'.format(src_dc))
         elif dt == 'raster':
@@ -296,9 +298,10 @@ increment to save space.
                     dst_srs=self.dst_srs,
                     weight=self.weight,
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose
                 )
-                #for xyz in _ds.block_xyz(inc=self.inc, want_gmt=True) if self.inc is not None else _ds.yield_xyz():
                 for xyz in _ds.yield_xyz():
                     yield(xyz)
                     

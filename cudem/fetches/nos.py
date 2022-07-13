@@ -154,6 +154,8 @@ class HydroNOS(f_utils.FetchModule):
                         src_srs='epsg:4326+1089',
                         dst_srs=self.dst_srs,
                         src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
                         verbose=self.verbose,
                         remote=True
                     )
@@ -172,6 +174,8 @@ class HydroNOS(f_utils.FetchModule):
                         src_srs='{}+1089'.format(bag_epsg),
                         dst_srs=self.dst_srs,
                         src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
                         verbose=self.verbose
                     )
                     for xyz in _ds.yield_xyz():

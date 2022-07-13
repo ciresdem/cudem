@@ -347,6 +347,8 @@ class VDATUM(f_utils.FetchModule):
                 dst_srs=self.dst_srs,
                 src_srs=None,
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 verbose=self.verbose
             )
 

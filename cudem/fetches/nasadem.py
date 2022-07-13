@@ -125,8 +125,10 @@ class NASADEM(f_utils.FetchModule):
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
-                #name=entry[1],
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                weight=self.weight,
                 verbose=self.verbose
             )
             for xyz in _ds.yield_xyz():

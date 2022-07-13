@@ -54,10 +54,9 @@ import cudem.fetches.copernicus
 class HydroLakes(f_utils.FetchModule):
     """hydrolakes"""
     
-    def __init__(self, where='1=1', want_globathy=False, inc='1s', **kwargs):
+    def __init__(self, where='1=1', want_globathy=False, **kwargs):
         super().__init__(**kwargs)
         self.want_globathy = want_globathy
-        self.inc = utils.str2inc(inc)
         self._hydrolakes_prods = 'https://www.hydrosheds.org/products/hydrolakes'
         self._hydrolakes_poly_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip'
         self._hydrolakes_gdb_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_gdb.zip'
@@ -91,7 +90,7 @@ class HydroLakes(f_utils.FetchModule):
     def _load_bathy(self):
         """create a nodata grid"""
         
-        xcount, ycount, gt = self.region.geo_transform(x_inc=self.inc, y_inc=self.inc)
+        xcount, ycount, gt = self.region.geo_transform(x_inc=self.x_inc, y_inc=self.y_inc)
         self.ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -303,13 +302,15 @@ class HydroLakes(f_utils.FetchModule):
             dst_srs=self.dst_srs,
             src_srs='epsg:4326',
             src_region=self.region,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc,
             weight=self.weight,
             verbose=self.verbose
         )
         for xyz in _ds.yield_xyz():
             yield(xyz)
 
-    def yield_array(self, entry, x_inc, y_inc):
+    def yield_array(self, entry):
         lk_elev = self.generate_elevations(entry)
 
         _ds = datasets.RasterFile(
@@ -317,9 +318,9 @@ class HydroLakes(f_utils.FetchModule):
             data_format=200,
             dst_srs=self.dst_srs,
             src_srs='epsg:4326',
-            x_inc=x_inc,
-            y_inc=y_inc,
             src_region=self.region,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc,
             weight=self.weight,
             verbose=self.verbose
         )

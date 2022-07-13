@@ -582,7 +582,10 @@ class fetch_results(threading.Thread):
 
 class FetchModule:
 
-    def __init__(self, src_region=None, callback=lambda: False, weight=None, verbose=True, dst_srs='epsg:4326'):
+    def __init__(
+            self, src_region=None, callback=lambda: False, weight=None,
+            verbose=True, dst_srs='epsg:4326', x_inc=None, y_inc=None
+    ):
         self.region = src_region
         self.callback = callback
         self.weight = weight
@@ -590,6 +593,8 @@ class FetchModule:
         self.status = 0
         self.results = []
         self.dst_srs = dst_srs
+        self.x_inc = utils.str2inc(x_inc)
+        self.y_inc = utils.str2inc(y_inc)
         self.name = None
         self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 
@@ -599,7 +604,7 @@ class FetchModule:
     def yield_xyz(self, entry, **kwargs):
         raise(NotImplementedError)
 
-    def yield_array(self, entry, x_inc, y_inc, **kwargs):
+    def yield_array(self, entry, **kwargs):
         raise(NotImplementedError)
     
     def fetch(self, entry):
@@ -638,12 +643,12 @@ class FetchModule:
                 encode=False
             )
 
-    def yield_results_to_array(self, x_inc=None, y_inc=None, **kwargs):
+    def yield_results_to_array(self, **kwargs):
         if len(self.results) == 0:
             self.run()
             
         for entry in self.results:
-            for arr in self.yield_array(entry, x_inc, y_inc, **kwargs):
+            for arr in self.yield_array(entry, **kwargs):
                 yield(arr)
             
 ### End

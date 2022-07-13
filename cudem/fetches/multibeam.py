@@ -82,7 +82,7 @@ class MBDB(f_utils.FetchModule):
 class Multibeam(f_utils.FetchModule):
     """Fetch multibeam data from NOAA NCEI"""
     
-    def __init__(self, processed=True, inc=None, process=False, min_year=None, survey_id=None, exclude=None, **kwargs):
+    def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, **kwargs):
         super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -94,7 +94,6 @@ class Multibeam(f_utils.FetchModule):
         self.name = 'multibeam'
         self.processed_p = processed
         self.process = process
-        self.inc = utils.str2inc(inc)
         self.min_year = utils.int_or(min_year)
         self.survey_id = survey_id
         self.exclude = exclude
@@ -250,29 +249,29 @@ class Multibeam(f_utils.FetchModule):
                     fn=src_xyz,
                     delim='\t',
                     data_format=168,
-                    #src_srs='epsg:4326+5773',
                     src_srs='epsg:4326',
                     dst_srs=self.dst_srs,
-                    #name=os.path.basename(entry[1]),
                     src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
                     verbose=self.verbose,
                     weight=this_weight,
                     remote=True
                 )
 
-                if self.inc is not None:
-                    xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd(
-                            'gmt blockmedian -I{:.10f} {} -r -V'.format(
-                                self.inc, self.region.format('gmt')
-                            ),
-                            verbose=self.verbose,
-                            data_fun=xyz_func
-                    ):
-                        yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-                else:
-                    for xyz in _ds.yield_xyz():
-                        yield(xyz)
+                #  if self.inc is not None:
+                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+                #     for xyz in utils.yield_cmd(
+                #             'gmt blockmedian -I{:.10f} {} -r -V'.format(
+                #                 self.inc, self.region.format('gmt')
+                #             ),
+                #             verbose=self.verbose,
+                #             data_fun=xyz_func
+                #     ):
+                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+                # else:
+                for xyz in _ds.yield_xyz():
+                    yield(xyz)
 
                 utils.remove_glob(src_data, '{}*'.format(src_xyz), '{}*.inf'.format(src_mb))
             else:

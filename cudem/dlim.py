@@ -526,7 +526,9 @@ parsing and processing.
             src_region=self.region,
             dst_srs=self.dst_srs,
             verbose=self.verbose,
-            weight=self.weight
+            weight=self.weight,
+            x_inc=self.x_inc,
+            y_inc=self.y_inc
         ).acquire()
 
         if self.fetch_module is None:
@@ -571,7 +573,8 @@ parsing and processing.
         """yield the data array
         set x_inc and y_inc to warp data to target resolution
         """
-        for arr in self.fetch_module.yield_results_to_array(x_inc=self.x_inc, y_inc=self.y_inc):
+        
+        for arr in self.fetch_module.yield_results_to_array():
             yield(arr)
             
 ## ==============================================
