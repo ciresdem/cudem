@@ -1249,7 +1249,6 @@ class LASFile(ElevationDataset):
             )
 
     def yield_array(self, mode='block'):
-
         if mode == 'mbgrid':
             with open('tmp.datalist', 'w') as tmp_dl:
                 tmp_dl.write('{} {} {}\n'.format(self.fn, 168, 1))
@@ -1348,7 +1347,7 @@ class RasterFile(ElevationDataset):
 
         return(src_ds)
         
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self, check_z=False, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
         self.infos['name'] = self.fn
@@ -1363,13 +1362,13 @@ class RasterFile(ElevationDataset):
                 x_count=src_ds.RasterXSize,
                 y_count=src_ds.RasterYSize
             )
-            # if check_z:
-            #     try:
-            #         zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
-            #     except:
-            #         zr = [None, None]
-            # else:
-            zr = [None, None]
+            if check_z:
+                try:
+                    zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
+                except:
+                    zr = [None, None]
+            else:
+                zr = [None, None]
                 
             this_region.zmin, this_region.zmax = zr[0], zr[1]
             self.infos['minmax'] = this_region.export_as_list(include_z=True)
@@ -1442,9 +1441,6 @@ class RasterFile(ElevationDataset):
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
-                # if self.verbose and self.parent is None:
-                #     #if self.verbose:
-                #     _prog.update_perc((y, srcwin[1] + srcwin[3]))
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
@@ -1709,13 +1705,6 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse_(self):
-        # if self.verbose:
-        #     _prog = utils.CliProgress(
-        #         'parsing BAG {}{}'.format(
-        #             self.fn,
-        #             ' @{}'.format(self.weight) if self.weight is not None else '')
-        #     )
-
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':
             if self.explode:
@@ -1785,11 +1774,6 @@ class BAGFile(ElevationDataset):
                 verbose=self.verbose
             )
             yield(sub_ds)
-                    
-        # if self.verbose:
-        #     _prog.end(0, 'parsed datalist {}{}'.format(
-        #         self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-        #     ))
 
     def yield_xyz(self):
         for ds in self.parse_():
