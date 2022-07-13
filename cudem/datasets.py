@@ -369,6 +369,7 @@ class ElevationDataset():
             #utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))            
             ## vertical transform
             if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
+                #vd_region = regions.Region().from_list(self.infos['minmax']) if self.region is None else self.region.copy()
                 vd_region = self.region.copy()
                 vd_region.buffer(pct=2)
                 trans_fn = '_tmp_trans_{}_{}_{}'.format(
@@ -1213,19 +1214,16 @@ class LASFile(ElevationDataset):
                 points = points[(np.isin(points.classification, self.classes))]
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
-                    #if self.dst_trans is not None:
-                    #    self.region.src_srs = self.dst_srs
-                    #    self.region.warp(self.src_srs)
-            
-                    dataset = dataset[dataset[:,0] > self.region.xmin,:]
-                    dataset = dataset[dataset[:,0] < self.region.xmax,:]
-                    dataset = dataset[dataset[:,1] > self.region.ymin,:]
-                    dataset = dataset[dataset[:,1] < self.region.ymax,:]
+                    tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                    dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
+                    dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
+                    dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
+                    dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
                     if self.region.zmin is not None:
-                        dataset = dataset[dataset[:,2] > self.region.zmin,:]
+                        dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
                         
                     if self.region.zmax is not None:
-                        dataset = dataset[dataset[:,2] < self.region.zmax,:]
+                        dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
                 
                 for point in dataset:
                     count += 1

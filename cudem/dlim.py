@@ -187,7 +187,9 @@ class Datalist(datasets.ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self._init_datalist_vector()        
+        self._init_datalist_vector()
+        dst_srs_ = self.dst_srs
+        self.dst_srs = self.dst_srs.split('+')[0]
         for entry in self.parse():
             if self.verbose:
                 callback()
@@ -229,6 +231,7 @@ class Datalist(datasets.ElevationDataset):
             self.infos['minmax'] = None
             
         self.region = _region
+        self.dst_srs = dst_srs_
         if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
             self.infos['src_srs'] = self.src_srs
         else:
