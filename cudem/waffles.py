@@ -2107,6 +2107,7 @@ class WafflesCoastline(Waffle):
             want_buildings=False,
             invert=False,
             polygonize=True,
+            osm_tries=3,
             **kwargs
     ):
         """Generate a landmask from various sources.
@@ -2137,6 +2138,7 @@ class WafflesCoastline(Waffle):
         self.want_buildings = want_buildings
         self.invert = invert
         self.polygonize = polygonize
+        self.osm_tries = utils.int_or(osm_tries, 3)
 
         self.coast_array = None
         self.ds_config = None
@@ -2387,7 +2389,7 @@ class WafflesCoastline(Waffle):
         this_osm._outdir = self.cache_dir
         this_osm.run()
         for osm_result in this_osm.results:
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False) >= 0:
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
                 osm_ds = ogr.Open(osm_result[1])
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')

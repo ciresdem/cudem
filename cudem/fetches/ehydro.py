@@ -158,7 +158,7 @@ specify `inc` to blockmedian the data when processing
                 layer.SetSpatialFilter(this_geom)
 
                 while len(layer) == 0:
-                    tmp_region.buffer(pct=2)
+                    tmp_region.buffer(pct=10)
                     this_geom = tmp_region.export_as_geom()
                     layer.SetSpatialFilter(None)
                     layer.SetSpatialFilter(this_geom)

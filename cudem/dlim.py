@@ -188,8 +188,11 @@ class Datalist(datasets.ElevationDataset):
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self._init_datalist_vector()
+        
         dst_srs_ = self.dst_srs
-        self.dst_srs = self.dst_srs.split('+')[0]
+        if self.dst_srs is not None:
+            self.dst_srs = self.dst_srs.split('+')[0]
+            
         for entry in self.parse():
             if self.verbose:
                 callback()
