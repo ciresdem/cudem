@@ -65,6 +65,7 @@ import cudem.fetches.mgds as mgds
 import cudem.fetches.arcticdem as arcticdem
 import cudem.fetches.bluetopo as bluetopo
 import cudem.fetches.hydrolakes as hydrolakes
+import cudem.fetches.gebco as gebco
 
 ## ==============================================
 ## Fetches Module Parser
@@ -88,6 +89,14 @@ layers: 'topo' or 'topo-mask'
 https://www.gmrt.org
 
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >""",
+        },
+        'gebco': {
+            'class': gebco.GEBCO,
+            'description': """GEBCO
+
+https://www.gebco.net
+
+< gebco >""",
         },
         'srtm_plus': {
             'class': srtm.SRTMPlus,
