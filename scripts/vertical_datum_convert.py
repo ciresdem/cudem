@@ -116,7 +116,7 @@ def main():
             sys.exit(1)
         i = i + 1
 
-    if src_grid is None:
+    if src_grid is None or not os.path.exists(src_grid):
         sys.stderr.write(_usage)
         sys.exit(1)
 

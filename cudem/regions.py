@@ -82,10 +82,10 @@ class Region:
         self.wkt = wkt
 
     def __repr__(self):
-        return(self.format('gmt'))
+        return(str(self.format('gmt')))
         
     def __str__(self):
-        return(self.format('gmt'))
+        return(str(self.format('gmt')))
         
     def valid_p(self, check_xy=False):
         """check the validity of a region

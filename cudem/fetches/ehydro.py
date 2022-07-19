@@ -139,56 +139,62 @@ specify `inc` to blockmedian the data when processing
                             n = this_xml.find('.//northbc').text
                             s = this_xml.find('.//southbc').text
                             src_region = regions.Region().from_list([float(w), float(e), float(s), float(n)])
-                        except: pass
+                        except:
+                            utils.echo_error_msg('could not parse region')
+                            src_region = self.region
                             
                 utils.remove_glob(src_xml)
 
-            if src_region is None:
-                sys.exit()
+            if src_region is not None and src_region.valid_p():
 
-            if src_epsg is None:
-                ## keep buffering the src region until a match is found...
+                if src_epsg is None:
+                    ## keep buffering the src region until a match is found...
 
-                tmp_region = src_region.copy()
-                sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
-                sp = ogr.Open(sp_fn)
-                layer = sp.GetLayer()
+                    tmp_region = src_region.copy()
+                    utils.echo_msg(tmp_region)
+                    sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
+                    sp = ogr.Open(sp_fn)
+                    layer = sp.GetLayer()
 
-                this_geom = tmp_region.export_as_geom()
-                layer.SetSpatialFilter(this_geom)
-
-                while len(layer) == 0:
-                    tmp_region.buffer(pct=10)
                     this_geom = tmp_region.export_as_geom()
-                    layer.SetSpatialFilter(None)
                     layer.SetSpatialFilter(this_geom)
+                    cnt = 0
                     
-                for feature in layer:
-                    src_epsg = feature.GetField('EPSG')
-                    break
-                    
-                sp = None
+                    while len(layer) == 0:
+                        cnt+=1
+                        tmp_region.buffer(pct=10)
+                        utils.echo_msg('buffering region ({}): {}'.format(cnt, tmp_region))
+                        this_geom = tmp_region.export_as_geom()
+                        layer.SetSpatialFilter(None)
+                        layer.SetSpatialFilter(this_geom)
 
-            src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
-            for src_usace in src_usaces:
-                _dl = datasets.XYZFile(
-                    fn=src_usace,
-                    data_format=168,
-                    x_scale=.3048,
-                    y_scale=.3048,
-                    z_scale=-.3048,
-                    src_srs='epsg:{}+5868'.format(src_epsg) if src_epsg is not None else None,
-                    dst_srs=self.dst_srs,
-                    src_region=src_region,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    verbose=self.verbose,
-                    remote=True
-                )
-                for xyz in _dl.yield_xyz():
-                    yield(xyz)
-                    
-                utils.remove_glob(src_usace, src_usace+'.inf')
+                    for feature in layer:
+                        src_epsg = feature.GetField('EPSG')
+                        break
+
+                    utils.echo_msg('epsg: {}'.format(src_epsg))
+                    sp = None
+
+                src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
+                for src_usace in src_usaces:
+                    _dl = datasets.XYZFile(
+                        fn=src_usace,
+                        data_format=168,
+                        x_scale=.3048,
+                        y_scale=.3048,
+                        z_scale=-.3048,
+                        src_srs='epsg:{}+5868'.format(src_epsg) if src_epsg is not None else None,
+                        dst_srs=self.dst_srs,
+                        src_region=src_region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
+                        verbose=self.verbose,
+                        remote=True
+                    )
+                    for xyz in _dl.yield_xyz():
+                        yield(xyz)
+
+                    utils.remove_glob(src_usace, src_usace+'.inf')
                 
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))

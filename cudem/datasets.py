@@ -298,7 +298,7 @@ class ElevationDataset():
         else:
             gen_inf = False
 
-        if gen_inf:
+        if gen_inf and not self.remote:
             if self.verbose:
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 
@@ -1000,6 +1000,7 @@ class XYZFile(ElevationDataset):
         count = 0
         skip = self.skip
         for xyz_line in self.src_data:
+            #utils.echo_msg_inline('{} - {}'.format(self.fn, count))
             if count >= skip:
                 this_xyz = self.line_delim(xyz_line)
                 if this_xyz is None:

@@ -243,7 +243,20 @@ class Multibeam(f_utils.FetchModule):
                         mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
                         mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
                         out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
-                    
+                        
+            # _ds = datasets.MBSParser(
+            #     fn=src_data,
+            #     data_format=301,
+            #     src_srs='epsg:4326',
+            #     dst_srs=self.dst_srs,
+            #     src_region=self.region,
+            #     x_inc=self.x_inc,
+            #     y_inc=self.y_inc,
+            #     verbose=self.verbose,
+            #     weight=this_weight,
+            #     remote=True
+            # )
+
             if status == 0:
                 _ds = datasets.XYZFile(
                     fn=src_xyz,
@@ -259,7 +272,7 @@ class Multibeam(f_utils.FetchModule):
                     remote=True
                 )
 
-                #  if self.inc is not None:
+                # if self.inc is not None:
                 #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
                 #     for xyz in utils.yield_cmd(
                 #             'gmt blockmedian -I{:.10f} {} -r -V'.format(
