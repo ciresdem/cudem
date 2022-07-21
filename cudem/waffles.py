@@ -62,7 +62,7 @@ from cudem import vdatumfun
 
 ## Data cache directory
 ## mostly stores fetches related data here
-waffles_cache = utils.cudem_cache
+waffles_cache = utils.cudem_cache()
 
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -1530,7 +1530,7 @@ class WafflesVDatum(Waffle):
 
     def run(self):
         cudem.vdatums.VerticalTransform(
-            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out
+            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out, cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
         
         return(self)
@@ -3428,7 +3428,8 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--t_srs' or arg == '-P' or arg == '-t_srs':
             wg['dst_srs'] = utils.str_or(argv[i + 1], 'epsg:4326')
             i = i + 1
-        elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')        
+        elif arg[:2] == '-P': wg['dst_srs'] = utils.str_or(arg[2:], 'epsg:4326')
+        ## update cache_dir to default to current utils.cache_dir or if an arg, dont add .cudem_cache!
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
             i = i + 1

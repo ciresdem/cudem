@@ -98,6 +98,7 @@ class ElevationDataset():
             },
             parent=None,
             src_region=None,
+            cache_dir=None,
             verbose=False,
             remote=False
     ):
@@ -125,7 +126,8 @@ class ElevationDataset():
         else:
             utils.echo_warning_msg('{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(sample_alg))
             self.sample_alg = 'bilinear'
-            
+
+        self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
         if utils.fn_url_p(self.fn):
             self.remote = True
         
@@ -369,25 +371,29 @@ class ElevationDataset():
             #utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))            
             ## vertical transform
             if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
-                #vd_region = regions.Region().from_list(self.infos['minmax']) if self.region is None else self.region.copy()
-                vd_region = self.region.copy()
+                vd_region = regions.Region(src_srs=self.src_srs.split('+')[0]).from_list(self.infos['minmax']).warp(self.dst_srs.split('+')[0]) if self.region is None else self.region.copy()
                 vd_region.buffer(pct=2)
-                trans_fn = '_tmp_trans_{}_{}_{}'.format(
-                    self.src_srs.split('+')[-1],
-                    self.dst_srs.split('+')[-1],
-                    self.region.format('fn')
+                trans_fn = os.path.join(
+                    self.cache_dir,
+                    '_vdatum_trans_{}_{}_{}'.format(
+                        self.src_srs.split('+')[-1],
+                        self.dst_srs.split('+')[-1],
+                        vd_region.format('fn')
+                    )
                 )
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -P epsg:4326 -c -k -D ./'.format(
+
+                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -P epsg:4326 -c -k -D {}'.format(
                     vd_region.format('str'),
                     self.src_srs.split('+')[-1],
                     self.dst_srs.split('+')[-1],
-                    trans_fn
+                    trans_fn,
+                    self.cache_dir
                 )
                 if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
                     tmp_srs = osr.SpatialReference()
                     tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
                     dst_srs = self.dst_srs.split('+')[0]
-                    src_srs = '{} +geoidgrids=./{}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)                        
+                    src_srs = '{} +geoidgrids={}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)                        
                 else:
                     utils.echo_error_msg(
                         'failed to generate transformation grid between {} and {} for this region!'.format(
@@ -1225,9 +1231,9 @@ class LASFile(ElevationDataset):
                         
                     if self.region.zmax is not None:
                         dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
-                
+                        
+                count += len(dataset)
                 for point in dataset:
-                    count += 1
                     this_xyz = xyzfun.XYZPoint(
                         x=point[0],
                         y=point[1],
@@ -1784,8 +1790,10 @@ class BAGFile(ElevationDataset):
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser"""
 
-    def __init__(self, **kwargs):
+    def __init__(self, mb_fmt=None, mb_exclude='A', **kwargs):
         super().__init__(**kwargs)
+        self.mb_fmt = mb_fmt
+        self.mb_exclude = mb_exclude
         self.infos = {}
         
     def generate_inf(self, callback=lambda: False):
@@ -1876,11 +1884,51 @@ class MBSParser(ElevationDataset):
         return(self)
 
     def yield_xyz(self):
-        for line in utils.yield_cmd(
-                'mblist -MA -OXYZ -I{}'.format(self.fn),
-                verbose=True,
-        ):
-            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-            this_xyz.weight = self.weight
-            yield(this_xyz)
+
+        if self.x_inc is not None and self.y_inc is not None:        
+            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
+                tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
+
+            ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
+
+            mbgrid_region = self.region.copy()
+            mbgrid_region = mbgrid_region.buffer(pct=2)
+
+            utils.run_cmd(
+                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                    mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                ), verbose=True
+            )
+
+            utils.gdal2gdal('{}.grd'.format(ofn))
+            utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+
+            #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
+
+            xyz_ds = RasterFile(
+                fn='{}.tif'.format(ofn),
+                data_format=200,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                weight=self.weight,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                sample_alg=self.sample_alg,
+                src_region=self.region,
+                verbose=self.verbose
+            )
+
+            for xyz in xyz_ds.yield_xyz():
+                yield(xyz)
+
+            utils.remove_glob('{}.tif*'.format(ofn))
+
+        else:
+            for line in utils.yield_cmd(
+                    'mblist -M{} -OXYZ -I{}'.format(self.mb_exclude, self.fn),
+                    verbose=True,
+            ):
+                this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+                this_xyz.weight = self.weight
+                yield(this_xyz)
 ### End

@@ -212,7 +212,7 @@ def get_vdatum_by_name(datum_name):
     return(None)
 
 
-vdatum_cache = utils.cudem_cache
+vdatum_cache = utils.cudem_cache()
 
 class VerticalTransform:
     

@@ -679,7 +679,9 @@ class DatasetFactory:
             },
             parent=None,
             src_region=None,
-            verbose=False
+            cache_dir=None,
+            verbose=False,
+            remote=False
     ):
         self.fn = fn
         self.data_format = data_format
@@ -694,7 +696,9 @@ class DatasetFactory:
         self.x_inc = x_inc
         self.y_inc = y_inc
         self.sample_alg = sample_alg
-
+        self.remote = remote
+        self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
+        
         self.parse_fn()
             
     def parse_fn(self):

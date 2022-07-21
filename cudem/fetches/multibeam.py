@@ -227,76 +227,83 @@ class Multibeam(f_utils.FetchModule):
 
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'
-            if not self.process:
-                this_weight = self.weight
-                out, status = utils.run_cmd('mblist -OXYZ -I{} -M{} > {}'.format(src_data, 'X{}'.format(self.exclude) if self.exclude is not None else 'A', src_xyz), verbose=True)
-            else:
-                #this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
-                this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
-                if this_weight <= 0.: this_weight = 0.0000001
-                #this_weight = (float(mb_perc) * ((int(mb_date)-2000)/int(this_year) - 2000))/100.
-                out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
+
+            this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+            this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+            mb_exclude = str(100-float(mb_perc))
             
-                if status != 0:
-                    if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
-                        mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
-                        mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
-                        out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
+            # if not self.process:
+            #     this_weight = self.weight
+            #     #out, status = utils.run_cmd('mblist -OXYZ -I{} -M{} > {}'.format(src_data, 'X{}'.format(self.exclude) if self.exclude is not None else 'A', src_xyz), verbose=True)
+            # else:
+            #     #this_weight = (float(mb_perc) * (1 + (2*((int(mb_date)-2015)/100))))/100.
+            #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+            #     this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+            #     if this_weight <= 0.: this_weight = 0.0000001
+            #     #this_weight = (float(mb_perc) * ((int(mb_date)-2000)/int(this_year) - 2000))/100.
+            #     out, status = utils.run_cmd('mblist -OXYZ -I{} -MX{} > {}'.format(src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
+            
+            #     if status != 0:
+            #         if f_utils.Fetch('{}.inf'.format(entry[0]), callback=self.callback, verbose=self.verbose).fetch_file('{}.inf'.format(src_mb)) == 0:
+            #             mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
+            #             mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
+            #             out, status = utils.run_cmd('mblist -F{} -OXYZ -I{} -MX{}  > {}'.format(mb_fmt, src_data, str(100-float(mb_perc)), src_xyz), verbose=True)
                         
-            # _ds = datasets.MBSParser(
-            #     fn=src_data,
-            #     data_format=301,
-            #     src_srs='epsg:4326',
-            #     dst_srs=self.dst_srs,
-            #     src_region=self.region,
-            #     x_inc=self.x_inc,
-            #     y_inc=self.y_inc,
-            #     verbose=self.verbose,
-            #     weight=this_weight,
-            #     remote=True
-            # )
+            _ds = datasets.MBSParser(
+                fn=src_data,
+                data_format=301,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                verbose=self.verbose,
+                weight=this_weight,
+                mb_fmt=mb_fmt,
+                mb_exclude=mb_exclude,
+                remote=True
+            )
 
-            if status == 0:
-                _ds = datasets.XYZFile(
-                    fn=src_xyz,
-                    delim='\t',
-                    data_format=168,
-                    src_srs='epsg:4326',
-                    dst_srs=self.dst_srs,
-                    src_region=self.region,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    verbose=self.verbose,
-                    weight=this_weight,
-                    remote=True
-                )
+            # if status == 0:
+            #     _ds = datasets.XYZFile(
+            #         fn=src_xyz,
+            #         delim='\t',
+            #         data_format=168,
+            #         src_srs='epsg:4326',
+            #         dst_srs=self.dst_srs,
+            #         src_region=self.region,
+            #         x_inc=self.x_inc,
+            #         y_inc=self.y_inc,
+            #         verbose=self.verbose,
+            #         weight=this_weight,
+            #         remote=True
+            #     )
 
-                # if self.inc is not None:
-                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                #     for xyz in utils.yield_cmd(
-                #             'gmt blockmedian -I{:.10f} {} -r -V'.format(
-                #                 self.inc, self.region.format('gmt')
-                #             ),
-                #             verbose=self.verbose,
-                #             data_fun=xyz_func
-                #     ):
-                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-                # else:
-                for xyz in _ds.yield_xyz():
-                    yield(xyz)
+            #     # if self.inc is not None:
+            #     #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
+            #     #     for xyz in utils.yield_cmd(
+            #     #             'gmt blockmedian -I{:.10f} {} -r -V'.format(
+            #     #                 self.inc, self.region.format('gmt')
+            #     #             ),
+            #     #             verbose=self.verbose,
+            #     #             data_fun=xyz_func
+            #     #     ):
+            #     #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
+            #     # else:
+            for xyz in _ds.yield_xyz():
+                yield(xyz)
 
-                utils.remove_glob(src_data, '{}*'.format(src_xyz), '{}*.inf'.format(src_mb))
-            else:
-                utils.echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
-                with open(
-                        '{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self.name, self.region.format('fn')))),
-                        'a'
-                ) as mb_err:
-                    mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
+            utils.remove_glob(src_data, '{}*'.format(src_xyz), '{}*.inf'.format(src_mb))
+            # else:
+            #     utils.echo_error_msg('failed to process local file, {} [{}]...'.format(src_data, entry[0]))
+            #     with open(
+            #             '{}'.format(os.path.join(self._outdir, 'fetch_{}_{}.err'.format(self.name, self.region.format('fn')))),
+            #             'a'
+            #     ) as mb_err:
+            #         mb_err.write('{}\n'.format(','.join([src_mb, entry[0]])))
                     
-                os.rename(src_data, os.path.join(self._outdir, src_data))
-                utils.remove_glob(src_xyz)
+            #     os.rename(src_data, os.path.join(self._outdir, src_data))
+            #     utils.remove_glob(src_xyz)
         else:
             utils.echo_error_msg(
                 'failed to fetch remote file, {}...'.format(src_data)
