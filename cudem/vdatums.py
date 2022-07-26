@@ -172,6 +172,7 @@ _cdn_reference_frames = {
     3855: {'name': 'EGM2008 height',},
     5773: {'name': 'EGM96 height',},
     5703: {'name': 'NAVD88 height',},
+    6360: {'name': 'NAVD88 height (usFt)',},
     6644: {'name': 'GUVD04 height',},
     6641: {'name': 'PRVD02 height',},
     6643: {'name': 'ASVD02 height',},
@@ -283,6 +284,16 @@ class VerticalTransform:
             return(int(datum_name))
         
         return(None)
+
+    def _feet_to_meters(self):
+        c_array = np.zeros((self.ycount, self.xcount))
+        c_array[:] = .3048
+        return(c_array)
+
+    def _meters_to_feet(self):
+        c_array = np.zeros((self.ycount, self.xcount))
+        c_array[:] = 3.28084
+        return(c_array)
     
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
         """generate tidal transformation grid
@@ -367,6 +378,12 @@ class VerticalTransform:
     def _cdn_transform(self, epsg=None, name=None, invert=False):
         """create a cdn transofrmation grid"""
 
+        epsg = 5703 if epsg == 6360 else epsg
+        # c_array = None
+        # if epsg == 6360:
+        #     c_array = self._meters_to_feet()
+        #     epsg = 5703
+        
         if epsg is not None:
             cdn_results = cudem.fetches.vdatum.search_proj_cdn(
                 self.src_region, epsg=epsg, cache_dir=self.cache_dir
@@ -416,7 +433,10 @@ class VerticalTransform:
                             utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
-                            
+
+                            # if c_array is not None:
+                            #     _tmp_array = _tmp_array * c_array
+                                
                             return(_tmp_array, src_code)
 
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
@@ -442,10 +462,11 @@ class VerticalTransform:
         out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
         utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
         return(out_grid, epsg_out)
-
+    
     def _vertical_transform(self, epsg_in, epsg_out):
 
-        trans_array = np.zeros( (self.ycount, self.xcount) )        
+        trans_array = np.zeros( (self.ycount, self.xcount) )
+        ## failure can cause endless loop
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
             #print(ref_in, ref_out, epsg_in, epsg_out)

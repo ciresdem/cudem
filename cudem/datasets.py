@@ -382,7 +382,7 @@ class ElevationDataset():
                     )
                 )
 
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -P epsg:4326 -c -k -D {}'.format(
+                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
                     vd_region.format('str'),
                     self.src_srs.split('+')[-1],
                     self.dst_srs.split('+')[-1],
@@ -390,10 +390,21 @@ class ElevationDataset():
                     self.cache_dir
                 )
                 if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
-                    tmp_srs = osr.SpatialReference()
-                    tmp_srs.SetFromUserInput(self.src_srs.split('+')[0])
-                    dst_srs = self.dst_srs.split('+')[0]
-                    src_srs = '{} +geoidgrids={}.tif'.format(tmp_srs.ExportToProj4(), trans_fn)                        
+                    tmp_src_srs = osr.SpatialReference()
+                    tmp_src_srs.SetFromUserInput(self.src_srs.split('+')[0])
+                    tmp_dst_srs = osr.SpatialReference()
+                    tmp_dst_srs.SetFromUserInput(self.dst_srs.split('+')[0])
+                    
+                    src_srs = '{} +geoidgrids={}.tif'.format(tmp_src_srs.ExportToProj4(), trans_fn)
+                    dst_srs = '{}'.format(tmp_dst_srs.ExportToProj4())
+
+                    if self.src_srs.split('+')[1] == '6360':
+                        src_srs = src_srs + ' +vto_meter=0.3048006096012192'
+
+                    if self.dst_srs.split('+')[1] == '6360':
+                        dst_srs = dst_srs + ' +vto_meter=0.3048006096012192'
+
+                    tmp_src_srs = tmp_dst_srs = None                    
                 else:
                     utils.echo_error_msg(
                         'failed to generate transformation grid between {} and {} for this region!'.format(
@@ -432,6 +443,8 @@ class ElevationDataset():
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = dst_srs
                 self.trans_region.warp(src_srs)
+                
+            src_osr_srs = dst_osr_srs = None
 
     def parse_json(self):
         for ds in self.parse():
@@ -1127,6 +1140,37 @@ class LASFile(ElevationDataset):
         self.classes = [int(x) for x in classes.split('/')]
         super().__init__(**kwargs)
 
+        if self.src_srs is None:
+            self.src_srs = self.get_epsg()
+            self.set_transform()
+        
+    def get_epsg(self):
+        with lp.open(self.fn) as lasf:
+            lasf_vlrs = lasf.header.vlrs
+            for vlr in lasf_vlrs:
+                #if 'OGC WKT' in vlr.description:
+                if vlr.record_id == 2112:
+                    #src_epsg = self.get_srs(vlr.string)
+        
+                    src_srs = osr.SpatialReference()
+                    src_srs.SetFromUserInput(vlr.string)
+                    src_srs.AutoIdentifyEPSG()
+                    srs_auth = src_srs.GetAttrValue('AUTHORITY', 1)
+                    vert_cs = src_srs.GetAttrValue('vert_cs')
+                    proj4 = src_srs.ExportToProj4()
+                    vert_auth = src_srs.GetAttrValue('VERT_CS|AUTHORITY',1)
+                    src_srs = None
+                    
+                    if srs_auth is not None:
+                        if vert_auth is not None:
+                            return('epsg:{}+{}'.format(srs_auth, vert_auth))
+                        else:
+                            return('epsg:{}'.format(srs_auth))
+                    else:
+                        return(proj4)
+                    break
+            return(None)
+        
     def generate_inf(self, callback=lambda: False):
         """generate an inf file for a lidar dataset."""
         
@@ -1147,18 +1191,7 @@ class LASFile(ElevationDataset):
                  lasf.header.z_max]
             )
 
-        ##
-        ## gather the projection info if it exists - testing
-        ##
-        # print(lasf.header.vlrs[2].record_id)
-        # print(lasf.header.vlrs[2].description)
-        # #lasf.header.vlrs[2].parse_record_data(lasf.header.vlrs[2].record_data)
-        # #print(lasf.header.vlrs[2].record_data_bytes())
-        # print(lasf.header.vlrs[2].geo_keys)
-        # [print(x.id) for x in lasf.header.vlrs[2].geo_keys]
-
-        self.infos['src_srs'] = self.src_srs
-        
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else self.get_epsg()
         self.infos['minmax'] = this_region.export_as_list(
             include_z=True
         )

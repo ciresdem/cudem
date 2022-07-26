@@ -183,6 +183,7 @@ class Datalist(datasets.ElevationDataset):
         _region = self.region
         out_region = None
         out_regions = []
+        out_srs = []
         self.region = None
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
@@ -198,6 +199,8 @@ class Datalist(datasets.ElevationDataset):
                 callback()
 
             if entry.src_srs is not None:
+                out_srs.append(entry.src_srs)
+
                 if self.dst_srs is not None:
                     #self.infos['src_srs'] = self.dst_srs
                     e_region = regions.Region().from_list(entry.infos['minmax'])
@@ -208,6 +211,7 @@ class Datalist(datasets.ElevationDataset):
                     entry_region = entry.infos['minmax']
 
             else:
+                out_srs.append(None)
                 entry_region = entry.infos['minmax']
 
             if regions.Region().from_list(entry_region).valid_p():
@@ -235,8 +239,13 @@ class Datalist(datasets.ElevationDataset):
             
         self.region = _region
         self.dst_srs = dst_srs_
+            
         if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
-            self.infos['src_srs'] = self.src_srs
+            if self.src_srs is not None:
+                self.infos['src_srs'] = self.src_srs
+            else:
+                if all(x == out_srs[0] for x in out_srs):
+                    self.infos['src_srs'] = out_srs[0]
         else:
             self.src_srs = self.infos['src_srs']
         
@@ -384,7 +393,7 @@ class Datalist(datasets.ElevationDataset):
            
     def yield_xyz(self):
         """parse the data from the datalist and yield as xyz"""
-
+        
         for this_entry in self.parse_json():
             #for this_entry in self.parse():
             for xyz in this_entry.yield_xyz():

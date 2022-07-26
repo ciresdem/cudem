@@ -157,89 +157,92 @@ increment to save space.
         print(_req.url)
         if _req is not None:
             features = _req.json()
-            for feature in features['features']:
+            if not 'features' in features.keys():
+                utils.echo_error_msg('DAV failed to execute query...try again later')
+            else:
+                for feature in features['features']:
 
-                if self.datatype is not None:
-                    if self.datatype.lower() != feature['attributes']['DataType'].lower():
-                        continue
-                
-                links = json.loads(feature['attributes']['ExternalProviderLink'])
+                    if self.datatype is not None:
+                        if self.datatype.lower() != feature['attributes']['DataType'].lower():
+                            continue
 
-                ept_infos = None
-                ## get ept link to gather datum infos...for lidar only apparently...
-                for link in links['links']:
-                    if link['serviceID'] == 167:
-                        if link['label'] == 'EPT NOAA':
-                            ept_req = f_utils.Fetch(link['link'], verbose=True).fetch_req()
-                            ept_infos = ept_req.json()
-                            
-                ## get metadata for datum infos...for raster data
-                            
-                if self.index:
-                    feature['attributes']['ExternalProviderLink'] = links
-                    print(json.dumps(feature['attributes'], indent=4))
-                else:
+                    links = json.loads(feature['attributes']['ExternalProviderLink'])
+
+                    ept_infos = None
+                    ## get ept link to gather datum infos...for lidar only apparently...
                     for link in links['links']:
-                        if link['serviceID'] == 46:
-                            urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                            surv_name = '_'.join(link['link'].split('/')[-1].split('_')[:-1])
-                            #index_zipfile = 'tileindex.zip'
-                            index_zipfile = 'tileindex_{}.zip'.format(surv_name)
-                            index_zipurl = link['link'] + '/' + index_zipfile
-                            #urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                            urllist_url = link['link'] + '/' + urllist
-                            while True:
-                                if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
-                                    if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
-                                        break
-                                    urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                else:
-                                    break
-                                
-                            with open(urllist, 'r') as ul:
-                                for line in ul:
-                                    if 'tileindex' in line:
-                                        index_zipurl = line.strip()
+                        if link['serviceID'] == 167:
+                            if link['label'] == 'EPT NOAA':
+                                ept_req = f_utils.Fetch(link['link'], verbose=True).fetch_req()
+                                ept_infos = ept_req.json()
+
+                    ## get metadata for datum infos...for raster data
+
+                    if self.index:
+                        feature['attributes']['ExternalProviderLink'] = links
+                        print(json.dumps(feature['attributes'], indent=4))
+                    else:
+                        for link in links['links']:
+                            if link['serviceID'] == 46:
+                                urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
+                                surv_name = '_'.join(link['link'].split('/')[-1].split('_')[:-1])
+                                #index_zipfile = 'tileindex.zip'
+                                index_zipfile = 'tileindex_{}.zip'.format(surv_name)
+                                index_zipurl = link['link'] + '/' + index_zipfile
+                                #urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                urllist_url = link['link'] + '/' + urllist
+                                while True:
+                                    if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
+                                        if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
+                                            break
+                                        urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                    else:
                                         break
 
-                            utils.remove_glob(urllist)                            
-                            if f_utils.Fetch(
-                                    index_zipurl, callback=self.callback, verbose=self.verbose
-                            ).fetch_file(index_zipfile) == 0:
-                                index_shps = utils.p_unzip(index_zipfile, ['shp', 'shx', 'dbf', 'prj'])
-                                index_shp = None
-                                for v in index_shps:
-                                    if v.split('.')[-1] == 'shp':
-                                        index_shp = v
+                                with open(urllist, 'r') as ul:
+                                    for line in ul:
+                                        if 'tileindex' in line:
+                                            index_zipurl = line.strip()
+                                            break
 
-                                index_ds = ogr.Open(index_shp)
-                                index_layer = index_ds.GetLayer(0)
-                                for index_feature in index_layer:
-                                    index_geom = index_feature.GetGeometryRef()
-                                    if index_geom.Intersects(self.region.export_as_geom()):
-                                        tile_url = index_feature.GetField('URL').strip()
-                                        ## add vertical datum to output;
-                                        ## field is NativeVdatum
-                                        ## must get from metadata
-                                        if ept_infos is None:
-                                            this_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
-                                        else:
-                                            ## horizontal datum is wrong in ept, most seem to be nad83
-                                            #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
-                                            this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
-                                            
-                                        self.results.append(
-                                            [tile_url,
-                                             os.path.join(
-                                                 self._outdir, '{}/{}'.format(
-                                                     feature['attributes']['ID'], tile_url.split('/')[-1]
-                                                 )
-                                             ),
-                                             this_epsg,
-                                             feature['attributes']['DataType']])
-                                        
-                                index_ds = index_layer = None
-                                utils.remove_glob(index_zipfile, *index_shps)
+                                utils.remove_glob(urllist)                            
+                                if f_utils.Fetch(
+                                        index_zipurl, callback=self.callback, verbose=self.verbose
+                                ).fetch_file(index_zipfile) == 0:
+                                    index_shps = utils.p_unzip(index_zipfile, ['shp', 'shx', 'dbf', 'prj'])
+                                    index_shp = None
+                                    for v in index_shps:
+                                        if v.split('.')[-1] == 'shp':
+                                            index_shp = v
+
+                                    index_ds = ogr.Open(index_shp)
+                                    index_layer = index_ds.GetLayer(0)
+                                    for index_feature in index_layer:
+                                        index_geom = index_feature.GetGeometryRef()
+                                        if index_geom.Intersects(self.region.export_as_geom()):
+                                            tile_url = index_feature.GetField('URL').strip()
+                                            ## add vertical datum to output;
+                                            ## field is NativeVdatum
+                                            ## must get from metadata
+                                            if ept_infos is None:
+                                                this_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
+                                            else:
+                                                ## horizontal datum is wrong in ept, most seem to be nad83
+                                                #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
+                                                this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+
+                                            self.results.append(
+                                                [tile_url,
+                                                 os.path.join(
+                                                     self._outdir, '{}/{}'.format(
+                                                         feature['attributes']['ID'], tile_url.split('/')[-1]
+                                                     )
+                                                 ),
+                                                 this_epsg,
+                                                 feature['attributes']['DataType']])
+
+                                    index_ds = index_layer = None
+                                    utils.remove_glob(index_zipfile, *index_shps)
 
         return(self)
 

@@ -494,7 +494,8 @@ class Region:
 
         self.src_srs = dst_srs
         self.wkt = None
-        
+
+        src_srs = dst_srs_ = None
         return(self.transform(dst_trans))
 
     def transform(self, dst_trans=None):
@@ -505,9 +506,11 @@ class Region:
             return(self)
             
         pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
-        pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
         pointA.Transform(dst_trans)
+
+        pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
         pointB.Transform(dst_trans)
+        
         try:
             if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
                 self.xmin = pointA.GetX() if pointA.GetX() < pointB.GetX() else pointB.GetX()
@@ -516,6 +519,8 @@ class Region:
                 self.ymax = pointB.GetY() if pointB.GetY() > pointA.GetY() else pointA.GetY()
         except Exception as e:
             sys.stderr.write('transform error: {}\n'.format(str(e)))
+
+        dst_trans = pointA = pointB = None
         return(self)
     
 ## ==============================================

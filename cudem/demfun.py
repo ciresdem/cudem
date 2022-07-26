@@ -130,13 +130,21 @@ def get_srs(src_dem, vert_name=False):
     src_srs.AutoIdentifyEPSG()
     srs_auth = src_srs.GetAttrValue('AUTHORITY', 1)
     src_ds = None
+    vert_cs = src_srs.GetAttrValue('vert_cs')
+    vert_auth = src_srs.GetAttrValue('VERT_CS|AUTHORITY',1)
+    proj4 = src_srs.ExportToProj4()
+    src_srs = None
+    
     if vert_name:
-        return(src_srs.GetAttrValue('vert_cs'))
+        return(vert_cs)
     else:
         if srs_auth is not None:
-            return('epsg:{}'.format(srs_auth))
+            if vert_auth is not None:
+                return('epsg:{}+{}'.format(srs_auth, vert_auth))
+            else:
+                return('epsg:{}'.format(srs_auth))
         else:
-            return(src_srs.ExportToProj4())
+            return(proj4)
 
 def set_srs(src_dem, src_srs='epsg:4326'):
     """set the projection of gdal file src_fn to src_srs"""
