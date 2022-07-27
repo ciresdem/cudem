@@ -151,7 +151,7 @@ class HydroNOS(f_utils.FetchModule):
                         ypos=1,
                         zpos=3,
                         z_scale=-1,
-                        src_srs='epsg:4326+1089',
+                        src_srs='epsg:4326+5866',
                         dst_srs=self.dst_srs,
                         src_region=self.region,
                         x_inc=self.x_inc,
@@ -171,7 +171,7 @@ class HydroNOS(f_utils.FetchModule):
                     _ds = datasets.RasterFile(
                         fn=src_bag,
                         data_format=200,
-                        src_srs='{}+1089'.format(bag_epsg),
+                        src_srs='{}+5866'.format(bag_epsg),
                         dst_srs=self.dst_srs,
                         src_region=self.region,
                         x_inc=self.x_inc,
@@ -339,9 +339,9 @@ class NOS(f_utils.FetchModule):
                         ypos=1,
                         zpos=3,
                         z_scale=-1,
+                        #src_srs='epsg:4326+1089',
                         src_srs='epsg:4326',
                         dst_srs=self.dst_srs,
-                        #name=nos_f_r,
                         src_region=self.region,
                         verbose=self.verbose,
                         remote=True
@@ -354,7 +354,7 @@ class NOS(f_utils.FetchModule):
             elif dt == 'grid_bag':
                 src_bags = utils.p_unzip(src_nos, exts=['bag'])
                 for src_bag in src_bags:
-
+                    ## get bag proj from bag itself
                     _ds = datasets.RasterFile(
                         fn=src_bag,
                         data_format=200,
