@@ -169,7 +169,7 @@ class CopernicusDEM(f_utils.FetchModule):
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
-                    src_srs='epsg:4326+5773',
+                    src_srs='epsg:4326+3855',
                     dst_srs=self.dst_srs,
                     weight=self.weight,
                     src_region=self.region,
@@ -194,7 +194,7 @@ class CopernicusDEM(f_utils.FetchModule):
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
-                    src_srs='epsg:4326+5773',
+                    src_srs='epsg:4326+3855',
                     dst_srs=self.dst_srs,
                     src_region=self.region,
                     x_inc=self.x_inc,

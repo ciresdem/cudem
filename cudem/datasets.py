@@ -645,7 +645,10 @@ class ElevationDataset():
                             this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
                 ) as sub_dlf:
                     for xyz_dataset in self.data_lists[x]['data']:
-                        if len(xyz_dataset.fn.split('.')) > 1:
+                        if xyz_dataset.remote == True:
+                            ## we will want to split remote datasets into individual files if needed...
+                            sub_xyz_path = '{}_{}.xyz'.format(xyz_dataset.fn.split(':')[0], self.region.format('fn'))
+                        elif len(xyz_dataset.fn.split('.')) > 1:
                             xyz_ext = xyz_dataset.fn.split('.')[-1]
                             sub_xyz_path = '.'.join(
                                 [utils.fn_basename(
