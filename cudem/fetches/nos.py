@@ -139,50 +139,51 @@ class HydroNOS(f_utils.FetchModule):
 
     def yield_xyz(self, entry):
         src_nos = os.path.basename(entry[1])
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
-            if entry[2] == 'xyz':
-                nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
-                for src_xyz in nos_fns:
-                    _ds = datasets.XYZFile(
-                        fn=src_xyz,
-                        data_format=168,
-                        skip=1,
-                        xpos=2,
-                        ypos=1,
-                        zpos=3,
-                        z_scale=-1,
-                        src_srs='epsg:4326+5866',
-                        dst_srs=self.dst_srs,
-                        src_region=self.region,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        verbose=self.verbose,
-                        remote=True
-                    )
-                    for xyz in _ds.yield_xyz():
-                        yield(xyz)
-                        
-                utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
+        if 'ellipsoid' not in src_nos.lower():
+            if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
+                if entry[2] == 'xyz':
+                    nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
+                    for src_xyz in nos_fns:
+                        _ds = datasets.XYZFile(
+                            fn=src_xyz,
+                            data_format=168,
+                            skip=1,
+                            xpos=2,
+                            ypos=1,
+                            zpos=3,
+                            z_scale=-1,
+                            src_srs='epsg:4326+5866',
+                            dst_srs=self.dst_srs,
+                            src_region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            verbose=self.verbose,
+                            remote=True
+                        )
+                        for xyz in _ds.yield_xyz():
+                            yield(xyz)
 
-            elif entry[2] == 'bag':
-                src_bags = utils.p_unzip(src_nos, exts=['bag'])
-                for src_bag in src_bags:
-                    bag_epsg = demfun.get_srs(src_bag)
-                    _ds = datasets.RasterFile(
-                        fn=src_bag,
-                        data_format=200,
-                        src_srs='{}+5866'.format(bag_epsg),
-                        dst_srs=self.dst_srs,
-                        src_region=self.region,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        verbose=self.verbose
-                    )
-                    for xyz in _ds.yield_xyz():
-                        yield(xyz)
-                        
-                utils.remove_glob(*src_bags)
-        utils.remove_glob(src_nos)
+                    utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
+
+                elif entry[2] == 'bag':
+                    src_bags = utils.p_unzip(src_nos, exts=['bag'])
+                    for src_bag in src_bags:
+                        bag_epsg = demfun.get_srs(src_bag)
+                        _ds = datasets.RasterFile(
+                            fn=src_bag,
+                            data_format=200,
+                            src_srs='{}+5866'.format(bag_epsg),
+                            dst_srs=self.dst_srs,
+                            src_region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            verbose=self.verbose
+                        )
+                        for xyz in _ds.yield_xyz():
+                            yield(xyz)
+
+                    utils.remove_glob(*src_bags)
+            utils.remove_glob(src_nos)
                         
 ## ==============================================
 ## the NOS class is the old NOS fetches module.

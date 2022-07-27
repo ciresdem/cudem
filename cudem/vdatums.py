@@ -418,12 +418,12 @@ class VerticalTransform:
                             if os.path.exists('_{}'.format(os.path.basename(_trans_grid))):
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             utils.run_cmd(
-                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0'.format(
+                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline'.format(
                                     _trans_grid,
                                     '_{}'.format(os.path.basename(_trans_grid)),
                                     self.src_region.format('te'),
                                     self.xcount,
-                                    self.ycount
+                                    self.ycount,
                                 ), verbose=True
                             )
                             
