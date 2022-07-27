@@ -58,9 +58,12 @@
 
 import os
 
+from osgeo import gdal
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 
 import cudem.fetches.utils as f_utils
 

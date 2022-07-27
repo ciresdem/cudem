@@ -618,6 +618,11 @@ class Waffle:
                         [x for x in self.yield_xyz()]
                         self._process(fn=self.mask_fn, filter_=False)
                 return(self)
+        else:
+            if not os.path.exists(os.path.dirname(self.fn)):
+                try:
+                    os.makedirs(os.path.dirname(self.fn))
+                except: pass
             
         ## Generate in Chunks of self.chunk by self.chunk
         if self.chunk is not None:

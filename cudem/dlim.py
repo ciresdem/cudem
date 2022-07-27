@@ -1080,7 +1080,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     [x for x in this_datalist.archive_xyz()]
                 elif want_region:
-                    print(regions.Region().from_list(this_datalist.inf()['minmax']).format('gmt'))
+                    this_inf = this_datalist.inf()
+                    this_region = regions.Region().from_list(this_inf['minmax'])
+                    if dst_srs is not None:
+                        if src_srs is not None:
+                            this_region.src_srs = src_srs
+                            this_region.warp(dst_srs)
+                        elif 'src_srs' in this_inf and this_inf['src_srs'] is not None:
+                            this_region.src_srs = this_inf['src_srs']
+                            this_region.warp(dst_srs)
+
+                    print(this_region.format('gmt'))
+                    #print(regions.Region().from_list(this_datalist.inf()['minmax']).format('gmt'))
                 elif want_csv:
                     this_datalist.parse_data_lists()
                     for x in this_datalist.data_lists.keys():
