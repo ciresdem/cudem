@@ -384,14 +384,14 @@ class ElevationDataset():
             src_epsgs = srs2epsg(src_srs)
             dst_epsgs = srs2epsg(dst_srs)
             src_srs = dst_srs = None
-            
+
             if dst_epsgs[1] is not None and src_epsgs[1] is not None and src_epsgs[1] != dst_epsgs[1]:
                 vd_region = regions.Region(
-                    src_srs='epsg:'.format(src_epsgs[0])
+                    src_srs='epsg:{}'.format(src_epsgs[0])
                 ).from_list(
                     self.infos['minmax']
                 ).warp(
-                    'epsg:{}'.format(dst_epsgs[1])
+                    'epsg:{}'.format(dst_epsgs[0])
                 ) if self.region is None else self.region.copy()
                 
                 vd_region.buffer(pct=2)

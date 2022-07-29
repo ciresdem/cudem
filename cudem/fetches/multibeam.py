@@ -106,7 +106,7 @@ class Multibeam(f_utils.FetchModule):
                 til = il.split()
                 if len(til) > 1:
                     if til[0] == 'MBIO':
-                        return(til[4])
+                        return('mb'.format(til[4]))
 
     def mb_inf_data_date(self, src_inf):
         """extract the data format from the mbsystem inf file."""
