@@ -492,6 +492,7 @@ Options:
   -W, --t_srs\t\tSet the TARGET projection (for use with `-p`).
   -E, --increment\tBlock data to INCREMENT in native units.
 \t\t\tWhere INCREMENT is x-inc[/y-inc] (for use with `-p`).
+  -H, --threads\t\tSet the number of threads (1)
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format. <beta>
   -q, --quiet\t\tLower the verbosity to a quiet
@@ -522,6 +523,7 @@ See `fetches_cli_usage` for full cli options.
     want_proc = False
     want_verbose = True
     stop_threads = False
+    num_threads = 1
     dst_srs = None
     xy_inc = [None, None]
     
@@ -543,6 +545,9 @@ See `fetches_cli_usage` for full cli options.
             xy_inc = arg[2:].split('/')
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
             dst_srs = argv[i + 1]
+            i = i + 1
+        elif arg == '-threads' or arg == '--threads' or arg == '-H':
+            num_threads = utils.int_or(argv[i + 1], 1)
             i = i + 1
         elif arg == '--list' or arg == '-l':
             want_list = True
@@ -651,7 +656,7 @@ See `fetches_cli_usage` for full cli options.
                 for result in x_f.results:
                     print(result[0])
             else:
-                fr = f_utils.fetch_results(x_f, want_proc=want_proc)
+                fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads)
                 fr.daemon = True
                 _p = utils.CliProgress('fetching {} remote data files'.format(len(x_f.results)))
                 try:
