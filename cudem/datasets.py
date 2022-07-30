@@ -314,14 +314,6 @@ class ElevationDataset():
                                 inf.write(json.dumps(self.infos))
                         except:
                             pass
-                        
-                        # if self.region is not None:
-                        #     with open('{}_{}.inf'.format(
-                        #             'dlim_tmp', self.region.format('fn')), 'w') as inf:
-                        #         inf.write(json.dumps(self.infos))
-                        # else:
-                        #     with open('dlim_tmp.inf', 'w') as inf:
-                        #         inf.write(json.dumps(self.infos))
 
             if recursive_check and self.parent is not None:
                 self.parent.inf(check_hash=True)
@@ -361,6 +353,8 @@ class ElevationDataset():
             self.xyz_yield = self.yield_xyz()
 
     def set_transform(self):
+        """Set the transformation parameters for the dataset."""
+        
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
@@ -609,10 +603,10 @@ class ElevationDataset():
                 z_array = np.zeros((ycount, xcount))
                 weight_array = np.zeros((ycount, xcount))
 
-            #if self.verbose:
-            #    utils.echo_msg(
-            #        'blocking data to {}/{} grid'.format(ycount, xcount)
-            #    )
+            if self.verbose:
+               utils.echo_msg(
+                   'blocking data to {}/{} grid'.format(ycount, xcount)
+               )
                 
             for this_xyz in self.yield_xyz():
                 xpos, ypos = utils._geo2pixel(
@@ -968,9 +962,7 @@ class XYZFile(ElevationDataset):
 
             utils.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-
             #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
-
             xyz_ds = RasterFile(
                 fn='{}.tif'.format(ofn),
                 data_format=200,
@@ -1153,8 +1145,6 @@ class LASFile(ElevationDataset):
             for vlr in lasf_vlrs:
                 #if 'OGC WKT' in vlr.description:
                 if vlr.record_id == 2112:
-                    #src_epsg = self.get_srs(vlr.string)
-        
                     src_srs = osr.SpatialReference()
                     src_srs.SetFromUserInput(vlr.string)
                     src_srs.AutoIdentifyEPSG()
@@ -1935,12 +1925,9 @@ class MBSParser(ElevationDataset):
                     mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
-
             utils.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-
             #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
-
             xyz_ds = RasterFile(
                 fn='{}.tif'.format(ofn),
                 data_format=200,
@@ -1953,12 +1940,10 @@ class MBSParser(ElevationDataset):
                 src_region=self.region,
                 verbose=self.verbose
             )
-
             for xyz in xyz_ds.yield_xyz():
                 yield(xyz)
 
             utils.remove_glob('{}.tif*'.format(ofn))
-
         else:
             for line in utils.yield_cmd(
                     'mblist -M{} -OXYZ -I{}'.format(self.mb_exclude, self.fn),

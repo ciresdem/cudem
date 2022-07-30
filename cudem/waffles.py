@@ -1170,6 +1170,7 @@ class WafflesNum(Waffle):
                 utils.remove_glob('{}_n.tif'.format(self.name))
             else:
                 os.rename('{}_n.tif'.format(self.name), '{}.tif'.format(self.name))
+                
             if self.mode != 'n':
                 utils.remove_glob('{}_c.tif'.format(self.name))
 
