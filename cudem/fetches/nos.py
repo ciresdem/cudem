@@ -48,6 +48,7 @@
 ##
 ##Fields:
 ##
+
 ## SURVEY_ID ( type: esriFieldTypeString, alias: Survey ID, length: 10 )
 ## DATE_SURVEY_BEGIN ( type: esriFieldTypeDate, alias: Begin Date, length: 8 )
 ## DATE_SURVEY_END ( type: esriFieldTypeDate, alias: End Date, length: 8 )
@@ -74,6 +75,9 @@
 
 import os
 import json
+
+from osgeo import osr
+from osgeo import gdal
 
 from cudem import utils
 from cudem import regions
@@ -168,19 +172,25 @@ class HydroNOS(f_utils.FetchModule):
                 elif entry[2] == 'bag':
                     src_bags = utils.p_unzip(src_nos, exts=['bag'])
                     for src_bag in src_bags:
-                        bag_epsg = demfun.get_srs(src_bag)
-                        _ds = datasets.RasterFile(
-                            fn=src_bag,
-                            data_format=200,
-                            src_srs='{}+5866'.format(bag_epsg),
-                            dst_srs=self.dst_srs,
-                            src_region=self.region,
-                            x_inc=self.x_inc,
-                            y_inc=self.y_inc,
-                            verbose=self.verbose
-                        )
-                        for xyz in _ds.yield_xyz():
-                            yield(xyz)
+                        if 'ellipsoid' not in src_bag.lower() and 'vb' not in src_bag.lower():
+                            bag_ds = gdal.Open(src_bag)
+                            bag_srs = bag_ds.GetSpatialRef()
+                            bag_srs.AutoIdentifyEPSG()
+                            bag_srs.SetAuthority('VERT_CS', 'EPSG', 5866)
+                            bag_ds = None
+
+                            _ds = datasets.BAGFile(
+                                fn=src_bag,
+                                data_format=201,
+                                src_srs=bag_srs.ExportToWkt(),
+                                dst_srs=self.dst_srs,
+                                src_region=self.region,
+                                x_inc=self.x_inc,
+                                y_inc=self.y_inc,
+                                verbose=self.verbose
+                            )
+                            for xyz in _ds.yield_xyz():
+                                yield(xyz)
 
                     utils.remove_glob(*src_bags)
             utils.remove_glob(src_nos)

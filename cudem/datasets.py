@@ -361,18 +361,6 @@ class ElevationDataset():
             self.xyz_yield = self.yield_xyz()
 
     def set_transform(self):
-        """set an srs transform, if needed/wanted."""
-
-        def srs2epsg(srs):
-            """return epsg(s) associated with the srs
-        
-            returns a list [horz_epsg, vert_epsg]"""
-
-            srs.AutoIdentifyEPSG()
-            horz_auth = srs.GetAttrValue('AUTHORITY', 1)
-            vert_auth = srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-            return(utils.int_or(horz_auth), utils.int_or(vert_auth))
-        
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
@@ -380,66 +368,61 @@ class ElevationDataset():
             src_srs.SetFromUserInput(self.src_srs)
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(self.dst_srs)
+            if src_srs.IsVertical() == 1:
+                src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+            else:
+                src_vert_epsg = None
+                
+            if dst_srs.IsVertical() == 1:
+                dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+            else:
+                dst_vert_epsg = None
 
-            src_epsgs = srs2epsg(src_srs)
-            dst_epsgs = srs2epsg(dst_srs)
-            src_srs = dst_srs = None
-
-            if dst_epsgs[1] is not None and src_epsgs[1] is not None and src_epsgs[1] != dst_epsgs[1]:
+            if dst_vert_epsg is not None and src_vert_epsg is not None and dst_vert_epsg != src_vert_epsg:
                 vd_region = regions.Region(
-                    src_srs='epsg:{}'.format(src_epsgs[0])
+                    src_srs=src_srs.ExportToProj4()
                 ).from_list(
                     self.infos['minmax']
                 ).warp(
-                    'epsg:{}'.format(dst_epsgs[0])
+                    dst_srs.ExportToProj4()
                 ) if self.region is None else self.region.copy()
-                
                 vd_region.buffer(pct=2)
                 trans_fn = os.path.join(
                     self.cache_dir,
                     '_vdatum_trans_{}_{}_{}'.format(
-                        src_epsgs[1],
-                        dst_epsgs[1],
+                        src_vert_epsg,
+                        dst_vert_epsg,
                         vd_region.format('fn')
                     )
                 )
-
                 waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
                     vd_region.format('str'),
-                    src_epsgs[1],
-                    dst_epsgs[1],
+                    src_vert_epsg,
+                    dst_vert_epsg,
                     trans_fn,
                     self.cache_dir
                 )
-
                 if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
-                    tmp_src_srs = osr.SpatialReference()
-                    tmp_src_srs.SetFromUserInput('epsg:{}'.format(src_epsgs[0]))
-                    tmp_dst_srs = osr.SpatialReference()
-                    tmp_dst_srs.SetFromUserInput('epsg:{}'.format(dst_epsgs[0]))
-                    
-                    out_src_srs = '{} +geoidgrids={}.tif'.format(tmp_src_srs.ExportToProj4(), trans_fn)
-                    out_dst_srs = '{}'.format(tmp_dst_srs.ExportToProj4())
+                    out_src_srs = '{} +geoidgrids={}.tif'.format(src_srs.ExportToProj4(), trans_fn)
+                    out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
-                    if src_epsgs[1] == '6360':
+                    if src_vert_epsg == '6360':
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
 
-                    if dst_epsgs[1] == '6360':
+                    if dst_vert_epsg == '6360':
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
-
-                    tmp_src_srs = tmp_dst_srs = None                    
                 else:
                     utils.echo_error_msg(
-                        'failed to generate transformation grid between {} and {} for this region!'.format(
-                            src_epsgs[1], dst_epsgs[1]
+                        'failed to generate vertical transformation grid between {} and {} for this region!'.format(
+                            src_vert_epsg, dst_vert_epsg
                         )
                     )
-                    out_src_srs = 'epsg:{}'.format(src_epsgs[0])
-                    out_dst_srs = 'epsg:{}'.format(dst_epsgs[1])
+                    out_src_srs = src_srs.ExportToProj4()
+                    out_dst_srs = dst_srs.ExportToProj4()
                 
             else:
-                out_src_srs = 'epsg:{}'.format(src_epsgs[0])
-                out_dst_srs = 'epsg:{}'.format(dst_epsgs[0])
+                out_src_srs = src_srs.ExportToProj4()
+                out_dst_srs = dst_srs.ExportToProj4()
 
             #utils.echo_msg('in srs: {}; out srs: {}'.format(out_src_srs, out_dst_srs))                
             src_osr_srs = osr.SpatialReference()
@@ -452,12 +435,8 @@ class ElevationDataset():
             except:
                 pass
 
-            ## check these get closed properly!
             self.src_trans_srs = out_src_srs
             self.dst_trans_srs = out_dst_srs
-
-            #self.src_trans_srs = out_src_srs
-            #self.dst_trans_srs = out_dst_srs
             
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
             if self.region is not None:
@@ -466,93 +445,7 @@ class ElevationDataset():
                 self.trans_region.warp(out_src_srs)
                 
             src_osr_srs = dst_osr_srs = None
-                    
-    def set_transform_old(self):
-        """set an srs transform, if needed/wanted."""
-
-        if self.src_srs == '': self.src_srs = None
-        if self.dst_srs == '': self.dst_srs = None
-        if self.dst_srs is not None and \
-           self.src_srs is not None and \
-           self.src_srs != self.dst_srs:
-            #utils.echo_msg('initializing transformation from {} to {}'.format(self.src_srs, self.dst_srs))            
-            ## vertical transform
-            if utils.int_or(self.dst_srs.split('+')[-1]) is not None and utils.int_or(self.src_srs.split('+')[-1]) is not None:
-                vd_region = regions.Region(src_srs=self.src_srs.split('+')[0]).from_list(self.infos['minmax']).warp(self.dst_srs.split('+')[0]) if self.region is None else self.region.copy()
-                vd_region.buffer(pct=2)
-                trans_fn = os.path.join(
-                    self.cache_dir,
-                    '_vdatum_trans_{}_{}_{}'.format(
-                        self.src_srs.split('+')[-1],
-                        self.dst_srs.split('+')[-1],
-                        vd_region.format('fn')
-                    )
-                )
-
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
-                    vd_region.format('str'),
-                    self.src_srs.split('+')[-1],
-                    self.dst_srs.split('+')[-1],
-                    trans_fn,
-                    self.cache_dir
-                )
-                if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
-                    tmp_src_srs = osr.SpatialReference()
-                    tmp_src_srs.SetFromUserInput(self.src_srs.split('+')[0])
-                    tmp_dst_srs = osr.SpatialReference()
-                    tmp_dst_srs.SetFromUserInput(self.dst_srs.split('+')[0])
-                    
-                    src_srs = '{} +geoidgrids={}.tif'.format(tmp_src_srs.ExportToProj4(), trans_fn)
-                    dst_srs = '{}'.format(tmp_dst_srs.ExportToProj4())
-
-                    if self.src_srs.split('+')[1] == '6360':
-                        src_srs = src_srs + ' +vto_meter=0.3048006096012192'
-
-                    if self.dst_srs.split('+')[1] == '6360':
-                        dst_srs = dst_srs + ' +vto_meter=0.3048006096012192'
-
-                    tmp_src_srs = tmp_dst_srs = None                    
-                else:
-                    utils.echo_error_msg(
-                        'failed to generate transformation grid between {} and {} for this region!'.format(
-                            self.src_srs.split('+')[-1], self.dst_srs.split('+')[-1]
-                        )
-                    )
-                    src_srs = self.src_srs.split('+')[0]
-                    dst_srs = self.dst_srs.split('+')[0]
-
-            ## horizontal transform only
-            elif utils.int_or(self.src_srs.split('+')[-1]) is not None:
-                src_srs = self.src_srs.split('+')[0]
-                dst_srs = self.dst_srs
-            elif utils.int_or(self.dst_srs.split('+')[-1]) is not None:
-                dst_srs = self.dst_srs.split('+')[0]
-                src_srs = self.src_srs
-            else:
-                src_srs = self.src_srs
-                dst_srs = self.dst_srs
-
-            #utils.echo_msg('in srs: {}; out srs: {}'.format(src_srs, dst_srs))                
-            src_osr_srs = osr.SpatialReference()
-            src_osr_srs.SetFromUserInput(src_srs)
-            dst_osr_srs = osr.SpatialReference()
-            dst_osr_srs.SetFromUserInput(dst_srs)
-            try:
-                src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            except:
-                pass
-
-            self.src_trans_srs = src_srs
-            self.dst_trans_srs = dst_srs
-            self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
-            if self.region is not None:
-                self.trans_region = self.region.copy()
-                self.trans_region.src_srs = dst_srs
-                self.trans_region.warp(src_srs)
-                
-            src_osr_srs = dst_osr_srs = None
-
+            
     def parse_json(self):
         for ds in self.parse():
             yield(ds)
@@ -1887,7 +1780,7 @@ class BAGFile(ElevationDataset):
                     yield(sub_ds)
 
             else:
-                oo = ["MODE=RESAMPLED_GRID"]
+                oo = ["MODE=RESAMPLED_GRID", "RES_STRATEGY=MAX"]
                 if self.region is not None and self.region.valid_p():
                     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
                     oo.append('MINX={}'.format(tmp_region.xmin))

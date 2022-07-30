@@ -122,45 +122,57 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
-def get_srs(src_dem, vert_name=False):
-    src_ds = gdal.Open(src_dem)
-    proj = src_ds.GetProjectionRef()
-    src_srs = osr.SpatialReference()
-    src_srs.SetFromUserInput(proj)
-    src_srs.AutoIdentifyEPSG()
-    srs_auth = src_srs.GetAttrValue('AUTHORITY', 1)
-    src_ds = None
-    vert_cs = src_srs.GetAttrValue('vert_cs')
-    vert_auth = src_srs.GetAttrValue('VERT_CS|AUTHORITY',1)
-    proj4 = src_srs.ExportToProj4()
-    src_srs = None
+def wkt2epsg(wkt):
+    """ Transform a WKT string to an EPSG code
+
+    Arguments
+    ---------
+
+    wkt: WKT definition
+    epsg: the proj.4 epsg file (defaults to '/usr/local/share/proj/epsg')
+    forceProj4: whether to perform brute force proj4 epsg file check (last resort)
     
-    if vert_name:
-        return(vert_cs)
+    Returns: EPSG code
+    """
+
+    code = None
+    p_in = osr.SpatialReference()
+    s = p_in.ImportFromWkt(wkt)
+    if s == 5:  # invalid WKT
+        return(None)
+    if p_in.IsLocal() == 1:  # this is a local definition
+        return(p_in.ExportToWkt())
+    if p_in.IsGeographic() == 1:  # this is a geographic srs
+        cstype = 'GEOGCS'
+    else:  # this is a projected srs
+        cstype = 'PROJCS'
+
+    if p_in.IsVertical() == 1:
+        csvtype = 'VERT_CS'
     else:
-        if srs_auth is not None:
-            if vert_auth is not None:
-                return('epsg:{}+{}'.format(srs_auth, vert_auth))
-            else:
-                return('epsg:{}'.format(srs_auth))
+        csvtype = None
+
+    p_in.AutoIdentifyEPSG()
+        
+    an = p_in.GetAuthorityName(cstype)
+    ac = p_in.GetAuthorityCode(cstype)
+    
+    vn = p_in.GetAuthorityCode(csvtype)
+    vc = p_in.GetAuthorityCode(csvtype)
+    if an is not None and ac is not None:  # return the EPSG code
+        return('{}:{}'.format(p_in.GetAuthorityName(cstype), p_in.GetAuthorityCode(cstype)))
+    else:  # export the proj4 string (no vertical)
+        p_out = p_in.ExportToProj4()
+        if p_out:
+                return(p_out)
         else:
-            return(proj4)
+            return(None)
 
-def set_srs(src_dem, src_srs='epsg:4326'):
-    """set the projection of gdal file src_fn to src_srs"""
-
-    try:
-        ds = gdal.Open(src_dem, gdal.GA_Update)
-    except: ds = None
-    if ds is not None:
-        try:
-            ds.SetProjection(utils.sr_wkt(src_srs))
-        except Exception as e:
-            #ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
-            utils.echo_warning_msg('could not set projection {}'.format(src_srs))
-        ds = None
-        return(0)
-    else: return(None)
+def get_srs(src_dem):
+    src_ds = gdal.Open(src_dem)
+    wkt = src_ds.GetProjectionRef()
+    src_ds = None
+    return(wkt2epsg(wkt))
 
 def get_nodata(src_dem):
     """get the nodata valiue of src_dem
