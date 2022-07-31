@@ -1341,7 +1341,13 @@ class RasterFile(ElevationDataset):
     
     def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
         super().__init__(**kwargs)
-        self.open_options = open_options.split('/') if open_options is not None else []
+        try:
+            self.open_options = open_options.split('/')
+        except AttributeError:
+            self.open_options = open_options
+        except:
+            self.open_options = None
+
         self.mask = mask
         self.weight_mask = weight_mask
         if self.valid_p() and self.src_srs is None:
@@ -1373,6 +1379,9 @@ class RasterFile(ElevationDataset):
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+                if src_ds is None:
+                    utils.echo_warning_msg('could not open file using open options {}'.format(self.open_options))
+                    src_ds = gdal.Open(self.fn)
             else:
                 src_ds = gdal.Open(self.fn)
 
@@ -1700,9 +1709,10 @@ class BAGFile(ElevationDataset):
     exist, otherwise process as normal grid
     """
 
-    def __init__(self, explode=False, **kwargs):
+    def __init__(self, explode=False, force_vr=False, **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
+        self.force_vr = force_vr
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)            
             self.set_transform()
@@ -1737,7 +1747,7 @@ class BAGFile(ElevationDataset):
 
     def parse_(self):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
-        if 'HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE':
+        if ('HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE') or self.force_vr:
             if self.explode:
                 oo = ["MODE=LIST_SUPERGRIDS"]
                 if self.region is not None and self.region.valid_p():
