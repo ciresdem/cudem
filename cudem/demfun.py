@@ -122,57 +122,41 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
-def wkt2epsg(wkt):
-    """ Transform a WKT string to an EPSG code
-
-    Arguments
-    ---------
-
-    wkt: WKT definition
-    epsg: the proj.4 epsg file (defaults to '/usr/local/share/proj/epsg')
-    forceProj4: whether to perform brute force proj4 epsg file check (last resort)
-    
-    Returns: EPSG code
-    """
-
-    code = None
-    p_in = osr.SpatialReference()
-    s = p_in.ImportFromWkt(wkt)
-    if s == 5:  # invalid WKT
-        return(None)
-    if p_in.IsLocal() == 1:  # this is a local definition
-        return(p_in.ExportToWkt())
-    if p_in.IsGeographic() == 1:  # this is a geographic srs
-        cstype = 'GEOGCS'
-    else:  # this is a projected srs
-        cstype = 'PROJCS'
-
-    if p_in.IsVertical() == 1:
-        csvtype = 'VERT_CS'
-    else:
-        csvtype = None
-
-    p_in.AutoIdentifyEPSG()
-        
-    an = p_in.GetAuthorityName(cstype)
-    ac = p_in.GetAuthorityCode(cstype)
-    
-    vn = p_in.GetAuthorityCode(csvtype)
-    vc = p_in.GetAuthorityCode(csvtype)
-    if an is not None and ac is not None:  # return the EPSG code
-        return('{}:{}'.format(p_in.GetAuthorityName(cstype), p_in.GetAuthorityCode(cstype)))
-    else:  # export the proj4 string (no vertical)
-        p_out = p_in.ExportToProj4()
-        if p_out:
-                return(p_out)
-        else:
-            return(None)
-
 def get_srs(src_dem):
     src_ds = gdal.Open(src_dem)
-    wkt = src_ds.GetProjectionRef()
+    src_srs = src_ds.GetSpatialRef()
     src_ds = None
-    return(wkt2epsg(wkt))
+    
+    if src_srs.IsLocal() == 1:
+        return(src_srs.ExportToWkt())
+    if src_srs.IsGeographic() == 1:
+        cstype = 'GEOGCS'
+    else:
+        cstype = 'PROJCS'
+
+    src_srs.AutoIdentifyEPSG()
+    an = src_srs.GetAuthorityName(cstype)
+    ac = src_srs.GetAuthorityCode(cstype)
+    
+    if src_srs.IsVertical() == 1:
+        csvtype = 'VERT_CS'
+        vn = src_srs.GetAuthorityName(csvtype)
+        vc = src_srs.GetAuthorityCode(csvtype)
+    else:
+        csvtype = vc = vn = None
+        
+    
+    if an is not None and ac is not None:
+        if vn is not None and vc is not None:
+            return('{}:{}+{}'.format(an, ac, vc))
+        else:
+            return('{}:{}'.format(an, ac))
+    else:
+        dst_srs = src_srs.ExportToProj4()
+        if dst_srs:
+                return(dst_srs)
+        else:
+            return(None)
 
 def get_nodata(src_dem):
     """get the nodata valiue of src_dem
