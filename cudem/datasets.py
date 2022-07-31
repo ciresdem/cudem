@@ -1747,7 +1747,10 @@ class BAGFile(ElevationDataset):
 
     def parse_(self):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
-        if ('HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE') or self.force_vr:
+        if ('HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE') \
+           or self.force_vr \
+           or 'MAX_RESOLUTION_X' in mt.keys() \
+           or 'MAX_RESOLUTION_Y' in mt.keys():
             if self.explode:
                 oo = ["MODE=LIST_SUPERGRIDS"]
                 if self.region is not None and self.region.valid_p():
