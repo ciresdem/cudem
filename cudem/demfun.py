@@ -122,6 +122,22 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
+def set_srs(src_dem, src_srs='epsg:4326'):
+    """set the projection of gdal file src_fn to src_srs"""
+
+    try:
+        ds = gdal.Open(src_dem, gdal.GA_Update)
+    except: ds = None
+    if ds is not None:
+        try:
+            ds.SetProjection(utils.sr_wkt(src_srs))
+        except Exception as e:
+            #ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
+            utils.echo_warning_msg('could not set projection {}'.format(src_srs))
+        ds = None
+        return(0)
+    else: return(None)
+
 def get_srs(src_dem):
     src_ds = gdal.Open(src_dem)
     src_srs = src_ds.GetSpatialRef()
