@@ -1144,6 +1144,7 @@ class LASFile(ElevationDataset):
             lasf_vlrs = lasf.header.vlrs
             for vlr in lasf_vlrs:
                 #if 'OGC WKT' in vlr.description:
+                #utils.echo_msg(vlr.description)
                 if vlr.record_id == 2112:
                     src_srs = osr.SpatialReference()
                     src_srs.SetFromUserInput(vlr.string)

@@ -183,7 +183,7 @@ specify `inc` to blockmedian the data when processing
                         x_scale=.3048,
                         y_scale=.3048,
                         z_scale=-.3048,
-                        src_srs='epsg:{}+5868'.format(src_epsg) if src_epsg is not None else None,
+                        src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None,
                         dst_srs=self.dst_srs,
                         src_region=src_region,
                         x_inc=self.x_inc,

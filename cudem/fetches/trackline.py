@@ -66,4 +66,7 @@ class Trackline(f_utils.FetchModule):
                 ids.append(feature['attributes']['SURVEY_ID'])
 
             print('http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids)))
+            #xyz_link = 'http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids))
+            #self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'trackline'])
+            #self.results.append([xyz_link, os.path.join(self._outdir, 'tmp_trackline.xyz'), 'trackline'])
 ### End
