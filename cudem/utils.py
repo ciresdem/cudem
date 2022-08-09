@@ -38,7 +38,8 @@ import subprocess
 import zipfile
 import gzip
 import re
-
+import curses
+        
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
@@ -532,7 +533,9 @@ def gdal_fext(src_drv_name):
     fexts = None
     try:
         drv = gdal.GetDriverByName(src_drv_name)
-        if drv.GetMetadataItem(gdal.DCAP_RASTER): fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+        if drv.GetMetadataItem(gdal.DCAP_RASTER):
+            fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+            
         if fexts is not None:
             return(fexts.split()[0])
         else:
@@ -892,7 +895,8 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         )
     else:
         p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=True
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, close_fds=True
         )
 
     if data_fun is not None:
@@ -934,7 +938,9 @@ def yield_cmd(cmd, data_fun=None, verbose=False):
     if data_fun is not None:
         pipe_stdin = subprocess.PIPE
     else: pipe_stdin = None
-    p = subprocess.Popen(cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True)
+    p = subprocess.Popen(
+        cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True
+    )
     
     if data_fun is not None:
         if verbose: echo_msg('piping data to cmd subprocess...')
@@ -1011,6 +1017,25 @@ def config_check(chk_vdatum=False, verbose=False):
 ## verbosity functions
 ##
 ## ==============================================
+def _terminal_width():
+    cols = 40
+    try:
+        cols = shutil.get_terminal_size().columns
+    except:
+        try:
+            rows, cols = curses.initscr().getmaxyx()
+        finally:
+            curses.endwin()
+                
+    return(cols)
+
+def _init_msg(msg, prefix_len):
+    width = int(_terminal_width()) - (prefix_len+6)
+    if len(msg) > width:
+        return('{}...'.format(msg[:width]))
+    else:
+        return('{}'.format(msg))
+
 def echo_warning_msg2(msg, prefix = 'waffles'):
     """echo warning msg to stderr using `prefix`
 
@@ -1021,7 +1046,8 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
       msg (str): a message
       prefix (str): a prefix for the message
     """
-    
+
+    #msg = _init_msg(msg, len(prefix) + 9)
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     sys.stderr.write('{}: \033[31m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
@@ -1036,7 +1062,8 @@ def echo_error_msg2(msg, prefix = 'waffles'):
       msg (str): a message
       prefix (str): a prefix for the message
     """
-    
+
+    #msg = _init_msg(msg, len(prefix) + 7)
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
@@ -1052,7 +1079,8 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
       prefix (str): a prefix for the message
       nl (bool): append a newline to the message
     """
-    
+
+    #msg = _init_msg(msg, len(prefix))
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     if bold:
@@ -1091,7 +1119,8 @@ class CliProgress:
         self.add_one = lambda x: x + 1
         self.sub_one = lambda x: x - 1
         self.spin_way = self.add_one
-        self.spinner = ['*     ', '**    ', '***   ', ' ***  ', '  *** ', '   ***', '    **', '     *']
+        self.spinner = ['*     ', '**    ', '***   ', ' ***  ',
+                        '  *** ', '   ***', '    **', '     *']
         
         self.perc = lambda p: ((p[0]/p[1]) * 100.)
         
@@ -1112,7 +1141,6 @@ class CliProgress:
         try:
             cols = shutil.get_terminal_size().columns
         except:
-            import curses
             try:
                 rows, cols = curses.initscr().getmaxyx()
             finally:
@@ -1132,7 +1160,9 @@ class CliProgress:
         if len(p) == 2 and p[0] <= p[1]:
             self._init_opm()
             self._clear_stderr()
-            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(self.perc(p), msg if msg is not None else self.opm))
+            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
+                self.perc(p), msg if msg is not None else self.opm
+            ))
         else: self.update()
         
     def update(self, msg = None):
@@ -1141,7 +1171,9 @@ class CliProgress:
         self.sc = (self.count % (self.tw + 1))
             
         self._clear_stderr()
-        sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(self.spinner[self.sc], msg if msg is not None else self.opm))
+        sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(
+            self.spinner[self.sc], msg if msg is not None else self.opm
+        ))
         
         if self.count == self.tw: self.spin_way = self.sub_one
         if self.count == 0: self.spin_way = self.add_one
@@ -1154,12 +1186,14 @@ class CliProgress:
             end_msg = self.message
             
         if status != 0:
-            sys.stderr.write('\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', end_msg))
+            sys.stderr.write(
+                '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', end_msg)
+            )
         else:
-            sys.stderr.write('\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg))
+            sys.stderr.write(
+                '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg)
+            )
 
-import sys
-import os
 import multiprocessing as mp
 import numpy
 

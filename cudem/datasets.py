@@ -348,7 +348,7 @@ class ElevationDataset():
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
                 
-            self.xyz_yield = self.block_xyz()
+            self.xyz_yield = self.block_xyz(want_gmt=True)
         else:
             self.xyz_yield = self.yield_xyz()
 
@@ -357,22 +357,59 @@ class ElevationDataset():
         
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
-        if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
+        if self.dst_srs is not None \
+           and self.src_srs is not None \
+           and self.src_srs != self.dst_srs:
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(self.src_srs)
+            #src_srs = self.parse_srs(src_srs)
+            
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(self.dst_srs)
+            #dst_srs = self.parse_srs(dst_srs)
+
+            ## HORZ
+            if src_srs.IsGeographic() == 1:
+                cstype = 'GEOGCS'
+            else:
+                cstype = 'PROJCS'
+
+            src_srs.AutoIdentifyEPSG()
+            an = src_srs.GetAuthorityName(cstype)
+            src_horz_epsg = src_srs.GetAuthorityCode(cstype)
+            
+            if dst_srs.IsGeographic() == 1:
+                cstype = 'GEOGCS'
+            else:
+                cstype = 'PROJCS'
+
+            dst_srs.AutoIdentifyEPSG()
+            an = dst_srs.GetAuthorityName(cstype)
+            dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
+
+            ## VERT
             if src_srs.IsVertical() == 1:
-                src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+                csvtype = 'VERT_CS'
+                src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
+                #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
             else:
                 src_vert_epsg = None
                 
             if dst_srs.IsVertical() == 1:
-                dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+                csvtype = 'VERT_CS'
+                dst_vert_epsg = dst_srs.GetAuthorityCode(csvtype)
+                #dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
             else:
                 dst_vert_epsg = None
 
-            if dst_vert_epsg is not None and src_vert_epsg is not None and dst_vert_epsg != src_vert_epsg:
+            src_srs = osr.SpatialReference()
+            src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
+            dst_srs = osr.SpatialReference()
+            dst_srs.SetFromUserInput('epsg:{}'.format(dst_horz_epsg))
+                
+            if dst_vert_epsg is not None \
+               and src_vert_epsg is not None \
+               and dst_vert_epsg != src_vert_epsg:
                 vd_region = regions.Region(
                     src_srs=src_srs.ExportToProj4()
                 ).from_list(
@@ -418,7 +455,8 @@ class ElevationDataset():
                 out_src_srs = src_srs.ExportToProj4()
                 out_dst_srs = dst_srs.ExportToProj4()
 
-            #utils.echo_msg('in srs: {}; out srs: {}'.format(out_src_srs, out_dst_srs))                
+            #utils.echo_msg('in srs: {}'.format(out_src_srs))
+            #utils.echo_msg('out srs: {}'.format(out_dst_srs))                
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -677,6 +715,9 @@ class ElevationDataset():
         """
         
         if want_gmt:
+            if 'minmax' not in self.infos.keys():
+                self.generate_inf()
+
             ds_region = regions.Region().from_list(self.infos['minmax'])
             if self.dst_trans is not None:
                 ds_region.transform(self.dst_trans)
@@ -688,15 +729,17 @@ class ElevationDataset():
             else:
                 block_region = ds_region.copy()
 
-            if block_region.valid_p():                
+            if not block_region.valid_p():
+                utils.echo_error_msg('Invalid region: {}'.format(block_region))
+            else:
                 if utils.config_check()['GMT'] is None:
                     utils.echo_error_msg(
                         'GMT must be installed to use blockmedian; install GMT or set `want_gmt` to False'
                     )
                 else:
-                    xyz_func = lambda p: self.dump_xyz(dst_port=p, encode=True)
+                    xyz_func = lambda p: self.dump_xyz_direct(dst_port=p, encode=True)
                     for xyz in utils.yield_cmd(
-                            'gmt blockmedian -I{:.10f}/{:.10f} {} -r -V'.format(
+                            'gmt blockmedian -I{:.10f}/{:.10f} {} -V'.format(
                                 self.x_inc, self.y_inc, block_region.format('gmt')
                             ),
                             verbose=self.verbose,
@@ -836,6 +879,16 @@ class ElevationDataset():
         """dump the XYZ data from the dataset"""
         
         for this_xyz in self.xyz_yield:
+            this_xyz.dump(
+                include_w=True if self.weight is not None else False,
+                dst_port=dst_port,
+                encode=encode
+            )
+
+    def dump_xyz_direct(self, dst_port=sys.stdout, encode=False, **kwargs):
+        """dump the XYZ data from the dataset"""
+        
+        for this_xyz in self.yield_xyz():
             this_xyz.dump(
                 include_w=True if self.weight is not None else False,
                 dst_port=dst_port,
@@ -1297,7 +1350,10 @@ class LASFile(ElevationDataset):
             )
 
             utils.gdal2gdal('{}.grd'.format(ofn))
-            utils.remove_glob('tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+            utils.remove_glob(
+                'tmp.datalist', '{}.cmd'.format(ofn),
+                '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn)
+            )
             xyz_ds = RasterFile(
                 fn='{}.tif'.format(ofn),
                 data_format=200,

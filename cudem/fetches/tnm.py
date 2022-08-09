@@ -135,11 +135,13 @@ class TheNationalMap(f_utils.FetchModule):
                 metadataDate = ds['lastUpdatedDate']
             except: metadataDate = utils.this_year()            
             if geom is not None:
-                self.FRED._add_survey(Name = ds['sbDatasetTag'], ID = ds['id'], Agency = 'USGS', Date = pubDate[-4:],
-                                      MetadataLink = ds['infoUrl'], MetadataDate = metadataDate,
-                                      DataLink = '{}{}'.format(self._tnm_product_url, url_enc), Link = ds['dataGovUrl'], Resolution = ','.join(ds['extents']),
-                                      DataType = datatype, DataSource = 'tnm', HorizontalDatum = h_epsg,
-                                      VerticalDatum = v_epsg, Etcetra = fmt, Info = ds['refreshCycle'], geom = geom)
+                self.FRED._add_survey(
+                    Name = ds['sbDatasetTag'], ID = ds['id'], Agency = 'USGS', Date = pubDate[-4:],
+                    MetadataLink = ds['infoUrl'], MetadataDate = metadataDate,
+                    DataLink = '{}{}'.format(self._tnm_product_url, url_enc),
+                    Link = ds['dataGovUrl'], Resolution = ','.join(ds['extents']),
+                    DataType = datatype, DataSource = 'tnm', HorizontalDatum = h_epsg,
+                    VerticalDatum = v_epsg, Etcetra = fmt, Info = ds['refreshCycle'], geom = geom)
 
     ## ==============================================
     ## update the FRED geojson with each TNM dataset
@@ -316,7 +318,7 @@ class TheNationalMap(f_utils.FetchModule):
         """yield the xyz data from the tnm fetch module"""
         
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
-            datatype = entry[-1]
+            datatype = entry[-2]
             if datatype == 'raster':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
@@ -335,6 +337,25 @@ class TheNationalMap(f_utils.FetchModule):
                         if xyz.z != 0:
                             yield(xyz)
                     utils.remove_glob(src_tnm)
+            elif datatype == 'lidar':
+                _ds = datasets.LASFile(
+                    fn=entry[1],
+                    data_format=300,
+                    #src_srs=ds_epsg,
+                    dst_srs=self.dst_srs,
+                    weight=self.weight,
+                    src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
+                    verbose=self.verbose,
+                    remote=True
+                )
+                #for xyz in _ds.yield_xyz():
+                for xyz in _ds.xyz_yield:
+                    yield(xyz)
+                    
+                utils.remove_glob('{}*'.format(entry[1]))
+                
         utils.remove_glob(entry[1])
 
 ## ==============================================

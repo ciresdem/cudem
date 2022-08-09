@@ -138,7 +138,9 @@ specify `inc` to blockmedian the data when processing
                             e = this_xml.find('.//eastbc').text
                             n = this_xml.find('.//northbc').text
                             s = this_xml.find('.//southbc').text
-                            src_region = regions.Region().from_list([float(w), float(e), float(s), float(n)])
+                            src_region = regions.Region().from_list(
+                                [float(w), float(e), float(s), float(n)]
+                            )
                         except:
                             utils.echo_error_msg('could not parse region')
                             src_region = self.region

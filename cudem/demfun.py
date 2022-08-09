@@ -142,37 +142,40 @@ def get_srs(src_dem):
     src_ds = gdal.Open(src_dem)
     src_srs = src_ds.GetSpatialRef()
     src_ds = None
-    
-    if src_srs.IsLocal() == 1:
-        return(src_srs.ExportToWkt())
-    if src_srs.IsGeographic() == 1:
-        cstype = 'GEOGCS'
-    else:
-        cstype = 'PROJCS'
 
-    src_srs.AutoIdentifyEPSG()
-    an = src_srs.GetAuthorityName(cstype)
-    ac = src_srs.GetAuthorityCode(cstype)
-    
-    if src_srs.IsVertical() == 1:
-        csvtype = 'VERT_CS'
-        vn = src_srs.GetAuthorityName(csvtype)
-        vc = src_srs.GetAuthorityCode(csvtype)
-    else:
-        csvtype = vc = vn = None
-        
-    
-    if an is not None and ac is not None:
-        if vn is not None and vc is not None:
-            return('{}:{}+{}'.format(an, ac, vc))
+    if src_srs is not None:
+        if src_srs.IsLocal() == 1:
+            return(src_srs.ExportToWkt())
+        if src_srs.IsGeographic() == 1:
+            cstype = 'GEOGCS'
         else:
-            return('{}:{}'.format(an, ac))
-    else:
-        dst_srs = src_srs.ExportToProj4()
-        if dst_srs:
-                return(dst_srs)
+            cstype = 'PROJCS'
+
+        src_srs.AutoIdentifyEPSG()
+        an = src_srs.GetAuthorityName(cstype)
+        ac = src_srs.GetAuthorityCode(cstype)
+
+        if src_srs.IsVertical() == 1:
+            csvtype = 'VERT_CS'
+            vn = src_srs.GetAuthorityName(csvtype)
+            vc = src_srs.GetAuthorityCode(csvtype)
         else:
-            return(None)
+            csvtype = vc = vn = None
+
+
+        if an is not None and ac is not None:
+            if vn is not None and vc is not None:
+                return('{}:{}+{}'.format(an, ac, vc))
+            else:
+                return('{}:{}'.format(an, ac))
+        else:
+            dst_srs = src_srs.ExportToProj4()
+            if dst_srs:
+                    return(dst_srs)
+            else:
+                return(None)
+    else:
+        return(None)
 
 def get_nodata(src_dem):
     """get the nodata valiue of src_dem

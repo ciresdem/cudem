@@ -262,6 +262,7 @@ increment to save space.
                 ## no ept epsg's...assume nad83, NAVD88
                 if len(ds_epsg.split(':')) == 1:
                     ds_epsg = 'epsg:4269+{}'.format(ds_epsg)
+
                 _ds = datasets.LASFile(
                     fn=src_dc,
                     data_format=300,
@@ -285,6 +286,7 @@ increment to save space.
                 #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
                         
                 # else:
+                #for xyz in _ds.yield_xyz():
                 for xyz in _ds.yield_xyz():
                     yield(xyz)
                         
