@@ -2593,9 +2593,14 @@ class WafflesLakes(Waffle):
         NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
         """
 
-        bathy_arr = (shore_distance_arr * max_depth) / float(shore_distance_arr.max())
+        max_dist = float(1e-7) if shore_distance_arr.max() <= 0 else shore_distance_arr.max()
+        bathy_arr = (shore_distance_arr * max_depth) / float(max_dist)
         bathy_arr[bathy_arr == 0] = np.nan
-        if shore_arr is None or shore_arr[~np.isnan(bathy_arr)].max() == 0:
+
+        if shore_arr is None \
+           or shore_arr.size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].max() == 0:
             bathy_arr = shore_elev - bathy_arr
         else:
             bathy_arr = shore_arr - bathy_arr
@@ -2643,6 +2648,7 @@ class WafflesLakes(Waffle):
             
             prox_arr = prox_band.ReadAsArray()
             msk_arr = msk_band.ReadAsArray()
+            #if shore_arr is None or shore_arr[~np.isnan(bathy_arr)].max() == 0
             self.bathy_arr += self.apply_calculation(
                 prox_band.ReadAsArray(),
                 max_depth=lk_depth_glb,
