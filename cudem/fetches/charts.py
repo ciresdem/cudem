@@ -81,17 +81,22 @@ class NauticalCharts(f_utils.FetchModule):
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
         self._rnc_data_catalog = 'https://charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
+        self._ienc_charts_data_catalog = 'https://ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml'
+        self._ienc_buoys_data_catalog = 'https://ienccloud.us/ienc/products/catalog/IENCBuoyProductsCatalog.xml'
         self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
         self._outdir = os.path.join(os.getcwd(), 'charts')
         self._dt_xml = {
             'ENC':self._enc_data_catalog,
-            'RNC':self._rnc_data_catalog
+            'RNC':self._rnc_data_catalog,
         }
+        #            'IENC-Charts':self._ienc_charts_data_catalog,
+        #            'IENC-Buoys':self._ienc_buoys_data_catalog
+        #        }
         self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
         self.name = 'charts'
         self.v_datum = 'mhw'
-        self.src_srs='epsg:4326+5868'
+        self.src_srs='epsg:4326+5866'
         
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
@@ -157,8 +162,8 @@ class NauticalCharts(f_utils.FetchModule):
     def yield_xyz(self, entry):
         """ENC data comes as a .000 file in a zip.
 
-        The data is referenced to MHW and is represente as a depth.
-        In U.S. waters, MHW can be transformed to MSL or the local GEOID using
+        The data is referenced to MLLW and is represented as a depth.
+        In U.S. waters, MLLW can be transformed to MSL or the local GEOID using
         VDatum and/or it's associated grids (mhw.gtx or tss.gtx)
         """
             

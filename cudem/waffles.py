@@ -146,6 +146,8 @@ class Waffle:
         self.mask_fn = '{}_m.tif'.format(self.name)
         self.waffled = False
         self.aux_dems = []
+
+        ## setting set_incs to True will force dlim to process the data to the set increments (raster mainly)
         self._init_data(set_incs=True)
         #self._init_data()
             
@@ -2509,7 +2511,11 @@ class WafflesLakes(Waffle):
         this_lakes._outdir = self.cache_dir
         this_lakes.run()
 
-        fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False)
+        #lakes_zip = this_lakes.results[0][1]
+        #lakes_url = this_lakes.results[0][0]
+        #this_lakes_zip = os.path.join(self.cache_dir, this_lakes.results[0][1])
+        #cudem.fetches.utils.Fetch(lakes_url, verbose=self.verbose).fetch_file(lakes_zip, check_size=False)
+        fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -2523,7 +2529,7 @@ class WafflesLakes(Waffle):
 
         return(lakes_shp)
 
-    def _fetch_globathy(self):
+    def _fetch_globathy(self, ids=[]):
         """fetch globathy csv data and process into dict"""
         
         import csv
@@ -2531,16 +2537,24 @@ class WafflesLakes(Waffle):
         
         _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
         globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
-        cudem.fetches.utils.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip)
+        cudem.fetches.utils.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip, check_size=False)
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
         globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
 
-        
+        _prog = utils.CliProgress('parsing globathy parameters...')
         with open(globathy_csv, mode='r') as globc:
             reader = csv.reader(globc)
             next(reader)
-            globd = {int(row[0]):float(row[-1]) for row in reader}
-        
+            if len(ids) > 0:
+                globd = {}
+                for row in reader:
+                    if int(row[0]) in ids:
+                        _prog.update()
+                        globd[int(row[0])] = float(row[-1])
+            else:
+                globd = {int(row[0]):float(row[-1]) for row in reader}
+
+        _prog.end(0, 'parsed {} globathy parameters'.format(len(globd)))
         return(globd)
 
     def _fetch_copernicus(self):
@@ -2552,7 +2566,7 @@ class WafflesLakes(Waffle):
         this_cop._outdir = self.cache_dir
         this_cop.run()
 
-        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False)
+        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
@@ -2611,7 +2625,7 @@ class WafflesLakes(Waffle):
     def run(self):        
         self._load_bathy()        
         lakes_shp = self._fetch_lakes()
-        globd = self._fetch_globathy()
+        #globd = self._fetch_globathy()
         cop_ds = self._fetch_copernicus()
         cop_band = cop_ds.GetRasterBand(1)
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
@@ -2620,21 +2634,31 @@ class WafflesLakes(Waffle):
         lk_ds = ogr.Open(lakes_shp)
         lk_layer = lk_ds.GetLayer()
         lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
+        #lk_layer.SetAttributeFilter('Lake_area >= {}'.format(self.x_inc * self.y_inc))
         lk_features = lk_layer.GetFeatureCount()
         lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
 
+        lk_ids = []
+        for i, feat in enumerate(lk_layer):
+            lk_ids.append(feat.GetField('Hylak_id'))
+
+        globd = self._fetch_globathy(ids=lk_ids)
+        
         for i, feat in enumerate(lk_layer):
             lk_prog.update_perc((i, lk_features))
             lk_id = feat.GetField('Hylak_id')
-            lk_name = feat.GetField('Lake_name')
             lk_elevation = feat.GetField('Elevation')
-            lk_depth = feat.GetField('Depth_avg')
             lk_depth_glb = globd[lk_id]
             
-            utils.echo_msg('lake: {}'.format(lk_name))
-            utils.echo_msg('lake elevation: {}'.format(lk_elevation))
-            utils.echo_msg('lake_depth: {}'.format(lk_depth))
-            utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
+            #lk_name = feat.GetField('Lake_name')
+            #lk_depth = feat.GetField('Depth_avg')
+            #lk_area = feat.GetField('Lake_area')
+            #utils.echo_msg('lake: {}'.format(lk_name))
+            #utils.echo_msg('lake elevation: {}'.format(lk_elevation))
+            #utils.echo_msg('lake_depth: {}'.format(lk_depth))
+            #utils.echo_msg('lake_area: {}'.format(lk_area))
+            #utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
+            #utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
 
             tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
             tmp_layer = tmp_ds.GetLayer()            
@@ -2648,7 +2672,7 @@ class WafflesLakes(Waffle):
             
             prox_arr = prox_band.ReadAsArray()
             msk_arr = msk_band.ReadAsArray()
-            #if shore_arr is None or shore_arr[~np.isnan(bathy_arr)].max() == 0
+
             self.bathy_arr += self.apply_calculation(
                 prox_band.ReadAsArray(),
                 max_depth=lk_depth_glb,

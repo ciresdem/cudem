@@ -362,16 +362,16 @@ class Fetch:
             try:
                 os.makedirs(os.path.dirname(dst_fn))
             except: pass
-
+            
         try:
+            try:
+                if not overwrite and not check_size and os.path.exists(dst_fn):
+                    raise UnboundLocalError('{} exists, '.format(dst_fn))
+            except OSError:
+                pass
+            
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
-
-                try:
-                    if not overwrite and not check_size and os.path.exists(dst_fn):
-                        raise UnboundLocalError('{} exists, '.format(dst_fn))
-                except OSError:
-                    pass
                 
                 req_h = req.headers
                 if 'Content-length' in req_h:
@@ -499,7 +499,7 @@ class Fetch:
 
 ## ==============================================
 ## ==============================================
-def fetch_queue(q, m, p=False):
+def fetch_queue(q, m, p=False, c=True):
     """fetch queue `q` of fetch results\
     each fetch queue should be a list of the following:
     [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
@@ -531,7 +531,7 @@ def fetch_queue(q, m, p=False):
                         verbose=m.verbose,
                         headers=m.headers,
                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
-                    ).fetch_file(fetch_args[1])
+                    ).fetch_file(fetch_args[1], check_size=c)
             else:
                 if m.region is not None:
                     o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '_' + m.region.format('fn') + '.xyz'
@@ -559,19 +559,20 @@ class fetch_results(threading.Thread):
     """
     
     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
-    def __init__(self, mod, want_proc=False, n_threads=3):
+    def __init__(self, mod, want_proc=False, check_size=True, n_threads=3):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.mod = mod
         #self.outdir_ = self.mod._outdir
         self.want_proc = want_proc
+        self.check_size = check_size
         self.n_threads = n_threads
         if len(self.mod.results) == 0:
             self.mod.run()
         
     def run(self):
         for _ in range(self.n_threads):
-            t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc))
+            t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc, self.check_size))
             t.daemon = True
             t.start()
         for row in self.mod.results:
