@@ -2552,6 +2552,9 @@ class WafflesLakes(Waffle):
                     if int(row[0]) in ids:
                         _prog.update()
                         globd[int(row[0])] = float(row[-1])
+                        ids.remove(int(row[0]))
+                    if len(ids) == 0:
+                        break
             else:
                 globd = {int(row[0]):float(row[-1]) for row in reader}
 
@@ -2577,9 +2580,10 @@ class WafflesLakes(Waffle):
         cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
 
         _cop_prog = utils.CliProgress('combining Copernicus tiles')
-        for i, cop_tif in enumerate(this_cop.results):
-            _cop_prog.update_perc((i, len(this_cop.results)))
-            gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
+        #for i, cop_tif in enumerate(this_cop.results):
+        #    _cop_prog.update_perc((i, len(this_cop.results)))
+        #    gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
         _cop_prog.end(0, 'combined {} Copernicus tiles'.format(len(this_cop.results)))
         
         return(cop_ds)
@@ -2653,8 +2657,8 @@ class WafflesLakes(Waffle):
         ## get lake ids and globathy depths
         lk_ids = []
         [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
-        globd = self._fetch_globathy(ids=lk_ids)
-        
+        globd = self._fetch_globathy(ids=lk_ids[:])
+
         ## rasterize hydrolakes using id
         gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
         msk_ds.FlushCache()
