@@ -2676,9 +2676,12 @@ class WafflesLakes(Waffle):
         _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
         for n, this_id in enumerate(lk_ids):
             msk_arr[msk_arr == this_id] = globd[this_id]
-            _p.update((n, len(lk_ids)))
+            _p.update_perc((n, len(lk_ids)))
         _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
 
+        #utils.echo_msg('Assigning Globathy Depths to rasterized lakes...')
+        #msk_arr[msk_arr[np.in1d(msk_arr, globd.keys())]] = globd.values()
+        
         prox_arr = prox_band.ReadAsArray()
         cop_arr = cop_band.ReadAsArray()
 
