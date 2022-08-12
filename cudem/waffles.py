@@ -2487,7 +2487,7 @@ class WafflesLakes(Waffle):
         else:
             self.dst_srs = 'epsg:4326'
             
-    def _load_bathy(self):
+    def _init_bathy(self):
         """create a nodata grid"""
         
         xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
@@ -2501,7 +2501,6 @@ class WafflesLakes(Waffle):
             self.ndv,
             'GTiff'
         )        
-        #self.bathy_arr = np.zeros( (ycount, xcount) )
             
     def _fetch_lakes(self):
         """fetch hydrolakes polygons"""
@@ -2512,10 +2511,6 @@ class WafflesLakes(Waffle):
         this_lakes._outdir = self.cache_dir
         this_lakes.run()
 
-        #lakes_zip = this_lakes.results[0][1]
-        #lakes_url = this_lakes.results[0][0]
-        #this_lakes_zip = os.path.join(self.cache_dir, this_lakes.results[0][1])
-        #cudem.fetches.utils.Fetch(lakes_url, verbose=self.verbose).fetch_file(lakes_zip, check_size=False)
         fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False, check_size=False)
         fr.daemon = True
         fr.start()
@@ -2639,7 +2634,7 @@ class WafflesLakes(Waffle):
         return(bathy_arr)    
     
     def run(self):        
-        self._load_bathy()        
+        self._init_bathy()        
         lakes_shp = self._fetch_lakes()
         cop_ds = self._fetch_copernicus()
         cop_band = cop_ds.GetRasterBand(1)
@@ -2681,6 +2676,11 @@ class WafflesLakes(Waffle):
 
         #utils.echo_msg('Assigning Globathy Depths to rasterized lakes...')
         #msk_arr[msk_arr[np.in1d(msk_arr, globd.keys())]] = globd.values()
+        #print(zip(*globd.keys()))
+        #print(list(globd.values()))
+        #msk_arr[list(globd.keys()),:] = list(globd.values())
+        #msk_arr[zip(*globd.keys())] = list(globd.values())
+        #msk_arr[np.isin(msk_arr, list(globd.keys()))] = list(globd.values())
         
         prox_arr = prox_band.ReadAsArray()
         cop_arr = cop_band.ReadAsArray()
