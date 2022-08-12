@@ -495,6 +495,7 @@ Options:
   -H, --threads\t\tSet the number of threads (1)
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -p, --process\t\tProcess fetched elevation data to ASCII XYZ format. <beta>
+  -z, --no_check_size\tDon't check the size of remote data if local data exists.
   -q, --quiet\t\tLower the verbosity to a quiet
 
   --modules\t\tDisply the module descriptions and usage
@@ -523,6 +524,7 @@ See `fetches_cli_usage` for full cli options.
     want_proc = False
     want_verbose = True
     stop_threads = False
+    check_size = True
     num_threads = 1
     dst_srs = None
     xy_inc = [None, None]
@@ -553,6 +555,8 @@ See `fetches_cli_usage` for full cli options.
             want_list = True
         elif arg == '--process' or arg == '-p':
             want_proc = True
+        elif arg == '--no_check_size' or arg == '-z':
+            check_size = False
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
@@ -656,7 +660,7 @@ See `fetches_cli_usage` for full cli options.
                 for result in x_f.results:
                     print(result[0])
             else:
-                fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads)
+                fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads, check_size=check_size)
                 fr.daemon = True
                 _p = utils.CliProgress('fetching {} remote data files'.format(len(x_f.results)))
                 try:

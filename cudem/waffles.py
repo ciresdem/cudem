@@ -44,6 +44,7 @@ import time
 
 import numpy as np
 from scipy import spatial
+from scipy import ndimage
 import threading        
 from osgeo import gdal
 from osgeo import ogr
@@ -2574,10 +2575,13 @@ class WafflesLakes(Waffle):
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-        
+
+        _cop_prog = utils.CliProgress('combining Copernicus tiles')
         for i, cop_tif in enumerate(this_cop.results):
+            _cop_prog.update_perc((i, len(this_cop.results)))
             gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
-            
+        _cop_prog.end(0, 'combined {} Copernicus tiles'.format(len(this_cop.results)))
+        
         return(cop_ds)
     
     def generate_mem_ogr(self, geom, srs):
@@ -2594,8 +2598,103 @@ class WafflesLakes(Waffle):
         return(ds)
 
     ##
-    ## From GLOBathy
-    def apply_calculation(self, shore_distance_arr, max_depth=0, shore_arr=None, shore_elev=0):
+    ## Adapted from GLOBathy
+    def apply_calculation(self, shore_distance_arr, lake_depths_arr, shore_arr=None):
+        """
+        Apply distance calculation, which is each pixel's distance to shore, multiplied
+        by the maximum depth, all divided by the maximum distance to shore. This provides
+        a smooth slope from shore to lake max depth.
+
+        shore_distance - Input numpy array containing array of distances to shoreline.
+            Must contain positive values for distance away from shore and 0 elsewhere.
+        max_depth - Input value with maximum lake depth.
+        NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
+        """
+
+        labels, nfeatures = ndimage.label(shore_distance_arr)
+        nfeatures = np.arange(1, nfeatures +1)
+        maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
+        max_dist_arr = np.zeros(np.shape(shore_distance_arr))
+        for x in nfeatures:
+            max_dist_arr[labels==x] = maxes[x-1]
+
+        max_dist_arr[max_dist_arr == 0] = np.nan
+        bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
+        bathy_arr[bathy_arr == 0] = np.nan
+
+        if shore_arr is None \
+           or shore_arr.size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].max() == 0:
+            utils.echo_warning_msg('invalid shore array, using default shore value of zero')
+            bathy_arr = 0 - bathy_arr
+        else:
+            bathy_arr = shore_arr - bathy_arr
+            
+        bathy_arr[np.isnan(bathy_arr)] = 0
+        return(bathy_arr)    
+    
+    def run(self):        
+        self._load_bathy()        
+        lakes_shp = self._fetch_lakes()
+        cop_ds = self._fetch_copernicus()
+        cop_band = cop_ds.GetRasterBand(1)
+        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
+        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
+
+        lk_ds = ogr.Open(lakes_shp, 1)
+        lk_layer = lk_ds.GetLayer()
+
+        ## filter layer to region
+        lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
+        lk_features = lk_layer.GetFeatureCount()
+        lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
+
+        ## get lake ids and globathy depths
+        lk_ids = []
+        [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
+        globd = self._fetch_globathy(ids=lk_ids)
+        
+        ## rasterize hydrolakes using id
+        gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+        msk_ds.FlushCache()
+        msk_band = msk_ds.GetRasterBand(1)
+        msk_band.SetNoDataValue(self.ds_config['ndv'])
+        lk_ds = None
+        
+        ## calculate proximity of lake cells to shore
+        prox_band = prox_ds.GetRasterBand(1)
+        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)
+
+        ## assign max depth from globathy
+        msk_arr = msk_band.ReadAsArray()
+        _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
+        for n, this_id in enumerate(lk_ids):
+            msk_arr[msk_arr == this_id] = globd[this_id]
+            _p.update((n, len(lk_ids)))
+        _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
+
+        prox_arr = prox_band.ReadAsArray()
+        cop_arr = cop_band.ReadAsArray()
+
+        utils.echo_msg('Calculating simulated lake depths...')
+        ## apply calculation from globathy
+        self.bathy_arr += self.apply_calculation(
+            prox_arr,
+            msk_arr,
+            shore_arr=cop_arr,
+        )
+            
+        lk_prog.end(0, 'processed {} lakes'.format(lk_features))
+        self.bathy_arr[self.bathy_arr == 0] = self.ndv        
+        utils.gdal_write(
+            self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
+        )            
+        prox_ds = msk_ds = cop_ds = None
+        return(self)
+
+    def apply_calculation2(self, shore_distance_arr, max_depth=0, shore_arr=None, shore_elev=0):
         """
         Apply distance calculation, which is each pixel's distance to shore, multiplied
         by the maximum depth, all divided by the maximum distance to shore. This provides
@@ -2622,10 +2721,9 @@ class WafflesLakes(Waffle):
         bathy_arr[np.isnan(bathy_arr)] = 0
         return(bathy_arr)
     
-    def run(self):        
+    def run2(self):        
         self._load_bathy()        
         lakes_shp = self._fetch_lakes()
-        #globd = self._fetch_globathy()
         cop_ds = self._fetch_copernicus()
         cop_band = cop_ds.GetRasterBand(1)
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
@@ -2634,7 +2732,6 @@ class WafflesLakes(Waffle):
         lk_ds = ogr.Open(lakes_shp)
         lk_layer = lk_ds.GetLayer()
         lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
-        #lk_layer.SetAttributeFilter('Lake_area >= {}'.format(self.x_inc * self.y_inc))
         lk_features = lk_layer.GetFeatureCount()
         lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
 
@@ -2650,15 +2747,15 @@ class WafflesLakes(Waffle):
             lk_elevation = feat.GetField('Elevation')
             lk_depth_glb = globd[lk_id]
             
-            #lk_name = feat.GetField('Lake_name')
-            #lk_depth = feat.GetField('Depth_avg')
-            #lk_area = feat.GetField('Lake_area')
-            #utils.echo_msg('lake: {}'.format(lk_name))
-            #utils.echo_msg('lake elevation: {}'.format(lk_elevation))
-            #utils.echo_msg('lake_depth: {}'.format(lk_depth))
-            #utils.echo_msg('lake_area: {}'.format(lk_area))
-            #utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
-            #utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
+            lk_name = feat.GetField('Lake_name')
+            lk_depth = feat.GetField('Depth_avg')
+            lk_area = feat.GetField('Lake_area')
+            utils.echo_msg('lake: {}'.format(lk_name))
+            utils.echo_msg('lake elevation: {}'.format(lk_elevation))
+            utils.echo_msg('lake_depth: {}'.format(lk_depth))
+            utils.echo_msg('lake_area: {}'.format(lk_area))
+            utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
+            utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
 
             tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
             tmp_layer = tmp_ds.GetLayer()            
@@ -2692,7 +2789,7 @@ class WafflesLakes(Waffle):
             self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
         )            
         prox_ds = msk_ds = None
-        return(self)
+        return(self)    
     
 ## ==============================================
 ## Waffles DEM update - testing
