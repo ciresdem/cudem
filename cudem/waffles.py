@@ -2501,7 +2501,7 @@ class WafflesLakes(Waffle):
             self.ndv,
             'GTiff'
         )        
-        self.bathy_arr = np.zeros( (ycount, xcount) )
+        #self.bathy_arr = np.zeros( (ycount, xcount) )
             
     def _fetch_lakes(self):
         """fetch hydrolakes polygons"""
@@ -2687,16 +2687,16 @@ class WafflesLakes(Waffle):
 
         utils.echo_msg('Calculating simulated lake depths...')
         ## apply calculation from globathy
-        self.bathy_arr += self.apply_calculation(
+        bathy_arr = self.apply_calculation(
             prox_arr,
             msk_arr,
             shore_arr=cop_arr,
         )
             
         lk_prog.end(0, 'processed {} lakes'.format(lk_features))
-        self.bathy_arr[self.bathy_arr == 0] = self.ndv        
+        bathy_arr[bathy_arr == 0] = self.ndv        
         utils.gdal_write(
-            self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
+            bathy_arr, '{}.tif'.format(self.name), self.ds_config,
         )            
         prox_ds = msk_ds = cop_ds = None
         return(self)
