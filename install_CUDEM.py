@@ -3,48 +3,117 @@
 import os
 import sys
 
-try:
-    from osgeo import gdal
-except ImportError:
-    raise (""" ERROR: Could not find the GDAL/OGR Python library bindings. 
-               On Debian based systems you can install it with this command:
-               apt install python-gdal
-               On Redhat based systems (fedora) you can install it with this command:
-               dnf install gdal gdal-devel python3-gdal 
-               On windows, either use `OSGEO4W` or install GDAL via ...""") 
-
-
 cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in os.environ['PATH'].split(os.pathsep))
 
-if not cmd_exists('gmt'):
-    print(""" WARNING: Could not find GMT on the system.
-              Some functionality of CUDEM will be unavailable without it.
-              On Debian based systems you can install it with this command:
-              apt install GMT
-              On Redhat based systems (fedora/centos) you can install it with this command:
-              dnf install GMT""")
+use_dnf = False
+use_apt = False
 
-if not cmd_exists('mblist'):
-    print(""" WARNING: Could not find MB-System on the system.
-              Some functionality of CUDEM will be unavailable without it.
-              Get the latest from ...""")
+if cmd_exists('dnf'):
+    use_dnf = True
+elif cmd_exists('apt'):
+    use_apt = True
 
-if not cmd_exists('laszip'):
-    print(""" WARNING: Could not find laszip on the system.
-              Some functionality of CUDEM will be unavailable without it.
-              Get the latest from ...""")
+def install_htdp():
+    htdp_url = 'https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip'
+    os.system('wget {}'.format(htdp_url))
+    os.system('unzip HTDP-download.zip -d htdp_tmp')
+    os.system('gfortran htdp_tmp/htdp.f')
+    os.system('mv a.out ~/.local/bin/htdp')
+    os.system('rm -rf htdp_tmp HTDP-download.zip')
 
+def install_mbsystem():
+    mbs_url = ''
+    os.system('wget {}'.format(mbs_url))
+
+def check_dependencies(install_missing=False):
+
+    try:
+        from osgeo import gdal
+    except ImportError:
+        if install_missing and use_dnf:
+            os.system('sudo dnf install gdal gdal-devel python3-gdal')
+        else:
+            print(""" ERROR: Could not find the GDAL/OGR Python library bindings. 
+            On Debian based systems you can install it with this command:
+            apt install python-gdal
+            On Redhat based systems (fedora) you can install it with this command:
+            dnf install gdal gdal-devel python3-gdal 
+            On windows, either use `OSGEO4W` or install GDAL via ...""")
+
+    if not cmd_exists('gmt'):
+        if install_missing and use_dnf:
+            os.system('sudo dnf install GMT GMT-devel GMT-doc')
+        else:
+            print(""" WARNING: Could not find GMT on the system.
+            Some functionality of CUDEM will be unavailable without it.
+            On Debian based systems you can install it with this command:
+            apt install GMT
+            On Redhat based systems (fedora/centos) you can install it with this command:
+            dnf install GMT""")
+
+    if not cmd_exists('mblist'):
+        if install_missing and use_dnf:
+            os.system('sudo dnf install g++ motif motif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel GMT GMT-devel boost boost-python3 glibc-devel mesa* xorg-x11-fonts* gcc-c++ libtirpc-devel')
+            os.system('git clone https://github.com/dwcaress/MB-System.git')
+            os.chdir('MB-System')
+            os.system('./configure --prefix ~/.local')
+            os.system('make')
+            os.system('make install')
+            os.system('cd ..')
+            os.chdir('..')
+            os.system('rm -rf MB-System')
+        else:
+            print(""" WARNING: Could not find MB-System on the system.
+            Some functionality of CUDEM will be unavailable without it.
+            Get the latest from ...""")
+
+    if not cmd_exists('htdp'):
+        if install_missing:
+            if cmd_exists('wget') and cmd_exists('unzip'):
+                
+                if not cmd_exists('gfortran'):
+                    if use_dnf:
+                        os.system('sudo dnf install gfortran')
+
+                if cmd_exists('gfortran'):
+                    install_htdp()
+        else:
+            print(""" WARNING: Could not find HTDP on the system.
+            Some functionality of CUDEM will be unavailable without it.
+            Get the latest version: https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip...""")
+
+install_usage = """{cmd}: install CUDEM and dependencies
+
+Options:
+  --pull\t\tpull updates from git
+  --dependencies\tattempt to install dependencies
+Note: installing dependencies only supports RedHat based systems.
+
+  --help\t\tPrint the usage text
+""".format(cmd=os.path.basename(sys.argv[0]))
+            
 if __name__ == '__main__':
     clone = False
     pull = False
     install = True
+    install_dep = False
+    
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg == '--pull' or arg == '-p':
             pull = True
+        elif arg == '--dependencies' or arg == '-d':
+            install_dep = True
+
+        elif arg == '--help' or arg == '-h':
+            sys.stderr.write(install_usage)
+            sys.exit(0)
+            
         i = i + 1
 
+    check_dependencies(install_missing = install_dep)
+        
     if clone:
         os.system('git clone https://github.com/ciresdem/cudem.git')
     if pull:
