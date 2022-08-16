@@ -54,8 +54,10 @@ _tidal_frames = {
            'description': 'Mean Higher High Water'},
     5868: {'name': 'mhw',
            'description': 'Mean High Water'},
-    5174: {'name': 'msl',
+    5714: {'name': 'msl',
            'description': 'Mean Sea Level'},
+    5713: {'name': 'mtl',
+           'description': 'Mean Tide Level'},
 }
 
 _htdp_reference_frames = {

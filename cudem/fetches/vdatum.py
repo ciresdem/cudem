@@ -74,7 +74,9 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
         ymax = float(_inf_areas[key]['maxlat'])
         _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
         _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
-            
+
+        if 'AK' in _out_key: print(_inf_areas_fmt[_out_key])
+        
     return(_inf_areas_fmt)
 
 def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, cache_dir='./'):
@@ -166,7 +168,7 @@ class VDATUM(f_utils.FetchModule):
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
         self._vdatums = ['TIDAL']
-        self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
+        self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl', 'msl']
         self.where = where
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
