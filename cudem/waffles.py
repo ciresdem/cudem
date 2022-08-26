@@ -3218,8 +3218,13 @@ Patch an existing DEM with data from the datalist.
 By default, will return lake bathymetry as depth values (positive down), 
 to get elevations (positive up), set apply_elevations=True.
 
-< lakes:apply_elevations=False >
- :apply_elevations=[True/False]\t\tuse COPERNICUS to apply lake level elevations to output.""",
+< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
+ :apply_elevations=[True/False]\t\tuse COPERNICUS to apply lake level elevations to output
+ :min_area=[val] - minimum lake area to consider
+ :max_area=[val] - maximum lake area to consider
+ :min_id=[val] - minimum lake ID to consider
+ :max_id=[val] - maximum lake ID to consider
+ :depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value""",
         },
         'stacks': {
             'name': 'stacks',
