@@ -3220,11 +3220,11 @@ to get elevations (positive up), set apply_elevations=True.
 
 < lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
  :apply_elevations=[True/False]\t\tuse COPERNICUS to apply lake level elevations to output
- :min_area=[val] - minimum lake area to consider
- :max_area=[val] - maximum lake area to consider
- :min_id=[val] - minimum lake ID to consider
- :max_id=[val] - maximum lake ID to consider
- :depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value""",
+ :min_area=[val]\t\t\tminimum lake area to consider
+ :max_area=[val]\t\t\tmaximum lake area to consider
+ :min_id=[val]\t\t\t\tminimum lake ID to consider
+ :max_id=[val]\t\t\t\tmaximum lake ID to consider
+ :depth=[globathy/hydrolakes/val]\tobtain the depth value from GloBathy, HydroLakes or constant value""",
         },
         'stacks': {
             'name': 'stacks',
