@@ -125,6 +125,16 @@ class Region:
                       wmax = self.wmax,
                       src_srs = self.src_srs,
                       wkt = self.wkt))
+
+    def _wgs_extremes(self):
+        if self.xmin < -180:
+            self.xmin = -180
+        if self.xmax > 180:
+            self.xmax = 180
+        if self.ymin < -90:
+            self.ymin = -90
+        if self.ymax > 90:
+            self.ymax = 90
     
     def from_list(self, region_list):
         """import a region from a region list 

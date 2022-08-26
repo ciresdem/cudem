@@ -87,7 +87,17 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
     
     _proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
     cdn_index = os.path.join(cache_dir, 'proj_cdn_files.geojson')
-    if f_utils.Fetch(_proj_vdatum_index, verbose=verbose).fetch_file(cdn_index) == 0:
+    #cdn_headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }
+    cdn_headers = {'Host': 'cdn.proj.org',
+                   'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0',
+                   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                   'Accept-Language': 'pt-BR,pt;q=0.8,en-US;q=0.5,en;q=0.3',
+                   'Accept-Encoding': 'gzip, deflate',
+                   'Connection': 'keep-alive',
+                   'Pragma': 'no-cache',
+                   'Cache-Control': 'no-cache'}
+    
+    if f_utils.Fetch(_proj_vdatum_index, headers=cdn_headers, verbose=verbose).fetch_file(cdn_index, timeout=5, read_timeout=5) == 0:
         cdn_driver = ogr.GetDriverByName('GeoJSON')
         cdn_ds = cdn_driver.Open(cdn_index, 0)
         cdn_layer = cdn_ds.GetLayer()

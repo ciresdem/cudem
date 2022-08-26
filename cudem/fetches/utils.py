@@ -47,7 +47,8 @@ from cudem import utils
 from cudem import fetches
 from cudem import regions
 
-r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
+#r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
+r_headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
 namespaces = {
     'gmd': 'http://www.isotc211.org/2005/gmd', 
     'gmi': 'http://www.isotc211.org/2005/gmi', 
@@ -347,7 +348,7 @@ class Fetch:
 
     def fetch_file(
             self, dst_fn, params=None, datatype=None, overwrite=False,
-            timeout=140, read_timeout=320, tries=3, check_size=True
+            timeout=5, read_timeout=10, tries=3, check_size=True
     ):
         """fetch src_url and save to dst_fn"""
     
@@ -597,7 +598,8 @@ class FetchModule:
         self.x_inc = utils.str2inc(x_inc)
         self.y_inc = utils.str2inc(y_inc)
         self.name = None
-        self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
+        #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
 
     def run(self):
         raise(NotImplementedError)
@@ -614,7 +616,7 @@ class FetchModule:
             callback=self.callback,
             verbose=self.verbose,
             headers=self.headers
-        ).fetch_file(entry[1])
+        ).fetch_file(entry[1], timeout=5, read_timeout=5)
 
     def fetch_results(self):
         for entry in self.results:

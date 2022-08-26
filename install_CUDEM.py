@@ -31,7 +31,7 @@ def check_dependencies(install_missing=False):
         from osgeo import gdal
     except ImportError:
         if install_missing and use_dnf:
-            os.system('sudo dnf install gdal gdal-devel python3-gdal')
+            os.system('sudo dnf install gdal gdal-devel python3-gdal gdal-python-tools')
         else:
             print(""" ERROR: Could not find the GDAL/OGR Python library bindings. 
             On Debian based systems you can install it with this command:
