@@ -665,6 +665,22 @@ def regions_intersect_ogr_p(region_a, region_b):
             return(True)
     return(False)
 
+def regions_within_ogr_p(region_a, region_b):
+    """check if region_b is within region_a using ogr
+
+    Args:
+      region_a (region): a region 
+      region_b (region): a region 
+
+    Returns:
+      bool: True if `region_b` is within `region_a` else False.
+    """
+
+    if region_a.valid_p() and region_b.valid_p():
+        if region_b.export_as_geom().Within(region_a.export_as_geom()):
+            return(True)
+    return(False)
+
 def z_region_pass(region, upper_limit=None, lower_limit=None):
     """return True if extended region [xmin, xmax, ymin, ymax, zmin, zmax] is 
     within upper and lower z limits
@@ -918,5 +934,5 @@ def regions_cli(argv = sys.argv):
         elif echo_fn:
             print(this_region.format('fn'))
         else:
-            this_region.export_as_ogr('test.shp')
+            this_region.export_as_ogr('region_{}.shp'.format(this_region.format('fn')))
 ### End
