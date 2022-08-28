@@ -143,14 +143,15 @@ class HTDP:
             lon_list.append(lon_axis)
 
         lon_band = np.vstack(lon_list)
-
+        
         lat_list = []
         for i in range(lon_steps):
             lat_list.append(lat_axis)
 
-        lat_band = np.column_stack(lat_list)
-            
-        return(np.array([lon_band,lat_band]))
+        lat_band = np.vstack(lat_list)
+
+        t = np.array([lon_band, lat_band])
+        return(t)
 
     def _write_grid(self, grid, out_filename):
         """This function writes a grid out in form suitable to use as input to the
@@ -158,6 +159,7 @@ class HTDP:
         """
         
         fd_out = open(out_filename, 'w')
+
         for i in range(grid.shape[2]):
             for j in range(grid.shape[1]):
                 fd_out.write('{} {} 0 "PNT_{}_{}"\n'.format(grid[1,j,i], grid[0,j,i], i, j))

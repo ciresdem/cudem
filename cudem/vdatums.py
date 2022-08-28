@@ -450,9 +450,10 @@ class VerticalTransform:
         htdp = htdpfun.HTDP()
         utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
 
-        griddef = (self.src_region.xmin, self.src_region.ymax,
+        griddef = (self.src_region.xmax, self.src_region.ymax,
                    self.src_region.xmin, self.src_region.ymin,
                    self.xcount, self.ycount)
+
         grid = htdp._new_create_grid(griddef)
 
         htdp._write_grid(grid, '_tmp_input.xyz')
