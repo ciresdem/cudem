@@ -2472,7 +2472,7 @@ class WafflesCoastline(Waffle):
 ## Waffles Bathymetry - testing
 ## ==============================================
 class WafflesLakes(Waffle):
-    def __init__(self, apply_elevations=False, min_area=None, max_area=None, min_id=None, max_id=None, depth='globathy', **kwargs):
+    def __init__(self, apply_elevations=False, min_area=None, max_area=None, min_id=None, max_id=None, depth='globathy', elevations='copernicus', **kwargs):
         self.mod = 'lakes'
         self.mod_args = {}
 
@@ -2484,6 +2484,7 @@ class WafflesLakes(Waffle):
         self.min_id = min_id
         self.max_id = max_id
         self.depth = depth
+        self.elevations = elevations
         self.ds_config = None
             
         self.wgs_region = self.p_region.copy()
@@ -2561,6 +2562,32 @@ class WafflesLakes(Waffle):
         _prog.end(0, 'parsed {} globathy parameters'.format(len(globd)))
         return(globd)
 
+    def _fetch_gmrt(self, gmrt_region=None):
+        """GMRT - Global low-res.
+        """
+
+        if gmrt_region is None:
+            gmrt_region = self.p_region
+        
+        this_gmrt = cudem.fetches.gmrt.GMRT(
+            src_region=gmrt_region, weight=self.weights, verbose=self.verbose, layer='topo'
+        )
+        this_gmrt._outdir = self.cache_dir
+        this_gmrt.run()
+
+        fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        
+        gmrt_tif = this_gmrt.results[0]
+        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        return(gmrt_ds)
+    
     def _fetch_copernicus(self, cop_region=None):
         """copernicus"""
 
@@ -2619,16 +2646,24 @@ class WafflesLakes(Waffle):
         """
 
         labels, nfeatures = ndimage.label(shore_distance_arr)
+        #utils.echo_msg('set labels')
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
+        #utils.echo_msg('set maxes')
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        for x in nfeatures:
+        #utils.echo_msg('set max_dist_arr')
+        p = utils.CliProgress('applying labesl to array...')
+        for n, x in enumerate(nfeatures):
+            p.update_perc((n,len(nfeatures)))
             max_dist_arr[labels==x] = maxes[x-1]
-
+        p.end(0, 'applied labels to max_dist_arr')
+        
         max_dist_arr[max_dist_arr == 0] = np.nan
         bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
         bathy_arr[bathy_arr == 0] = np.nan
 
+        #utils.echo_msg('applied calculation to array')
+        
         if shore_arr is None \
            or shore_arr.size == 0 \
            or shore_arr[~np.isnan(bathy_arr)].size == 0 \
@@ -2637,7 +2672,8 @@ class WafflesLakes(Waffle):
             bathy_arr = 0 - bathy_arr
         else:
             bathy_arr = shore_arr - bathy_arr
-            
+
+        utils.echo_msg('applied shore elevations to lake depths')
         bathy_arr[np.isnan(bathy_arr)] = 0
         return(bathy_arr)    
     
@@ -2684,8 +2720,12 @@ class WafflesLakes(Waffle):
         self._init_bathy()
         
         ## fetch and initialize the copernicus data
-        cop_ds = self._fetch_copernicus(cop_region=self.p_region)
-        cop_band = cop_ds.GetRasterBand(1)
+        if self.elevations == 'copernicus':
+            cop_ds = self._fetch_copernicus(cop_region=self.p_region)
+            cop_band = cop_ds.GetRasterBand(1)
+        elif self.elevations == 'gmrt':
+            cop_ds = self._fetch_gmrt(gmrt_region=self.p_region)
+            cop_band = cop_ds.GetRasterBand(1)
         
         ## initialize the tmp datasources
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
@@ -2696,39 +2736,55 @@ class WafflesLakes(Waffle):
         [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
 
         utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
-        globd = self._fetch_globathy(ids=lk_ids[:])
+        if self.depth == 'globathy':
+            globd = self._fetch_globathy(ids=lk_ids[:])
+            ## rasterize hydrolakes using id
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
 
-        ## rasterize hydrolakes using id
-        gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
-        msk_ds.FlushCache()
-        msk_band = msk_ds.GetRasterBand(1)
-        msk_band.SetNoDataValue(self.ds_config['ndv'])
-        
+            ## assign max depth from globathy
+            msk_arr = msk_band.ReadAsArray()
+            _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
+            for n, this_id in enumerate(lk_ids):
+                #if self.depth == 'globathy':
+                depth = globd[this_id]
+                # elif self.depth == 'hydrolakes':
+                #     lk_layer.SetAttributeFilter('Hylak_id = {}'.format(this_id))
+                #     for lk_f in lk_layer:
+                #         depth = float(lk_f.GetField('Depth_avg'))
+                # elif utils.float_or(self.depth) is not None:
+                #     depth = utils.float_or(self.depth)
+                # else:
+                #     depth = 1
+
+                #msk_arr[msk_arr == this_id] = globd[this_id]
+                msk_arr[msk_arr == this_id] = depth
+                _p.update_perc((n, len(lk_ids)))
+            _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
+            
+        elif self.depth == 'hydrolakes':
+            globd = None
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            msk_arr = msk_band.ReadAsArray()
+            
+        elif utils.float_or(self.depth) is not None:
+            msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
+            msk_arr[:] = self.depth
+            
+        else:
+            msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
+            
+        lk_ds = None
+            
         ## calculate proximity of lake cells to shore
         prox_band = prox_ds.GetRasterBand(1)
         proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
         gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)
-
-        ## assign max depth from globathy
-        msk_arr = msk_band.ReadAsArray()
-        _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
-        for n, this_id in enumerate(lk_ids):
-            if self.depth == 'globathy':
-                depth = globd[this_id]
-            elif self.depth == 'hydrolakes':
-                lk_layer.SetAttributeFilter('Hylak_id = {}'.format(this_id))
-                for lk_f in lk_layer:
-                    depth = float(lk_f.GetField('Depth_avg'))
-            elif utils.float_or(self.depth) is not None:
-                depth = utils.float_or(self.depth)
-            else:
-                depth = 1
-
-            #msk_arr[msk_arr == this_id] = globd[this_id]
-            msk_arr[msk_arr == this_id] = depth
-            _p.update_perc((n, len(lk_ids)))
-        _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
-        lk_ds = None
         
         #utils.echo_msg('Assigning Globathy Depths to rasterized lakes...')
         #msk_arr[msk_arr[np.in1d(msk_arr, globd.keys())]] = globd.values()

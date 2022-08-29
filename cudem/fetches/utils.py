@@ -348,7 +348,7 @@ class Fetch:
 
     def fetch_file(
             self, dst_fn, params=None, datatype=None, overwrite=False,
-            timeout=5, read_timeout=10, tries=3, check_size=True
+            timeout=5, read_timeout=50, tries=3, check_size=True
     ):
         """fetch src_url and save to dst_fn"""
     
