@@ -214,6 +214,7 @@ class TheNationalMap(f_utils.FetchModule):
                 
                 if len(_dataset_results) > 0:
                     for item in _dataset_results['items']:
+                        p_dir = '_'.join(item['title'].split(' '))
                         if _data['prodFormats'] is None:
                             fmts = []
                         else: fmts = _data['prodFormats'].split(',')
@@ -226,14 +227,14 @@ class TheNationalMap(f_utils.FetchModule):
                                             f_url = item['urls'][fmt]
                                             break
                                     if f_url is None: f_url = item['downloadURL']
-                                    self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+                                    self.results.append([f_url, os.path.join(self._outdir, p_dir, f_url.split('/')[-1]), surv['DataType']])
                         else:
                             for fmt in fmts:
                                 if fmt in item['urls'].keys():
                                     f_url = item['urls'][fmt]
                                     break
                             if f_url is None:  f_url = item['downloadURL']
-                            self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+                            self.results.append([f_url, os.path.join(self._outdir, p_dir, f_url.split('/')[-1]), surv['DataType']])
                 offset += 100
                 if offset >= total: break
         return(self)
