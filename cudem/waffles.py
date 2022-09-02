@@ -2166,7 +2166,7 @@ class WafflesCoastline(Waffle):
         if self.dst_srs is not None:
             self.wgs_region.warp('epsg:4326')
         else:
-            self.dst_srs = 'epsg:4326'
+            self.dst_srs = 'epsg:4326'            
         
     def run(self):
         self._load_coast_mask()
@@ -2236,7 +2236,7 @@ class WafflesCoastline(Waffle):
         """
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=self.f_region, weight=self.weights, verbose=self.verbose, layer='topo'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, layer='topo'
         )
         this_gmrt._outdir = self.cache_dir
         this_gmrt.run()
@@ -2309,6 +2309,15 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        dst_srs.AutoIdentifyEPSG()
+        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+
+        tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
+        
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
@@ -2342,7 +2351,9 @@ class WafflesCoastline(Waffle):
                 ),
                 verbose=True
             )
-            tnm_ds = gdal.Open('nhdArea_merge.tif')
+
+            gdal.Warp(nhd_warp_ds, 'nhdArea_merge.tif', dstSRS=dst_srs, resampleAlg=self.sample)            
+            #tnm_ds = gdal.Open('nhdArea_merge.tif')
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                 tnm_ds_arr[tnm_ds_arr < 1] = 0
@@ -2355,7 +2366,7 @@ class WafflesCoastline(Waffle):
         """HydroLakes -- Global Lakes"""
         
         this_lakes = cudem.fetches.hydrolakes.HydroLakes(
-            src_region=self.f_region, weight=self.weights, verbose=self.verbose
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose
         )
         this_lakes._outdir = self.cache_dir
         this_lakes.run()
@@ -2372,15 +2383,23 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        dst_srs.AutoIdentifyEPSG()
+        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+                
         lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
+        lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lk_ds = ogr.Open(lakes_shp)
         if lk_ds is not None:
             lk_layer = lk_ds.GetLayer()
             lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
             gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
-            lakes_ds_arr = lakes_ds.GetRasterBand(1).ReadAsArray()
+            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+            lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
             self.coast_array[lakes_ds_arr == -1] = 0
-            lakes_ds = lk_ds = None
+            lakes_ds = lk_ds = lakes_warp_ds = None
         else:
             utils.echo_error_msg('could not open {}'.format(lakes_shp))
 
@@ -2392,11 +2411,19 @@ class WafflesCoastline(Waffle):
         """
 
         bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
+        bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.f_region, weight=self.weights, verbose=self.verbose
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        dst_srs.AutoIdentifyEPSG()
+        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
                 osm_ds = ogr.Open(osm_result[1])
@@ -2404,14 +2431,15 @@ class WafflesCoastline(Waffle):
                     osm_layer = osm_ds.GetLayer('multipolygons')
                     osm_layer.SetAttributeFilter("building!=''")
                     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-                    bldg_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                    gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                    bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
                     self.coast_array[bldg_arr == -1] = 0
                 else:
                     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_result[1]))
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             
-        bldg_ds = None
+        bldg_ds = bldg_warp_ds = None
         
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
