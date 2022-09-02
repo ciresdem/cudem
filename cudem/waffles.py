@@ -2267,7 +2267,7 @@ class WafflesCoastline(Waffle):
         this_cop._outdir = self.cache_dir
         this_cop.run()
 
-        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False)
+        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)
         fr.daemon = True
         fr.start()
         fr.join()
