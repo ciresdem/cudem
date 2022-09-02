@@ -133,7 +133,7 @@ def main():
 
         trans_region = src_region.copy()
         trans_region.warp()
-        trans_region.buffer(pct=2)
+        #trans_region.buffer(pct=2)
 
         trans_region._wgs_extremes()
         
@@ -141,14 +141,14 @@ def main():
         #print(demfun.get_srs(src_grid))
         #print(trans_region)
         
-        x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
+        #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
         
-        #x_inc = src_infos['geoT'][1]
-        #y_inc = -src_infos['geoT'][5]
+        x_inc = src_infos['geoT'][1]
+        y_inc = -src_infos['geoT'][5]
         #tmp_x_inc = x_inc*(3**2)
         #tmp_y_inc = y_inc*(3**2)
-        #tmp_x_inc = 3/3600
-        #tmp_y_inc = 3/3600
+        tmp_x_inc = 3/3600
+        tmp_y_inc = 3/3600
         
         vt = vdatums.VerticalTransform(trans_region, x_inc, y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
