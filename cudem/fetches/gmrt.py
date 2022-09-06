@@ -137,7 +137,7 @@ class GMRT(f_utils.FetchModule):
         src_data = 'gmrt_tmp.tif'
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data) == 0:
+        ).fetch_file(src_data,timeout=10, read_timeout=120) == 0:
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
