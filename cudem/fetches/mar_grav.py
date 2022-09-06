@@ -61,6 +61,7 @@ class MarGrav(f_utils.FetchModule):
             'east':self.region.xmax,
             'mag':self.mag,
         }
+
         _req = f_utils.Fetch(self._mar_grav_url, verify=False).fetch_req(params=_data)
         if _req is not None:
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn'))

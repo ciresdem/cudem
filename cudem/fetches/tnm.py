@@ -190,7 +190,6 @@ class TheNationalMap(f_utils.FetchModule):
         f = self.formats.split(',') if self.formats is not None else None
         q = self.q
         for surv in FRED._filter_FRED(self):
-            #print(surv)
             offset = 0
             total = 0
             while True:
@@ -213,12 +212,9 @@ class TheNationalMap(f_utils.FetchModule):
                         utils.echo_error_msg('error, {}'.format(e))
                 
                 if len(_dataset_results) > 0:
+
                     for item in _dataset_results['items']:
                         p_dir = '_'.join(item['title'].split(' '))
-                        #print(item)
-                        #print()
-                        #print(item['title'].split())
-                        #print(item['title'].split()[-2])
                         if _data['prodFormats'] is None:
                             fmts = []
                         else: fmts = _data['prodFormats'].split(',')
@@ -231,14 +227,16 @@ class TheNationalMap(f_utils.FetchModule):
                                             f_url = item['urls'][fmt]
                                             break
                                     if f_url is None: f_url = item['downloadURL']
-                                    self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                                    #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                                    self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
                         else:
                             for fmt in fmts:
                                 if fmt in item['urls'].keys():
                                     f_url = item['urls'][fmt]
                                     break
                             if f_url is None:  f_url = item['downloadURL']
-                            self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                            #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                            self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
                 offset += 100
                 if offset >= total: break
         return(self)

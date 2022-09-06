@@ -2674,13 +2674,10 @@ class WafflesLakes(Waffle):
         """
 
         labels, nfeatures = ndimage.label(shore_distance_arr)
-        #utils.echo_msg('set labels')
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
-        #utils.echo_msg('set maxes')
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        #utils.echo_msg('set max_dist_arr')
-        p = utils.CliProgress('applying labesl to array...')
+        p = utils.CliProgress('applying labels to array...')
         for n, x in enumerate(nfeatures):
             p.update_perc((n,len(nfeatures)))
             max_dist_arr[labels==x] = maxes[x-1]
@@ -2690,8 +2687,6 @@ class WafflesLakes(Waffle):
         bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
         bathy_arr[bathy_arr == 0] = np.nan
 
-        #utils.echo_msg('applied calculation to array')
-        
         if shore_arr is None \
            or shore_arr.size == 0 \
            or shore_arr[~np.isnan(bathy_arr)].size == 0 \
@@ -2754,6 +2749,24 @@ class WafflesLakes(Waffle):
         elif self.elevations == 'gmrt':
             cop_ds = self._fetch_gmrt(gmrt_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
+        elif utils.float_or(self.elevations) is not None:
+            cop_band = None
+            cop_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
+            cop_arr[:] = self.elevations
+        elif os.path.exists(self.elevations):
+            elev_ds = gdal.Open(self.elevations)
+            if elev_ds is not None:
+                dst_srs = osr.SpatialReference()
+                dst_srs.SetFromUserInput(self.dst_srs)
+                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
+                gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                cop_band = cop_ds.GetRasterBand(1)
+            else:
+                cop_band = None
+                cop_arr = None
+        else:
+            cop_band = None
+            cop_arr = None
         
         ## initialize the tmp datasources
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
@@ -2823,7 +2836,9 @@ class WafflesLakes(Waffle):
         #msk_arr[np.isin(msk_arr, list(globd.keys()))] = list(globd.values())
         
         prox_arr = prox_band.ReadAsArray()
-        cop_arr = cop_band.ReadAsArray()
+        
+        if cop_band is not None:
+            cop_arr = cop_band.ReadAsArray()
 
         utils.echo_msg('Calculating simulated lake depths...')
         ## apply calculation from globathy

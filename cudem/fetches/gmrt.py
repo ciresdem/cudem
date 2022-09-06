@@ -128,7 +128,7 @@ class GMRT(f_utils.FetchModule):
                     float(opts['south']),
                     float(opts['north'])
                 ])
-                outf = 'gmrt_{}_{}.tif'.format(opts['layer'], url_region.format('fn'))
+                outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
                 self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
                 
         return(self)
@@ -163,10 +163,10 @@ class GMRT(f_utils.FetchModule):
         utils.remove_glob('{}*'.format(src_data))
 
     def yield_array(self, entry):
-        src_data = 'gmrt_tmp.tif'
+        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'grd')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data) == 0:
+        ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
             if self.bathy_only:
                 ds = gdal.Open(src_data)
                 ds_config = demfun.gather_infos(ds)
