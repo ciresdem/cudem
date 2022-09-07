@@ -2772,6 +2772,7 @@ class WafflesLakes(Waffle):
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
         msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
         msk_band = None
+        globd = None
         
         ## get lake ids and globathy depths
         lk_ids = []
@@ -2790,24 +2791,12 @@ class WafflesLakes(Waffle):
             msk_arr = msk_band.ReadAsArray()
             _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
             for n, this_id in enumerate(lk_ids):
-                #if self.depth == 'globathy':
                 depth = globd[this_id]
-                # elif self.depth == 'hydrolakes':
-                #     lk_layer.SetAttributeFilter('Hylak_id = {}'.format(this_id))
-                #     for lk_f in lk_layer:
-                #         depth = float(lk_f.GetField('Depth_avg'))
-                # elif utils.float_or(self.depth) is not None:
-                #     depth = utils.float_or(self.depth)
-                # else:
-                #     depth = 1
-
-                #msk_arr[msk_arr == this_id] = globd[this_id]
                 msk_arr[msk_arr == this_id] = depth
                 _p.update_perc((n, len(lk_ids)))
             _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
             
         elif self.depth == 'hydrolakes':
-            globd = None
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
@@ -2815,7 +2804,6 @@ class WafflesLakes(Waffle):
             msk_arr = msk_band.ReadAsArray()
             
         elif utils.float_or(self.depth) is not None:
-            
             msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
             msk_arr[:] = self.depth
             
@@ -2823,9 +2811,6 @@ class WafflesLakes(Waffle):
             msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
             
         ## calculate proximity of lake cells to shore
-        prox_band = prox_ds.GetRasterBand(1)
-        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-
         if msk_band is None:
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
@@ -2833,18 +2818,10 @@ class WafflesLakes(Waffle):
             msk_band.SetNoDataValue(self.ds_config['ndv'])
             
         lk_ds = None
-        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)
-        
-        #utils.echo_msg('Assigning Globathy Depths to rasterized lakes...')
-        #msk_arr[msk_arr[np.in1d(msk_arr, globd.keys())]] = globd.values()
-        #print(zip(*globd.keys()))
-        #print(list(globd.values()))
-        #msk_arr[list(globd.keys()),:] = list(globd.values())
-        #msk_arr[zip(*globd.keys())] = list(globd.values())
-        #msk_arr[np.isin(msk_arr, list(globd.keys()))] = list(globd.values())
-        
+        prox_band = prox_ds.GetRasterBand(1)
+        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)        
         prox_arr = prox_band.ReadAsArray()
-        
         if cop_band is not None:
             cop_arr = cop_band.ReadAsArray()
 
