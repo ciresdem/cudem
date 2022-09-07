@@ -148,7 +148,7 @@ class HTDP:
         for i in range(lon_steps):
             lat_list.append(lat_axis)
 
-        lat_band = np.vstack(lat_list)
+        lat_band = np.column_stack(lat_list)
 
         t = np.array([lon_band, lat_band])
         return(t)
