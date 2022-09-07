@@ -228,7 +228,8 @@ class TheNationalMap(f_utils.FetchModule):
                                             break
                                     if f_url is None: f_url = item['downloadURL']
                                     #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                                    self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                                    #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                                    self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
                         else:
                             for fmt in fmts:
                                 if fmt in item['urls'].keys():
@@ -236,7 +237,8 @@ class TheNationalMap(f_utils.FetchModule):
                                     break
                             if f_url is None:  f_url = item['downloadURL']
                             #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                            self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                            #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                            self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
                 offset += 100
                 if offset >= total: break
         return(self)

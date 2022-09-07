@@ -78,7 +78,7 @@ class MarGrav(f_utils.FetchModule):
                 fn=src_data,
                 data_format=168,
                 skip=1,
-                x_offset=-360,
+                #x_offset=-180,
                 src_srs='epsg:4326+3855',
                 dst_srs=self.dst_srs,
                 src_region=self.region,

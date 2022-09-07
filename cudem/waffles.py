@@ -2771,6 +2771,7 @@ class WafflesLakes(Waffle):
         ## initialize the tmp datasources
         prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
         msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
+        msk_band = None
         
         ## get lake ids and globathy depths
         lk_ids = []
@@ -2814,17 +2815,24 @@ class WafflesLakes(Waffle):
             msk_arr = msk_band.ReadAsArray()
             
         elif utils.float_or(self.depth) is not None:
+            
             msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
             msk_arr[:] = self.depth
             
-        else:
+        else:            
             msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
-            
-        lk_ds = None
             
         ## calculate proximity of lake cells to shore
         prox_band = prox_ds.GetRasterBand(1)
         proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+
+        if msk_band is None:
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            
+        lk_ds = None
         gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)
         
         #utils.echo_msg('Assigning Globathy Depths to rasterized lakes...')
