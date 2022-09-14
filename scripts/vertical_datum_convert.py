@@ -150,7 +150,7 @@ def main():
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
         
-        vt = vdatums.VerticalTransform(trans_region, x_inc, y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
+        vt = vdatums.VerticalTransform(trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
         
         if _trans_grid is not None:

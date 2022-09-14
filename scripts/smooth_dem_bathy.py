@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### smooth_dem_bathy.py
 ##
-## Copyright (c) 2012 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2012 - 2022 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -29,10 +29,9 @@ from osgeo.gdalconst import *
 from osgeo import osr
 from osgeo import gdal
 
-#from geomods import gdalfun
-from cudem import demfun
+#from cudem import demfun
 
-_version = '0.0.7'
+_version = '0.0.8'
 _usage = '''smooth_dem_bathy.py ({}): smooth the bathymetry in a DEM
 smooth_dem_bathy.py: A script that smooths the bathy areas of DEM (below 0) and merges back with original, unsmoothed topo.
 
@@ -41,13 +40,14 @@ usage: smooth_dem_bathy.py [ si [ args ] ] [ file ]
 Options:
   file\t\tThe input DEM file-name
   -s\t\tValue for the smooth factor; default is 10
+  -c\t\tCutoff value (smooth only below this elevation); default is 0
   -i\t\tA file containing DEM file-names to process
 
   -help\t\tPrint the usage text
   -version\tPrint the version information
 
 Example:
-smooth_dem_bathy.py input.tif -s 12
+smooth_dem_bathy.py input.tif -s 12 -c 0
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>'''.format(_version)
 
 def open_file_list(in_list, smooth_factor):
@@ -126,7 +126,7 @@ def CreateGeoTiff(Name, Array, driver,
     DataSet.GetRasterBand(1).SetNoDataValue(NDV)
     return NewFileName
 
-def proc_elev(elev, smooth_factor):
+def proc_elev(elev, smooth_factor, cutoff):
     '''process the elev array'''
     
     if not os.path.exists(elev):
@@ -141,32 +141,26 @@ def proc_elev(elev, smooth_factor):
         print("nodata is", NDV)
         print("datatype is", DataType)
         print("smooth factor is", smooth_factor)
+        print("cutoff is", cutoff)
         print("output_name is", output_name)
         
         elev_g = gdal.Open(elev) #
         elev_array = elev_g.GetRasterBand(1).ReadAsArray(0,0,xsize,ysize) 
-        mask_array = elev_array
-        elev_array = None
-        #Set topo values to zero
-        mask_array[mask_array > 0] = 0
-        mask_array[mask_array == NDV] = 0
+        mask_array = np.zeros((ysize,xsize))
+        mask_array[elev_array < cutoff] = 1
         print("loaded input dem")
 
-        #print mask_array
         #Perform smoothing
-        smooth_elev=gaussian_blur(mask_array, smooth_factor)
-        #print smooth_elev
+        smooth_elev=gaussian_blur(elev_array, smooth_factor)
         if np.isnan(smooth_elev[0][0]):
             output_name=elev[:-4]+"_smooth_fail"
-        #print smooth_elev
-        mask_array[mask_array < 0] = 1
         smooth_elev = smooth_elev * mask_array
         mask_array = None
         print("smoothed array")
     
         #Reload original array and merge the topo with the smoothed bathy
         elev_array = elev_g.GetRasterBand(1).ReadAsArray(0,0,xsize,ysize)
-        elev_array[elev_array < 0] = 0
+        elev_array[elev_array < cutoff] = 0
         smoothed_array = smooth_elev + elev_array
         elev_g = elev_array = smooth_elev = None
         
@@ -176,14 +170,10 @@ def proc_elev(elev, smooth_factor):
         smoothed_array = None
         print("created Smoothed Geotiff")
 
-#def smooth_bathy(src_gdal, smooth_factor):
-    # gdal-split by 0
-    # smooth lower
-    # merge back with upper
-        
 if __name__ == '__main__':    
     elev = None
     smooth_factor = 10
+    cutoff = 0
     in_list = None
 
     i = 1
@@ -191,6 +181,9 @@ if __name__ == '__main__':
         arg = sys.argv[i]
         if arg == '-s' or arg == '-smooth' or arg == '--smooth':
             smooth_factor = sys.argv[i+1]
+            i = i + 1
+        elif arg == '-c' or arg == '-cutoff' or arg == '--cutoff':
+            cutoff = sys.argv[i+1]
             i = i + 1
         elif arg == '-i':
             in_list = sys.argv[i+1]
@@ -218,12 +211,19 @@ if __name__ == '__main__':
         print("Error: %s is not a valid smooth-factor" %(smooth_factor))
         print(_usage)
         sys.exit(1)
+        
+    try: cutoff = float(cutoff)
+    except:
+        print("Error: %s is not a valid cutoff value" %(cutoff))
+        print(_usage)
+        sys.exit(1)
 
     if in_list:
         for lf in yield_file_list(in_list):
             proc_elev(lf, smooth_factor)
     else:
-        proc_elev(elev, smooth_factor)
+        proc_elev(elev, smooth_factor, cutoff)
         #demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
+        #demfun.filter_(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), 1, smooth_factor, cutoff, None, 'grid')
 
 ### End

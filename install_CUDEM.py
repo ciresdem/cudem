@@ -120,6 +120,6 @@ if __name__ == '__main__':
         os.system('git pull')
     if install:
         if not cmd_exists('pip') and install_dep:
-            os.system('dnf install python3-pip')
+            os.system('sudo dnf install python3-pip')
             
         os.system('pip install --user --upgrade ./')

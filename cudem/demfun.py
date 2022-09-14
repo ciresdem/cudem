@@ -585,8 +585,11 @@ def blur(src_dem, dst_dem, sf = 1):
         ds_array = ds.GetRasterBand(1).ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
         ds = None
         msk_array = np.array(ds_array)
-        msk_array[msk_array != ds_config['ndv']] = 1
         msk_array[msk_array == ds_config['ndv']] = np.nan
+        msk_array[~np.isnan(msk_array)] = 1
+        #msk_array[np.isnan(msk_array)] = 0
+        #msk_array[msk_array != ds_config['ndv']] = 1
+        ds_array[np.isnan(msk_array)] = 0
         ds_array[ds_array == ds_config['ndv']] = 0
         smooth_array = np_gaussian_blur(ds_array, int(sf))
         smooth_array = smooth_array * msk_array
@@ -958,7 +961,7 @@ def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
     ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp' if node == 'pixel' else ''))
     return(utils.run_cmd(ft_cmd1, verbose=verbose))
 
-def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):
+def filter_old(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):
     """filter raster using smoothing factor `fltr`; optionally
     only smooth bathymetry (sub-zero) using a split_val of 0.
 
@@ -1002,8 +1005,9 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
             if ds is not None:
                 ds_config = gather_infos(ds)
                 msk_arr = ds.GetRasterBand(1).ReadAsArray()
-                msk_arr[msk_arr != ds_config['ndv']] = 1
                 msk_arr[msk_arr == ds_config['ndv']] = np.nan
+                msk_arr[~np.isnan(msk_arr)] = 1
+                
                 ds = None
                 try:
                     u_ds = gdal.Open(dem_u)
@@ -1019,8 +1023,10 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
                     if l_ds is not None:
                         u_arr = u_ds.GetRasterBand(1).ReadAsArray()
                         l_arr = l_ds.GetRasterBand(1).ReadAsArray()
-                        u_arr[u_arr == ds_config['ndv']] = 0
-                        l_arr[l_arr == ds_config['ndv']] = 0
+                        u_arr[u_arr == ds_config['ndv']] = np.nan
+                        u_arr[np.isnan(u_arr)] = 0
+                        l_arr[l_arr == ds_config['ndv']] = np.nan
+                        l_arr[np.isnan(l_arr)] = 0
                         ds_arr = (u_arr + l_arr) * msk_arr
                         ds_arr[np.isnan(ds_arr)] = ds_config['ndv']
                         utils.gdal_write(ds_arr, '__merged.tif', ds_config)
@@ -1035,6 +1041,77 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
         return(0)
     else: return(-1)
 
+def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, node='pixel'):
+    """filter raster using smoothing factor `fltr`; optionally
+    only smooth bathymetry (sub-zero) using a split_val of 0.
+
+    Args: 
+      fltr (int): the filter to use, 1, 2 or 3
+      flt_val (varies): the filter value, varies by filter.
+      split_val (float): an elevation value (only filter below this value)
+
+    Returns:
+      0 for success or -1 for failure
+    """
+
+    utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
+
+    if os.path.exists(src_dem):
+        
+        if int(fltr) == 1:
+            out, status = blur(
+                src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
+        elif int(fltr) == 2:
+            out, status = grdfilter(
+                src_dem, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
+                node = node, verbose = True)
+        elif int(fltr) == 3:
+            out, status = filter_outliers_slp(
+                src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
+        else:
+            utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
+            out, status = blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
+        if status != 0: return(status)
+
+        if split_val is not None:
+            try:
+                ds = gdal.Open(src_dem)
+            except:
+                ds = None
+
+            if ds is not None:
+                ds_config = gather_infos(ds)
+
+                elev_array = ds.GetRasterBand(1).ReadAsArray()
+                mask_array = np.zeros((ds_config['ny'],ds_config['nx']))
+                
+                mask_array[elev_array == ds_config['ndv']] = 0
+                mask_array[elev_array < split_val] = 1
+                #mask_array[~np.isnan(mask_array)] = 0
+
+                elev_array[elev_array < split_val] = 0
+
+                try:
+                    s_ds = gdal.Open('tmp_fltr.tif')
+                except:
+                    s_ds = None
+
+                if s_ds is not None:
+                    s_array = s_ds.GetRasterBand(1).ReadAsArray()
+                    s_array = s_array * mask_array
+                    smoothed_array = s_array + elev_array
+                    elev_array = None
+
+                    utils.gdal_write(smoothed_array, dst_dem, ds_config)
+                    s_ds = None
+                    
+                utils.remove_glob('tmp_fltr.tif')
+                ds = None
+        else:
+            os.rename('tmp_fltr.tif', dst_dem)
+        return(0)
+    else: return(-1)
+    
 def slope(src_gdal, dst_gdal, s = 111120):
     """generate a slope grid with GDAL
 
