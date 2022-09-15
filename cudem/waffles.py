@@ -2352,7 +2352,7 @@ class WafflesCoastline(Waffle):
                 verbose=True
             )
 
-            gdal.Warp(nhd_warp_ds, 'nhdArea_merge.tif', dstSRS=dst_srs, resampleAlg=self.sample)            
+            gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=dst_srs, resampleAlg=self.sample)            
             #tnm_ds = gdal.Open('nhdArea_merge.tif')
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
