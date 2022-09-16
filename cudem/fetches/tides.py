@@ -119,16 +119,19 @@ class Tides(f_utils.FetchModule):
                             continue
                     lon = feature['attributes']['longitude']
                     lat = feature['attributes']['latitude']
-                    z = feature['attributes'][self.s_datum] - feature['attributes'][self.t_datum]
-                    if self.units == 'm':
-                        z = z * 0.3048
+                    if feature['attributes'][self.s_datum] != -99999.99 and feature['attributes'][self.t_datum] != -99999.99:
+                        z = feature['attributes'][self.s_datum] - feature['attributes'][self.t_datum]
+                        if self.units == 'm':
+                            z = z * 0.3048
                         
-                    xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
-                    if self.dst_srs is not None:
-                        xyz.warp(dst_srs=self.dst_srs)
+                        xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                        if self.dst_srs is not None:
+                            xyz.warp(dst_srs=self.dst_srs)
 
-                    ln += 1
-                    yield(xyz)
+                        ln += 1
+                        yield(xyz)
+                    else:
+                        utils.echo_error_msg('could not parse difference between {} and {} for {}'.format(self.s_datum, self.t_datum, feature['attributes']['name']))
                     
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))

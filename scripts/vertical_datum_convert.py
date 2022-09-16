@@ -65,8 +65,6 @@ usage: {cmd} [OPTIONS] input_grid output_grid
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(version=_version, cmd=os.path.basename(sys.argv[0]))
-#{htdp_epsg}
-#, htdp_epsg=_htdp_epsg_desc(htdpfun.HTDP()._reference_frames))
         
 def main():
     src_grid = None
@@ -139,16 +137,10 @@ def main():
 
         trans_region._wgs_extremes()
         
-        #print(src_region)
-        #print(demfun.get_srs(src_grid))
-        #print(trans_region)
-        
         #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
         
         x_inc = src_infos['geoT'][1]
         y_inc = -src_infos['geoT'][5]
-        #tmp_x_inc = x_inc*(3**2)
-        #tmp_y_inc = y_inc*(3**2)
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
         
@@ -176,24 +168,6 @@ def main():
             #     ), verbose=True
             # )
 
-            # a_ds = gdal.Open(src_grid)
-            # b_ds = gdal.Open('_{}'.format(_trans_grid))
-
-            # a_config = demfun.gather_infos(a_ds)
-            
-            # a_band = a_ds.GetRasterBand(1)
-            # b_band = b_ds.GetRasterBand(1)
-
-            # a_arr = a_band.ReadAsArray()
-            # b_arr = b_band.ReadAsArray()
-
-            # c_arr = a_arr + b_arr
-
-            # a_ds = b_ds = None
-            
-            # utils.gdal_write(c_arr, dst_grid, a_config, verbose=True)
-            # utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
-            
             # out, status = utils.run_cmd(
             #     'gdal_calc.py -A {} -B {} --calc "A+B" --outfile {} --co COMPRESS=LZW --co TILED=YES --co PREDICTOR=3 --overwrite'.format(
             #         src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ ')
