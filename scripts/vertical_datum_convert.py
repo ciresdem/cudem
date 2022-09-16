@@ -135,7 +135,7 @@ def main():
 
         trans_region = src_region.copy()
         trans_region.warp()
-        #trans_region.buffer(pct=2)
+        trans_region.buffer(pct=2)
 
         trans_region._wgs_extremes()
         
@@ -176,23 +176,23 @@ def main():
             #     ), verbose=True
             # )
 
-            a_ds = gdal.Open(src_grid)
-            b_ds = gdal.Open('_{}'.format(_trans_grid))
+            # a_ds = gdal.Open(src_grid)
+            # b_ds = gdal.Open('_{}'.format(_trans_grid))
 
-            a_config = demfun.gather_infos(a_ds)
+            # a_config = demfun.gather_infos(a_ds)
             
-            a_band = a_ds.GetRasterBand(1)
-            b_band = b_ds.GetRasterBand(1)
+            # a_band = a_ds.GetRasterBand(1)
+            # b_band = b_ds.GetRasterBand(1)
 
-            a_arr = a_band.ReadAsArray()
-            b_arr = b_band.ReadAsArray()
+            # a_arr = a_band.ReadAsArray()
+            # b_arr = b_band.ReadAsArray()
 
-            c_arr = a_arr + b_arr
+            # c_arr = a_arr + b_arr
 
-            a_ds = b_ds = None
+            # a_ds = b_ds = None
             
-            utils.gdal_write(c_arr, dst_grid, a_config, verbose=True)
-            utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
+            # utils.gdal_write(c_arr, dst_grid, a_config, verbose=True)
+            # utils.remove_glob(_trans_grid, '_{}'.format(_trans_grid))
             
             # out, status = utils.run_cmd(
             #     'gdal_calc.py -A {} -B {} --calc "A+B" --outfile {} --co COMPRESS=LZW --co TILED=YES --co PREDICTOR=3 --overwrite'.format(
@@ -202,6 +202,10 @@ def main():
             # )
             # if status == 0:
 
+            gdc_cmd = 'gdal_calc.py -A {} -B {} --calc "A+B" --outfile {} --co COMPRESS=LZW --co TILED=YES --co PREDICTOR=3 --overwrite'.format(
+                src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ '))
+            os.system(gdc_cmd)
+                
         else:
             utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
 
