@@ -86,6 +86,9 @@ class GMRT(f_utils.FetchModule):
             self.layer = layer
             
         self.bathy_only = bathy_only
+        self.gmrt_region = self.region.copy()
+        self.gmrt_region._wgs_extremes(just_below=True)
+        print(self.gmrt_region)
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -94,10 +97,10 @@ class GMRT(f_utils.FetchModule):
             return([])
         
         self.data = {
-            'north':self.region.ymax,
-            'west':self.region.xmin,
-            'south':self.region.ymin,
-            'east':self.region.xmax,
+            'north':self.gmrt_region.ymax,
+            'west':self.gmrt_region.xmin,
+            'south':self.gmrt_region.ymin,
+            'east':self.gmrt_region.xmax,
             'mformat':'json',
             'resolution':self.res,
             'format':self.fmt,
