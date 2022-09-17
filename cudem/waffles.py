@@ -2520,11 +2520,12 @@ class WafflesLakes(Waffle):
             self.wgs_region.warp('epsg:4326')            
         else:
             self.dst_srs = 'epsg:4326'
+        self._init_bathy()
 
     def _init_bathy(self):
         """create a nodata grid"""
         
-        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        xcount, ycount, gt = self.d_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         self.ds_config = demfun.set_infos(
             xcount,
             ycount,
@@ -2701,7 +2702,6 @@ class WafflesLakes(Waffle):
         return(bathy_arr)    
     
     def run(self):
-        self._init_bathy()        
         self.p_region.buffer(pct=2)
         lakes_shp = self._fetch_lakes()
         lk_ds = ogr.Open(lakes_shp, 1)

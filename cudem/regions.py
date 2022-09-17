@@ -406,8 +406,8 @@ class Region:
             if pct is not None:
                 ewp = (self.xmax - self.xmin) * (pct * .01)
                 nsp = (self.ymax - self.ymin) * (pct * .01)
-                x_bv = (ewp + nsp) / 2
-                y_bv = (ewp + nsp) / 2
+                x_bv = (ewp + nsp) / 2.
+                y_bv = (ewp + nsp) / 2.
 
             self.xmin -= x_bv
             self.xmax += x_bv
