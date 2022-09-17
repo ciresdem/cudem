@@ -2525,7 +2525,7 @@ class WafflesLakes(Waffle):
     def _init_bathy(self):
         """create a nodata grid"""
         
-        xcount, ycount, gt = self.d_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         self.ds_config = demfun.set_infos(
             xcount,
             ycount,
