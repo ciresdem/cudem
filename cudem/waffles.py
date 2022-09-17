@@ -2520,7 +2520,7 @@ class WafflesLakes(Waffle):
             self.wgs_region.warp('epsg:4326')            
         else:
             self.dst_srs = 'epsg:4326'
-            
+
     def _init_bathy(self):
         """create a nodata grid"""
         
@@ -2701,6 +2701,7 @@ class WafflesLakes(Waffle):
         return(bathy_arr)    
     
     def run(self):
+        self._init_bathy()        
         self.p_region.buffer(pct=2)
         lakes_shp = self._fetch_lakes()
         lk_ds = ogr.Open(lakes_shp, 1)
@@ -2736,11 +2737,9 @@ class WafflesLakes(Waffle):
             lk_wkt = lk_geom.ExportToWkt()
             this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
             lk_regions = regions.regions_merge(lk_regions, this_region)
-
+            
         while not regions.regions_within_ogr_p(self.p_region, lk_regions):
             self.p_region.buffer(pct=2)
-
-        self._init_bathy()
         
         ## fetch and initialize the copernicus data
         if self.elevations == 'copernicus':
