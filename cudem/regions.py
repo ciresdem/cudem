@@ -390,7 +390,7 @@ class Region:
             
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
         
-    def buffer(self, x_bv=0, y_bv=0, pct=None):
+    def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
         """return the region buffered by buffer-value `bv`
 
         Args:
@@ -409,6 +409,13 @@ class Region:
                 x_bv = (ewp + nsp) / 2.
                 y_bv = (ewp + nsp) / 2.
 
+                if x_inc is not None:
+                    if y_inc is None:
+                        y_inc = x_inc
+                        
+                    x_bv = int(x_bv/x_inc) * float(x_inc)
+                    y_bv = int(y_bv/y_inc) * float(y_inc)
+                    
             self.xmin -= x_bv
             self.xmax += x_bv
             self.ymin -= y_bv

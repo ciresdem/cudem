@@ -2497,10 +2497,20 @@ class WafflesCoastline(Waffle):
         utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
-## Waffles Bathymetry - testing
+## Waffles Lakes Bathymetry
 ## ==============================================
 class WafflesLakes(Waffle):
-    def __init__(self, apply_elevations=False, min_area=None, max_area=None, min_id=None, max_id=None, depth='globathy', elevations='copernicus', **kwargs):
+    def __init__(
+            self,
+            apply_elevations=False,
+            min_area=None,
+            max_area=None,
+            min_id=None,
+            max_id=None,
+            depth='globathy',
+            elevations='copernicus',
+            **kwargs
+    ):
         self.mod = 'lakes'
         self.mod_args = {}
 
@@ -2520,7 +2530,6 @@ class WafflesLakes(Waffle):
             self.wgs_region.warp('epsg:4326')            
         else:
             self.dst_srs = 'epsg:4326'
-        self._init_bathy()
 
     def _init_bathy(self):
         """create a nodata grid"""
@@ -2546,7 +2555,9 @@ class WafflesLakes(Waffle):
         this_lakes._outdir = self.cache_dir
         this_lakes.run()
 
-        fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False, check_size=False)
+        fr = cudem.fetches.utils.fetch_results(
+            this_lakes, want_proc=False, check_size=False
+        )
         fr.daemon = True
         fr.start()
         fr.join()
@@ -2568,10 +2579,13 @@ class WafflesLakes(Waffle):
         
         _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
         globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
-        cudem.fetches.utils.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip, check_size=False)
+        cudem.fetches.utils.Fetch(
+            _globathy_url, verbose=self.verbose
+        ).fetch_file(
+            globathy_zip, check_size=False
+        )
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
         globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
-
         _prog = utils.CliProgress('parsing globathy parameters...')
         with open(globathy_csv, mode='r') as globc:
             reader = csv.reader(globc)
@@ -2583,6 +2597,7 @@ class WafflesLakes(Waffle):
                         _prog.update()
                         globd[int(row[0])] = float(row[-1])
                         ids.remove(int(row[0]))
+                        
                     if len(ids) == 0:
                         break
             else:
@@ -2640,9 +2655,6 @@ class WafflesLakes(Waffle):
 
         _cop_prog = utils.CliProgress('combining Copernicus tiles')
         [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
-        #for i, cop_tif in enumerate(this_cop.results):
-        #    _cop_prog.update_perc((i, len(this_cop.results)))
-        #    gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
         _cop_prog.end(0, 'combined {} Copernicus tiles'.format(len(this_cop.results)))
         
         return(cop_ds)
@@ -2702,7 +2714,8 @@ class WafflesLakes(Waffle):
         return(bathy_arr)    
     
     def run(self):
-        self.p_region.buffer(pct=2)
+        #self.p_region.buffer(pct=2)
+        
         lakes_shp = self._fetch_lakes()
         lk_ds = ogr.Open(lakes_shp, 1)
         lk_layer = lk_ds.GetLayer()
@@ -2719,7 +2732,6 @@ class WafflesLakes(Waffle):
             lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
 
         ## filter by Area
-
         if self.max_area is not None:
             lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
             
@@ -2727,9 +2739,7 @@ class WafflesLakes(Waffle):
             lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
         
         lk_features = lk_layer.GetFeatureCount()
-        
         lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
-
         lk_regions = self.p_region.copy()
         for lk_f in lk_layer:
             this_region = regions.Region()
@@ -2739,8 +2749,11 @@ class WafflesLakes(Waffle):
             lk_regions = regions.regions_merge(lk_regions, this_region)
             
         while not regions.regions_within_ogr_p(self.p_region, lk_regions):
-            self.p_region.buffer(pct=2)
-        
+            utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
+            self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
+
+        self._init_bathy()
+            
         ## fetch and initialize the copernicus data
         if self.elevations == 'copernicus':
             cop_ds = self._fetch_copernicus(cop_region=self.p_region)
