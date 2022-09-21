@@ -594,7 +594,7 @@ def x360(x):
 
 def unbz2(bz2_file, outdir='./', overwrite=False):
 
-    newfilepath = os.path.join(outdir, bz2_file.split('.')[:-1])
+    newfilepath = os.path.join(outdir, '.'.join(bz2_file.split('.')[:-1]))
     with open(newfilepath, 'wb') as new_file, bz2.BZ2File(bz2_file, 'rb') as file:
         for data in iter(lambda : file.read(100 * 1024), b''):
             new_file.write(data)
