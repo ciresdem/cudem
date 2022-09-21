@@ -2437,6 +2437,7 @@ class WafflesCoastline(Waffle):
                 osm_ds = ogr.Open(osm_file)
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')
+                    osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
                     osm_layer.SetAttributeFilter("building!=''")
                     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
                     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
@@ -2444,6 +2445,7 @@ class WafflesCoastline(Waffle):
                     self.coast_array[bldg_arr == -1] = 0
                 else:
                     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
+                osm_ds = None
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             
