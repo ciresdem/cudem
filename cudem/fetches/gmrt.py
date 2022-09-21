@@ -70,7 +70,7 @@ import cudem.fetches.utils as f_utils
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
-    def __init__(self, res='max', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
+    def __init__(self, res='default', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
         super().__init__(**kwargs) 
 
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -87,7 +87,7 @@ class GMRT(f_utils.FetchModule):
             
         self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
-        self.gmrt_region.buffer(pct=2,x_inc=.0088,y_inc=.0088)
+        self.gmrt_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
         self.gmrt_region._wgs_extremes(just_below=True)
         print(self.gmrt_region)
         
@@ -177,7 +177,7 @@ class GMRT(f_utils.FetchModule):
         src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
+        ).fetch_file(src_data, timeout=10, read_timeout=220) == 0:
             if self.bathy_only:
                 ds = gdal.Open(src_data)
                 ds_config = demfun.gather_infos(ds)
