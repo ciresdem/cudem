@@ -2430,7 +2430,7 @@ class WafflesCoastline(Waffle):
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
                 if osm_result[-1] == 'bz2':
-                    osm_file = utils.unbz2(osm_result[0])
+                    osm_file = utils.unbz2(osm_result[1])
                 else:
                     osm_file = osm_result[1]
                     
