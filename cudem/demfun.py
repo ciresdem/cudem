@@ -48,13 +48,13 @@ def infos(src_dem, region = None, scan = False):
             ds = gdal.Open(src_dem)
         except: ds = None
         if ds is not None:
-            dsc = gather_infos(ds, region = region, scan = scan)
+            dsc = gather_infos(ds, region = region, scan = scan)#, node='grid' if src_dem.split('.')[-1] == 'nc' else 'pixel')
             ds = None
             return(dsc)
         else: return(None)
     else: return(None)
     
-def gather_infos(src_ds, region = None, scan = False):
+def gather_infos(src_ds, region = None, scan = False, node = 'pixel'):
     """gather information from `src_ds` GDAL dataset
 
     returns gdal_config dict.
@@ -68,22 +68,25 @@ def gather_infos(src_ds, region = None, scan = False):
     dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
 
     mt = src_ds.GetMetadata()
-
-    # node = 'pixel'
+    
+    # #node = 'pixel'
     # if 'AREA_OR_POINT' in mt.keys():
     #     if mt['AREA_OR_POINT'].lower() == 'point':
     #         node = 'grid'
     # elif 'NC_GLOBAL#node_offset' in mt.keys():
     #     if mt['NC_GLOBAL#node_offset'] == '0':
     #         node = 'grid'
-    # else:
-    #     node = 'pixel'
-
+    # #else:
+    # #    node = 'pixel'
+    # print(node)
     # if node == 'grid':
     #     dst_gt = list(dst_gt)
     #     dst_gt[0] = dst_gt[0] - (dst_gt[1]/2)
-    #     dst_gt[3] = dst_gt[3] - (dst_gt[5]/2)
+    #     dst_gt[3] = dst_gt[3] + (dst_gt[5]/2)
     #     dst_gt = tuple(dst_gt)
+    #     if region is not None:
+    #         srcwin = region.srcwin(gt, src_ds.RasterXSize+1, src_ds.RasterYSize+1)
+    #     else: srcwin = (0, 0, src_ds.RasterXSize+1, src_ds.RasterYSize+1)
 
     ds_config = {
         'nx': srcwin[2],
@@ -97,6 +100,7 @@ def gather_infos(src_ds, region = None, scan = False):
         'fmt': src_ds.GetDriver().ShortName,
         'zr': None,
     }
+    # print(ds_config)
     if ds_config['ndv'] is None: ds_config['ndv'] = -9999
     if scan:
         src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])

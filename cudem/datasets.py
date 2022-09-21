@@ -1411,6 +1411,9 @@ class RasterFile(ElevationDataset):
             self.src_srs = demfun.get_srs(self.fn)
             self.set_transform()
 
+        #self.dem_infos = demfun.infos(self.fn)
+        #self.dem_infos = demfun.gather_infos(self.fn, node='grid' if self.fn.split('.')[-1] == 'nc' else 'pixel')
+
     def init_ds(self):
         """initialize the raster dataset
 
@@ -1426,7 +1429,7 @@ class RasterFile(ElevationDataset):
                 self.warp_region = self.region.copy()
                 if self.dst_trans is not None:
                     self.dst_trans = None
-
+            print(self.warp_region)
             src_ds = demfun.sample_warp(
                 self.fn, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
@@ -1452,9 +1455,13 @@ class RasterFile(ElevationDataset):
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         self.infos['format'] = self.data_format
         src_ds = gdal.Open(self.fn)
+        #self.dem_infos = demfun.gather_infos(src_ds)#,node='grid' if self.fn.split('.')[-1] == 'nc' else 'pixel')
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                #geo_transform=self.dem_infos['geoT'],
+                #x_count=self.dem_infos['nx'],
+                #y_count=self.dem_infos['ny']
                 geo_transform=gt,
                 x_count=src_ds.RasterXSize,
                 y_count=src_ds.RasterYSize
@@ -1511,6 +1518,7 @@ class RasterFile(ElevationDataset):
             count = 0
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
+            #gt = self.dem_infos['geoT']
             ndv = band.GetNoDataValue()
             msk_band = None
             weight_band = None
@@ -1535,6 +1543,7 @@ class RasterFile(ElevationDataset):
                 nodata.append('{:g}'.format(ndv))
 
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
+            #srcwin = self.get_srcwin(gt, self.dem_infos['nx'], self.dem_infos['ny'])
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
@@ -1601,8 +1610,10 @@ class RasterFile(ElevationDataset):
         if src_ds is not None:
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
+            #gt = self.dem_infos['geoT']
             ndv = utils.float_or(demfun.get_nodata(self.fn), -9999.)
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
+            #srcwin = self.get_srcwin(gt, self.dem_infos['nx'], self.dem_infos['ny'])
             src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
             x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
             srcwin_region = regions.Region().from_geo_transform(

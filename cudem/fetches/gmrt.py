@@ -87,15 +87,15 @@ class GMRT(f_utils.FetchModule):
             
         self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
+        self.gmrt_region.buffer(pct=2,x_inc=.0088,y_inc=.0088)
         self.gmrt_region._wgs_extremes(just_below=True)
-        print(self.gmrt_region)
         
     def run(self):
         '''Run the GMRT fetching module'''
 
         if self.region is None:
             return([])
-        
+
         self.data = {
             'north':self.gmrt_region.ymax,
             'west':self.gmrt_region.xmin,
@@ -104,43 +104,51 @@ class GMRT(f_utils.FetchModule):
             'mformat':'json',
             'resolution':self.res,
             'format':self.fmt,
+            'layer':self.layer,
         }
-
+        
         req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(
             params=self.data, tries=10, timeout=2
         )
         if req is not None:
-            try:
-                gmrt_urls = req.json()
-            except Exception as e:
-                utils.echo_error_msg(e)
-                gmrt_urls = []
-                
-            for url in gmrt_urls:
-                if self.layer == 'topo-mask':
-                    url = url.replace('topo', 'topo-mask')
+            outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+            self.results.append([req.url, os.path.join(self._outdir, outf), 'gmrt'])
+ 
+            
+            # try:
+            #     gmrt_urls = req.json()
+            # except Exception as e:
+            #     utils.echo_error_msg(e)
+            #     gmrt_urls = []
+
+            # for url in gmrt_urls:
+            #     if self.layer == 'topo-mask':
+            #         url = url.replace('topo', 'topo-mask')
                     
-                opts = {}
-                for url_opt in url.split('?')[1].split('&'):
-                    opt_kp = url_opt.split('=')
-                    opts[opt_kp[0]] = opt_kp[1]
+            #     opts = {}
+            #     for url_opt in url.split('?')[1].split('&'):
+            #         opt_kp = url_opt.split('=')
+            #         opts[opt_kp[0]] = opt_kp[1]
                     
-                url_region = regions.Region().from_list([
-                    float(opts['west']),
-                    float(opts['east']),
-                    float(opts['south']),
-                    float(opts['north'])
-                ])
-                outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
-                self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
+            #     url_region = regions.Region().from_list([
+            #         float(opts['west']),
+            #         float(opts['east']),
+            #         float(opts['south']),
+            #         float(opts['north'])
+            #     ])
+            #     outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+            #     self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
                 
         return(self)
 
     def yield_xyz(self, entry):
-        src_data = 'gmrt_tmp.tif'
+        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(src_data,timeout=10, read_timeout=120) == 0:
+
+            #utils.run_cmd('gmt grdedit -T {}'.format(src_data), verbose=True)
+            
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
@@ -166,7 +174,7 @@ class GMRT(f_utils.FetchModule):
         utils.remove_glob('{}*'.format(src_data))
 
     def yield_array(self, entry):
-        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'grd')
+        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
@@ -180,10 +188,12 @@ class GMRT(f_utils.FetchModule):
                 band.WriteArray(outarray)
                 ds = None
 
+            #utils.run_cmd('gmt grdedit -T {}'.format(src_data), verbose=True)
+                
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                src_srs='epsg:4326+5773',
+                src_srs='epsg:4326+3855',
                 dst_srs=self.dst_srs,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
