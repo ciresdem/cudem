@@ -70,7 +70,7 @@ import cudem.fetches.utils as f_utils
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
-    def __init__(self, res='max', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
+    def __init__(self, res=1024, fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
         super().__init__(**kwargs) 
 
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -87,8 +87,9 @@ class GMRT(f_utils.FetchModule):
             
         self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
-        self.gmrt_region.buffer(pct=2,x_inc=.0088,y_inc=.0088)
+        self.gmrt_region.buffer(pct=2)#,x_inc=.0088,y_inc=.0088)
         self.gmrt_region._wgs_extremes(just_below=True)
+        print(self.gmrt_region)
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -104,40 +105,39 @@ class GMRT(f_utils.FetchModule):
             'mformat':'json',
             'resolution':self.res,
             'format':self.fmt,
-            'layer':self.layer,
+            #'layer':self.layer,
         }
-        
+
         req = f_utils.Fetch(self._gmrt_grid_urls_url).fetch_req(
             params=self.data, tries=10, timeout=2
         )
         if req is not None:
-            outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
-            self.results.append([req.url, os.path.join(self._outdir, outf), 'gmrt'])
- 
+            #outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+            #self.results.append([req.url, os.path.join(self._outdir, outf), 'gmrt']) 
             
-            # try:
-            #     gmrt_urls = req.json()
-            # except Exception as e:
-            #     utils.echo_error_msg(e)
-            #     gmrt_urls = []
+            try:
+                gmrt_urls = req.json()
+            except Exception as e:
+                utils.echo_error_msg(e)
+                gmrt_urls = []
 
-            # for url in gmrt_urls:
-            #     if self.layer == 'topo-mask':
-            #         url = url.replace('topo', 'topo-mask')
+            for url in gmrt_urls:
+                if self.layer == 'topo-mask':
+                    url = url.replace('topo', 'topo-mask')
                     
-            #     opts = {}
-            #     for url_opt in url.split('?')[1].split('&'):
-            #         opt_kp = url_opt.split('=')
-            #         opts[opt_kp[0]] = opt_kp[1]
+                opts = {}
+                for url_opt in url.split('?')[1].split('&'):
+                    opt_kp = url_opt.split('=')
+                    opts[opt_kp[0]] = opt_kp[1]
                     
-            #     url_region = regions.Region().from_list([
-            #         float(opts['west']),
-            #         float(opts['east']),
-            #         float(opts['south']),
-            #         float(opts['north'])
-            #     ])
-            #     outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
-            #     self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
+                url_region = regions.Region().from_list([
+                    float(opts['west']),
+                    float(opts['east']),
+                    float(opts['south']),
+                    float(opts['north'])
+                ])
+                outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+                self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
                 
         return(self)
 
