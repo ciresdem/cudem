@@ -413,8 +413,12 @@ class Region:
                     if y_inc is None:
                         y_inc = x_inc
                         
-                    x_bv = int(x_bv/x_inc) * float(x_inc)
-                    y_bv = int(y_bv/y_inc) * float(y_inc)
+                    tmp_x_bv = int(x_bv/x_inc) * float(x_inc)
+                    tmp_y_bv = int(y_bv/y_inc) * float(y_inc)
+                    if tmp_x_bv != 0:
+                        x_bv = tmp_x_bv
+                    if tmp_y_bv != 0:
+                        y_bv = tmp_y_bv
                     
             self.xmin -= x_bv
             self.xmax += x_bv
