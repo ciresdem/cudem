@@ -2426,7 +2426,12 @@ class WafflesCoastline(Waffle):
         
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
-                osm_ds = ogr.Open(osm_result[1])
+                if osm_result[-1] == 'bz2':
+                    osm_file = utils.unbz2(osm_result[0])
+                else:
+                    osm_file = osm_result[1]
+                    
+                osm_ds = ogr.Open(osm_file)
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')
                     osm_layer.SetAttributeFilter("building!=''")
@@ -2435,7 +2440,7 @@ class WafflesCoastline(Waffle):
                     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
                     self.coast_array[bldg_arr == -1] = 0
                 else:
-                    utils.echo_error_msg('could not open ogr dataset {}'.format(osm_result[1]))
+                    utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             

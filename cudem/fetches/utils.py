@@ -459,6 +459,7 @@ class Fetch:
             status = -1
                 
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
+            utils.echo_error_msg('data not fetched...')
             status = -1
             
         if self.verbose and status == 0:

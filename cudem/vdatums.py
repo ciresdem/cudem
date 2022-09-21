@@ -214,8 +214,10 @@ def get_vdatum_by_name(datum_name):
 
     return(None)
 
+#vdatum_cache = utils.cudem_cache()
 
-vdatum_cache = utils.cudem_cache()
+def vdatum_cache():
+    return(utils.cudem_cache())
 
 class VerticalTransform:
     
@@ -227,19 +229,21 @@ class VerticalTransform:
             epsg_in,
             epsg_out,
             verbose=True,
-            cache_dir=vdatum_cache
+            cache_dir=None
     ):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
         self.epsg_in = self._datum_by_name(str(epsg_in))
         self.epsg_out = self._datum_by_name(str(epsg_out))
-        self.cache_dir = cache_dir
+        #self.cache_dir = utils.cudem_cache if cache_dir is None else cache_dir
+        self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
         print(self.xcount, self.ycount)
         print(self.src_region)
         print(self.src_x_inc, self.src_y_inc)
+        print(self.cache_dir)
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         
     def _frames(self, epsg_in, epsg_out):

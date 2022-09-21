@@ -87,7 +87,7 @@ class GMRT(f_utils.FetchModule):
             
         self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
-        self.gmrt_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
+        self.gmrt_region.buffer(pct=.33,x_inc=.0088,y_inc=.0088)
         self.gmrt_region._wgs_extremes(just_below=True)
         print(self.gmrt_region)
         
@@ -177,7 +177,7 @@ class GMRT(f_utils.FetchModule):
         src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data, timeout=10, read_timeout=220) == 0:
+        ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
             if self.bathy_only:
                 ds = gdal.Open(src_data)
                 ds_config = demfun.gather_infos(ds)
