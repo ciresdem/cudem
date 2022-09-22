@@ -550,6 +550,26 @@ def gdal_fext(src_drv_name):
         
         return(fext)
 
+def ogr_clip(src_ogr_fn, dst_region=None):
+
+    src_ds = ogr.Open(src_ogr_fn)
+    src_layer = src_ds.GetLayer()
+
+    region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
+    dst_region.export_as_ogr(region_ogr)
+    region_ds = ogr.Open(region_ogr)
+    region_layer = region_ds.GetLayer()
+
+    dst_ogr = '.'.join(src_ogr_fn.split('.')[:-1])
+    dst_ds = driver.CreateDataSource('{}.gpkg'.format(dst_ogr))
+    dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type=ogr.wkbPolygon)
+    
+    ogr.Layer.Clip(src_layer, inClipLayer, dst_layer)
+
+    src_ds = region_ds = dst_ds = None
+    remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
+    return(dst_ogr)
+    
 def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
     older versions of gdal can't do this, so fallback to known standards.

@@ -456,7 +456,8 @@ class ElevationDataset():
                 out_dst_srs = dst_srs.ExportToProj4()
 
             #utils.echo_msg('in srs: {}'.format(out_src_srs))
-            #utils.echo_msg('out srs: {}'.format(out_dst_srs))                
+            #utils.echo_msg('out srs: {}'.format(out_dst_srs))
+            
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -469,12 +470,18 @@ class ElevationDataset():
 
             self.src_trans_srs = out_src_srs
             self.dst_trans_srs = out_dst_srs
-            
+
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
             if self.region is not None:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
                 self.trans_region.warp(out_src_srs)
+                # utils.echo_msg(self.dst_srs)
+                # utils.echo_msg(self.src_srs)
+                # self.trans_region.src_srs = self.dst_srs
+                # self.trans_region.warp(self.src_srs)
+                # utils.echo_msg(self.region)
+                # utils.echo_msg(self.trans_region)
                 
             src_osr_srs = dst_osr_srs = None
             
@@ -1302,6 +1309,7 @@ class LASFile(ElevationDataset):
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
                     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                    #print(tmp_region)
                     dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
                     dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
                     dataset = dataset[dataset[:,1] > tmp_region.ymin,:]

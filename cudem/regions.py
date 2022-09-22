@@ -532,13 +532,28 @@ class Region:
 
         pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
         pointB.Transform(dst_trans)
+
+        pointC = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymax))
+        pointC.Transform(dst_trans)
+
+        pointD = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymin))
+        pointD.Transform(dst_trans)
         
         try:
             if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
-                self.xmin = pointA.GetX() if pointA.GetX() < pointB.GetX() else pointB.GetX()
-                self.xmax = pointB.GetX() if pointB.GetX() > pointA.GetX() else pointA.GetX()
-                self.ymin = pointA.GetY() if pointA.GetY() < pointB.GetY() else pointB.GetY()
-                self.ymax = pointB.GetY() if pointB.GetY() > pointA.GetY() else pointA.GetY()
+
+                xs = [pointA.GetX(), pointB.GetX(), pointC.GetX(), pointD.GetX()]
+                ys = [pointA.GetY(), pointB.GetY(), pointC.GetY(), pointD.GetY()]
+
+                self.xmin = min(xs)
+                self.xmax = max(xs)
+                self.ymin = min(ys)
+                self.ymax = max(ys)
+                
+                #self.xmin = pointA.GetX() if pointA.GetX() < pointB.GetX() else pointB.GetX()
+                #self.xmax = pointB.GetX() if pointB.GetX() > pointA.GetX() else pointA.GetX()
+                #self.ymin = pointA.GetY() if pointA.GetY() < pointB.GetY() else pointB.GetY()
+                #self.ymax = pointB.GetY() if pointB.GetY() > pointA.GetY() else pointA.GetY()
         except Exception as e:
             sys.stderr.write('transform error: {}\n'.format(str(e)))
 
@@ -935,6 +950,12 @@ def regions_cli(argv = sys.argv):
         if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
     
     for rn, this_region in enumerate(these_regions):
+        if src_srs is not None:
+            this_region.src_srs = src_srs
+            
+        if dst_srs is not None:
+            this_region.warp(dst_srs)
+        
         if bv is not None:
             this_region.buffer(x_bv=bv, y_bv=bv)
             

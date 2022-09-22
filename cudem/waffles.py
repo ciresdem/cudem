@@ -2023,6 +2023,8 @@ class WafflesStacks(Waffle):
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
         self._init_data(set_incs=True)
+        if self.weights is None:
+            self.weights = 1
         
     def run(self):
         xcount, ycount, dst_gt = self.p_region.geo_transform(
@@ -2430,9 +2432,12 @@ class WafflesCoastline(Waffle):
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
                 if osm_result[-1] == 'bz2':
-                    osm_file = utils.unbz2(osm_result[1])
+                    osm_planet = utils.unbz2(osm_result[1])
+                    osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
+                    _clipped = True
                 else:
                     osm_file = osm_result[1]
+                    _clipped = False
                     
                 osm_ds = ogr.Open(osm_file)
                 if osm_ds is not None:
@@ -2446,6 +2451,8 @@ class WafflesCoastline(Waffle):
                 else:
                     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
                 osm_ds = None
+                if _clipped:
+                    utils.remove_glob(osm_file)
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             
