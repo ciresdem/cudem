@@ -550,25 +550,31 @@ def gdal_fext(src_drv_name):
         
         return(fext)
 
-def ogr_clip(src_ogr_fn, dst_region=None):
+def ogr_clip(src_ogr_fn, dst_region=None, overwrite=False):
 
-    src_ds = ogr.Open(src_ogr_fn)
-    src_layer = src_ds.GetLayer()
-
-    region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
-    dst_region.export_as_ogr(region_ogr)
-    region_ds = ogr.Open(region_ogr)
-    region_layer = region_ds.GetLayer()
-
-    dst_ogr = '.'.join(src_ogr_fn.split('.')[:-1])
-    dst_ds = driver.CreateDataSource('{}.gpkg'.format(dst_ogr))
-    dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type=ogr.wkbPolygon)
+    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
+    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
-    ogr.Layer.Clip(src_layer, inClipLayer, dst_layer)
+    if not os.path.exists(dst_ogr_fn) or overwrite:
+    
+        src_ds = ogr.Open(src_ogr_fn)
+        src_layer = src_ds.GetLayer()
 
-    src_ds = region_ds = dst_ds = None
-    remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
-    return(dst_ogr)
+        region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
+        dst_region.export_as_ogr(region_ogr)
+        region_ds = ogr.Open(region_ogr)
+        region_layer = region_ds.GetLayer()
+
+        driver = ogr.GetDriverByName('GPKG')
+        dst_ds = driver.CreateDataSource(dst_ogr_fn)
+        dst_layer = dst_ds.CreateLayer(dst_ogr_bn, geom_type=ogr.wkbPolygon)
+
+        ogr.Layer.Clip(src_layer, region_layer, dst_layer)
+
+        src_ds = region_ds = dst_ds = None
+        remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
+        
+    return(dst_ogr_fn)
     
 def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
@@ -614,10 +620,13 @@ def x360(x):
 
 def unbz2(bz2_file, outdir='./', overwrite=False):
 
-    newfilepath = os.path.join(outdir, '.'.join(bz2_file.split('.')[:-1]))
-    with open(newfilepath, 'wb') as new_file, bz2.BZ2File(bz2_file, 'rb') as file:
-        for data in iter(lambda : file.read(100 * 1024), b''):
-            new_file.write(data)
+    newfilepath = '.'.join(bz2_file.split('.')[:-1])
+
+    if not os.path.exists(newfilepath):
+        echo_msg('Uncompressing {} to {}...'.format(bz2_file, newfilepath))
+        with open(newfilepath, 'wb') as new_file, bz2.BZ2File(bz2_file, 'rb') as file:
+            for data in iter(lambda : file.read(100 * 1024), b''):
+                new_file.write(data)
     return(newfilepath)
 
 def unzip(zip_file, outdir='./', overwrite=False):

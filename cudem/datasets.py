@@ -1437,7 +1437,7 @@ class RasterFile(ElevationDataset):
                 self.warp_region = self.region.copy()
                 if self.dst_trans is not None:
                     self.dst_trans = None
-            print(self.warp_region)
+            print(self.sample_alg)
             src_ds = demfun.sample_warp(
                 self.fn, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,

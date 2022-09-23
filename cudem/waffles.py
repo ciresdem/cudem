@@ -2432,7 +2432,7 @@ class WafflesCoastline(Waffle):
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
                 if osm_result[-1] == 'bz2':
-                    osm_planet = utils.unbz2(osm_result[1])
+                    osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
                     osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
                     _clipped = True
                 else:
@@ -2451,8 +2451,8 @@ class WafflesCoastline(Waffle):
                 else:
                     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
                 osm_ds = None
-                if _clipped:
-                    utils.remove_glob(osm_file)
+                #if _clipped:
+                #    utils.remove_glob(osm_file)
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
             

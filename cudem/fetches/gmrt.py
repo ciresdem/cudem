@@ -87,9 +87,10 @@ class GMRT(f_utils.FetchModule):
             
         self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
-        self.gmrt_region.buffer(pct=.33,x_inc=.0088,y_inc=.0088)
+        self.gmrt_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
+        #self.gmrt_region.buffer(pct=.3333)
         self.gmrt_region._wgs_extremes(just_below=True)
-        print(self.gmrt_region)
+        #print(self.gmrt_region)
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -199,6 +200,7 @@ class GMRT(f_utils.FetchModule):
                 y_inc=self.y_inc,
                 weight=self.weight,
                 src_region=self.region,
+                #sample_alg='cubicspline',
                 verbose=self.verbose
             )
                 
