@@ -2428,6 +2428,8 @@ class WafflesCoastline(Waffle):
         dst_srs.AutoIdentifyEPSG()
         dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
         dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         
         for osm_result in this_osm.results:
             if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
@@ -2435,10 +2437,14 @@ class WafflesCoastline(Waffle):
                     osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
                     osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
                     _clipped = True
+                elif osm_result[-1] == 'pbf':
+                    osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
+                    #osm_file = utils.ogr_clip(osm_result[1], self.wgs_region)
+                    _clipped = True
                 else:
                     osm_file = osm_result[1]
                     _clipped = False
-                    
+
                 osm_ds = ogr.Open(osm_file)
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')

@@ -43,7 +43,9 @@ class OpenStreetMap(f_utils.FetchModule):
     def __init__(self, q=None, fmt='osm', planet=False, **kwargs):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
-        self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
+        self._osm_planet_ = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
+        self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/pbf/planet-latest.osm.pbf'
+        self._osm_continents = 'https://download.geofabrik.de/'
         self._outdir = os.path.join(os.getcwd(), 'osm')
         self.name = 'osm'
         self.q = q
@@ -57,9 +59,14 @@ class OpenStreetMap(f_utils.FetchModule):
         if self.region is None:
             return([])
 
+        #if self.planet:
+        #    self.results.append([self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.bz2'), 'bz2'])
+        
+        ## fetch whole planet
         if self.planet:
-            self.results.append([self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.bz2'), 'bz2'])
+            self.results.append([self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.pbf'), 'pbf'])
 
+        ## fetch in chunks
         else:
             x_delta = self.region.xmax - self.region.xmin
             y_delta = self.region.ymax - self.region.ymin

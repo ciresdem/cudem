@@ -550,7 +550,17 @@ def gdal_fext(src_drv_name):
         
         return(fext)
 
-def ogr_clip(src_ogr_fn, dst_region=None, overwrite=False):
+def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
+
+    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
+    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
+    
+    if not os.path.exists(dst_ogr_fn) or overwrite:
+        run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
+                
+    return(dst_ogr_fn)
+
+def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
 
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
@@ -558,8 +568,11 @@ def ogr_clip(src_ogr_fn, dst_region=None, overwrite=False):
     if not os.path.exists(dst_ogr_fn) or overwrite:
     
         src_ds = ogr.Open(src_ogr_fn)
-        src_layer = src_ds.GetLayer()
-
+        if layer is not None:
+            src_layer = src_ds.GetLayer(layer)
+        else:
+            src_layer = src_ds.GetLayer()
+            
         region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
         dst_region.export_as_ogr(region_ogr)
         region_ds = ogr.Open(region_ogr)
@@ -567,7 +580,7 @@ def ogr_clip(src_ogr_fn, dst_region=None, overwrite=False):
 
         driver = ogr.GetDriverByName('GPKG')
         dst_ds = driver.CreateDataSource(dst_ogr_fn)
-        dst_layer = dst_ds.CreateLayer(dst_ogr_bn, geom_type=ogr.wkbPolygon)
+        dst_layer = dst_ds.CreateLayer(layer if layer is not None else 'clipped', geom_type=ogr.wkbPolygon)
 
         ogr.Layer.Clip(src_layer, region_layer, dst_layer)
 
@@ -575,6 +588,7 @@ def ogr_clip(src_ogr_fn, dst_region=None, overwrite=False):
         remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
         
     return(dst_ogr_fn)
+
     
 def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
