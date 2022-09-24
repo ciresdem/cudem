@@ -2448,7 +2448,7 @@ class WafflesCoastline(Waffle):
                 osm_ds = ogr.Open(osm_file)
                 if osm_ds is not None:
                     osm_layer = osm_ds.GetLayer('multipolygons')
-                    osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
+                    #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
                     osm_layer.SetAttributeFilter("building!=''")
                     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
                     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
