@@ -43,7 +43,7 @@ class OpenStreetMap(f_utils.FetchModule):
     def __init__(self, q=None, fmt='osm', planet=False, **kwargs):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
-        self._osm_planet_ = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
+        self._osm_planet_bz2 = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
         self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/pbf/planet-latest.osm.pbf'
         self._osm_continents = 'https://download.geofabrik.de/'
         self._outdir = os.path.join(os.getcwd(), 'osm')
