@@ -1077,6 +1077,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
             out, status = blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
         if status != 0: return(status)
 
+        split_val = utils.float_or(split_val)
         if split_val is not None:
             try:
                 ds = gdal.Open(src_dem)

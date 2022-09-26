@@ -1404,7 +1404,7 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser."""
     
-    def __init__(self, mask=None, weight_mask=None, open_options=None, **kwargs):
+    def __init__(self, mask=None, weight_mask=None, open_options=None, sample=None, **kwargs):
         super().__init__(**kwargs)
         try:
             self.open_options = open_options.split('/')
@@ -1419,6 +1419,8 @@ class RasterFile(ElevationDataset):
             self.src_srs = demfun.get_srs(self.fn)
             self.set_transform()
 
+        self.sample_alg = sample if sample is not None else self.sample_alg
+            
         #self.dem_infos = demfun.infos(self.fn)
         #self.dem_infos = demfun.gather_infos(self.fn, node='grid' if self.fn.split('.')[-1] == 'nc' else 'pixel')
 
@@ -1437,7 +1439,7 @@ class RasterFile(ElevationDataset):
                 self.warp_region = self.region.copy()
                 if self.dst_trans is not None:
                     self.dst_trans = None
-            print(self.sample_alg)
+
             src_ds = demfun.sample_warp(
                 self.fn, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
