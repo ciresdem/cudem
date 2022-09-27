@@ -1695,6 +1695,7 @@ DEM generation.
             landmask=False,
             poly_count=3,
             keep_auxilary=False,
+            mode='surface',
             **kwargs
     ):
         self.mod = 'cudem'

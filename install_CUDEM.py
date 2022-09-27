@@ -7,6 +7,7 @@ cmd_exists = lambda x: any(os.access(os.path.join(path, x), os.X_OK) for path in
 
 use_dnf = False
 use_apt = False
+want_mbsystem = False
 
 if cmd_exists('dnf'):
     use_dnf = True
@@ -51,7 +52,7 @@ def check_dependencies(install_missing=False):
             On Redhat based systems (fedora/centos) you can install it with this command:
             dnf install GMT""")
 
-    if not cmd_exists('mblist'):
+    if not cmd_exists('mblist') or want_mbsystem:
         if install_missing and use_dnf:
             os.system('sudo dnf install g++ motif motif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel GMT GMT-devel boost boost-python3 glibc-devel mesa* xorg-x11-fonts* gcc-c++ libtirpc-devel')
             os.system('git clone https://github.com/dwcaress/MB-System.git')
@@ -105,6 +106,8 @@ if __name__ == '__main__':
             pull = True
         elif arg == '--dependencies' or arg == '-d':
             install_dep = True
+        elif arg == '--mbsystem' or arg == '-m':
+            want_mbsystem = True
 
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(install_usage)
