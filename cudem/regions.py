@@ -389,7 +389,24 @@ class Region:
             this_size[1] = 0
             
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
-        
+
+    def cut(self, cut_region=None, x_inc=None, y_inc=None):
+        if self.valid_p():
+            if cut_region.valid_p():
+                x_max_count = int((self.xmax - cut_region.xmax) / x_inc)
+                y_max_count = int((self.ymax - cut_region.ymax) / y_inc)                
+                x_min_count = int((self.xmin - cut_region.xmin) / x_inc)
+                y_min_count = int((self.ymin - cut_region.ymin) / y_inc)
+
+                self.xmax = (self.xmax - (x_max_count*x_inc))
+                self.ymax = (self.ymax - (y_max_count*y_inc))
+                self.xmin = (self.xmin - (x_min_count*x_inc))
+                self.ymin = (self.ymin - (y_min_count*y_inc))
+
+                return(self)
+            
+        return(self)
+                
     def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
         """return the region buffered by buffer-value `bv`
 

@@ -446,8 +446,7 @@ def sample_warp(
         out_region = None
 
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=True,
-                       width=xcount, height=ycount,
+                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
                        callback=gdal.TermProgress if verbose else None)
@@ -456,21 +455,7 @@ def sample_warp(
         return(dst_ds, 0)
     else:
         dst_ds = None
-        return(dst_dem, 0)
-
-    # if dst_dem is None:
-    #     dst_ds = gdal.Warp('', src_dem, format='MEM', xRes=x_sample_inc, yRes=y_sample_inc, #targetAlignedPixels=True,# width=xcount, height=ycount,
-    #                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
-    #                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
-    #                        callback=gdal.TermProgress if verbose else None)
-
-    #     return(dst_ds, 0)
-    # else:
-    #     dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=True,
-    #                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, 
-    #                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
-    #                        callback=gdal.TermProgress if verbose else None)
-    
+        return(dst_dem, 0)    
     
 def chunks(src_dem, n_chunk):
     """split `src_fn` GDAL file into chunks with `n_chunk` cells squared.

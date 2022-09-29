@@ -1430,15 +1430,14 @@ class RasterFile(ElevationDataset):
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
         if self.x_inc is not None and self.y_inc is not None:
             dem_inf = demfun.infos(self.fn)
-            if self.region is None:
-                self.warp_region = regions.Region().from_list(self.infos['minmax'])
-            else:
-                self.warp_region = self.region.copy()
+            self.warp_region = regions.Region().from_list(self.infos['minmax'])
+            
+            if self.region is not None:
+                self.warp_region.cut(self.region, self.x_inc, self.y_inc)
+
                 if self.dst_trans is not None:
                     self.dst_trans = None
                     
-            #self.warp_region.buffer(self.x_inc*.5, self.y_inc*.5)
-
             tmp_ds = self.fn
             src_ds = gdal.Open(self.fn)
             mt = src_ds.GetMetadata()
@@ -1462,23 +1461,22 @@ class RasterFile(ElevationDataset):
                 ndv=ndv, verbose=self.verbose
             )[0]            
             tmp_ds = None
-            src_ds = warp_ds
             
-            # ## clip
-            # warp_ds_config = demfun.gather_infos(warp_ds)
-            # gt = warp_ds_config['geoT']
-            # srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='pixel')
-            # warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            # dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-            # out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
-            #                                  warp_ds_config['proj'], warp_ds_config['dt'], warp_ds_config['ndv'],
-            #                                  warp_ds_config['fmt'])
+            ## clip
+            warp_ds_config = demfun.gather_infos(warp_ds)
+            gt = warp_ds_config['geoT']
+            srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='pixel')
+            warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                             warp_ds_config['proj'], warp_ds_config['dt'], warp_ds_config['ndv'],
+                                             warp_ds_config['fmt'])
             
-            # src_ds = demfun.generate_mem_ds(out_ds_config)
-            # band = src_ds.GetRasterBand(1)
-            # band.WriteArray(warp_arr)
-            # src_ds.FlushCache()
-            # warp_ds = None
+            src_ds = demfun.generate_mem_ds(out_ds_config)
+            band = src_ds.GetRasterBand(1)
+            band.WriteArray(warp_arr)
+            src_ds.FlushCache()
+            warp_ds = None
             
         else:
             if self.open_options:
