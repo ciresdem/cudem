@@ -425,17 +425,20 @@ def sample_warp(
         ndv=-9999, tap=False, size=False, verbose=False
 ):
 
-    if size:
-        xcount, ycount, dst_gt = src_region.geo_transform(
-            x_inc=x_sample_inc, y_inc=y_sample_inc
-        )
-
     if verbose:
         utils.echo_msg(
             'sampling DEM {} to {}/{} using {}'.format(
                 src_dem, x_sample_inc, y_sample_inc, sample_alg
             )
         )
+    
+    if size:
+        xcount, ycount, dst_gt = src_region.geo_transform(
+            x_inc=x_sample_inc, y_inc=y_sample_inc
+        )
+        x_sample_inc = y_sample_inc = None
+    else:
+        xcount = ycount = None
 
     if src_region is not None:
         out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
@@ -443,7 +446,8 @@ def sample_warp(
         out_region = None
 
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap,# width=xcount, height=ycount,
+                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=True,
+                       width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
                        callback=gdal.TermProgress if verbose else None)

@@ -1438,11 +1438,11 @@ class RasterFile(ElevationDataset):
                     self.dst_trans = None
                     
             self.warp_region.buffer(self.x_inc*.5, self.y_inc*.5)
-            print(self.warp_region)
 
             tmp_ds = self.fn
             src_ds = gdal.Open(self.fn)
             mt = src_ds.GetMetadata()
+            
             ## remake this grid if it's grid-node
             if 'AREA_OR_POINT' in mt.keys():
                 if mt['AREA_OR_POINT'].lower() == 'point':
