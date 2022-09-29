@@ -1309,7 +1309,6 @@ class LASFile(ElevationDataset):
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
                     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-                    #print(tmp_region)
                     dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
                     dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
                     dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
@@ -1420,9 +1419,7 @@ class RasterFile(ElevationDataset):
             self.set_transform()
 
         self.sample_alg = sample if sample is not None else self.sample_alg
-            
-        #self.dem_infos = demfun.infos(self.fn)
-        #self.dem_infos = demfun.gather_infos(self.fn, node='grid' if self.fn.split('.')[-1] == 'nc' else 'pixel')
+        self.dem_infos = demfun.infos(self.fn)
 
     def init_ds(self):
         """initialize the raster dataset
@@ -1439,13 +1436,49 @@ class RasterFile(ElevationDataset):
                 self.warp_region = self.region.copy()
                 if self.dst_trans is not None:
                     self.dst_trans = None
+                    
+            self.warp_region.buffer(self.x_inc*.5, self.y_inc*.5)
+            print(self.warp_region)
 
-            src_ds = demfun.sample_warp(
-                self.fn, None, self.x_inc, self.y_inc,
+            tmp_ds = self.fn
+            src_ds = gdal.Open(self.fn)
+            mt = src_ds.GetMetadata()
+            ## remake this grid if it's grid-node
+            if 'AREA_OR_POINT' in mt.keys():
+                if mt['AREA_OR_POINT'].lower() == 'point':
+                    ds_config = demfun.gather_infos(src_ds)
+                    tmp_ds = demfun.generate_mem_ds(ds_config)            
+                    band = tmp_ds.GetRasterBand(1)
+                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())            
+                    tmp_ds.FlushCache()
+                    
+            src_ds = None
+
+            ## sample
+            warp_ds = demfun.sample_warp(
+                tmp_ds, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
                 ndv=ndv, verbose=self.verbose
-            )[0]
+            )[0]            
+            tmp_ds = None
+
+            ## clip
+            warp_ds_config = demfun.gather_infos(warp_ds)
+            gt = warp_ds_config['geoT']
+            srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='pixel')
+            warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+            out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                             warp_ds_config['proj'], warp_ds_config['dt'], warp_ds_config['ndv'],
+                                             warp_ds_config['fmt'])
+            
+            src_ds = demfun.generate_mem_ds(out_ds_config)
+            band = src_ds.GetRasterBand(1)
+            band.WriteArray(warp_arr)
+            src_ds.FlushCache()
+            warp_ds = None
+            
         else:
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1464,8 +1497,6 @@ class RasterFile(ElevationDataset):
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         self.infos['format'] = self.data_format
-        src_ds = gdal.Open(self.fn)
-        #self.dem_infos = demfun.gather_infos(src_ds)#,node='grid' if self.fn.split('.')[-1] == 'nc' else 'pixel')
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
@@ -1528,7 +1559,6 @@ class RasterFile(ElevationDataset):
             count = 0
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
-            #gt = self.dem_infos['geoT']
             ndv = band.GetNoDataValue()
             msk_band = None
             weight_band = None
@@ -1553,7 +1583,6 @@ class RasterFile(ElevationDataset):
                 nodata.append('{:g}'.format(ndv))
 
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
-            #srcwin = self.get_srcwin(gt, self.dem_infos['nx'], self.dem_infos['ny'])
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
@@ -1620,10 +1649,8 @@ class RasterFile(ElevationDataset):
         if src_ds is not None:
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
-            #gt = self.dem_infos['geoT']
             ndv = utils.float_or(demfun.get_nodata(self.fn), -9999.)
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
-            #srcwin = self.get_srcwin(gt, self.dem_infos['nx'], self.dem_infos['ny'])
             src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
             x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
             srcwin_region = regions.Region().from_geo_transform(

@@ -54,40 +54,20 @@ def infos(src_dem, region = None, scan = False):
         else: return(None)
     else: return(None)
     
-def gather_infos(src_ds, region = None, scan = False, node = 'pixel'):
+def gather_infos(src_ds, region=None, scan=False, node='pixel'):
     """gather information from `src_ds` GDAL dataset
 
     returns gdal_config dict.
     """
-    
+
     gt = src_ds.GetGeoTransform()
     if region is not None:
         srcwin = region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
     else: srcwin = (0, 0, src_ds.RasterXSize, src_ds.RasterYSize)
     src_band = src_ds.GetRasterBand(1)
     dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-
     mt = src_ds.GetMetadata()
     
-    # #node = 'pixel'
-    # if 'AREA_OR_POINT' in mt.keys():
-    #     if mt['AREA_OR_POINT'].lower() == 'point':
-    #         node = 'grid'
-    # elif 'NC_GLOBAL#node_offset' in mt.keys():
-    #     if mt['NC_GLOBAL#node_offset'] == '0':
-    #         node = 'grid'
-    # #else:
-    # #    node = 'pixel'
-    # print(node)
-    # if node == 'grid':
-    #     dst_gt = list(dst_gt)
-    #     dst_gt[0] = dst_gt[0] - (dst_gt[1]/2)
-    #     dst_gt[3] = dst_gt[3] + (dst_gt[5]/2)
-    #     dst_gt = tuple(dst_gt)
-    #     if region is not None:
-    #         srcwin = region.srcwin(gt, src_ds.RasterXSize+1, src_ds.RasterYSize+1)
-    #     else: srcwin = (0, 0, src_ds.RasterXSize+1, src_ds.RasterYSize+1)
-
     ds_config = {
         'nx': srcwin[2],
         'ny': srcwin[3],
@@ -100,7 +80,6 @@ def gather_infos(src_ds, region = None, scan = False, node = 'pixel'):
         'fmt': src_ds.GetDriver().ShortName,
         'zr': None,
     }
-    # print(ds_config)
     if ds_config['ndv'] is None: ds_config['ndv'] = -9999
     if scan:
         src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -443,12 +422,13 @@ def polygonize(src_gdal, dst_layer, verbose=False):
 def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
-        ndv=-9999, verbose=False
+        ndv=-9999, tap=False, size=False, verbose=False
 ):
 
-    xcount, ycount, dst_gt = src_region.geo_transform(
-        x_inc=x_sample_inc, y_inc=y_sample_inc
-    )
+    if size:
+        xcount, ycount, dst_gt = src_region.geo_transform(
+            x_inc=x_sample_inc, y_inc=y_sample_inc
+        )
 
     if verbose:
         utils.echo_msg(
@@ -462,19 +442,31 @@ def sample_warp(
     else: 
         out_region = None
 
+    dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
+                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap,# width=xcount, height=ycount,
+                       dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
+                       options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
+                       callback=gdal.TermProgress if verbose else None)
+
     if dst_dem is None:
-        dst_ds = gdal.Warp('', src_dem, format='MEM', width=xcount, height=ycount,
-                           dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg,
-                           options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
-                           callback=gdal.TermProgress if verbose else None)
         return(dst_ds, 0)
     else:
-        dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc,
-                           dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, targetAlignedPixels=True,
-                           options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
-                           callback=gdal.TermProgress if verbose else None)
         dst_ds = None
         return(dst_dem, 0)
+
+    # if dst_dem is None:
+    #     dst_ds = gdal.Warp('', src_dem, format='MEM', xRes=x_sample_inc, yRes=y_sample_inc, #targetAlignedPixels=True,# width=xcount, height=ycount,
+    #                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
+    #                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
+    #                        callback=gdal.TermProgress if verbose else None)
+
+    #     return(dst_ds, 0)
+    # else:
+    #     dst_ds = gdal.Warp(dst_dem, src_dem, xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=True,
+    #                        dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, 
+    #                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs,
+    #                        callback=gdal.TermProgress if verbose else None)
+    
     
 def chunks(src_dem, n_chunk):
     """split `src_fn` GDAL file into chunks with `n_chunk` cells squared.
