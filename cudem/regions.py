@@ -392,19 +392,20 @@ class Region:
 
     def cut(self, cut_region=None, x_inc=None, y_inc=None):
         if self.valid_p():
-            if cut_region.valid_p():
-                x_max_count = int((self.xmax - cut_region.xmax) / x_inc)
-                y_max_count = int((self.ymax - cut_region.ymax) / y_inc)                
-                x_min_count = int((self.xmin - cut_region.xmin) / x_inc)
-                y_min_count = int((self.ymin - cut_region.ymin) / y_inc)
-
-                self.xmax = (self.xmax - (x_max_count*x_inc))
-                self.ymax = (self.ymax - (y_max_count*y_inc))
-                self.xmin = (self.xmin - (x_min_count*x_inc))
-                self.ymin = (self.ymin - (y_min_count*y_inc))
-
+            if cut_region is not None and cut_region.valid_p():
+                if x_inc is not None and y_inc is not None:
+                    x_max_count = int((self.xmax - cut_region.xmax) / x_inc)
+                    y_max_count = int((self.ymax - cut_region.ymax) / y_inc)                
+                    x_min_count = int((self.xmin - cut_region.xmin) / x_inc)
+                    y_min_count = int((self.ymin - cut_region.ymin) / y_inc)
+                    
+                    self.xmax -= (x_max_count*x_inc)
+                    self.ymax -= (y_max_count*y_inc)
+                    self.xmin -= (x_min_count*x_inc)
+                    self.ymin -= (y_min_count*y_inc)
+                else:
+                    return(regions_reduce(self, cut_region))
                 return(self)
-            
         return(self)
                 
     def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
