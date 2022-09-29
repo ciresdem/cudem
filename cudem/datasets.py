@@ -1496,6 +1496,7 @@ class RasterFile(ElevationDataset):
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         self.infos['format'] = self.data_format
+        src_ds = gdal.Open(self.fn)        
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
