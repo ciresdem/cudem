@@ -369,7 +369,8 @@ class Region:
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
 
-        returns the gdal srcwin (xoff, yoff, xsize, ysize)
+        Returns:
+            tuple: the gdal srcwin (xoff, yoff, xsize, ysize)
         """
 
         ## geo_transform is considered in grid-node to properly capture the region
@@ -391,8 +392,19 @@ class Region:
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
 
     def cut(self, cut_region=None, x_inc=None, y_inc=None):
+        """ cut the region based on `cut_region` while accounting for
+        x_inc and y_inc so as to align to a potential grid
+
+        Returns:
+          region-object: self
+        """
+        
         if self.valid_p():
             if cut_region is not None and cut_region.valid_p():
+
+                if regions_within_ogr_p(cut_region, self):
+                    return(self)
+                
                 if x_inc is not None and y_inc is not None:
                     x_max_count = int((self.xmax - cut_region.xmax) / x_inc)
                     y_max_count = int((self.ymax - cut_region.ymax) / y_inc)                
