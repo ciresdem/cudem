@@ -2185,7 +2185,7 @@ class WafflesCoastline(Waffle):
         import cudem.fetches.utils
 
         self.f_region = self.p_region.copy()
-        self.f_region.buffer(pct=5, self.xinc, self.yinc)
+        self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
         self.f_region.src_srs = self.dst_srs
         self.wgs_region = self.f_region.copy()
         if self.dst_srs is not None:
