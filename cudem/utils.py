@@ -378,7 +378,7 @@ def hav_dst(pnt0, pnt1):
     
     return(rad_m*c)
     
-def _geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
+def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
     Args:

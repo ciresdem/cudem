@@ -434,7 +434,7 @@ def sample_warp(
     
     if size:
         xcount, ycount, dst_gt = src_region.geo_transform(
-            x_inc=x_sample_inc, y_inc=y_sample_inc
+            x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
         )
         x_sample_inc = y_sample_inc = None
     else:
@@ -1162,12 +1162,13 @@ def generate_mem_ds(ds_config, name='MEM'):
         
     mem_driver = gdal.GetDriverByName('MEM')
     mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
-    mem_ds.SetGeoTransform(ds_config['geoT'])
-    if ds_config['proj'] is not None:
-        mem_ds.SetProjection(ds_config['proj'])
-        
-    mem_band = mem_ds.GetRasterBand(1)
-    mem_band.SetNoDataValue(ds_config['ndv'])
+    if mem_ds is not None:
+        mem_ds.SetGeoTransform(ds_config['geoT'])
+        if ds_config['proj'] is not None:
+            mem_ds.SetProjection(ds_config['proj'])
+            
+        mem_band = mem_ds.GetRasterBand(1)
+        mem_band.SetNoDataValue(ds_config['ndv'])
         
     return(mem_ds)
     

@@ -249,7 +249,7 @@ class Region:
             else: return('/'.join([str(x) for x in self.region[:4]]))
         else: return(None)
         
-    def geo_transform(self, x_inc=0, y_inc=None, node='pixel'):
+    def geo_transform(self, x_inc=0, y_inc=None, node='grid'):
         """return a count info and a geotransform based on the region and a cellsize
 
         Args:
@@ -267,8 +267,8 @@ class Region:
 
         ## geo_transform is considered in grid-node to properly capture the region
         dst_gt = (self.xmin, x_inc, 0, self.ymax, 0, y_inc)
-        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node='grid')
-        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node='grid')
+        this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node=node)
+        this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node=node)
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
@@ -365,7 +365,7 @@ class Region:
         y_inc = float((self.ymax - self.ymin) / y_count)
         return(x_inc, y_inc)
         
-    def srcwin(self, geo_transform, x_count, y_count, node='pixel'):
+    def srcwin(self, geo_transform, x_count, y_count, node='grid'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
 
@@ -374,8 +374,8 @@ class Region:
         """
 
         ## geo_transform is considered in grid-node to properly capture the region
-        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node='grid')]
-        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node='grid')]
+        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node=node)]
+        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
             this_size[0] = x_count - this_origin[0]
@@ -402,6 +402,9 @@ class Region:
         if self.valid_p():
             if cut_region is not None and cut_region.valid_p():
 
+                if not regions_intersect_ogr_p(cut_region, self):
+                    return(self)
+                
                 if regions_within_ogr_p(cut_region, self):
                     return(self)
                 

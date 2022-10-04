@@ -275,7 +275,7 @@ class Datalist(datasets.ElevationDataset):
             count = len(dl_layer)
             
             for l,feat in enumerate(dl_layer):
-                _prog.update_perc((l, count))
+                #_prog.update_perc((l, count))
                 if self.region is not None:
                     w_region = self.region.w_region()
                     if w_region[0] is not None:
@@ -304,6 +304,8 @@ class Datalist(datasets.ElevationDataset):
                     for ds in data_set.parse():
                         self.data_entries.append(ds)
                         yield(ds)
+                        
+                _prog.update_perc((l, count))
             dl_ds = dl_layer = None
         else:
             status = -1
@@ -334,8 +336,8 @@ class Datalist(datasets.ElevationDataset):
 
             with open(self.fn, 'r') as op:
                 for l, this_line in enumerate(op):
-                    if self.verbose:
-                        _prog.update_perc((l, count))
+                    # if self.verbose:
+                    #     _prog.update_perc((l, count))
                         
                     if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
@@ -375,6 +377,9 @@ class Datalist(datasets.ElevationDataset):
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds)
                                     yield(ds)
+                    if self.verbose:
+                        _prog.update_perc((l, count))
+                                    
         elif len(self.data_entries) > 0:
             for data_set in self.data_entries:
                 for ds in data_set.parse():
