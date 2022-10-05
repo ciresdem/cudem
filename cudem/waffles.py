@@ -1897,9 +1897,12 @@ DEM generation.
                 
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             utils.echo_msg('pre region: {}'.format(pre_region))
-            
+
+            waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None else 'd') if pre == self.pre_count else 'stacks:supercede=True'
+            waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1'
+
             pre_surface = WaffleFactory(
-                mod='surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1',
+                mod=waffles_mod_surfstack,
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
@@ -1912,8 +1915,8 @@ DEM generation.
                 srs_transform=self.srs_transform,
                 clobber=True,
                 sample=self.sample,
-                xsample=xsample if pre !=0 else None,
-                ysample=ysample if pre !=0 else None,
+                #xsample=xsample if pre !=0 else None,
+                #ysample=ysample if pre !=0 else None,
                 verbose=self.verbose,
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
