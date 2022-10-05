@@ -40,7 +40,7 @@ import cudem.fetches.utils as f_utils
 class OpenStreetMap(f_utils.FetchModule):
     """Fetch OSM data"""
     
-    def __init__(self, q=None, fmt='osm', planet=False, buildings_only=False, chunks=True, **kwargs):
+    def __init__(self, q=None, fmt='osm', planet=False, chunks=True, **kwargs):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
         self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
@@ -53,9 +53,17 @@ class OpenStreetMap(f_utils.FetchModule):
         self.q = q
         self.fmt = fmt
         self.planet = planet
-        self.buildings_only = buildings_only
         self.chunks = chunks
 
+        if self.q == 'buildings':
+            self.q = '''
+            (way["building"];
+            relation["building"]["type"="multipolygon"];
+            );
+            (._;>;);
+            out meta;
+            '''
+        
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
                          'referer': 'https://lz4.overpass-api.de/' }
         
@@ -78,7 +86,7 @@ class OpenStreetMap(f_utils.FetchModule):
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > 1 or y_delta > 5:
+            if x_delta > 5 or y_delta > 5:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
                     n_chunk = int(xcount*(5/x_delta))
@@ -87,7 +95,10 @@ class OpenStreetMap(f_utils.FetchModule):
             else:
                 n_chunk = None
 
-            for this_region in self.region.chunk(incs[0], n_chunk=n_chunk):        
+            these_regions = self.region.chunk(incs[0], n_chunk=n_chunk)
+            utils.echo_msg('chunking OSM request into {} regions'.format(len(these_regions)))
+            
+            for this_region in these_regions:
                 c_bbox = this_region.format('osm_bbox')
                 out_fn = 'osm_{}'.format(this_region.format('fn'))
                 osm_q_bbox  = '''
@@ -100,15 +111,6 @@ class OpenStreetMap(f_utils.FetchModule):
                 );
                 out meta;
                 '''
-
-                if self.buildings_only:
-                    osm_q = '''
-                    (way["building"];
-                    relation["building"]["type"="multipolygon"];
-                    );
-                    (._;>;);
-                    out meta;
-                    '''
                 
                 osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
 
@@ -132,15 +134,6 @@ class OpenStreetMap(f_utils.FetchModule):
             out meta;
             '''
 
-            if self.buildings_only:
-                osm_q = '''
-                (way["building"];
-                relation["building"]["type"="multipolygon"];
-                );
-                (._;>;);
-                out meta;
-                '''
-                
             osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
             osm_data = f_utils.urlencode({'data': osm_q_})
             osm_data_url = self._osm_api + '?' + osm_data            

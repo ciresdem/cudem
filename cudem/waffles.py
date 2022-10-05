@@ -2443,7 +2443,7 @@ class WafflesCoastline(Waffle):
         # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, buildings_only=True
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings'
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
@@ -2457,7 +2457,7 @@ class WafflesCoastline(Waffle):
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         
         for osm_result in this_osm.results:
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries) >= 0:
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=100) >= 0:
                 if osm_result[-1] == 'bz2':
                     osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
                     osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
