@@ -2480,7 +2480,18 @@ class WafflesCoastline(Waffle):
                 #     verbose=True
                 # )
 
-                utils.run_cmd(
+                # osm_ds = ogr.Open(osm_file)
+                # osm_layer = osm_ds.GetLayer('multipolygons')
+                # #print(osm_layer.GetFeatureCount())
+                # osm_layer_dfn = osm_layer.GetLayerDefn()
+                # print(osm_layer_dfn)
+                # #osm_fi = osm_layer_dfn.GetFieldIndex()
+                # #print(osm_fi)
+                # osm_fi = osm_layer_dfn.GetFieldIndex('building')
+                # print(osm_fi)
+                # osm_ds = None
+                
+                out, status = utils.run_cmd(
                     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32'.format(
                         osm_file,
                         self.p_region.format('te'),
@@ -2489,15 +2500,17 @@ class WafflesCoastline(Waffle):
                     ),
                     verbose=True
                 )
-                
-                bldg_ds = gdal.Open('bldg_osm.tif')
-                #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
-                if bldg_ds is not None:
-                    bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                    self.coast_array[bldg_ds_arr == -1] = 0
-                    bldg_ds = bldg_ds_arr = None
 
-                bldg_ds = None
+                if status == 0:
+                    bldg_ds = gdal.Open('bldg_osm.tif')
+                    #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
+                    if bldg_ds is not None:
+                        bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                        self.coast_array[bldg_ds_arr == -1] = 0
+                        bldg_ds = bldg_ds_arr = None
+                        
+                    bldg_ds = None
+                    
                 utils.remove_glob('bldg_osm.tif*')
                 
                 # osm_ds = ogr.Open(osm_file)
