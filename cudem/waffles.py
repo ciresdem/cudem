@@ -1884,8 +1884,8 @@ DEM generation.
                         utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
                     )
                 ]
-                if pre == 0 and self.landmask:
-                    pre_data.append('copernicus,-11,{}'.format(pre_weight))
+                # if pre == 0 and self.landmask:
+                #     pre_data.append('copernicus:datatype=1,-11,{}'.format(pre_weight))
                 pre_region.wmin = pre_weight
 
             pre_region = self._proc_region()
@@ -2440,10 +2440,10 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
-        bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
-        bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
+        # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
+        # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, buildings_only=True
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
@@ -2470,18 +2470,48 @@ class WafflesCoastline(Waffle):
                     osm_file = osm_result[1]
                     _clipped = False
 
-                osm_ds = ogr.Open(osm_file)
-                if osm_ds is not None:
-                    osm_layer = osm_ds.GetLayer('multipolygons')
-                    #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
-                    osm_layer.SetAttributeFilter("building!=''")
-                    gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-                    gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
-                    bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
-                    self.coast_array[bldg_arr == -1] = 0
-                else:
-                    utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
-                osm_ds = None
+                # utils.run_cmd(
+                #     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -where "building!=\'\'" -te {} -ts {} {} -ot Int32'.format(
+                #         osm_file,
+                #         self.p_region.format('te'),
+                #         self.ds_config['nx'],
+                #         self.ds_config['ny'],
+                #     ),
+                #     verbose=True
+                # )
+
+                utils.run_cmd(
+                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32'.format(
+                        osm_file,
+                        self.p_region.format('te'),
+                        self.ds_config['nx'],
+                        self.ds_config['ny'],
+                    ),
+                    verbose=True
+                )
+                
+                bldg_ds = gdal.Open('bldg_osm.tif')
+                #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
+                if bldg_ds is not None:
+                    bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                    self.coast_array[bldg_ds_arr == -1] = 0
+                    bldg_ds = bldg_ds_arr = None
+
+                bldg_ds = None
+                #utils.remove_glob('bldg_osm.tif*')
+                
+                # osm_ds = ogr.Open(osm_file)
+                # if osm_ds is not None:
+                #     osm_layer = osm_ds.GetLayer('multipolygons')
+                #     #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
+                #     osm_layer.SetAttributeFilter("building!=''")
+                #     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
+                #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                #     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
+                #     self.coast_array[bldg_arr == -1] = 0
+                # else:
+                #     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
+                # osm_ds = None
                 #if _clipped:
                 #    utils.remove_glob(osm_file)
             #else:

@@ -40,7 +40,7 @@ import cudem.fetches.utils as f_utils
 class OpenStreetMap(f_utils.FetchModule):
     """Fetch OSM data"""
     
-    def __init__(self, q=None, fmt='osm', planet=False, **kwargs):
+    def __init__(self, q=None, fmt='osm', planet=False, buildings_only=False, chunks=True, **kwargs):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
         self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
@@ -53,6 +53,8 @@ class OpenStreetMap(f_utils.FetchModule):
         self.q = q
         self.fmt = fmt
         self.planet = planet
+        self.buildings_only = buildings_only
+        self.chunks = chunks
 
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
                          'referer': 'https://lz4.overpass-api.de/' }
@@ -69,19 +71,19 @@ class OpenStreetMap(f_utils.FetchModule):
             self.results.append([self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.pbf'), 'pbf'])
 
         ## fetch in chunks
-        else:
+        elif self.chunks:
             x_delta = self.region.xmax - self.region.xmin
             y_delta = self.region.ymax - self.region.ymin
             incs = self.region.increments(1000,1000)
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > .05 or y_delta > .05:
+            if x_delta > .25 or y_delta > .25:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
-                    n_chunk = int(xcount*(.05/x_delta))
+                    n_chunk = int(xcount*(.25/x_delta))
                 elif y_delta > x_delta:
-                    n_chunk = int(ycount*(.05/y_delta))
+                    n_chunk = int(ycount*(.25/y_delta))
             else:
                 n_chunk = None
 
@@ -99,11 +101,50 @@ class OpenStreetMap(f_utils.FetchModule):
                 out meta;
                 '''
 
+                if self.buildings_only:
+                    osm_q = '''
+                    (way["building"];
+                    relation["building"]["type"="multipolygon"];
+                    );
+                    (._;>;);
+                    out meta;
+                    '''
+                
                 osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
 
+                #utils.echo_msg('using query: {}'.format(osm_q_))
                 osm_data = f_utils.urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
 
                 self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
+
+        else:
+            c_bbox = self.region.format('osm_bbox')
+            out_fn = 'osm_{}'.format(self.region.format('fn'))
+            osm_q_bbox  = '''
+            {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
+
+            osm_q = '''
+            (node;
+            <;
+            >;
+            );
+            out meta;
+            '''
+
+            if self.buildings_only:
+                osm_q = '''
+                (way["building"];
+                relation["building"]["type"="multipolygon"];
+                );
+                (._;>;);
+                out meta;
+                '''
+                
+            osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
+            osm_data = f_utils.urlencode({'data': osm_q_})
+            osm_data_url = self._osm_api + '?' + osm_data            
+            self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
+                
                 
 ### End
