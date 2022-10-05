@@ -1884,6 +1884,8 @@ DEM generation.
                         utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
                     )
                 ]
+                if pre == 0 and self.landmask:
+                    pre_data.append('copernicus,-11,{}'.format(pre_weight))
                 pre_region.wmin = pre_weight
 
             pre_region = self._proc_region()
@@ -1898,7 +1900,7 @@ DEM generation.
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             utils.echo_msg('pre region: {}'.format(pre_region))
 
-            waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None else 'd') if pre == self.pre_count else 'stacks:supercede=True'
+            waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None else 'd') if pre == self.pre_count else 'stacks:supercede=True:upper_limit={}'.format(upper_limit if pre !=0 else None)
             waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1'
 
             pre_surface = WaffleFactory(
@@ -2490,18 +2492,28 @@ class WafflesCoastline(Waffle):
     def _load_data(self):
         """load data from user datalist and amend coast_array"""
 
-        ##TODO: use stacks instead
         for this_data in self.data:
-            for this_xyz in this_data.yield_xyz():
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, self.ds_config['geoT'], 'pixel'
-                )
-                try:
-                    if this_xyz.z >= 0:
-                        self.coast_array[ypos, xpos] += 1
-                    else:
-                        self.coast_array[ypos, xpos] -= 1
-                except: pass
+            for this_arr in this_data.yield_array():
+                data_arr = this_arr[0]['mean']
+                data_arr[np.isnan(data_arr)] = 0
+                data_arr[data_arr > 0] = 1
+                data_arr[data_arr < 0] = 0
+                self.coast_array += data_arr
+
+                data_arr = None
+        
+        # ##TODO: use stacks instead
+        # for this_data in self.data:
+        #     for this_xyz in this_data.yield_xyz():
+        #         xpos, ypos = utils._geo2pixel(
+        #             this_xyz.x, this_xyz.y, self.ds_config['geoT'], 'pixel'
+        #         )
+        #         try:
+        #             if this_xyz.z >= 0:
+        #                 self.coast_array[ypos, xpos] += 1
+        #             else:
+        #                 self.coast_array[ypos, xpos] -= 1
+        #         except: pass
         
     def _write_coast_array(self):
         """write coast_array to file"""

@@ -398,6 +398,19 @@ def crop(src_dem, dst_dem):
         return(utils.gdal_write(dst_arr, dst_dem, ds_config))
     else:
         return(None, -1)
+
+def has_nodata_p(src_gdal):
+    try:
+        ds = gdal.Open('{}'.format(src_gdal))
+    except: ds = None
+    if ds is not None:
+        ds_config = gather_infos(ds)
+        ds_arr = ds.GetRasterBand(1).ReadAsArray()
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+
+        if np.any(np.isnan(ds_arr)):
+            return(True)
+    return(False)
     
 def polygonize(src_gdal, dst_layer, verbose=False):
     '''run gdal.Polygonize on src_ds and add polygon to dst_layer'''
