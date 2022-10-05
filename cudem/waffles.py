@@ -2443,7 +2443,7 @@ class WafflesCoastline(Waffle):
         # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, buildings_only=True
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=False, buildings_only=True
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
