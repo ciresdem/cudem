@@ -89,12 +89,12 @@ class OpenStreetMap(f_utils.FetchModule):
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > 5 or y_delta > 5:
+            if x_delta > 1 or y_delta > 1:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
-                    n_chunk = int(xcount*(5/x_delta))
+                    n_chunk = int(xcount*(1/x_delta))
                 elif y_delta > x_delta:
-                    n_chunk = int(ycount*(5/y_delta))
+                    n_chunk = int(ycount*(1/y_delta))
             else:
                 n_chunk = None
 
