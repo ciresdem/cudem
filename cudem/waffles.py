@@ -2498,7 +2498,7 @@ class WafflesCoastline(Waffle):
                     bldg_ds = bldg_ds_arr = None
 
                 bldg_ds = None
-                #utils.remove_glob('bldg_osm.tif*')
+                utils.remove_glob('bldg_osm.tif*')
                 
                 # osm_ds = ogr.Open(osm_file)
                 # if osm_ds is not None:

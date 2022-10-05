@@ -1737,6 +1737,7 @@ class RasterFile(ElevationDataset):
             src_arrs = {'mean': src_arr, 'weight': src_weight, 'count': count_arr}
             #yield(src_arr, dst_srcwin, dst_gt, src_weight)
             yield(src_arrs, dst_srcwin, dst_gt)
+            src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
         src_ds = src_weight = src_arr = None
 
     ##
