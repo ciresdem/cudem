@@ -2490,6 +2490,9 @@ class WafflesCoastline(Waffle):
                 # osm_fi = osm_layer_dfn.GetFieldIndex('building')
                 # print(osm_fi)
                 # osm_ds = None
+
+                if os.path.getsize(osm_file) == 366:
+                    continue
                 
                 out, status = utils.run_cmd(
                     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32'.format(

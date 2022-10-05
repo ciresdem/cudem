@@ -55,7 +55,10 @@ class OpenStreetMap(f_utils.FetchModule):
         self.planet = planet
         self.chunks = chunks
 
+        self.h = ''
+        
         if self.q == 'buildings':
+            self.h = '[maxsize:2000000000]'
             self.q = '''
             (way["building"];
             relation["building"]["type"="multipolygon"];
@@ -102,7 +105,7 @@ class OpenStreetMap(f_utils.FetchModule):
                 c_bbox = this_region.format('osm_bbox')
                 out_fn = 'osm_{}'.format(this_region.format('fn'))
                 osm_q_bbox  = '''
-                {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
+                {1}{2}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '', self.h)
 
                 osm_q = '''
                 (node;
