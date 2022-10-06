@@ -2444,7 +2444,7 @@ class WafflesCoastline(Waffle):
         # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm'
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
@@ -2462,7 +2462,7 @@ class WafflesCoastline(Waffle):
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
-        _osm_p = utils.CliProgress('fetching and processing OSM buildings')
+        _osm_p = utils.CliProgress('processing OSM buildings')
         for n, osm_result in enumerate(this_osm.results):
             _osm_p.update_perc((n, len(this_osm.results)))
             #if cudem.fetches.utils.Fetch(osm_result[0], verbose=False).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=100) >= 0:
@@ -2504,13 +2504,13 @@ class WafflesCoastline(Waffle):
                     continue
                 
                 out, status = utils.run_cmd(
-                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32'.format(
+                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
                         osm_file,
                         self.p_region.format('te'),
                         self.ds_config['nx'],
                         self.ds_config['ny'],
                     ),
-                    verbose=True
+                    verbose=False
                 )
 
                 if status == 0:
@@ -2541,7 +2541,7 @@ class WafflesCoastline(Waffle):
                 #    utils.remove_glob(osm_file)
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
-        _osm_p.end(0, 'Fetched and Processed OMS buildings')
+        _osm_p.end(0, 'processed OSM buildings')
         bldg_ds = bldg_warp_ds = None
         
     def _load_data(self):
