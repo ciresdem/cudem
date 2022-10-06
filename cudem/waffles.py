@@ -2141,6 +2141,7 @@ class WafflesCoastline(Waffle):
             want_gmrt=False,
             want_lakes=False,
             want_buildings=False,
+            min_building_length=None,
             want_osm_planet=False,
             invert=False,
             polygonize=True,
@@ -2163,6 +2164,7 @@ class WafflesCoastline(Waffle):
             'want_gmrt':want_gmrt,
             'want_lakes':want_lakes,
             'want_buildings':want_buildings,
+            'min_building_length':min_building_length,
             'want_osm_planet':want_osm_planet,
             'osm_tries':osm_tries,
             'invert':invert,
@@ -2175,6 +2177,7 @@ class WafflesCoastline(Waffle):
         self.want_copernicus = want_copernicus
         self.want_lakes = want_lakes
         self.want_buildings = want_buildings
+        self.min_building_length = min_building_length
         self.want_osm_planet = want_osm_planet
         self.invert = invert
         self.polygonize = polygonize
@@ -2444,7 +2447,9 @@ class WafflesCoastline(Waffle):
         # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm', min_length=450
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose,
+            planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm',
+            min_length=self.min_building_length
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
