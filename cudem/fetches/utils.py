@@ -418,20 +418,23 @@ class Fetch:
                             if self.verbose:
                                 done = int(50 * curr_chunk / req_s)
                                 #utils.echo_msg_inline("[%s%s] %s bps" % ('=' * done, ' ' * (50-done), curr_chunk//(time.perf_counter() - start)))
-                                progress.update_perc((curr_chunk, req_s))
+                                if self.verbose:
+                                    progress.update_perc((curr_chunk, req_s))
                                 curr_chunk += 8196
                             if chunk:
                                 local_file.write(chunk)
 
                 elif req.status_code == 429 or req.status_code == 504:
                     if tries < 0:
-                        utils.echo_warning_msg('max tries exhausted...')
+                        if self.verbose:
+                            utils.echo_warning_msg('max tries exhausted...')
                         status = -1
                     else:
                         ## ==============================================
                         ## pause a bit and retry...
                         ## ==============================================
-                        utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
+                        if self.verbose:
+                            utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
                         time.sleep(10)
                         Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                             dst_fn,
@@ -445,7 +448,8 @@ class Fetch:
                         self.verbose=False
                     
                 else:
-                    utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
+                    if self.verbose:
+                        utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
                     status = -1
 
         except UnboundLocalError as e:

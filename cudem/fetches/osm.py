@@ -40,7 +40,7 @@ import cudem.fetches.utils as f_utils
 class OpenStreetMap(f_utils.FetchModule):
     """Fetch OSM data"""
     
-    def __init__(self, q=None, fmt='osm', planet=False, chunks=True, **kwargs):
+    def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
         super().__init__(**kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
         self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
@@ -60,12 +60,12 @@ class OpenStreetMap(f_utils.FetchModule):
         if self.q == 'buildings':
             self.h = '[maxsize:2000000000]'
             self.q = '''
-            (way["building"];
+            (way["building"]{};
             relation["building"]["type"="multipolygon"];
             );
             (._;>;);
             out meta;
-            '''
+            '''.format('(if: length() > {})'.format(min_length) if min_length is not None else '')
         
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
                          'referer': 'https://lz4.overpass-api.de/' }
@@ -89,12 +89,12 @@ class OpenStreetMap(f_utils.FetchModule):
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > 1 or y_delta > 1:
+            if x_delta > .25 or y_delta > .25:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
-                    n_chunk = int(xcount*(1/x_delta))
+                    n_chunk = int(xcount*(.25/x_delta))
                 elif y_delta > x_delta:
-                    n_chunk = int(ycount*(1/y_delta))
+                    n_chunk = int(ycount*(.25/y_delta))
             else:
                 n_chunk = None
 

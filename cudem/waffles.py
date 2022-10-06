@@ -2144,7 +2144,7 @@ class WafflesCoastline(Waffle):
             want_osm_planet=False,
             invert=False,
             polygonize=True,
-            osm_tries=3,
+            osm_tries=5,
             **kwargs
     ):
         """Generate a landmask from various sources.
@@ -2164,6 +2164,7 @@ class WafflesCoastline(Waffle):
             'want_lakes':want_lakes,
             'want_buildings':want_buildings,
             'want_osm_planet':want_osm_planet,
+            'osm_tries':osm_tries,
             'invert':invert,
             'polygonize':polygonize
         }
@@ -2177,7 +2178,7 @@ class WafflesCoastline(Waffle):
         self.want_osm_planet = want_osm_planet
         self.invert = invert
         self.polygonize = polygonize
-        self.osm_tries = utils.int_or(osm_tries, 3)
+        self.osm_tries = utils.int_or(osm_tries, 5)
 
         self.coast_array = None
         self.ds_config = None
@@ -2448,6 +2449,11 @@ class WafflesCoastline(Waffle):
         this_osm._outdir = self.cache_dir
         this_osm.run()
 
+        fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, check_size=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+        
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         dst_srs.AutoIdentifyEPSG()
@@ -2455,9 +2461,12 @@ class WafflesCoastline(Waffle):
         dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        
-        for osm_result in this_osm.results:
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=self.verbose).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=100) >= 0:
+
+        _osm_p = utils.CliProgress('fetching and processing OSM buildings')
+        for n, osm_result in enumerate(this_osm.results):
+            _osm_p.update_perc((n, len(this_osm.results)))
+            #if cudem.fetches.utils.Fetch(osm_result[0], verbose=False).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=100) >= 0:
+            if True:
                 if osm_result[-1] == 'bz2':
                     osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
                     osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
@@ -2532,7 +2541,7 @@ class WafflesCoastline(Waffle):
                 #    utils.remove_glob(osm_file)
             #else:
             #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
-            
+        _osm_p.end(0, 'Fetched and Processed OMS buildings')
         bldg_ds = bldg_warp_ds = None
         
     def _load_data(self):
