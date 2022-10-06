@@ -348,7 +348,7 @@ class Fetch:
 
     def fetch_file(
             self, dst_fn, params=None, datatype=None, overwrite=False,
-            timeout=5, read_timeout=50, tries=3, check_size=True
+            timeout=5, read_timeout=100, tries=5, check_size=True
     ):
         """fetch src_url and save to dst_fn"""
     
@@ -435,14 +435,14 @@ class Fetch:
                         ## ==============================================
                         if self.verbose:
                             utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
-                        time.sleep(15)
+                        time.sleep(30)
                         Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                             dst_fn,
                             params=params,
                             datatype=datatype,
                             overwrite=overwrite,
-                            timeout=timeout,
-                            read_timeout=read_timeout,
+                            timeout=timeout+5,
+                            read_timeout=read_timeout+50,
                             tries=tries-1
                         )
                         self.verbose=False

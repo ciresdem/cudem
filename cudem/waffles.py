@@ -2449,10 +2449,10 @@ class WafflesCoastline(Waffle):
         this_osm._outdir = self.cache_dir
         this_osm.run()
 
-        fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
+        # fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, check_size=False)
+        # fr.daemon = True
+        # fr.start()
+        # fr.join()
         
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
@@ -2465,8 +2465,8 @@ class WafflesCoastline(Waffle):
         _osm_p = utils.CliProgress('processing OSM buildings')
         for n, osm_result in enumerate(this_osm.results):
             _osm_p.update_perc((n, len(this_osm.results)))
-            #if cudem.fetches.utils.Fetch(osm_result[0], verbose=False).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=100) >= 0:
-            if True:
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=150) >= 0:
+                #if True:
                 if osm_result[-1] == 'bz2':
                     osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
                     osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
