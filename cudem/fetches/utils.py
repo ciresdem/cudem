@@ -435,7 +435,7 @@ class Fetch:
                         ## ==============================================
                         if self.verbose:
                             utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
-                        time.sleep(30)
+                        time.sleep(10)
                         Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                             dst_fn,
                             params=params,
