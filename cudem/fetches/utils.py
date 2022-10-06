@@ -375,8 +375,11 @@ class Fetch:
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
                 
                 req_h = req.headers
+                #utils.echo_msg(req_h)
                 if 'Content-length' in req_h:
                     req_s = int(req_h['Content-length'])
+                if 'Content-Length' in req_h:
+                    req_s = int(req_h['Content-Length'])
                 else: req_s = -1
 
                 try:

@@ -58,7 +58,8 @@ class OpenStreetMap(f_utils.FetchModule):
         self.h = ''
         
         if self.q == 'buildings':
-            self.h = '[maxsize:2000000000]'
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
             self.q = '''
             (way["building"]{};
             relation["building"]["type"="multipolygon"];
@@ -120,7 +121,7 @@ class OpenStreetMap(f_utils.FetchModule):
                 #utils.echo_msg('using query: {}'.format(osm_q_))
                 osm_data = f_utils.urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
-
+                
                 self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
 
         else:

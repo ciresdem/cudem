@@ -2444,7 +2444,7 @@ class WafflesCoastline(Waffle):
         # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
         this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm', min_length=450
         )
         this_osm._outdir = self.cache_dir
         this_osm.run()
@@ -2465,7 +2465,7 @@ class WafflesCoastline(Waffle):
         _osm_p = utils.CliProgress('processing OSM buildings')
         for n, osm_result in enumerate(this_osm.results):
             _osm_p.update_perc((n, len(this_osm.results)))
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=150) >= 0:
+            if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
                 #if True:
                 if osm_result[-1] == 'bz2':
                     osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
