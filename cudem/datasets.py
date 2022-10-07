@@ -32,7 +32,8 @@ import json
 import laspy as lp
 import copy
 import csv
-
+import math
+                        
 import numpy as np
 from scipy.spatial import ConvexHull
 
@@ -716,6 +717,7 @@ class ElevationDataset():
             return(out_arrays, dst_gt if want_gt else None, ds_config if want_ds_config else None)
         else:
             utils.echo_error_msg('invalid region {}'.format(block_region))
+            return(None)
     
     def block_xyz(self, want_gmt=False):
         """block the src_xyz data to the mean block value
@@ -947,7 +949,13 @@ class XYZFile(ElevationDataset):
         self.delim = delim
         if delim is not None:
             self._known_delims.insert(0, delim)
+            
+        self.rem = False
+        if x_offset == 'REM':
+            x_offset = 0
+            self.rem = True
         self.scoff = True if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0 else False
+            
 
         super().__init__(**kwargs)
         
@@ -1041,7 +1049,8 @@ class XYZFile(ElevationDataset):
 
             for arr in xyz_ds.yield_array():
                 yield(arr)
-
+                
+            xyz_ds = None
             utils.remove_glob('{}.tif*'.format(ofn))
 
         elif mode == 'block':
@@ -1095,11 +1104,15 @@ class XYZFile(ElevationDataset):
                 except Exception as e:
                     utils.echo_error_msg('{} ; {}'.format(e, this_xyz))
                     this_xyz = xyzfun.XYZPoint()
+
                 if this_xyz.valid_p():
                     if self.scoff:
                         this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
                         this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                         this_xyz.z *= self.z_scale
+
+                    if self.rem:
+                        this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
                     this_xyz.w = w if self.weight is None else self.weight * w                        
                     if self.dst_trans is not None:
@@ -1436,8 +1449,8 @@ class RasterFile(ElevationDataset):
                 self.warp_region.warp(self.dst_srs)
            
             if self.region is not None:
-                if not regions.regions_within_ogr_p(self.warp_region, self.region) :
-                    self.warp_region = self.region
+                if not regions.regions_within_ogr_p(self.warp_region, self.region):
+                    self.warp_region = self.region.copy()
                 else:
                     self.warp_region.cut(self.region, self.x_inc, self.y_inc)
                 
@@ -1446,20 +1459,19 @@ class RasterFile(ElevationDataset):
                     
             tmp_ds = self.fn
             src_ds = gdal.Open(self.fn)
-            if src_ds is None:
-                return(src_ds)
             
-            mt = src_ds.GetMetadata()            
-            ## remake this grid if it's grid-node
-            if 'AREA_OR_POINT' in mt.keys():
-                if mt['AREA_OR_POINT'].lower() == 'point':
-                    ds_config = demfun.gather_infos(src_ds)
-                    tmp_ds = demfun.generate_mem_ds(ds_config)            
-                    band = tmp_ds.GetRasterBand(1)
-                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())            
-                    tmp_ds.FlushCache()
+            if src_ds is not None:
+                mt = src_ds.GetMetadata()            
+                ## remake this grid if it's grid-node
+                if 'AREA_OR_POINT' in mt.keys():
+                    if mt['AREA_OR_POINT'].lower() == 'point':
+                        ds_config = demfun.gather_infos(src_ds)
+                        tmp_ds = demfun.generate_mem_ds(ds_config)            
+                        band = tmp_ds.GetRasterBand(1)
+                        band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())            
+                        tmp_ds.FlushCache()
                     
-            src_ds = None
+                src_ds = None
 
             ## sample
             warp_ds = demfun.sample_warp(
@@ -1467,30 +1479,26 @@ class RasterFile(ElevationDataset):
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
                 ndv=ndv, verbose=False
-            )[0]            
+            )[0] 
             tmp_ds = None
-
-            if warp_ds is None:
-                return(warp_ds)
+            if warp_ds is not None:
+                ## clip
+                warp_ds_config = demfun.gather_infos(warp_ds)
+                gt = warp_ds_config['geoT']
+                srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
+                warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+                out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                                 warp_ds_config['proj'], warp_ds_config['dt'], warp_ds_config['ndv'],
+                                                 warp_ds_config['fmt'])
             
-            ## clip
-            warp_ds_config = demfun.gather_infos(warp_ds)
-            gt = warp_ds_config['geoT']
-            srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
-            warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-            out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
-                                             warp_ds_config['proj'], warp_ds_config['dt'], warp_ds_config['ndv'],
-                                             warp_ds_config['fmt'])
-            
-            src_ds = demfun.generate_mem_ds(out_ds_config)
-            if src_ds is None:
-                return(src_ds)
-            
-            band = src_ds.GetRasterBand(1)
-            band.WriteArray(warp_arr)
-            src_ds.FlushCache()
-            warp_ds = None
+                src_ds = demfun.generate_mem_ds(out_ds_config)
+                if src_ds is not None:
+                    band = src_ds.GetRasterBand(1)
+                    band.WriteArray(warp_arr)
+                    src_ds.FlushCache()
+                    
+                warp_ds = warp_arr = None
             
         else:
             if self.open_options:
@@ -1579,7 +1587,7 @@ class RasterFile(ElevationDataset):
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
                 msk_band = src_mask.GetRasterBand(1)
-                
+            
             if self.weight_mask is not None:
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
@@ -1729,16 +1737,13 @@ class RasterFile(ElevationDataset):
                     )
                 )
 
-            #print(src_arr.shape)
-            #print(src_weight.shape)
             count_arr = np.zeros((src_arr.shape[0], src_arr.shape[1]))
-            #print(count_arr.shape)
             count_arr[~np.isnan(src_arr)] = 1
             src_arrs = {'mean': src_arr, 'weight': src_weight, 'count': count_arr}
-            #yield(src_arr, dst_srcwin, dst_gt, src_weight)
             yield(src_arrs, dst_srcwin, dst_gt)
             src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
-        src_ds = src_weight = src_arr = None
+            
+        src_ds = src_weight = None
 
     ##
     ## Testing_

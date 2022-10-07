@@ -361,7 +361,8 @@ class Waffle:
                 tmp_w[w_arr > tmp_w] = w_arr[w_arr > tmp_w]
                 z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
                 weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
-
+                tmp_w = tmp_z = None
+                
             arr = w_arr = c_arr = None
 
         count_array[count_array == 0] = np.nan
@@ -1820,7 +1821,7 @@ DEM generation.
         
     def run(self):
         pre = self.pre_count
-        self.p_region.buffer(pct=self.pre_count, x_inc=self.xinc, y_inc=self.yinc)
+        #self.p_region.buffer(pct=self.pre_count, x_inc=self.xinc, y_inc=self.yinc)
         pre_weight = 0
         pre_region = self.p_region.copy()
         pre_region.wmin = None
@@ -1872,30 +1873,28 @@ DEM generation.
             ysample = self.yinc * (3**(pre - 1))
             if xsample == 0: xsample = self.xinc
             if ysample == 0: ysample = self.yinc
+
+            #pre_region = self._proc_region()
+            #pre_region.buffer(pct=pre, x_inc=self.xinc, y_inc=self.yinc)
             
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
-                #pre_weight = self.min_weight/(3**pre) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
+                utils.echo_msg(pre_weight)
                 pre_data = [
                     '{},200:weight_mask={},1'.format(n, w),
                     '{}.tif,200,{}'.format(
                         utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
                     )
                 ]
-                # if pre == 0 and self.landmask:
-                #     pre_data.append('copernicus:datatype=1,-11,{}'.format(pre_weight))
                 pre_region.wmin = pre_weight
-
-            pre_region = self._proc_region()
-            pre_region.buffer(pct=pre)
 
             if pre == 0:
                 pre_region.zmax = None
 
-            if pre != self.pre_count:
-                pre_region.wmin = pre_weight
+            #if pre != self.pre_count:
+            #    pre_region.wmin = pre_weight
                 
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
             utils.echo_msg('pre region: {}'.format(pre_region))

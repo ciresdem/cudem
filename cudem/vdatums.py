@@ -216,8 +216,8 @@ def get_vdatum_by_name(datum_name):
 
 #vdatum_cache = utils.cudem_cache()
 
-def vdatum_cache():
-    return(utils.cudem_cache())
+#def vdatum_cache():
+#    return(utils.cudem_cache())
 
 class VerticalTransform:
     
@@ -511,6 +511,7 @@ class VerticalTransform:
                 epsg_in = epsg_out
 
             trans_array = trans_array + tmp_trans
+            tmp_trans = None
             
         return(trans_array)
     
@@ -526,6 +527,7 @@ class VerticalTransform:
 
             if outfile is not None:
                 utils.gdal_write(trans_array, outfile, trans_infos)
+                trans_array = None
                 return(outfile)
             else:
                 return(trans_array, trans_infos)

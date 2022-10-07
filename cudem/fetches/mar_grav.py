@@ -74,25 +74,86 @@ class MarGrav(f_utils.FetchModule):
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
-            _ds = datasets.XYZFile(
-                fn=src_data,
-                data_format=168,
-                skip=1,
-                #x_offset=-180,
+
+            utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(self.region.format('gmt'), src_data), verbose=True)
+            
+            _ds = datasets.RasterFile(
+                fn='mar_grav60s.tif',
+                data_format=200,
                 src_srs='epsg:4326+3855',
                 dst_srs=self.dst_srs,
-                src_region=self.region,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
-                verbose=self.verbose,
-                remote=True
+                weight=self.weight,
+                src_region=self.region,
+                verbose=self.verbose
             )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
+            
+            # _ds = datasets.XYZFile(
+            #     fn=src_data,
+            #     data_format=168,
+            #     skip=1,
+            #     x_offset='REM',
+            #     src_srs='epsg:4326+3855',
+            #     dst_srs=self.dst_srs,
+            #     src_region=self.region,
+            #     x_inc=self.x_inc,
+            #     y_inc=self.y_inc,
+            #     verbose=self.verbose,
+            #     remote=True
+            # )
+            # #_ds.generate_inf()
+            # for xyz in _ds.yield_xyz():
+            #     yield(xyz)
                 
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
             
-        utils.remove_glob('{}*'.format(src_data))                
+        utils.remove_glob('{}*'.format(src_data))
+
+
+    def yield_array(self, entry):
+        src_data = 'mar_grav_tmp.xyz'
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose, verify=False
+        ).fetch_file(src_data) == 0:
+            utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(self.region.format('gmt'), src_data), verbose=True)
+            
+            _ds = datasets.RasterFile(
+                fn='mar_grav60s.tif',
+                data_format=200,
+                src_srs='epsg:4326+3855',
+                dst_srs=self.dst_srs,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                weight=self.weight,
+                src_region=self.region,
+                verbose=self.verbose
+            )
+
+            # _ds = datasets.XYZFile(
+            #     fn=src_data,
+            #     data_format=168,
+            #     skip=1,
+            #     #x_offset=-180,
+            #     src_srs='epsg:4326+3855',
+            #     dst_srs=self.dst_srs,
+            #     src_region=self.region,
+            #     x_inc=self.x_inc,
+            #     y_inc=self.y_inc,
+            #     verbose=self.verbose,
+            #     remote=True
+            # )
+            # _ds.generate_inf()
+            for arr in _ds.yield_array():
+                yield(arr)
+                
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
+            
+        utils.remove_glob('{}*'.format(src_data))                        
+        
 
 ### End

@@ -862,7 +862,7 @@ def gdal_write(
             else: pass
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
         ds.GetRasterBand(1).WriteArray(src_arr)
-        ds = None        
+        ds = src_arr = None        
         return(dst_gdal, 0)
     else:
         return(None, -1)
