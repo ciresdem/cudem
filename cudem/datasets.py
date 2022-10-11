@@ -1070,6 +1070,29 @@ class XYZFile(ElevationDataset):
             yield(src_arrs, dst_srcwin, src_gt)
             src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
 
+        elif mode == 'idw':
+            ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])            
+            utils.run_cmd('waffles {} -M IDW:radius={} -O {} -E {}/{} {}'.format(self.region.format('gmt'), self.x_inc*3, ofn, self.x_inc, self.y_inc, self.fn), verbose=True)
+
+            xyz_ds = RasterFile(
+                fn='{}.tif'.format(ofn),
+                data_format=200,
+                src_srs=self.src_srs,
+                dst_srs=self.dst_srs,
+                weight=self.weight,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                sample_alg=self.sample_alg,
+                src_region=self.region,
+                verbose=self.verbose
+            )
+
+            for arr in xyz_ds.yield_array():
+                yield(arr)
+                
+            xyz_ds = None
+            utils.remove_glob('{}.tif*'.format(ofn))
+            
     def yield_xyz(self):
         """xyz file parsing generator"""
         

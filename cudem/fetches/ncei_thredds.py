@@ -125,7 +125,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
                 )
                 if zv is not None:
                     for zvs in zv:
-                        print(zvs.text)
+                        #print(zvs.text)
                         if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
                             zvar = zvs.text
                             break
