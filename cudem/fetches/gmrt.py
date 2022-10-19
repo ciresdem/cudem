@@ -180,7 +180,7 @@ class GMRT(f_utils.FetchModule):
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
             if self.bathy_only:
-                ds = gdal.Open(src_data)
+                ds = gdal.Open(src_data, 1)
                 ds_config = demfun.gather_infos(ds)
                 band = ds.GetRasterBand(1)
                 comp_geot = ds_config['geoT']

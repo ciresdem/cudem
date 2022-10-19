@@ -306,21 +306,23 @@ class ElevationDataset():
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 
             self.infos = self.generate_inf(None if not self.verbose else _prog.update)
-            
-            if 'minmax' in self.infos:
-                if self.infos['minmax'] is not None:
-                    if write_inf:
-                        try:
-                            with open('{}.inf'.format(self.fn), 'w') as inf:
-                                inf.write(json.dumps(self.infos))
-                        except:
-                            pass
+            if self.infos is not None:
+                if 'minmax' in self.infos:
+                    if self.infos['minmax'] is not None:
+                        if write_inf:
+                            try:
+                                with open('{}.inf'.format(self.fn), 'w') as inf:
+                                    inf.write(json.dumps(self.infos))
+                            except:
+                                pass
 
-            if recursive_check and self.parent is not None:
-                self.parent.inf(check_hash=True)
-                
-            if self.verbose:
-                _prog.end(0, 'generated inf for {}'.format(self.fn))
+                if recursive_check and self.parent is not None:
+                    self.parent.inf(check_hash=True)
+
+                if self.verbose:
+                    _prog.end(0, 'generated inf for {}'.format(self.fn))
+            else:
+                sys.exit(-1)    
                 
         if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
             self.infos['src_srs'] = self.src_srs
@@ -1008,11 +1010,14 @@ class XYZFile(ElevationDataset):
 
     def line_delim(self, xyz_line):
         """guess a line delimiter"""
-        
+
         for delim in self._known_delims:
-            this_xyz = xyz_line.split(delim)
-            if len(this_xyz) > 1:
-                return(this_xyz)
+            try:
+                this_xyz = xyz_line.split(delim)
+                if len(this_xyz) > 1:
+                    return(this_xyz)
+            except:
+                pass
 
     def yield_array(self, mode='block'):
 

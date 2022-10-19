@@ -55,6 +55,7 @@ if __name__ == "__main__":
     chunk_step = None
     chunk_size = None
     agg_level = 3
+    replace = False
     i = 1
     
     argv = sys.argv
@@ -69,6 +70,8 @@ if __name__ == "__main__":
         elif arg == '-agg_level' or arg == '--agg_level' or arg == '-a':
             agg_level = utils.int_or(argv[i + 1])
             i = i + 1
+        elif arg == '-replace' or arg == '--replace' or arg == '-r':
+            replace = True
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
@@ -88,6 +91,6 @@ if __name__ == "__main__":
   
     dst_gdal = elev.split('.')[0] + '_fltr.tif'
     utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
-    demfun.filter_outliers_slp(elev, dst_gdal, chunk_size=chunk_size, chunk_step=chunk_step, agg_level=agg_level)
+    demfun.filter_outliers_slp(elev, dst_gdal, chunk_size=chunk_size, chunk_step=chunk_step, agg_level=agg_level, replace=replace)
 
 ### End

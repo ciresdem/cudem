@@ -157,8 +157,10 @@ class Datalist(datasets.ElevationDataset):
             ) for i, f in enumerate(self.v_fields)]
             
             [self.layer.SetFeature(feature) for feature in self.layer]
+            return(0)
         else:
             self.layer = None
+            return(-1)
 
     def _create_entry_feature(self, entry, entry_region):
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
@@ -188,38 +190,40 @@ class Datalist(datasets.ElevationDataset):
         self.infos['name'] = self.fn
         self.infos['numpts'] = 0
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self._init_datalist_vector()
-        
-        dst_srs_ = self.dst_srs
-        if self.dst_srs is not None:
-            self.dst_srs = self.dst_srs.split('+')[0]
-            
-        for entry in self.parse():
-            if self.verbose:
-                callback()
+        json_status = self._init_datalist_vector()
+        if json_status == 0:        
+            dst_srs_ = self.dst_srs
+            if self.dst_srs is not None:
+                self.dst_srs = self.dst_srs.split('+')[0]
 
-            if entry.src_srs is not None:
-                out_srs.append(entry.src_srs)
+            for entry in self.parse():
+                if self.verbose:
+                    callback()
 
-                if self.dst_srs is not None:
-                    #self.infos['src_srs'] = self.dst_srs
-                    e_region = regions.Region().from_list(entry.infos['minmax'])
-                    e_region.src_srs = entry.src_srs
-                    e_region.warp(self.dst_srs)
-                    entry_region = e_region.export_as_list(include_z=True)
+                if entry.src_srs is not None:
+                    out_srs.append(entry.src_srs)
+
+                    if self.dst_srs is not None:
+                        #self.infos['src_srs'] = self.dst_srs
+                        e_region = regions.Region().from_list(entry.infos['minmax'])
+                        e_region.src_srs = entry.src_srs
+                        e_region.warp(self.dst_srs)
+                        entry_region = e_region.export_as_list(include_z=True)
+                    else:
+                        entry_region = entry.infos['minmax']
+
                 else:
+                    out_srs.append(None)
                     entry_region = entry.infos['minmax']
 
-            else:
-                out_srs.append(None)
-                entry_region = entry.infos['minmax']
-
-            if regions.Region().from_list(entry_region).valid_p():
-                self._create_entry_feature(entry, regions.Region().from_list(entry_region))
-                out_regions.append(entry_region)
-                if 'numpts' in self.infos.keys():
-                    self.infos['numpts'] += entry.infos['numpts']
-
+                if regions.Region().from_list(entry_region).valid_p():
+                    self._create_entry_feature(entry, regions.Region().from_list(entry_region))
+                    out_regions.append(entry_region)
+                    if 'numpts' in self.infos.keys():
+                        self.infos['numpts'] += entry.infos['numpts']
+        else:
+            return(None)
+        
         self.ds = self.layer = None
         count = 0
         for this_region in out_regions:
@@ -264,49 +268,53 @@ class Datalist(datasets.ElevationDataset):
         if os.path.exists('{}.json'.format(self.fn)):
             driver = ogr.GetDriverByName('GeoJSON')
             dl_ds = driver.Open('{}.json'.format(self.fn))
-            dl_layer = dl_ds.GetLayer()
-            ldefn = dl_layer.GetLayerDefn()
-            if self.region is not None:
-                _boundsGeom = self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom()
+            if dl_ds is None:
+                utils.echo_error_msg('could not open {}.json'.format(self.fn))
+                status = -1
             else:
-                _boundsGeom = None
-
-            dl_layer.SetSpatialFilter(_boundsGeom)
-            count = len(dl_layer)
-            
-            for l,feat in enumerate(dl_layer):
-                #_prog.update_perc((l, count))
+                dl_layer = dl_ds.GetLayer()
+                ldefn = dl_layer.GetLayerDefn()
                 if self.region is not None:
-                    w_region = self.region.w_region()
-                    if w_region[0] is not None:
-                        if float(feat.GetField('Weight')) < w_region[0]:
-                            continue
-                    if w_region[1] is not None:
-                        if float(feat.GetField('Weight')) > w_region[1]:
-                            continue
-                        
-                data_set = DatasetFactory(
-                    '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
-                    weight=self.weight,
-                    parent=self,
-                    src_region=self.region,
-                    metadata=copy.deepcopy(self.metadata),
-                    src_srs=self.src_srs,
-                    dst_srs=self.dst_srs,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    sample_alg=self.sample_alg,
-                    verbose=self.verbose
-                ).acquire()
-                if data_set is not None and data_set.valid_p(
-                        fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                ):
-                    for ds in data_set.parse():
-                        self.data_entries.append(ds)
-                        yield(ds)
-                        
-                _prog.update_perc((l, count))
-            dl_ds = dl_layer = None
+                    _boundsGeom = self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom()
+                else:
+                    _boundsGeom = None
+
+                dl_layer.SetSpatialFilter(_boundsGeom)
+                count = len(dl_layer)
+
+                for l,feat in enumerate(dl_layer):
+                    #_prog.update_perc((l, count))
+                    if self.region is not None:
+                        w_region = self.region.w_region()
+                        if w_region[0] is not None:
+                            if float(feat.GetField('Weight')) < w_region[0]:
+                                continue
+                        if w_region[1] is not None:
+                            if float(feat.GetField('Weight')) > w_region[1]:
+                                continue
+
+                    data_set = DatasetFactory(
+                        '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
+                        weight=self.weight,
+                        parent=self,
+                        src_region=self.region,
+                        metadata=copy.deepcopy(self.metadata),
+                        src_srs=self.src_srs,
+                        dst_srs=self.dst_srs,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
+                        sample_alg=self.sample_alg,
+                        verbose=self.verbose
+                    ).acquire()
+                    if data_set is not None and data_set.valid_p(
+                            fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                    ):
+                        for ds in data_set.parse():
+                            self.data_entries.append(ds)
+                            yield(ds)
+
+                    _prog.update_perc((l, count))
+                dl_ds = dl_layer = None
         else:
             status = -1
             for ds in self.parse():

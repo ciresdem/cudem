@@ -334,21 +334,23 @@ class Waffle:
         weight_array = np.zeros((ycount, xcount))
 
         if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid using {} method'.format(
-                ycount, xcount, 'supercede' if supercede else 'weighted mean'
+            utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
+                ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
             ))
 
         for arrs, srcwin, gt in self.yield_array():            
 
             arr = arrs['mean']
             w_arr = arrs['weight']
-            #c_arr = arrs['count']
+            c_arr = arrs['count']
+            c_arr[np.isnan(arr)] = 0
+            c_arr[np.isnan(c_arr)] = 0
             w_arr[np.isnan(arr)] = 0
             w_arr[np.isnan(w_arr)] = 0
             arr[np.isnan(arr)] = 0
                   
-            c_arr = np.zeros((srcwin[3], srcwin[2]))
-            c_arr[~np.isnan(arr)] = 1
+            #c_arr = np.zeros((srcwin[3], srcwin[2]))
+            #c_arr[~np.isnan(arr)] = 1
             
             count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr            
             if not supercede:
@@ -397,12 +399,12 @@ class Waffle:
                 'GTiff'
             )
 
-            utils.gdal_write(z_array, '{}_s.tif'.format(self.name), ds_config, verbose=True)
+            utils.gdal_write(z_array, '{}_s.tif'.format(out_name), ds_config, verbose=True)
             if keep_weights:
-                utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
+                utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
                 
             if keep_count:
-                utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
+                utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
             
         z_array[z_array == self.ndv] = np.nan
         weight_array[weight_array == self.ndv] = np.nan
@@ -1830,13 +1832,37 @@ DEM generation.
         coast = '{}_cst'.format(self.name)
 
         #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
-        self._stacks_array(out_name=self.name, keep_weights=True, keep_count=True, supercede=True)
-        n = '{}_s.tif'.format(self.name)
-        w = '{}_w.tif'.format(self.name)
-        c = '{}_c.tif'.format(self.name)
+        self._stacks_array(out_name='{}_stack'.format(self.name), keep_weights=True, keep_count=True, supercede=True)
+        n = '{}_stack_s.tif'.format(self.name)
+        w = '{}_stack_w.tif'.format(self.name)
+        c = '{}_stack_c.tif'.format(self.name)
+
+        demfun.filter_outliers_slp(n, '_tmp_fltr.tif', agg_level=5, replace=False)
+        os.rename('_tmp_fltr.tif', n)
+        
+        # src_ds = gdal.Open(n)
+        # if src_ds is not None:
+        #     src_band = src_ds.GetRasterBand(1)
+        #     src_array = src_band.ReadAsArray()
+        #     print(len(src_array[src_array == src_band.GetNoDataValue()]))
+
+        # src_ds = None
+        # msk_ds = gdal.Open(w)
+        # if msk_ds is not None:
+        #     msk_band = msk_ds.GetRasterBand(1)
+        #     msk_array = msk_band.ReadAsArray()
+        #     print(len(msk_array[msk_array == msk_band.GetNoDataValue()]))
+            
+        # msk_ds = None
+        
+        demfun.mask_(w, n, '_tmp_w.tif')
+        os.rename('_tmp_w.tif', w)
+        demfun.mask_(c, n, '_tmp_c.tif')
+        os.rename('_tmp_c.tif', c)
+
         if self.min_weight is None:
             self.min_weight = demfun.percentile(w, 75)
-            
+        
         utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
         

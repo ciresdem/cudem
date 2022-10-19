@@ -82,7 +82,7 @@ class MBDB(f_utils.FetchModule):
 class Multibeam(f_utils.FetchModule):
     """Fetch multibeam data from NOAA NCEI"""
     
-    def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, **kwargs):
+    def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, make_datalist=False, **kwargs):
         super().__init__(**kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -97,6 +97,7 @@ class Multibeam(f_utils.FetchModule):
         self.min_year = utils.int_or(min_year)
         self.survey_id = survey_id
         self.exclude = exclude
+        self.make_datalist = make_datalist
 
     def mb_inf_data_format(self, src_inf):
         """extract the data format from the mbsystem inf file."""
@@ -193,11 +194,23 @@ class Multibeam(f_utils.FetchModule):
                         else:
                             self.results.append(survs)
 
-        # with open('mb_inf.txt', 'w') as mb_inf_txt:
-        #     for entry in self.results:
-        #         mb_inf_txt.write(self.parse_entry_inf(entry))
-        #         mb_inf_txt.write('\n')
-        #         #self.echo_inf(entry)
+        if self.make_datalist:
+            s_got = []
+            with open('mb_inf.txt', 'w') as mb_inf_txt:
+                for entry in self.results:
+                    try:
+                        survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
+                        if survey in s_got:
+                            continue
+                        
+                        this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                        this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+                        mb_inf_txt.write('{} -1 {}\n'.format(survey, this_weight))
+                        s_got.append(survey)
+                        #mb_inf_txt.write('\n')
+                        #self.echo_inf(entry)
+                    except:
+                        pass
 
     def echo_inf(self, entry):
         print(self.parse_entry_inf(entry))

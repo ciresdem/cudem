@@ -41,12 +41,15 @@ import cudem.fetches.utils as f_utils
 class MarGrav(f_utils.FetchModule):
     '''Fetch mar_grav sattelite altimetry topography'''
     
-    def __init__(self, mag=1, **kwargs):
+    def __init__(self, mag=1, upper_limit=None, lower_limit=None, **kwargs):
         super().__init__(**kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
         self._outdir = os.path.join(os.getcwd(), 'mar_grav')
         self.name = 'mar_grav'
         self.mag = mag if mag == 1 else 0.1
+        self.grav_region = self.region.copy()
+        self.grav_region.zmaz = utils.float_or(upper_limit)
+        self.grav_region.zmin = utils.float_or(lower_limit)
 
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -74,8 +77,7 @@ class MarGrav(f_utils.FetchModule):
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
-
-            utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(self.region.format('gmt'), src_data), verbose=True)
+            utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(self.grav_region.format('gmt'), src_data), verbose=True)
             
             _ds = datasets.RasterFile(
                 fn='mar_grav60s.tif',
@@ -118,8 +120,9 @@ class MarGrav(f_utils.FetchModule):
         src_data = 'mar_grav_tmp.xyz'
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
-        ).fetch_file(src_data) == 0:
-            utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(self.region.format('gmt'), src_data), verbose=True)
+        ).fetch_file(src_data) == 0:            
+            #utils.run_cmd('waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1 -k'.format(self.grav_region.format('gmt'), src_data), verbose=True)
+            utils.run_cmd('waffles {} -E 15s -M IDW:radius=30s:min_points=1 -O mar_grav60s {},168:x_offset=REM,1 -k'.format(self.grav_region.format('gmt'), src_data), verbose=True)
             
             _ds = datasets.RasterFile(
                 fn='mar_grav60s.tif',

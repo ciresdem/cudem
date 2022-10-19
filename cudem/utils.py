@@ -265,7 +265,9 @@ def remove_glob(*args):
                     remove_glob('{}/*'.format(g))
                     os.removedirs(g)
                 else: os.remove(g)
-        except Exception as e: print(e)
+        except Exception as e:
+            echo_error_msg(e)
+            return(-1)
         
     return(0)
 
