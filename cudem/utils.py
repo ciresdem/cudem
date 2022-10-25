@@ -864,8 +864,8 @@ def gdal_write(
                 echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
             else: pass
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
-        print(src_arr.size)
-        print(src_arr.shape)
+        #print(src_arr.size)
+        #print(src_arr.shape)
         ds.GetRasterBand(1).WriteArray(src_arr)
         ds = src_arr = None        
         return(dst_gdal, 0)
