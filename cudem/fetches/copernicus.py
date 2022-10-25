@@ -28,6 +28,8 @@
 ##
 ## Fetches from opentopography
 ##
+## datatype of 1 is 10 m and datatype of 3 is 30 m
+##
 ### Code:
 
 import os
@@ -165,7 +167,7 @@ class CopernicusDEM(f_utils.FetchModule):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
-                demfun.set_nodata(src_cop_dem, 0)
+                demfun.set_nodata(src_cop_dem, 0, verbose=False)
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
@@ -181,8 +183,8 @@ class CopernicusDEM(f_utils.FetchModule):
                     #if xyz.z != 0:
                     yield(xyz)
                         
-                utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
-        utils.remove_glob(entry[1])
+                #utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
+        #utils.remove_glob(entry[1])
 
     def yield_array(self, entry):
         if f_utils.Fetch(
@@ -190,7 +192,7 @@ class CopernicusDEM(f_utils.FetchModule):
         ).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
-                demfun.set_nodata(src_cop_dem, 0)
+                demfun.set_nodata(src_cop_dem, 0, verbose=False)
                 _ds = datasets.RasterFile(
                     fn=src_cop_dem,
                     data_format=200,
@@ -205,8 +207,8 @@ class CopernicusDEM(f_utils.FetchModule):
                 for arr in _ds.yield_array():
                     yield(arr)
                         
-                utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
-        utils.remove_glob(entry[1])
+                #utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
+        #utils.remove_glob(entry[1])
         
 if __name__ == '__main__':
     cop_dem = CopernicusDEM()

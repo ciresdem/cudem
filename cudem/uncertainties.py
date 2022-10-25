@@ -95,13 +95,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
         self.prox = '{}_prox.tif'.format(self.dem.mod)
         utils.echo_msg('generating proximity grid {}...'.format(self.prox))
         demfun.proximity(self.dem.mask_fn, self.prox)
-        if self.dem.epsg is not None: demfun.set_epsg(self.prox, self.dem.epsg)
+        #if self.dem.dst_srs is not None: demfun.set_srs(self.prox, self.dem.dst_srs)
+        if self.dem.dst_srs is not None: demfun.set_srs(self.prox, self.dem.dst_srs)
 
     def _gen_slope(self):
         self.slope = '{}_slope.tif'.format(self.dem.mod)
         utils.echo_msg('generating proximity grid {}...'.format(self.slope))
         demfun.proximity(self.dem.fn, self.slope)
-        if self.dem.epsg is not None: demfun.set_epsg(self.slope, self.dem.epsg)
+        if self.dem.dst_srs is not None: demfun.set_srs(self.slope, self.dem.dst_srs)
 
     def _regions_sort(self, trainers, t_num=25, verbose=False):
         """sort regions by distance; regions is a list of regions [xmin, xmax, ymin, ymax].
@@ -319,7 +320,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                     #perc = int(float(n+(len(train_h) * z))/(len(train_h)*len(trains)) * 100)
                     #_prog.update_perc((int(float(n+(len(train_h) * z))), len(train_h)*len(trains)))
                     _prog.update()
-                    this_region = sub_region[0]
+                    this_region = sub_region[0].copy()
                     if sub_region[3] < ss_samp:
                         ss_samp = None
 
@@ -329,11 +330,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
                     o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
                     ds = gdal.Open(self.dem.fn)
                     ds_config = demfun.gather_infos(ds)
-                    b_region = this_region
-                    b_region.buffer(20*self.dem.inc)
+                    b_region = this_region.copy()
+                    b_region.buffer(pct=20, x_inc=self.dem.xinc, y_inc=self.dem.yinc)
                     srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+                    cnt = 0
+                    
                     with open(o_xyz, 'w') as o_fh:
                         for xyz in demfun.parse(ds, srcwin=srcwin, mask=self.dem.mask_fn):
+                            cnt+=1
                             xyz.dump(dst_port=o_fh)
                     ds = None
 
@@ -361,11 +365,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## ==============================================
                         ## generate the random-sample DEM
                         ## ==============================================
+                        #try:
                         waff = waffles.WaffleFactory(
                             mod=self.dem.mod,
                             data=[s_outer, sub_xyz_head],
                             src_region=this_region,
-                            inc=self.dem.inc,
+                            xinc=self.dem.xinc,
+                            yinc=self.dem.yinc,
                             name='sub_{}'.format(n),
                             node=self.dem.node,
                             fmt=self.dem.fmt,
@@ -374,14 +380,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             weights=self.dem.weights,
                             sample=self.dem.sample,
                             clip=self.dem.clip,
-                            epsg=self.dem.epsg,
+                            dst_srs=self.dem.dst_srs,
                             mask=True,
                             verbose=False,
-                            clobber=True
+                            clobber=True,
                         )
                         waff.mod_args = self.dem.mod_args
                         wf = waff.acquire().generate()
-                        
+
                         if wf.valid_p():
                             ## ==============================================
                             ## generate the random-sample data PROX and SLOPE
@@ -399,7 +405,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             #sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
                             sub_dp = demfun.query(sub_xyd, sub_prox, 'xyzg')
                             #sub_ds = demfun.query(sub_dp, self.slope, 'g')
-                            
+
                             #if len(sub_dp) > 0:
                             #   if sub_dp.shape[0] == sub_ds.shape[0]:
                             #       sub_dp = np.append(sub_dp, sub_ds, 1)
@@ -412,7 +418,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             try:
                                 s_dp = np.concatenate((s_dp, sub_dp), axis = 0)
                             except: s_dp = sub_dp
-                        #else: s_dp = sub_dp
+                        else: s_dp = sub_dp
+                        #except:
+                        #    pass
                     utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
 
             if len(s_dp) > 0:
@@ -498,7 +506,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## ==============================================
         chnk_inc = int((self.region_info[self.dem.name][1] / math.sqrt(g_max)) / self.region_info[self.dem.name][3])
         #chnk_inc = 250
-        sub_regions = self.dem.region.chunk(self.dem.inc, chnk_inc)
+        sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
         ## ==============================================
@@ -558,7 +566,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
             math_cmd = 'gmt grdmath {} 0 AND ABS {} POW {} MUL {} ADD = {}_prox_unc.tif=gd+n-9999:GTiff\
             '.format(self.prox, ec_d[2], ec_d[1], 0, self.dem.name)
             utils.run_cmd(math_cmd, verbose = self.dem.verbose)
-        if self.dem.epsg is not None: status = demfun.set_epsg('{}_prox_unc.tif'.format(self.dem.name), epsg=self.dem.epsg)
+        if self.dem.dst_srs is not None: status = demfun.set_srs('{}_prox_unc.tif'.format(self.dem.name), epsg=self.dem.dst_srs)
         utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
 
         # utils.echo_msg('applying coefficient to SLOPE grid')
@@ -568,7 +576,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #     math_cmd = 'gmt grdmath {} 0 AND ABS {} POW {} MUL {} ADD = {}_slp_unc.tif=gd+n-9999:GTiff\
         #     '.format(self.slope, ec_s[2], ec_s[1], 0, self.dem.name)
         #     utils.run_cmd(math_cmd, verbose = self.dem.verbose)
-        # if self.dem.epsg is not None: status = demfun.set_epsg('{}_prox_unc.tif'.format(self.dem.name), epsg=self.dem.epsg)
+        # if self.dem.dst_srs is not None: status = demfun.set_srs('{}_prox_unc.tif'.format(self.dem.name), epsg=self.dem.dst_srs)
         # utils.echo_msg('applied coefficient {} to SLOPE grid'.format(ec_s))
 
         utils.remove_glob(self.prox)
@@ -644,16 +652,22 @@ def uncertainties_cli(argv = sys.argv):
             #try:
             with open(wg_user, 'r') as wgj:
                 wg = json.load(wgj)
+                if wg['src_region'] is not None:
+                    wg['src_region'] = regions.Region().from_list(
+                        wg['src_region']
+                    )
+                    
+                #for key in wg.keys():
+                #print(key)
+                this_waffle = waffles.WaffleFactory(**wg).acquire()
+                this_waffle.mask = True
+                this_waffle.clobber = False
 
-                for key in wg.keys():
-                    this_waffle = waffles.WaffleFactory(**wg).acquire()
-                    this_waffle.mask = True
-                    this_waffle.clobber = False
-                    if not this_waffle.valid_p():
-                        this_waffle.generate()
-
-                    i = InterpolationUncertainty(dem=this_waffle).run()
-                    utils.echo_msg(this_waffle)
+                if not this_waffle.valid_p():
+                    this_waffle.generate()
+                    
+                i = InterpolationUncertainty(dem=this_waffle).run()
+                utils.echo_msg(this_waffle)
 
                 sys.exit(0)
             # except Exception as e:

@@ -704,7 +704,7 @@ def gunzip(gz_file):
         
     return(guz_file)
     
-def p_unzip(src_file, exts=None):
+def p_unzip(src_file, exts=None, outdir='./'):
     """unzip/gunzip src_file based on `exts`
     
     Args:
@@ -722,10 +722,11 @@ def p_unzip(src_file, exts=None):
             for ext in exts:
                 for zf in zfs:
                     if ext == zf.split('.')[-1]:
-                        #if ext in zf:
-                        src_procs.append(os.path.basename(zf))
-                        with open(os.path.basename(zf), 'wb') as f:
-                            f.write(z.read(zf))
+                        src_procs.append(zf)
+                        if not os.path.exists(zf):
+                            echo_msg('Extracting {}'.format(zf))
+                            with open(zf, 'wb') as f:
+                                f.write(z.read(zf))
     elif src_file.split('.')[-1] == 'gz':
         try:
             tmp_proc = gunzip(src_file)
@@ -863,6 +864,8 @@ def gdal_write(
                 echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
             else: pass
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
+        print(src_arr.size)
+        print(src_arr.shape)
         ds.GetRasterBand(1).WriteArray(src_arr)
         ds = src_arr = None        
         return(dst_gdal, 0)

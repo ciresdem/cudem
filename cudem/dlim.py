@@ -42,6 +42,8 @@ import cudem
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+
+
 from cudem.fetches import fetches
 
 def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
@@ -496,6 +498,8 @@ class ZIPlist(datasets.ElevationDataset):
                 weight=self.weight,
                 parent=self,
                 src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
                 metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
@@ -534,6 +538,11 @@ class ZIPlist(datasets.ElevationDataset):
         for ds in self.parse_():
             for xyz in ds.yield_xyz():
                 yield(xyz)
+
+    def yield_array(self):
+        for ds in self.parse_():
+            for arr in ds.yield_array():
+                yield(arr)
 
 ## ==============================================
 ## dlim Fetcher dataset class

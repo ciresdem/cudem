@@ -1503,14 +1503,14 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbo
             if '{:g}'.format(z) not in nodata:
                 ln += 1
                 geo_x,geo_y = utils._pixel2geo(x, y, gt)
-                if warp is not None:
-                    #point = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, epsg=4326)
-                    point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
-                    point.Transform(dst_trans)
-                    pnt = point.GetPoint()
-                    xyz = xyzfun.XYZPoint(x=point.GetX(), y=point.GetY(), z=z)#from_list([pnt[0], pnt[1], z])
-                else:
-                    xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z)#line = [geo_x, geo_y, z]
+                # if warp is not None:
+                #     #point = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, epsg=4326)
+                #     point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
+                #     point.Transform(dst_trans)
+                #     pnt = point.GetPoint()
+                #     xyz = xyzfun.XYZPoint(x=point.GetX(), y=point.GetY(), z=z)#from_list([pnt[0], pnt[1], z])
+                # else:
+                xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z)#line = [geo_x, geo_y, z]
                 yield(xyz)
     band = None
     src_mask = None

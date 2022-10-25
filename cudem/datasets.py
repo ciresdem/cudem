@@ -626,7 +626,7 @@ class ElevationDataset():
             x_inc = inc
             y_inc = inc
         
-        out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}                   
+        out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}
         block_region = regions.Region().from_list(self.infos['minmax'])
         
         if self.dst_trans is not None:
@@ -958,7 +958,6 @@ class XYZFile(ElevationDataset):
             self.rem = True
         self.scoff = True if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0 else False
             
-
         super().__init__(**kwargs)
         
     def generate_inf(self, callback=lambda: False):
@@ -1614,6 +1613,7 @@ class RasterFile(ElevationDataset):
             weight_band = None
             if self.mask is not None:
                 src_mask = gdal.Open(self.mask)
+                msk_config = demfun.gather_infos(src_mask)
                 msk_band = src_mask.GetRasterBand(1)
             
             if self.weight_mask is not None:
@@ -1661,9 +1661,10 @@ class RasterFile(ElevationDataset):
                         
                 if msk_band is not None:
                    msk_data = msk_band.ReadAsArray(
-                       self.srcwin[0], y, self.srcwin[2], 1
+                       srcwin[0], y, srcwin[2], 1
                    )
-                   band_data[msk_data==0]=ndv
+                   band_data[msk_data==msk_config['ndv']]=ndv
+                   weight_data[msk_data==msk_config['ndv']]=ndv
                    
                 band_data = np.reshape(band_data, (srcwin[2], ))
                 if weight_band is not None:
@@ -1711,13 +1712,13 @@ class RasterFile(ElevationDataset):
             )
             dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
             src_arr[src_arr == ndv] = np.nan
-            
+                    
             if self.weight_mask is not None:
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
                         self.weight_mask, None, self.x_inc, self.y_inc,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                         ndv=ndv, verbose=self.verbose
+                         ndv=ndv, verbose=False
                     )[0]
                 else:
                     src_weight = gdal.Open(self.weight_mask)
@@ -1729,7 +1730,23 @@ class RasterFile(ElevationDataset):
             else:
                 src_weight = np.zeros((y_count, x_count))
                 src_weight[:] = self.weight
-            
+
+            if self.mask is not None:
+                mask_infos = demfun.infos(self.mask)
+                if self.x_inc is not None and self.y_inc is not None:
+                    src_mask = demfun.sample_warp(
+                        self.mask, None, self.x_inc, self.y_inc,
+                        src_region=self.warp_region, sample_alg=self.sample_alg,
+                        ndv=mask_infos['ndv'], verbose=False
+                    )[0]
+                else:
+                    src_mask = gdal.Open(self.mask)
+
+                mask_band = src_mask.GetRasterBand(1)
+                src_mask = mask_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                src_arr[src_mask == mask_infos['ndv']] = np.nan
+                src_weight[src_mask == mask_infos['ndv']] = np.nan
+                
             if self.region is not None and self.region.valid_p():
                 z_region = self.region.z_region()
                 if z_region[0] is not None:

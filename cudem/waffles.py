@@ -270,8 +270,6 @@ class Waffle:
             block=self.block
         ))
 
-    ## TODO: move following functions to datasets
-    ##
     def _xyz_ds(self):
         """Make a point vector OGR DataSet Object from src_xyz
 
@@ -370,6 +368,7 @@ class Waffle:
         count_array[count_array == 0] = np.nan
         weight_array[weight_array == 0] = np.nan
         z_array[np.isnan(weight_array)] = np.nan
+        
         if not supercede:
             weight_array = weight_array/count_array
             z_array = (z_array/weight_array)/count_array
@@ -405,11 +404,49 @@ class Waffle:
                 
             if keep_count:
                 utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
+
+            if self.mask:
+                mask_array = np.zeros((ycount, xcount))
+                mask_array[weight_array != self.ndv] = 1
+                utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=True)
+                mask_array = None
             
         z_array[z_array == self.ndv] = np.nan
         weight_array[weight_array == self.ndv] = np.nan
         count_array[count_array == self.ndv] = np.nan
         return(z_array, weight_array, count_array, ds_config)
+
+    def _mask_array(self):
+        xcount, ycount, dst_gt = self.p_region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc, node='grid'
+        )
+
+        gdt = gdal.GDT_Float32
+        mask_array = np.zeros((ycount, xcount))
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            self.dst_srs,
+            gdal.GDT_Float32,
+            self.ndv,
+            'GTiff'
+        )
+
+        if self.verbose:
+            utils.echo_msg('masking data to {}/{} grid to {}'.format(
+                ycount, xcount, self.mask_fn
+            ))
+
+        for arrs, srcwin, gt in self.yield_array():
+            cnt_arr = arrs['count']
+            cnt_arr[np.isnan(cnt_arr)] = 0
+            mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
+
+        mask_array[mask_array > 0] = 1
+        utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
+        mask_array = None
             
     def _xyz_block_array(self, min_count=None, out_name=None):
         """block the src_xyz data to the mean block value
@@ -480,49 +517,49 @@ class Waffle:
         count_array[count_array == self.ndv] = np.nan
         return(z_array, weight_array, count_array, dst_gt)
     
-    # def _xyz_block(self, src_xyz, out_name=None):
-    #     """block the src_xyz data to the mean block value
+    def _xyz_block(self, src_xyz, out_name=None):
+        """block the src_xyz data to the mean block value
 
-    #     Yields:
-    #       list: xyz data for each block with data
-    #     """
+        Yields:
+          list: xyz data for each block with data
+        """
 
-    #     z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz, out_name=out_name)
-    #     ycount, xcount = z_array.shape
+        z_array, weight_array, count_array, dst_gt = self._xyz_block_array(src_xyz, out_name=out_name)
+        ycount, xcount = z_array.shape
 
-    #     for y in range(0, ycount):
-    #         for x in range(0, xcount):
-    #             z = z_array[y,x]
-    #             if not np.isnan(z):
-    #                 geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-    #                 out_xyz = xyzfun.XYZPoint(
-    #                     x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
-    #                 )
-    #                 yield(out_xyz)
+        for y in range(0, ycount):
+            for x in range(0, xcount):
+                z = z_array[y,x]
+                if not np.isnan(z):
+                    geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
+                    out_xyz = xyzfun.XYZPoint(
+                        x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
+                    )
+                    yield(out_xyz)
 
-    #     z_array = weight_array = count_array = None
+        z_array = weight_array = count_array = None
 
-    # def _xyz_block_t(self, src_xyz):
-    #     """block the src_xyz data for fast lookup"""
+    def _xyz_block_t(self, src_xyz):
+        """block the src_xyz data for fast lookup"""
 
-    #     xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-    #     self.block_t = np.empty((ycount, xcount), dtype=object)
-    #     for y in range(0, ycount):
-    #         for x in range(0, xcount):
-    #             self.block_t[y,x] = []
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        self.block_t = np.empty((ycount, xcount), dtype=object)
+        for y in range(0, ycount):
+            for x in range(0, xcount):
+                self.block_t[y,x] = []
 
-    #     if self.verbose:
-    #         utils.echo_msg(
-    #             'blocking data into {} buckets'.format(ycount*xcount)
-    #         )
+        if self.verbose:
+            utils.echo_msg(
+                'blocking data into {} buckets'.format(ycount*xcount)
+            )
             
-    #     for this_xyz in src_xyz:
-    #         if regions.xyz_in_region_p(this_xyz, self.p_region):
-    #             xpos, ypos = utils._geo2pixel(
-    #                 this_xyz.x, this_xyz.y, dst_gt
-    #             )
-    #             if xpos < xcount and ypos < ycount:
-    #                 self.block_t[ypos,xpos].append(this_xyz.copy())
+        for this_xyz in src_xyz:
+            if regions.xyz_in_region_p(this_xyz, self.p_region):
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt
+                )
+                if xpos < xcount and ypos < ycount:
+                    self.block_t[ypos,xpos].append(this_xyz.copy())
         
     def _xyz_mask(self, src_xyz, dst_gdal, dst_format='GTiff'):
         """Create a num grid mask of xyz data. The output grid
@@ -532,13 +569,14 @@ class Waffle:
         """
 
         xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        #print(xcount, ycount, dst_gt)
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
             xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, 'GTiff'
         )
         for this_xyz in src_xyz:
-            yield(this_xyz)            
+            #yield(this_xyz)            
             if regions.xyz_in_region_p(this_xyz, self.region):
                 xpos, ypos = utils._geo2pixel(
                     this_xyz.x, this_xyz.y, dst_gt, 'pixel'
@@ -559,10 +597,15 @@ class Waffle:
     def yield_xyz(self, region=None, **kwargs):
         """yields the xyz data"""
 
-        # # this_datalist = dlim.init_data(self.data_, self.p_region, None, self.dst_srs if self.srs_transform else None, (self.xinc, self.yinc), self.verbose)
-        # # if this_datalist is not None and this_datalist.valid_p(
-        # #     fmts=dlim.DatasetFactory.data_types[this_datalist.data_format]['fmts']
-        # # ):
+        # this_datalist = dlim.init_data(self.data_, self.p_region, None, self.dst_srs if self.srs_transform else None, (self.xinc, self.yinc), 'bilinear', self.verbose)
+        # if this_datalist is not None and this_datalist.valid_p(
+        #     fmts=dlim.DatasetFactory.data_types[this_datalist.data_format]['fmts']
+        # ):
+
+        #     if self.mask:
+        #         xyz_yield = this_datalist.mask_and_yield_xyz(self.mask_fn, self.xinc)
+        #     for xyz in xyz_yield:
+        #         yield(xyz)
             
         # if self.archive:
         #     xyz_yield = self.data.archive_xyz()
@@ -594,13 +637,13 @@ class Waffle:
             else:
                 xyz_yield = xdl.yield_xyz()
                 
-            if self.mask:
-                xyz_yield = self._xyz_mask(xyz_yield, self.mask_fn)
+            #if self.mask:
+                #xyz_yield = self._xyz_mask(xyz_yield, self.mask_fn)
                 #xyz_yield = xdl.mask_and_yield_xyz(self.mask_fn, self.x_inc)
                 
-            # if self.block:
-            #     #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
-            #     xyz_yield = xdl.block_xyz()
+            if self.block:
+                #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
+                xyz_yield = xdl.block_xyz()
                 
             for xyz in xyz_yield:
                 yield(xyz)
@@ -691,7 +734,8 @@ class Waffle:
             if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
-        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
+            #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
+        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
             try:
                 os.rename('__tmp_cut__.tif', '{}'.format(fn))
             except Exception as e:
@@ -717,7 +761,9 @@ class Waffle:
                 )
                 if self.mask:
                     if not os.path.exists(self.mask_fn):
-                        [x for x in self.yield_xyz()]
+                        #[x for x in self.yield_xyz()]
+                        self._mask_array()
+                        #[x for x in self.yield_array()]
                         self._process(fn=self.mask_fn, filter_=False)
                 return(self)
         else:
@@ -1774,7 +1820,6 @@ class WafflesNearest(WafflesGDALGrid):
 
 ## ==============================================
 ## Waffles 'CUDEM' gridding
-## ...and some tests
 ## ==============================================
 class WafflesCUDEM(Waffle):
     """Waffles CUDEM gridding module
@@ -1805,7 +1850,8 @@ DEM generation.
             'smoothing':smoothing,
             'landmask':landmask,
             'poly_count':poly_count,
-            'keep_auxilary':keep_auxilary
+            'keep_auxilary':keep_auxilary,
+            'mode':mode
         }
         try:
             super().__init__(**kwargs)
@@ -1823,7 +1869,6 @@ DEM generation.
         
     def run(self):
         pre = self.pre_count
-        #self.p_region.buffer(pct=self.pre_count, x_inc=self.xinc, y_inc=self.yinc)
         pre_weight = 0
         pre_region = self.p_region.copy()
         pre_region.wmin = None
@@ -1831,41 +1876,28 @@ DEM generation.
         upper_limit = None
         coast = '{}_cst'.format(self.name)
 
+        ## Block/Stack the data with weights
         #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         self._stacks_array(out_name='{}_stack'.format(self.name), keep_weights=True, keep_count=True, supercede=True)
         n = '{}_stack_s.tif'.format(self.name)
         w = '{}_stack_w.tif'.format(self.name)
         c = '{}_stack_c.tif'.format(self.name)
 
-        demfun.filter_outliers_slp(n, '_tmp_fltr.tif', agg_level=5, replace=False)
-        os.rename('_tmp_fltr.tif', n)
-        
-        # src_ds = gdal.Open(n)
-        # if src_ds is not None:
-        #     src_band = src_ds.GetRasterBand(1)
-        #     src_array = src_band.ReadAsArray()
-        #     print(len(src_array[src_array == src_band.GetNoDataValue()]))
-
-        # src_ds = None
-        # msk_ds = gdal.Open(w)
-        # if msk_ds is not None:
-        #     msk_band = msk_ds.GetRasterBand(1)
-        #     msk_array = msk_band.ReadAsArray()
-        #     print(len(msk_array[msk_array == msk_band.GetNoDataValue()]))
-            
-        # msk_ds = None
-        
-        demfun.mask_(w, n, '_tmp_w.tif')
-        os.rename('_tmp_w.tif', w)
-        demfun.mask_(c, n, '_tmp_c.tif')
-        os.rename('_tmp_c.tif', c)
+        ## Remove outliers from the stacked data
+        #demfun.filter_outliers_slp(n, '_tmp_fltr.tif', agg_level=5, replace=False)
+        #os.rename('_tmp_fltr.tif', n)
+        #demfun.mask_(w, n, '_tmp_w.tif')
+        #os.rename('_tmp_w.tif', w)
+        #demfun.mask_(c, n, '_tmp_c.tif')
+        #os.rename('_tmp_c.tif', c)
 
         if self.min_weight is None:
             self.min_weight = demfun.percentile(w, 75)
         
-        utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
+        if self.verbose: utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
         pre_data = ['{},200:weight_mask={},1'.format(n, w)]
-        
+
+        ## Generate Coastline
         if self.landmask:
             upper_limit = -0.1
             pre_region.zmax = 1
@@ -1885,13 +1917,15 @@ DEM generation.
                         dst_srs=self.dst_srs,
                         srs_transform=self.srs_transform,
                         clobber=True,
-                        verbose=self.verbose,
+                        verbose=self.verbose
                     ).acquire().generate()
                     coastline = '{}.shp'.format(self.coast.name)
             else:
                 coastline = self.landmask
+                
             pre_clip = '{}:invert=True'.format(coastline)
-        
+
+        ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
             pre_xinc = self.xinc * (3**pre)
             pre_yinc = self.yinc * (3**pre)
@@ -1899,11 +1933,9 @@ DEM generation.
             ysample = self.yinc * (3**(pre - 1))
             if xsample == 0: xsample = self.xinc
             if ysample == 0: ysample = self.yinc
-
-            #pre_region = self._proc_region()
-            #pre_region.buffer(pct=pre, x_inc=self.xinc, y_inc=self.yinc)
-            
             pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
+            
+            ## if not final output, setup the configuration for the pre-surface
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
@@ -1919,21 +1951,22 @@ DEM generation.
             if pre == 0:
                 pre_region.zmax = None
 
-            #if pre != self.pre_count:
-            #    pre_region.wmin = pre_weight
-                
             pre_name = utils.append_fn('_pre_surface', pre_region, pre)
-            utils.echo_msg('pre region: {}'.format(pre_region))
+            if self.verbose: utils.echo_msg('pre region: {}'.format(pre_region))
 
+            ## Grid/Stack the iteration
             waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None else 'd') if pre == self.pre_count else 'stacks:supercede=True:upper_limit={}'.format(upper_limit if pre !=0 else None)
             waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit if pre !=0 else 'd') if pre !=0 else 'surface:tension=1'
-
+            
+            waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
+            
             pre_surface = WaffleFactory(
-                mod=waffles_mod_surfstack,
+                #mod=waffles_mod_surfstack,
+                mod=waffles_mod,
                 data=pre_data,
                 src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
-                yinc=pre_yinc if pre != 0 else self.yinc,
+                yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
                 node=self.node,
                 fltr=pre_filter if pre !=0 else [],
@@ -2154,7 +2187,7 @@ class WafflesStacks(Waffle):
             self.aux_dems.append('{}_w.tif'.format(self.name))
         
         return(self)
-    
+
 ## ==============================================
 ## Waffles Coastline/Landmask
 ## ==============================================
@@ -2174,6 +2207,14 @@ class WafflesCoastline(Waffle):
             **kwargs
     ):
         """Generate a landmask from various sources.
+
+        sources include:
+        GMRT
+        Copernicus
+        NHD
+        HydroLakes
+        OSM Buildings
+        *user-data*
         
         set polyginize to False to skip polyginizing the landmask, set
         polygonize to an integer to control how many output polygons will
@@ -2248,13 +2289,13 @@ class WafflesCoastline(Waffle):
         if len(self.data) > 0:
             self._load_data()
 
-        utils.echo_msg(
-            'finanlizing array for region {} at {} {}...'.format(
-                self.p_region.format('gmt'), self.ds_config['nx'], self.ds_config['ny']
+        if self.verbose:
+            utils.echo_msg(
+                'finanlizing array for region {} at {} {}...'.format(
+                    self.p_region.format('gmt'), self.ds_config['nx'], self.ds_config['ny']
+                )
             )
-        )
         self._finalize_array()
-        utils.echo_msg('writing array to {}.tif...'.format(self.name))        
         self._write_coast_array()
         if self.polygonize:
             if utils.int_or(self.polygonize) is not None:
@@ -2602,7 +2643,10 @@ class WafflesCoastline(Waffle):
         
     def _write_coast_array(self):
         """write coast_array to file"""
-        
+
+        if self.verbose:
+            utils.echo_msg('writing array to {}.tif...'.format(self.name))
+            
         utils.gdal_write(
             self.coast_array, '{}.tif'.format(self.name), self.ds_config,
         )
@@ -2610,6 +2654,9 @@ class WafflesCoastline(Waffle):
     def _write_coast_poly(self, poly_count=None):
         """convert to coast_array vector"""
 
+        if self.verbose:
+            utils.echo_msg('polygonizing array to {}.shp...'.format(self.name))
+        
         poly_count = utils.int_or(poly_count)
         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
             'tmp_c_{}.shp'.format(self.name)
@@ -2622,10 +2669,15 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
-                self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0" {}.shp tmp_c_{}.shp'.format(
+                self.name, self.name, self.name),
             verbose=True
         )
+        # utils.run_cmd(
+        #     'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
+        #         self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+        #     verbose=True
+        # )
         # utils.run_cmd(
         #     'ogr2ogr {}.shp tmp_c_{}.shp'.format(
         #         self.name, self.name, self.name),
