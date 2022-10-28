@@ -590,10 +590,31 @@ class Waffle:
     #     out, status = utils.gdal_write(ptArray, dst_gdal, ds_config)    
 
     def yield_array(self, **kwargs):
+
+        if self.mask:
+            xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+            mask_array = np.zeros((ycount, xcount))
+            ds_config = demfun.set_infos(
+                xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
+                gdal.GDT_Float32, self.ndv, 'GTiff'
+        )
+        
         for xdl in self.data:
             for array in xdl.yield_array():
+                if self.mask:
+                    cnt_arr = array[0]['count']
+                    srcwin = array[1]
+                    ds_config = array[2]
+                    cnt_arr[np.isnan(cnt_arr)] = 0
+                    mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
+                    mask_array[mask_array > 0] = 1
+                    
                 yield(array)
-        
+                
+        if self.mask:
+            utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
+            mask_array = None
+                    
     def yield_xyz(self, region=None, **kwargs):
         """yields the xyz data"""
 

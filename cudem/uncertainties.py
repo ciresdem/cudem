@@ -247,8 +247,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
         max_err = np.max(error)
         min_err = np.min(error)
         max_int_dist = int(np.max(distance))
-        #nbins = 10
-        nbins = range(0, max_int_dist, 10)
+        nbins = 10
+        #nbins = range(0, max_int_dist, 10)
         #nbins = int(len(error) * .1)
         #nbins = 'auto'
         #nbins=range(int(min_err),int(max_err),10)
@@ -496,8 +496,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 else:
                     last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
 
-                #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='distance')
-                ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
+                ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='distance')
+                #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
                 ec_diff = abs(ec_d[2] - ec_d[1])
                 ec_l_diff = abs(last_ec_diff - ec_diff)
                 # s_dp = s_dp[s_dp[:,4] < s_max,:]
