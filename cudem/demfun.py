@@ -105,7 +105,7 @@ def copy_infos(src_config):
         dst_config[dsc] = src_config[dsc]
     return(dst_config)
 
-def set_srs(src_dem, src_srs='epsg:4326'):
+def set_srs(src_dem, src_srs='epsg:4326', verbose=True):
     """set the projection of gdal file src_fn to src_srs"""
 
     try:
@@ -116,7 +116,8 @@ def set_srs(src_dem, src_srs='epsg:4326'):
             ds.SetProjection(utils.sr_wkt(src_srs))
         except Exception as e:
             #ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
-            utils.echo_warning_msg('could not set projection {}'.format(src_srs))
+            if verbose:
+                utils.echo_warning_msg('could not set projection {}'.format(src_srs))
         ds = None
         return(0)
     else: return(None)
@@ -167,11 +168,13 @@ def get_nodata(src_dem):
     """
     
     src_ds = gdal.Open(src_dem)
-    band = src_ds.GetRasterBand(1)
-    ndv = band.GetNoDataValue()
-    src_ds = None
-
-    return(ndv)
+    if src_ds is not None:
+        band = src_ds.GetRasterBand(1)
+        ndv = band.GetNoDataValue()
+        src_ds = None
+        return(ndv)
+    else:
+        return(None)
     
 def set_nodata(src_dem, nodata=-9999, convert_array=False, verbose=True):
     """set the nodata value of gdal file src_dem
@@ -179,7 +182,9 @@ def set_nodata(src_dem, nodata=-9999, convert_array=False, verbose=True):
     returns 0
     """
 
-    utils.echo_msg('setting nodata value of {} to {}'.format(src_dem, nodata))
+    if verbose:
+        utils.echo_msg('setting nodata value of {} to {}'.format(src_dem, nodata))
+        
     try:
         ds = gdal.Open(src_dem, gdal.GA_Update)
     except: ds = None
@@ -202,7 +207,7 @@ def set_nodata(src_dem, nodata=-9999, convert_array=False, verbose=True):
         return(0)
     else: return(None)
 
-def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
+def set_metadata(src_dem, node='pixel', cudem=False, verbose=True): #, vdatum='NAVD88'):
     """add metadata to the waffled raster
 
     Args: 
@@ -242,7 +247,9 @@ def set_metadata(src_dem, node='pixel', cudem=False): #, vdatum='NAVD88'):
         ds = None
         return(0)
     else:
-        utils.echo_error_msg('failed to set metadata')
+        if verbose:
+            utils.echo_error_msg('failed to set metadata')
+            
         return(None)
 
 def get_array(src_dem):
@@ -317,7 +324,7 @@ def split(src_dem, split_value = 0):
         return([dst_upper, dst_lower])
     else: return(None)
 
-def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
+def cut(src_dem, src_region, dst_dem, node='pixel', mode=None, verbose=True):
     """cut src_fn gdal file to srcwin and output dst_fn gdal file
 
     returns [output-dem, status-code]
@@ -334,7 +341,7 @@ def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
         
         return(utils.run_cmd('gdal_translate {} {} -srcwin {} {} {} {}'.format(
             src_dem, dst_dem, this_srcwin[0], this_srcwin[1], this_srcwin[2], this_srcwin[3]
-        ), verbose=True))
+        ), verbose=verbose))
     else:
         try:
             ds = gdal.Open(src_dem)
@@ -351,10 +358,10 @@ def cut(src_dem, src_region, dst_dem, node='pixel', mode=None):
                                       ds_config['proj'], ds_config['dt'], ds_config['ndv'],
                                       ds_config['fmt'])
             ds = None
-            return(utils.gdal_write(ds_arr, dst_dem, out_ds_config))
+            return(utils.gdal_write(ds_arr, dst_dem, out_ds_config, verbose=verbose))
         else: return(None, -1)
 
-def clip(src_dem, dst_dem, src_ply=None, invert=False):
+def clip(src_dem, dst_dem, src_ply=None, invert=False, verbose=True):
     """clip dem to polygon `src_ply`, optionally invert the clip.
 
     returns [gdal_raserize-output, gdal_rasterize-return-code]
@@ -364,16 +371,16 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False):
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
     tmp_ply = '__tmp_clp_ply.shp'
     
-    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=True)
+    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
         if invert:
             gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)
-            out, status = utils.run_cmd(gr_cmd, verbose=True)
+            out, status = utils.run_cmd(gr_cmd, verbose=verbose)
         else:
             shutil.copyfile(src_dem, dst_dem)
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
                 .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_dem)
-            out, status = utils.run_cmd(gr_cmd, verbose=True)
+            out, status = utils.run_cmd(gr_cmd, verbose=verbose)
         utils.remove_glob('__tmp_clp_ply.*')
     else: return(None, -1)
     return(out, status)
@@ -1543,7 +1550,7 @@ def yield_query(src_xyz, src_grd, out_form):
             except: z = ds_nd
 
             if x > ds_gt[0] and y < float(ds_gt[3]):
-                xpos, ypos = utils._geo2pixel(x, y, ds_gt)
+                xpos, ypos = utils._geo2pixel(x, y, ds_gt, node='pixel')
                 try: 
                     g = tgrid[ypos, xpos]
                 except: g = ds_nd
@@ -1555,6 +1562,7 @@ def yield_query(src_xyz, src_grd, out_form):
                     for i in out_form:
                         outs.append(vars()[i])
                     yield(outs)
+        ds = None
 
 def query(src_xyz, src_grd, out_form):
     """query a gdal-compatible grid file with xyz data.

@@ -70,7 +70,7 @@ import cudem.fetches.utils as f_utils
 class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
-    def __init__(self, res='default', fmt='geotiff', bathy_only=False, layer='topo', **kwargs):
+    def __init__(self, res='default', fmt='geotiff', bathy_only=False, upper_limit=None, lower_limit=None, layer='topo', **kwargs):
         super().__init__(**kwargs) 
 
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -84,13 +84,19 @@ class GMRT(f_utils.FetchModule):
             self.layer = 'topo'
         else:
             self.layer = layer
+
+        self.upper_limit = upper_limit
+        self.lower_limit = lower_limit
+        if bathy_only:
+            self.upper_limit = 0
             
-        self.bathy_only = bathy_only
         self.gmrt_region = self.region.copy()
         self.gmrt_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
-        #self.gmrt_region.buffer(pct=.3333)
         self.gmrt_region._wgs_extremes(just_below=True)
-        #print(self.gmrt_region)
+
+        self.gmrt_p_region = self.region.copy()
+        self.gmrt_p_region.zmax = utils.float_or(upper_limit)
+        self.gmrt_p_region.zmin = utils.float_or(lower_limit)
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -142,74 +148,39 @@ class GMRT(f_utils.FetchModule):
                 
         return(self)
 
-    def yield_xyz(self, entry):
+    def yield_ds(self, entry):
         src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(src_data,timeout=10, read_timeout=120) == 0:
-
-            #utils.run_cmd('gmt grdedit -T {}'.format(src_data), verbose=True)
-            
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
-                src_srs='epsg:4326+3855',
+                #src_srs='epsg:4326+3855',
+                src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 weight=self.weight,
-                src_region=self.region,
+                src_region=self.gmrt_p_region,
                 verbose=self.verbose
             )
-            if self.bathy_only:
-                for xyz in gmrt_ds.yield_xyz():
-                    if xyz.z < 0:
-                        yield(xyz)
-            else:
-                for xyz in gmrt_ds.yield_xyz():
-                    yield(xyz)
-                    
+
+            yield(gmrt_ds)
+
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
             
         utils.remove_glob('{}*'.format(src_data))
+            
+    def yield_xyz(self, entry):
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
+                yield(xyz)
 
     def yield_array(self, entry):
-        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
-        if f_utils.Fetch(
-                entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
-            if self.bathy_only:
-                ds = gdal.Open(src_data, 1)
-                ds_config = demfun.gather_infos(ds)
-                band = ds.GetRasterBand(1)
-                comp_geot = ds_config['geoT']
-                outarray = ds.ReadAsArray()
-                outarray[outarray > 0] = band.GetNoDataValue()
-                band.WriteArray(outarray)
-                ds = None
-
-            #utils.run_cmd('gmt grdedit -T {}'.format(src_data), verbose=True)
-                
-            gmrt_ds = datasets.RasterFile(
-                fn=src_data,
-                data_format=200,
-                src_srs='epsg:4326+3855',
-                dst_srs=self.dst_srs,
-                x_inc=self.x_inc,
-                y_inc=self.y_inc,
-                weight=self.weight,
-                src_region=self.region,
-                #sample_alg='cubicspline',
-                verbose=self.verbose
-            )
-                
-            for arr in gmrt_ds.yield_array():
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
                 yield(arr)
-                    
-        else:
-            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
-            
-        utils.remove_glob('{}*'.format(src_data))
         
 ### End

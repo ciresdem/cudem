@@ -31,7 +31,7 @@ with open('README', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.8.0',
+    version = '1.9.0',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -56,6 +56,7 @@ setuptools.setup(
         'laspy[laszip]',
         'h5py',
         'boto3',
+        'tqdm',
     ], 
     entry_points = {
         'console_scripts': [

@@ -40,7 +40,16 @@ import cudem.fetches.utils as f_utils
 class GEBCO(f_utils.FetchModule):
     '''Fetch raster data from GEBCO'''
     
-    def __init__(self, want_ice='geotiff', want_sub_ice=False, want_tid=False, exclude_tid=None, upper_limit=None, lower_limit=None, **kwargs):
+    def __init__(
+            self,
+            want_ice='geotiff',
+            want_sub_ice=False,
+            want_tid=False,
+            exclude_tid=None,
+            upper_limit=None,
+            lower_limit=None,
+            **kwargs
+    ):
         super().__init__(**kwargs) 
 
         self._gebco_urls = {
@@ -78,7 +87,7 @@ class GEBCO(f_utils.FetchModule):
         self.name = 'gebco'
 
         self.tid_dic = {
-            0: ['Land', 1],
+            0: ['Land', .21],
             10: ['Singlebeam - depth value collected by a single beam echo-sounder', .65],
             11:	['Multibeam - depth value collected by a multibeam echo-sounder', .95],
             12:	['Seismic - depth value collected by seismic methods', .3],
@@ -100,7 +109,7 @@ class GEBCO(f_utils.FetchModule):
         }
 
         self.gebco_region = self.region.copy()
-        self.gebco_region.zmaz = utils.float_or(upper_limit)
+        self.gebco_region.zmax = utils.float_or(upper_limit)
         self.gebco_region.zmin = utils.float_or(lower_limit)
         
     def run(self):
@@ -116,23 +125,22 @@ class GEBCO(f_utils.FetchModule):
                 
         return(self)
 
-    def yield_array(self, entry):
+    def yield_ds(self, entry):
         src_data = 'tmp_gebco.tif'
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(entry[1]) == 0:
 
             gebco_fns = utils.p_unzip(entry[1], ['tif'])
-            print(gebco_fns)
+            #print(gebco_fns)
             ## fetch the TID zip if needed
             if self.exclude_tid is not None:
-                #utils.echo_msg('excluding gebco TID(s) {} - {}'.format(self.exclude_tid, self.tid_dic[self.exclude_tid][0]))
                 if f_utils.Fetch(
                         self._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
                 ).fetch_file(os.path.join(self._outdir, 'gebco_tid.zip')) == 0:
                     
                     tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'])
-                    print(tid_fns)
+                    #print(tid_fns)
                     for tid_fn in tid_fns:
                         tmp_tid = 'tmp_tid.tif'
                         tid_ds = gdal.Open(tid_fn)
@@ -150,9 +158,7 @@ class GEBCO(f_utils.FetchModule):
                             tid_array[tid_array == tid_key] = self.tid_dic[tid_key][1]
                             
                         utils.gdal_write(tid_array, tmp_tid, tid_config)
-                        
-                        #demfun.set_nodata(tid_fn, self.exclude_tid)
-                        
+                                                
                         gebco_ds = datasets.RasterFile(
                             fn=tid_fn.replace('tid_', ''),
                             data_format=200,
@@ -167,14 +173,10 @@ class GEBCO(f_utils.FetchModule):
                             weight_mask=tmp_tid
                         )
 
-                        for arr in gebco_ds.yield_array():
-                            yield(arr)
-                            
+                        yield(gebco_ds)
                         utils.remove_glob(tmp_tid)
-                        #utils.remove_glob('tmp_gebco.tif')
             else:
-                for gebco_fn in gebco_fns:
-                    
+                for gebco_fn in gebco_fns:                    
                     gebco_ds = datasets.RasterFile(
                         fn=gebco_fn,
                         data_format=200,
@@ -184,92 +186,25 @@ class GEBCO(f_utils.FetchModule):
                         y_inc=self.y_inc,
                         weight=self.weight,
                         src_region=self.gebco_region,
-                        #sample_alg='cubicspline',
                         verbose=self.verbose,
 
                     )
-
-                    for arr in gebco_ds.yield_array():
-                        yield(arr)
+                    yield(gebco_ds)
+        
+    def yield_array(self, entry):
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
+                yield(arr)
 
     def yield_xyz(self, entry):
-        src_data = 'tmp_gebco.tif'
-        if f_utils.Fetch(
-                entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(entry[1]) == 0:
-
-            gebco_fns = utils.p_unzip(entry[1], ['tif'])
-            ## fetch the TID zip if needed
-            if self.exclude_tid is not None:
-                #utils.echo_msg('excluding gebco TID(s) {} - {}'.format(self.exclude_tid, self.tid_dic[self.exclude_tid][0]))
-                if f_utils.Fetch(
-                        self._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
-                ).fetch_file(os.path.join(self._outdir, 'gebco_tid.zip')) == 0:
-                    
-                    tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'])
-                    for tid_fn in tid_fns:
-                        tmp_tid = 'tmp_tid.tif'
-                        tid_ds = gdal.Open(tid_fn)
-                        tid_config = demfun.gather_infos(tid_ds)
-                        tid_band = tid_ds.GetRasterBand(1)
-                        tid_array = tid_band.ReadAsArray().astype(float)
-                        tid_ds = None
-                        tid_config['ndv'] = -9999
-                        tid_config['dt'] = gdal.GDT_Float32
-                        
-                        for tid_key in self.exclude_tid:
-                            tid_array[tid_array == tid_key] = tid_config['ndv']
-                        
-                        for tid_key in self.tid_dic.keys():
-                            tid_array[tid_array == tid_key] = self.tid_dic[tid_key][1]
-                            
-                        utils.gdal_write(tid_array, tmp_tid, tid_config)
-                        
-                        gebco_ds = datasets.RasterFile(
-                            fn=tid_fn.replace('tid_', ''),
-                            data_format=200,
-                            src_srs='epsg:4326+3855',
-                            dst_srs=self.dst_srs,
-                            x_inc=self.x_inc,
-                            y_inc=self.y_inc,
-                            weight=self.weight,
-                            src_region=self.gebco_region,
-                            verbose=self.verbose,
-                            mask=tmp_tid,
-                            weight_mask=tmp_tid
-                        )
-
-                        for xyz in gebco_ds.yield_xyz():
-                            yield(xyz)
-                            
-                        utils.remove_glob(tmp_tid)
-                        #utils.remove_glob('tmp_gebco.tif')
-            else:
-                for gebco_fn in gebco_fns:
-                    
-                    gebco_ds = datasets.RasterFile(
-                        fn=gebco_fn,
-                        data_format=200,
-                        src_srs='epsg:4326+3855',
-                        dst_srs=self.dst_srs,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        weight=self.weight,
-                        src_region=self.gebco_region,
-                        #sample_alg='cubicspline',
-                        verbose=self.verbose,
-
-                    )
-
-                    for xyz in gebco_ds.yield_xyz():
-                        yield(xyz)
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
+                yield(xyz)
             
     def yield_zip_xyz(self, entry):
-
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(entry[1]) == 0:
-            
             gebco_ds = dlim.ZIPlist(
                 fn=entry[1],
                 data_format=-2,
@@ -281,7 +216,6 @@ class GEBCO(f_utils.FetchModule):
                 src_region=self.region,
                 verbose=self.verbose
             )
-
             for xyz in gebco_ds.yield_xyz():
                 yield(xyz)
                     
@@ -289,11 +223,9 @@ class GEBCO(f_utils.FetchModule):
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
 
     def yield_zip_array(self, entry):
-
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(entry[1]) == 0:
-            
             gebco_ds = dlim.ZIPlist(
                 fn=entry[1],
                 data_format=-2,
@@ -305,12 +237,10 @@ class GEBCO(f_utils.FetchModule):
                 src_region=self.region,
                 verbose=self.verbose
             )
-
             for arr in gebco_ds.yield_array():
                 yield(arr)
                     
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(entry[0]))
-            
-                  
-## End
+                              
+### End

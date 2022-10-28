@@ -161,9 +161,7 @@ class CopernicusDEM(f_utils.FetchModule):
                 
         return(self)
 
-    def yield_xyz(self, entry):
-        """yield the xyz data from the copernicus fetch module"""
-        
+    def yield_ds(self, entry):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
@@ -179,36 +177,21 @@ class CopernicusDEM(f_utils.FetchModule):
                     y_inc=self.y_inc,
                     verbose=self.verbose
                 )
-                for xyz in _ds.yield_xyz():
-                    #if xyz.z != 0:
+                yield(_ds)
+    
+    def yield_xyz(self, entry):
+        """yield the xyz data from the copernicus fetch module"""
+        
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
                     yield(xyz)
-                        
-                #utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
-        #utils.remove_glob(entry[1])
 
     def yield_array(self, entry):
-        if f_utils.Fetch(
-                entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers
-        ).fetch_file(entry[1]) == 0:
-            src_cop_dems = utils.p_unzip(entry[1], ['tif'])
-            for src_cop_dem in src_cop_dems:
-                demfun.set_nodata(src_cop_dem, 0, verbose=False)
-                _ds = datasets.RasterFile(
-                    fn=src_cop_dem,
-                    data_format=200,
-                    src_srs='epsg:4326+3855',
-                    dst_srs=self.dst_srs,
-                    src_region=self.region,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    weight=self.weight,
-                    verbose=self.verbose
-                )
-                for arr in _ds.yield_array():
-                    yield(arr)
-                        
-                #utils.remove_glob(src_cop_dem, src_cop_dem + '.inf')
-        #utils.remove_glob(entry[1])
+        """yield the array data from the copernicus fetch module"""
+        
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
+                yield(arr)
         
 if __name__ == '__main__':
     cop_dem = CopernicusDEM()

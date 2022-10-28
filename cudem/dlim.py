@@ -677,7 +677,8 @@ class DatasetFactory:
                   'vdatum',
                   'earthdata',
                   'bluetopo',
-                  'hydrolakes'
+                  'hydrolakes',
+                  'gebco'
               ],
               'opts': '< -11 >',
               'class': Fetcher,

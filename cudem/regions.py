@@ -614,12 +614,16 @@ def regions_reduce(region_a, region_b):
     if region_a.valid_p() and region_b.valid_p():
         if region_a.xmin is not None and region_b.xmin is not None:
             region_c.xmin = region_a.xmin if region_a.xmin > region_b.xmin else region_b.xmin
+            
         if region_a.xmax is not None and region_b.xmax is not None:
             region_c.xmax = region_a.xmax if region_a.xmax < region_b.xmax else region_b.xmax
+            
         if region_a.ymin is not None and region_b.ymin is not None:
             region_c.ymin = region_a.ymin if region_a.ymin > region_b.ymin else region_b.ymin
+            
         if region_a.ymax is not None and region_b.ymax is not None:
             region_c.ymax = region_a.ymax if region_a.ymax < region_b.ymax else region_b.ymax
+            
         if region_a.zmin is not None and region_b.zmin is not None:
             region_c.zmin = region_a.zmin if region_a.zmin > region_b.zmin else region_b.zmin
         else:
@@ -627,27 +631,34 @@ def regions_reduce(region_a, region_b):
                 region_c.zmin = region_a.zmin
             if region_b.zmin is not None:
                 region_c.zmin = region_b.zmin
+                
         if region_a.zmax is not None and region_b.zmax is not None:
             region_c.zmax = region_a.zmax if region_a.zmax < region_b.zmax else region_b.zmax
         else:
             if region_a.zmax is not None:
                 region_c.zmax = region_a.zmax
+                
             if region_b.zmax is not None:
                 region_c.zmax = region_b.zmax
+                
         if region_a.wmin is not None and region_b.wmin is not None:
             region_c.wmin = region_a.wmin if region_a.wmin > region_b.wmin else region_b.wmin
         else:
             if region_a.wmin is not None:
                 region_c.wmin = region_a.wmin
+                
             if region_b.wmin is not None:
                 region_c.wmin = region_b.wmin
+                
         if region_a.wmax is not None and region_b.wmax is not None:
             region_c.wmax = region_a.wmax if region_a.wmax < region_b.wmax else region_b.wmax
         else:
             if region_a.wmax is not None:
                 region_c.wmax = region_a.wmax
+                
             if region_b.wmax is not None:
                 region_c.wmax = region_b.wmax
+                
     return(region_c)
 
 def regions_merge(region_a, region_b):
