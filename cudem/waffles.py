@@ -604,7 +604,7 @@ class Waffle:
                 if self.mask:
                     cnt_arr = array[0]['count']
                     srcwin = array[1]
-                    ds_config = array[2]
+                    gt = array[2]
                     cnt_arr[np.isnan(cnt_arr)] = 0
                     mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
                     mask_array[mask_array > 0] = 1
