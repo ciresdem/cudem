@@ -246,8 +246,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
 
         max_err = np.max(error)
         min_err = np.min(error)
-        max_int_dist = np.max(distance)
-        nbins = 10
+        max_int_dist = int(np.max(distance))
+        #nbins = 10
+        nbins = range(0, max_int_dist, 10)
         #nbins = int(len(error) * .1)
         #nbins = 'auto'
         #nbins=range(int(min_err),int(max_err),10)
@@ -519,6 +520,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 
                 if abs(last_ec_diff - ec_diff) < 0.0001:
                     break
+                
+                if abs(last_ec_diff - ec_diff) < 0.0001:
+                    break
 
                 if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
                     break
@@ -706,10 +710,18 @@ def uncertainties_cli(argv = sys.argv):
     wg = {}
     wg['verbose'] = True
     wg['clobber'] = False
+    sims = None
+    max_sample = None
     
     while i < len(argv):
         arg = argv[i]
         if arg == '--quiet' or arg == '-q': wg['verbose'] = False
+        elif arg == '-sims' or arg == '--sims' or arg == '-S':
+            sims = utils.int_or(argv[i + 1])
+            i = i + 1
+        elif arg == '-sample' or arg == '--sample' or arg == '-P':
+            max_sample = utils.int_or(argv[i + 1])
+            i = i + 1
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(uncertainties_cli_usage)
             sys.exit(0)
@@ -743,7 +755,7 @@ def uncertainties_cli(argv = sys.argv):
                 if not this_waffle.valid_p():
                     this_waffle.generate()
                     
-                i = InterpolationUncertainty(dem=this_waffle).run()
+                i = InterpolationUncertainty(dem=this_waffle, sims=sims, max_sample=max_sample).run()
                 utils.echo_msg(this_waffle)
 
                 sys.exit(0)
