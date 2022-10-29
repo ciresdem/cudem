@@ -79,8 +79,8 @@ class MarGrav(f_utils.FetchModule):
         ).fetch_file(src_data) == 0:
             if self.raster:
                 utils.run_cmd(
-                    'waffles {} -E 60s -M IDW -O mar_grav60s {},168:x_offset=REM,1'.format(
-                        self.grav_region.format('gmt'), src_data
+                    'waffles {} -E 15s -M IDW:min_points=16 -O mar_grav60s {},168:x_offset=REM,1 -T 1:1'.format(
+                        self.region.format('gmt'), src_data
                     ),
                     verbose=True
                 )
@@ -92,7 +92,7 @@ class MarGrav(f_utils.FetchModule):
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
                     weight=self.weight,
-                    src_region=self.region,
+                    src_region=self.grav_region,
                     verbose=self.verbose
                 )
             else:
@@ -103,10 +103,11 @@ class MarGrav(f_utils.FetchModule):
                     x_offset='REM',
                     src_srs='epsg:4326+3855',
                     dst_srs=self.dst_srs,
-                    src_region=self.region,
+                    src_region=self.grav_region,
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
                     verbose=self.verbose,
+                    weight=self.weight,
                     remote=True
                 )
             yield(_ds)
@@ -121,7 +122,7 @@ class MarGrav(f_utils.FetchModule):
                 yield(xyz)
 
     def yield_array(self, entry):
-        self.raster = True
+        #self.raster = True
         for ds in self.yield_ds(entry):
             for arr in ds.yield_array():
                 yield(arr)

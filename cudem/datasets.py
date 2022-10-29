@@ -627,7 +627,10 @@ class ElevationDataset():
             y_inc = inc
         
         out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}
-        block_region = regions.Region().from_list(self.infos['minmax'])
+        if self.region is None:
+            block_region = regions.Region().from_list(self.infos['minmax'])
+        else:
+            block_region = self.region.copy()
         
         if self.dst_trans is not None:
             block_region.transform(self.dst_trans)
@@ -1473,7 +1476,7 @@ class RasterFile(ElevationDataset):
                 tmp_ds, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
-                ndv=ndv, verbose=True
+                ndv=ndv, verbose=False
             )[0] 
             tmp_ds = None
             utils.remove_glob('_tmp_gdal.tif')

@@ -170,7 +170,7 @@ class GEBCO(f_utils.FetchModule):
                             src_region=self.gebco_region,
                             verbose=self.verbose,
                             mask=tmp_tid,
-                            weight_mask=tmp_tid
+                            #weight_mask=tmp_tid
                         )
 
                         yield(gebco_ds)
@@ -187,7 +187,7 @@ class GEBCO(f_utils.FetchModule):
                         weight=self.weight,
                         src_region=self.gebco_region,
                         verbose=self.verbose,
-
+                        #weight_mask=tmp_tid
                     )
                     yield(gebco_ds)
         

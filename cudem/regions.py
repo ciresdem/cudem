@@ -221,6 +221,7 @@ class Region:
             t = 'fstr': xmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax
             t = 'sstr': xmin xmax ymin ymax
             t = 'gmt': -Rxmin/xmax/ymin/ymax
+            t = 'waffles': -Rxmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax
             t = 'bbox': xmin,ymin,xmax,ymax
             t = 'osm_bbox': ymin,xmin,ymax,xmax
             t = 'te': xmin ymin xmax ymax
@@ -236,6 +237,7 @@ class Region:
             elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)]))
             elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
+            #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)])
             elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
             elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin), str(self.ymax), str(self.xmax)]))
             elif t == 'te': return(' '.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
