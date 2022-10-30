@@ -48,7 +48,7 @@ class MarGrav(f_utils.FetchModule):
         self.name = 'mar_grav'
         self.mag = mag if mag == 1 else 0.1
         self.grav_region = self.region.copy()
-        self.grav_region.zmaz = utils.float_or(upper_limit)
+        self.grav_region.zmax = utils.float_or(upper_limit)
         self.grav_region.zmin = utils.float_or(lower_limit)
         self.raster = raster
 
@@ -79,13 +79,13 @@ class MarGrav(f_utils.FetchModule):
         ).fetch_file(src_data) == 0:
             if self.raster:
                 utils.run_cmd(
-                    'waffles {} -E 15s -M IDW:min_points=16 -O mar_grav60s {},168:x_offset=REM,1 -T 1:1'.format(
+                    'waffles {} -E 15s -M IDW:min_points=16 -O mar_grav15s {},168:x_offset=REM,1 -T 1:2'.format(
                         self.region.format('gmt'), src_data
                     ),
                     verbose=True
                 )
                 _ds = datasets.RasterFile(
-                    fn='mar_grav60s.tif',
+                    fn='mar_grav15s.tif',
                     data_format=200,
                     src_srs='epsg:4326+3855',
                     dst_srs=self.dst_srs,
@@ -96,8 +96,14 @@ class MarGrav(f_utils.FetchModule):
                     verbose=self.verbose
                 )
             else:
+                utils.run_cmd(
+                    'waffles {} -E 30s -M IDW:min_points=16 -O mar_grav30s {},168:x_offset=REM,1 -T 1:2'.format(
+                        self.region.format('gmt'), src_data
+                    ),
+                    verbose=True
+                )
                 _ds = datasets.XYZFile(
-                    fn=src_data,
+                    fn='mar_grav30s.tif',
                     data_format=168,
                     skip=1,
                     x_offset='REM',

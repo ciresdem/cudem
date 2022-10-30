@@ -1631,7 +1631,8 @@ class RasterFile(ElevationDataset):
                        srcwin[0], y, srcwin[2], 1
                    )
                    band_data[mask_data==ndv] = ndv
-                   weight_data[mask_data==ndv] = ndv
+                   if weight_band is not None:
+                       weight_data[mask_data==ndv] = ndv
                     
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
