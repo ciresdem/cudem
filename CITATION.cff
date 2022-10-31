@@ -14,6 +14,6 @@ authors:
   
     website: https://http://ciresgroups.colorado.edu/coastalDEM
 title: "CUDEM"
-version: 1.6.1
+version: 1.9.0
 date-released: 2022-02-01
 url: "https://github.com/ciresdem/cudem"

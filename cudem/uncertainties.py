@@ -179,7 +179,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
             
         return([out_inner, out_outer])
 
-    def _err_fit_plot(self, xdata, ydata, out, fitfunc, dst_name='unc', xa='distance'):
+    def _err_fit_plot(self, xdata, ydata, out, fitfunc, bins_final, std_final, sampling_den, max_int_dist, dst_name='unc', xa='distance'):
         """plot a best fit plot with matplotlib
 
         Args:
@@ -188,23 +188,73 @@ class InterpolationUncertainty: #(waffles.Waffle):
 
         """
 
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            from matplotlib.offsetbox import AnchoredText
+        #try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.offsetbox import AnchoredText
 
-            plt.plot(xdata, ydata, 'o')
-            plt.plot(xdata, fitfunc(out, xdata), '-')
-            plt.xlabel(xa)
-            plt.ylabel('error (m)')
-            out_png = '{}_bf.png'.format(dst_name)
-            plt.savefig(out_png)
-            plt.close()
+        short_name="All Terrain"
+        
+        fig = plt.figure()
+        ax = plt.subplot(111)
 
-        except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+        plt_data=ax.scatter(bins_final, std_final, zorder=1, label='Error St. Dev.', marker="o", color="black", s=30)
+        plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
 
-    def _err_scatter_plot(self, error_arr, dist_arr, dst_name='unc', xa='distance'):
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+
+        anchored_text = AnchoredText(short_name, loc=2)
+        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text)
+
+        anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$ "%(out[1],out[2]), loc=1)
+        #add r2 value using below
+        #anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$      $r^2=%g$ "%(coeff1,coeff2,rsquared), loc=1)
+        anchored_text2.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text2)
+
+        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
+        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
+        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text3)
+
+        plt.legend([plt_data, plt_best_fit], ['Interpolation Error St Dev', 'Best-Fit Line'], loc='upper center', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+        
+        plt.xlabel('Distance from Measurement (cells)', fontsize=14)
+        plt.ylabel('Interpolation Error St Dev (m)', fontsize=14)
+        plt.xlim(xmin=0)
+        plt.xlim(xmax=int(max_int_dist)+1)
+        plt.ylim(ymin=0)
+        y_max=max(std_final)+(0.25*max(std_final))
+        plt.ylim(ymax=y_max)
+
+        # plt.plot(xdata, ydata, 'o')
+        # plt.plot(xdata, fitfunc(out, xdata), '-')
+        #plt.xlabel(xa)
+        #plt.ylabel('Interpolation Error (m)')
+        out_png = '{}_bf.png'.format(dst_name)
+        plt.savefig(out_png)
+        plt.close()
+
+        #except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+
+    def _err_scatter_plot(self, error_arr, dist_arr, mean, std, max_int_dist, bins_orig, sampling_den, dst_name='unc', xa='distance'):
         """plot a scatter plot with matplotlib
 
         Args:
@@ -213,23 +263,52 @@ class InterpolationUncertainty: #(waffles.Waffle):
 
         """
 
-        try:
-            import matplotlib
-            matplotlib.use('Agg')
-            import matplotlib.pyplot as plt
-            from matplotlib.offsetbox import AnchoredText
+        #try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.offsetbox import AnchoredText
 
-            plt.scatter(dist_arr, error_arr)
-            #plt.title('Scatter')
-            plt.xlabel(xa)
-            plt.ylabel('error (m)')
-            out_png = '{}_scatter.png'.format(dst_name)
-            plt.savefig(out_png)
-            plt.close()
+        short_name="All Terrain"
 
-        except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+        fig = plt.figure()
+        ax = plt.subplot(111)
+        plt_data=ax.scatter(dist_arr, error_arr, zorder=1, label="Measurements", marker=".", color="black", s=20)
+        plt_data_uncert=ax.errorbar(bins_orig, mean, yerr=std, fmt='r-', linewidth=3)
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
 
-    def _err2coeff(self, err_arr, coeff_guess=[0, 0.1, 0.2], dst_name='unc', xa='distance'):
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+
+        anchored_text = AnchoredText(short_name, loc=2)
+        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text)
+
+        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
+        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
+        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text3)
+
+        plt.legend([plt_data, plt_data_uncert], ["Interpolation Error", "Mean +/- St. Deviation"], loc="upper center", bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+        plt.xlabel("Distance from Measurement (cells)", fontsize=14)
+        plt.ylabel("Interpolation Error (m)", fontsize=14)
+        plt.xlim(xmin=0)
+        plt.xlim(xmax=int(max_int_dist)+1)
+
+        #plt.xlabel(xa)
+        #plt.ylabel('Interpolation Error (m)')
+        out_png = "{}_scatter.png".format(dst_name)
+        plt.savefig(out_png)
+        plt.close()
+
+        #xcept: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+
+    def _err2coeff(self, err_arr, sampling_den, coeff_guess=[0, 0.1, 0.2], dst_name='unc', xa='distance'):
         """calculate and plot the error coefficient given err_arr which is 
         a 2 col array with `err dist
 
@@ -241,18 +320,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
         """
 
         from scipy import optimize
+        
         error = err_arr[:,0]
         distance = err_arr[:,1]
-
         max_err = np.max(error)
         min_err = np.min(error)
         max_int_dist = int(np.max(distance))
         nbins = 10
-        #nbins = range(0, max_int_dist, 10)
-        #nbins = int(len(error) * .1)
-        #nbins = 'auto'
-        #nbins=range(int(min_err),int(max_err),10)
-        #print(nbins)
         n, _ = np.histogram(distance, bins = nbins)
         while 0 in n:
             nbins -= 1
@@ -261,51 +335,28 @@ class InterpolationUncertainty: #(waffles.Waffle):
         serror, _ = np.histogram(distance, bins=nbins, weights=error)
         serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
 
-        #with np.errstate(invalid='ignore'):
-        #    mean = serror / n
-        #    std = np.sqrt(serror2/n - mean*mean)
         mean = serror / n
         std = np.sqrt(serror2 / n - mean * mean)
-
-        #std_final=[0]
-        #std_final.append(std[0])
-        #std_final.append(std[1])
-        #std_final.append(std[2])
-
-        #i=3
-        #while i < len(std):
-        #    std_final.append(std[i])
-        #    i = i+1
-        
         ydata = np.insert(std, 0, 0)
         bins_orig=(_[1:] + _[:-1]) / 2
-        #bins_final=[0]
-
-        #for j in bins_orig[0:len(std_final)-1]:
-        #    #print "appending", j
-        #    bins_final.append(j)
-
-        #xdata=bins_final
-        #ydata=std_final
-            
+        
         xdata = np.insert(bins_orig, 0, 0)
         xdata[xdata - 0 < 0.0001] = 0.0001
         while len(xdata) < 3:
             xdata = np.append(xdata, 0)
             ydata = np.append(ydata, 0)
             
-        #print('xdata', xdata)
-        #print('ydata', ydata)
         fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
         errfunc = lambda p, x, y: y - fitfunc(p, x)
         out, cov, infodict, mesg, ier = optimize.leastsq(
             errfunc, coeff_guess, args=(xdata, ydata), full_output=True
         )
-        try:
-            self._err_fit_plot(xdata, ydata, out, fitfunc, dst_name, xa)
-            self._err_scatter_plot(error, distance, dst_name, xa)
-        except:
-            utils.echo_error_msg('unable to generate error plots, please check configs.')
+        #ry:
+
+        self._err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
+        self._err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
+        #except:
+        #   utils.echo_error_msg('unable to generate error plots, please check configs.')
             
         return(out)
 
@@ -527,7 +578,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 else:
                     last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
 
-                ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='distance')
+                ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
                 #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
                 ec_diff = abs(ec_d[2] - ec_d[1])
                 ec_l_diff = abs(last_ec_diff - ec_diff)
@@ -603,8 +654,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## ==============================================
         ## chunk region into sub regions
         ## ==============================================
-        print(self.region_info[self.dem.name])
-        print(num_sum, g_max, num_perc)
+        #print(self.region_info[self.dem.name])
+        #print(num_sum, g_max, num_perc)
         #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc)
         chnk_inc = 24
         sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
@@ -622,7 +673,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
         s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
         s_5perc = np.percentile(s_dens, 5)
         s_dens = None
-        utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
+        #utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
+        utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
 
         ## ==============================================
         ## zone analysis / generate training regions

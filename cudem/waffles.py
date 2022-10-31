@@ -4103,7 +4103,7 @@ Options:
 
   --help\t\tPrint the usage text
   --config\t\tSave the waffles config JSON and major datalist
-  --modules\t\tDisply the module descriptions and usage
+  --modules\t\tDisplay the module descriptions and usage
   --version\t\tPrint the version information
 
 Datalists and data formats:

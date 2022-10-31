@@ -498,7 +498,7 @@ Options:
   -z, --no_check_size\tDon't check the size of remote data if local data exists.
   -q, --quiet\t\tLower the verbosity to a quiet
 
-  --modules\t\tDisply the module descriptions and usage
+  --modules\t\tDisplay the module descriptions and usage
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
