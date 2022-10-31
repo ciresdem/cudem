@@ -60,7 +60,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         self.sims = sims
         self.max_sample = max_sample
         self.chnk_lvl = chnk_lvl        
-        self._zones = ['low-dens','mid-dens','high-dens','low-slp','mid-slp','high-slp']
+        self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
         #self._zones = ['low-dens','mid-dens','high-dens']
         self.prox = None
         self.slope = None
@@ -136,8 +136,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 d_t = lambda t: utils.euc_dst(this_center, t[0].center()) > min_dst
                 np.random.shuffle(train)
                 train.sort(reverse=True, key=d_t)
-            if verbose:
-                utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
+            #if verbose:
+            #    utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
                 
             train_sorted.append(train_d)
             
@@ -321,39 +321,63 @@ class InterpolationUncertainty: #(waffles.Waffle):
         for sc, sub_region in enumerate(sub_regions):
             _prog.update_perc((sc, len(sub_regions)))
             s_sum, s_g_max, s_perc = self._mask_analysis(msk_ds, region=sub_region)
+            #s_sum, s_g_max, s_perc = self._mask_analysis(slp_ds, region=sub_region)
+            s_dc = demfun.gather_infos(dem_ds, region=sub_region, scan=True)
             p_perc = self._prox_analysis(prox_ds, region=sub_region)
             slp_perc = self._prox_analysis(slp_ds, region=sub_region)
             #slp_perc = 0
-            s_dc = demfun.gather_infos(dem_ds, region=sub_region, scan=True)
+            
+            # if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
+            #     zone = self._zones[2]
+            # elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
+            #     zone = self._zones[1]
+            # else:
+            #     zone = self._zones[0]
+            zone = None
             if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
-                zone = self._zones[2]
-            elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
-                zone = self._zones[1]
-            else:
-                zone = self._zones[0]
-                
-            if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
-                zone = self._zones[3]
-            elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
-                zone = self._zones[4]
-            else:
-                zone = self._zones[5]
+                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                    zone = self._zones[6]
+                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                    zone = self._zones[7]
+                else:
+                    zone = None
+                    #    zone = self._zones[8]
 
-            sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, slp_perc, s_dc['zr'][0], s_dc['zr'][1], zone]
-            #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
+            elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
+                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                    zone = self._zones[3]
+                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                    zone = self._zones[4]
+                else:
+                    zone = None
+                    #    zone = self._zones[5]
+            else:
+                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                    zone = self._zones[0]
+                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                    zone = self._zones[1]
+                else:
+                    zone = None
+                    #    zone = self._zones[2]
+                    
+            if zone is not None:
+                sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
+            #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, slp_perc, zone]
+            #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, slp_perc, s_dc['zr'][0], s_dc['zr'][1], zone]
+            
+        _prog.end(0, 'analyzed {} sub-regions.'.format(len(sub_regions)))
             
         dem_ds = msk_ds = prox_ds = slp_ds = None
-        _prog.end(0, 'analyzed {} sub-regions.'.format(len(sub_regions)))
         return(sub_zones)
 
-    def _split_sample(self, trains, perc):
+    def _split_sample(self, trainers, perc):
         """split-sample simulations and error calculations
         sims = max-simulations
         """
             
         _prog = utils.CliProgress('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample))
-        utils.echo_msg('simulation\terrors\tproximity-coeff\tp_diff\tslp-coeff\tslp_diff')
-        #utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
+        #utils.echo_msg('simulation\terrors\tproximity-coeff\tp_diff\tslp-coeff\tslp_diff')
+        utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
         sim = 0
         status = 0
         last_ec_d = None
@@ -363,7 +387,12 @@ class InterpolationUncertainty: #(waffles.Waffle):
         while True:
             status = 0
             sim += 1
+            #utils.echo_msg('sorting training tiles by distance...')
             #trains = self._regions_sort(trainers, verbose=False)
+            trains = self._regions_sort(trainers, verbose = False)
+            tot_trains = len([x for s in trains for x in s])
+            #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
+            
             for z, train in enumerate(trains):
                 train_h = train[:25]
                 ss_samp = perc
@@ -372,11 +401,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 ## perform split-sample analysis on each training region.
                 ## ==============================================
                 for n, sub_region in enumerate(train_h):
-                    ss_samp = perc
+                    #print(sub_region)
                     _prog.update()
+                    ss_samp = perc
                     this_region = sub_region[0].copy()
-                    if sub_region[3] < ss_samp:
-                        ss_samp = sub_region[3]
+                    #if sub_region[3] < ss_samp:
+                    #   ss_samp = sub_region[3]
+                    ss_samp = sub_region[3]
 
                     ## ==============================================
                     ## extract the xyz data for the region from the DEM
@@ -396,7 +427,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             xyz.dump(dst_port=o_fh)
                             
                     ds = None
-
+                   
                     if os.stat(o_xyz).st_size != 0:
                         ## ==============================================
                         ## split the xyz data to inner/outer; outer is
@@ -409,18 +440,23 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
                             ss_len = len(sub_xyz)
                             #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                            if ss_samp is not None:
-                                sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                                #sx_cnt = int(ss_len * (ss_samp / 100.))
-                            else:
-                                #sx_cnt = ss_len-1
-                                sx_cnt = 1
+                            #if ss_samp is not None:
+                            #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                            sx_cnt = int(ss_len * (ss_samp / 100.))
+                            #else:
+                            #    #sx_cnt = ss_len-1
+                            #    sx_cnt = 1
                                 
-                            #if sx_cnt >= ss_len: sx_cnt = ss_len-1
-                            
+                            #if sx_cnt >= ss_len: sx_cnt = ss_len=-1
+                            sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+
+                            #print('sx_cnt', sx_cnt)
+                            #print('ss_len', ss_len)
+                            #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
+                            #_prog.update('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors: {} {} {} {} {}'.format(self.sims, self.max_sample, sub_region[5], ss_samp, sx_cnt, ss_len, len(sub_xyz[sx_cnt:])))
                             sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
                             np.random.shuffle(sub_xyz)
-                            np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
+                            np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
 
                             ## ==============================================
                             ## generate the random-sample DEM
@@ -459,13 +495,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                 ## ==============================================
                                 ## Calculate the random-sample errors
                                 ## ==============================================
-                                sub_xyd = demfun.query(sub_xyz[:sx_cnt], wf.fn, 'xyd')
+                                sub_xyd = demfun.query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
                                 sub_dp = demfun.query(sub_xyd, sub_prox, 'xyzg')
-                                sub_ds = demfun.query(sub_dp, self.slope, 'g')
-                                if len(sub_dp) > 0:
-                                   if sub_dp.shape[0] == sub_ds.shape[0]:
-                                       sub_dp = np.append(sub_dp, sub_ds, 1)
-                                   else: sub_dp = []
+                                #sub_ds = demfun.query(sub_dp, self.slope, 'g')
+                                #if len(sub_dp) > 0:
+                                #   if sub_dp.shape[0] == sub_ds.shape[0]:
+                                #       sub_dp = np.append(sub_dp, sub_ds, 1)
+                                #   else: sub_dp = []
                             else:
                                 sub_dp = None
                                 
@@ -475,12 +511,12 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                     s_dp = np.vstack((s_dp, sub_dp))
                                 except:
                                     s_dp = sub_dp
-                                
+                                    
                     utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
 
             if s_dp is not None and len(s_dp) > 0:
                 d_max = self.region_info[self.dem.name][4]
-                s_max = self.region_info[self.dem.name][5]
+                #s_max = self.region_info[self.dem.name][5]
                 #s_dp = s_dp[s_dp[:,3] < d_max,:]
                 s_dp = s_dp[s_dp[:,3] >= 1,:]
                 prox_err = s_dp[:,[2,3]]
@@ -496,11 +532,11 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 ec_diff = abs(ec_d[2] - ec_d[1])
                 ec_l_diff = abs(last_ec_diff - ec_diff)
                 #s_dp = s_dp[s_dp[:,4] < s_max,:]
-                slp_err = s_dp[:,[2,4]]
-                ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
+                #slp_err = s_dp[:,[2,4]]
+                #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
                 # ec_s = [0, 1, 2]
-                utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
-                #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.min(prox_err, axis=0)[0], np.max(prox_err, axis=0)[0], np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+                #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
+                utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.min(prox_err, axis=0)[0], np.max(prox_err, axis=0)[0], np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
                 
                 if len(s_dp) < self.max_sample:
                     last_ec_d = ec_d
@@ -515,12 +551,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 
                 if abs(last_ec_diff - ec_diff) < 0.0001:
                     break
-                
-                if abs(last_ec_diff - ec_diff) < 0.0001:
-                    break
 
-                if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
-                    break
+                # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
+                #     break
                 
                 last_ec_d = ec_d
             else:
@@ -528,12 +561,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 
         np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
         _prog.end(status, 'performed {} SPLIT-SAMPLE simulations'.format(sim))
-        return([ec_d, ec_s])
+        return([ec_d])
         
     def run(self):
         s_dp = s_ds = None
         unc_out = {}
-        zones = ['low-dens','mid-dens','high-dens','low-slp','mid-slp','high-slp']
+        zones = ['low-dens-low-slp','low-dens-mid-slp','low-dens-high-slp','mid-dens-low-slp','mid-dens-mid-slp','mid-dens-high-slp','high-dens-low-slp', 'high-dens-mid-slp', 'high-dens-low-slp']
+        #zones = ['low-dens','mid-dens','high-dens','low-slp','mid-slp','high-slp']
+        #zones = ['low-dens','mid-dens','high-dens']
         utils.echo_msg('running INTERPOLATION uncertainty module using {}...'.format(self.dem.mod))
         
         if self.prox is None:
@@ -560,16 +595,18 @@ class InterpolationUncertainty: #(waffles.Waffle):
         self.slp_perc_66 = demfun.percentile(self.slope, 75)
         self.slp_perc_100 = demfun.percentile(self.slope, 100)
 
-        self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile, self.slp_percentile]
-        #self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile] 
+        #self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile, self.slp_percentile]
+        self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile] 
         for x in self.region_info.keys():
             utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
 
         ## ==============================================
         ## chunk region into sub regions
         ## ==============================================
-        chnk_inc = int((self.region_info[self.dem.name][1] / math.sqrt(g_max)) / self.region_info[self.dem.name][3])
-        #chnk_inc = 120
+        print(self.region_info[self.dem.name])
+        print(num_sum, g_max, num_perc)
+        #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc)
+        chnk_inc = 24
         sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
@@ -577,6 +614,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## sub-region analysis
         ## ==============================================
         sub_zones = self._sub_region_analysis(sub_regions)
+        #sub_zones.append(self._sub_region_analysis(sub_regions, prox_or_slp='slp'))
 
         ## ==============================================
         ## sub-region density and percentiles
@@ -594,8 +632,10 @@ class InterpolationUncertainty: #(waffles.Waffle):
         s_perc = 50
 
         for z, this_zone in enumerate(self._zones):
-            print(sub_zones) #sub_zones[x][8] (with slope)
-            tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][8] == self._zones[z]]
+            #print(sub_zones) #sub_zones[x][8] (with slope) [5] for prox only
+            #print(this_zone)
+            tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
+            #print(tile_set)
             if len(tile_set) > 0:
                 d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
             else:
@@ -608,11 +648,10 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 )
             )
             trainers.append(t_trainers)
-
-        utils.echo_msg('sorting training tiles by distance...')
-        trains = self._regions_sort(trainers, verbose = True)
-        tot_trains = len([x for s in trains for x in s])
-        utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
+        #utils.echo_msg('sorting training tiles by distance...')
+        # trains = self._regions_sort(trainers, verbose = False)
+        # tot_trains = len([x for s in trains for x in s])
+        # utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
         utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
 
         ## ==============================================
@@ -620,14 +659,16 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## sims = max-simulations
         ## ==============================================
         if self.sims is None:
-            self.sims = int(len(sub_regions)/tot_trains)
-            #self.sims = 12
+            #self.sims = int(len(sub_regions)/tot_trains)
+            self.sims = 12
 
         if self.max_sample is None:
-            self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .1)
+            self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .25)
             #self.max_sample = 1
             
-        ec_d, ec_s = self._split_sample(trains, s_5perc)
+        #ec_d, ec_s = self._split_sample(trains, s_5perc)
+        #ec_d = self._split_sample(trains, s_5perc)[0]
+        ec_d = self._split_sample(trainers, num_perc)[0]
 
         ## ==============================================
         ## Save/Output results
@@ -647,15 +688,15 @@ class InterpolationUncertainty: #(waffles.Waffle):
             
         utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
 
-        utils.echo_msg('applying coefficient to SLOPE grid')
-        #if self.dem.gc['GMT'] is None:
-        utils.run_cmd('gdal_calc.py -A {} --outfile {}_slp_unc.tif --calc "{}+({}*(A**{}))"'.format(self.slope, self.dem.name, 0, ec_s[1], ec_s[2]), verbose = True)
-        #else:
-        #    math_cmd = 'gmt grdmath {} 0 AND ABS {} POW {} MUL {} ADD = {}_slp_unc.tif=gd+n-9999:GTiff\
-        #    '.format(self.slope, ec_s[2], ec_s[1], 0, self.dem.name)
-        #    utils.run_cmd(math_cmd, verbose = self.dem.verbose)
-        if self.dem.dst_srs is not None: status = demfun.set_srs('{}_prox_unc.tif'.format(self.dem.name), src_srs=self.dem.dst_srs)
-        utils.echo_msg('applied coefficient {} to SLOPE grid'.format(ec_s))
+        # utils.echo_msg('applying coefficient to SLOPE grid')
+        # #if self.dem.gc['GMT'] is None:
+        # utils.run_cmd('gdal_calc.py -A {} --outfile {}_slp_unc.tif --calc "{}+({}*(A**{}))"'.format(self.slope, self.dem.name, 0, ec_s[1], ec_s[2]), verbose = True)
+        # #else:
+        # #    math_cmd = 'gmt grdmath {} 0 AND ABS {} POW {} MUL {} ADD = {}_slp_unc.tif=gd+n-9999:GTiff\
+        # #    '.format(self.slope, ec_s[2], ec_s[1], 0, self.dem.name)
+        # #    utils.run_cmd(math_cmd, verbose = self.dem.verbose)
+        # if self.dem.dst_srs is not None: status = demfun.set_srs('{}_prox_unc.tif'.format(self.dem.name), src_srs=self.dem.dst_srs)
+        # utils.echo_msg('applied coefficient {} to SLOPE grid'.format(ec_s))
 
         utils.remove_glob(self.prox)
         utils.remove_glob(self.slope)
