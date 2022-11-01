@@ -200,8 +200,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ax = plt.subplot(111)
 
         plt_data=ax.scatter(bins_final, std_final, zorder=1, label='Error St. Dev.', marker="o", color="black", s=30)
-        plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
-
+        #plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
+        plt_best_fit,=ax.plot(xdata, fitfunc(out, xdata), '-')
+        
         box = ax.get_position()
         ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
 
@@ -421,7 +422,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         dem_ds = msk_ds = prox_ds = slp_ds = None
         return(sub_zones)
 
-    def _split_sample(self, trainers, perc):
+    def _split_sample(self, trainers, perc, max_dist):
         """split-sample simulations and error calculations
         sims = max-simulations
         """
@@ -568,7 +569,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
             if s_dp is not None and len(s_dp) > 0:
                 d_max = self.region_info[self.dem.name][4]
                 #s_max = self.region_info[self.dem.name][5]
-                #s_dp = s_dp[s_dp[:,3] < d_max,:]
+                s_dp = s_dp[s_dp[:,3] < max_dist,:]
                 s_dp = s_dp[s_dp[:,3] >= 1,:]
                 prox_err = s_dp[:,[2,3]]
 
@@ -656,8 +657,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## ==============================================
         #print(self.region_info[self.dem.name])
         #print(num_sum, g_max, num_perc)
-        #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc)
-        chnk_inc = 24
+        chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        #chnk_inc = 24
         sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
@@ -720,7 +721,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
             
         #ec_d, ec_s = self._split_sample(trains, s_5perc)
         #ec_d = self._split_sample(trains, s_5perc)[0]
-        ec_d = self._split_sample(trainers, num_perc)[0]
+        ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
 
         ## ==============================================
         ## Save/Output results
