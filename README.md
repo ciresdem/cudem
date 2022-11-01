@@ -59,9 +59,15 @@ Optional:
 -   HTDP
 -   VDatum
 
-> Python libraries (installed with pip when using 'install_CUDEM.py'
-> script): numpy, scipy, requests\[security\], lxml, matplotlib,
-> laspy\[laszip\], h5py, boto3
+Python libraries (installed with pip when using the 'install_CUDEM.py' script):
+-   numpy
+-   scipy
+-   requests[security]
+-   lxml
+-   matplotlib
+-   laspy[laszip]
+-   h5py
+-   boto3
 
 **Install CUDEM and dependencies from github using git (on
 Redhat/Fedora):**
