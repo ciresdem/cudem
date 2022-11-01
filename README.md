@@ -486,7 +486,7 @@ mar_grav:raster=True:upper_limit=0,-11,.01 \--config
 The contents of the generated config file configuration file
 (gebcop15_n28x00_w079x50_2022v1.json) are as follows:
 
-'''
+```
 {
 
 \"archive\": false,
@@ -570,7 +570,7 @@ null
 \"ysample\": null
 
 }
-'''
+```
 
 **To generate the DEM, execute the following command:**
 
