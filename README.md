@@ -13,13 +13,13 @@ In this GEBCO Cookbook section, we provide user instructions to:
 * Generate an integrated coastal bathymetric-topographic DEM
 * Generate an interpolation uncertainty grid
 Code Repository Install
-Dependencies:
+# Dependencies:
 Required: Python >= 3.0, GDAL and GDAL-Python, git, pip, 
 Optional: GMT, MB-System, HTDP, VDatum
 Python libraries (installed with pip when using ‘install_CUDEM.py’ script): numpy, scipy, requests[security], lxml, matplotlib, laspy[laszip], h5py, boto3
 
 
-Install CUDEM and dependencies from github using git (on Redhat/Fedora):
+# Install CUDEM and dependencies from github using git (on Redhat/Fedora):
 sudo dnf update
 git config --global user.name "First Last"
 git config --global user.email "example@example.com"
@@ -28,20 +28,20 @@ cd cudem
 python install_CUDEM.py –dependencies
 
 
-Update existing CUDEM installation via git:
+# Update existing CUDEM installation via git:
 python install_CUDEM.py –pull
 
 
-Install Dependencies and CUDEM code Manually on Redhat/Fedora (package names will differ on other linux systems):
+# Install Dependencies and CUDEM code Manually on Redhat/Fedora (package names will differ on other linux systems):
 Install GDAL:
 sudo dnf install gdal gdal-devel python3-gdal
 
 
-Install GMT:
+# Install GMT:
 sudo dnf install GMT GMT-devel GMT-doc gshhg-gmt-nc4 gshhg-gmt-nc4-full gshhg-gmt-nc4-high
 
 
-Install MB-System:
+# Install MB-System:
 https://www.mbari.org/products/research-software/mb-system/how-to-download-and-install-mb-system/#toggle-id-10
         
 https://github.com/dwcaress/MB-System/releases
@@ -57,7 +57,7 @@ make
 make install
 
 
-Install HTDP:
+# Install HTDP:
 sudo dnf install gfortran
 wget https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip
 unzip HTDP-download.zip -d htdp_tmp
@@ -65,19 +65,19 @@ gfortran htdp_tmp/htdp.f
 mv a.out ~/.local/bin/htdp
 
 
-Install CUDEM git:
+# Install CUDEM git:
 sudo dnf install python3-gdal python3-pip python3-wheel
 git clone https://github.com/ciresdem/cudem.git
 cd cudem
 ./install_CUDEM.py
 
 
-# Add the following to ~/.bashrc
+Add the following to ~/.bashrc
 export PATH=~/.local/bin:$PATH
 source ~/.bashrc
 
 
-Programs and scripts provided with CUDEM:
+# Programs and scripts provided with CUDEM:
 dlim                                process data
 waffles                                generate Digital Elevation Models
 regions                                process REGIONS
