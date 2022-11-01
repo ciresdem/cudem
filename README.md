@@ -39,8 +39,7 @@ In this GEBCO Cookbook section, we provide user instructions to:
 
 -   Install the CUDEM code and the open-source software dependencies
 
--   Download and process elevation and depth data from multiple publicly
-    > available sources
+-   Download and process elevation and depth data from multiple publicly available sources
 
 -   Generate an integrated coastal bathymetric-topographic DEM
 
