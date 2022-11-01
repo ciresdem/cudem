@@ -486,11 +486,12 @@ mar_grav:raster=True:upper_limit=0,-11,.01 \--config
 The contents of the generated config file configuration file
 (gebcop15_n28x00_w079x50_2022v1.json) are as follows:
 
+'''
 {
 
-  \"archive\": false,
+\"archive\": false,
 
-  \"block\": false,
+\"block\": false,
 
 \"cache_dir\": \"/media/sf_Projects/tmp/gebco/.cudem_cache\",
 
@@ -569,6 +570,7 @@ null
 \"ysample\": null
 
 }
+'''
 
 **To generate the DEM, execute the following command:**
 
