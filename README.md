@@ -458,7 +458,7 @@ masking, weighting, and interpolation.
 "waffles."
 
 |  ***Name***          |                ***Description*** |
-
+|----------------------|----------------------------------|
   average                             Generate an average DEM using GDAL\'s *gdal_grid* command.
 
   coastline                           Generate a coastline (land/sea mask) using a variety of data sources.
