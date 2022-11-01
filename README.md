@@ -35,7 +35,7 @@ CUDEMs are a shift from project-based DEM specifications, to a
 comprehensive program that systematically and continuously develops and
 updates DEMs across all spatial scales.
 
-In this GEBCO Cookbook section, we provide user instructions to:
+In this section, we provide user instructions to:
 
 -   Install the CUDEM code and the open-source software dependencies
 -   Download and process elevation and depth data from multiple publicly available sources
