@@ -87,15 +87,15 @@ python install_CUDEM.py --dependencies
 
 **Install Dependencies and CUDEM code Manually on Redhat/Fedora (package names will differ on other linux systems):**
 
-**Install GDAL:**
+*Install GDAL:*
 
 `sudo dnf install gdal gdal-devel python3-gdal`
 
-**Install GMT:**
+*Install GMT:*
 
 `sudo dnf install GMT GMT-devel GMT-doc gshhg-gmt-nc4 gshhg-gmt-nc4-full gshhg-gmt-nc4-high`
 
-**Install MB-System:**
+*Install MB-System:*
 
 > *https://www.mbari.org/products/research-software/mb-system/how-to-download-and-install-mb-system/#toggle-id-10*
 
@@ -109,7 +109,7 @@ make
 make install
 ```
 
-**Install HTDP:**
+*Install HTDP:*
 
 ```
 sudo dnf install gfortran
@@ -119,7 +119,7 @@ gfortran htdp_tmp/htdp.f
 mv a.out ~/.local/bin/htdp
 ```
 
-**Install CUDEM git:**
+*Install CUDEM git:*
 
 ```
 sudo dnf install python3-gdal python3-pip python3-wheel
