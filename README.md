@@ -1,4 +1,4 @@
-Matthew Love[^1],[2^], Christopher Amante[^1],[2^]
+Matthew Love[^1],[^2], Christopher Amante[^1],[^2]
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
 at the University of Colorado Boulder
