@@ -532,7 +532,7 @@ The contents of the generated config file configuration file
 
 **To generate the DEM, execute the following command:**
 
-waffles -G gebcop15_n28x00_w079x50_2022v1.json
+`waffles -G gebcop15_n28x00_w079x50_2022v1.json`
 
 Output:
 
