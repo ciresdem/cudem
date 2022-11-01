@@ -274,7 +274,6 @@ between adjacent DEM tiles.
 **Table 1.** Data source modules available in the CUDEM software tool
 "fetches*.*"
 
-|-----------------------|-----------------------|-----------------------|
 | ***Name***            | ***Description***     | ***URL***             |
 |-----------------------|-----------------------|-----------------------|
 | arcticdem             | Arctic DEM            | [[htt                 |
