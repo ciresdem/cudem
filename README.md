@@ -281,28 +281,23 @@ between adjacent DEM tiles.
 |                       |                       | data/arcticdem/]{.ul} |
 |                       |                       | ](https://www.pgc.umn |
 |                       |                       | .edu/data/arcticdem/) |
-|-----------------------|-----------------------|-----------------------|
 | bluetopo              | A curated collection  | [[https://www.        |
 |                       | of high resolution    | nauticalcharts.noaa.g |
 |                       | seafloor models from  | ov/data/bluetopo.html |
 |                       | NOAA.                 | ]{.ul}](https://www.n |
 |                       |                       | auticalcharts.noaa.go |
 |                       |                       | v/data/bluetopo.html) |
-|-----------------------|-----------------------|-----------------------|
 | buoys                 | Buoy information from | [[https://www.ndbc.   |
 |                       | NOAA                  | noaa.gov]{.ul}](https |
 |                       |                       | ://www.ndbc.noaa.gov) |
-|-----------------------|-----------------------|-----------------------|
 | charts                | NOS Nautical Charts,  | [[ht                  |
 |                       | including electronic  | tps://www.charts.noaa |
 |                       | Nautical Charts and   | .gov/]{.ul}](https:// |
 |                       | Raster Nautical       | www.charts.noaa.gov/) |
 |                       | Charts                |                       |
-|-----------------------|-----------------------|-----------------------|
 | chs                   | Canadian Hydrographic | [[https://ope         |
 |                       | Surveys               | n.canada.ca]{.ul}](ht |
 |                       |                       | tps://open.canada.ca) |
-|-----------------------|-----------------------|-----------------------|
 | copernicus            | Copernicus elevation  | [[https://ec.eur      |
 |                       | data                  | opa.eu/eurostat/web/g |
 |                       |                       | isco/geodata/referenc |
@@ -313,28 +308,23 @@ between adjacent DEM tiles.
 |                       |                       | isco/geodata/referenc |
 |                       |                       | e-data/elevation/cope |
 |                       |                       | rnicus-dem/elevation) |
-|-----------------------|-----------------------|-----------------------|
 | digital_coast         | Lidar and Raster data | [[https://coa         |
 |                       | from NOAA's Digital   | st.noaa.gov]{.ul}](ht |
 |                       | Coast                 | tps://coast.noaa.gov) |
-|-----------------------|-----------------------|-----------------------|
 | earthdata             | NASA Earthdata        | [[https:              |
 |                       |                       | //cmr.earthdata.nasa. |
 |                       |                       | gov]{.ul}](https://cm |
 |                       |                       | r.earthdata.nasa.gov) |
-|-----------------------|-----------------------|-----------------------|
 | ehydro                | USACE hydrographic    | [[https://navigatio   |
 |                       | surveys               | n.usace.army.mil/Surv |
 |                       |                       | ey/Hydro]{.ul}](https |
 |                       |                       | ://navigation.usace.a |
 |                       |                       | rmy.mil/Survey/Hydro) |
-|-----------------------|-----------------------|-----------------------|
 | emodnet               | EmodNET European      | [                     |
 |                       | Ba                    | [https://portal.emodn |
 |                       | thymetric/Topographic | et-bathymetry.eu/]{.u |
 |                       | DEM                   | l}](https://portal.em |
 |                       |                       | odnet-bathymetry.eu/) |
-|-----------------------|-----------------------|-----------------------|
 | gebco                 | A global continuous   | [[https://www         |
 |                       | terrain model for     | .gebco.net/data_and_p |
 |                       | ocean and land with a | roducts/gridded_bathy |
@@ -342,37 +332,30 @@ between adjacent DEM tiles.
 |                       | 15 arc seconds.       | tps://www.gebco.net/d |
 |                       |                       | ata_and_products/grid |
 |                       |                       | ded_bathymetry_data/) |
-|-----------------------|-----------------------|-----------------------|
 | gmrt                  | The Global            | [[https:/             |
 |                       | MultiResolution       | /www.gmrt.org]{.ul}]( |
 |                       | Topography synthesis  | https://www.gmrt.org) |
-|-----------------------|-----------------------|-----------------------|
 | hrdem                 | High-Resolution DEMs  | [[https://ope         |
 |                       | from Canada           | n.canada.ca]{.ul}](ht |
 |                       |                       | tps://open.canada.ca) |
-|-----------------------|-----------------------|-----------------------|
 | hydrolakes            | HydroLakes vector and | [[https://www.hydro   |
 |                       | derived elevations    | sheds.org/products/hy |
 |                       |                       | drolakes]{.ul}](https |
 |                       |                       | ://www.hydrosheds.org |
 |                       |                       | /products/hydrolakes) |
-|-----------------------|-----------------------|-----------------------|
 | mar_grav              | Marine Gravity        | [[https://topex.u     |
 |                       | Satellite Altimetry   | csd.edu/WWW_html/mar_ |
 |                       | Topography from       | grav.html]{.ul}](http |
 |                       | Scripps.              | s://topex.ucsd.edu/WW |
 |                       |                       | W_html/mar_grav.html) |
-|-----------------------|-----------------------|-----------------------|
 | mgds                  | Marine Geoscience     | [[https://www.marine- |
 |                       | Data System           | geo.org]{.ul}](https: |
 |                       |                       | //www.marine-geo.org) |
-|-----------------------|-----------------------|-----------------------|
 | multibeam             | NOAA Multibeam        | [                     |
 |                       | bathymetric data      | [https://data.ngdc.no |
 |                       |                       | aa.gov/platforms/]{.u |
 |                       |                       | l}](https://data.ngdc |
 |                       |                       | .noaa.gov/platforms/) |
-|-----------------------|-----------------------|-----------------------|
 | nasadem               | NASA Digital          | [[https://            |
 |                       | Elevation Model       | www.earthdata.nasa.go |
 |                       |                       | v/esds/competitive-pr |
@@ -381,57 +364,47 @@ between adjacent DEM tiles.
 |                       |                       | .earthdata.nasa.gov/e |
 |                       |                       | sds/competitive-progr |
 |                       |                       | ams/measures/nasadem) |
-|-----------------------|-----------------------|-----------------------|
 | ncei_thredds          | NCEI DEM THREDDS      | [[                    |
 |                       | Catalog               | https://www.ngdc.noaa |
 |                       |                       | .gov/thredds/demCatal |
 |                       |                       | og.xml]{.ul}](https:/ |
 |                       |                       | /www.ngdc.noaa.gov/th |
 |                       |                       | redds/demCatalog.xml) |
-|-----------------------|-----------------------|-----------------------|
 | ngs                   | NGS monuments         | [[http://geodesy.     |
 |                       |                       | noaa.gov/]{.ul}](http |
 |                       |                       | ://geodesy.noaa.gov/) |
-|-----------------------|-----------------------|-----------------------|
 | nos                   | NOS Hydrographic      | [[https:              |
 |                       | DataBase (NOSHDB)     | //www.ngdc.noaa.gov/m |
 |                       |                       | gg/bathymetry/hydro.h |
 |                       |                       | tml]{.ul}](https://ww |
 |                       |                       | w.ngdc.noaa.gov/mgg/b |
 |                       |                       | athymetry/hydro.html) |
-|-----------------------|-----------------------|-----------------------|
 | osm                   | Open Street Map       | [[https://            |
 |                       |                       | wiki.openstreetmap.or |
 |                       |                       | g/]{.ul}](https://wik |
 |                       |                       | i.openstreetmap.org/) |
-|-----------------------|-----------------------|-----------------------|
 | srtm_plus             | SRTM15|: Global       | [[                    |
 |                       | bathymetry and        | https://topex.ucsd.ed |
 |                       | topography at 15      | u/WWW_html/srtm15_plu |
 |                       | arc-seconds.          | s.html]{.ul}](https:/ |
 |                       |                       | /topex.ucsd.edu/WWW_h |
 |                       |                       | tml/srtm15_plus.html) |
-|-----------------------|-----------------------|-----------------------|
 | tides                 | Tide station          | [[https://tidesa      |
 |                       | information from NOAA | ndcurrents.noaa.gov/] |
 |                       |                       | {.ul}](https://tidesa |
 |                       |                       | ndcurrents.noaa.gov/) |
-|-----------------------|-----------------------|-----------------------|
 | tnm                   | USGS National Map     | [[http://tnmac        |
 |                       |                       | cess.nationalmap.gov/ |
 |                       |                       | ]{.ul}](http://tnmacc |
 |                       |                       | ess.nationalmap.gov/) |
-|-----------------------|-----------------------|-----------------------|
 | trackline             | NOAA trackline        | [[http://www.ngdc.    |
 |                       | bathymetry data       | noaa.gov/trackline/]{ |
 |                       |                       | .ul}](http://www.ngdc |
 |                       |                       | .noaa.gov/trackline/) |
-|-----------------------|-----------------------|-----------------------|
 | usiei                 | US Interagency        | [[https://coas        |
 |                       | Elevation Inventory   | t.noaa.gov/inventory/ |
 |                       |                       | ]{.ul}](https://coast |
 |                       |                       | .noaa.gov/inventory/) |
-|-----------------------|-----------------------|-----------------------|
 | vdatum                | Vertical Datum        | [[https://vdatu       |
 |                       | transformation grids  | m.noaa.gov]{.ul}](htt |
 |                       |                       | ps://vdatum.noaa.gov) |
@@ -439,7 +412,6 @@ between adjacent DEM tiles.
 |                       |                       | [[https://c           |
 |                       |                       | dn.proj.org/]{.ul}](h |
 |                       |                       | ttps://cdn.proj.org/) |
-|-----------------------|-----------------------|-----------------------|
 
 "Waffles" is the data gridding tool for DEM generation using various
 gridding modules (Table 2). We leverage existing open-source software
