@@ -276,17 +276,8 @@ between adjacent DEM tiles.
 
 | ***Name***            | ***Description***     | ***URL***             |
 |-----------------------|-----------------------|-----------------------|
-| arcticdem             | Arctic DEM            | [[htt                 |
-|                       |                       | ps://www.pgc.umn.edu/ |
-|                       |                       | data/arcticdem/]{.ul} |
-|                       |                       | ](https://www.pgc.umn |
-|                       |                       | .edu/data/arcticdem/) |
-| bluetopo              | A curated collection  | [[https://www.        |
-|                       | of high resolution    | nauticalcharts.noaa.g |
-|                       | seafloor models from  | ov/data/bluetopo.html |
-|                       | NOAA.                 | ]{.ul}](https://www.n |
-|                       |                       | auticalcharts.noaa.go |
-|                       |                       | v/data/bluetopo.html) |
+| arcticdem             | Arctic DEM            | [[https://www.pgc.umn.edu/data/arcticdem/]{.ul}](https://www.pgc.umn.edu/data/arcticdem/) |
+| bluetopo              | A curated collection of high resolution seafloor models from NOAA. | [[https://www.nauticalcharts.noaa.gov/data/bluetopo.html]{.ul}](https://www.nauticalcharts.noaa.gov/data/bluetopo.html) |
 | buoys                 | Buoy information from | [[https://www.ndbc.   |
 |                       | NOAA                  | noaa.gov]{.ul}](https |
 |                       |                       | ://www.ndbc.noaa.gov) |
