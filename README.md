@@ -459,8 +459,8 @@ masking, weighting, and interpolation.
 
 |  ***Name***          |                ***Description*** |
 |----------------------|----------------------------------|
-  average                             Generate an average DEM using GDAL\'s *gdal_grid* command.
-
+|  average             |                Generate an average DEM using GDAL\'s *gdal_grid* command. |
+|----------------------|----------------------------------|
   coastline                           Generate a coastline (land/sea mask) using a variety of data sources.
 
   cudem                               CUDEM integrated DEM generation. Generate an topographic-bathymetric integrated DEM using a variety of data sources.
