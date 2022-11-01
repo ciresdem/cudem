@@ -460,35 +460,21 @@ masking, weighting, and interpolation.
 |  ***Name***          |                ***Description*** |
 |----------------------|----------------------------------|
 |  average             |                Generate an average DEM using GDAL\'s *gdal_grid* command. |
-|----------------------|----------------------------------|
-  coastline                           Generate a coastline (land/sea mask) using a variety of data sources.
-
-  cudem                               CUDEM integrated DEM generation. Generate an topographic-bathymetric integrated DEM using a variety of data sources.
-
-  IDW                                 Generate a DEM using an Inverse Distance Weighted algorithm. If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty, as described here:
+|  coastline           |                Generate a coastline (land/sea mask) using a variety of data sources. |
+|  cudem               |                CUDEM integrated DEM generation. Generate an topographic-bathymetric integrated DEM using a variety of data sources. |
+|  IDW                 |                Generate a DEM using an Inverse Distance Weighted algorithm. If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty, as described here: 
                                       [[https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932]{.ul}](https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932), and here:
-                                      [[https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python]{.ul}](https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python)
-
-  invdst                              Generate an inverse distance DEM using GDAL\'s *gdal_grid* command.
-
-  linear                              Generate a linear DEM using GDAL\'s *gdal_grid* command.
-
-  mbgrid                              Generate a DEM using MB-System\'s *mbgrid* command.
-
-  nearest                             Generate a nearest DEM using GDAL\'s *gdal_grid* command.
-
-  nearneighbor                        Generate a DEM using GMT\'s *nearneighbor* command
-
-  num                                 Generate an uninterpolated DEM using various gridding modes, including options from GMT's *xyz2grd* command
-
-  stacks                              Generate a DEM using a raster stacking method. By default, calculate the \[weighted\]-mean where overlapping cells occur. Set supercede to True to overwrite overlapping cells with higher weighted data.
-
-  surface                             Generate a DEM using GMT\'s *surface* command
-
-  triangulate                         Generate a DEM using GMT\'s *triangulate* command
-
-  vdatum                              Generate a vertical datum conversion grid.
-  -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+                                      [[https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python]{.ul}](https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python) |
+|  invdst              |                Generate an inverse distance DEM using GDAL\'s *gdal_grid* command. |
+|  linear              |                Generate a linear DEM using GDAL\'s *gdal_grid* command. |
+|  mbgrid              |                Generate a DEM using MB-System\'s *mbgrid* command. |
+|  nearest             |                Generate a nearest DEM using GDAL\'s *gdal_grid* command. |
+|  nearneighbor        |                Generate a DEM using GMT\'s *nearneighbor* command |
+|  num                  |               Generate an uninterpolated DEM using various gridding modes, including options from GMT's *xyz2grd* command |
+|  stacks               |               Generate a DEM using a raster stacking method. By default, calculate the \[weighted\]-mean where overlapping cells occur. Set supercede to True to overwrite overlapping cells with higher weighted data. | 
+|  surface              |               Generate a DEM using GMT\'s *surface* command | 
+|  triangulate          |               Generate a DEM using GMT\'s *triangulate* command | 
+|  vdatum              |                Generate a vertical datum conversion grid. |
 
 # Uncertainty Grid Generation
 
