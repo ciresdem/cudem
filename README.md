@@ -453,9 +453,9 @@ framework. See Hare et al. (2011), Amante and Eakins (2016), and Amante
 
 For additional questions, please contact:
 
-[[Matthew.Love\@noaa.gov]{.ul}](mailto:Matthew.Love@noaa.gov)
+[Matthew.Love@noaa.gov](mailto:Matthew.Love@noaa.gov)
 
-[[Christopher.Amante\@noaa.gov]{.ul}](mailto:Christopher.Amante@noaa.gov)
+[Christopher.Amante@noaa.gov](mailto:Christopher.Amante@noaa.gov)
 
 ## Code Syntax
 
