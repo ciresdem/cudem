@@ -487,7 +487,9 @@ The contents of the generated config file configuration file
 (gebcop15_n28x00_w079x50_2022v1.json) are as follows:
 
 {
+
 	\"archive\": false,
+
 	\"block\": false,
 
 \"cache_dir\": \"/media/sf_Projects/tmp/gebco/.cudem_cache\",
