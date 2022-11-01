@@ -559,9 +559,6 @@ gebcop15_n28x00_w079x50_2022v1_stack_w.tif - stacks weight mask
 
 gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
-![](./media/image3.png){width="1.2708333333333333in"
-height="5.239393044619423in"}
-
 ![](./media/image6.png){width="5.22998031496063in"
 height="5.22998031496063in"}
 
