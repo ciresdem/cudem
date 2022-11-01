@@ -462,9 +462,7 @@ masking, weighting, and interpolation.
 |  average             |                Generate an average DEM using GDAL\'s *gdal_grid* command. |
 |  coastline           |                Generate a coastline (land/sea mask) using a variety of data sources. |
 |  cudem               |                CUDEM integrated DEM generation. Generate an topographic-bathymetric integrated DEM using a variety of data sources. |
-|  IDW                 |                Generate a DEM using an Inverse Distance Weighted algorithm. If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty, as described here: 
-                                      [[https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932]{.ul}](https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932), and here:
-                                      [[https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python]{.ul}](https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python) |
+|  IDW                 |                Generate a DEM using an Inverse Distance Weighted algorithm. If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty, as described here: [[https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932]{.ul}](https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932), and here: [[https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python]{.ul}](https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python) |
 |  invdst              |                Generate an inverse distance DEM using GDAL\'s *gdal_grid* command. |
 |  linear              |                Generate a linear DEM using GDAL\'s *gdal_grid* command. |
 |  mbgrid              |                Generate a DEM using MB-System\'s *mbgrid* command. |
