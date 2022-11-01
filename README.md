@@ -488,86 +488,46 @@ The contents of the generated config file configuration file
 
 ```
 {
-	\"archive\": false,
-
-\"block\": false,
-
-\"cache_dir\": \"/media/sf_Projects/tmp/gebco/.cudem_cache\",
-
-\"chunk\": null,
-
-\"clip\": null,
-
-\"clobber\": true,
-
-\"data\": \[
-
-\"gebco:exclude_tid=0/40,-11,1.0\",
-
-\"copernicus:datatype=1,-11,2.0\",
-
-\"mar_grav:raster=True:upper_limit=0,-11,.01\"
-
-\],
-
-\"dst_srs\": \"epsg:4326\",
-
-\"extend\": 0,
-
-\"extend_proc\": 0,
-
-\"fltr\": \[\],
-
-\"fmt\": \"GTiff\",
-
-\"mask\": true,
-
-\"mod\": \"cudem:min_weight=.2:landmask=coastline:pre_count=1\",
-
-\"name\": \"gebcop15_n28x00_w079x50_2022v1\",
-
-\"ndv\": -9999,
-
-\"node\": \"pixel\",
-
-\"sample\": \"bilinear\",
-
-\"spat\": false,
-
-\"src_region\": \[
-
--79.5,
-
--76.5,
-
-25.0,
-
-28.0,
-
-null,
-
-null,
-
-null,
-
-null
-
-\],
-
-\"srs_transform\": false,
-
-\"verbose\": true,
-
-\"weights\": 1,
-
-\"xinc\": 0.004166666666666667,
-
-\"xsample\": null,
-
-\"yinc\": 0.004166666666666667,
-
-\"ysample\": null
-
+"archive": false,
+"block": false,
+"cache_dir": ".cudem_cache",
+"chunk": null,
+"clip": null,
+"clobber": true,
+"data": [
+	"gebco:exclude_tid=0/40,-11,1.0",
+	"copernicus:datatype=1,-11,2.0",
+	"mar_grav:raster=True:upper_limit=0,-11,.01"
+],
+"dst_srs": "epsg:4326",
+"extend": 0,
+"extend_proc": 0,
+"fltr": [],
+"fmt": "GTiff",
+"mask": true,
+"mod": "cudem:min_weight=.2:landmask=coastline:pre_count=1",
+"name": "gebcop15_n28x00_w079x50_2022v1",
+"ndv": -9999,
+"node": "pixel",
+"sample": "bilinear",
+"spat": false,
+"src_region": [
+	      -79.5,
+	      -76.5,
+	      25.0,
+	      28.0,
+	      null,
+	      null,
+	      null,
+	      null
+],
+"srs_transform": false,
+"verbose": true,
+"weights": 1,
+"xinc": 0.004166666666666667,
+"xsample": null,
+"yinc": 0.004166666666666667,
+"ysample": null
 }
 ```
 
