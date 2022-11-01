@@ -612,7 +612,7 @@ For additional questions, please contact:
 ## Code Syntax
 
 ### Fetches Module:
-
+```
 fetches (0.7.6): Fetches; Fetch and process remote elevation data
 
 usage: fetches \[ -hlmpqERW \[ args \] \] MODULE \...
@@ -662,9 +662,10 @@ gmrt, gebco, srtm_plus, mar_grav, multibeam, mgds, trackline, ehydro,
 ngs, nos, charts, digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem,
 arcticdem, bluetopo, osm, copernicus, nasadem, tides, vdatum, buoys,
 earthdata, usiei, hydrolakes
+```
 
 ### Waffles Module:
-
+```
 waffles (1.9.0): Generate DEMs and derivatives.
 
 usage: waffles \[OPTIONS\] DATALIST
@@ -800,6 +801,7 @@ Modules (see waffles \--modules \<module-name> for more info):
 
 surface, triangulate, nearneighbor, num, linear, nearest, average,
 invdst, IDW, vdatum, mbgrid, coastline, cudem, patch, lakes, stacks
+```
 
 ## Code License
 
