@@ -88,8 +88,6 @@ python install_CUDEM.py --dependencies
 
 > *https://www.mbari.org/products/research-software/mb-system/how-to-download-and-install-mb-system/#toggle-id-10*
 
-[[https://github.com/dwcaress/MB-System/releases]{.ul}](https://github.com/dwcaress/MB-System/releases)
-
 ```
 sudo dnf install openmotif openmotif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel gmt gmt-devel boost boost-python3 glibc-devel mesa\* xorg-x11-fonts\* gcc-c++ libtirpc-devel
 git clone https://github.com/dwcaress/MB-System.git
