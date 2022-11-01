@@ -488,8 +488,7 @@ The contents of the generated config file configuration file
 
 ```
 {
-
-\"archive\": false,
+	\"archive\": false,
 
 \"block\": false,
 
