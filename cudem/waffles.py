@@ -2052,7 +2052,8 @@ DEM generation.
         self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
         self.mode = mode
-        self.filter_outliers = filter_outliers
+        self.filter_outliers = utils.int_or(filter_outliers)
+        self.filter_outliers = 1 if self.filter_outliers > 5 or self.filter_outliers < 0 else self.filter_outliers
         
     def run(self):
         pre = self.pre_count
@@ -2065,7 +2066,9 @@ DEM generation.
 
         ## Block/Stack the data with weights
         #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
-        self._stacks_array(out_name='{}_stack'.format(self.name), keep_weights=True, keep_count=True, supercede=True)
+        self._stacks_array(
+            out_name='{}_stack'.format(self.name), keep_weights=True, keep_count=True, supercede=True
+        )
         n = '{}_stack_s.tif'.format(self.name)
         w = '{}_stack_w.tif'.format(self.name)
         c = '{}_stack_c.tif'.format(self.name)
@@ -2091,8 +2094,10 @@ DEM generation.
         # os.rename('{}.tif'.format(self.stacked.name), n)
         
         ## Remove outliers from the stacked data
-        if self.filter_outliers:
-            demfun.filter_outliers_slp(n, '_tmp_fltr.tif', agg_level=5, replace=False)
+        if self.filter_outliers is not None:
+            demfun.filter_outliers_slp(
+                n, '_tmp_fltr.tif', agg_level=self.filter_outliers, replace=False
+            )
             os.rename('_tmp_fltr.tif', n)
             demfun.mask_(w, n, '_tmp_w.tif')
             os.rename('_tmp_w.tif', w)

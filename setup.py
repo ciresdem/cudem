@@ -26,7 +26,7 @@ import sys
 
 site.ENABLE_USER_SITE = "--user" in sys.argv[1:]
 
-with open('README', 'r') as fh:
+with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setuptools.setup(
