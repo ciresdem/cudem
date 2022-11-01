@@ -122,6 +122,7 @@ source \~/.bashrc
 
 **Programs and scripts provided with CUDEM:**
 
+| Command | Description |
 |---|---|
 | dlim | process data |
 | waffles | generate Digital Elevation Models |
