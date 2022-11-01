@@ -61,22 +61,16 @@ Optional: GMT, MB-System, HTDP, VDatum
 **Install CUDEM and dependencies from github using git (on
 Redhat/Fedora):**
 
+```
 sudo dnf update
-
-git config \--global user.name \"First Last\"
-
-git config \--global user.email
-\"[[example\@example.com]{.ul}](mailto:example@example.com)\"
-
-git clone
-[[https://github.com/ciresdem/cudem.git]{.ul}](https://github.com/ciresdem/cudem.git)
-
+git config --global user.name "First Last"
+git config --global user.email "example@example.com"
+git clone https://github.com/ciresdem/cudem.git
 cd cudem
-
 python install_CUDEM.py --dependencies
+```
 
 **Update existing CUDEM installation via git:**
-
 python install_CUDEM.py --pull
 
 > **Install Dependencies and CUDEM code Manually on Redhat/Fedora
