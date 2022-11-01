@@ -46,9 +46,18 @@ In this section, we provide user instructions to:
 
 **Dependencies:**
 
-Required: Python \>= 3.0, GDAL and GDAL-Python, git, pip,
+Required:
+-Python \>= 3.0
+-GDAL
+-GDAL-Python
+-git
+-pip
 
-Optional: GMT, MB-System, HTDP, VDatum
+Optional:
+-GMT
+-MB-System
+-HTDP
+-VDatum
 
 > Python libraries (installed with pip when using 'install_CUDEM.py'
 > script): numpy, scipy, requests\[security\], lxml, matplotlib,
