@@ -671,134 +671,78 @@ waffles (1.9.0): Generate DEMs and derivatives.
 usage: waffles \[OPTIONS\] DATALIST
 
 Options:
+-R, --region Specifies the desired REGION;
+    Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+    Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+    OR an OGR-compatible vector file with regional polygons.
+    Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+    If a vector file is supplied, will use each region found therein.
+-E, --increment Gridding INCREMENT and RESAMPLE-INCREMENT in native
+    units.
+    Where INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
+-S, --sample_alg ReSAMPLE algorithm to use (from gdalwarp)
+-F, --format Output grid FORMAT. [GTiff]
+-M, --module Desired Waffles MODULE and options. (see available Modules
+    below)
+    Where MODULE is
+    module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+-O, --output-name BASENAME for all outputs.
+-P, --t_srs Projection of REGION and output DEM.
+-X, --extend Number of cells with which to EXTEND the output DEM REGION and a
+    percentage to extend the processing REGION.
+    Where EXTEND is dem-extend(cell-count)\[:processing-extend(percentage)\]
+    e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing
+    region by 10 percent of the input REGION.
+-T, --filter FILTER the output DEM using one or multiple filters.
+    Where FILTER is fltr_id[:fltr_val[:split_value=z]]
+    Available FILTERS:
+    1: perform a Gaussian Filter at -T1:<factor>.
+    2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
+    3: perform an Outlier Filter at -T3:<aggression>.
+       The -T switch may be set multiple times to perform multiple filters.
+       Append :split_value=<num> to only filter values below z-value <num>.
+       e.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian
+       filter
+-C, --clip CLIP the output to the clip polygon
+    -C<clip_ply.shp:invert=False>
+-K, --chunk Generate the DEM in CHUNKs
+-G, --wg-config A waffles config JSON file. If supplied, will overwrite all other options.
+    Generate a waffles_config JSON file using the --config flag.
+-D, --cache-dir CACHE Directory for storing temp data.
+    Default Cache Directory is ~/.cudem_cache; cache will be cleared
+    after a waffles session to retain the data, use the --keep-cache flag
+-N, --nodata NODATA value of output DEM
+-f, --transform Transform all data to PROJECTION value set with
+--t_srs/-P where applicable.
+-p, --prefix Set BASENAME (-O) to PREFIX (append
+    <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
+    note: Set Resolution, Year and Version by setting this to
+    'res=X:year=XXXX:version=X', leave blank for default of
+    <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
+-r, --grid-node Use grid-node registration, default is pixel-node
+-w, --weights Use weights provided in the datalist to weight overlapping data.
+-a, --archive ARCHIVE the datalist to the given region.
+-k, --keep-cache KEEP the cache data intact after run
+-m, --mask Generate a data MASK raster.
+-s, --spat Generate SPATIAL-METADATA.
+-c, --continue Don\'t clobber existing files.
+-q, --quiet Lower verbosity to a quiet.
 
--R, \--region Specifies the desired REGION;
-
-Where a REGION is xmin/xmax/ymin/ymax\[/zmin/zmax\[/wmin/wmax\]\]
-
-Use \'-\' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
-
-OR an OGR-compatible vector file with regional polygons.
-
-Where the REGION is /path/to/vector\[:zmin/zmax\[/wmin/wmax\]\].
-
-If a vector file is supplied, will use each region found therein.
-
--E, \--increment Gridding INCREMENT and RESAMPLE-INCREMENT in native
-units.
-
-Where INCREMENT is x-inc\[/y-inc\]\[:sample-x-inc/sample-y-inc\]
-
--S, \--sample_alg ReSAMPLE algorithm to use (from gdalwarp)
-
--F, \--format Output grid FORMAT. \[GTiff\]
-
--M, \--module Desired Waffles MODULE and options. (see available Modules
-below)
-
-Where MODULE is
-module\[:mod_opt=mod_val\[:mod_opt1=mod_val1\[:\...\]\]\]
-
--O, \--output-name BASENAME for all outputs.
-
--P, \--t_srs Projection of REGION and output DEM.
-
--X, \--extend Number of cells with which to EXTEND the output DEM REGION
-and a
-
-percentage to extend the processing REGION.
-
-Where EXTEND is dem-extend(cell-count)\[:processing-extend(percentage)\]
-
-e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing
-region by 10
-
-percent of the input REGION.
-
--T, \--filter FILTER the output DEM using one or multiple filters.
-
-Where FILTER is fltr_id\[:fltr_val\[:split_value=z\]\]
-
-Available FILTERS:
-
-1: perform a Gaussian Filter at -T1:\<factor>.
-
-2: use a Cosine Arch Filter at -T2:\<dist(km)> search distance.
-
-3: perform an Outlier Filter at -T3:\<aggression>.
-
-The -T switch may be set multiple times to perform multiple filters.
-
-Append :split_value=\<num> to only filter values below z-value \<num>.
-
-e.g. -T1:10:split_value=0 to smooth bathymetry (z\<0) using Gaussian
-filter
-
--C, \--clip CLIP the output to the clip polygon
--C\<clip_ply.shp:invert=False>
-
--K, \--chunk Generate the DEM in CHUNKs
-
--G, \--wg-config A waffles config JSON file. If supplied, will overwrite
-all other options.
-
-Generate a waffles_config JSON file using the \--config flag.
-
--D, \--cache-dir CACHE Directory for storing temp data.
-
-> Default Cache Directory is \~/.cudem_cache; cache will be cleared
-> after a waffles session to retain the data, use the \--keep-cache flag
-
--N, \--nodata NODATA value of output DEM
-
--f, \--transform Transform all data to PROJECTION value set with
-\--t_srs/-P where applicable.
-
--p, \--prefix Set BASENAME (-O) to PREFIX (append
-
-> \<RES>\_nYYxYY_wXXxXX\_\<YEAR>v\<VERSION> info to output BASENAME).
-> note: Set Resolution, Year and Version by setting this to
-> \'res=X:year=XXXX:version=X\', leave blank for default of
-> \<INCREMENT>, \<CURRENT_YEAR> and \<1>, respectively.
-
--r, \--grid-node Use grid-node registration, default is pixel-node
-
--w, \--weights Use weights provided in the datalist to weight
-overlapping data.
-
--a, \--archive ARCHIVE the datalist to the given region.
-
--k, \--keep-cache KEEP the cache data intact after run
-
--m, \--mask Generate a data MASK raster.
-
--s, \--spat Generate SPATIAL-METADATA.
-
--c, \--continue Don\'t clobber existing files.
-
--q, \--quiet Lower verbosity to a quiet.
-
-\--help Print the usage text
-
-\--config Save the waffles config JSON and major datalist
-
-\--modules Display the module descriptions and usage
-
-\--version Print the version information
+--help Print the usage text
+--config Save the waffles config JSON and major datalist
+--modules Display the module descriptions and usage
+--version Print the version information
 
 Datalists and data formats:
-
 A datalist is a file that contains a number of datalist entries, while
 an entry is a space-delineated line: \`path \[format weight \[name
 source date type resolution hdatum vdatum url\]\]\`
 
 Supported datalist formats:
-
 datalist (-1), zip (-2), xyz (168), raster (200), bag (201), las (300),
 mbs (301), fetches (-11)
 
 Modules (see waffles \--modules \<module-name> for more info):
-
 surface, triangulate, nearneighbor, num, linear, nearest, average,
 invdst, IDW, vdatum, mbgrid, coastline, cudem, patch, lakes, stacks
 ```
