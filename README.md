@@ -615,48 +615,29 @@ For additional questions, please contact:
 ```
 fetches (0.7.6): Fetches; Fetch and process remote elevation data
 
-usage: fetches \[ -hlmpqERW \[ args \] \] MODULE \...
+usage: fetches [ -hlmpqERW [ args ] ] MODULE ...
 
 Options:
-
 -R, \--region Restrict processing to the desired REGION
+    Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+    Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+    OR an OGR-compatible vector file with regional polygons.
+    Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+    If a vector file is supplied, will use each region found therein.
+-W, --t_srs Set the TARGET projection (for use with '-p').
+-E, --increment Block data to INCREMENT in native units.
+    Where INCREMENT is x-inc[/y-inc] (for use with '-p').
+-H, --threads Set the number of threads (1)
+-l, --list Return a list of fetch URLs in the given region.
+-p, --process Process fetched elevation data to ASCII XYZ format. <beta>
+-z, --no_check_size Don\'t check the size of remote data if local data exists.
+-q, --quiet Lower the verbosity to a quiet
 
-Where a REGION is xmin/xmax/ymin/ymax\[/zmin/zmax\[/wmin/wmax\]\]
+--modules Display the module descriptions and usage
+--help Print the usage text
+--version Print the version information
 
-Use \'-\' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
-
-OR an OGR-compatible vector file with regional polygons.
-
-Where the REGION is /path/to/vector\[:zmin/zmax\[/wmin/wmax\]\].
-
-If a vector file is supplied, will use each region found therein.
-
--W, \--t_srs Set the TARGET projection (for use with \`-p\`).
-
--E, \--increment Block data to INCREMENT in native units.
-
-Where INCREMENT is x-inc\[/y-inc\] (for use with \`-p\`).
-
--H, \--threads Set the number of threads (1)
-
--l, \--list Return a list of fetch URLs in the given region.
-
--p, \--process Process fetched elevation data to ASCII XYZ format.
-\<beta>
-
--z, \--no_check_size Don\'t check the size of remote data if local data
-exists.
-
--q, \--quiet Lower the verbosity to a quiet
-
-\--modules Display the module descriptions and usage
-
-\--help Print the usage text
-
-\--version Print the version information
-
-Supported FETCHES modules (see fetches \--modules \<module-name> for
-more info):
+Supported FETCHES modules (see fetches --modules <module-name> for more info):
 
 gmrt, gebco, srtm_plus, mar_grav, multibeam, mgds, trackline, ehydro,
 ngs, nos, charts, digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem,
