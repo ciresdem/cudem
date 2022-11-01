@@ -566,7 +566,7 @@ gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 **To generate the Interpolation Uncertainty Grid, execute the following
 command:**
 
-uncertainties gebcop15_n28x00_w079x50_2022v1.json
+`uncertainties gebcop15_n28x00_w079x50_2022v1.json`
 
 Output:
 
@@ -576,12 +576,12 @@ gebcop15_n28x00_w079x50_2022v1_prox_scatter.png - uncertainty scatter
 
 gebcop15_n28x00_w079x50_2022v1_prox_unc.tif - uncertainty grid
 
-![](./media/image5.png){width="4.93in" height="3.7342541557305338in"}
+![](./media/image5.png)
 
 **Figure 2.** Split-sample interpolation errors as a function of
 distance to the nearest measurement.
 
-![](./media/image4.png){width="4.96in" height="3.6856911636045493in"}
+![](./media/image4.png)
 
 **Figure 3.** Best-fit interpolation uncertainty equation derived from
 the standard deviations of binned split-sample interpolation errors as a
