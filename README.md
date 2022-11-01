@@ -488,9 +488,9 @@ The contents of the generated config file configuration file
 
 {
 
-	\"archive\": false,
+  \"archive\": false,
 
-	\"block\": false,
+  \"block\": false,
 
 \"cache_dir\": \"/media/sf_Projects/tmp/gebco/.cudem_cache\",
 
