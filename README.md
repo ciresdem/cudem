@@ -1,9 +1,9 @@
-Matthew Love^1,2^, Christopher Amante^1,2^
+Matthew Love[^1],[2^], Christopher Amante[^1],[2^]
 
-^1^Cooperative Institute for Research in Environmental Sciences (CIRES)
+[^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
 at the University of Colorado Boulder
 
-^2^National Oceanic and Atmospheric Administration (NOAA) National
+[^2]: National Oceanic and Atmospheric Administration (NOAA) National
 Centers for Environmental Information (NCEI)
 
 # Overview
