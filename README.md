@@ -71,19 +71,18 @@ python install_CUDEM.py --dependencies
 ```
 
 **Update existing CUDEM installation via git:**
-python install_CUDEM.py --pull
 
-> **Install Dependencies and CUDEM code Manually on Redhat/Fedora
-> (package names will differ on other linux systems):**
+`python install_CUDEM.py --pull`
+
+**Install Dependencies and CUDEM code Manually on Redhat/Fedora (package names will differ on other linux systems):**
 
 **Install GDAL:**
 
-> sudo dnf install gdal gdal-devel python3-gdal
+`sudo dnf install gdal gdal-devel python3-gdal`
 
 **Install GMT:**
 
-> sudo dnf install GMT GMT-devel GMT-doc gshhg-gmt-nc4
-> gshhg-gmt-nc4-full gshhg-gmt-nc4-high
+`sudo dnf install GMT GMT-devel GMT-doc gshhg-gmt-nc4 gshhg-gmt-nc4-full gshhg-gmt-nc4-high`
 
 **Install MB-System:**
 
@@ -91,51 +90,37 @@ python install_CUDEM.py --pull
 
 [[https://github.com/dwcaress/MB-System/releases]{.ul}](https://github.com/dwcaress/MB-System/releases)
 
-> sudo dnf install openmotif openmotif-devel fftw fftw-devel netcdf
-> netcdf-devel proj proj-devel gdal-devel gmt gmt-devel boost
-> boost-python3 glibc-devel mesa\* xorg-x11-fonts\* gcc-c++
-> libtirpc-devel
-
+```
+sudo dnf install openmotif openmotif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel gmt gmt-devel boost boost-python3 glibc-devel mesa\* xorg-x11-fonts\* gcc-c++ libtirpc-devel
 git clone https://github.com/dwcaress/MB-System.git
-
-> cd MB-System
->
-> ./configure --prefix \~/.local CFLAGS=\"-I/usr/include/tirpc\"
-> CXXFLAGS=\"-I/usr/include/tirpc\"
->
-> make
->
-> make install
+cd MB-System
+./configure --prefix \~/.local CFLAGS=\"-I/usr/include/tirpc\"
+CXXFLAGS=\"-I/usr/include/tirpc\"
+make
+make install
+```
 
 **Install HTDP:**
 
-> sudo dnf install gfortran
->
-> wget
-> [[https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip]{.ul}](https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip)
->
-> unzip HTDP-download.zip -d htdp_tmp
->
-> gfortran htdp_tmp/htdp.f
->
-> mv a.out \~/.local/bin/htdp
+```
+sudo dnf install gfortran
+wget https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip
+unzip HTDP-download.zip -d htdp_tmp
+gfortran htdp_tmp/htdp.f
+mv a.out ~/.local/bin/htdp
+```
 
 **Install CUDEM git:**
 
-> sudo dnf install python3-gdal python3-pip python3-wheel
->
-> git clone
-> [[https://github.com/ciresdem/cudem]{.ul}](https://github.com/ciresdem/cudem).git
->
-> cd cudem
->
-> ./install_CUDEM.py
-
-\# Add the following to \~/.bashrc
-
-> export PATH=\~/.local/bin:\$PATH
->
-> source \~/.bashrc
+```
+sudo dnf install python3-gdal python3-pip python3-wheel
+git clone https://github.com/ciresdem/cudem.git
+cd cudem
+./install_CUDEM.py
+# Add the following to \~/.bashrc
+export PATH=\~/.local/bin:\$PATH
+source \~/.bashrc
+```
 
 **Programs and scripts provided with CUDEM:**
 
