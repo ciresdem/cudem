@@ -23,7 +23,7 @@ community to the global scale.
 We generate the CUDEMs through a standardized process using free and
 open-source software (FOSS) and provide open-access to our code
 repository
-([[https://github.com/ciresdem]{.ul}](https://github.com/ciresdem)) for
+([https://github.com/ciresdem](https://github.com/ciresdem)) for
 consistency, transparency, and to promote accessibility. The CUDEM
 framework consists of systematic tiled geographic extents, spatial
 resolutions, and horizontal and vertical datums to facilitate rapid
