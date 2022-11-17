@@ -243,6 +243,7 @@ between adjacent DEM tiles.
 | tnm | USGS National Map | http://tnmaccess.nationalmap.gov/ |
 | trackline | NOAA trackline bathymetry data | http://www.ngdc.noaa.gov/trackline/ |
 | usiei | US Interagency Elevation Inventory | https://coast.noaa.gov/inventory/ |
+| WSF | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
 
 
@@ -461,7 +462,7 @@ For additional questions, please contact:
 
 ### Fetches Module:
 ```
-fetches (0.7.6): Fetches; Fetch and process remote elevation data
+fetches (0.7.7): Fetches; Fetch and process remote elevation data
 
 usage: fetches [ -hlmpqERW [ args ] ] MODULE ...
 
@@ -490,12 +491,12 @@ Supported FETCHES modules (see fetches --modules <module-name> for more info):
 gmrt, gebco, srtm_plus, mar_grav, multibeam, mgds, trackline, ehydro,
 ngs, nos, charts, digital_coast, ncei_thredds, tnm, emodnet, chs, hrdem,
 arcticdem, bluetopo, osm, copernicus, nasadem, tides, vdatum, buoys,
-earthdata, usiei, hydrolakes
+earthdata, usiei, wsf, hydrolakes
 ```
 
 ### Waffles Module:
 ```
-waffles (1.9.0): Generate DEMs and derivatives.
+waffles (1.10.0): Generate DEMs and derivatives.
 
 usage: waffles \[OPTIONS\] DATALIST
 
