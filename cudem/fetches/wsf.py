@@ -96,7 +96,7 @@ class WSF(f_utils.FetchModule):
                 if geom is not None:
                     surveys.append({'Name': row.split('.')[0], 'ID': sid, 'Agency': 'DLR', 'Date': utils.this_date(),
                                     'MetadataLink': row.split('.')[0] + '_stac.json', 'MetadataDate': utils.this_date(), 'DataLink': self._wsf_url + row,
-                                    'DataType': 'WSF', 'DataSource': 'WSF-DLR', 'HorizontalDatum': 'epsg:4326',
+                                    'DataType': 'WSF', 'DataSource': 'WSF', 'HorizontalDatum': 'epsg:4326',
                                     'VerticalDatum': 'None', 'Info': '', 'geom': geom})
 
         if self.verbose:
