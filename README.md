@@ -243,7 +243,7 @@ between adjacent DEM tiles.
 | tnm | USGS National Map | http://tnmaccess.nationalmap.gov/ |
 | trackline | NOAA trackline bathymetry data | http://www.ngdc.noaa.gov/trackline/ |
 | usiei | US Interagency Elevation Inventory | https://coast.noaa.gov/inventory/ |
-| WSF | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
+| wsf | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
 
 
