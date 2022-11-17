@@ -243,6 +243,7 @@ class Multibeam(f_utils.FetchModule):
 
             this_year = int(utils.this_year()) if self.min_year is None else self.min_year
             this_weight = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.
+            if this_weight <= 0: this_weight = 1e-7
             mb_exclude = str(100-float(mb_perc))
             
             # if not self.process:

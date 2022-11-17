@@ -344,17 +344,17 @@ class ElevationDataset():
     def set_yield(self):
         """set the yield strategy, either default block or mask"""
 
-        if self.x_inc is not None:
+        if self.x_inc is not None and (self.data_format != 200 and self.data_format != 201):
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
                 self.y_inc = self.x_inc
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
                 
-            self.xyz_yield = self.block_xyz(want_gmt=True)
+            self.xyz_yield = self.block_xyz()
         else:
             self.xyz_yield = self.yield_xyz()
-
+        
     def set_transform(self):
         """Set the transformation parameters for the dataset."""
         
@@ -608,178 +608,125 @@ class ElevationDataset():
                                     encode=False
                                 )
 
-    def block_array(
-            self, want_mean=True, want_count=True, want_weights=True,
-            want_mask=True, want_gt=False, want_ds_config=False, min_count=None,
-            out_name=None, ndv=-9999, inc=None, verbose=True
-    ):
-        """block the xyz data to the mean block value
+    def yield_block_array(self):
+        """yield the xyz data as arrays
 
         Yields:
           list: an array for [weighted]mean, weights mask, and count
         """
 
-        if inc is None:
-            x_inc = self.x_inc
-            y_inc = self.y_inc
-        else:
-            x_inc = inc
-            y_inc = inc
-        
-        out_arrays = {'mean':None, 'count':None, 'weight':None, 'mask':None}
-        if self.region is None:
-            block_region = regions.Region().from_list(self.infos['minmax'])
-        else:
-            block_region = self.region.copy()
-        
-        if self.dst_trans is not None:
-            block_region.transform(self.dst_trans)
+        out_arrays = {'z':None, 'count':None, 'weight':None, 'mask':None}
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
 
-        if self.region is not None and self.region.valid_p():
-            block_region = regions.regions_reduce(
-                self.region, block_region
+        for this_xyz in self.yield_xyz():
+            xpos, ypos = utils._geo2pixel(
+                this_xyz.x, this_xyz.y, dst_gt, 'pixel'
             )
+            if xpos < xcount and ypos < ycount and xpos >= 0 and ypos >= 0:            
+                if self.weight is not None:
+                    w = this_xyz.w
+                else:
+                    w = 1
 
-            if not regions.regions_within_ogr_p(block_region, self.region) :
-                block_region = self.region.copy()
-            else:
-                block_region.cut(self.region, x_inc, y_inc)
-        
-        if block_region.valid_p():
-        
-            xcount, ycount, dst_gt = block_region.geo_transform(
-                x_inc=x_inc, y_inc=y_inc
-            )
-            gdt = gdal.GDT_Float32
-            count_array = np.zeros((ycount, xcount))
-            
-            if want_mean:
-                z_array = np.zeros((ycount, xcount))
-                weight_array = np.zeros((ycount, xcount))
-
-            if self.verbose and verbose:
-               utils.echo_msg(
-                   'blocking data to {}/{} grid'.format(ycount, xcount)
-               )
-                
-            for this_xyz in self.yield_xyz():
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, dst_gt, 'pixel'
-                )
-                try:
-                    count_array[ypos, xpos] += 1
-                    if want_mean:
-                        z_array[ypos, xpos] += this_xyz.z * this_xyz.w
-                        
-                    if want_weights and self.weight is not None:
-                        weight_array[ypos, xpos] += this_xyz.w
-
-                except: pass
-
-            count_array[count_array == 0] = np.nan
-            if not self.weight:
-                weight_array = np.ones((ycount, xcount))
-                
-            if want_mean and want_weights:
-                weight_array[weight_array == 0] = np.nan
-                weight_array = (weight_array/count_array)
-                z_array = (z_array/weight_array)/count_array
-                
-            elif want_mean:
-                z_array = (z_array/count_array)
-
-            if min_count is not None and want_mean:
-                z_array[count_array < min_count] = np.nan
-                weight_array[count_array < min_count] = np.nan
-
-            if want_mean:
-                z_array[np.isnan(z_array)] = ndv
-                out_arrays['mean'] = z_array
-                
-            if want_weights:
-                weight_array[np.isnan(weight_array)] = ndv
-                out_arrays['weight'] = weight_array
-                
-            if want_mask:
-                mask_array = count_array[~np.isnan(count_array)]
-                out_arrays['mask'] = mask_array
-                
-            if want_count:
-                count_array[np.isnan(count_array)] = ndv
-                out_arrays['count'] = count_array
-
-            ds_config = demfun.set_infos(
-                xcount,
-                ycount,
-                xcount * ycount,
-                dst_gt,
-                self.dst_srs,
-                gdal.GDT_Float32,
-                ndv,
-                'GTiff'
-            )
-
-            return(out_arrays, dst_gt if want_gt else None, ds_config if want_ds_config else None)
-        else:
-            utils.echo_error_msg('invalid region {}'.format(block_region))
-            return(None)
-    
-    def block_xyz(self, want_gmt=False):
+                out_arrays['z'] = np.array([[this_xyz.z]])
+                out_arrays['count'] = np.array([[1]])
+                out_arrays['weight'] = np.array([[this_xyz.w]])
+                this_srcwin = (xpos, ypos, 1, 1)
+                yield(out_arrays, this_srcwin, dst_gt)
+                                            
+    def block_xyz(self, min_count=None, ndv=-9999, fmt='GTiff'):
         """block the src_xyz data to the mean block value
 
         Yields:
           list: xyz data for each block with data
         """
+
+        ## initialize output rasters
+        out_name = '{}_block'.format(utils.fn_basename2(os.path.basename(self.fn)))
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
+        gdt = gdal.GDT_Float32
+        c_gdt = gdal.GDT_Int32
+        driver = gdal.GetDriverByName(fmt)
+
+        z_ds = driver.Create('{}_s.tif'.format(out_name), xcount, ycount, 1, gdt,
+                             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
+        z_ds.SetGeoTransform(dst_gt)
+        z_band = z_ds.GetRasterBand(1)
+        z_band.SetNoDataValue(ndv)
         
-        if want_gmt:
-            if 'minmax' not in self.infos.keys():
-                self.generate_inf()
+        w_ds = driver.Create('{}_w.tif'.format(out_name), xcount, ycount, 1, gdt,
+                             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
+        w_ds.SetGeoTransform(dst_gt)
+        w_band = w_ds.GetRasterBand(1)
+        w_band.SetNoDataValue(ndv)
+                
+        c_ds = driver.Create('{}_c.tif'.format(out_name), xcount, ycount, 1, gdt)
+        c_ds.SetGeoTransform(dst_gt)
+        c_band = c_ds.GetRasterBand(1)
+        c_band.SetNoDataValue(ndv)
 
-            ds_region = regions.Region().from_list(self.infos['minmax'])
-            if self.dst_trans is not None:
-                ds_region.transform(self.dst_trans)
+        for arrs, srcwin, gt  in self.yield_block_array():
+            arr = arrs['z']
+            w_arr = arrs['weight']
+            c_arr = arrs['count']
+            c_arr[np.isnan(arr)] = 0
+            w_arr[np.isnan(arr)] = 0
+            arr[np.isnan(arr)] = 0
+            z_array = z_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            z_array[z_array == ndv] = 0
+            w_array[w_array == ndv] = 0
+            c_array[c_array == ndv] = 0
+            c_array += c_arr
+            z_array += (arr * w_arr)
+            w_array += w_arr
+            c_array[c_array == 0] = ndv
+            w_array[w_array == 0] = ndv
+            z_array[np.isnan(w_array)] = ndv
+            z_array[w_array == ndv] = ndv
+            z_band.WriteArray(z_array, srcwin[0], srcwin[1])
+            w_band.WriteArray(w_array, srcwin[0], srcwin[1])
+            c_band.WriteArray(c_array, srcwin[0], srcwin[1])
+            arr = w_arr = c_arr = z_array = w_array = c_array = None
 
-            if self.region is not None and self.region.valid_p():
-                block_region = regions.regions_reduce(
-                    self.region, ds_region
-                )
-            else:
-                block_region = ds_region.copy()
-
-            if not block_region.valid_p():
-                utils.echo_error_msg('Invalid region: {}'.format(block_region))
-            else:
-                if utils.config_check()['GMT'] is None:
-                    utils.echo_error_msg(
-                        'GMT must be installed to use blockmedian; install GMT or set `want_gmt` to False'
+        ## Finalize and close datasets
+        srcwin = (0, 0, z_ds.RasterXSize, z_ds.RasterYSize)
+        for y in range(
+                srcwin[1], srcwin[1] + srcwin[3], 1
+        ):
+            z_data = z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            c_data = c_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            w_data = w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            z_data[z_data == ndv] = np.nan
+            w_data[w_data == ndv] = np.nan
+            c_data[c_data == ndv] = np.nan
+            z_data[np.isnan(w_data)] = np.nan
+            w_data = w_data / c_data
+            z_data = (z_data/w_data)/c_data
+            
+            for x in range(0, xcount):
+                z = z_data[0, x]
+                if not np.isnan(z):
+                    geo_x, geo_y = utils._pixel2geo(x, y, gt)
+                    out_xyz = xyzfun.XYZPoint(
+                        x=geo_x, y=geo_y, z=z, w=w_data[0, x]
                     )
-                else:
-                    xyz_func = lambda p: self.dump_xyz_direct(dst_port=p, encode=True)
-                    for xyz in utils.yield_cmd(
-                            'gmt blockmedian -I{:.10f}/{:.10f} {} -V'.format(
-                                self.x_inc, self.y_inc, block_region.format('gmt')
-                            ),
-                            verbose=self.verbose,
-                            data_fun=xyz_func
-                    ):
-                        yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-        else:
-            block_arrays, dst_gt, ds_config = self.block_array(
-                want_mean=True, want_weights=True, want_count=False, want_mask=False,
-                want_gt=True, want_ds_config=True
-            )
-            z_array = block_arrays['mean']
-            weight_array = block_arrays['weight']
-            for y in range(0, ds_config['ny']):
-                for x in range(0, ds_config['nx']):
-                    z = z_array[y,x]
-                    if not np.isnan(z) and '{:g}'.format(ds_config['ndv']) != '{:g}'.format(z):
-                        geo_x, geo_y = utils._pixel2geo(x, y, dst_gt)
-                        out_xyz = xyzfun.XYZPoint(
-                            x=geo_x, y=geo_y, z=z, w=weight_array[y,x]
-                        )
-                        yield(out_xyz)
-
+                    yield(out_xyz)
+                    
+            z_data[np.isnan(z_data)] = ndv
+            c_data[np.isnan(c_data)] = ndv
+            w_data[np.isnan(w_data)] = ndv
+            z_band.WriteArray(z_data, srcwin[0], y)
+            c_band.WriteArray(c_data, srcwin[0], y)
+            w_band.WriteArray(w_data, srcwin[0], y)
+                            
+        z_ds = c_ds = w_ds = None
+        
     def mask_xyz(self, dst_x_inc, dst_y_inc, dst_format='MEM', ndv=-9999, **kwargs):
         """Create a num grid mask of xyz data. The output grid
         will contain 1 where data exists and 0 where no data exists.
@@ -1021,89 +968,9 @@ class XYZFile(ElevationDataset):
             except:
                 pass
 
-    def yield_array(self, mode='block'):
-        if os.path.exists(self.fn) and os.stat(self.fn).st_size != 0:            
-            if mode == 'mbgrid':
-                with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
-                    tmp_dl.write('{} {} {}\n'.format(self.fn, 168, 1))
-
-                ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-
-                mbgrid_region = self.region.copy()
-                mbgrid_region = mbgrid_region.buffer(x_bv=self.x_inc*-.5, y_bv=self.y_inc*-.5)
-
-                utils.run_cmd(
-                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                        mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                    ), verbose=True
-                )
-
-                utils.gdal2gdal('{}.grd'.format(ofn))
-                utils.remove_glob(
-                    '_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn)
-                )
-                xyz_ds = RasterFile(
-                    fn='{}.tif'.format(ofn),
-                    data_format=200,
-                    src_srs=self.src_srs,
-                    dst_srs=self.dst_srs,
-                    weight=self.weight,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    sample_alg=self.sample_alg,
-                    src_region=self.region,
-                    verbose=self.verbose
-                )
-
-                for arr in xyz_ds.yield_array():
-                    yield(arr)
-
-                xyz_ds = None
-                utils.remove_glob('{}.tif*'.format(ofn))
-
-            elif mode == 'block':
-                src_arrs, src_gt, src_ds_config = self.block_array(
-                    want_mean=True, want_count=True, want_weights=True,
-                    want_mask=False, want_gt=True, want_ds_config=True, inc=self.x_inc,
-                    verbose=False
-                )
-
-                x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
-                srcwin_region = regions.Region().from_geo_transform(
-                    geo_transform=src_gt, x_count=src_ds_config['nx'], y_count=src_ds_config['ny']
-                )
-                dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count, 'grid')
-                src_arrs['mean'][src_arrs['mean'] == src_ds_config['ndv']] = np.nan
-                src_arrs['weight'][src_arrs['weight'] == src_ds_config['ndv']] = np.nan
-                yield(src_arrs, dst_srcwin, src_gt)
-                src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
-
-            elif mode == 'idw':
-                ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])            
-                utils.run_cmd(
-                    'waffles {} -M IDW:radius={} -O {} -E {}/{} {}'.format(
-                        self.region.format('gmt'), self.x_inc*3, ofn, self.x_inc, self.y_inc, self.fn
-                    ),
-                    verbose=True
-                )
-                xyz_ds = RasterFile(
-                    fn='{}.tif'.format(ofn),
-                    data_format=200,
-                    src_srs=self.src_srs,
-                    dst_srs=self.dst_srs,
-                    weight=self.weight,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    sample_alg=self.sample_alg,
-                    src_region=self.region,
-                    verbose=self.verbose
-                )
-
-                for arr in xyz_ds.yield_array():
-                    yield(arr)
-
-                xyz_ds = None
-                utils.remove_glob('{}.tif*'.format(ofn))
+    def yield_array(self):        
+        for arrs in self.yield_block_array():
+            yield(arrs)
             
     def yield_xyz(self):
         """xyz file parsing generator"""
@@ -1124,7 +991,7 @@ class XYZFile(ElevationDataset):
                 this_xyz = self.line_delim(xyz_line)
                 if this_xyz is None:
                     continue
-                
+
                 if self.wpos is not None:
                     w = float(this_xyz[self.wpos])
                 else:
@@ -1152,7 +1019,7 @@ class XYZFile(ElevationDataset):
                     this_xyz.w = w if self.weight is None else self.weight * w                        
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
-                        
+
                     if self.region is not None and self.region.valid_p():
                         if regions.xyz_in_region_p(this_xyz, self.region):
                             count += 1
@@ -1326,62 +1193,14 @@ class LASFile(ElevationDataset):
                 )
             )
 
-    def yield_array(self, mode='block'):
-        if mode == 'mbgrid':
-            with open('tmp.datalist', 'w') as tmp_dl:
-                tmp_dl.write('{} {} {}\n'.format(self.fn, 168, 1))
-
-            ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-
-            mbgrid_region = self.region.copy()
-            mbgrid_region = mbgrid_region.buffer(x_bv=self.x_inc*-.5, y_bv=self.y_inc*-.5)
-
-            utils.run_cmd(
-                'mbgrid -Itmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                    mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                ), verbose=True
-            )
-
-            utils.gdal2gdal('{}.grd'.format(ofn))
-            utils.remove_glob(
-                'tmp.datalist', '{}.cmd'.format(ofn),
-                '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn)
-            )
-            xyz_ds = RasterFile(
-                fn='{}.tif'.format(ofn),
-                data_format=200,
-                src_srs=self.src_srs,
-                dst_srs=self.dst_srs,
-                weight=self.weight,
-                x_inc=self.x_inc,
-                y_inc=self.y_inc,
-                sample_alg=self.sample_alg,
-                src_region=self.region,
-                verbose=self.verbose
-            )
-
-            for arr in xyz_ds.yield_array():
-                yield(arr)
-
-            utils.remove_glob('{}.tif*'.format(ofn))
-
-        elif mode == 'block':
-
-            src_arrs, src_gt, src_ds_config = self.block_array(
-                want_mean=True, want_count=True, want_weights=True,
-                want_mask=False, want_gt=True, want_ds_config=True, inc=self.x_inc,
-                verbose=False
-            )
-
+    def yield_array(self):        
+        for src_arrs, src_gt, src_ds_config in self.yield_block_array():
             x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
             srcwin_region = regions.Region().from_geo_transform(
                 geo_transform=src_gt, x_count=src_ds_config['nx'], y_count=src_ds_config['ny']
             )
             dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count, 'grid')
-            src_arrs['mean'][src_arrs['mean'] == src_ds_config['ndv']] = np.nan
-            src_arrs['weight'][src_arrs['weight'] == src_ds_config['ndv']] = np.nan
             yield(src_arrs, dst_srcwin, src_gt)
-            src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
             
 ## ==============================================
 ## ==============================================
@@ -1571,7 +1390,7 @@ class RasterFile(ElevationDataset):
             )
         return(srcwin)
     
-    def yield_xyz(self):
+    def yield_array(self):
         """parse the data from gdal dataset src_ds (first band only)"""
 
         src_ds = self.init_ds()
@@ -1583,13 +1402,15 @@ class RasterFile(ElevationDataset):
             count = 0
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
-            ndv = band.GetNoDataValue()
+            ndv = float(band.GetNoDataValue())
             mask_band = None
             weight_band = None
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
             if ndv is not None:
                 nodata.append('{:g}'.format(ndv))
-            
+
+            band_data = count_data = weight_data = mask_data = None
+            out_arrays = {'z':None, 'count':None, 'weight':None, 'mask':None}
             if self.weight_mask is not None:
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
@@ -1621,56 +1442,73 @@ class RasterFile(ElevationDataset):
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
+                if not np.isnan(ndv):
+                    band_data[band_data == ndv] = np.nan
+
+                if np.all(np.isnan(band_data)):
+                    continue
+                
+                this_origin = utils._pixel2geo(srcwin[0], y, gt, node='grid')
+                this_gt = (this_origin[0], gt[1], 0, this_origin[1], 0, gt[5])
+                                    
                 if weight_band is not None:
                     weight_data = weight_band.ReadAsArray(
                         srcwin[0], y, srcwin[2], 1
                     )
-                    
+                    weight_ndv = float(weight_band.GetNoDataValue())
+                    if not np.isnan(weight_ndv):
+                        weight_data[weight_data==weight_ndv] = np.nan
+                else:
+                    weight_data = np.ones(band_data.shape)
+                    if self.weight:
+                        weight_data[:] = self.weight
+                                       
                 if mask_band is not None:
-                   mask_data = mask_band.ReadAsArray(
-                       srcwin[0], y, srcwin[2], 1
-                   )
-                   band_data[mask_data==ndv] = ndv
-                   if weight_band is not None:
-                       weight_data[mask_data==ndv] = ndv
+                    mask_data = mask_band.ReadAsArray(
+                        srcwin[0], y, srcwin[2], 1
+                    )
+                    mask_ndv = float(mask_band.GetNoDataValue())
+                    if not np.isnan(mask_ndv):
+                        mask_data[mask_data==mask_ndv] = np.nan
+
+                    band_data[np.isnan(mask_data)] = np.nan
+                    if weight_band is not None:
+                        weight_data[np.isnan(mask_data)] = np.nan
                     
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
                     if z_region[0] is not None:
-                        band_data[band_data < z_region[0]] = ndv
+                        band_data[band_data < z_region[0]] = np.nan
                         
                     if z_region[1] is not None:
-                        band_data[band_data > z_region[1]] = ndv
+                        band_data[band_data > z_region[1]] = np.nan
 
                     if weight_band is not None:
                         w_region = self.region.w_region()
                         if w_region[0] is not None:
-                            band_data[weight_data < w_region[0]] = ndv
+                            band_data[weight_data < w_region[0]] = np.nan
                         
                         if w_region[1] is not None:
-                            band_data[weight_data > w_region[1]] = ndv
-                            
-                if np.all(band_data == ndv):
-                     continue
-                            
-                if weight_band is not None:
-                    weight_data[band_data==ndv] = ndv
-                    weight_data = np.reshape(weight_data, (srcwin[2], ))
-                            
-                band_data = np.reshape(band_data, (srcwin[2], ))
-                for x_i in range(0, srcwin[2], 1):
-                    z = band_data[x_i]
-                    if '{:g}'.format(z) not in nodata:
-                        x = x_i + srcwin[0]
-                        out_xyz.x, out_xyz.y = utils._pixel2geo(x, y, gt)
-                        out_xyz.z = z
-                        out_xyz.w = utils.float_or(self.weight, 1) if weight_band is None else weight_data[x_i]
-                        count += 1
-                        if self.dst_trans is not None:
-                            out_xyz.transform(self.dst_trans)
-                            
-                        yield(out_xyz)
-                            
+                            band_data[weight_data > w_region[1]] = np.nan
+
+                count_data = np.zeros(band_data.shape)
+                count_data[~np.isnan(band_data)] = 1
+                #count += np.count_nonzero(~np.isnan(count_data))
+                count += np.count_nonzero(count_data)
+                out_arrays = {'z':band_data, 'count':count_data, 'weight':weight_data, 'mask':mask_data}
+                ds_config = demfun.set_infos(
+                    1,
+                    y,
+                    y,
+                    this_gt,
+                    self.dst_srs,
+                    gdal.GDT_Float32,
+                    np.nan,
+                    'GTiff'
+                )
+                this_srcwin = (srcwin[0], y, srcwin[2], 1)
+                yield(out_arrays, this_srcwin, this_gt)
+                                            
             band = mask_band = weight_band = src_weight = src_mask = src_ds = None
             if self.verbose:
                 utils.echo_msg(
@@ -1678,10 +1516,10 @@ class RasterFile(ElevationDataset):
                         count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                     )
                 )
-
-    def yield_xyz_from_array(self):
+                
+    def yield_xyz(self):
         for arrs, srcwin, gt in self.yield_array():
-            z_array = arrs['mean']
+            z_array = arrs['z']
             w_array = arrs['weight']
             ycount, xcount = z_array.shape
             for y in range(0, ycount):
@@ -1693,101 +1531,6 @@ class RasterFile(ElevationDataset):
                             x=geo_x, y=geo_y, z=z, w=w_array[y,x]
                         )
                         yield(out_xyz)
-            
-    def yield_array(self):
-        src_ds = self.init_ds()
-        if src_ds is None:
-            if self.verbose:
-                utils.echo_error_msg('could not load raster {}'.format(self.fn))
-        else:
-            band = src_ds.GetRasterBand(1)
-            gt = src_ds.GetGeoTransform()
-            ndv = utils.float_or(demfun.get_nodata(self.fn), -9999.)
-            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
-            src_arr = band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
-            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc, 'grid')
-            srcwin_region = regions.Region().from_geo_transform(
-                geo_transform=gt, x_count=src_arr.shape[1], y_count=src_arr.shape[0]
-            )
-            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count)
-            src_arr[src_arr == ndv] = np.nan
-                    
-            if self.weight_mask is not None:
-                if self.x_inc is not None and self.y_inc is not None:
-                    src_weight = demfun.sample_warp(
-                        self.weight_mask, None, self.x_inc, self.y_inc,
-                        src_region=self.warp_region, sample_alg=self.sample_alg,
-                         ndv=ndv, verbose=False
-                    )[0]
-                else:
-                    src_weight = gdal.Open(self.weight_mask)
-                    
-                weight_band = src_weight.GetRasterBand(1)
-                src_weight = weight_band.ReadAsArray(srcwin[0],srcwin[1],srcwin[2],srcwin[3]).astype(float)
-                src_weight[src_weight == ndv] = np.nan
-                    
-            else:
-                src_weight = np.zeros((y_count, x_count))
-                src_weight[:] = self.weight
-
-            if self.mask is not None:
-                mask_infos = demfun.infos(self.mask)
-                if self.x_inc is not None and self.y_inc is not None:
-                    src_mask = demfun.sample_warp(
-                        self.mask, None, self.x_inc, self.y_inc,
-                        src_region=self.warp_region, sample_alg=self.sample_alg,
-                        ndv=mask_infos['ndv'], verbose=False
-                    )[0]
-                else:
-                    src_mask = gdal.Open(self.mask)
-
-                mask_band = src_mask.GetRasterBand(1)
-                src_mask = mask_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                src_arr[src_mask == mask_infos['ndv']] = np.nan
-                src_weight[src_mask == mask_infos['ndv']] = np.nan
-                
-            if self.region is not None and self.region.valid_p():
-                z_region = self.region.z_region()
-                if z_region[0] is not None:
-                    src_arr[src_arr < z_region[0]] = np.nan
-                        
-                if z_region[1] is not None:
-                    src_arr[src_arr > z_region[1]] = np.nan
-
-                if self.weight_mask is not None:
-                    w_region = self.region.w_region()
-                    if w_region[0] is not None:
-                        src_arr[src_weight < float(w_region[0])] = np.nan
-                        src_weight[src_weight < float(w_region[0])] = np.nan
-                        
-                    if w_region[1] is not None:
-                        src_arr[src_weight > w_region[1]] = np.nan
-                        src_weight[src_weight > w_region[1]] = np.nan
-                else:
-                    w_region = self.region.w_region()
-                    if w_region[0] is not None:
-                        if self.weight < w_region[0]:
-                            src_arr[:] = np.nan
-                        
-                    if w_region[1] is not None:
-                        if self.weight > w_region[1]:
-                            src_arr[:] = np.nan
-                            
-            point_count = np.count_nonzero(~np.isnan(src_arr))
-            if self.verbose:
-                utils.echo_msg(
-                    'parsed {} data records from {}{}'.format(
-                        point_count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-                    )
-                )
-
-            count_arr = np.zeros((src_arr.shape[0], src_arr.shape[1]))
-            count_arr[~np.isnan(src_arr)] = 1
-            src_arrs = {'mean': src_arr, 'weight': src_weight, 'count': count_arr}
-            yield(src_arrs, dst_srcwin, dst_gt)
-            src_arrs['mean'] = src_arrs['weight'] = src_arrs['count'] = None
-            
-        src_ds = src_weight = None
             
 ## ==============================================
 ## ==============================================
@@ -1899,7 +1642,7 @@ class BAGFile(ElevationDataset):
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
                 weight=self.weight,
-                src_region=bag_region,
+                src_region=self.region,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 verbose=self.verbose,

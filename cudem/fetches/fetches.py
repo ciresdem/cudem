@@ -66,6 +66,7 @@ import cudem.fetches.arcticdem as arcticdem
 import cudem.fetches.bluetopo as bluetopo
 import cudem.fetches.hydrolakes as hydrolakes
 import cudem.fetches.gebco as gebco
+import cudem.fetches.wsf as wsf
 
 ## ==============================================
 ## Fetches Module Parser
@@ -386,6 +387,14 @@ layers:
 https://coast.noaa.gov/inventory/
 
 < usiei:where=None:layer=0 >""",
+        },
+        'wsf': {
+            'class': wsf.WSF,
+            'description': """WSF from German Aerospace Service (DLR)
+
+            World Settlement Footprint (WSF) 2019
+
+< usiei:where=None:datatype=None >""",
         },
         'hydrolakes': {
             'class': hydrolakes.HydroLakes,

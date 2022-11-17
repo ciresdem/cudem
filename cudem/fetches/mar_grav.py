@@ -50,7 +50,7 @@ class MarGrav(f_utils.FetchModule):
         self.grav_region = self.region.copy()
         self.grav_region.zmax = utils.float_or(upper_limit)
         self.grav_region.zmin = utils.float_or(lower_limit)
-        self.raster = raster
+        self.raster = utils.str2inc(raster)
 
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -77,17 +77,23 @@ class MarGrav(f_utils.FetchModule):
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
-            if self.raster:
+            if self.raster is not None:
+                mar_grav_fn = utils.append_fn(
+                    'mar_grav', self.grav_region, self.raster
+                )
+                
                 utils.run_cmd(
-                    'waffles {} -E 15s -M IDW:min_points=16 -O mar_grav15s {},168:x_offset=REM,1 -T 1:2'.format(
-                        self.region.format('gmt'), src_data
+                    'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
+                        self.region.format('gmt'), self.raster, mar_grav_fn, src_data
                     ),
                     verbose=True
                 )
+
                 _ds = datasets.RasterFile(
-                    fn='mar_grav15s.tif',
+                    fn='{}.tif'.format(mar_grav_fn),
                     data_format=200,
-                    src_srs='epsg:4326+3855',
+                    #src_srs='epsg:4326+3855',
+                    src_srs='epsg:4326',
                     dst_srs=self.dst_srs,
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
@@ -96,14 +102,14 @@ class MarGrav(f_utils.FetchModule):
                     verbose=self.verbose
                 )
             else:
-                utils.run_cmd(
-                    'waffles {} -E 30s -M IDW:min_points=16 -O mar_grav30s {},168:x_offset=REM,1 -T 1:2'.format(
-                        self.region.format('gmt'), src_data
-                    ),
-                    verbose=True
-                )
+                # utils.run_cmd(
+                #     'waffles {} -E 30s -M IDW:min_points=16 -O mar_grav30s {},168:x_offset=REM,1 -T 1:2'.format(
+                #         self.region.format('gmt'), src_data
+                #     ),
+                #     verbose=True
+                # )
                 _ds = datasets.XYZFile(
-                    fn='mar_grav30s.tif',
+                    fn=src_data,
                     data_format=168,
                     skip=1,
                     x_offset='REM',

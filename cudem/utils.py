@@ -114,6 +114,12 @@ def fn_basename(fn, ext):
     else:
         return(fn[:-(len(ext)+1)])
 
+def fn_basename2(fn):
+    """return the basename of fn based on ext"""
+
+    return('.'.join(fn.split('.')[:-1]))
+
+    
 def fn_url_p(fn):
     """check if fn is a url"""
     
@@ -174,7 +180,7 @@ def str2inc(inc_str):
         inc = float(inc_str[:-1]) / 360.
     else:
         try:
-            inc = float(inc_str)
+            inc = float_or(inc_str)
         except ValueError as e:
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
             return(None)
@@ -437,7 +443,7 @@ def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     
     return(pixel_x, pixel_y)
 
-def _pixel2geo(pixel_x, pixel_y, geo_transform):
+def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel'):
     """convert a pixel location to geographic coordinates given geoTransform
 
     Args:
@@ -449,10 +455,10 @@ def _pixel2geo(pixel_x, pixel_y, geo_transform):
       list: [geographic-x, geographic-y]
     """
     
-    geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geo_transform)
+    geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geo_transform, node)
     return(geo_x, geo_y)
 
-def _apply_gt(in_x, in_y, geo_transform):
+def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
     """apply geotransform to in_x,in_y
     
     Args:
@@ -464,8 +470,12 @@ def _apply_gt(in_x, in_y, geo_transform):
       list: [geographic-x, geographic-y]
     """
 
-    out_x = geo_transform[0] + (in_x+0.5) * geo_transform[1] + (in_y+0.5) * geo_transform[2]
-    out_y = geo_transform[3] + (in_x+0.5) * geo_transform[4] + (in_y+0.5) * geo_transform[5]
+    if node == 'pixel':
+        out_x = geo_transform[0] + (in_x+0.5) * geo_transform[1] + (in_y+0.5) * geo_transform[2]
+        out_y = geo_transform[3] + (in_x+0.5) * geo_transform[4] + (in_y+0.5) * geo_transform[5]
+    else:
+        out_x = geo_transform[0] + in_x * geo_transform[1] + in_y * geo_transform[2]
+        out_y = geo_transform[3] + in_x * geo_transform[4] + in_y * geo_transform[5]
 
     return(out_x, out_y)
 
@@ -790,7 +800,7 @@ def p_f_unzip(src_file, fns=None):
             
     return(src_procs)
 
-def yield_srcwin(n_size=(), n_chunk=10, step=None):
+def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     """yield source windows in n_chunks at step"""
     
     if step is None:
@@ -799,8 +809,16 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None):
     y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
-    
+
+    if verbose:
+        _prog = CliProgress(
+           'chunking srcwin from {} @ {}/{}'.format(n_size, n_chunk, step)
+        )
+        
     while True:
+        if verbose:
+           _prog.update_perc((i_chunk*step, (n_size[0]*n_size[1])/step))
+           
         y_chunk = n_chunk
         while True:
             this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
@@ -823,7 +841,9 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None):
         else:
             x_chunk += step
             x_i_chunk += 1
-
+    if verbose:
+       _prog.end(0, 'chunked srcwin from {} @ {}/{}'.format(n_size, n_chunk, step))
+       
 def gdal_write(
         src_arr,
         dst_gdal,
@@ -1074,6 +1094,7 @@ def config_check(chk_vdatum=False, verbose=False):
 ##
 ## verbosity functions
 ##
+## TODO: add threading and verbosity
 ## ==============================================
 def _terminal_width():
     cols = 40

@@ -429,7 +429,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
             
         _prog = utils.CliProgress('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample))
         #utils.echo_msg('simulation\terrors\tproximity-coeff\tp_diff\tslp-coeff\tslp_diff')
-        utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
+        #utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
+        utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
         sim = 0
         status = 0
         last_ec_d = None
@@ -588,7 +589,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
                 # ec_s = [0, 1, 2]
                 #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
-                utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.min(prox_err, axis=0)[0], np.max(prox_err, axis=0)[0], np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
                 
                 if len(s_dp) < self.max_sample:
                     last_ec_d = ec_d
@@ -601,7 +602,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 if sim >= int(self.sims):
                     break
                 
-                if abs(last_ec_diff - ec_diff) < 0.0001:
+                if abs(last_ec_diff - ec_diff) < 0.01:
                     break
 
                 # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
@@ -609,7 +610,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 
                 last_ec_d = ec_d
             else:
-                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None))
+                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
                 
         np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
         _prog.end(status, 'performed {} SPLIT-SAMPLE simulations'.format(sim))
