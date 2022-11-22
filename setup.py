@@ -88,6 +88,7 @@ setuptools.setup(
         'scripts/gdal_minmax.py',
         'scripts/ddms.py',
         'scripts/has_nulls.py',
+        'scripts/all_ndv.py',
         'scripts/xyz_clip.py',
         'scripts/clip_xyz.sh',
         'scripts/percentiles_minmax.py',

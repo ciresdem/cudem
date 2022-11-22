@@ -909,6 +909,9 @@ class XYZFile(ElevationDataset):
         self.scoff = True if x_scale != 1 or y_scale != 1 or z_scale != 1 or x_offset != 0 or y_offset != 0 else False
             
         super().__init__(**kwargs)
+
+        if self.src_srs is not None:
+            self.set_transform()
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the xyz dataset"""

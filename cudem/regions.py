@@ -236,7 +236,9 @@ class Region:
             if t == 'str': return('/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)]))
-            elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
+            #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
+            elif t == 'gmt':
+                return('-R{:.26f}/{:.26f}/{:.26f}/{:.26f}'.format(self.xmin, self.xmax, self.ymin, self.ymax))
             #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)])
             elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
             elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin), str(self.ymax), str(self.xmax)]))
@@ -444,17 +446,18 @@ class Region:
                 x_bv = (ewp + nsp) / 2.
                 y_bv = (ewp + nsp) / 2.
 
-                if x_inc is not None:
-                    if y_inc is None:
-                        y_inc = x_inc
+            if x_inc is not None:
+                if y_inc is None:
+                    y_inc = x_inc
                         
-                    tmp_x_bv = int(x_bv/x_inc) * float(x_inc)
-                    tmp_y_bv = int(y_bv/y_inc) * float(y_inc)
-                    if tmp_x_bv != 0:
-                        x_bv = tmp_x_bv
-                    if tmp_y_bv != 0:
-                        y_bv = tmp_y_bv
-                    
+                tmp_x_bv = int(x_bv/x_inc) * float(x_inc)
+                tmp_y_bv = int(y_bv/y_inc) * float(y_inc)
+                if tmp_x_bv != 0:
+                    x_bv = tmp_x_bv
+                if tmp_y_bv != 0:
+                    y_bv = tmp_y_bv
+
+
             self.xmin -= x_bv
             self.xmax += x_bv
             self.ymin -= y_bv

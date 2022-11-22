@@ -264,7 +264,7 @@ def get_array(src_dem):
         utils.echo_error_msg('could not open {}'.format(src_dem))
         return(None, None)
 
-def mask_(src_dem, msk_dem, out_dem):
+def mask_(src_dem, msk_dem, out_dem, msk_value = None):
     src_ds = gdal.Open(src_dem)
     if src_ds is not None:
         src_config = gather_infos(src_ds)
@@ -276,7 +276,10 @@ def mask_(src_dem, msk_dem, out_dem):
             msk_band = msk_ds.GetRasterBand(1)
             msk_array = msk_band.ReadAsArray()
 
-            src_array[msk_array == msk_band.GetNoDataValue()] = src_band.GetNoDataValue()
+            if msk_value is None:
+                msk_value = msk_band.GetNoDataValue()
+            
+            src_array[msk_array == msk_value] = src_band.GetNoDataValue()
 
             utils.gdal_write(src_array, out_dem, src_config)
             msk_ds = None
@@ -794,7 +797,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
         chunk_step = utils.int_or(chunk_step)
         n_step = chunk_step if chunk_step is not None else int(n_chunk)
         #n_step = n_chunk
-        #n_step = n_chunk/4
+        n_step = n_chunk/4
         
         utils.echo_msg(
             'scanning {} for outliers with {}@{} using aggression level {} ({}/{} & {}/{})...'.format(

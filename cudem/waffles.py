@@ -156,14 +156,17 @@ class Waffle:
         #self._init_data()
             
     def _init_regions(self):
+
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
-
+            
         self.d_region = self._dist_region()
         self.p_region = self._proc_region()
         self.c_region = self._coast_region()
         self.ps_region = self.p_region.copy()
-        self.ps_region = self.ps_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
+        self.ps_region = self.ps_region.buffer(
+            x_bv=self.xinc*-.5, y_bv=self.yinc*-.5, x_inc=self.xinc, y_inc=self.yinc
+        )
 
         if self.verbose:
             utils.echo_msg('target region: {}'.format(self.region))
@@ -191,42 +194,49 @@ class Waffle:
 
     def _coast_region(self):
         """processing region (extended by self.extend_proc)"""
-        
-        cr = regions.Region().from_region(self.region)
-        xcount, ycount, gt = cr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ewp = xcount * ((self.extend_proc+5) * .01)
-        nsp = ycount * ((self.extend_proc+5) * .01)
-        x_bv = int((ewp + nsp) / 2)
-        y_bv = int((ewp + nsp) / 2)
 
-        return(
-            cr.buffer(
-                x_bv=self.xinc*x_bv,
-                y_bv=self.yinc*y_bv
-            )
-        )
+        cr = self.d_region.copy()
+        return(cr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc))
+        
+        # cr = regions.Region().from_region(self.region)
+        # xcount, ycount, gt = cr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        # ewp = xcount * ((self.extend_proc+5) * .01)
+        # nsp = ycount * ((self.extend_proc+5) * .01)
+        # x_bv = int((ewp + nsp) / 2)
+        # y_bv = int((ewp + nsp) / 2)
+
+        # return(
+        #     cr.buffer(
+        #         x_bv=self.xinc*x_bv,
+        #         y_bv=self.yinc*y_bv
+        #     )
+        # )
     
     def _proc_region(self):
         """processing region (extended by percentage self.extend_proc)"""
-        
-        pr = regions.Region().from_region(self.d_region)
-        xcount, ycount, gt = pr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ewp = xcount * (self.extend_proc * .01)
-        nsp = ycount * (self.extend_proc * .01)
-        x_bv = int((ewp + nsp) / 2)
-        y_bv = int((ewp + nsp) / 2)
 
-        return(
-            pr.buffer(
-                x_bv=self.xinc*x_bv,
-                y_bv=self.yinc*y_bv
-            )
-        )
+        pr = self.d_region.copy()
+        return(pr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc))
+        
+        # pr = regions.Region().from_region(self.d_region)
+        # xcount, ycount, gt = pr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        # ewp = xcount * (self.extend_proc * .01)
+        # nsp = ycount * (self.extend_proc * .01)
+        # x_bv = int((ewp + nsp) / 2)
+        # y_bv = int((ewp + nsp) / 2)
+
+        # return(
+        #     pr.buffer(
+        #         x_bv=self.xinc*x_bv,
+        #         y_bv=self.yinc*y_bv
+        #     )
+        # )
     
     def _dist_region(self):
         """distribution region (extended by self.extend)."""
         
-        dr = regions.Region().from_region(self.region)
+        #dr = regions.Region().from_region(self.region)
+        dr = self.region.copy()
         if self.xsample is None and self.ysample is None:
             return(
                 dr.buffer(
@@ -607,7 +617,8 @@ class Waffle:
                              src_region=self.p_region, sample_alg=self.sample,
                              ndv=self.ndv, verbose=self.verbose)[1] == 0:
                 os.rename('__tmp_sample.tif', fn)
-            
+
+                
         if self.clip is not None:
             clip_args = {}
             cp = self.clip.split(':')
@@ -616,26 +627,33 @@ class Waffle:
             clip_args = utils.args2dict(cp[1:], clip_args)
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
-                    mod='coastline:invert=True',
-                    data=[],
-                    src_region=self.c_region,
-                    xinc=self.xinc,
-                    yinc=self.yinc,
+                    mod='coastline:invert=True:polygonize=False',
+                    data=self.data_,
+                    src_region=self.p_region,
+                    xinc=self.xsample if self.xsample is not None else self.xinc,
+                    yinc=self.ysample if self.ysample is not None else self.yinc,
                     name='tmp_coast',
                     node=self.node,
-                    extend=self.extend+12,
+                    #extend=self.extend,
+                    #extend_proc=self.extend_proc,
                     weights=self.weights,
+                    #xsample=self.xsample,
+                    #ysample=self.ysample,
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
                     verbose=self.verbose,
                 ).acquire().generate()
+                
                 clip_args['src_ply'] = 'tmp_coast.shp'
-
-            ## if clip vector is empty, will return surface with all upper_value :(
-            ## maybe have it remove all data in such cases (if invert is true)
-            if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
+                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=0)
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
+                
+            else:
+                ## if clip vector is empty, will return surface with all upper_value :(
+                ## maybe have it remove all data in such cases (if invert is true)
+                if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
+                    os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
         #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
@@ -750,7 +768,30 @@ class Waffle:
                 return(self._process(filter_=True))
             else:
                 return(self)
+
+    def set_limits(self, upper_limit=None, lower_limit=None):
+        upper_limit = utils.float_or(upper_limit)
+        lower_limit = utils.float_or(lower_limit)
         
+        if upper_limit is not None or lower_limit is not None:
+            src_ds = gdal.Open(self.fn, 1)
+            if src_ds is not None:
+                src_band = src_ds.GetRasterBand(1)
+                band_data = src_band.ReadAsArray()
+
+                if upper_limit is not None:
+                    utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
+                    band_data[band_data > upper_limit] = upper_limit
+
+                if lower_limit is not None:
+                    utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
+                    band_data[band_data < lower_limit] = lower_limit
+
+                src_band.WriteArray(band_data)
+                src_ds = None
+                
+        return(self)
+            
     def valid_p(self):
         """check if the output WAFFLES DEM is valid"""
 
@@ -836,8 +877,8 @@ class GMTSurface(Waffle):
     Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
     """
     
-    def __init__(self, tension=.35, relaxation=1.2, max_radius=None,
-                 lower_limit='d', upper_limit='d',
+    def __init__(self, tension=.35, relaxation=1.4, max_radius=None,
+                 lower_limit=None, upper_limit=None, aspect=None,
                  breakline=None, convergence=None,
                  **kwargs):
         """generate a DEM with GMT surface"""
@@ -846,6 +887,7 @@ class GMTSurface(Waffle):
         self.mod_args = {
             'tension':tension,
             'relaxation':relaxation,
+            'aspect':aspect,
             'max_radius':max_radius,
             'lower_limit':lower_limit,
             'upper_limit':upper_limit,
@@ -862,18 +904,22 @@ class GMTSurface(Waffle):
         self.tension = tension
         self.convergence = utils.float_or(convergence)
         self.relaxation = relaxation
-        self.lower_limit = utils.float_or(lower_limit, 'd')
-        self.upper_limit = utils.float_or(upper_limit, 'd')
+        #self.lower_limit = utils.float_or(lower_limit, 'd')
+        #self.upper_limit = utils.float_or(upper_limit, 'd')
+        self.upper_limit = upper_limit
+        self.lower_limit = lower_limit
         self.breakline = breakline
         self.max_radius = max_radius
+        self.aspect = aspect
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
         
     def run(self):
+        
         dem_surf_cmd = (
-            'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt surface -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} -Ll{} -Lu{}{}{}{}'.format(
+            'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt surface -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -885,13 +931,16 @@ class GMTSurface(Waffle):
                 self.ndv,
                 self.tension,
                 self.relaxation,
-                self.lower_limit,
-                self.upper_limit,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
-                ' -C{}'.format(self.convergence) if self.convergence is not None else ''
+                ' -C{}'.format(self.convergence) if self.convergence is not None else '',
+                ' -A{}'.format(self.aspect) if self.aspect is not None else ''
             )
         )
+
+        ## -L* messes up the output solution! use self.set_limits()
+        #' -Ll{}'.format(self.lower_limit) if self.lower_limit is not None else '',
+        #' -Lu{}'.format(self.upper_limit) if self.upper_limit is not None else '',
         
         out, status = utils.run_cmd(
             dem_surf_cmd,
@@ -900,8 +949,9 @@ class GMTSurface(Waffle):
                 dst_port=p, encode=True
             )
         )
-        
-        return(self)
+
+        return(self.set_limits(self.upper_limit, self.lower_limit))
+               #return(self)
 
 ## ==============================================
 ## GMT Triangulate
@@ -929,7 +979,7 @@ class GMTTriangulate(Waffle):
         )        
         
     def run(self):
-        dem_tri_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt triangulate -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
+        dem_tri_cmd = 'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt triangulate -V {} -I{:.14f}/{:.14f} -G{}.tif=gd:GTiff'.format(
             self.ps_region.format('gmt'),
             self.xinc,
             self.yinc,
@@ -979,7 +1029,7 @@ class GMTNearNeighbor(Waffle):
         self.sectors = sectors
         
     def run(self):
-        dem_nn_cmd = 'gmt blockmean {} -I{:.10f}/{:.10f}{} -V | gmt nearneighbor -V {} -I{:.10f}/{:.10f} -G{}.tif=gd+n{}:GTiff{}{}{}'.format(
+        dem_nn_cmd = 'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt nearneighbor -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff{}{}{}'.format(
             self.ps_region.format('gmt'),
             self.xinc,
             self.yinc,
@@ -1110,13 +1160,14 @@ class WafflesMBGrid(Waffle):
             return(None)
     
     def run(self):
-        # if use_datalists:
-        #     #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
-        #     archive = wg['archive']
-        #     wg['archive'] = True
-        #     for xyz in waffles_yield_datalist(wg): pass
-        #     wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
-        #     wg['archive'] = archive
+        if use_datalists:
+            #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
+            archive = wg['archive']
+            wg['archive'] = True
+            #for xyz in waffles_yield_datalist(wg): pass
+            [x for x in self.yield_xyz()]
+            #wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
+            wg['archive'] = archive
 
         mb_region = self.p_region.copy()
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
@@ -1253,7 +1304,7 @@ class WafflesNum(Waffle):
                 return(None, -1)
 
             out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)            
-            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.10f}/{:.10f} -G{}.tif=gd:GTiff'.format(
+            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.14f}/{:.14f} -G{}.tif=gd:GTiff'.format(
                 self.mode,
                 self.ps_region.format('gmt'),
                 self.xinc,
@@ -1484,18 +1535,18 @@ class WafflesIDW(Waffle):
         point_indices = np.nonzero(points_array != points_no_data)
         
         for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):
-            if np.isnan(points_no_data):
-                if np.all(~np.isnan(points_array)):
-                   interp_band.WriteArray(points_array, xoff, yoff)
-                   continue
-                else:
-                    point_indices = np.nonzero(~np.isnan(points_array))
-            else:
-                if np.all(points_array != points_no_data):
-                   interp_band.WriteArray(points_array, xoff, yoff)
-                   continue
-                else:
-                    point_indices = np.nonzero(points_array != points_no_data)
+            # if np.isnan(points_no_data):
+            #     if np.all(~np.isnan(points_array)):
+            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            #        continue
+            #     else:
+            #         point_indices = np.nonzero(~np.isnan(points_array))
+            # else:
+            #     if np.all(points_array != points_no_data):
+            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            #        continue
+            #     else:
+            #         point_indices = np.nonzero(points_array != points_no_data)
                 
             if len(point_indices[0]):
                 point_values = points_array[point_indices]
@@ -1503,23 +1554,29 @@ class WafflesIDW(Waffle):
                                   srcwin[1]:srcwin[1]+srcwin[3]]
 
                 if idw:
+                    
                     invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
                     interp_data = invdisttree(
-                        np.vstack((xi.flatten(), yi.flatten())).T,
+                        np.vstack((yi.flatten(), xi.flatten())).T,
                         nnear=self.min_points,
                         eps=.1,
                         p=self.power,
                         dub=self.radius,
                         weights=weights_array.flatten()
                     )
-                    interp_data = np.reshape(interp_data, (srcwin[3], srcwin[2]))
+                    interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
+                    #interp_data = np.flipud(interp_data)
+                    #interp_data = np.rot90(np.fliplr(interp_data))
+                    #print(interp_data)
+                    #print(interp_data.T)
+
                 else:
                     interp_data = interpolate.griddata(
                         np.transpose(point_indices), point_values,
                         (xi, yi), method='linear'
                     )
-
-                interp_band.WriteArray(interp_data, srcwin[1], srcwin[0])
+                                
+                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])
                 
         points_band = points_ds = weights_ds = weights_band = None        
         return(self)    
@@ -2012,12 +2069,14 @@ DEM generation.
     def run(self):
         pre = self.pre_count
         pre_weight = 0
+        #final_region = self.p_region.copy()
+        #self.p_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
         pre_region = self.p_region.copy()
         pre_region.wmin = None
         pre_clip = None 
         upper_limit = None
         coast = '{}_cst'.format(self.name)
-
+        
         ## Block/Stack the data with weights
         #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         self._stacks_array(
@@ -2026,26 +2085,6 @@ DEM generation.
         n = '{}_stack_s.tif'.format(self.name)
         w = '{}_stack_w.tif'.format(self.name)
         c = '{}_stack_c.tif'.format(self.name)
-
-        # self.stacked = WaffleFactory(
-        #     mod='stacks:supercede=True:keep_weights=True:keep_count=True',
-        #     data=self.data_,
-        #     src_region=self.p_region,
-        #     xinc=self.xinc,
-        #     yinc=self.yinc,
-        #     name=self.name,
-        #     node=self.node,
-        #     weights=self.weights,
-        #     dst_srs=self.dst_srs,
-        #     srs_transform=self.srs_transform,
-        #     clobber=True,
-        #     verbose=self.verbose
-        # ).acquire().generate()
-
-        # n = '{}_n.tif'.format(self.stacked.name)
-        # w = '{}_w.tif'.format(self.stacked.name)
-        # c = '{}_c.tif'.format(self.stacked.name)
-        # os.rename('{}.tif'.format(self.stacked.name), n)
         
         ## Remove outliers from the stacked data
         if self.filter_outliers is not None:
@@ -2125,8 +2164,8 @@ DEM generation.
 
             ## Grid/Stack the iteration
             if pre == self.pre_count:
-                waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None  else 'd')
-                waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit if upper_limit is not None else 'd')
+                waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit)# if upper_limit is not None  else 'd')
+                waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit)# if upper_limit is not None else 'd')
             elif pre != 0:
                 waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
                 waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
@@ -2134,7 +2173,9 @@ DEM generation.
                 waffles_mod_surface = 'surface:tension=1'
                 waffles_mod_surfstack = 'stacks:supercede=True'
             
-            waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack            
+            waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
+            #waffles_mod = waffles_mod_surfstack
+            
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
