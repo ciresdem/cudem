@@ -2069,7 +2069,7 @@ DEM generation.
     def run(self):
         pre = self.pre_count
         pre_weight = 0
-        #final_region = self.p_region.copy()
+        final_region = self.d_region.copy()
         #self.p_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
         pre_region = self.p_region.copy()
         pre_region.wmin = None
@@ -2179,7 +2179,7 @@ DEM generation.
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
-                src_region=pre_region,
+                src_region=pre_region if pre !=0 else final_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
                 yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
@@ -3775,7 +3775,7 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
 < IDW:min_points=8:radius=inf:power=1:block=False >
  :power=[val]\t\tweight**power
  :min_points=[val]\tminimum neighbor points for IDW
- :radius=[val]\t\tsearch radius, only fill data cells within radius from data
+ :radius=[val]\t\tsearch radius (in cells), only fill data cells within radius from data
  :block=[True/False]\tblock the data before performing the IDW routine""",
         },
         'vdatum': {

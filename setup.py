@@ -117,6 +117,7 @@ setuptools.setup(
         'scripts/xyztindex.py',
         'scripts/gdal_mask.py',
         'scripts/vrbag2tif2chunks2xyz.sh',
+        'scripts/VR_to_image.py',
         'scripts/explode_bags.sh',
         'scripts/vertical_datum_convert.py',
         'scripts/dem_smooth.py',
