@@ -457,7 +457,6 @@ class Region:
                 if tmp_y_bv != 0:
                     y_bv = tmp_y_bv
 
-
             self.xmin -= x_bv
             self.xmax += x_bv
             self.ymin -= y_bv

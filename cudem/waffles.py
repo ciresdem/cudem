@@ -879,7 +879,7 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.4, max_radius=None,
                  lower_limit=None, upper_limit=None, aspect=None,
-                 breakline=None, convergence=None,
+                 breakline=None, convergence=None, blockmean=True,
                  **kwargs):
         """generate a DEM with GMT surface"""
 
@@ -892,7 +892,8 @@ class GMTSurface(Waffle):
             'lower_limit':lower_limit,
             'upper_limit':upper_limit,
             'breakline':breakline,
-            'convergence':convergence
+            'convergence':convergence,
+            'blockmean':blockmean,
         }
         super().__init__(**kwargs)
         if self.gc['GMT'] is None:
@@ -911,19 +912,31 @@ class GMTSurface(Waffle):
         self.breakline = breakline
         self.max_radius = max_radius
         self.aspect = aspect
+        self.blockmean = blockmean
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
         
     def run(self):
+
+        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
+        #print(self.ps_region.xmax-self.ps_region.xmin)
+        #print(self.xinc * xsize)
         
-        dem_surf_cmd = (
-            'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt surface -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
-                self.ps_region.format('gmt'),
-                self.xinc,
-                self.yinc,
-                ' -W' if self.weights else '',
+        dem_surf_cmd = ('')
+        if self.blockmean:
+            dem_surf_cmd = (
+                'gmt blockmean {} -I{:.26f}/{:.26f}+e{} -V |'.format(
+                    self.ps_region.format('gmt'),
+                    self.xinc,
+                    self.yinc,
+                    ' -W' if self.weights else ''
+                )
+            )
+
+        dem_surf_cmd += (
+            'gmt surface -V {} -I{:.26f}/{:.26f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -937,6 +950,26 @@ class GMTSurface(Waffle):
                 ' -A{}'.format(self.aspect) if self.aspect is not None else ''
             )
         )
+        
+        # dem_surf_cmd = (
+        #     'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt surface -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
+        #         self.ps_region.format('gmt'),
+        #         self.xinc,
+        #         self.yinc,
+        #         ' -W' if self.weights else '',
+        #         self.ps_region.format('gmt'),
+        #         self.xinc,
+        #         self.yinc,
+        #         self.name,
+        #         self.ndv,
+        #         self.tension,
+        #         self.relaxation,
+        #         ' -D{}'.format(self.breakline) if self.breakline is not None else '',
+        #         ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
+        #         ' -C{}'.format(self.convergence) if self.convergence is not None else '',
+        #         ' -A{}'.format(self.aspect) if self.aspect is not None else ''
+        #     )
+        # )
 
         ## -L* messes up the output solution! use self.set_limits()
         #' -Ll{}'.format(self.lower_limit) if self.lower_limit is not None else '',
@@ -2108,7 +2141,7 @@ DEM generation.
         ## Generate Coastline
         if self.landmask:
             upper_limit = -0.1
-            pre_region.zmax = 1
+            #pre_region.zmax = 1
             if not os.path.exists(utils.str_or(self.landmask)):
                 if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
                     coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
@@ -2135,8 +2168,8 @@ DEM generation.
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
-            pre_xinc = self.xinc * (3**pre)
-            pre_yinc = self.yinc * (3**pre)
+            pre_xinc = float(self.xinc * (3**pre))
+            pre_yinc = float(self.yinc * (3**pre))
             xsample = self.xinc * (3**(pre - 1))
             ysample = self.yinc * (3**(pre - 1))
             if xsample == 0: xsample = self.xinc
@@ -2164,14 +2197,25 @@ DEM generation.
 
             ## Grid/Stack the iteration
             if pre == self.pre_count:
-                waffles_mod_surface = 'surface:tension=1:upper_limit={}'.format(upper_limit)# if upper_limit is not None  else 'd')
-                waffles_mod_surfstack = 'surface:tension=1:upper_limit={}'.format(upper_limit)# if upper_limit is not None else 'd')
+                waffles_mod_surface = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None  else 'd')
+                waffles_mod_surfstack = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None else 'd')
             elif pre != 0:
                 waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
                 waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
             else:
-                waffles_mod_surface = 'surface:tension=1'
+                waffles_mod_surface = 'surface:tension=1:blockmean=False'
                 waffles_mod_surfstack = 'stacks:supercede=True'
+
+            # if pre == self.pre_count:
+            #     waffles_mod_surface = 'IDW:min_points=24:upper_limit={}'.format(upper_limit)# if upper_limit is not None  else 'd')
+            #     waffles_mod_surfstack = 'IDW:min_points=24:upper_limit={}'.format(upper_limit)# if upper_limit is not None else 'd')
+            # elif pre != 0:
+            #     waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
+            #     waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
+            # else:
+            #     waffles_mod_surface = 'IDW:min_points=24'
+            #     waffles_mod_surfstack = 'stacks:supercede=True'
+
             
             waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
             #waffles_mod = waffles_mod_surfstack
@@ -2179,7 +2223,8 @@ DEM generation.
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
-                src_region=pre_region if pre !=0 else final_region,
+                #src_region=pre_region if pre !=0 else final_region,
+                src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
                 yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,

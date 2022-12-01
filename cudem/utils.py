@@ -185,7 +185,7 @@ def str2inc(inc_str):
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
             return(None)
         
-    return(inc)
+    return(float(inc))
 
 def this_date():
     """get current data
