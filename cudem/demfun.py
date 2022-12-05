@@ -813,16 +813,20 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
             )
         )
 
-        for srcwin in utils.yield_srcwin((ds.RasterYSize, ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True):
+        for srcwin in utils.yield_srcwin(
+                (ds.RasterYSize, ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+        ):
             nd = 0
-            #band_data = ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-            #coverage_data = ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-            #slp_data = slp_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
             band_data = ds_band.ReadAsArray(*srcwin)
-            coverage_data = ds_band.ReadAsArray(*srcwin)
             band_data[band_data == ds_config['ndv']] = np.nan
-            coverage_data[coverage_data == ds_config['ndv']] = np.nan
 
+            if np.all(np.isnan(band_data)):
+                dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
+                continue
+            
+            coverage_data = ds_band.ReadAsArray(*srcwin)
+            coverage_data[coverage_data == ds_config['ndv']] = np.nan
+                        
             this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
             dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
             
@@ -830,9 +834,6 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
             dst_config['nx'] = srcwin[2]
             dst_config['ny'] = srcwin[3]
             dst_config['geoT'] = dst_gt
-            
-            if np.all(np.isnan(band_data)):
-                continue
 
             if not np.all(band_data == band_data[0,:]):                
                 px, py = np.gradient(band_data, gt[1])
@@ -875,8 +876,6 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                     point_indices = np.nonzero(~np.isnan(band_data))
                     if len(point_indices[0]):
                         point_values = band_data[point_indices]
-                        # xi, yi = np.mgrid[srcwin[1]:srcwin[1]+srcwin[3],
-                        #                   srcwin[0]:srcwin[0]+srcwin[2]]
                         xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
 
                         try:
@@ -887,11 +886,9 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                             interp_data[np.isnan(coverage_data)] = np.nan
                             dst_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                         except:
-                            pass
+                            dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
                 else:
-                    #ds_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = band_data
                     dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
-                    #tnd += len(band_data[np.isnan(band_data)])
 
         ds = dst_ds = None
         return(dst_dem, 0)

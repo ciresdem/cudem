@@ -2316,7 +2316,8 @@ DEM generation.
             #utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             utils.remove_glob('{}*'.format(n), '{}*'.format(c), '{}.*'.format(coast))
 
-        self.aux_dems.append(w)
+        os.rename(w, '{}_w.tif'.format(self.name))
+        self.aux_dems.append('{}_w.tif'.format(self.name))
             
         return(self)
         
