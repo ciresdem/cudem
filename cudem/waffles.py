@@ -1536,7 +1536,6 @@ class WafflesIDW(Waffle):
             return(self)
 
         print ('Interpolating...', self.radius) #JDV
-        c = 0
 
         points_array = points_band.ReadAsArray()
         point_indices = np.nonzero(points_array != points_no_data)
