@@ -51,7 +51,7 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
 
     def __init__(self, where=[], **kwargs):
         super().__init__(**kwargs)
-        self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/demCatalog.xml"
+        self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
         self._ngdc_url = "https://www.ngdc.noaa.gov"
         self._outdir = os.path.join(os.getcwd(), 'ncei_thredds')        
         ##self.where = where

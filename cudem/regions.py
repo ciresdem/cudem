@@ -238,7 +238,7 @@ class Region:
             elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)]))
             #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
             elif t == 'gmt':
-                return('-R{:.26f}/{:.26f}/{:.26f}/{:.26f}'.format(self.xmin, self.xmax, self.ymin, self.ymax))
+                return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(self.xmin, self.xmax, self.ymin, self.ymax))
             #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)])
             elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
             elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin), str(self.ymax), str(self.xmax)]))

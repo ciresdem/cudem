@@ -197,40 +197,12 @@ class Waffle:
 
         cr = self.d_region.copy()
         return(cr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc))
-        
-        # cr = regions.Region().from_region(self.region)
-        # xcount, ycount, gt = cr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        # ewp = xcount * ((self.extend_proc+5) * .01)
-        # nsp = ycount * ((self.extend_proc+5) * .01)
-        # x_bv = int((ewp + nsp) / 2)
-        # y_bv = int((ewp + nsp) / 2)
-
-        # return(
-        #     cr.buffer(
-        #         x_bv=self.xinc*x_bv,
-        #         y_bv=self.yinc*y_bv
-        #     )
-        # )
     
     def _proc_region(self):
         """processing region (extended by percentage self.extend_proc)"""
 
         pr = self.d_region.copy()
         return(pr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc))
-        
-        # pr = regions.Region().from_region(self.d_region)
-        # xcount, ycount, gt = pr.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        # ewp = xcount * (self.extend_proc * .01)
-        # nsp = ycount * (self.extend_proc * .01)
-        # x_bv = int((ewp + nsp) / 2)
-        # y_bv = int((ewp + nsp) / 2)
-
-        # return(
-        #     pr.buffer(
-        #         x_bv=self.xinc*x_bv,
-        #         y_bv=self.yinc*y_bv
-        #     )
-        # )
     
     def _dist_region(self):
         """distribution region (extended by self.extend)."""
@@ -286,7 +258,7 @@ class Waffle:
     def _stacks_array(self, supercede=False, out_name=None):
         if not self.weights:
             self.weights = 1
-            
+
         xcount, ycount, dst_gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc, node='grid'
         )
@@ -879,7 +851,7 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.4, max_radius=None,
                  lower_limit=None, upper_limit=None, aspect=None,
-                 breakline=None, convergence=None, blockmean=True,
+                 breakline=None, convergence=None, blockmean=True, geographic=True,
                  **kwargs):
         """generate a DEM with GMT surface"""
 
@@ -894,6 +866,7 @@ class GMTSurface(Waffle):
             'breakline':breakline,
             'convergence':convergence,
             'blockmean':blockmean,
+            'geographic':geographic
         }
         super().__init__(**kwargs)
         if self.gc['GMT'] is None:
@@ -913,6 +886,7 @@ class GMTSurface(Waffle):
         self.max_radius = max_radius
         self.aspect = aspect
         self.blockmean = blockmean
+        self.geographic = geographic
         out, status = utils.run_cmd(
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
@@ -927,16 +901,17 @@ class GMTSurface(Waffle):
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
-                'gmt blockmean {} -I{:.26f}/{:.26f}+e{} -V |'.format(
+                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{} -V |'.format(
                     self.ps_region.format('gmt'),
                     self.xinc,
                     self.yinc,
-                    ' -W' if self.weights else ''
+                    ' -W' if self.weights else '',
+                    ' -fg' if self.geographic else '',
                 )
             )
 
         dem_surf_cmd += (
-            'gmt surface -V {} -I{:.26f}/{:.26f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
                 self.ps_region.format('gmt'),
                 self.xinc,
                 self.yinc,
@@ -947,7 +922,8 @@ class GMTSurface(Waffle):
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
                 ' -C{}'.format(self.convergence) if self.convergence is not None else '',
-                ' -A{}'.format(self.aspect) if self.aspect is not None else ''
+                ' -A{}'.format(self.aspect) if self.aspect is not None else '',
+                ' -fg' if self.geographic else '',
             )
         )
         
@@ -1499,7 +1475,6 @@ class WafflesIDW(Waffle):
     def run(self):
         chunk_size=None
         chunk_step=None
-        idw=True        
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
@@ -1526,11 +1501,11 @@ class WafflesIDW(Waffle):
             i=0
 
         self._stacks_array(
-            out_name='{}_stack'.format(self.name)#, keep_weights=True, keep_count=True, supercede=True
+            out_name='{}_idw_stack'.format(self.name)#, keep_weights=True, keep_count=True, supercede=True
         )
-        n = '{}_stack_s.tif'.format(self.name)
-        w = '{}_stack_w.tif'.format(self.name)
-        c = '{}_stack_c.tif'.format(self.name)
+        n = '{}_idw_stack_s.tif'.format(self.name)
+        w = '{}_idw_stack_w.tif'.format(self.name)
+        c = '{}_idw_stack_c.tif'.format(self.name)
 
         if chunk_size is None:
             n_chunk = int(ds_config['nx'] * .1)
@@ -1564,54 +1539,33 @@ class WafflesIDW(Waffle):
         c = 0
 
         points_array = points_band.ReadAsArray()
-        weights_array = weights_band.ReadAsArray() if self.weights else None
         point_indices = np.nonzero(points_array != points_no_data)
-        
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):
-            # if np.isnan(points_no_data):
-            #     if np.all(~np.isnan(points_array)):
-            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-            #        continue
-            #     else:
-            #         point_indices = np.nonzero(~np.isnan(points_array))
-            # else:
-            #     if np.all(points_array != points_no_data):
-            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-            #        continue
-            #     else:
-            #         point_indices = np.nonzero(points_array != points_no_data)
-                
+        point_values = points_array[point_indices]
+        points_ds = points_array = None
+
+        if self.weights:
+            weights_array = weights_band.ReadAsArray()
+            weight_values = weights_array[point_indices]
+            weights_ds = weights_array = None
+        else:
+            weight_values = None
+
+        invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
+        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):                
             if len(point_indices[0]):
-                point_values = points_array[point_indices]
                 xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
                                   srcwin[1]:srcwin[1]+srcwin[3]]
-
-                if idw:
-                    
-                    invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
-                    interp_data = invdisttree(
-                        np.vstack((yi.flatten(), xi.flatten())).T,
-                        nnear=self.min_points,
-                        eps=.1,
-                        p=self.power,
-                        dub=self.radius,
-                        weights=weights_array.flatten()
-                    )
-                    interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
-                    #interp_data = np.flipud(interp_data)
-                    #interp_data = np.rot90(np.fliplr(interp_data))
-                    #print(interp_data)
-                    #print(interp_data.T)
-
-                else:
-                    interp_data = interpolate.griddata(
-                        np.transpose(point_indices), point_values,
-                        (xi, yi), method='linear'
-                    )
-                                
-                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])
-                
-        points_band = points_ds = weights_ds = weights_band = None        
+                interp_data = invdisttree(
+                    np.vstack((yi.flatten(), xi.flatten())).T,
+                    nnear=self.min_points,
+                    eps=.1,
+                    p=self.power,
+                    dub=self.radius,
+                    weights=weight_values
+                )
+                interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
+                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
+        interp_ds = point_values = weight_values = None        
         return(self)    
     
 ## ==============================================
@@ -1870,6 +1824,109 @@ class WafflesVDatum(Waffle):
         return(self)
 
 ## ==============================================
+## Scipy gridding (linear, cubic, near)
+## ==============================================
+class WafflesSciPy(Waffle):
+    def __init__(self, method='linear', **kwargs):
+        self.mod = 'scipy'
+        self.mod_args = {
+            'method':method,
+        }
+        super().__init__(**kwargs)
+        self.method = method
+
+    def run(self):
+        chunk_size=None
+        chunk_step=None
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            utils.sr_wkt(self.dst_srs),
+            gdal.GDT_Float32,
+            self.ndv,
+            self.fmt
+        )
+
+        if self.verbose:
+            progress = utils.CliProgress(
+                'generating {} grid @ {}/{}'.format(
+                    self.method, ycount, xcount
+                )
+            )
+
+        self._stacks_array(
+            out_name='{}_scipy_stack'.format(self.name)
+        )
+        n = '{}_scipy_stack_s.tif'.format(self.name)
+        w = '{}_scipy_stack_w.tif'.format(self.name)
+        c = '{}_scipy_stack_c.tif'.format(self.name)
+
+        if chunk_size is None:
+            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = 10 if n_chunk < 10 else n_chunk
+        else: n_chunk = chunk_size
+        if chunk_step is None:
+            n_step = int(n_chunk/2)
+        else: n_step = chunk_step
+
+        points_ds = gdal.Open(n)
+        points_band = points_ds.GetRasterBand(1)
+        points_no_data = points_band.GetNoDataValue()
+        
+        weights_ds = gdal.Open(w)
+        weights_band = weights_ds.GetRasterBand(1)
+        weights_no_data = weights_band.GetNoDataValue()
+
+        try:
+            interp_ds = points_ds.GetDriver().Create(
+                self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+            )
+            interp_ds.SetProjection(points_ds.GetProjection())
+            interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
+            interp_band = interp_ds.GetRasterBand(1)
+            interp_band.SetNoDataValue(np.nan)
+        except:
+            return(self)
+
+        print ('Interpolating...')
+        c = 0
+
+        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):
+
+            points_array = points_band.ReadAsArray(*srcwin)
+            point_indices = np.nonzero(points_array != points_no_data)
+            point_values = points_array[point_indices]
+            points_array = None
+            
+            # if np.isnan(points_no_data):
+            #     if np.all(~np.isnan(points_array)):
+            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            #        continue
+            #     #else:
+            #     #    point_indices = np.nonzero(~np.isnan(points_array))
+            # else:
+            #     if np.all(points_array != points_no_data):
+            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            #        continue
+            #     #else:
+            #     #    point_indices = np.nonzero(points_array != points_no_data)
+                
+            if len(point_indices[0]):
+                xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
+                                  srcwin[1]:srcwin[1]+srcwin[3]]
+                interp_data = interpolate.griddata(
+                    np.transpose(point_indices), point_values,
+                    (yi, xi), method='cubic'
+                )
+                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])              
+        interp_ds = point_values = weight_values = None        
+        return(self)    
+    
+## ==============================================
 ## GDAL gridding
 ## ==============================================
 class WafflesGDALGrid(Waffle):
@@ -2079,7 +2136,7 @@ DEM generation.
             'poly_count':poly_count,
             'keep_auxilary':keep_auxilary,
             'mode':mode,
-            'filter_outliers':filter_outliers
+            'filter_outliers':filter_outliers,
         }
         try:
             super().__init__(**kwargs)
@@ -2113,7 +2170,7 @@ DEM generation.
         ## Block/Stack the data with weights
         #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         self._stacks_array(
-            out_name='{}_stack'.format(self.name, supercede=True)#, keep_weights=True, keep_count=True, supercede=True
+            out_name='{}_stack'.format(self.name), supercede=True
         )
         n = '{}_stack_s.tif'.format(self.name)
         w = '{}_stack_w.tif'.format(self.name)
@@ -2136,35 +2193,37 @@ DEM generation.
         if self.verbose:
             utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
             
-        pre_data = ['{},200:weight_mask={},1'.format(n, w)]
+        pre_data = ['{},200:weight_mask={}:sample=average,1'.format(n, w)]
 
         ## Generate Coastline
+        self.coast = None
         if self.landmask:
             upper_limit = -0.1
             #pre_region.zmax = 1
             if not os.path.exists(utils.str_or(self.landmask)):
-                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
-                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
-                else:
-                    self.coast = WaffleFactory(
-                        mod='coastline:polygonize={}'.format(self.poly_count),
-                        data=pre_data,
-                        src_region=self.p_region,
-                        xinc=self.xinc,
-                        yinc=self.yinc,
-                        name=coast,
-                        node=self.node,
-                        weights=self.weights,
-                        dst_srs=self.dst_srs,
-                        srs_transform=self.srs_transform,
-                        clobber=True,
-                        verbose=self.verbose
-                    ).acquire().generate()
-                    coastline = '{}.shp'.format(self.coast.name)
+               if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
+                   coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
+               else:
+                   self.coast = WaffleFactory(
+                       #mod='coastline:polygonize={}:invert=True'.format(self.poly_count),
+                       mod='coastline:polygonize=False',
+                       data=pre_data,
+                       src_region=self.p_region,
+                       xinc=self.xinc,
+                       yinc=self.yinc,
+                       name=coast,
+                       node=self.node,
+                       weights=self.weights,
+                       dst_srs=self.dst_srs,
+                       srs_transform=self.srs_transform,
+                       clobber=True,
+                       verbose=self.verbose
+                   ).acquire().generate()
+                   coastline = '{}.shp'.format(self.coast.name)
             else:
-                coastline = self.landmask
-                
-            pre_clip = '{}:invert=True'.format(coastline)
+               coastline = self.landmask
+            #pre_clip = '{}:invert=True'.format(coastline)
+            pre_clip = '{}'.format(coastline)
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
@@ -2181,7 +2240,7 @@ DEM generation.
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
                 pre_data = [
-                    '{},200:weight_mask={},1'.format(n, w),
+                    '{},200:weight_mask={}:sample=average,1'.format(n, w),
                     '{}.tif,200,{}'.format(
                         utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
                     )
@@ -2196,25 +2255,28 @@ DEM generation.
                 utils.echo_msg('pre region: {}'.format(pre_region))
 
             ## Grid/Stack the iteration
-            if pre == self.pre_count:
-                waffles_mod_surface = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None  else 'd')
-                waffles_mod_surfstack = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None else 'd')
-            elif pre != 0:
-                waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-                waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-            else:
-                waffles_mod_surface = 'surface:tension=1:blockmean=False'
-                waffles_mod_surfstack = 'stacks:supercede=True'
-
             # if pre == self.pre_count:
-            #     waffles_mod_surface = 'IDW:min_points=24:upper_limit={}'.format(upper_limit)# if upper_limit is not None  else 'd')
-            #     waffles_mod_surfstack = 'IDW:min_points=24:upper_limit={}'.format(upper_limit)# if upper_limit is not None else 'd')
+            #     waffles_mod_surface = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None  else 'd')
+            #     waffles_mod_surfstack = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None else 'd')
             # elif pre != 0:
             #     waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
             #     waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
             # else:
-            #     waffles_mod_surface = 'IDW:min_points=24'
+            #     waffles_mod_surface = 'surface:tension=1:blockmean=False'
             #     waffles_mod_surfstack = 'stacks:supercede=True'
+
+            if pre == self.pre_count:
+                waffles_mod_surface = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
+                waffles_mod_surfstack = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
+                #waffles_mod_surface = 'IDW:upper_limit={}'.format(upper_limit)
+                #waffles_mod_surfstack = 'IDW:upper_limit={}'.format(upper_limit)
+            elif pre != 0:
+                waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
+                waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
+            else:
+                #waffles_mod_surface = 'surface:tension=1:blockmean=False'
+                waffles_mod_surface = 'IDW'
+                waffles_mod_surfstack = 'stacks:supercede=True'
 
             
             waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
@@ -2223,8 +2285,8 @@ DEM generation.
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
-                #src_region=pre_region if pre !=0 else final_region,
-                src_region=pre_region,
+                src_region=pre_region if pre !=0 else final_region,
+                #src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
                 yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
@@ -2234,12 +2296,18 @@ DEM generation.
                 dst_srs=self.dst_srs,
                 srs_transform=self.srs_transform,
                 clobber=True,
-                sample=self.sample,
+                #sample=self.sample,
                 verbose=self.verbose,
-                clip=pre_clip if pre !=0 else None,
+                #clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
+
+            if self.coast is not None:
+                if pre !=0:
+                    demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1)
+                    os.rename('__tmp_coast_clip.tif', pre_surface.fn)
+
             pre -= 1
-            
+                    
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))

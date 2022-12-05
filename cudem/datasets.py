@@ -1290,6 +1290,8 @@ class RasterFile(ElevationDataset):
                     band = tmp_ds.GetRasterBand(1)
                     band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())            
                     tmp_ds.FlushCache()
+                # else:
+                #     tmp_ds = gdal.Open(self.fn)
                     
                 src_ds = None
 

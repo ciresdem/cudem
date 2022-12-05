@@ -270,8 +270,16 @@ def mask_(src_dem, msk_dem, out_dem, msk_value = None):
         src_config = gather_infos(src_ds)
         src_band = src_ds.GetRasterBand(1)
         src_array = src_band.ReadAsArray()
-    
-        msk_ds = gdal.Open(msk_dem)
+
+        tmp_region = regions.Region().from_geo_transform(src_config['geoT'], src_config['nx'], src_config['ny'])
+        tmp_ds = gdal.Open(msk_dem)
+        msk_ds = sample_warp(
+            tmp_ds, None, src_config['geoT'][1], src_config['geoT'][5],
+            src_region=tmp_region, sample_alg='bilinear',
+            verbose=True
+        )[0] 
+        tmp_ds = None
+        
         if msk_ds is not None:
             msk_band = msk_ds.GetRasterBand(1)
             msk_array = msk_band.ReadAsArray()
@@ -376,14 +384,14 @@ def clip(src_dem, dst_dem, src_ply=None, invert=False, verbose=True):
     
     out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
-        if invert:
-            gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)
-            out, status = utils.run_cmd(gr_cmd, verbose=verbose)
-        else:
-            shutil.copyfile(src_dem, dst_dem)
-            gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
-                .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_dem)
-            out, status = utils.run_cmd(gr_cmd, verbose=verbose)
+        #if invert:
+        #    gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)
+        #    out, status = utils.run_cmd(gr_cmd, verbose=verbose)
+        #else:
+        shutil.copyfile(src_dem, dst_dem)
+        gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
+            .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_dem, ' -i' if invert else '')
+        out, status = utils.run_cmd(gr_cmd, verbose=verbose)
         utils.remove_glob('__tmp_clp_ply.*')
     else: return(None, -1)
     return(out, status)
