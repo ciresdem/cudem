@@ -1565,7 +1565,10 @@ class WafflesIDW(Waffle):
                 )
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
                 interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
-        interp_ds = point_values = weight_values = None        
+        interp_ds = point_values = weight_values = None
+
+        utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        
         return(self)    
     
 ## ==============================================
@@ -2310,7 +2313,10 @@ DEM generation.
                     
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
-            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
+            #utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
+            utils.remove_glob('{}*'.format(n), '{}*'.format(c), '{}.*'.format(coast))
+
+        self.aux_dems.append(w)
             
         return(self)
         

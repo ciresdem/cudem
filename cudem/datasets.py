@@ -1197,13 +1197,17 @@ class LASFile(ElevationDataset):
             )
 
     def yield_array(self):        
-        for src_arrs, src_gt, src_ds_config in self.yield_block_array():
-            x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
-            srcwin_region = regions.Region().from_geo_transform(
-                geo_transform=src_gt, x_count=src_ds_config['nx'], y_count=src_ds_config['ny']
-            )
-            dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count, 'grid')
-            yield(src_arrs, dst_srcwin, src_gt)
+        for arrs in self.yield_block_array():
+            yield(arrs)
+            
+    # def yield_array(self):        
+    #     for src_arrs, src_gt, src_ds_config in self.yield_block_array():
+    #         x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
+    #         srcwin_region = regions.Region().from_geo_transform(
+    #             geo_transform=src_gt, x_count=src_ds_config['nx'], y_count=src_ds_config['ny']
+    #         )
+    #         dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count, 'grid')
+    #         yield(src_arrs, dst_srcwin, src_gt)
             
 ## ==============================================
 ## ==============================================
