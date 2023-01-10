@@ -1313,7 +1313,7 @@ class WafflesNum(Waffle):
                 return(None, -1)
 
             out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)            
-            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.14f}/{:.14f} -G{}.tif=gd:GTiff'.format(
+            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.14f}/{:.14f}+e -G{}.tif=gd:GTiff'.format(
                 self.mode,
                 self.ps_region.format('gmt'),
                 self.xinc,

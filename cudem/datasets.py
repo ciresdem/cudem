@@ -131,7 +131,7 @@ class ElevationDataset():
         self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
         if utils.fn_url_p(self.fn):
             self.remote = True
-        
+            
         if self.valid_p():
             self.set_yield()
             self.inf(check_hash=True if self.data_format == -1 else False)
@@ -266,7 +266,7 @@ class ElevationDataset():
         The function `generate_inf()` should be defined for each specific
         dataset sub-class.
         """
-        
+
         inf_path = '{}.inf'.format(self.fn)
         mb_inf = False
         self.infos = {}
@@ -357,16 +357,17 @@ class ElevationDataset():
         
     def set_transform(self):
         """Set the transformation parameters for the dataset."""
-        
+
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None \
            and self.src_srs is not None \
            and self.src_srs != self.dst_srs:
             src_srs = osr.SpatialReference()
+
             src_srs.SetFromUserInput(self.src_srs)
             #src_srs = self.parse_srs(src_srs)
-            
+
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(self.dst_srs)
             #dst_srs = self.parse_srs(dst_srs)
@@ -380,7 +381,7 @@ class ElevationDataset():
             src_srs.AutoIdentifyEPSG()
             an = src_srs.GetAuthorityName(cstype)
             src_horz_epsg = src_srs.GetAuthorityCode(cstype)
-            
+
             if dst_srs.IsGeographic() == 1:
                 cstype = 'GEOGCS'
             else:
@@ -405,11 +406,14 @@ class ElevationDataset():
             else:
                 dst_vert_epsg = None
 
+            #print(src_horz_epsg)
+            #print(dst_horz_epsg)
+                
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput('epsg:{}'.format(dst_horz_epsg))
-                
+
             if dst_vert_epsg is not None \
                and src_vert_epsg is not None \
                and dst_vert_epsg != src_vert_epsg:
@@ -420,6 +424,9 @@ class ElevationDataset():
                 ).warp(
                     dst_srs.ExportToProj4()
                 ) if self.region is None else self.region.copy()
+                
+                utils.echo_msg(vd_region)
+                
                 vd_region.buffer(pct=2)
                 trans_fn = os.path.join(
                     self.cache_dir,
@@ -465,6 +472,7 @@ class ElevationDataset():
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
             dst_osr_srs.SetFromUserInput(out_dst_srs)
+
             try:
                 src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
                 dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
@@ -475,10 +483,17 @@ class ElevationDataset():
             self.dst_trans_srs = out_dst_srs
 
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
-            if self.region is not None:
+
+            if self.region is not None and self.region.src_srs != self.src_srs:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
                 self.trans_region.warp(out_src_srs)
+            else:
+                #self.trans_region = self.
+                self.trans_region = regions.Region().from_string(self.infos['wkt'])
+                self.trans_region.src_srs = self.src_srs
+                self.trans_region.warp(self.dst_srs)
+                
                 # utils.echo_msg(self.dst_srs)
                 # utils.echo_msg(self.src_srs)
                 # self.trans_region.src_srs = self.dst_srs
@@ -740,7 +755,7 @@ class ElevationDataset():
             ycount,
             (xcount*ycount),
             dst_gt,
-            utils.sr_wkt(self.src_srs),
+            utils.sr_wkt(self.dst_srs),
             gdal.GDT_Int32,
             ndv,
             'MEM'
@@ -1221,25 +1236,36 @@ class RasterFile(ElevationDataset):
             open_options=None,
             sample=None,
             resample=True,
+            check_path=True,
+            super_grid=False,
             **kwargs
     ):
-        super().__init__(**kwargs)
         try:
             self.open_options = open_options.split('/')
         except AttributeError:
             self.open_options = open_options
         except:
             self.open_options = None
+        
+        super().__init__(**kwargs)
 
         self.mask = mask
         self.weight_mask = weight_mask
+
         if self.valid_p() and self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
-            self.set_transform()
+            
+        self.set_transform()
 
         self.sample_alg = sample if sample is not None else self.sample_alg
         self.resample = resample
+        self.check_path = check_path
         self.dem_infos = demfun.infos(self.fn)
+        self.super_grid = super_grid
+        if self.x_inc is not None and self.y_inc is not None and self.resample:
+            self.resample_and_warp = True
+        else:
+            self.resample_and_warp = False
 
     def init_ds(self):
         """initialize the raster dataset
@@ -1247,18 +1273,19 @@ class RasterFile(ElevationDataset):
         if x/y incs are set, will warp raster to that resolution.
         """
 
-        if not os.path.exists(self.fn):
+        if self.check_path and not os.path.exists(self.fn):
             return(None)
-            
+
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
-        if self.x_inc is not None and self.y_inc is not None and self.resample:
+        if self.resample_and_warp:
             dem_inf = demfun.infos(self.fn)
             self.warp_region = regions.Region().from_list(self.infos['minmax'])
             if self.dst_trans is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
-           
-            if self.region is not None:
+                
+            #if self.region is not None
+            if self.region is not None and self.region.src_srs != self.src_srs:
                 if not regions.regions_within_ogr_p(self.warp_region, self.region):
                     self.warp_region = self.region.copy()
                 else:
@@ -1266,14 +1293,14 @@ class RasterFile(ElevationDataset):
                 
                 if self.dst_trans is not None:
                     self.dst_trans = None
-                    
+
             tmp_ds = self.fn
 
             if self.open_options is not None:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
             else:
                 src_ds = gdal.Open(self.fn)
-            
+
             if src_ds is not None:
                 remake = False
                 mt = src_ds.GetMetadata()            
@@ -1282,17 +1309,15 @@ class RasterFile(ElevationDataset):
                     if mt['AREA_OR_POINT'].lower() == 'point':
                         remake = True
                         
-                if self.open_options is not None:
+                if self.open_options is not None:# or self.super_grid:
                     remake = True
                     
                 if remake:
                     ds_config = demfun.gather_infos(src_ds)
-                    #src_arr = src_ds.GetRasterBand(1).ReadAsArray()
-                    #utils.gdal_write(src_arr, '_tmp_gdal.tif', ds_config)
-                    #tmp_ds = gdal.Open('_tmp_gdal.tif')
-                    tmp_ds = demfun.generate_mem_ds(ds_config)            
+                    tmp_ds = demfun.generate_mem_ds(ds_config)
                     band = tmp_ds.GetRasterBand(1)
-                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())            
+                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
+                    tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
                     tmp_ds.FlushCache()
                 # else:
                 #     tmp_ds = gdal.Open(self.fn)
@@ -1308,11 +1333,13 @@ class RasterFile(ElevationDataset):
             )[0] 
             tmp_ds = None
             utils.remove_glob('_tmp_gdal.tif')
+
             if warp_ds is not None:
                 ## clip
                 warp_ds_config = demfun.gather_infos(warp_ds)
                 gt = warp_ds_config['geoT']
-                srcwin = self.region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
+                srcwin = self.warp_region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
+
                 warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
                 out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
@@ -1347,7 +1374,13 @@ class RasterFile(ElevationDataset):
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
         self.infos['src_srs'] = self.src_srs if self.src_srs is not None else demfun.get_srs(self.fn)
         self.infos['format'] = self.data_format
-        src_ds = gdal.Open(self.fn)        
+        #src_ds = gdal.Open(self.fn)
+
+        if self.open_options is not None:
+            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+        else:
+            src_ds = gdal.Open(self.fn)
+        
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
             this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
@@ -1539,6 +1572,11 @@ class RasterFile(ElevationDataset):
                         out_xyz = xyzfun.XYZPoint(
                             x=geo_x, y=geo_y, z=z, w=w_array[y,x]
                         )
+                        #print(self.dst_trans)
+                        if self.dst_trans is not None and not self.resample_and_warp:
+                            out_xyz.transform(self.dst_trans)
+
+                        #print(out_xyz)
                         yield(out_xyz)
             
 ## ==============================================
@@ -1554,8 +1592,9 @@ class BAGFile(ElevationDataset):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
+        
         if self.src_srs is None:
-            self.src_srs = demfun.get_srs(self.fn)            
+            self.src_srs = demfun.get_srs(self.fn)
             self.set_transform()
         
     def generate_inf(self, callback=lambda: False):
@@ -1586,13 +1625,15 @@ class BAGFile(ElevationDataset):
             
         return(self.infos)
 
-    def parse_(self, resample=False):
+    def parse_(self, resample=True):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         oo = []
+
         if self.region is not None and self.region.valid_p():
             bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
             inf_region = regions.Region().from_list(self.infos['minmax'])
             bag_region = regions.regions_reduce(bag_region, inf_region)
+            bag_region.src_srs = self.infos['src_srs']
             #print(bag_region)
             
             oo.append('MINX={}'.format(bag_region.xmin))
@@ -1601,6 +1642,10 @@ class BAGFile(ElevationDataset):
             oo.append('MAXY={}'.format(bag_region.ymax))
         else:
             bag_region = regions.Region().from_list(self.infos['minmax'])
+            bag_region.src_srs = self.infos['src_srs']
+
+        if self.dst_trans is not None:
+            bag_region.warp(self.dst_srs)
             
         if ('HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE') \
            or self.force_vr \
@@ -1623,13 +1668,19 @@ class BAGFile(ElevationDataset):
                         x_inc=self.x_inc,
                         y_inc=self.y_inc,
                         verbose=self.verbose,
-                        resample=resample
+                        resample=resample,
+                        check_path=False,
+                        super_grid=True
                     )
+
+                    sub_ds.infos = {}
+                    sub_ds.generate_inf()
                     yield(sub_ds)
 
             else:
                 oo.append("MODE=RESAMPLED_GRID")
                 oo.append("RES_STRATEGY=MIN")
+
                 sub_ds = RasterFile(
                     fn=self.fn,
                     data_format=200,
@@ -1643,6 +1694,7 @@ class BAGFile(ElevationDataset):
                     verbose=self.verbose,
                     resample=resample
                 )
+
                 yield(sub_ds)
         else:
             sub_ds = RasterFile(
@@ -1660,7 +1712,7 @@ class BAGFile(ElevationDataset):
             yield(sub_ds)
 
     def yield_xyz(self):
-        for ds in self.parse_(resample=False):
+        for ds in self.parse_():
             for xyz in ds.yield_xyz():
                 yield(xyz)
 

@@ -120,7 +120,7 @@ class SpatialMetadata:
             xinc=None,
             yinc=None,
             name='waffles_sm',
-            src_srs='epsg:4326',
+            src_srs=None,
             dst_srs=None,
             extend=0,
             node='pixel',
@@ -133,7 +133,7 @@ class SpatialMetadata:
         self.data = data
         self.xinc = utils.float_or(xinc)
         self.yinc = utils.float_or(yinc)
-        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
+        self.src_srs = utils.str_or(src_srs, None)
         self.dst_srs = utils.str_or(dst_srs, 'epsg:4326')
         self.extend = extend
         self.node = node
@@ -165,7 +165,10 @@ class SpatialMetadata:
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.d_region,
             verbose=self.verbose,
-            src_srs=self.src_srs
+            #src_srs=self.src_srs,
+            dst_srs=self.dst_srs,
+            x_inc = self.xinc,
+            y_inc = self.yinc
         ).acquire() for dl in self.data]
 
         self.data = [d for d in self.data if d is not None]
@@ -196,7 +199,7 @@ class SpatialMetadata:
             ogr.OFTString
         ]
         utils.remove_glob('{}.*'.format(self.dst_layer))
-        utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
+        utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.dst_srs)
     
         self.ds = ogr.GetDriverByName(self.ogr_format).CreateDataSource(self.dst_vector)
         if self.ds is not None: 
@@ -245,7 +248,10 @@ class SpatialMetadata:
                 defn = None if self.layer is None else self.layer.GetLayerDefn()
                 dl_name = x
 
+                ## update to stacks
                 mask_ds, mask_config = xdl.mask_xyz(self.xinc, self.yinc)
+                
+                print(demfun.gather_infos(mask_ds, scan=True))
                 if demfun.gather_infos(mask_ds, scan=True)['zr'][1] == 1:
                     tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
                         '{}_poly'.format(dl_name)
@@ -465,7 +471,7 @@ def spat_meta_cli(argv = sys.argv):
                     xinc=xinc,
                     yinc=yinc,
                     extend=extend,
-                    src_srs=src_srs,
+                    dst_srs=src_srs,
                     node=node,
                     name=name_,
                     verbose=want_verbose,

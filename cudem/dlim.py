@@ -43,7 +43,6 @@ from cudem import utils
 from cudem import regions
 from cudem import datasets
 
-
 from cudem.fetches import fetches
 
 def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
@@ -339,7 +338,6 @@ class Datalist(datasets.ElevationDataset):
                     self.fn,
                     ' @{}'.format(self.weight) if self.weight is not None else '')
             )
-                    
         if os.path.exists(self.fn):
             with open(self.fn, 'r') as f:
                 count = sum(1 for _ in f)
@@ -1040,7 +1038,6 @@ def datalists_cli(argv=sys.argv):
 
     if len(xy_inc) < 2:
         xy_inc.append(xy_inc[0])
-        
     elif len(xy_inc) == 0:
         xy_inc = [None, None]
 

@@ -37,22 +37,22 @@ from cudem import xyzfun
 ## ==============================================
 ## DEM/GDAL/GMT functions, etc
 ## ==============================================
-def infos(src_dem, region = None, scan = False):
+def infos(src_dem, region=None, scan=False):
     """scan gdal file src_fn and gather region info.
 
     returns region dict.
     """
     
-    if os.path.exists(src_dem):
-        try:
-            ds = gdal.Open(src_dem)
-        except: ds = None
-        if ds is not None:
-            dsc = gather_infos(ds, region = region, scan = scan)#, node='grid' if src_dem.split('.')[-1] == 'nc' else 'pixel')
-            ds = None
-            return(dsc)
-        else: return(None)
+    #if os.path.exists(src_dem):
+    try:
+        ds = gdal.Open(src_dem)
+    except: ds = None
+    if ds is not None:
+        dsc = gather_infos(ds, region = region, scan = scan)#, node='grid' if src_dem.split('.')[-1] == 'nc' else 'pixel')
+        ds = None
+        return(dsc)
     else: return(None)
+    #else: return(None)
     
 def gather_infos(src_ds, region=None, scan=False, node='pixel'):
     """gather information from `src_ds` GDAL dataset
@@ -134,7 +134,7 @@ def get_srs(src_dem):
             cstype = 'GEOGCS'
         else:
             cstype = 'PROJCS'
-
+            
         src_srs.AutoIdentifyEPSG()
         an = src_srs.GetAuthorityName(cstype)
         ac = src_srs.GetAuthorityCode(cstype)
@@ -145,7 +145,6 @@ def get_srs(src_dem):
             vc = src_srs.GetAuthorityCode(csvtype)
         else:
             csvtype = vc = vn = None
-
 
         if an is not None and ac is not None:
             if vn is not None and vc is not None:
@@ -473,13 +472,6 @@ def sample_warp(
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, tap=False, size=False, verbose=False
 ):
-
-    if verbose:
-        utils.echo_msg(
-            'sampling DEM {} to {}/{} using {}'.format(
-                src_dem, x_sample_inc, y_sample_inc, sample_alg
-            )
-        )
     
     if size:
         xcount, ycount, dst_gt = src_region.geo_transform(
@@ -494,11 +486,20 @@ def sample_warp(
     else: 
         out_region = None
 
+    if verbose:
+        utils.echo_msg(
+            'sampling DEM: {} to region: {} and increments: {}/{} using {} from: {} to {}'.format(
+                src_dem, out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
+            )
+        )
+
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
-                       dstNodata=ndv, outputBounds=out_region, resampleAlg=sample_alg, errorThreshold=0,
+                       dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32,
                        callback=gdal.TermProgress if verbose else None)
+
+    #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
 
     if dst_dem is None:
         return(dst_ds, 0)
@@ -739,41 +740,50 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
 
     agg_level = utils.int_or(agg_level)
 
-    if agg_level == 1:
-        percentile = 95
-        curv_percentile = 95
-    elif agg_level == 2:
-        percentile = 85
-        curv_percentile = 95
-    elif agg_level == 3:
-        percentile = 75
-        curv_percentile = 95
-    elif agg_level == 4:
-        percentile = 65
-        curv_percentile = 95
-    elif agg_level == 5:
-        percentile = 55
-        curv_percentile = 95
-    elif agg_level == 6:
-        percentile = 55
-        curv_percentile = 85
-    elif agg_level == 7:
-        percentile = 55
-        curv_percentile = 75
-    elif agg_level == 8:
-        percentile = 55
-        curv_percentile = 65
-    elif agg_level == 9:
-        percentile = 55
-        curv_percentile = 55
-    else:
-        percentile = 75
-        curv_percentile = 95
+    if agg_level is not None:
+        percentile = 100 - (agg_level*10)
+        if percentile < 50: percentle = 50
+        if percentile > 100: percentile = 100
+        #curv_percentile = 0 + (agg_level*10)
+
+    percentile = agg_level
+        
+    # if agg_level == 1:
+    #     percentile = 95
+    #     curv_percentile = 95
+    # elif agg_level == 2:
+    #     percentile = 85
+    #     curv_percentile = 95
+    # elif agg_level == 3:
+    #     percentile = 75
+    #     curv_percentile = 95
+    # elif agg_level == 4:
+    #     percentile = 65
+    #     curv_percentile = 95
+    # elif agg_level == 5:
+    #     percentile = 55
+    #     curv_percentile = 95
+    # elif agg_level == 6:
+    #     percentile = 55
+    #     curv_percentile = 85
+    # elif agg_level == 7:
+    #     percentile = 55
+    #     curv_percentile = 75
+    # elif agg_level == 8:
+    #     percentile = 55
+    #     curv_percentile = 65
+    # elif agg_level == 9:
+    #     percentile = 55
+    #     curv_percentile = 55
+    # else:
+    #     percentile = 75
+    #     curv_percentile = 95
+
         
     max_percentile = percentile
     min_percentile = 100 - percentile
-    curv_max_percentile = curv_percentile
-    curv_min_percentile = 100 - curv_percentile
+    #curv_max_percentile = percentile
+    #curv_min_percentile = 100 - percentile
     
     try:
         ds = gdal.Open(src_dem)
@@ -808,8 +818,8 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
         n_step = n_chunk/4
         
         utils.echo_msg(
-            'scanning {} for outliers with {}@{} using aggression level {} ({}/{} & {}/{})...'.format(
-                src_dem, n_chunk, n_step, agg_level, max_percentile, min_percentile, curv_max_percentile, curv_min_percentile
+            'scanning {} for outliers with {}@{} using aggression level {} ({}/{})...'.format(
+                src_dem, n_chunk, n_step, agg_level, max_percentile, min_percentile
             )
         )
 
@@ -821,7 +831,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
             band_data[band_data == ds_config['ndv']] = np.nan
 
             if np.all(np.isnan(band_data)):
-                dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
+                #dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
                 continue
             
             coverage_data = ds_band.ReadAsArray(*srcwin)
@@ -835,14 +845,15 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
             dst_config['ny'] = srcwin[3]
             dst_config['geoT'] = dst_gt
 
-            if not np.all(band_data == band_data[0,:]):                
+            if not np.all(band_data == band_data[0,:]):
+                
                 px, py = np.gradient(band_data, gt[1])
-                slp_data_ = np.sqrt(px ** 2, py ** 2)
-                slp_data = np.degrees(np.arctan(slp_data_))
+                slp_data = np.sqrt(px ** 2, py ** 2)
+                #slp_data = np.degrees(np.arctan(slp_data_))
                 
                 px, py = np.gradient(slp_data, gt[1])
-                curv_data_ = np.sqrt(px ** 2, py ** 2)
-                curv_data = np.degrees(np.arctan(curv_data_))
+                curv_data = np.sqrt(px ** 2, py ** 2)
+                #curv_data = np.degrees(np.arctan(curv_data_))
 
                 srcwin_perc75 = np.nanpercentile(band_data, max_percentile)
                 srcwin_perc25 = np.nanpercentile(band_data, min_percentile)
@@ -860,16 +871,23 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                 #utils.echo_msg('slp upper limit: {}'.format(slp_upper_limit))
                 #utils.echo_msg('slp lower limit: {}'.format(slp_lower_limit))
 
-                curv_srcwin_perc75 = np.nanpercentile(curv_data, curv_max_percentile)
-                curv_srcwin_perc25 = np.nanpercentile(curv_data, curv_min_percentile)
+                curv_srcwin_perc75 = np.nanpercentile(curv_data, max_percentile)
+                curv_srcwin_perc25 = np.nanpercentile(curv_data, min_percentile)
                 curv_iqr_p = (curv_srcwin_perc75 - curv_srcwin_perc25) * 1.5
                 curv_upper_limit = curv_srcwin_perc75 + curv_iqr_p
                 curv_lower_limit = curv_srcwin_perc25 - curv_iqr_p
                 #utils.echo_msg('curv upper limit: {}'.format(curv_upper_limit))
                 #utils.echo_msg('curv lower limit: {}'.format(curv_lower_limit))
-
-                band_data[((band_data > upper_limit) | (band_data < lower_limit)) \
-                          & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit))] = np.nan
+                #print(curv_data)
+                
+                band_data[(curv_data > curv_upper_limit)] = np.nan
+                #band_data[((band_data > upper_limit) | (band_data < lower_limit))] = np.nan
+                # band_data[((band_data > upper_limit) | (band_data < lower_limit)) \
+                #           & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit)) \
+                #           & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit))] = np.nan
+                #band_data[((band_data > upper_limit) | (band_data < lower_limit)) \
+                #          & (curv_data > curv_upper_limit)] = np.nan
+                #(curv_data > curv_upper_limit)] = np.nan
                 
                 ## fill nodata here...
                 if replace:
@@ -881,7 +899,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                         try:
                             interp_data = scipy.interpolate.griddata(
                                 np.transpose(point_indices), point_values,
-                                (xi, yi), method='linear'
+                                (xi, yi), method='cubic'
                             )
                             interp_data[np.isnan(coverage_data)] = np.nan
                             dst_band.WriteArray(interp_data, srcwin[0], srcwin[1])
@@ -889,6 +907,7 @@ def filter_outliers_slp(src_dem, dst_dem, chunk_size=None, chunk_step=None, agg_
                             dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
                 else:
                     dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
+                    #dst_band.WriteArray(curv_data, srcwin[0], srcwin[1])
 
         ds = dst_ds = None
         return(dst_dem, 0)

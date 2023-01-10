@@ -815,12 +815,12 @@ if __name__ == "__main__":
     #MRL: add default tmp_dir and method
     #MRL: add interpolation method option to CLI and make sure the method is 'idw', 'linear' or 'cubic', use 'linear as default
     if len(sys.argv) > 3:
-        method = sys.argv[4]
+        method = sys.argv[3]
     else:
         method = 'linear'
 
     if len(sys.argv) > 4:
-        tmp_dir = sys.argv[3]
+        tmp_dir = sys.argv[4]
     else:
         tmp_dir = './'
         
