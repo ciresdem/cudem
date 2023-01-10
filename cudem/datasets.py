@@ -357,7 +357,7 @@ class ElevationDataset():
         
     def set_transform(self):
         """Set the transformation parameters for the dataset."""
-
+        
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None \
@@ -425,8 +425,6 @@ class ElevationDataset():
                     dst_srs.ExportToProj4()
                 ) if self.region is None else self.region.copy()
                 
-                utils.echo_msg(vd_region)
-                
                 vd_region.buffer(pct=2)
                 trans_fn = os.path.join(
                     self.cache_dir,
@@ -493,6 +491,8 @@ class ElevationDataset():
                 self.trans_region = regions.Region().from_string(self.infos['wkt'])
                 self.trans_region.src_srs = self.src_srs
                 self.trans_region.warp(self.dst_srs)
+
+            #utils.echo_msg('trans_region: {}'.format(self.trans_region))
                 
                 # utils.echo_msg(self.dst_srs)
                 # utils.echo_msg(self.src_srs)
@@ -1283,7 +1283,7 @@ class RasterFile(ElevationDataset):
             if self.dst_trans is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
-                
+
             #if self.region is not None
             if self.region is not None and self.region.src_srs != self.src_srs:
                 if not regions.regions_within_ogr_p(self.warp_region, self.region):
@@ -1295,7 +1295,6 @@ class RasterFile(ElevationDataset):
                     self.dst_trans = None
 
             tmp_ds = self.fn
-
             if self.open_options is not None:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
             else:
@@ -1717,7 +1716,7 @@ class BAGFile(ElevationDataset):
                 yield(xyz)
 
     def yield_array(self):
-        for ds in self.parse_(resample=False):
+        for ds in self.parse_():
             for arr in ds.yield_array():
                 yield(arr)
                 
