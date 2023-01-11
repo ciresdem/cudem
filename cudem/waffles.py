@@ -1,6 +1,6 @@
 ### waffles.py
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## waffles.py is part of CUDEM
 ##
@@ -2790,9 +2790,6 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        #dst_srs = osr.SpatialReference()
-        #dst_srs.SetFromUserInput(self.dst_srs)
-        
         gmrt_tif = this_gmrt.results[0]
         gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
         gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
@@ -2815,21 +2812,6 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-        
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        # #dst_srs.AutoIdentifyEPSG()
-        # #dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        # #dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
-
-        # if dst_srs.IsGeographic() == 1:
-        #     cstype = 'GEOGCS'
-        # else:
-        #     cstype = 'PROJCS'
-
-        # dst_srs.AutoIdentifyEPSG()
-        # an = dst_srs.GetAuthorityName(cstype)
-        # dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
         
         for i, cop_tif in enumerate(this_cop.results):
             demfun.set_nodata(cop_tif[1], 0, verbose=False)
@@ -2856,12 +2838,6 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        # dst_srs.AutoIdentifyEPSG()
-        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
        
         for i, wsf_tif in enumerate(this_wsf.results):
             demfun.set_nodata(wsf_tif[1], 0, verbose=False)
@@ -2895,12 +2871,6 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
-
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        # dst_srs.AutoIdentifyEPSG()
-        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
 
         tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
         
@@ -2973,12 +2943,6 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        # dst_srs.AutoIdentifyEPSG()
-        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
-                
         lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lk_ds = ogr.Open(lakes_shp)
@@ -3015,11 +2979,6 @@ class WafflesCoastline(Waffle):
         # fr.start()
         # fr.join()
         
-        # dst_srs = osr.SpatialReference()
-        # dst_srs.SetFromUserInput(self.dst_srs)
-        # dst_srs.AutoIdentifyEPSG()
-        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
