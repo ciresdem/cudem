@@ -363,52 +363,55 @@ class ElevationDataset():
         if self.dst_srs is not None \
            and self.src_srs is not None \
            and self.src_srs != self.dst_srs:
-            src_srs = osr.SpatialReference()
+            #src_srs = osr.SpatialReference()
+            
+            # src_srs.SetFromUserInput(self.src_srs)
+            # #src_srs = self.parse_srs(src_srs)
 
-            src_srs.SetFromUserInput(self.src_srs)
-            #src_srs = self.parse_srs(src_srs)
+            # dst_srs = osr.SpatialReference()
+            # dst_srs.SetFromUserInput(self.dst_srs)
+            # #dst_srs = self.parse_srs(dst_srs)
 
-            dst_srs = osr.SpatialReference()
-            dst_srs.SetFromUserInput(self.dst_srs)
-            #dst_srs = self.parse_srs(dst_srs)
+            # ## HORZ
+            # if src_srs.IsGeographic() == 1:
+            #     cstype = 'GEOGCS'
+            # else:
+            #     cstype = 'PROJCS'
 
-            ## HORZ
-            if src_srs.IsGeographic() == 1:
-                cstype = 'GEOGCS'
-            else:
-                cstype = 'PROJCS'
+            # src_srs.AutoIdentifyEPSG()
+            # an = src_srs.GetAuthorityName(cstype)
+            # src_horz_epsg = src_srs.GetAuthorityCode(cstype)
 
-            src_srs.AutoIdentifyEPSG()
-            an = src_srs.GetAuthorityName(cstype)
-            src_horz_epsg = src_srs.GetAuthorityCode(cstype)
+            # if dst_srs.IsGeographic() == 1:
+            #     cstype = 'GEOGCS'
+            # else:
+            #     cstype = 'PROJCS'
 
-            if dst_srs.IsGeographic() == 1:
-                cstype = 'GEOGCS'
-            else:
-                cstype = 'PROJCS'
+            # dst_srs.AutoIdentifyEPSG()
+            # an = dst_srs.GetAuthorityName(cstype)
+            # dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
 
-            dst_srs.AutoIdentifyEPSG()
-            an = dst_srs.GetAuthorityName(cstype)
-            dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
-
-            ## VERT
-            if src_srs.IsVertical() == 1:
-                csvtype = 'VERT_CS'
-                src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
-                #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-            else:
-                src_vert_epsg = None
+            # ## VERT
+            # if src_srs.IsVertical() == 1:
+            #     csvtype = 'VERT_CS'
+            #     src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
+            #     #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+            # else:
+            #     src_vert_epsg = None
                 
-            if dst_srs.IsVertical() == 1:
-                csvtype = 'VERT_CS'
-                dst_vert_epsg = dst_srs.GetAuthorityCode(csvtype)
-                #dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-            else:
-                dst_vert_epsg = None
+            # if dst_srs.IsVertical() == 1:
+            #     csvtype = 'VERT_CS'
+            #     dst_vert_epsg = dst_srs.GetAuthorityCode(csvtype)
+            #     #dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+            # else:
+            #     dst_vert_epsg = None
 
-            #print(src_horz_epsg)
-            #print(dst_horz_epsg)
-                
+            # #print(src_horz_epsg)
+            # #print(dst_horz_epsg)
+
+            src_horz_epsg, src_vert_epsg = utils.epsg_from_input(self.src_srs)
+            dst_horz_epsg, dst_vert_epsg = utils.epsg_from_input(self.dst_srs)
+            
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
             dst_srs = osr.SpatialReference()
@@ -1587,10 +1590,11 @@ class BAGFile(ElevationDataset):
     exist, otherwise process as normal grid
     """
 
-    def __init__(self, explode=False, force_vr=False, **kwargs):
+    def __init__(self, explode=False, force_vr=False, vr_strategy='MIN', **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
+        self.vr_strategy = vr_strategy
         
         if self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
@@ -1678,7 +1682,7 @@ class BAGFile(ElevationDataset):
 
             else:
                 oo.append("MODE=RESAMPLED_GRID")
-                oo.append("RES_STRATEGY=MIN")
+                oo.append("RES_STRATEGY={}".format(self.vr_strategy))
 
                 sub_ds = RasterFile(
                     fn=self.fn,

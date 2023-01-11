@@ -531,6 +531,33 @@ def gdal_prj_file(dst_fn, src_srs):
         out.write(sr_wkt(src_srs, True))
         
     return(0)
+
+def epsg_from_input(in_srs):
+    src_srs = osr.SpatialReference()
+    src_srs.SetFromUserInput(in_srs)
+
+    ## HORZ
+    if src_srs.IsGeographic() == 1:
+        cstype = 'GEOGCS'
+    else:
+        cstype = 'PROJCS'
+
+    src_srs.AutoIdentifyEPSG()
+    an = src_srs.GetAuthorityName(cstype)
+    src_horz_epsg = src_srs.GetAuthorityCode(cstype)
+
+    ## VERT
+    if src_srs.IsVertical() == 1:
+        csvtype = 'VERT_CS'
+        src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
+        #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+    else:
+        src_vert_epsg = None
+                
+    #src_srs = osr.SpatialReference()
+    #src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
+
+    return(src_horz_epsg, src_vert_epsg)
     
 def gdal_fext(src_drv_name):
     """find the common file extention given a GDAL driver name

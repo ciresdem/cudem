@@ -2704,7 +2704,11 @@ class WafflesCoastline(Waffle):
             self.wgs_region.warp('epsg:4326')
         else:
             self.dst_srs = 'epsg:4326'            
-        
+
+        horz_epsg, vert_epsg = utils.epsg_from_input(self.dst_srs)
+        self.cst_srs = osr.SpatialReference()
+        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz))
+            
     def run(self):
         self._load_coast_mask()
 
@@ -2762,7 +2766,7 @@ class WafflesCoastline(Waffle):
             ycount,
             xcount * ycount,
             gt,
-            utils.sr_wkt(self.dst_srs),
+            utils.sr_wkt(self.cst_srs),
             gdal.GDT_Float32,
             self.ndv,
             'GTiff'
@@ -2786,12 +2790,12 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
+        #dst_srs = osr.SpatialReference()
+        #dst_srs.SetFromUserInput(self.dst_srs)
         
         gmrt_tif = this_gmrt.results[0]
         gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
-        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
         gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr < 0] = 0
@@ -2811,18 +2815,27 @@ class WafflesCoastline(Waffle):
         fr.daemon = True
         fr.start()
         fr.join()
+        
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        # #dst_srs.AutoIdentifyEPSG()
+        # #dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        # #dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
 
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        dst_srs.AutoIdentifyEPSG()
-        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
-       
+        # if dst_srs.IsGeographic() == 1:
+        #     cstype = 'GEOGCS'
+        # else:
+        #     cstype = 'PROJCS'
+
+        # dst_srs.AutoIdentifyEPSG()
+        # an = dst_srs.GetAuthorityName(cstype)
+        # dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
+        
         for i, cop_tif in enumerate(this_cop.results):
             demfun.set_nodata(cop_tif[1], 0, verbose=False)
             cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
             gdal.Warp(
-                cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample,
+                cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
                 callback=False, srcNodata=0
             )
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
@@ -2844,18 +2857,18 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        dst_srs.AutoIdentifyEPSG()
-        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        # dst_srs.AutoIdentifyEPSG()
+        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
        
         for i, wsf_tif in enumerate(this_wsf.results):
             demfun.set_nodata(wsf_tif[1], 0, verbose=False)
             wsf_ds = demfun.generate_mem_ds(self.ds_config, name='wsf')
 
             gdal.Warp(
-                wsf_ds, wsf_tif[1], dstSRS=dst_srs, resampleAlg='cubicspline',
+                wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
                 callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
             )
             wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
@@ -2883,11 +2896,11 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        dst_srs.AutoIdentifyEPSG()
-        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        # dst_srs.AutoIdentifyEPSG()
+        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
 
         tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
         
@@ -2926,7 +2939,7 @@ class WafflesCoastline(Waffle):
             )
 
             try:
-                gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=dst_srs, resampleAlg=self.sample)
+                gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
             except:
                 tnm_ds = None
                 
@@ -2960,11 +2973,11 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        dst_srs.AutoIdentifyEPSG()
-        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        # dst_srs.AutoIdentifyEPSG()
+        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
                 
         lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
         lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
@@ -2973,7 +2986,7 @@ class WafflesCoastline(Waffle):
             lk_layer = lk_ds.GetLayer()
             lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
             gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
-            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
             lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
             self.coast_array[lakes_ds_arr == -1] = 0
             lakes_ds = lk_ds = lakes_warp_ds = None
@@ -3002,11 +3015,11 @@ class WafflesCoastline(Waffle):
         # fr.start()
         # fr.join()
         
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        dst_srs.AutoIdentifyEPSG()
-        dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
-        dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
+        # dst_srs = osr.SpatialReference()
+        # dst_srs.SetFromUserInput(self.dst_srs)
+        # dst_srs.AutoIdentifyEPSG()
+        # dst_auth = dst_srs.GetAttrValue('AUTHORITY', 1)
+        # dst_srs.SetFromUserInput('epsg:{}'.format(dst_auth))
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
@@ -3063,7 +3076,7 @@ class WafflesCoastline(Waffle):
 
                 if status == 0:
                     bldg_ds = gdal.Open('bldg_osm.tif')
-                    #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=dst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
+                    #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=self.cst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
                     if bldg_ds is not None:
                         bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
                         self.coast_array[bldg_ds_arr == -1] = 0
@@ -3079,7 +3092,7 @@ class WafflesCoastline(Waffle):
                 #     #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
                 #     osm_layer.SetAttributeFilter("building!=''")
                 #     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-                #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
                 #     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
                 #     self.coast_array[bldg_arr == -1] = 0
                 # else:
@@ -3156,7 +3169,7 @@ class WafflesCoastline(Waffle):
             verbose=self.verbose
         )
 
-        utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
+        utils.gdal_prj_file(self.name + '.prj', self.cst_srs)
 
 ## ==============================================
 ## Waffles Lakes Bathymetry
