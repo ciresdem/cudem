@@ -165,8 +165,8 @@ class VDATUM(f_utils.FetchModule):
         6642: {'name': 'tss',
                'description': 'VIVD09 tss geoid',
                'grid': 'tss.gtx'},
-        5714: {'name': 'msl',
-               'description': 'VIVD09 tss geoid',
+        5714: {'name': 'tss',
+               'description': 'to MSL tss geoid',
                'grid': 'tss.gtx'},
     }
     
@@ -177,11 +177,11 @@ class VDATUM(f_utils.FetchModule):
         self._proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
         
         self._outdir = os.path.join(os.getcwd(), 'vdatum')
-        
+
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
         self._vdatums = ['TIDAL']
-        self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl', 'msl']
+        self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
         self.where = where
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
@@ -281,7 +281,7 @@ class VDATUM(f_utils.FetchModule):
             w.append("DataType = '{}'".format(self.datatype))
         elif self.epsg is not None:
             w.append("DataType = '{}'".format(self._tidal_references[self.epsg]['name']))
-
+            
         ## ==============================================
         ## Search FRED for VDATUM TIDAL TRANSFORMATION GRIDS
         ## FRED holds the VDATUM tidal grids,

@@ -1,6 +1,6 @@
 ### vdatums.py
 ##
-## Copyright (c) 2021, 2022 Regents of the University of Colorado
+## Copyright (c) 2021 - 2023 Regents of the University of Colorado
 ##
 ## vdatums.py is part of CUDEM
 ##
@@ -54,7 +54,7 @@ _tidal_frames = {
            'description': 'Mean Higher High Water'},
     5868: {'name': 'mhw',
            'description': 'Mean High Water'},
-    5714: {'name': 'msl',
+    5714: {'name': 'tss',
            'description': 'Mean Sea Level'},
     5713: {'name': 'mtl',
            'description': 'Mean Tide Level'},
@@ -316,6 +316,9 @@ class VerticalTransform:
         v_out._outdir = self.cache_dir
         v_out.run()
 
+        print(v_in.results)
+        print(v_out.results)
+        
         if not v_in.results or not v_out.results:
             utils.echo_error_msg(
                 'could not locate {} or {} in the region {}'.format(
@@ -324,42 +327,48 @@ class VerticalTransform:
             )
             return(np.zeros( (self.ycount, self.xcount) ), None)
         
-        if vdatum_tidal_in != 5174 and vdatum_tidal_in != 'msl': 
-            _trans_in = waffles.WaffleFactory(
-                mod = 'surface',
-                data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
-                src_region = self.src_region,
-                xinc = self.src_x_inc,
-                yinc = self.src_y_inc,
-                name = '{}'.format(vdatum_tidal_in),
-                dst_srs='epsg:4326',
-                node = 'pixel',
-                verbose = True
-            ).acquire().generate()
+        #if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
+        _trans_in = waffles.WaffleFactory(
+            mod = 'surface',
+            data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
+            src_region = self.src_region,
+            xinc = self.src_x_inc,
+            yinc = self.src_y_inc,
+            name = '{}'.format(vdatum_tidal_in),
+            dst_srs='epsg:4326',
+            node = 'pixel',
+            verbose = True
+        ).acquire().generate()
             
-            utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
-        else:
-            _trans_in = None
-
-        if vdatum_tidal_out != 5174 and vdatum_tidal_out != 'msl':
-            _trans_out = waffles.GMTSurface(
-                data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
-                src_region = self.src_region,
-                xinc = self.src_x_inc,
-                yinc = self.src_y_inc,
-                dst_srs='epsg:4326',
-                name = '{}'.format(vdatum_tidal_out),
-                node = 'pixel',
-                verbose = True
-            ).generate()
-            utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
+        utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
+        #else:
+        #    _trans_in = None
+            
+        #if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
+        _trans_out = waffles.GMTSurface(
+            data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
+            src_region = self.src_region,
+            xinc = self.src_x_inc,
+            yinc = self.src_y_inc,
+            dst_srs='epsg:4326',
+            name = '{}'.format(vdatum_tidal_out),
+            node = 'pixel',
+            verbose = True
+        ).generate()
+        utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
                               
-        else:
-            _trans_out = None
+        #else:
+        #    _trans_out = None
 
         _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
         _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
 
+        if vdatum_tidal_in == 5714 or vdatum_tidal_in == 'msl':
+            _trans_in_array *= -1
+            
+        if vdatum_tidal_out == 5714 or vdatum_tidal_out == 'msl':
+            _trans_out_array *= -1
+        
         if _trans_in_array is None:
             _trans_in = None
         else:
@@ -476,9 +485,10 @@ class VerticalTransform:
         ## failure can cause endless loop
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            #print(ref_in, ref_out, epsg_in, epsg_out)
+            print(ref_in, ref_out, epsg_in, epsg_out)
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
+                    print(_tidal_frames)
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
                 else:

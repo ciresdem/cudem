@@ -151,12 +151,15 @@ def main():
             utils.remove_glob('_{}'.format(_trans_grid))
         
         if _trans_grid is not None:
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(
+
+            out_h, out_v = utils.epsg_from_input(demfun.get_srs(src_grid))
+            
+            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs epsg:{}'.format(
                 _trans_grid, '_{}'.format(_trans_grid),
                 src_region.format('te'),
                 src_infos['nx'],
                 src_infos['ny'],
-                demfun.get_srs(src_grid)), verbose=True)
+                out_h), verbose=True)
             
             # utils.run_cmd(
             #     'gdalwarp {} {} -te {} -tr {} {} -s_srs epsg:4326 -t_srs {} -co COMPRESS=LZW -co TILED=YES -co PREDICTOR=3'.format(
