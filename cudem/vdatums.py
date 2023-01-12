@@ -54,7 +54,7 @@ _tidal_frames = {
            'description': 'Mean Higher High Water'},
     5868: {'name': 'mhw',
            'description': 'Mean High Water'},
-    5714: {'name': 'tss',
+    5714: {'name': 'msl',
            'description': 'Mean Sea Level'},
     5713: {'name': 'mtl',
            'description': 'Mean Tide Level'},
@@ -316,68 +316,67 @@ class VerticalTransform:
         v_out._outdir = self.cache_dir
         v_out.run()
 
-        print(v_in.results)
-        print(v_out.results)
-        
-        if not v_in.results or not v_out.results:
+        if not v_in.results:
             utils.echo_error_msg(
-                'could not locate {} or {} in the region {}'.format(
-                    vdatum_tidal_in, vdatum_tidal_out, self.src_region
+                'could not locate {} in the region {}'.format(
+                    vdatum_tidal_in, self.src_region
                 )
             )
-            return(np.zeros( (self.ycount, self.xcount) ), None)
-        
-        #if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
-        _trans_in = waffles.WaffleFactory(
-            mod = 'surface',
-            data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
-            src_region = self.src_region,
-            xinc = self.src_x_inc,
-            yinc = self.src_y_inc,
-            name = '{}'.format(vdatum_tidal_in),
-            dst_srs='epsg:4326',
-            node = 'pixel',
-            verbose = True
-        ).acquire().generate()
-            
-        utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
-        #else:
-        #    _trans_in = None
-            
-        #if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
-        _trans_out = waffles.GMTSurface(
-            data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
-            src_region = self.src_region,
-            xinc = self.src_x_inc,
-            yinc = self.src_y_inc,
-            dst_srs='epsg:4326',
-            name = '{}'.format(vdatum_tidal_out),
-            node = 'pixel',
-            verbose = True
-        ).generate()
-        utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
-                              
-        #else:
-        #    _trans_out = None
-
-        _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
-        _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
-
-        if vdatum_tidal_in == 5714 or vdatum_tidal_in == 'msl':
-            _trans_in_array *= -1
-            
-        if vdatum_tidal_out == 5714 or vdatum_tidal_out == 'msl':
-            _trans_out_array *= -1
-        
-        if _trans_in_array is None:
+            _trans_in_array, _trans_in_infos = [np.zeros( (self.ycount, self.xcount) ), None]
             _trans_in = None
+            #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
-            utils.remove_glob('{}*'.format(_trans_in.fn))
+            if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
+                _trans_in = waffles.WaffleFactory(
+                    mod = 'surface',
+                    data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
+                    src_region = self.src_region,
+                    xinc = self.src_x_inc,
+                    yinc = self.src_y_inc,
+                    name = '{}'.format(vdatum_tidal_in),
+                    dst_srs='epsg:4326',
+                    node = 'pixel',
+                    verbose = True
+                ).acquire().generate()
 
-        if _trans_out_array is None:
+                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
+                _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
+                if _trans_in_array is None:
+                    _trans_in = None
+                else:
+                    utils.remove_glob('{}*'.format(_trans_in.fn))
+            else:
+                _trans_in = None
+            
+        if not v_out.results:
+            utils.echo_error_msg(
+                'could not locate {} in the region {}'.format(
+                    vdatum_tidal_out, self.src_region
+                )
+            )
+            _trans_out_array, _trans_out_infos = [np.zeros( (self.ycount, self.xcount) ), None]
             _trans_out = None
+            #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
-            utils.remove_glob('{}*'.format(_trans_out.fn))
+            if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
+                _trans_out = waffles.GMTSurface(
+                    data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
+                    src_region = self.src_region,
+                    xinc = self.src_x_inc,
+                    yinc = self.src_y_inc,
+                    dst_srs='epsg:4326',
+                    name = '{}'.format(vdatum_tidal_out),
+                    node = 'pixel',
+                    verbose = True
+                ).generate()
+                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
+                _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
+                if _trans_out_array is None:
+                    _trans_out = None
+                else:
+                    utils.remove_glob('{}*'.format(_trans_out.fn))
+            else:
+                _trans_out = None
         
         if _trans_in is None:
             if _trans_out is None:
