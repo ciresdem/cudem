@@ -2707,7 +2707,7 @@ class WafflesCoastline(Waffle):
 
         horz_epsg, vert_epsg = utils.epsg_from_input(self.dst_srs)
         self.cst_srs = osr.SpatialReference()
-        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz))
+        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
             
     def run(self):
         self._load_coast_mask()
