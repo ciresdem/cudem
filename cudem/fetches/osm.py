@@ -104,7 +104,7 @@ class OpenStreetMap(f_utils.FetchModule):
             
             for this_region in these_regions:
                 c_bbox = this_region.format('osm_bbox')
-                out_fn = 'osm_{}'.format(this_region.format('fn'))
+                out_fn = 'osm_{}'.format(this_region.format('fn_full'))
                 osm_q_bbox  = '''
                 {1}{2}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '', self.h)
 
@@ -126,7 +126,7 @@ class OpenStreetMap(f_utils.FetchModule):
 
         else:
             c_bbox = self.region.format('osm_bbox')
-            out_fn = 'osm_{}'.format(self.region.format('fn'))
+            out_fn = 'osm_{}'.format(self.region.format('fn_full'))
             osm_q_bbox  = '''
             {1}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '')
 

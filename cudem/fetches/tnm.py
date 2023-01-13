@@ -207,7 +207,7 @@ class TheNationalMap(f_utils.FetchModule):
                         _dataset_results = _req.json()
                         total = _dataset_results['total']
                     except ValueError:
-                        utils.echo_error_msg('tnm server error, try again')
+                        utils.echo_error_msg('tnm server error resulting in {}, try again'.format(e))
                     except Exception as e:
                         utils.echo_error_msg('error, {}'.format(e))
                 

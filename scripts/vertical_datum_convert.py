@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### vertical_datum_convert.py
 ##
-## Copyright (c) 2022 Regents of the University of Colorado
+## Copyright (c) 2022, 2023 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
