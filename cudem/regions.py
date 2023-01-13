@@ -254,10 +254,10 @@ class Region:
                 ns_mn = 's' if self.ymin < 0 else 'n'
                 ew_mx = 'e' if self.xmax > 0 else 'w'
                 ew_mn = 'e' if self.xmin > 0 else 'w'
-                return('{}{:6f}x{:6f}_{}{:8f}x{:6f}x{}{:6f}x{:6f}_{}{:8f}{:6f}'.format(ns_mx, abs(self.ymax), abs(self.ymax * 100) % 100, 
-                                                                                       ew_mn, abs(self.xmin), abs(self.xmin * 100) % 100,
-                                                                                       ns_mn, abs(self.ymin), abs(self.ymin * 100) % 100,
-                                                                                       ew_mx, abs(self.xmax), abs(self.xmax * 100) % 100))
+                return('{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
+                                                                                            ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
+                                                                                            ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
+                                                                                            ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100))
                                                              
             elif t == 'inf': return(' '.join([str(x) for x in self.region]))
             else: return('/'.join([str(x) for x in self.region[:4]]))
