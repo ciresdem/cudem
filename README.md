@@ -274,7 +274,8 @@ masking, weighting, and interpolation.
 |  mbgrid              |                Generate a DEM using MB-System\'s *mbgrid* command. |
 |  nearest             |                Generate a nearest DEM using GDAL\'s *gdal_grid* command. |
 |  nearneighbor        |                Generate a DEM using GMT\'s *nearneighbor* command |
-|  num                  |               Generate an uninterpolated DEM using various gridding modes, including options from GMT's *xyz2grd* command |
+|  num                  |               Generate an uninterpolated DEM using various gridding modes, including options from GMT's *xyz2grd* command. |
+|  scipy               |                Generate a DEM using Scipy's gridding algorithms (linear, cubic, nearest.) |
 |  stacks               |               Generate a DEM using a raster stacking method. By default, calculate the \[weighted\]-mean where overlapping cells occur. Set supercede to True to overwrite overlapping cells with higher weighted data. | 
 |  surface              |               Generate a DEM using GMT\'s *surface* command | 
 |  triangulate          |               Generate a DEM using GMT\'s *triangulate* command | 
