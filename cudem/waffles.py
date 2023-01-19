@@ -1839,7 +1839,7 @@ class WafflesSciPy(Waffle):
         self.method = method
         self.supercede = supercede
         self.keep_auxiliary = keep_auxiliary
-        self.chunk_size = chunk_size
+        self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = None
 
     def run(self):
