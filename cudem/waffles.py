@@ -1456,14 +1456,24 @@ class WafflesIDW(Waffle):
     radius is in cell-units
     """
     
-    def __init__(self, power=1, min_points=8, upper_limit=None, lower_limit=None, radius=None, **kwargs):
+    def __init__(
+            self,
+            power=1,
+            min_points=8,
+            upper_limit=None,
+            lower_limit=None,
+            radius=None,
+            supercede=False,
+            **kwargs
+    ):
         self.mod = 'IDW'
         self.mod_args = {
             'power':power,
             'min_points':min_points,
             'upper_limit':upper_limit,
             'lower_limit':lower_limit,
-            'radius':radius
+            'radius':radius,
+            'supercede':supercede,
         }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
@@ -1471,6 +1481,7 @@ class WafflesIDW(Waffle):
         self.radius = np.inf if radius is None else utils.str2inc(radius) 
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
+        self.supercede = supercede
 
     def run(self):
         chunk_size=None
@@ -1501,7 +1512,8 @@ class WafflesIDW(Waffle):
             i=0
 
         self._stacks_array(
-            out_name='{}_idw_stack'.format(self.name)#, keep_weights=True, keep_count=True, supercede=True
+            out_name='{}_idw_stack'.format(self.name),
+            supercede=self.supercede#, keep_weights=True, keep_count=True, supercede=True
         )
         n = '{}_idw_stack_s.tif'.format(self.name)
         w = '{}_idw_stack_w.tif'.format(self.name)
@@ -1830,14 +1842,16 @@ class WafflesVDatum(Waffle):
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
-    def __init__(self, method='linear', **kwargs):
+    def __init__(self, method='linear', supercede=False, **kwargs):
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
+            'supercede':supercede,
         }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
+        self.supercede = supercede
 
     def run(self):
         if self.method not in self.methods:
@@ -1870,7 +1884,8 @@ class WafflesSciPy(Waffle):
             )
 
         self._stacks_array(
-            out_name='{}_scipy_stack'.format(self.name)
+            out_name='{}_scipy_stack'.format(self.name),
+            supercede=self.supercede
         )
         n = '{}_scipy_stack_s.tif'.format(self.name)
         w = '{}_scipy_stack_w.tif'.format(self.name)
@@ -3856,10 +3871,11 @@ as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
 < IDW:min_points=8:radius=inf:power=1:block=False >
- :power=[val]\t\tweight**power
- :min_points=[val]\tminimum neighbor points for IDW
- :radius=[val]\t\tsearch radius (in cells), only fill data cells within radius from data
- :block=[True/False]\tblock the data before performing the IDW routine""",
+ :power=[val]\t\t\tweight**power
+ :min_points=[val]\t\tminimum neighbor points for IDW
+ :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
+ :block=[True/False]\t\tblock the data before performing the IDW routine
+ :supercede=[True/False]\tsupercede higher weighted data""",
         },
         'vdatum': {
             'name': 'vdatum',
@@ -3972,7 +3988,8 @@ Generate a DEM using Scipy's gridding interpolation
 Optional gridding methods are 'linear', 'cubic' and 'nearest'
 
 < scipy:method=<method> >
- :method=[linear/cubic/nearest]\tinterpolation method to use""",
+ :method=[linear/cubic/nearest]\tinterpolation method to use
+ :supercede=[True/False]\tsupercede higher weighted data""",
         },
 
     }
