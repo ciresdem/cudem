@@ -1826,18 +1826,21 @@ class WafflesUIDW(Waffle):
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
-    def __init__(self, method='linear', supercede=False, keep_auxiliary=False, **kwargs):
+    def __init__(self, method='linear', supercede=False, keep_auxiliary=False, chunk_size=None, **kwargs):
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
             'supercede':supercede,
             'keep_auxiliary':keep_auxiliary,
+            'chunk_size':chunk_size,
         }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
         self.supercede = supercede
         self.keep_auxiliary = keep_auxiliary
+        self.chunk_size = chunk_size
+        self.chunk_step = None
 
     def run(self):
         if self.method not in self.methods:
@@ -1848,8 +1851,6 @@ class WafflesSciPy(Waffle):
             )
             return(self)
         
-        chunk_size=None
-        chunk_step=None
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
@@ -1877,13 +1878,13 @@ class WafflesSciPy(Waffle):
         w = '{}_scipy_stack_w.tif'.format(self.name)
         c = '{}_scipy_stack_c.tif'.format(self.name)
 
-        if chunk_size is None:
+        if self.chunk_size is None:
             n_chunk = int(ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
-        else: n_chunk = chunk_size
-        if chunk_step is None:
+        else: n_chunk = self.chunk_size
+        if self.chunk_step is None:
             n_step = int(n_chunk/2)
-        else: n_step = chunk_step
+        else: n_step = self.chunk_step
 
         points_ds = gdal.Open(n)
         points_band = points_ds.GetRasterBand(1)
@@ -1922,7 +1923,7 @@ class WafflesSciPy(Waffle):
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
-                    #print(e)
+                    print(e)
                     continue
         interp_ds = points_ds = point_values = weight_values = None
         if not self.keep_auxiliary:
@@ -3983,7 +3984,8 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
 < scipy:method=<method> >
  :method=[linear/cubic/nearest]\tinterpolation method to use
  :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxiliary=[True/False]\tretain auxiliary files""",
+ :keep_auxiliary=[True/False]\tretain auxiliary files
+ :chunk_size=[val]\t\tsize of chunks in pixels""",
         },
 
     }
