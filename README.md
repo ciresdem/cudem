@@ -575,7 +575,8 @@ mbs (301), fetches (-11)
 
 Modules (see waffles \--modules \<module-name> for more info):
 surface, triangulate, nearneighbor, num, linear, nearest, average,
-invdst, IDW, vdatum, mbgrid, coastline, cudem, patch, lakes, stacks
+invdst, IDW, vdatum, mbgrid, coastline, cudem, patch, lakes, stacks,
+scipy
 ```
 
 ## Code License
@@ -584,9 +585,9 @@ License:
 
   -----------------------------------------------------------------------
          MIT License
-  ------ ----------------------------------------------------------------
+  -----------------------------------------------------------------------
          
-         Copyright (c) 2010 - 2022 Regents of the University of Colorado
+         Copyright (c) 2010 - 2023 Regents of the University of Colorado
          
          Permission is hereby granted, free of charge, to any person
          obtaining a copy
