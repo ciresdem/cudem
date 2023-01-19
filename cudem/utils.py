@@ -870,6 +870,26 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
             x_i_chunk += 1
     if verbose:
        _prog.end(0, 'chunked srcwin from {} @ {}/{}'.format(n_size, n_chunk, step))
+
+def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
+    """yield source windows in n_chunks at step"""
+
+    if n_size is None:
+        n_size = srcwin
+
+    x_origin = srcwin[0] - buff_size
+    x_origin = 0 if x_origin < 0 else x_origin
+        
+    y_origin = srcwin[1] - buff_size
+    y_origin = 0 if y_origin < 0 else y_origin
+
+    x_size = srcwin[3] + (buff_size*2)
+    x_size = (n_size[1] - x_origin) if (x_origin + x_size) > n_size[1] else x_size
+    
+    y_size = srcwin[2] + (buff_size*2)
+    y_size = (n_size[0] - y_origin) if (y_origin + y_size) > n_size[0] else y_size
+    
+    return(x_origin, y_origin, x_size, y_size)
        
 def gdal_write(
         src_arr,

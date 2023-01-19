@@ -1,6 +1,6 @@
 ### setup.py
 ##
-## Copyright (c) 2020 - 2022 Regents of the University of Colorado
+## Copyright (c) 2020 - 2023 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -19,8 +19,6 @@
 ##
 ### Code:
 import setuptools
-
-
 import site
 import sys
 
@@ -31,7 +29,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.10.2',
+    version = '1.10.3',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -62,6 +60,7 @@ setuptools.setup(
         'console_scripts': [
             'cudem = cudem.cudem_cli:cudem_cli',
             'dlim = cudem.dlim:datalists_cli',
+            'regions = cudem.regions:regions_cli',
             'regions3 = cudem.regions:regions_cli',
             'waffles = cudem.waffles:waffles_cli',
             'waffles3 = cudem.waffles:waffles_cli',

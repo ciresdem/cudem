@@ -1565,7 +1565,6 @@ class WafflesIDW(Waffle):
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
                 interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
         interp_ds = point_values = weight_values = None
-
         utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
         
         return(self)    
@@ -1826,7 +1825,7 @@ class WafflesVDatum(Waffle):
         return(self)
 
 ## ==============================================
-## Scipy gridding (linear, cubic, near)
+## Scipy gridding (linear, cubic, nearest)
 ## ==============================================
 class WafflesSciPy(Waffle):
     def __init__(self, method='linear', **kwargs):
@@ -1835,9 +1834,18 @@ class WafflesSciPy(Waffle):
             'method':method,
         }
         super().__init__(**kwargs)
+        self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
 
     def run(self):
+        if self.method not in self.methods:
+            utils.echo_error_msg(
+                '{} is not a valid interpolation method, options are {}'.format(
+                    self.method, self.methods
+                )
+            )
+            return(self)
+        
         chunk_size=None
         chunk_step=None
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
@@ -1894,38 +1902,31 @@ class WafflesSciPy(Waffle):
         except:
             return(self)
 
-        print ('Interpolating...')
-        c = 0
-
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):
-
-            points_array = points_band.ReadAsArray(*srcwin)
+        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk): #, step=n_step):
+            srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), 40)
+            points_array = points_band.ReadAsArray(*srcwin_buff)
             point_indices = np.nonzero(points_array != points_no_data)
-            point_values = points_array[point_indices]
-            points_array = None
-            
-            # if np.isnan(points_no_data):
-            #     if np.all(~np.isnan(points_array)):
-            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-            #        continue
-            #     #else:
-            #     #    point_indices = np.nonzero(~np.isnan(points_array))
-            # else:
-            #     if np.all(points_array != points_no_data):
-            #        interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-            #        continue
-            #     #else:
-            #     #    point_indices = np.nonzero(points_array != points_no_data)
-                
             if len(point_indices[0]):
-                xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
-                                  srcwin[1]:srcwin[1]+srcwin[3]]
-                interp_data = interpolate.griddata(
-                    np.transpose(point_indices), point_values,
-                    (yi, xi), method='cubic'
-                )
-                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])              
-        interp_ds = point_values = weight_values = None        
+                point_values = points_array[point_indices]
+                xi, yi = np.mgrid[0:srcwin_buff[2],
+                                  0:srcwin_buff[3]]
+                
+                try:
+                    interp_data = interpolate.griddata(
+                        np.transpose(point_indices), point_values,
+                        (xi, yi), method=self.method
+                    )
+                    y_origin = srcwin[1]-srcwin_buff[1]
+                    x_origin = srcwin[0]-srcwin_buff[0]
+                    y_size = y_origin + srcwin[3]
+                    x_size = x_origin + srcwin[2]
+                    interp_data = interp_data[y_origin:y_size,x_origin:x_size]
+                    interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
+                except Exception as e:
+                    #print(e)
+                    continue
+        interp_ds = points_ds = weights_ds = point_values = weight_values = None
+        utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
         return(self)    
     
 ## ==============================================
@@ -3105,22 +3106,11 @@ class WafflesCoastline(Waffle):
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
             
-        # utils.run_cmd(
-        #     'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0" {}.shp tmp_c_{}.shp'.format(
-        #         self.name, self.name, self.name),
-        #     verbose=self.verbose
-        # )
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
                 self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
             verbose=self.verbose
         )
-        # utils.run_cmd(
-        #     'ogr2ogr {}.shp tmp_c_{}.shp'.format(
-        #         self.name, self.name, self.name),
-        #     verbose=True
-        # )
-        
         utils.remove_glob('tmp_c_{}.*'.format(self.name))
         utils.run_cmd(
             'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
@@ -3971,9 +3961,20 @@ Set supercede to True to overwrite overlapping cells with higher weighted data.
  :keep_count=[True/False]\tretain count raster
  :min_count=[val]\t\tonly retain data cells if they contain `min_count` overlapping data""",
         },
+        'scipy': {
+            'name': 'scipy',
+            'datalist-p': True,
+            'class': WafflesSciPy,
+            'description': """Generate DEM using Scipy gridding interpolation\n
+Generate a DEM using Scipy's gridding interpolation
+Optional gridding methods are 'linear', 'cubic' and 'nearest'
+
+< scipy:method=<method> >
+ :method=[linear/cubic/nearest]\tinterpolation method to use""",
+        },
 
     }
-    
+
     def __init__(
             self,
             mod=None,

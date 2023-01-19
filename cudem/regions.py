@@ -1,6 +1,6 @@
 ### regions.py
 ##
-## Copyright (c) 2010 - 2022 CIRES Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 CIRES Regents of the University of Colorado
 ##
 ## regions.py is part of CUDEM
 ##
@@ -233,35 +233,66 @@ class Region:
         """
 
         if self.valid_p():
-            if t == 'str': return('/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
-            elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
-            elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)]))
-            #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax)]))
-            elif t == 'gmt':
-                return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(self.xmin, self.xmax, self.ymin, self.ymax))
-            #elif t == 'gmt': return('-R' + '/'.join([str(self.xmin), str(self.xmax), str(self.ymin), str(self.ymax), str(self.zmin), str(self.zmax), str(self.wmin), str(self.wmax)])
-            elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
-            elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin), str(self.ymax), str(self.xmax)]))
-            elif t == 'te': return(' '.join([str(self.xmin), str(self.ymin), str(self.xmax), str(self.ymax)]))
-            elif t == 'ul_lr': return(' '.join([str(self.xmin), str(self.ymax), str(self.xmax), str(self.ymin)]))
+            if t == 'str': return(
+                    '/'.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax)])
+            )
+            elif t == 'sstr': return(
+                    ' '.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax)])
+            )
+            elif t == 'fstr': return(
+                    ' '.join([str(self.xmin), str(self.xmax),
+                              str(self.ymin), str(self.ymax),
+                              str(self.zmin), str(self.zmax),
+                              str(self.wmin), str(self.wmax)])
+            )
+            elif t == 'gmt': return(
+                    '-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
+                        self.xmin, self.xmax,
+                        self.ymin, self.ymax)
+            )
+            elif t == 'bbox': return(
+                    ','.join([str(self.xmin), str(self.ymin),
+                              str(self.xmax), str(self.ymax)])
+            )
+            elif t == 'osm_bbox': return(
+                    ','.join([str(self.ymin), str(self.xmin),
+                              str(self.ymax), str(self.xmax)])
+            )
+            elif t == 'te': return(
+                    ' '.join([str(self.xmin), str(self.ymin),
+                              str(self.xmax), str(self.ymax)])
+            )
+            elif t == 'ul_lr': return(
+                    ' '.join([str(self.xmin), str(self.ymax),
+                              str(self.xmax), str(self.ymin)])
+            )
             elif t == 'fn':
                 ns = 's' if self.ymax < 0 else 'n'
                 ew = 'e' if self.xmin > 0 else 'w'
-                return('{}{:02d}x{:02d}_{}{:03d}x{:02d}'.format(ns, abs(int(self.ymax)), abs(int(self.ymax * 100)) % 100, 
-                                                                ew, abs(int(self.xmin)), abs(int(self.xmin * 100)) % 100))
+                return('{}{:02d}x{:02d}_{}{:03d}x{:02d}'.format(
+                    ns, abs(int(self.ymax)), abs(int(self.ymax * 100)) % 100, 
+                    ew, abs(int(self.xmin)), abs(int(self.xmin * 100)) % 100))
             elif t == 'fn_full':
                 ns_mx = 's' if self.ymax < 0 else 'n'
                 ns_mn = 's' if self.ymin < 0 else 'n'
                 ew_mx = 'e' if self.xmax > 0 else 'w'
                 ew_mn = 'e' if self.xmin > 0 else 'w'
-                return('{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
-                                                                                            ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
-                                                                                            ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
-                                                                                            ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100))
-                                                             
-            elif t == 'inf': return(' '.join([str(x) for x in self.region]))
-            else: return('/'.join([str(x) for x in self.region[:4]]))
-        else: return(None)
+                return(
+                    '{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(
+                        ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
+                        ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
+                        ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
+                        ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100)
+                )
+            elif t == 'inf': return(
+                    ' '.join([str(x) for x in self.region])
+            )
+            else:
+                return('/'.join([str(x) for x in self.region[:4]]))
+        else:
+            return(None)
         
     def geo_transform(self, x_inc=0, y_inc=None, node='grid'):
         """return a count info and a geotransform based on the region and a cellsize
@@ -693,19 +724,11 @@ def regions_merge(region_a, region_b):
         region_c.ymin = region_a.ymin if region_a.ymin < region_b.ymin else region_b.ymin
         region_c.ymax = region_a.ymax if region_a.ymax > region_b.ymax else region_b.ymax
         if region_a.zmin is not None and region_b.zmin is not None:
-            #if region_a.zmin is None:
-            #    region_c.zmin = region_b.zmin
-            #elif region_b.zmin is None:
-            #    region_c.zmin = region_a.zmin
-            #else:
             region_c.zmin = region_a.zmin if region_a.zmin < region_b.zmin else region_b.zmin
+            
         if region_a.zmax is not None and region_b.zmax is not None:
-            #if region_a.zmax is None:
-            #    region_c.zmax = region_b.zmax
-            #elif region_b.zmax is None:
-            #    region_c.zmax = region_a.zmax
-            #else:
             region_c.zmax = region_a.zmax if region_a.zmax > region_b.zmax else region_b.zmax
+            
     return(region_c)
 
 def regions_intersect_p(region_a, region_b):
