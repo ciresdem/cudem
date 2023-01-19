@@ -1923,7 +1923,7 @@ class WafflesSciPy(Waffle):
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
-                    print(e)
+                    #print(e)
                     continue
         interp_ds = points_ds = point_values = weight_values = None
         if not self.keep_auxiliary:
