@@ -1465,6 +1465,7 @@ class WafflesIDW(Waffle):
             radius=None,
             supercede=False,
             keep_auxiliary=False,
+            chunk_size=None,
             **kwargs
     ):
         self.mod = 'IDW'
@@ -1476,6 +1477,7 @@ class WafflesIDW(Waffle):
             'radius':radius,
             'supercede':supercede,
             'keep_auxiliary':keep_auxiliary,
+            'chunk_size':chunk_size,
         }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
@@ -1485,10 +1487,10 @@ class WafflesIDW(Waffle):
         self.lower_limit = utils.float_or(lower_limit)
         self.supercede = supercede
         self.keep_auxiliary = keep_auxiliary
+        self.chunk_size = chunk_size
+        self.chunk_step = chunk_step
 
     def run(self):
-        chunk_size=None
-        chunk_step=None
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
             xcount,
@@ -1522,13 +1524,13 @@ class WafflesIDW(Waffle):
         w = '{}_idw_stack_w.tif'.format(self.name)
         c = '{}_idw_stack_c.tif'.format(self.name)
 
-        if chunk_size is None:
+        if self.chunk_size is None:
             n_chunk = int(ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
-        else: n_chunk = chunk_size
-        if chunk_step is None:
+        else: n_chunk = self.chunk_size
+        if self.chunk_step is None:
             n_step = int(n_chunk/2)
-        else: n_step = chunk_step
+        else: n_step = self.chunk_step
 
         points_ds = gdal.Open(n)
         points_band = points_ds.GetRasterBand(1)
@@ -1712,7 +1714,7 @@ class WafflesIDW_(Waffle):
         
         return(self)    
 
-class WafflesUIDW(Waffle):
+class WafflesUIDW_(Waffle):
     """Uncertainty Weighted Inverse Distance Weighted.
     
     see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
@@ -1935,7 +1937,7 @@ class WafflesSciPy(Waffle):
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
-                    #print(e)
+                    print(e)
                     continue
         interp_ds = points_ds = point_values = weight_values = None
         if not self.keep_auxiliary:
@@ -3874,13 +3876,14 @@ If weights are used, will generate a UIDW DEM, using weight values as inverse un
 as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
-< IDW:min_points=8:radius=inf:power=1:block=False >
+< IDW:min_points=8:radius=inf:power=1:block=False:supercede=False:keep_auxiliary=False:chunk_size=None >
  :power=[val]\t\t\tweight**power
  :min_points=[val]\t\tminimum neighbor points for IDW
  :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
  :block=[True/False]\t\tblock the data before performing the IDW routine
  :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxiliary=[True/False]\tretain auxiliary files""",
+ :keep_auxiliary=[True/False]\tretain auxiliary files
+ :chunk_size=[val]\t\tsize of chunks in pixels""",
         },
         'vdatum': {
             'name': 'vdatum',
