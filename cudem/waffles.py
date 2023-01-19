@@ -1464,7 +1464,7 @@ class WafflesIDW(Waffle):
             lower_limit=None,
             radius=None,
             supercede=False,
-            keep_auxilary=False,
+            keep_auxiliary=False,
             **kwargs
     ):
         self.mod = 'IDW'
@@ -1475,7 +1475,7 @@ class WafflesIDW(Waffle):
             'lower_limit':lower_limit,
             'radius':radius,
             'supercede':supercede,
-            'keep_auxilary':keep_auxilary,
+            'keep_auxiliary':keep_auxiliary,
         }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
@@ -1484,7 +1484,7 @@ class WafflesIDW(Waffle):
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
         self.supercede = supercede
-        self.keep_auxilary = keep_auxilary
+        self.keep_auxiliary = keep_auxiliary
 
     def run(self):
         chunk_size=None
@@ -1578,7 +1578,7 @@ class WafflesIDW(Waffle):
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
                 interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
         interp_ds = point_values = weight_values = None
-        if not self.keep_auxilary:
+        if not self.keep_auxiliary:
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
         else:
             os.rename(w, '{}_w.tif'.format(self.name))
@@ -1826,18 +1826,18 @@ class WafflesUIDW(Waffle):
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
-    def __init__(self, method='linear', supercede=False, keep_auxilary=False, **kwargs):
+    def __init__(self, method='linear', supercede=False, keep_auxiliary=False, **kwargs):
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
             'supercede':supercede,
-            'keep_auxilary':keep_auxilary,
+            'keep_auxiliary':keep_auxiliary,
         }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
         self.supercede = supercede
-        self.keep_auxilary = keep_auxilary
+        self.keep_auxiliary = keep_auxiliary
 
     def run(self):
         if self.method not in self.methods:
@@ -1925,7 +1925,7 @@ class WafflesSciPy(Waffle):
                     #print(e)
                     continue
         interp_ds = points_ds = point_values = weight_values = None
-        if not self.keep_auxilary:
+        if not self.keep_auxiliary:
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
         else:
             os.rename(w, '{}_w.tif'.format(self.name))
@@ -2158,7 +2158,7 @@ DEM generation.
             smoothing=None,
             landmask=False,
             poly_count=True,
-            keep_auxilary=False,
+            keep_auxiliary=False,
             mode='surface',
             filter_outliers=None,
             **kwargs
@@ -2170,7 +2170,7 @@ DEM generation.
             'smoothing':smoothing,
             'landmask':landmask,
             'poly_count':poly_count,
-            'keep_auxilary':keep_auxilary,
+            'keep_auxiliary':keep_auxiliary,
             'mode':mode,
             'filter_outliers':filter_outliers,
         }
@@ -2185,7 +2185,7 @@ DEM generation.
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
         self.poly_count = poly_count
-        self.keep_auxilary = keep_auxilary
+        self.keep_auxiliary = keep_auxiliary
         self.mode = mode
         self.filter_outliers = utils.int_or(filter_outliers)
         if self.filter_outliers is not None:
@@ -2320,7 +2320,7 @@ DEM generation.
 
             pre -= 1
                     
-        if not self.keep_auxilary:
+        if not self.keep_auxiliary:
             utils.remove_glob('*_pre_surface*')
             utils.remove_glob('{}*'.format(n), '{}*'.format(c), '{}.*'.format(coast))
 
@@ -3867,7 +3867,7 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
  :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
  :block=[True/False]\t\tblock the data before performing the IDW routine
  :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxilary=[True/False]\tretain auxilary files""",
+ :keep_auxiliary=[True/False]\tretain auxiliary files""",
         },
         'vdatum': {
             'name': 'vdatum',
@@ -3982,7 +3982,7 @@ Optional gridding methods are 'linear', 'cubic' and 'nearest'
 < scipy:method=<method> >
  :method=[linear/cubic/nearest]\tinterpolation method to use
  :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxilary=[True/False]\tretain auxilary files""",
+ :keep_auxiliary=[True/False]\tretain auxiliary files""",
         },
 
     }
