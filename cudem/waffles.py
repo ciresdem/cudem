@@ -3995,7 +3995,7 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
  :supercede=[True/False]\tsupercede higher weighted data,
  :keep_auxiliary=[True/False]\tretain auxiliary files
  :chunk_size=[val]\t\tsize of chunks in pixels
- :chunk_buffer=[val]\tsize of the chunk buffer in pixels""",
+ :chunk_buffer=[val]\t\tsize of the chunk buffer in pixels""",
         },
 
     }
