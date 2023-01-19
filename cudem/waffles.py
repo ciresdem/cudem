@@ -1516,7 +1516,7 @@ class WafflesIDW(Waffle):
 
         self._stacks_array(
             out_name='{}_idw_stack'.format(self.name),
-            supercede=self.supercede#, keep_weights=True, keep_count=True, supercede=True
+            supercede=self.supercede
         )
         n = '{}_idw_stack_s.tif'.format(self.name)
         w = '{}_idw_stack_w.tif'.format(self.name)
@@ -1550,8 +1550,6 @@ class WafflesIDW(Waffle):
         except:
             return(self)
 
-        print ('Interpolating...', self.radius) #JDV
-
         points_array = points_band.ReadAsArray()
         point_indices = np.nonzero(points_array != points_no_data)
         point_values = points_array[point_indices]
@@ -1582,6 +1580,13 @@ class WafflesIDW(Waffle):
         interp_ds = point_values = weight_values = None
         if not self.keep_auxilary:
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        else:
+            os.rename(w, '{}_w.tif'.format(self.name))
+            os.rename(c, '{}_c.tif'.format(self.name))
+            os.rename(n, '{}_n.tif'.format(self.name))
+            self.aux_dems.append('{}_w.tif'.format(self.name))
+            self.aux_dems.append('{}_c.tif'.format(self.name))
+            self.aux_dems.append('{}_n.tif'.format(self.name))
         
         return(self)    
     
@@ -1884,10 +1889,6 @@ class WafflesSciPy(Waffle):
         points_band = points_ds.GetRasterBand(1)
         points_no_data = points_band.GetNoDataValue()
         
-        weights_ds = gdal.Open(w)
-        weights_band = weights_ds.GetRasterBand(1)
-        weights_no_data = weights_band.GetNoDataValue()
-
         try:
             interp_ds = points_ds.GetDriver().Create(
                 self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
@@ -1923,9 +1924,16 @@ class WafflesSciPy(Waffle):
                 except Exception as e:
                     #print(e)
                     continue
-        interp_ds = points_ds = weights_ds = point_values = weight_values = None
+        interp_ds = points_ds = point_values = weight_values = None
         if not self.keep_auxilary:
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        else:
+            os.rename(w, '{}_w.tif'.format(self.name))
+            os.rename(c, '{}_c.tif'.format(self.name))
+            os.rename(n, '{}_n.tif'.format(self.name))
+            self.aux_dems.append('{}_w.tif'.format(self.name))
+            self.aux_dems.append('{}_c.tif'.format(self.name))
+            self.aux_dems.append('{}_n.tif'.format(self.name))
             
         return(self)
     
@@ -2179,7 +2187,6 @@ DEM generation.
         self.poly_count = poly_count
         self.keep_auxilary = keep_auxilary
         self.mode = mode
-        #if filter_outliers is not None:
         self.filter_outliers = utils.int_or(filter_outliers)
         if self.filter_outliers is not None:
             self.filter_outliers = 1 if self.filter_outliers > 9 or self.filter_outliers < 1 else self.filter_outliers
@@ -2196,7 +2203,6 @@ DEM generation.
         coast = '{}_cst'.format(self.name)
         
         ## Block/Stack the data with weights
-        #self._xyz_block_array(self.yield_xyz(), out_name=self.name)
         self._stacks_array(
             out_name='{}_stack'.format(self.name), supercede=True
         )
@@ -2227,13 +2233,11 @@ DEM generation.
         self.coast = None
         if self.landmask:
             upper_limit = -0.1
-            #pre_region.zmax = 1
             if not os.path.exists(utils.str_or(self.landmask)):
                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
                else:
                    self.coast = WaffleFactory(
-                       #mod='coastline:polygonize={}:invert=True'.format(self.poly_count),
                        mod='coastline:polygonize=False',
                        data=pre_data,
                        src_region=self.p_region,
@@ -2250,7 +2254,6 @@ DEM generation.
                    coastline = '{}.shp'.format(self.coast.name)
             else:
                coastline = self.landmask
-            #pre_clip = '{}:invert=True'.format(coastline)
             pre_clip = '{}'.format(coastline)
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
@@ -2283,38 +2286,21 @@ DEM generation.
                 utils.echo_msg('pre region: {}'.format(pre_region))
 
             ## Grid/Stack the iteration
-            # if pre == self.pre_count:
-            #     waffles_mod_surface = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None  else 'd')
-            #     waffles_mod_surfstack = 'surface:tension=1:upper_limit={}:blockmean=False'.format(upper_limit)# if upper_limit is not None else 'd')
-            # elif pre != 0:
-            #     waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-            #     waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-            # else:
-            #     waffles_mod_surface = 'surface:tension=1:blockmean=False'
-            #     waffles_mod_surfstack = 'stacks:supercede=True'
-
             if pre == self.pre_count:
                 waffles_mod_surface = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
                 waffles_mod_surfstack = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
-                #waffles_mod_surface = 'IDW:upper_limit={}'.format(upper_limit)
-                #waffles_mod_surfstack = 'IDW:upper_limit={}'.format(upper_limit)
             elif pre != 0:
                 waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
                 waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
             else:
-                #waffles_mod_surface = 'surface:tension=1:blockmean=False'
                 waffles_mod_surface = 'IDW'
                 waffles_mod_surfstack = 'stacks:supercede=True'
-
             
             waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
-            #waffles_mod = waffles_mod_surfstack
-            
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
                 src_region=pre_region if pre !=0 else final_region,
-                #src_region=pre_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
                 yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
@@ -2324,9 +2310,7 @@ DEM generation.
                 dst_srs=self.dst_srs,
                 srs_transform=self.srs_transform,
                 clobber=True,
-                #sample=self.sample,
                 verbose=self.verbose,
-                #clip=pre_clip if pre !=0 else None,
             ).acquire().generate()                
 
             if self.coast is not None:
@@ -2338,7 +2322,6 @@ DEM generation.
                     
         if not self.keep_auxilary:
             utils.remove_glob('*_pre_surface*')
-            #utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c), '{}.*'.format(coast))
             utils.remove_glob('{}*'.format(n), '{}*'.format(c), '{}.*'.format(coast))
 
         os.rename(w, '{}_w.tif'.format(self.name))
