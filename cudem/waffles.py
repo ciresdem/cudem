@@ -1814,31 +1814,6 @@ class WafflesUIDW(Waffle):
             outArray, '{}.tif'.format(self.name), ds_config
         )        
         return(self)    
-    
-## ==============================================
-## Waffles VDatum
-## ==============================================
-class WafflesVDatum(Waffle):
-    """vertical datum transformation grid"""
-
-    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
-        self.mod = 'vdatum'
-        self.mod_args = {
-            'vdatum_in':vdatum_in,
-            'vdatum_out':vdatum_out
-        }
-        super().__init__(**kwargs)
-        self.vdatum_in = vdatum_in
-        self.vdatum_out = vdatum_out
-        
-        import cudem.vdatums
-
-    def run(self):
-        cudem.vdatums.VerticalTransform(
-            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out, cache_dir=waffles_cache
-        ).run(outfile='{}.tif'.format(self.name))
-        
-        return(self)
 
 ## ==============================================
 ## Scipy gridding (linear, cubic, nearest)
@@ -1952,7 +1927,32 @@ class WafflesSciPy(Waffle):
         if not self.keep_auxilary:
             utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
             
-        return(self)    
+        return(self)
+    
+## ==============================================
+## Waffles VDatum
+## ==============================================
+class WafflesVDatum(Waffle):
+    """vertical datum transformation grid"""
+
+    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
+        self.mod = 'vdatum'
+        self.mod_args = {
+            'vdatum_in':vdatum_in,
+            'vdatum_out':vdatum_out
+        }
+        super().__init__(**kwargs)
+        self.vdatum_in = vdatum_in
+        self.vdatum_out = vdatum_out
+        
+        import cudem.vdatums
+
+    def run(self):
+        cudem.vdatums.VerticalTransform(
+            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out, cache_dir=waffles_cache
+        ).run(outfile='{}.tif'.format(self.name))
+        
+        return(self)
     
 ## ==============================================
 ## GDAL gridding
