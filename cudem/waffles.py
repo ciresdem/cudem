@@ -1512,8 +1512,8 @@ class WafflesIDW(Waffle):
         if self.verbose:
             if self.min_points:
                 progress = utils.CliProgress(
-                    'generating IDW grid @ {}/{} looking for at least {} neighbors'.format(
-                        ycount, xcount, self.min_points
+                    'generating IDW grid @ {}/{} looking for at least {} neighbors within {} pixels'.format(
+                        ycount, xcount, self.min_points, self.radius
                     )
                 )
             else:
