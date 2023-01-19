@@ -1826,13 +1826,21 @@ class WafflesUIDW(Waffle):
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
-    def __init__(self, method='linear', supercede=False, keep_auxiliary=False, chunk_size=None, **kwargs):
+    def __init__(
+            self,
+            method='linear',
+            supercede=False,
+            keep_auxiliary=False,
+            chunk_size=None,
+            chunk_buffer=40,
+            **kwargs):
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
             'supercede':supercede,
             'keep_auxiliary':keep_auxiliary,
             'chunk_size':chunk_size,
+            'chunk_buffer':chunk_buffer,
         }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
@@ -1841,6 +1849,7 @@ class WafflesSciPy(Waffle):
         self.keep_auxiliary = keep_auxiliary
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = None
+        self.chunk_buffer = utils.int_or(chunk_buffer)
 
     def run(self):
         if self.method not in self.methods:
@@ -1903,7 +1912,7 @@ class WafflesSciPy(Waffle):
             return(self)
 
         for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk): #, step=n_step):
-            srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), 40)
+            srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             point_indices = np.nonzero(points_array != points_no_data)
             if len(point_indices[0]):
@@ -3985,7 +3994,8 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
  :method=[linear/cubic/nearest]\tinterpolation method to use
  :supercede=[True/False]\tsupercede higher weighted data,
  :keep_auxiliary=[True/False]\tretain auxiliary files
- :chunk_size=[val]\t\tsize of chunks in pixels""",
+ :chunk_size=[val]\t\tsize of chunks in pixels
+ :chunk_buffer=[val]\tsize of the chunk buffer in pixels""",
         },
 
     }
