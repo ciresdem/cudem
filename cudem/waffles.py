@@ -3978,7 +3978,8 @@ Set supercede to True to overwrite overlapping cells with higher weighted data.
             'description': """Generate DEM using Scipy gridding interpolation\n
 Generate a DEM using Scipy's gridding interpolation
 Optional gridding methods are 'linear', 'cubic' and 'nearest'
-
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+            
 < scipy:method=<method> >
  :method=[linear/cubic/nearest]\tinterpolation method to use
  :supercede=[True/False]\tsupercede higher weighted data,
