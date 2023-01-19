@@ -1176,7 +1176,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix) + 9)
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: \033[31m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
 
 def echo_error_msg2(msg, prefix = 'waffles'):
     """echo error msg to stderr using `prefix`

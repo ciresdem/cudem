@@ -266,19 +266,25 @@ class Waffle:
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(self.fmt)
 
-        z_ds = driver.Create('{}_s.tif'.format(out_name), xcount, ycount, 1, gdt,
-                             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
+        z_ds = driver.Create(
+            '{}_s.tif'.format(out_name), xcount, ycount, 1, gdt,
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        )
         z_ds.SetGeoTransform(dst_gt)
         z_band = z_ds.GetRasterBand(1)
         z_band.SetNoDataValue(self.ndv)
         
-        w_ds = driver.Create('{}_w.tif'.format(out_name), xcount, ycount, 1, gdt,
-                             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
+        w_ds = driver.Create(
+            '{}_w.tif'.format(out_name), xcount, ycount, 1, gdt,
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        )
         w_ds.SetGeoTransform(dst_gt)
         w_band = w_ds.GetRasterBand(1)
         w_band.SetNoDataValue(self.ndv)
                 
-        c_ds = driver.Create('{}_c.tif'.format(out_name), xcount, ycount, 1, gdt)
+        c_ds = driver.Create(
+            '{}_c.tif'.format(out_name), xcount, ycount, 1, gdt
+        )
         c_ds.SetGeoTransform(dst_gt)
         c_band = c_ds.GetRasterBand(1)
         c_band.SetNoDataValue(self.ndv)
@@ -1488,8 +1494,8 @@ class WafflesIDW(Waffle):
         self.supercede = supercede
         self.keep_auxiliary = keep_auxiliary
         self.chunk_size = chunk_size
-        self.chunk_step = chunk_step
-
+        self.chunk_step = None
+        
     def run(self):
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
