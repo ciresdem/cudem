@@ -1910,8 +1910,11 @@ class WafflesSciPy(Waffle):
             interp_band.SetNoDataValue(np.nan)
         except:
             return(self)
-
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk): #, step=n_step):
+        
+        if self.verbose:
+            utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
+                
+        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk): #, step=n_step):                
             srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             point_indices = np.nonzero(points_array != points_no_data)
