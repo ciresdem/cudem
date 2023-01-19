@@ -1464,6 +1464,7 @@ class WafflesIDW(Waffle):
             lower_limit=None,
             radius=None,
             supercede=False,
+            keep_auxilary=False,
             **kwargs
     ):
         self.mod = 'IDW'
@@ -1474,6 +1475,7 @@ class WafflesIDW(Waffle):
             'lower_limit':lower_limit,
             'radius':radius,
             'supercede':supercede,
+            'keep_auxilary':keep_auxilary,
         }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
@@ -1482,6 +1484,7 @@ class WafflesIDW(Waffle):
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
         self.supercede = supercede
+        self.keep_auxilary = keep_auxilary
 
     def run(self):
         chunk_size=None
@@ -1577,7 +1580,8 @@ class WafflesIDW(Waffle):
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
                 interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
         interp_ds = point_values = weight_values = None
-        utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        if not self.keep_auxilary:
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
         
         return(self)    
     
@@ -1842,16 +1846,18 @@ class WafflesVDatum(Waffle):
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
-    def __init__(self, method='linear', supercede=False, **kwargs):
+    def __init__(self, method='linear', supercede=False, keep_auxilary=False, **kwargs):
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
             'supercede':supercede,
+            'keep_auxilary':keep_auxilary,
         }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
         self.supercede = supercede
+        self.keep_auxilary = keep_auxilary
 
     def run(self):
         if self.method not in self.methods:
@@ -1943,7 +1949,9 @@ class WafflesSciPy(Waffle):
                     #print(e)
                     continue
         interp_ds = points_ds = weights_ds = point_values = weight_values = None
-        utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        if not self.keep_auxilary:
+            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+            
         return(self)    
     
 ## ==============================================
@@ -3875,7 +3883,8 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
  :min_points=[val]\t\tminimum neighbor points for IDW
  :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
  :block=[True/False]\t\tblock the data before performing the IDW routine
- :supercede=[True/False]\tsupercede higher weighted data""",
+ :supercede=[True/False]\tsupercede higher weighted data,
+ :keep_auxilary=[True/False]\tretain auxilary files""",
         },
         'vdatum': {
             'name': 'vdatum',
@@ -3989,7 +3998,8 @@ Optional gridding methods are 'linear', 'cubic' and 'nearest'
 
 < scipy:method=<method> >
  :method=[linear/cubic/nearest]\tinterpolation method to use
- :supercede=[True/False]\tsupercede higher weighted data""",
+ :supercede=[True/False]\tsupercede higher weighted data,
+ :keep_auxilary=[True/False]\tretain auxilary files""",
         },
 
     }
