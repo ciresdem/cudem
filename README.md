@@ -497,7 +497,7 @@ earthdata, usiei, wsf, hydrolakes
 
 ### Waffles Module:
 ```
-waffles (1.10.0): Generate DEMs and derivatives.
+waffles (1.10.3): Generate DEMs and derivatives.
 
 usage: waffles \[OPTIONS\] DATALIST
 
