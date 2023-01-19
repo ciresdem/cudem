@@ -3882,11 +3882,12 @@ If weights are used, will generate a UIDW DEM, using weight values as inverse un
 as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
-< IDW:min_points=8:radius=inf:power=1:block=False:supercede=False:keep_auxiliary=False:chunk_size=None >
+< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
  :power=[val]\t\t\tweight**power
  :min_points=[val]\t\tminimum neighbor points for IDW
  :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
- :block=[True/False]\t\tblock the data before performing the IDW routine
+ :upper_limit=[val]\t\tRestrict output DEM to values below val
+ :lower_limit=[val]\t\tRestrict output DEM to values above val
  :supercede=[True/False]\tsupercede higher weighted data,
  :keep_auxiliary=[True/False]\tretain auxiliary files
  :chunk_size=[val]\t\tsize of chunks in pixels""",
