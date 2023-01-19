@@ -1826,6 +1826,8 @@ class WafflesVDatum(Waffle):
 
 ## ==============================================
 ## Scipy gridding (linear, cubic, nearest)
+##
+## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## ==============================================
 class WafflesSciPy(Waffle):
     def __init__(self, method='linear', **kwargs):
@@ -4465,7 +4467,15 @@ def waffles_cli(argv = sys.argv):
             '''must specify a waffles -M module.'''
         )
         sys.exit(-1)
-                
+
+    if module.split(':')[0] not in WaffleFactory()._modules.keys():
+        utils.echo_error_msg(
+            '''{} is not a valid waffles module, available modules are: {}'''.format(
+                module.split(':')[0], _waffles_module_short_desc()
+            )
+        )
+        sys.exit(-1)
+        
     if WaffleFactory()._modules[module.split(':')[0]]['datalist-p']:
         if len(dls) == 0:
             sys.stderr.write(waffles_cli_usage)
