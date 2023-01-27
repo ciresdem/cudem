@@ -84,11 +84,12 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose):
+def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose, invert_region=False):
 
     xdls = [DatasetFactory(
         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
         src_region=this_region,
+        invert_region=invert_region,
         verbose=want_verbose,
         src_srs=src_srs,
         dst_srs=dst_srs,
@@ -102,6 +103,7 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want
         this_datalist = DatasetFactory(
             fn=dl_fn,
             src_region=this_region,
+            invert_region=invert_region,
             verbose=want_verbose,
             src_srs=src_srs,
             dst_srs=dst_srs,
@@ -299,6 +301,7 @@ class Datalist(datasets.ElevationDataset):
                         weight=self.weight,
                         parent=self,
                         src_region=self.region,
+                        invert_region=self.invert_region,
                         metadata=copy.deepcopy(self.metadata),
                         src_srs=self.src_srs,
                         dst_srs=self.dst_srs,
@@ -353,6 +356,7 @@ class Datalist(datasets.ElevationDataset):
                             weight=self.weight,
                             parent=self,
                             src_region=self.region,
+                            invert_region=self.invert_region,
                             metadata=copy.deepcopy(self.metadata),
                             src_srs=self.src_srs,
                             dst_srs=self.dst_srs,
@@ -496,6 +500,7 @@ class ZIPlist(datasets.ElevationDataset):
                 weight=self.weight,
                 parent=self,
                 src_region=self.region,
+                invert_region=self.invert_region,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 metadata=copy.deepcopy(self.metadata),
@@ -592,6 +597,7 @@ parsing and processing.
                 weight=self.weight,
                 parent=self,
                 src_region=self.region,
+                invert_regoin=self.invert_region,
                 metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
@@ -709,6 +715,7 @@ class DatasetFactory:
             },
             parent=None,
             src_region=None,
+            invert_region=False,
             cache_dir=None,
             verbose=False,
             remote=False
@@ -720,6 +727,7 @@ class DatasetFactory:
         self.dst_srs = dst_srs
         self.metadata = copy.deepcopy(metadata)
         self.region = src_region
+        self.invert_region = invert_region
         self.parent = parent
         self.verbose = verbose
         self.ds_args = {}
@@ -891,6 +899,7 @@ class DatasetFactory:
                 data_format=self.data_format,
                 weight=self.weight,
                 src_region=self.region,
+                invert_region=self.invert_region,
                 metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
@@ -976,6 +985,7 @@ def datalists_cli(argv=sys.argv):
     want_json = False
     want_datalists=False
     want_separate=False
+    invert_region=False
     
     ## ==============================================
     ## parse command line arguments.
@@ -1001,6 +1011,8 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg == '--separate' or arg == '-s':
             want_separate = True
+        elif arg == '--invert_region' or arg == '-v':
+            invert_region = True
         elif arg == '--archive' or arg == '-a':
             want_archive = True
         elif arg == '--weights' or arg == '-w':
@@ -1086,7 +1098,7 @@ def datalists_cli(argv=sys.argv):
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
-            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose)
+            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose, invert_region)
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory.data_types[this_datalist.data_format]['fmts']
             ):

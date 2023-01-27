@@ -1,6 +1,6 @@
 ### uncertainties.py
 ##
-## Copyright (c) 2020 - 2022 Regents of the University of Colorado
+## Copyright (c) 2020 - 2023 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -19,7 +19,13 @@
 ##
 ### Commentary:
 ##
-## 
+## TODO:
+## source data uncertainty, slope (within cell)...
+## generate a "Low Confidence Raster" <- uncertainty raster
+## point density, land cover, classification (lidar)
+## datum, resampling, spatial resolution, aspect, morph change.
+## rank factors? 
+## multi threading !!
 ##
 ### Code:
 
@@ -163,6 +169,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
 
         out_inner = None
         out_outer = None
+        #utils.run_cmd('gmt'
         gmt_s_inner = 'gmt gmtselect -V {} {} > {}_inner.xyz'.format(
             o_xyz, sub_region.format('gmt'), sub_bn
         )
@@ -486,6 +493,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## split the xyz data to inner/outer; outer is
                         ## the data buffer, inner will be randomly sampled
                         ## ==============================================
+
                         s_inner, s_outer = self._gmt_select_split(
                             o_xyz, this_region, 'sub_{}'.format(n), verbose=False
                         )

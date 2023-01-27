@@ -138,7 +138,9 @@ of the seafloor and sub-seafloor.
 
 https://www.marine-geo.org
 
-< mgds >""",
+data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Ancillary, Bathymetry:Singlebeam, Bathymetry:BPI, Bathymetry:ReferenceSurface, Bathymetry:Paelobathymetry]
+            
+< mgds:data_type=Bathymetry >""",
         },
         'trackline': {
             'class': trackline.Trackline,

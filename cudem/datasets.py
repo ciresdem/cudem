@@ -99,6 +99,7 @@ class ElevationDataset():
             },
             parent=None,
             src_region=None,
+            invert_region=False,
             cache_dir=None,
             verbose=False,
             remote=False
@@ -114,6 +115,7 @@ class ElevationDataset():
         self.src_trans_srs = None
         self.dst_trans_srs = None
         self.region = src_region
+        self.invert_region = invert_region
         self.parent = parent
         self.verbose = verbose
         self.data_entries = []
@@ -1183,16 +1185,30 @@ class LASFile(ElevationDataset):
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
                     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-                    dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
-                    dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
-                    dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
-                    dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
-                    if self.region.zmin is not None:
-                        dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
+                    if not self.invert_region:
+                        dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
+                        dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
+                        dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
+                        dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
+                        if self.region.zmin is not None:
+                            dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
+
+                        if self.region.zmax is not None:
+                            dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
+                    else:
+                        dataset_ = (dataset[dataset[:,0] < tmp_region.xmin,:]) | (dataset[dataset[:,0] > tmp_region.xmax,:])
+                        #dataset = dataset[dataset[:,0] > tmp_region.xmax,:]
+                        #dataset = dataset[:, dataset_,:]
+                        #dataset_ = (dataset[:,1] < tmp_region.ymin) | (dataset[:,1] > tmp_region.ymax)
+                        #dataset = dataset[:, dataset_]
+                        #print(dataset_)
+                        #dataset = dataset[dataset[:,1] > tmp_region.ymax,:]
+                        if self.region.zmin is not None:
+                            dataset = dataset[dataset[:,2] < tmp_region.zmin,:]
                         
-                    if self.region.zmax is not None:
-                        dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
-                        
+                        if self.region.zmax is not None:
+                            dataset = dataset[dataset[:,2] > tmp_region.zmax,:]
+        
                 count += len(dataset)
                 for point in dataset:
                     this_xyz = xyzfun.XYZPoint(
@@ -1479,7 +1495,7 @@ class RasterFile(ElevationDataset):
 
                 mask_band = src_mask.GetRasterBand(1)
 
-            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
+            srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize, node='pixel')
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
@@ -1550,6 +1566,7 @@ class RasterFile(ElevationDataset):
                     np.nan,
                     'GTiff'
                 )
+
                 this_srcwin = (srcwin[0], y, srcwin[2], 1)
                 yield(out_arrays, this_srcwin, this_gt)
                                             

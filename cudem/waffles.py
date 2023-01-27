@@ -301,7 +301,8 @@ class Waffle:
             c_arr[np.isnan(arr)] = 0
             w_arr[np.isnan(arr)] = 0
             arr[np.isnan(arr)] = 0
-
+            #print(srcwin)
+            #print(xcount, ycount)
             z_array = z_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -1882,7 +1883,7 @@ class WafflesSciPy(Waffle):
 
         if self.verbose:
             progress = utils.CliProgress(
-                'generating {} grid @ {}/{}'.format(
+                'generating {} (scipy) grid @ {}/{}'.format(
                     self.method, ycount, xcount
                 )
             )
@@ -1943,7 +1944,7 @@ class WafflesSciPy(Waffle):
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
-                    print(e)
+                    #print(e)
                     continue
         interp_ds = points_ds = point_values = weight_values = None
         if not self.keep_auxiliary:

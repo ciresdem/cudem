@@ -1,6 +1,6 @@
 ### mgds.py -- Marine Geo Digital Library
 ##
-## Copyright (c) 2022 Regents of the University of Colorado
+## Copyright (c) 2022, 2023 Regents of the University of Colorado
 ##
 ## mgds.py is part of CUDEM
 ##
@@ -34,9 +34,8 @@ import cudem.fetches.utils as f_utils
 class MGDS(f_utils.FetchModule):
     '''Fetch marine data from MGDS'''
     
-    def __init__(self, **kwargs):
+    def __init__(self, data_type='Bathymetry', **kwargs):
         super().__init__(**kwargs) 
-
         self._mgds_file_url = "https://www.marine-geo.org/services/FileServer?"
         self._mgds_filedownload_url = "http://www.marine-geo.org/services/FileDownloadServer?"
         self._mgds_filemetadata_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
@@ -44,20 +43,21 @@ class MGDS(f_utils.FetchModule):
         self._mgds_search_url = "http://www.marine-geo.org/services/search/datasets??"
         self._outdir = os.path.join(os.getcwd(), 'mgds')
         self.name = 'mgds'
+        self.data_type = data_type.replace(',', ':')
         
     def run(self):
         '''Run the MGDS fetching module'''
 
         if self.region is None:
             return([])
-        
+
         self.data = {
             'north':self.region.ymax,
             'west':self.region.xmin,
             'south':self.region.ymin,
             'east':self.region.xmax,
             'format':'summary',
-            'data_type':'Bathymetry',
+            'data_type':'{}'.format(self.data_type),
         }
 
         # self.data = {

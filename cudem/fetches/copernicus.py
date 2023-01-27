@@ -1,6 +1,6 @@
 ### copernicus.py - COPERNICUS fetch
 ##
-## Copyright (c) 2021 - 2022 Regents of the University of Colorado
+## Copyright (c) 2021 - 2023 Regents of the University of Colorado
 ##
 ## copernicus.py is part of CUDEM
 ##
