@@ -1182,33 +1182,37 @@ class LASFile(ElevationDataset):
         with lp.open(self.fn) as lasf:
             for points in lasf.chunk_iterator(2_000_000):
                 points = points[(np.isin(points.classification, self.classes))]
-                dataset = np.vstack((points.x, points.y, points.z)).transpose()
                 if self.region is not None  and self.region.valid_p():
                     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-                    if not self.invert_region:
-                        dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
-                        dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
-                        dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
-                        dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
+                    if self.invert_region:
+                        points = points[((points.x > tmp_region.xmax) | (points.x < tmp_region.xmin)) | \
+                                        ((points.y > tmp_region.ymax) | (points.y < tmp_region.ymin))]
                         if self.region.zmin is not None:
-                            dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
-
-                        if self.region.zmax is not None:
-                            dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
+                            points =  points[(points.z < tmp_region.zmin)]
+                            if self.region.zmax is not None:
+                                points =  points[(points.z > tmp_region.zmax)]
                     else:
-                        dataset_ = (dataset[dataset[:,0] < tmp_region.xmin,:]) | (dataset[dataset[:,0] > tmp_region.xmax,:])
-                        #dataset = dataset[dataset[:,0] > tmp_region.xmax,:]
-                        #dataset = dataset[:, dataset_,:]
-                        #dataset_ = (dataset[:,1] < tmp_region.ymin) | (dataset[:,1] > tmp_region.ymax)
-                        #dataset = dataset[:, dataset_]
-                        #print(dataset_)
-                        #dataset = dataset[dataset[:,1] > tmp_region.ymax,:]
+                        points = points[((points.x < tmp_region.xmax) & (points.x > tmp_region.xmin)) & \
+                                        ((points.y < tmp_region.ymax) & (points.y > tmp_region.ymin))]
                         if self.region.zmin is not None:
-                            dataset = dataset[dataset[:,2] < tmp_region.zmin,:]
-                        
+                            points =  points[(points.z > tmp_region.zmin)]
                         if self.region.zmax is not None:
-                            dataset = dataset[dataset[:,2] > tmp_region.zmax,:]
-        
+                            points =  points[(points.z < tmp_region.zmax)]
+                                              
+                dataset = np.vstack((points.x, points.y, points.z)).transpose()
+                # if self.region is not None  and self.region.valid_p():
+                #     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                #     if not self.invert_region:
+                #         dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
+                #         dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
+                #         dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
+                #         dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
+                #         if self.region.zmin is not None:
+                #             dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
+
+                #         if self.region.zmax is not None:
+                #             dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
+                
                 count += len(dataset)
                 for point in dataset:
                     this_xyz = xyzfun.XYZPoint(
