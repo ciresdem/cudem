@@ -1044,9 +1044,14 @@ class XYZFile(ElevationDataset):
                         this_xyz.transform(self.dst_trans)
 
                     if self.region is not None and self.region.valid_p():
-                        if regions.xyz_in_region_p(this_xyz, self.region):
-                            count += 1
-                            yield(this_xyz)
+                        if self.invert_region:
+                            if not regions.xyz_in_region_p(this_xyz, self.region):
+                                count += 1
+                                yield(this_xyz)
+                        else:
+                            if regions.xyz_in_region_p(this_xyz, self.region):
+                                count += 1
+                                yield(this_xyz)
                     else:
                         count += 1
                         yield(this_xyz)
