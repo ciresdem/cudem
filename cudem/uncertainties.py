@@ -169,7 +169,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
 
         out_inner = None
         out_outer = None
-        #utils.run_cmd('gmt'
+        utils.run_cmd('gmt gmtset IO_COL_SEPARATOR space')
         gmt_s_inner = 'gmt gmtselect -V {} {} > {}_inner.xyz'.format(
             o_xyz, sub_region.format('gmt'), sub_bn
         )
@@ -790,6 +790,8 @@ Options:
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
+Generate a waffles config files with the `waffles` command.
+
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
            dl_formats=dlim._datalist_fmts_short_desc(),
@@ -838,28 +840,29 @@ def uncertainties_cli(argv = sys.argv):
     ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
-            #try:
-            with open(wg_user, 'r') as wgj:
-                wg = json.load(wgj)
-                if wg['src_region'] is not None:
-                    wg['src_region'] = regions.Region().from_list(
-                        wg['src_region']
-                    )
-                    
-                this_waffle = waffles.WaffleFactory(**wg).acquire()
-                this_waffle.mask = True
-                this_waffle.clobber = False
+            try:
+                with open(wg_user, 'r') as wgj:
+                    wg = json.load(wgj)
+                    if wg['src_region'] is not None:
+                        wg['src_region'] = regions.Region().from_list(
+                            wg['src_region']
+                        )
 
-                if not this_waffle.valid_p():
-                    this_waffle.generate()
-                    
-                i = InterpolationUncertainty(dem=this_waffle, sims=sims, max_sample=max_sample).run()
-                utils.echo_msg(this_waffle)
+                    this_waffle = waffles.WaffleFactory(**wg).acquire()
+                    this_waffle.mask = True
+                    this_waffle.clobber = False
 
-                sys.exit(0)
-            # except Exception as e:
-            #     utils.echo_error_msg(e)
-            #     sys.exit(-1)
+                    if not this_waffle.valid_p():
+                        this_waffle.generate()
+
+                    ## run interpolation uncertainty
+                    i = InterpolationUncertainty(dem=this_waffle, sims=sims, max_sample=max_sample).run()
+                    utils.echo_msg(this_waffle)
+
+                    sys.exit(0)
+            except Exception as e:
+                utils.echo_error_msg(e)
+                sys.exit(-1)
         else:
             utils.echo_error_msg(
                 'specified waffles config file does not exist, {}'.format(wg_user)

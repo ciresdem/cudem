@@ -1305,22 +1305,24 @@ class RasterFile(ElevationDataset):
             return(None)
 
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
+
+        self.warp_region = regions.Region().from_list(self.infos['minmax'])
+        if self.dst_trans is not None:
+            self.warp_region.src_srs = self.src_srs
+            self.warp_region.warp(self.dst_srs)
+            
+        #if self.region is not None
+        if self.region is not None and self.region.src_srs != self.src_srs:
+            if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
+                self.warp_region = self.region.copy()
+            else:
+                self.warp_region.cut(self.region, self.x_inc, self.y_inc)
+                
+            if self.dst_trans is not None:
+                self.dst_trans = None
+        
         if self.resample_and_warp:
             dem_inf = demfun.infos(self.fn)
-            self.warp_region = regions.Region().from_list(self.infos['minmax'])
-            if self.dst_trans is not None:
-                self.warp_region.src_srs = self.src_srs
-                self.warp_region.warp(self.dst_srs)
-
-            #if self.region is not None
-            if self.region is not None and self.region.src_srs != self.src_srs:
-                if not regions.regions_within_ogr_p(self.warp_region, self.region):
-                    self.warp_region = self.region.copy()
-                else:
-                    self.warp_region.cut(self.region, self.x_inc, self.y_inc)
-                
-                if self.dst_trans is not None:
-                    self.dst_trans = None
 
             tmp_ds = self.fn
             if self.open_options is not None:
@@ -1392,6 +1394,23 @@ class RasterFile(ElevationDataset):
             else:
                 src_ds = gdal.Open(self.fn)
 
+        if self.invert_region:
+            src_ds_config = demfun.gather_infos(src_ds)
+            srcwin = self.warp_region.srcwin(src_ds_config['geoT'], src_ds_config['nx'], src_ds_config['ny'], node='grid')
+            
+            driver = gdal.GetDriverByName('MEM')
+            mem_ds = driver.Create('msk', src_ds_config['nx'], src_ds_config['ny'], 1, src_ds_config['dt'])
+            mem_ds.SetGeoTransform(src_ds_config['geoT'])
+            mem_ds.SetProjection(src_ds_config['proj'])
+            mem_band = mem_ds.GetRasterBand(1)
+            mem_band.SetNoDataValue(src_ds_config['ndv'])
+            mem_arr = np.ones((src_ds_config['ny'], src_ds_config['nx']))
+            mem_arr[srcwin[0]:srcwin[0]+srcwin[2],
+                    srcwin[1]:srcwin[1]+srcwin[3]] = src_ds_config['ndv']
+            mem_band.WriteArray(mem_arr)
+
+            self.mask = mem_ds
+            
         return(src_ds)
         
     def generate_inf(self, check_z=False, callback=lambda: False):
@@ -1436,22 +1455,27 @@ class RasterFile(ElevationDataset):
 
     def get_srcwin(self, gt, x_size, y_size, node='grid'):
         if self.region is not None:
-            if self.dst_trans is not None:
-                if self.trans_region is not None and self.trans_region.valid_p(
-                        check_xy = True
-                ):
-                    srcwin = self.trans_region.srcwin(
+            if self.invert_region:
+                srcwin = (
+                    0, 0, x_size, y_size, node
+                )
+            else:
+                if self.dst_trans is not None:
+                    if self.trans_region is not None and self.trans_region.valid_p(
+                            check_xy = True
+                    ):
+                        srcwin = self.trans_region.srcwin(
+                            gt, x_size, y_size, node
+                        )
+                    else:
+                        srcwin = (
+                            0, 0, x_size, y_size, node
+                        )
+
+                else:
+                    srcwin = self.region.srcwin(
                         gt, x_size, y_size, node
                     )
-                else:
-                    srcwin = (
-                        0, 0, x_size, y_size, node
-                    )
-
-            else:
-                srcwin = self.region.srcwin(
-                    gt, x_size, y_size, node
-                )
 
         else:
             srcwin = (
@@ -1500,7 +1524,10 @@ class RasterFile(ElevationDataset):
                         ndv=ndv, verbose=False
                     )[0]
                 else:
-                    src_mask = gdal.Open(self.mask)
+                    if not self.invert_region:
+                        src_mask = gdal.Open(self.mask)
+                    else:
+                        src_mask = self.mask
 
                 mask_band = src_mask.GetRasterBand(1)
 
@@ -1546,19 +1573,40 @@ class RasterFile(ElevationDataset):
                     
                 if self.region is not None and self.region.valid_p():
                     z_region = self.region.z_region()
-                    if z_region[0] is not None:
-                        band_data[band_data < z_region[0]] = np.nan
+
+                    if self.invert_region:
+                        if z_region[0] is not None and z_region[1] is not None:
+                            band_data[(band_data > z_region[0]) & (band_data < z_region[1])] = np.nan
                         
-                    if z_region[1] is not None:
-                        band_data[band_data > z_region[1]] = np.nan
+                        elif z_region[0] is not None:
+                            band_data[band_data > z_region[0]] = np.nan
+                        
+                        elif z_region[1] is not None:
+                            band_data[band_data < z_region[1]] = np.nan
+                    else:
+                        if z_region[0] is not None:
+                            band_data[band_data < z_region[0]] = np.nan
+                        
+                        if z_region[1] is not None:
+                            band_data[band_data > z_region[1]] = np.nan
 
                     if weight_band is not None:
                         w_region = self.region.w_region()
-                        if w_region[0] is not None:
-                            band_data[weight_data < w_region[0]] = np.nan
+                        if self.invert_region:
+                            if w_region[0] is not None and w_region[1] is not None:
+                                band_data[(band_data > w_region[0]) & (band_data < w_region[1])] = np.nan
+
+                            elif w_region[0] is not None:
+                                band_data[band_data > w_region[0]] = np.nan
                         
-                        if w_region[1] is not None:
-                            band_data[weight_data > w_region[1]] = np.nan
+                            elif w_region[1] is not None:
+                                band_data[band_data < w_region[1]] = np.nan
+                        else:
+                            if w_region[0] is not None:
+                                band_data[weight_data < w_region[0]] = np.nan
+                        
+                            if w_region[1] is not None:
+                                band_data[weight_data > w_region[1]] = np.nan
 
                 count_data = np.zeros(band_data.shape)
                 count_data[~np.isnan(band_data)] = 1

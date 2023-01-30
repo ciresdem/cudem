@@ -291,7 +291,8 @@ def mask_(src_dem, msk_dem, out_dem, msk_value = None):
             utils.gdal_write(src_array, out_dem, src_config)
             msk_ds = None
         src_ds = None
-    
+
+        
 def split(src_dem, split_value = 0):
     """split raster file `src_dem`into two files based on z value, 
     or if split_value is a filename, split raster by overlay, where upper is outside and lower is inside.
