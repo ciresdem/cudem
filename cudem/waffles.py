@@ -2481,7 +2481,12 @@ class WafflesStacks_ETOPO(Waffle):
         if self.keep_count:
             utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
             self.aux_dems.append('{}_c.tif'.format(self.name))
-        
+
+        if self.verbose:
+            utils.echo_msg('stacked data to {}/{} grid using {} method'.format(
+                ycount, xcount, 'supercede' if self.supercede else 'weighted mean'
+            ))
+            
         return(self)
 
 class WafflesStacks(Waffle):

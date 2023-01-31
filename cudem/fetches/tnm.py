@@ -45,7 +45,7 @@ import cudem.fetches.FRED as FRED
 class TheNationalMap(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
-    def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
+    def __init__(self, where=[], formats=None, extents=None, q=None, data_type=None, **kwargs):
         super().__init__(**kwargs)
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
@@ -71,7 +71,8 @@ class TheNationalMap(f_utils.FetchModule):
         self.formats = formats
         self.extents = extents
         self.q = q
-        
+        self.data_type = data_type
+
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
         self.FRED._attribute_filter(["DataSource = '{}'".format(self.name)])
@@ -198,7 +199,9 @@ class TheNationalMap(f_utils.FetchModule):
                 if q is not None: _data['q'] = str(q)
                 if f is None:
                     _data['prodFormats'] = surv['Etcetra']
-                else: _data['prodFormats'] = ','.join(f)
+                else:
+                    _data['prodFormats'] = ','.join(f)
+                    
                 if e is None: e = []
 
                 _req = f_utils.Fetch(surv['DataLink']).fetch_req(params=_data)
@@ -342,6 +345,7 @@ class TheNationalMap(f_utils.FetchModule):
                         if xyz.z != 0:
                             yield(xyz)
                     utils.remove_glob(src_tnm)
+                    
             elif datatype == 'lidar':
                 _ds = datasets.LASFile(
                     fn=entry[1],
@@ -363,6 +367,53 @@ class TheNationalMap(f_utils.FetchModule):
                 
         utils.remove_glob(entry[1])
 
+    def yield_array(self, entry):
+        """yield the xyz data from the tnm fetch module"""
+        
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
+            datatype = entry[-2]
+            if datatype == 'raster':
+                src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
+                for src_tnm in src_tnms:
+                    src_srs = demfun.get_srs(src_tnm)
+                    _ds = datasets.RasterFile(
+                        fn=src_tnm,
+                        data_format=200,
+                        src_srs=src_srs,
+                        dst_srs=self.dst_srs,
+                        src_region=self.region,
+                        x_inc=self.x_inc,
+                        y_inc=self.y_inc,
+                        verbose=self.verbose
+                    )
+                    for arr in _ds.yield_array():
+                        #if xyz.z != 0:
+                        yield(arr)
+                    utils.remove_glob(src_tnm)
+                    
+            elif datatype == 'lidar':
+                _ds = datasets.LASFile(
+                    fn=entry[1],
+                    data_format=300,
+                    #src_srs=ds_epsg,
+                    dst_srs=self.dst_srs,
+                    weight=self.weight,
+                    src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
+                    verbose=self.verbose,
+                    remote=True
+                )
+                for arr in _ds.yield_array():
+                    yield(arr)
+                #for xyz in _ds.yield_xyz():
+                #for xyz in _ds.xyz_yield:
+                #    yield(xyz)
+                    
+                utils.remove_glob('{}*'.format(entry[1]))
+                
+        utils.remove_glob(entry[1])
+        
 ## ==============================================
 ## class TNM is the old tnm api, doesn't currently work.
 ## held for now for historical purposes
@@ -451,11 +502,14 @@ class TNM(f_utils.FetchModule):
             'bbox': regions.region_format(self.region, 'bbox'),
             'max': 10000,
         }
-        if q is not None: self.data['q'] = str(q)
+        if q is not None:
+            self.data['q'] = str(q)
+            
         self.data['datasets'] = ','.join(sbDTags)
-        if len(self._tnm_df) > 0: self.data['prodFormats'] = ','.join(self._tnm_df)
-        req = f_utils.Fetch(self._tnm_product_url).fetch_req(params=self.data)
+        if len(self._tnm_df) > 0:
+            self.data['prodFormats'] = ','.join(self._tnm_df)
 
+        req = f_utils.Fetch(self._tnm_product_url).fetch_req(params=self.data)
         if req is not None:
             try:
                 self._dataset_results = req.json()

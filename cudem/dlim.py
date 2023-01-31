@@ -561,9 +561,19 @@ parsing and processing.
         super().__init__(**kwargs)
         self.remote=True
         self.metadata['name'] = self.fn
+        
+        f_region = self.region.copy()
+        f_region.src_srs = self.dst_srs
+        
+        wgs_region = f_region.copy()
+        if self.dst_srs is not None:
+            wgs_region.warp('epsg:4326')
+        else:
+            self.dst_srs = 'epsg:4326'
+        
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn,
-            src_region=self.region,
+            src_region=wgs_region,
             dst_srs=self.dst_srs,
             verbose=self.verbose,
             weight=self.weight,
