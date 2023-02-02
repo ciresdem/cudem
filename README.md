@@ -325,7 +325,7 @@ bathymetric-topographic DEM.
 execute the following command:**
 
 ```
-waffles -R -79.5/-76.5/25/28 -E 15s -O gebcop -p -w -m -P epsg:4326 -M cudem:min_weight=.15:landmask=coastline:pre_count=1:keep_auxiliary=True gebco:exclude_tid=0/40,-11,1 copernicus:datatype=1,-11,2 mar_grav:raster=True:upper_limit=0,-11,.01 \--config
+waffles -R -79.5/-76.5/25/28 -E 15s -O gebcop -p -w -m -P epsg:4326 -M cudem:min_weight=.15:landmask=coastline:pre_count=1:keep_auxiliary=True gebco:exclude_tid=0/40,-11,1 copernicus:datatype=1,-11,2 mar_grav:raster=True:upper_limit=0,-11,.01 --config
 ```
 
 The contents of the generated config file configuration file
