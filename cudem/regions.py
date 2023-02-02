@@ -163,7 +163,7 @@ class Region:
                     self.wkt = self.export_as_wkt()
                 else: self.wkt = None
         return(self)
-        
+
     def from_string(self, region_str):
         """import a region from a region string 
 
@@ -922,6 +922,37 @@ def ogr_wkts(src_ds):
         poly = None
     return(these_regions)
 
+def parse_cli_region(region_str, verbose=True):
+    these_regions = []
+    for i_region in region_str:
+        tmp_region = Region().from_string(i_region)
+        if tmp_region.valid_p(check_xy=True):
+            these_regions.append(tmp_region)
+        else:
+            i_region_s = i_region.split(':')
+            tmp_region = ogr_wkts(i_region_s[0])
+            for i in tmp_region:
+                if i.valid_p():
+                    if len(i_region_s) > 1:
+                        these_regions.append(
+                            Region().from_string(
+                                '/'.join([i.format('str'), i_region_s[1]])
+                            )
+                        )
+                    else:
+                        these_regions.append(i)
+
+    if len(these_regions) == 0:
+        these_regions = [None]
+    else:
+        if verbose:
+            if len(these_regions) > 0:
+                utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
+            else:
+                utils.echo_error_msg('failed to parse region(s), {}'.format(region_str))
+            
+    return(these_regions)
+
 ## ==============================================
 ##
 ## regions cli
@@ -1013,23 +1044,12 @@ def regions_cli(argv = sys.argv):
         else: dls.append(arg)
         i = i + 1
 
-    for i_region in i_regions:
-        tmp_region = Region().from_string(i_region)
-        if tmp_region.valid_p():
-            these_regions.append(tmp_region)
-        else:
-            tmp_region = ogr_wkts(i_region)
-            for i in tmp_region:
-                if i.valid_p():
-                    these_regions.append(i)
-                    
+    these_regions = parse_cli_region(i_regions)
     if len(these_regions) == 0:
         print(regions_usage)
         utils.echo_error_msg('you must specify at least one region')
         sys.exit(-1)
-    else:
-        if want_verbose: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-    
+        
     for rn, this_region in enumerate(these_regions):
         if src_srs is not None:
             this_region.src_srs = src_srs

@@ -4543,32 +4543,8 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## set the datalists and names
     ## ==============================================
-    wg['data'] = dls
-
-    for i_region in i_regions:
-        tmp_region = regions.Region().from_string(i_region)
-        if tmp_region.valid_p(check_xy=True):
-            these_regions.append(tmp_region)
-        else:
-            i_region_s = i_region.split(':')
-            tmp_region = regions.ogr_wkts(i_region_s[0])
-            for i in tmp_region:
-                if i.valid_p():
-                    if len(i_region_s) > 1:
-                        these_regions.append(
-                            regions.Region().from_string(
-                                '/'.join([i.format('str'), i_region_s[1]])
-                            )
-                        )
-                    else:
-                        these_regions.append(i)
-                    
-    if len(these_regions) == 0:
-        these_regions = []
-        utils.echo_error_msg('failed to parse region(s), {}'.format(i_regions))
-    else:
-        if wg['verbose']: utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-
+    wg['data'] = dls    
+    these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
     name = wg['name']
     for i, this_region in enumerate(these_regions):
         wg['src_region'] = this_region
