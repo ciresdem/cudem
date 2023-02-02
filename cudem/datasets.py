@@ -1,6 +1,6 @@
 ### datasets.py - Datasets
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## datasets.py is part of CUDEM
 ##
