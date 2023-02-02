@@ -622,8 +622,8 @@ License:
 
 ## Code Citation
 
-Love, M., Amante, C., Carignan, K., MacFerrin, M., & Lim, E. (2022).
-CUDEM (Version 1.9.0) \[Computer software\].
+Love, M., Amante, C., Carignan, K., MacFerrin, M., & Lim, E. (2023).
+CUDEM (Version 1.10.3) \[Computer software\].
 [[https://github.com/ciresdem/cudem]{.ul}](https://github.com/ciresdem/cudem)
 
 # References
