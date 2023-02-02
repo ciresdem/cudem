@@ -1,6 +1,6 @@
 ### dlim.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## dlim.py is part of CUDEM
 ##
@@ -927,7 +927,7 @@ _datalist_fmts_short_desc = lambda: ',  '.join(
 ## ==============================================
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
-usage: {cmd} [ -acdghijqwEPRW [ args ] ] DATALIST,FORMAT,WEIGHT ...
+usage: {cmd} [ -acdghijqwEJPR [ args ] ] DATALIST,FORMAT,WEIGHT ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -938,8 +938,8 @@ Options:
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -E, --increment\tBlock data to INCREMENT in native units.
 \t\t\tWhere INCREMENT is x-inc[/y-inc]
-  -P, --s_srs\t\tSet the SOURCE projection.
-  -W, --t_srs\t\tSet the TARGET projection.
+  -J, --s_srs\t\tSet the SOURCE projection.
+  -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
 
   --archive\t\tARCHIVE the datalist to the given REGION
   --glob\t\tGLOB the datasets in the current directory to stdout
@@ -1004,10 +1004,10 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg[:2] == '-E':
             xy_inc = arg[2:].split('/')
-        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
+        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-J':
             src_srs = argv[i + 1]
             i = i + 1
-        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
+        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
         elif arg == '--separate' or arg == '-s':
@@ -1124,9 +1124,8 @@ def datalists_cli(argv=sys.argv):
                         elif 'src_srs' in this_inf and this_inf['src_srs'] is not None:
                             this_region.src_srs = this_inf['src_srs']
                             this_region.warp(dst_srs)
-
                     print(this_region.format('gmt'))
-                    #print(regions.Region().from_list(this_datalist.inf()['minmax']).format('gmt'))
+                    
                 elif want_csv:
                     this_datalist.parse_data_lists()
                     for x in this_datalist.data_lists.keys():
@@ -1150,35 +1149,10 @@ def datalists_cli(argv=sys.argv):
                             )
                         )
                 elif want_datalists:
-                    #import json
-                    #j = open('{}.json'.format(this_datalist.metadata['name']), 'w')
                     this_datalist.parse_data_lists()
-                    # for x in this_datalist.data_lists.keys():
-                    #     p = this_datalist.data_lists[x]['parent']
-
-                    #     out_json = {
-                    #         "Name": x,
-                    #         "Title": p.title if p.title is not None else x,
-                    #         "Source": p.source,
-                    #         "Date": p.date,
-                    #         "DataType": p.data_type,
-                    #         "Resolution": p.resolution,
-                    #         "HDatum": p.hdatum,
-                    #         "VDatum": p.vdatum,
-                    #         "URL": p.url
-                    #     }
-                    #     j.write(json.dumps(out_json))
-                    #     j.write('\n')
-                    # j.close()
-                    
                     for x in this_datalist.data_lists.keys():
                         p = this_datalist.data_lists[x]['parent']
                         print('{} ({})|{}'.format(p.metadata['title'], p.metadata['name'], p.weight))
-                        #print(xdl.data_lists[x]['parent'].echo_())
-                        #print('{}'.format(this_datalist.data_lists[x]['parent'].fn))
-                        #print(this_datalist.data_lists[x])
-
-                        #print('{} ({})|{}'.format(this_datalist.data_lists[x]['parent'].metadata['title'], this_datalist.data_lists[x]['parent'].metadata['name'], this_datalist.data_lists[x]['parent'].weight))
                 else:
                     try:
                         if want_separate:
