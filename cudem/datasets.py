@@ -1495,7 +1495,7 @@ class RasterFile(ElevationDataset):
             count = 0
             band = src_ds.GetRasterBand(1)
             gt = src_ds.GetGeoTransform()
-            ndv = float(band.GetNoDataValue())
+            ndv = utils.float_or(band.GetNoDataValue())
             mask_band = None
             weight_band = None
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
@@ -1538,7 +1538,7 @@ class RasterFile(ElevationDataset):
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
-                if not np.isnan(ndv):
+                if ndv is not None and not np.isnan(ndv):
                     band_data[band_data == ndv] = np.nan
 
                 if np.all(np.isnan(band_data)):

@@ -562,25 +562,16 @@ parsing and processing.
         self.remote=True
         self.metadata['name'] = self.fn
         
-        f_region = self.region.copy()
-        f_region.src_srs = self.dst_srs
-        
-        wgs_region = f_region.copy()
-        if self.dst_srs is not None:
-            wgs_region.warp('epsg:4326')
-        else:
-            self.dst_srs = 'epsg:4326'
-        
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn,
-            src_region=wgs_region,
+            src_region=self.region,
             dst_srs=self.dst_srs,
             verbose=self.verbose,
             weight=self.weight,
             x_inc=self.x_inc,
             y_inc=self.y_inc
         ).acquire()
-
+        
         if self.fetch_module is None:
             pass
         
@@ -1079,6 +1070,8 @@ def datalists_cli(argv=sys.argv):
                     
         sys.exit(0)
 
+    ## move function to regions.
+    ## add epsg src_srs support
     for i_region in i_regions:
         tmp_region = regions.Region().from_string(i_region)
         if tmp_region.valid_p(check_xy=True):
@@ -1187,23 +1180,18 @@ def datalists_cli(argv=sys.argv):
 
                         #print('{} ({})|{}'.format(this_datalist.data_lists[x]['parent'].metadata['title'], this_datalist.data_lists[x]['parent'].metadata['name'], this_datalist.data_lists[x]['parent'].weight))
                 else:
-                    if want_separate:
-                        try:
+                    try:
+                        if want_separate:
                             for this_entry in this_datalist.parse():
                                 this_entry.dump_xyz()
-                        except KeyboardInterrupt:
-                            utils.echo_error_msg('Killed by user')
-                            break
-                        except BrokenPipeError:
-                            utils.echo_error_msg('Pipe Broken')
-                            break
-                    else:
-                        try:
+                        else:
                             this_datalist.dump_xyz()
-                        except KeyboardInterrupt:
-                            utils.echo_error_msg('Killed by user')
-                            break
-                        except BrokenPipeError:
-                            utils.echo_error_msg('Pipe Broken')
-                            break
+                    except KeyboardInterrupt:
+                        utils.echo_error_msg('Killed by user')
+                        break
+                    except BrokenPipeError:
+                        utils.echo_error_msg('Pipe Broken')
+                        break
+                    except Exception as e:
+                        utils.echo_error_msg(e)
 ### End

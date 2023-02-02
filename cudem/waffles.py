@@ -179,7 +179,7 @@ class Waffle:
         set `set_incs` to True to block/sample datasets to given increment
         this function sets `self.data` to a list of dataset objects.
         """
-        
+
         self.data = [dlim.DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=self.p_region,

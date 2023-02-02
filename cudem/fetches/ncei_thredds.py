@@ -154,9 +154,9 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         """Search for data in the reference vector file"""
         
         for surv in FRED._filter_FRED(self):
-            #wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=NetCDF3"\
-            #    .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
-            #print(wcs_url)
+            wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=geotiff_float"\
+                .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
+            print(wcs_url)
             #self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
             for d in surv['DataLink'].split(','):
                 if d != '':

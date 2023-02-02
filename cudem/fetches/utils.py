@@ -375,15 +375,15 @@ class Fetch:
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
                 
                 req_h = req.headers
-                #utils.echo_msg(req_h)
-                if 'Content-length' in req_h:
-                    req_s = int(req_h['Content-length'])
                 if 'Content-Length' in req_h:
                     req_s = int(req_h['Content-Length'])
-                else: req_s = -1
-
+                else:
+                    req_s = -1
+                
                 try:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
+                        raise UnboundLocalError('{} exists, '.format(dst_fn))
+                    elif req_s == -1:
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                 except OSError:
                     pass
@@ -609,6 +609,15 @@ class FetchModule:
         #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
         self.headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
 
+        f_region = self.region.copy()
+        f_region.src_srs = self.dst_srs
+        
+        self.wgs_region = f_region.copy()
+        if self.dst_srs is not None:
+            self.wgs_region.warp('epsg:4326')
+        else:
+            self.dst_srs = 'epsg:4326'
+
     def run(self):
         raise(NotImplementedError)
 
@@ -641,7 +650,7 @@ class FetchModule:
     def yield_results_to_xyz(self, **kwargs):
         if len(self.results) == 0:
             self.run()
-            
+
         for entry in self.results:
             for xyz in self.yield_xyz(entry, **kwargs):
                 yield(xyz)

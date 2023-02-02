@@ -1,6 +1,6 @@
 ### FRED.py
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
 ##
 ## FRED.py is part of CUDEM
 ##
@@ -206,20 +206,26 @@ class FRED:
         _results = []
         if region is not None:
             _boundsGeom = region.export_as_geom()
-        else: _boundsGeom = None
+        else:
+            _boundsGeom = None
 
         if self._verbose:
             _prog = utils.CliProgress('filtering {}...'.format(self.FREDloc))
+            
         if not self.open_p:
             self._open_ds()
             close_p = True
-        else: close_p = False
+        else:
+            close_p = False
 
         for i, layer in enumerate(layers):
             if self._verbose: _prog.update_perc((i, len(layers)))
             #this_layer = self.layer
             where.append("DataSource = '{}'".format(layer))
-            if self._verbose: utils.echo_msg('FRED filter: {}'.format(where))
+            if self._verbose:
+                utils.echo_msg('FRED region: {}'.format(region))
+                utils.echo_msg('FRED filter: {}'.format(where))
+                
             self._attribute_filter(where = where)
             for feat in self.layer:
                 if _boundsGeom is not None:
@@ -251,7 +257,7 @@ class FRED:
 ## ==============================================
 ## lambdas for the FRED using the module object `mod`
 ## ==============================================
-_filter_FRED = lambda mod: mod.FRED._filter(region=mod.region, where=mod.where, layers=[mod.name])
+_filter_FRED = lambda mod: mod.FRED._filter(region=mod.wgs_region, where=mod.where, layers=[mod.name])
 _update_FRED = lambda mod, s: mod.FRED._add_surveys(s)
 _filter_FRED_index = lambda mod: [utils.echo_msg(json.dumps(f, indent = 2)) for f in _filter_FRED(mod)]
 

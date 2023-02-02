@@ -45,7 +45,7 @@ import cudem.fetches.FRED as FRED
 class TheNationalMap(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
-    def __init__(self, where=[], formats=None, extents=None, q=None, data_type=None, **kwargs):
+    def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
         super().__init__(**kwargs)
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
@@ -60,8 +60,8 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
         self._outdir = os.path.join(os.getcwd(), 'tnm')
-        self.where = where
-        
+        #self.where = where
+        self.where = [where] if len(where) > 0 else []        
         self.name = 'tnm'
         self._urls = [self._tnm_api_url]
         
@@ -71,7 +71,6 @@ class TheNationalMap(f_utils.FetchModule):
         self.formats = formats
         self.extents = extents
         self.q = q
-        self.data_type = data_type
 
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -83,7 +82,7 @@ class TheNationalMap(f_utils.FetchModule):
         
     def _fred_datasets(self):
         ids = {}
-        for r in self.FRED._filter(self.region, self.where, ['tnm']):
+        for r in self.FRED._filter(self.wgs_region, self.where, ['tnm']):
             ids[r['ID']] = r['DataType']
         return(ids)
 
@@ -193,9 +192,10 @@ class TheNationalMap(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             offset = 0
             total = 0
+
             while True:
                 _dataset_results = []
-                _data = {'bbox': self.region.format('bbox'), 'max': 100, 'offset': offset}
+                _data = {'bbox': self.wgs_region.format('bbox'), 'max': 100, 'offset': offset}
                 if q is not None: _data['q'] = str(q)
                 if f is None:
                     _data['prodFormats'] = surv['Etcetra']
@@ -215,7 +215,6 @@ class TheNationalMap(f_utils.FetchModule):
                         utils.echo_error_msg('error, {}'.format(e))
                 
                 if len(_dataset_results) > 0:
-
                     for item in _dataset_results['items']:
                         p_dir = '_'.join(item['title'].split(' '))
                         if _data['prodFormats'] is None:
@@ -324,10 +323,11 @@ class TheNationalMap(f_utils.FetchModule):
         
     def yield_xyz(self, entry):
         """yield the xyz data from the tnm fetch module"""
-        
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
-            datatype = entry[-2]
-            if datatype == 'raster':
+
+        status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+        if status == 0:
+            datatype = entry[-1]
+            if datatype == 'raster' or datatype == 'ned':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     src_srs = demfun.get_srs(src_tnm)
@@ -340,12 +340,7 @@ class TheNationalMap(f_utils.FetchModule):
                         x_inc=self.x_inc,
                         y_inc=self.y_inc,
                         verbose=self.verbose
-                    )
-                    for xyz in _ds.yield_xyz():
-                        if xyz.z != 0:
-                            yield(xyz)
-                    utils.remove_glob(src_tnm)
-                    
+                    )                    
             elif datatype == 'lidar':
                 _ds = datasets.LASFile(
                     fn=entry[1],
@@ -359,20 +354,22 @@ class TheNationalMap(f_utils.FetchModule):
                     verbose=self.verbose,
                     remote=True
                 )
-                #for xyz in _ds.yield_xyz():
-                for xyz in _ds.xyz_yield:
-                    yield(xyz)
-                    
-                utils.remove_glob('{}*'.format(entry[1]))
+            else:
+                _ds = None
                 
-        utils.remove_glob(entry[1])
+            if _ds is not None:
+                for xyz in _ds.yield_xyz():
+                    yield(xyz)
+        else:
+            utils.echo_error_msg(status)
 
     def yield_array(self, entry):
         """yield the xyz data from the tnm fetch module"""
-        
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
-            datatype = entry[-2]
-            if datatype == 'raster':
+
+        status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+        if status == 0:
+            datatype = entry[-1]
+            if datatype == 'raster' or datatype == 'ned':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     src_srs = demfun.get_srs(src_tnm)
@@ -386,11 +383,6 @@ class TheNationalMap(f_utils.FetchModule):
                         y_inc=self.y_inc,
                         verbose=self.verbose
                     )
-                    for arr in _ds.yield_array():
-                        #if xyz.z != 0:
-                        yield(arr)
-                    utils.remove_glob(src_tnm)
-                    
             elif datatype == 'lidar':
                 _ds = datasets.LASFile(
                     fn=entry[1],
@@ -404,15 +396,15 @@ class TheNationalMap(f_utils.FetchModule):
                     verbose=self.verbose,
                     remote=True
                 )
+            else:
+                _ds = None
+                
+            if _ds is not None:
                 for arr in _ds.yield_array():
                     yield(arr)
-                #for xyz in _ds.yield_xyz():
-                #for xyz in _ds.xyz_yield:
-                #    yield(xyz)
-                    
-                utils.remove_glob('{}*'.format(entry[1]))
-                
-        utils.remove_glob(entry[1])
+        else:
+            utils.echo_error_msg(status)                
+        #utils.remove_glob(entry[1])
         
 ## ==============================================
 ## class TNM is the old tnm api, doesn't currently work.
