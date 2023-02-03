@@ -42,7 +42,7 @@ class MarGrav(f_utils.FetchModule):
     '''Fetch mar_grav sattelite altimetry topography'''
     
     def __init__(self, mag=1, upper_limit=None, lower_limit=None, raster=False, **kwargs):
-        super().__init__(name='margrav', **kwargs) 
+        super().__init__(name='mar_grav', **kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
         self.mag = mag if mag == 1 else 0.1
         self.grav_region = self.region.copy()
@@ -72,13 +72,16 @@ class MarGrav(f_utils.FetchModule):
         return(self)
 
     def yield_ds(self, entry):
-        src_data = 'mar_grav_tmp.xyz'
+        src_data = os.path.join(self._outdir, 'mar_grav_tmp.xyz')
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
             if self.raster:
-                mar_grav_fn = utils.append_fn(
-                    'mar_grav', self.grav_region, self.x_inc
+                mar_grav_fn = os.path.join(
+                    self._outdir,
+                    utils.append_fn(
+                        'mar_grav', self.grav_region, self.x_inc
+                    )
                 )
                 
                 utils.run_cmd(
@@ -125,7 +128,7 @@ class MarGrav(f_utils.FetchModule):
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
             
-        utils.remove_glob('{}*'.format(src_data))
+        #utils.remove_glob('{}*'.format(src_data))
         
     def yield_xyz(self, entry):
         for ds in self.yield_ds(entry):

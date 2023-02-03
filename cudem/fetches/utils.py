@@ -646,7 +646,7 @@ class FetchModule:
         for entry in self.results:
             self.fetch(entry)
             
-    def dump_xyz(self, entry, keep_entry=True, dst_port=sys.stdout, **kwargs):
+    def dump_xyz(self, entry, dst_port=sys.stdout, keep_entry=True, **kwargs):
         for xyz in self.yield_xyz(entry, **kwargs):
             xyz.dump(
                 include_w=True if self.weight is not None else False,

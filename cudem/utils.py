@@ -759,10 +759,11 @@ def p_unzip(src_file, exts=None, outdir='./'):
             for ext in exts:
                 for zf in zfs:
                     if ext == zf.split('.')[-1]:
-                        src_procs.append(zf)
-                        if not os.path.exists(zf):
-                            echo_msg('Extracting {}'.format(zf))
-                            with open(zf, 'wb') as f:
+                        ext_zf = os.path.join(outdir, zf)
+                        src_procs.append(ext_zf)
+                        if not os.path.exists(ext_zf):
+                            echo_msg('Extracting {}'.format(ext_zf))
+                            with open(ext_zf, 'wb') as f:
                                 f.write(z.read(zf))
     elif src_file.split('.')[-1] == 'gz':
         try:

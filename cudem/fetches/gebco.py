@@ -128,7 +128,7 @@ class GEBCO(f_utils.FetchModule):
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(entry[1]) == 0:
 
-            gebco_fns = utils.p_unzip(entry[1], ['tif'])
+            gebco_fns = utils.p_unzip(entry[1], ['tif'], self._outdir)
             #print(gebco_fns)
             ## fetch the TID zip if needed
             if self.exclude_tid is not None:
@@ -137,10 +137,10 @@ class GEBCO(f_utils.FetchModule):
                 ).fetch_file(os.path.join(self._outdir, 'gebco_tid.zip')) == 0:
 
                     ## only extract the file(s) needed for the region...
-                    tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'])
+                    tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'], self._outdir)
                     #print(tid_fns)
                     for tid_fn in tid_fns:
-                        tmp_tid = 'tmp_tid.tif'
+                        tmp_tid = os.path.join(self._outdir, 'tmp_tid.tif')
                         tid_ds = gdal.Open(tid_fn)
                         tid_config = demfun.gather_infos(tid_ds)
                         tid_band = tid_ds.GetRasterBand(1)
@@ -172,7 +172,7 @@ class GEBCO(f_utils.FetchModule):
                         )
 
                         yield(gebco_ds)
-                        utils.remove_glob(tmp_tid)
+                        #utils.remove_glob(tmp_tid)
             else:
                 for gebco_fn in gebco_fns:                    
                     gebco_ds = datasets.RasterFile(
