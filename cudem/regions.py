@@ -1043,7 +1043,6 @@ def regions_cli(argv = sys.argv):
         i = i + 1
 
     these_regions = parse_cli_region(i_regions)
-    print(these_regions)
     if not these_regions:
         print(regions_usage)
         utils.echo_error_msg('you must specify at least one region')
