@@ -129,7 +129,6 @@ class GEBCO(f_utils.FetchModule):
         ).fetch_file(entry[1]) == 0:
 
             gebco_fns = utils.p_unzip(entry[1], ['tif'], self._outdir)
-            #print(gebco_fns)
             ## fetch the TID zip if needed
             if self.exclude_tid is not None:
                 if f_utils.Fetch(
@@ -138,7 +137,6 @@ class GEBCO(f_utils.FetchModule):
 
                     ## only extract the file(s) needed for the region...
                     tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'], self._outdir)
-                    #print(tid_fns)
                     for tid_fn in tid_fns:
                         tmp_tid = os.path.join(self._outdir, 'tmp_tid.tif')
                         tid_ds = gdal.Open(tid_fn)
@@ -147,8 +145,7 @@ class GEBCO(f_utils.FetchModule):
                         tid_array = tid_band.ReadAsArray().astype(float)
                         tid_ds = None
                         tid_config['ndv'] = -9999
-                        tid_config['dt'] = gdal.GDT_Float32
-                        
+                        tid_config['dt'] = gdal.GDT_Float32                        
                         for tid_key in self.exclude_tid:
                             tid_array[tid_array == tid_key] = tid_config['ndv']
                         
@@ -156,7 +153,6 @@ class GEBCO(f_utils.FetchModule):
                             tid_array[tid_array == tid_key] = self.tid_dic[tid_key][1]
                             
                         utils.gdal_write(tid_array, tmp_tid, tid_config)
-                                                
                         gebco_ds = datasets.RasterFile(
                             fn=tid_fn.replace('tid_', ''),
                             data_format=200,
@@ -170,9 +166,7 @@ class GEBCO(f_utils.FetchModule):
                             mask=tmp_tid,
                             weight_mask=tmp_tid
                         )
-
                         yield(gebco_ds)
-                        #utils.remove_glob(tmp_tid)
             else:
                 for gebco_fn in gebco_fns:                    
                     gebco_ds = datasets.RasterFile(

@@ -2902,7 +2902,6 @@ class WafflesCoastline(Waffle):
             extents='HU-8 Subbasin,HU-4 Subregion',
             outdir=self.cache_dir
         )
-        #this_tnm._outdir = self.cache_dir
         this_tnm.run()
         fr = cudem.fetches.utils.fetch_results(this_tnm, want_proc=False)
         fr.daemon = True
@@ -2910,7 +2909,6 @@ class WafflesCoastline(Waffle):
         fr.join()
 
         tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
-        
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
@@ -2933,8 +2931,6 @@ class WafflesCoastline(Waffle):
                     ),
                     verbose=self.verbose
                 )
-                #utils.remove_glob(tnm_zip[1], *tnm_zips, gdb)
-                #utils.remove_glob(*tnm_zips, gdb)
 
             utils.run_cmd(
                 'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
