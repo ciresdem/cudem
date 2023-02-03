@@ -942,9 +942,7 @@ def parse_cli_region(region_str, verbose=True):
                     else:
                         these_regions.append(i)
 
-    if len(these_regions) == 0:
-        these_regions = [None]
-    else:
+    if len(these_regions) > 0:
         if verbose:
             if len(these_regions) > 0:
                 utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
@@ -1045,7 +1043,8 @@ def regions_cli(argv = sys.argv):
         i = i + 1
 
     these_regions = parse_cli_region(i_regions)
-    if len(these_regions) == 0:
+    print(these_regions)
+    if not these_regions:
         print(regions_usage)
         utils.echo_error_msg('you must specify at least one region')
         sys.exit(-1)
