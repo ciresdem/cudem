@@ -958,7 +958,7 @@ def parse_cli_region(region_str, verbose=True):
 ## ==============================================
 regions_usage = '''{cmd} ({version}): regions; Process and generate regions
 
-usage: {cmd} [ -hqPRW [ args ] ]...
+usage: {cmd} [ -hqJPR [ args ] ]...
 
 Options:
   -R, --region\t\tThe desired REGION 
@@ -967,8 +967,8 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
-  -P, --s_srs\t\tSet the SOURCE projection.
-  -W, --t_srs\t\tSet the TARGET projection.
+  -J, --s_srs\t\tSet the SOURCE projection.
+  -P, --t_srs\t\tSet the TARGET projection.
   -B, --buffer\t\tBUFFER the region with a buffer-value.
   -e, --echo\t\tECHO the <processed> region
   -n, --name\t\tPrint the region as a NAME
@@ -1012,10 +1012,10 @@ def regions_cli(argv = sys.argv):
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
-        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-P':
+        elif arg == '-s_srs' or arg == '--s_srs' or arg == '-J':
             src_srs = argv[i + 1]
             i = i + 1
-        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-W':
+        elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
         elif arg == '-b' or arg == '-B' or arg == '--buffer':
