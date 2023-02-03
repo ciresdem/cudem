@@ -55,14 +55,12 @@ class HydroLakes(f_utils.FetchModule):
     """hydrolakes"""
     
     def __init__(self, where='1=1', want_globathy=False, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='hydrolakes', **kwargs)
         self.want_globathy = want_globathy
         self._hydrolakes_prods = 'https://www.hydrosheds.org/products/hydrolakes'
         self._hydrolakes_poly_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip'
         self._hydrolakes_gdb_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_gdb.zip'
         self._globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
-        self._outdir = os.path.join(os.getcwd(), 'hydrolakes')
-        self.name = 'hydrolakes'
         self.where = [where] if len(where) > 0 else []
         
     def extract_region(self, in_ogr, out_ogr=None):

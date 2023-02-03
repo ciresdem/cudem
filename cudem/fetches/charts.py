@@ -1,6 +1,6 @@
 ### charts.py - NOAA Nautical CHARTS fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## charts.py is part of CUDEM
 ##
@@ -47,12 +47,10 @@ class Charts(f_utils.FetchModule):
     """charts"""
     
     def __init__(self, where='1=1', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='charts', **kwargs)
         #self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer'
         self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer'
         self._charts_query_url = '{0}/queryDatasets?'.format(self._charts_url)
-        self._outdir = os.path.join(os.getcwd(), 'charts')
-        self.name = 'charts'
         self.where = where
         
     def run(self):

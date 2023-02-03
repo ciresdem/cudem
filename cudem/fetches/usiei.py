@@ -1,6 +1,6 @@
 ### usiei.py - US Interagency Elevation Inventory
 ##
-## Copyright (c) 2021 CIRES Coastal DEM Team
+## Copyright (c) 2021 - 2023 CIRES Coastal DEM Team
 ##
 ## usiei.py is part of CUDEM
 ##
@@ -79,11 +79,9 @@ layers:
 """
     
     def __init__(self, where='1=1', layer=0, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='usiei', **kwargs)
         self._usiei_api_url = 'https://coast.noaa.gov/arcgis/rest/services/USInteragencyElevationInventory/USIEIv2/MapServer'
         self._usiei_query_url = '{0}/{1}/query?'.format(self._usiei_api_url, layer)
-        self._outdir = os.path.join(os.getcwd(), 'usiei')
-        self.name = 'usiei'
         self.where = where
         
     def run(self):

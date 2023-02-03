@@ -1,6 +1,6 @@
 ### trackline.py - NOS fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
 ##
 ## trackline.py is part of CUDEM
 ##
@@ -37,12 +37,10 @@ class Trackline(f_utils.FetchModule):
     """trackline"""
     
     def __init__(self, where='1=1', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='trackline', **kwargs)
         #self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_bathymetry/MapServer/0'
         self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_combined_dynamic/MapServer/1'
         self._trackline_query_url = '{0}/query?'.format(self._trackline_url)
-        self._outdir = os.path.join(os.getcwd(), 'trackline')
-        self.name = 'trackline'
         self.where = where
         
     def run(self):

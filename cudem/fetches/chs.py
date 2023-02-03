@@ -1,6 +1,6 @@
 ### chs.py - chs fetch - Canada
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2016 - 2023 CIRES Coastal DEM Team
 ##
 ## chs.py is part of CUDEM
 ##
@@ -44,11 +44,9 @@ class CHS(f_utils.FetchModule):
     """Fetch bathymetric soundings from the CHS"""
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='chs', **kwargs)
         self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
         self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
-        self._outdir = os.path.join(os.getcwd(), 'chs')
-        self.name = 'chs'
         
     def run(self):
         """Run the CHS fetching module"""

@@ -1,6 +1,6 @@
 ### osm.py - open street map fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## osm.py is part of CUDEM
 ##
@@ -41,15 +41,13 @@ class OpenStreetMap(f_utils.FetchModule):
     """Fetch OSM data"""
     
     def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='osm', **kwargs)
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
         self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
         self._osm_api3 = 'https://overpass.openstreetmap.fr/api/interpreter'
         self._osm_planet_bz2 = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
         self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/pbf/planet-latest.osm.pbf'
         self._osm_continents = 'https://download.geofabrik.de/'
-        self._outdir = os.path.join(os.getcwd(), 'osm')
-        self.name = 'osm'
         self.q = q
         self.fmt = fmt
         self.planet = planet

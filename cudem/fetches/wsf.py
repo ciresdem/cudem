@@ -1,6 +1,6 @@
 ### wsf.py - WSF from DLR (German Aerospace Center)
 ##
-## Copyright (c) 2022 Regents of the University of Colorado
+## Copyright (c) 2022, 2023 Regents of the University of Colorado
 ##
 ## wsf.py is part of CUDEM
 ##
@@ -45,13 +45,11 @@ class WSF(f_utils.FetchModule):
     '''Fetch WSF data'''
 
     def __init__(self, where='', datatype=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='wsf', **kwargs)
 
         self._wsf_url = 'https://download.geoservice.dlr.de/WSF2019/files/'
         self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
-        self._outdir = os.path.join(os.getcwd(), 'wsf')
-        self.name = 'wsf'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
 
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }

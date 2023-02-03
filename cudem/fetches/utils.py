@@ -1,6 +1,6 @@
 ### utils.py
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## utils.py is part of CUDEM
 ##
@@ -594,7 +594,8 @@ class FetchModule:
 
     def __init__(
             self, src_region=None, callback=lambda: False, weight=None,
-            verbose=True, dst_srs='epsg:4326', x_inc=None, y_inc=None
+            verbose=True, dst_srs='epsg:4326', x_inc=None, y_inc=None,
+            outdir=None, name='fetches'
     ):
         self.region = src_region
         self.callback = callback
@@ -605,10 +606,16 @@ class FetchModule:
         self.dst_srs = dst_srs
         self.x_inc = utils.str2inc(x_inc)
         self.y_inc = utils.str2inc(y_inc)
-        self.name = None
+        self.name = name
         #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
         self.headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
-
+        self.outdir = outdir
+        
+        if self.outdir is None:
+            self._outdir = os.path.join(os.getcwd(), self.name)
+        else:
+            self._outdir = self.outdir
+        
         f_region = self.region.copy()
         f_region.src_srs = self.dst_srs
         
@@ -639,15 +646,18 @@ class FetchModule:
         for entry in self.results:
             self.fetch(entry)
             
-    def dump_xyz(self, entry, dst_port=sys.stdout, **kwargs):
+    def dump_xyz(self, entry, keep_entry=True, dst_port=sys.stdout, **kwargs):
         for xyz in self.yield_xyz(entry, **kwargs):
             xyz.dump(
                 include_w=True if self.weight is not None else False,
                 dst_port=dst_port,
                 encode=False
             )
+
+        if not keep_entry:
+            utils.remove_glob(entry[1])
             
-    def yield_results_to_xyz(self, **kwargs):
+    def yield_results_to_xyz(self, keep_entry=True, **kwargs):
         if len(self.results) == 0:
             self.run()
 
@@ -655,20 +665,26 @@ class FetchModule:
             for xyz in self.yield_xyz(entry, **kwargs):
                 yield(xyz)
                 
-    def dump_results_to_xyz(self, dst_port=sys.stdout, **kwargs):
-        for xyz in self.yield_results_to_xyz(**kwargs):
+            if not keep_entry:
+                utils.remove_glob(entry[1])
+                
+    def dump_results_to_xyz(self, dst_port=sys.stdout, keep_entry=True, **kwargs):
+        for xyz in self.yield_results_to_xyz(keep_entry, **kwargs):
             xyz.dump(
                 include_w=True if self.weight is not None else False,
                 dst_port=dst_port,
                 encode=False
             )
 
-    def yield_results_to_array(self, **kwargs):
+    def yield_results_to_array(self, keep_entry=True, **kwargs):
         if len(self.results) == 0:
             self.run()
             
         for entry in self.results:
             for arr in self.yield_array(entry, **kwargs):
                 yield(arr)
+                
+            if not keep_entry:
+                utils.remove_glob(entry[1])
             
 ### End

@@ -49,7 +49,7 @@ class CopernicusDEM(f_utils.FetchModule):
     '''Fetch COPERNICUS data'''
     
     def __init__(self, where='', datatype=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='copernicus', **kwargs)
         self.cop30_rurl = 'https://opentopography.s3.sdsc.edu/minio/raster/COP30/COP30_hh/'
         self.cop30_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/COP30/COP30_hh/'
         self.cop30_vrt_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/COP30/COP30_hh.vrt?token='
@@ -58,8 +58,6 @@ class CopernicusDEM(f_utils.FetchModule):
         self.cop_10_web = 'https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation'
         self.where = [where] if len(where) > 0 else []
         self.datatype = datatype        
-        self._outdir = os.path.join(os.getcwd(), 'copernicus')
-        self.name = 'copernicus'
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
 
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',

@@ -1,6 +1,6 @@
 ### ncei_thredds.py - NOAA NCEI THREDDS DEM fetch
 ##
-## Copyright (c) 2015 - 2022 Regents of the University of Colorado
+## Copyright (c) 2015 - 2023 Regents of the University of Colorado
 ##
 ## ncei_thredds.py is part of CUDEM
 ##
@@ -50,15 +50,12 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
     """Fetch DEMs from NCEI THREDDS Catalog"""
 
     def __init__(self, where=[], **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='ncei_thredds', **kwargs)
         self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
         self._ngdc_url = "https://www.ngdc.noaa.gov"
-        self._outdir = os.path.join(os.getcwd(), 'ncei_thredds')  
         ##self.where = where
         ##self.where.append(where)
-        self.where = [where] if len(where) > 0 else []
-        
-        self.name = 'ncei_thredds'
+        self.where = [where] if len(where) > 0 else []        
         self._urls = [self._nt_catalog, self._ngdc_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()

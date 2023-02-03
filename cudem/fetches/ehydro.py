@@ -1,6 +1,6 @@
 ### ehydro.py - eHydro fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## ehyrdo.py is part of CUDEM
 ##
@@ -87,12 +87,10 @@ specify `inc` to blockmedian the data when processing
 """
     
     def __init__(self, where='1=1', inc=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='ehydro', **kwargs)
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
         self._ehydro_api_url = 'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0'
         self._ehydro_query_url = '{0}/query?'.format(self._ehydro_api_url)
-        self._outdir = os.path.join(os.getcwd(), 'ehydro')
-        self.name = 'ehydro'
         self.where = where
         self.inc = utils.str2inc(inc)
 

@@ -1,6 +1,6 @@
 ### tides.py - TIDE stations fetch
 ##
-## Copyright (c) 2018 - 2022 Regents of the University of Colorado
+## Copyright (c) 2018 - 2023 Regents of the University of Colorado
 ##
 ## tides.py is part of CUDEM
 ##
@@ -72,10 +72,8 @@ class Tides(f_utils.FetchModule):
     """Fetch NOS Tide Stations"""
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='tides', **kwargs)
         self._stations_api_url = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
-        self._outdir = os.path.join(os.getcwd(), 'tides')
-        self.name = 'tides'
         self.s_datum = s_datum
         self.t_datum = t_datum
         self.units = units

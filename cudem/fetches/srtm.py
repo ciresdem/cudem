@@ -1,6 +1,6 @@
 ### srtm.py - SRTM fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## srtm.py is part of CUDEM
 ##
@@ -43,10 +43,8 @@ class SRTMPlus(f_utils.FetchModule):
     '''Fetch SRTM+ data'''
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs) 
+        super().__init__(name='srtm_plus', **kwargs) 
         self._srtm_url = 'https://topex.ucsd.edu/cgi-bin/get_srtm15.cgi'
-        self._outdir = os.path.join(os.getcwd(), 'srtm_plus')
-        self.name = 'srtm_plus'
 
     def run(self):
         '''Run the SRTM fetching module.'''

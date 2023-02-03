@@ -1,6 +1,6 @@
 ### mar_grav.py - mar_grav fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
 ##
 ## mar_grav.py is part of CUDEM
 ##
@@ -42,15 +42,14 @@ class MarGrav(f_utils.FetchModule):
     '''Fetch mar_grav sattelite altimetry topography'''
     
     def __init__(self, mag=1, upper_limit=None, lower_limit=None, raster=False, **kwargs):
-        super().__init__(**kwargs) 
+        super().__init__(name='margrav', **kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
-        self._outdir = os.path.join(os.getcwd(), 'mar_grav')
-        self.name = 'mar_grav'
         self.mag = mag if mag == 1 else 0.1
         self.grav_region = self.region.copy()
         self.grav_region.zmax = utils.float_or(upper_limit)
         self.grav_region.zmin = utils.float_or(lower_limit)
-        self.raster = utils.str2inc(raster)
+        #print(self.x_inc)
+        self.raster = raster
 
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -77,14 +76,14 @@ class MarGrav(f_utils.FetchModule):
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
-            if self.raster is not None:
+            if self.raster:
                 mar_grav_fn = utils.append_fn(
-                    'mar_grav', self.grav_region, self.raster
+                    'mar_grav', self.grav_region, self.x_inc
                 )
                 
                 utils.run_cmd(
                     'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
-                        self.region.format('gmt'), self.raster, mar_grav_fn, src_data
+                        self.region.format('gmt'), self.x_inc, mar_grav_fn, src_data
                     ),
                     verbose=True
                 )

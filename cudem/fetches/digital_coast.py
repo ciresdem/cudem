@@ -1,6 +1,6 @@
 ### digital_coast.py - NOAA Digital Coast fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## digital_coast.py is part of CUDEM
 ##
@@ -130,10 +130,8 @@ increment to save space.
 """
     
     def __init__(self, where='1=1', index=False, datatype=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='digital_coast', **kwargs)
         self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
-        self._outdir = os.path.join(os.getcwd(), 'digital_coast')
-        self.name = 'digital_coast'
         self.where = where
         self.index = index
         self.datatype = datatype

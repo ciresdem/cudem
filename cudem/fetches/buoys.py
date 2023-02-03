@@ -1,6 +1,6 @@
 ### buoys.py - STATIONS fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2021 - 2023 CIRES Coastal DEM Team
 ##
 ## buoys.py is part of CUDEM
 ##
@@ -51,15 +51,13 @@ class BUOYS(f_utils.FetchModule):
     """Fetch NOS Tide Stations"""
     
     def __init__(self, buoy_id=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='buoys', **kwargs)
         self._ndbc_url = 'https://www.ndbc.noaa.gov'
         self._buoy_box_search_url = 'https://www.ndbc.noaa.gov/box_search.php?'
         self._buoy_station_url = 'https://www.ndbc.noaa.gov/station_page.php?'
         self._buoy_stations_url = 'https://www.ndbc.noaa.gov/to_station.shtml'
         self._buoy_station_kml = 'https://www.ndbc.noaa.gov/kml/marineobs_by_owner.kml'
         self._buoy_station_realtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
-        self._outdir = os.path.join(os.getcwd(), 'buoys')
-        self.name = 'buoys'
         self.buoy_id = buoy_id
 
     def run(self):

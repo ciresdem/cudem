@@ -1,6 +1,6 @@
 ### gebco.py - GEBCO dataset
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## gebco.py is part of CUDEM
 ##
@@ -50,7 +50,7 @@ class GEBCO(f_utils.FetchModule):
             lower_limit=None,
             **kwargs
     ):
-        super().__init__(**kwargs) 
+        super().__init__(name='gebco', **kwargs) 
 
         self._gebco_urls = {
             'gebco_ice': {
@@ -82,9 +82,6 @@ class GEBCO(f_utils.FetchModule):
             self.exclude_tid.remove(None)
         except:
             pass
-        
-        self._outdir = os.path.join(os.getcwd(), 'gebco')
-        self.name = 'gebco'
 
         self.tid_dic = {
             0: ['Land', .21],
@@ -138,7 +135,8 @@ class GEBCO(f_utils.FetchModule):
                 if f_utils.Fetch(
                         self._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
                 ).fetch_file(os.path.join(self._outdir, 'gebco_tid.zip')) == 0:
-                    
+
+                    ## only extract the file(s) needed for the region...
                     tid_fns = utils.p_unzip(os.path.join(self._outdir, 'gebco_tid.zip'), ['tif'])
                     #print(tid_fns)
                     for tid_fn in tid_fns:

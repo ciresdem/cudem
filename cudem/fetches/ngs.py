@@ -1,6 +1,6 @@
 ### ngs.py - NGS fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## ngs.py is part of CUDEM
 ##
@@ -44,10 +44,8 @@ class NGS(f_utils.FetchModule):
     """Fetch NGS monuments from NOAA"""
     
     def __init__(self, datum='geoidHt', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='ngs', **kwargs)
         self._ngs_search_url = 'http://geodesy.noaa.gov/api/nde/bounds?'
-        self._outdir = os.path.join(os.getcwd(), 'ngs')
-        self.name = 'ngs'
         if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
             utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
             self.datum = 'geoidHt'

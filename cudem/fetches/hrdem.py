@@ -1,6 +1,6 @@
 ### ncei_thredds.py - NOAA Digital Coast fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
 ##
 ## ncei_thredds.py is part of CUDEM
 ##
@@ -43,13 +43,10 @@ class HRDEM(f_utils.FetchModule):
     """Fetch HRDEM data from Canada (NRCAN)"""
     
     def __init__(self, where='', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='hrdem', **kwargs)
         self._hrdem_footprints_url = 'ftp://ftp.maps.canada.ca/pub/elevation/dem_mne/highresolution_hauteresolution/Datasets_Footprints.zip'
         self._hrdem_info_url = 'https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6'
-        self._outdir = os.path.join(os.getcwd(), 'hrdem')
         self.where = [where] if len(where) > 0 else []
-        self.name = 'hrdem'
-        
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
         

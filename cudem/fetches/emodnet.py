@@ -1,6 +1,6 @@
 ### emodnet.py - emodnet fetch - Europe
 ##
-## Copyright (c) 2018 - 2022 Regents of the University of Colorado
+## Copyright (c) 2018 - 2023 Regents of the University of Colorado
 ##
 ## emodnet.py is part of CUDEM
 ##
@@ -42,10 +42,8 @@ class EMODNet(f_utils.FetchModule):
     """Fetch raster data from the EMODNET DTM"""
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs) 
+        super().__init__(name='emodnet', **kwargs) 
         self._emodnet_grid_url = 'https://ows.emodnet-bathymetry.eu/wcs?'
-        self._outdir = os.path.join(os.getcwd(), 'emodnet')
-        self.name = 'emodnet'
 
     def run(self):
         """Run the EMODNET fetching module"""

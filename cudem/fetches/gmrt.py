@@ -1,6 +1,6 @@
 ### gmrt.py - GMRT dataset
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## gmrt.py is part of CUDEM
 ##
@@ -71,13 +71,11 @@ class GMRT(f_utils.FetchModule):
     '''Fetch raster data from the GMRT'''
     
     def __init__(self, res='default', fmt='geotiff', bathy_only=False, upper_limit=None, lower_limit=None, layer='topo', **kwargs):
-        super().__init__(**kwargs) 
+        super().__init__(name='gmrt', **kwargs) 
 
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
         self._gmrt_grid_urls_url = "https://www.gmrt.org:443/services/GridServer/urls?"
         self._gmrt_grid_metadata_url = "https://www.gmrt.org/services/GridServer/metadata?"        
-        self._outdir = os.path.join(os.getcwd(), 'gmrt')
-        self.name = 'gmrt'
         self.res = res
         self.fmt = fmt
         if layer != 'topo' and layer != 'topo-mask':

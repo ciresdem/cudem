@@ -2816,9 +2816,9 @@ class WafflesCoastline(Waffle):
         """
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, layer='topo'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, layer='topo', outdir=self.cache_dir
         )
-        this_gmrt._outdir = self.cache_dir
+        #this_gmrt._outdir = self.cache_dir
         this_gmrt.run()
 
         fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
@@ -2839,9 +2839,9 @@ class WafflesCoastline(Waffle):
         """copernicus"""
 
         this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, datatype='1'
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, datatype='1', outdir=self.cache_dir
         )
-        this_cop._outdir = self.cache_dir
+        #this_cop._outdir = self.cache_dir
         this_cop.run()
 
         fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)
@@ -2865,9 +2865,9 @@ class WafflesCoastline(Waffle):
         """wsf"""
 
         this_wsf = cudem.fetches.wsf.WSF(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
         )
-        this_wsf._outdir = self.cache_dir
+        #this_wsf._outdir = self.cache_dir
         this_wsf.run()
 
         fr = cudem.fetches.utils.fetch_results(this_wsf, want_proc=False, check_size=False)
@@ -2898,10 +2898,11 @@ class WafflesCoastline(Waffle):
             src_region=self.wgs_region,
             weight=self.weights,
             verbose=self.verbose,
-            where=["Name LIKE '%Hydro%'"],
-            extents='HU-8 Subbasin,HU-4 Subregion'
+            where="Name LIKE '%Hydro%'",
+            extents='HU-8 Subbasin,HU-4 Subregion',
+            outdir=self.cache_dir
         )
-        this_tnm._outdir = self.cache_dir
+        #this_tnm._outdir = self.cache_dir
         this_tnm.run()
         fr = cudem.fetches.utils.fetch_results(this_tnm, want_proc=False)
         fr.daemon = True
@@ -2962,9 +2963,9 @@ class WafflesCoastline(Waffle):
         """HydroLakes -- Global Lakes"""
         
         this_lakes = cudem.fetches.hydrolakes.HydroLakes(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose
+            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
         )
-        this_lakes._outdir = self.cache_dir
+        #this_lakes._outdir = self.cache_dir
         this_lakes.run()
         
         fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False)
@@ -3005,9 +3006,9 @@ class WafflesCoastline(Waffle):
         this_osm = cudem.fetches.osm.OpenStreetMap(
             src_region=self.wgs_region, weight=self.weights, verbose=self.verbose,
             planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm',
-            min_length=self.min_building_length
+            min_length=self.min_building_length, outdir=self.cache_dir
         )
-        this_osm._outdir = self.cache_dir
+        #this_osm._outdir = self.cache_dir
         this_osm.run()
 
         # fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, check_size=False)
@@ -3209,9 +3210,9 @@ class WafflesLakes(Waffle):
         """fetch hydrolakes polygons"""
 
         this_lakes = cudem.fetches.hydrolakes.HydroLakes(
-            src_region=self.p_region, weight=self.weights, verbose=self.verbose
+            src_region=self.p_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
         )
-        this_lakes._outdir = self.cache_dir
+        #this_lakes._outdir = self.cache_dir
         this_lakes.run()
 
         fr = cudem.fetches.utils.fetch_results(
@@ -3273,9 +3274,9 @@ class WafflesLakes(Waffle):
             gmrt_region = self.p_region
         
         this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=gmrt_region, weight=self.weights, verbose=self.verbose, layer='topo'
+            src_region=gmrt_region, weight=self.weights, verbose=self.verbose, layer='topo', outdir=self.cache_dir
         )
-        this_gmrt._outdir = self.cache_dir
+        #this_gmrt._outdir = self.cache_dir
         this_gmrt.run()
 
         fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
@@ -3298,9 +3299,9 @@ class WafflesLakes(Waffle):
             cop_region = self.p_region
             
         this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=cop_region, weight=self.weights, verbose=self.verbose, datatype='1'
+            src_region=cop_region, weight=self.weights, verbose=self.verbose, datatype='1', outdir=self.cache_dir
         )
-        this_cop._outdir = self.cache_dir
+        #this_cop._outdir = self.cache_dir
         this_cop.run()
 
         fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)

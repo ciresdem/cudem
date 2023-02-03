@@ -612,29 +612,10 @@ See `fetches_cli_usage` for full cli options.
     elif len(xy_inc) == 0:
         xy_inc = [None, None]
         
-    for i_region in i_regions:
-        tmp_region = regions.Region().from_string(i_region)
-        if tmp_region.valid_p(check_xy=True):
-            these_regions.append(tmp_region)
-        else:
-            i_region_s = i_region.split(':')
-            tmp_region = regions.ogr_wkts(i_region_s[0])
-            for i in tmp_region:
-                if i.valid_p():
-                    if len(i_region_s) > 1:
-                        these_regions.append(
-                            regions.Region().from_string(
-                                '/'.join([i.format('str'), i_region_s[1]])
-                            )
-                        )
-                    else:
-                        these_regions.append(i)
-
+    these_regions = regions.parse_cli_region(i_regions, want_verbose)
     if not these_regions:
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
-    if want_verbose:
-        utils.echo_msg('parsed {} region(s)'.format(len(these_regions)))
-
+        
     for rn, this_region in enumerate(these_regions):
         if stop_threads:
             return
@@ -698,10 +679,11 @@ See `fetches_cli_usage` for full cli options.
                             continue
                         
                         fr.fetch_q.task_done()
+                        
                 fr.join()
                 _p.end(x_f.status, 'fetched {} remote data files'.format(len(x_f.results)))
+                
             if want_verbose:
                 utils.echo_msg('ran fetch module {} on region {}...\
-            '.format(x_f.name, this_region.format('str')))
-                
+            '.format(x_f.name, this_region.format('str')))                
 ### End

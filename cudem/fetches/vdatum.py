@@ -1,6 +1,6 @@
 ### vdatum.py - vdatum conversion grids
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## vdatum.py is part of CUDEM
 ##
@@ -171,13 +171,11 @@ class VDATUM(f_utils.FetchModule):
     }
     
     def __init__(self, where=[], datatype=None, gtx=False, epsg=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='vdatum', **kwargs)
         
         self._vdatum_data_url = 'https://vdatum.noaa.gov/download/data/'
         self._proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
         
-        self._outdir = os.path.join(os.getcwd(), 'vdatum')
-
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
         self._vdatums = ['TIDAL']
@@ -186,9 +184,7 @@ class VDATUM(f_utils.FetchModule):
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
         self.gtx = gtx
-        self.name = 'vdatum'
         self.v_datum = 'varies'
-        
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
         

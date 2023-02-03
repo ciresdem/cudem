@@ -1,6 +1,6 @@
 ### arcticdem.py - Arctic DEM
 ##
-## Copyright (c) 2022 CIRES Coastal DEM Team
+## Copyright (c) 2022, 2023 CIRES Coastal DEM Team
 ##
 ## arctic.py is part of CUDEM
 ##
@@ -60,10 +60,8 @@ class ArcticDEM(f_utils.FetchModule):
     """ArcticDEM"""
     
     def __init__(self, where='1=1', layer=0, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='arcticdem', **kwargs)
         self._arctic_dem_index_url = 'https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/indexes/ArcticDEM_Tile_Index_Rel7.zip'
-        self._outdir = os.path.join(os.getcwd(), 'arcticdem')
-        self.name = 'arcticdem'
         self.where = [where] if len(where) > 0 else []
         self.arctic_region = self.region.copy()
         #self.arctic_region.warp('epsg:3413')

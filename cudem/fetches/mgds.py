@@ -35,14 +35,12 @@ class MGDS(f_utils.FetchModule):
     '''Fetch marine data from MGDS'''
     
     def __init__(self, data_type='Bathymetry', **kwargs):
-        super().__init__(**kwargs) 
+        super().__init__(name='mgds', **kwargs) 
         self._mgds_file_url = "https://www.marine-geo.org/services/FileServer?"
         self._mgds_filedownload_url = "http://www.marine-geo.org/services/FileDownloadServer?"
         self._mgds_filemetadata_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
         self._mgds_archive_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
         self._mgds_search_url = "http://www.marine-geo.org/services/search/datasets??"
-        self._outdir = os.path.join(os.getcwd(), 'mgds')
-        self.name = 'mgds'
         self.data_type = data_type.replace(',', ':')
         
     def run(self):

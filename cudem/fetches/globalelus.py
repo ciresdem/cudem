@@ -1,6 +1,6 @@
 ### globalelus.py - USACE fetch
 ##
-## Copyright (c) 2010 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2010 - 2023 CIRES Coastal DEM Team
 ##
 ## globalelus.py is part of CUDEM
 ##
@@ -37,13 +37,9 @@ class GlobalELUS(f_utils.FetchModule):
     '''Fetch GLOBAL ELUS data from USGS'''
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
+        super().__init__(name='globalelus', **kwargs)
         self._usace_gs_api_url = 'https://rmgsc.cr.usgs.gov/arcgis/rest/services/globalelus/MapServer/export?'
         
-        self._outdir = os.path.join(os.getcwd(), 'globalelus')
-        self.name = 'globalelus'
-
     def run(self):
         '''Run the GLOBALELUS fetching module'''
         

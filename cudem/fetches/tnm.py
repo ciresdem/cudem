@@ -46,7 +46,7 @@ class TheNationalMap(f_utils.FetchModule):
     """Fetch elevation data from The National Map"""
 
     def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='tnm', **kwargs)
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
         self._tnm_product_url = 'https://tnmaccess.nationalmap.gov/api/v1/products?'
@@ -59,10 +59,11 @@ class TheNationalMap(f_utils.FetchModule):
                          'National Hydrography Dataset Plus High Resolution (NHDPlus HR)', 'National Hydrography Dataset (NHD) Best Resolution',
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
-        self._outdir = os.path.join(os.getcwd(), 'tnm')
+        # if self.outdir is None:
+        #     self._outdir = os.path.join(os.getcwd(), 'tnm')
+            
         #self.where = where
         self.where = [where] if len(where) > 0 else []        
-        self.name = 'tnm'
         self._urls = [self._tnm_api_url]
         
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
@@ -325,39 +326,42 @@ class TheNationalMap(f_utils.FetchModule):
         """yield the xyz data from the tnm fetch module"""
 
         status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+        _datasets = []
         if status == 0:
             datatype = entry[-1]
-            if datatype == 'raster' or datatype == 'ned':
+            if datatype == 'raster':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     src_srs = demfun.get_srs(src_tnm)
-                    _ds = datasets.RasterFile(
-                        fn=src_tnm,
-                        data_format=200,
-                        src_srs=src_srs,
+                    _datasets.append(
+                        datasets.RasterFile(
+                            fn=src_tnm,
+                            data_format=200,
+                            src_srs=src_srs,
+                            dst_srs=self.dst_srs,
+                            src_region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            verbose=self.verbose,
+                            remote=True
+                        )
+                    )
+            elif datatype == 'lidar':
+                _datasets.append(
+                    datasets.LASFile(
+                        fn=entry[1],
+                        data_format=300,
                         dst_srs=self.dst_srs,
+                        weight=self.weight,
                         src_region=self.region,
                         x_inc=self.x_inc,
                         y_inc=self.y_inc,
-                        verbose=self.verbose
-                    )                    
-            elif datatype == 'lidar':
-                _ds = datasets.LASFile(
-                    fn=entry[1],
-                    data_format=300,
-                    #src_srs=ds_epsg,
-                    dst_srs=self.dst_srs,
-                    weight=self.weight,
-                    src_region=self.region,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    verbose=self.verbose,
-                    remote=True
+                        verbose=self.verbose,
+                        remote=True
+                    )
                 )
-            else:
-                _ds = None
                 
-            if _ds is not None:
+            for _ds in _datasets:
                 for xyz in _ds.yield_xyz():
                     yield(xyz)
         else:
@@ -367,39 +371,42 @@ class TheNationalMap(f_utils.FetchModule):
         """yield the xyz data from the tnm fetch module"""
 
         status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1])
+        _datasets = []
         if status == 0:
             datatype = entry[-1]
-            if datatype == 'raster' or datatype == 'ned':
+            if datatype == 'raster':
                 src_tnms = utils.p_unzip(entry[1], ['tif', 'img', 'gdal', 'asc', 'bag'])
                 for src_tnm in src_tnms:
                     src_srs = demfun.get_srs(src_tnm)
-                    _ds = datasets.RasterFile(
-                        fn=src_tnm,
-                        data_format=200,
-                        src_srs=src_srs,
+                    _datasets.append(
+                        datasets.RasterFile(
+                            fn=src_tnm,
+                            data_format=200,
+                            src_srs=src_srs,
+                            dst_srs=self.dst_srs,
+                            src_region=self.region,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            verbose=self.verbose,
+                            remote=True
+                        )
+                    )
+            elif datatype == 'lidar':
+                _datasets.append(
+                    datasets.LASFile(
+                        fn=entry[1],
+                        data_format=300,
                         dst_srs=self.dst_srs,
+                        weight=self.weight,
                         src_region=self.region,
                         x_inc=self.x_inc,
                         y_inc=self.y_inc,
-                        verbose=self.verbose
+                        verbose=self.verbose,
+                        remote=True
                     )
-            elif datatype == 'lidar':
-                _ds = datasets.LASFile(
-                    fn=entry[1],
-                    data_format=300,
-                    #src_srs=ds_epsg,
-                    dst_srs=self.dst_srs,
-                    weight=self.weight,
-                    src_region=self.region,
-                    x_inc=self.x_inc,
-                    y_inc=self.y_inc,
-                    verbose=self.verbose,
-                    remote=True
                 )
-            else:
-                _ds = None
                 
-            if _ds is not None:
+            for _ds in _datasets:
                 for arr in _ds.yield_array():
                     yield(arr)
         else:

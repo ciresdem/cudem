@@ -1,6 +1,6 @@
 ### multibeam.py - NCEI Multibeam
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## multibeam.py is part of CUDEM
 ##
@@ -50,13 +50,11 @@ class MBDB(f_utils.FetchModule):
     """NOSHydro"""
     
     def __init__(self, where='1=1', **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='multibeam', **kwargs)
         self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
         self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
         #self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
         self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
-        self._outdir = os.path.join(os.getcwd(), 'multibeam')
-        self.name = 'multibeam'
         self.where = where
         
     def run(self):

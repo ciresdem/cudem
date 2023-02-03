@@ -1,6 +1,6 @@
 ### nos.py - NOS fetch
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## nos.py is part of CUDEM
 ##
@@ -91,13 +91,11 @@ class HydroNOS(f_utils.FetchModule):
     """NOSHydro"""
     
     def __init__(self, where='1=1', layer=1, datatype=None, index=False, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='hydronos', **kwargs)
         self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
         self._nos_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro/MapServer'
         self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
         self._nos_query_url = '{0}/{1}/query?'.format(self._nos_dynamic_url, layer)
-        self._outdir = os.path.join(os.getcwd(), 'hydronos')
-        self.name = 'hydronos'
         self.where = where
         self.datatype = datatype
         self.index = index

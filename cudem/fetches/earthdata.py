@@ -1,6 +1,6 @@
 ### EarthData Download Script
 ##
-## Copyright (c) 2021 - 2022 Regents of the University of Colorado
+## Copyright (c) 2021 - 2023 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining
 ## a copy of this software and associated documentation files (the "Software"),
@@ -121,16 +121,13 @@ class EarthData(f_utils.FetchModule):
             name=None,
             **kwargs
     ):
-        super().__init__(**kwargs)
+        super().__init__(name='earthdata', **kwargs)
         self.CMR_URL = 'https://cmr.earthdata.nasa.gov'
         self.URS_URL = 'https://urs.earthdata.nasa.gov'
         self.CMR_PAGE_SIZE = 2000
         self.CMR_FILE_URL = ('{0}/search/granules.json?'
                              'sort_key[]=start_date&sort_key[]=producer_granule_id'
                              '&scroll=true&page_size={1}'.format(CMR_URL, CMR_PAGE_SIZE))
-        self.name = 'earthdata'
-        self._outdir = os.path.join(os.getcwd(), 'earthdata')
-        
         self.short_name = short_name
         self.provider = provider
         self.version = version
