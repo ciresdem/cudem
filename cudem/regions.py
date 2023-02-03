@@ -951,6 +951,68 @@ def parse_cli_region(region_str, verbose=True):
             
     return(these_regions)
 
+def generate_tile_set(in_region=None, inc=.25):
+    if in_region is None:
+        in_region = Region(xmin=-180, xmax=180, ymin=-90, ymax=90)
+
+    tile_regions = []
+    this_xmin = in_region.xmin
+    this_xmax = in_region.xmin+inc
+    this_ymin = in_region.ymin
+    this_ymax = in_region.ymin+inc
+    
+    # this_region = Region(
+    #     xmin=this_xmin,
+    #     xmax=this_xmax,
+    #     ymin=this_ymin,
+    #     ymax=this_ymax
+    # )
+    # tile_regions.append(this_region)
+
+    while this_xmax < in_region.xmax:
+        while this_ymax < in_region.ymax:
+            this_ymin = this_ymax
+            this_ymax += inc        
+            this_region = Region(xmin=this_xmin, xmax=this_xmax, ymin=this_ymin, ymax=this_ymax)
+            tile_regions.append(this_region)
+            
+        this_ymin = in_region.ymin
+        this_ymax = this_ymin + inc
+        this_xmin = this_xmax
+        this_xmax += inc
+            
+    return(tile_regions)
+
+def region_list_to_ogr(region_list, dst_ogr, dst_fmt='ESRI Shapefile'):
+    """convert a region list to an OGR vector
+    """
+
+    driver = ogr.GetDriverByName(dst_fmt)
+    if os.path.exists(dst_ogr):
+        driver.DeleteDataSource(dst_ogr)
+
+    dst_ds = driver.CreateDataSource(dst_ogr)
+    dst_lyr = dst_ds.CreateLayer(dst_ogr, geom_type = ogr.wkbPolygon)
+    dst_lyr.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+        
+    wkts = []
+    for this_id, this_region in enumerate(region_list):
+        eg = [[this_region.ymin, this_region.xmin],
+              [this_region.ymin, this_region.xmax],
+              [this_region.ymax, this_region.xmax],
+              [this_region.ymax, this_region.xmin],
+              [this_region.ymin, this_region.xmin]]
+    
+        wkt = create_wkt_polygon(eg)    
+        dst_feat = ogr.Feature(dst_lyr.GetLayerDefn())
+        dst_feat.SetGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+        dst_feat.SetField('id', this_id)
+        dst_lyr.CreateFeature(dst_feat)
+        dst_feat = None
+        
+    dst_ds = None
+
+
 ## ==============================================
 ##
 ## regions cli
@@ -958,7 +1020,7 @@ def parse_cli_region(region_str, verbose=True):
 ## ==============================================
 regions_usage = '''{cmd} ({version}): regions; Process and generate regions
 
-usage: {cmd} [ -hqJPR [ args ] ]...
+usage: {cmd} [ -hqJPRT [ args ] ]...
 
 Options:
   -R, --region\t\tThe desired REGION 
@@ -969,6 +1031,7 @@ Options:
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection.
+  -T, --tile_set\tGenerate a TILESET from the input region. (set incrememnt here)
   -B, --buffer\t\tBUFFER the region with a buffer-value.
   -e, --echo\t\tECHO the <processed> region
   -n, --name\t\tPrint the region as a NAME
@@ -996,6 +1059,7 @@ def regions_cli(argv = sys.argv):
     i_regions = []
     these_regions = []
     want_verbose = True
+    tile_set = None
     echo = False
     echo_fn = False
     bv = None
@@ -1020,6 +1084,9 @@ def regions_cli(argv = sys.argv):
             i = i + 1
         elif arg == '-b' or arg == '-B' or arg == '--buffer':
             bv = utils.float_or(argv[i+1])
+            i = i + 1
+        elif arg == '-t' or arg == '-T' or arg == '--tile_set':
+            tile_set = utils.float_or(argv[i+1])
             i = i + 1
         elif arg == '-e' or arg == '--echo' or arg == '-ee':
             echo = True
@@ -1047,7 +1114,14 @@ def regions_cli(argv = sys.argv):
         print(regions_usage)
         utils.echo_error_msg('you must specify at least one region')
         sys.exit(-1)
-        
+
+    if tile_set is not None:
+        for rn, this_region in enumerate(these_regions):
+            these_tiles = generate_tile_set(this_region, tile_set)
+            region_list_to_ogr(these_tiles, 'regions_tile_set.shp')
+            
+        these_regions = []
+            
     for rn, this_region in enumerate(these_regions):
         if src_srs is not None:
             this_region.src_srs = src_srs
