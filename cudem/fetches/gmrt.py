@@ -117,7 +117,7 @@ class GMRT(f_utils.FetchModule):
             params=self.data, tries=10, timeout=2
         )
         if req is not None:
-            outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+            outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn_full'), 'tif' if self.fmt == 'geotiff' else 'grd')
             self.results.append([req.url, os.path.join(self._outdir, outf), 'gmrt']) 
             
             # try:
@@ -147,10 +147,19 @@ class GMRT(f_utils.FetchModule):
         return(self)
 
     def yield_ds(self, entry):
-        src_data = 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc')
+        #out_fn = 'gmrt_{}'.format(seregion.format('fn_full'))
+        #src_data = os.path.join(self._outdir, 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc'))
+        src_data = entry[1]
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
-        ).fetch_file(src_data,timeout=10, read_timeout=120) == 0:
+        ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
+
+            ds = gdal.Open(src_data, gdal.GA_Update)
+            md = ds.GetMetadata()
+            md['AREA_OR_POINT'] = 'Point'
+            ds.SetMetadata(md)
+            ds = None
+            
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,
                 data_format=200,
@@ -161,15 +170,14 @@ class GMRT(f_utils.FetchModule):
                 y_inc=self.y_inc,
                 weight=self.weight,
                 src_region=self.gmrt_p_region,
+                #src_region=self.region,
                 verbose=self.verbose
             )
-
             yield(gmrt_ds)
-
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
             
-        utils.remove_glob('{}*'.format(src_data))
+        #utils.remove_glob('{}*'.format(src_data))
             
     def yield_xyz(self, entry):
         for ds in self.yield_ds(entry):

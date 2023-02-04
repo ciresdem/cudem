@@ -258,10 +258,11 @@ class Waffle:
     def _stacks_array(self, supercede=False, out_name=None):
         if not self.weights:
             self.weights = 1
-
+        #print(self.p_region)
         xcount, ycount, dst_gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc, node='grid'
         )
+        #print(xcount, ycount)
         gdt = gdal.GDT_Float32
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(self.fmt)

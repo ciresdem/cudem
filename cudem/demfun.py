@@ -1,6 +1,6 @@
 ### demfun.py - CUDEM DEM utilities and functions
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## demfun.py is part of CUDEM
 ##
@@ -291,7 +291,6 @@ def mask_(src_dem, msk_dem, out_dem, msk_value = None):
             utils.gdal_write(src_array, out_dem, src_config)
             msk_ds = None
         src_ds = None
-
         
 def split(src_dem, split_value = 0):
     """split raster file `src_dem`into two files based on z value, 

@@ -1305,22 +1305,26 @@ class RasterFile(ElevationDataset):
             return(None)
 
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
-
-        self.warp_region = regions.Region().from_list(self.infos['minmax'])
-        if self.dst_trans is not None:
-            self.warp_region.src_srs = self.src_srs
-            self.warp_region.warp(self.dst_srs)
             
-        #if self.region is not None
-        if self.region is not None and self.region.src_srs != self.src_srs:
-            if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
-                self.warp_region = self.region.copy()
-            else:
+        if self.region is not None:
+            self.warp_region = self.region.copy()
+        else:
+            self.warp_region = regions.Region().from_list(self.infos['minmax'])
+            
+        if self.region.src_srs != self.src_srs:
+            #if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
+            #    self.warp_region = self.region.copy()
+            #else:
+            if regions.regions_within_ogr_p(self.warp_region, self.region):
                 self.warp_region.cut(self.region, self.x_inc, self.y_inc)
                 
             if self.dst_trans is not None:
                 self.dst_trans = None
-        
+                            
+        if self.dst_trans is not None:
+            self.warp_region.src_srs = self.src_srs
+            self.warp_region.warp(self.dst_srs)
+                
         if self.resample_and_warp:
             dem_inf = demfun.infos(self.fn)
 
@@ -1340,7 +1344,7 @@ class RasterFile(ElevationDataset):
                         
                 if self.open_options is not None:# or self.super_grid:
                     remake = True
-                    
+
                 if remake:
                     ds_config = demfun.gather_infos(src_ds)
                     tmp_ds = demfun.generate_mem_ds(ds_config)
@@ -1354,6 +1358,7 @@ class RasterFile(ElevationDataset):
                 src_ds = None
 
             ## sample
+            #print(self.warp_region)
             warp_ds = demfun.sample_warp(
                 tmp_ds, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
@@ -1624,7 +1629,13 @@ class RasterFile(ElevationDataset):
                     'GTiff'
                 )
 
+                # if y >= srcwin[3]:
+                #     ysize = 0
+                # else:
+                #     ysize = 1
+                    
                 this_srcwin = (srcwin[0], y, srcwin[2], 1)
+                #print(this_srcwin)
                 yield(out_arrays, this_srcwin, this_gt)
                                             
             band = mask_band = weight_band = src_weight = src_mask = src_ds = None

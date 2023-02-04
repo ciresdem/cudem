@@ -128,13 +128,13 @@ class Region:
 
     def _wgs_extremes(self, just_below=False):
         if self.xmin <= -180:
-            self.xmin = -180 if not just_below else -179.99999
+            self.xmin = -180 if not just_below else -179.85
         if self.xmax >= 180:
-            self.xmax = 180 if not just_below else 179.99999
+            self.xmax = 180 if not just_below else 179.85
         if self.ymin <= -90:
-            self.ymin = -90 if not just_below else -89.99999
+            self.ymin = -90 if not just_below else -89.85
         if self.ymax >= 90:
-            self.ymax = 90 if not just_below else 89.99999
+            self.ymax = 90 if not just_below else 89.85
             
     
     def from_list(self, region_list):
@@ -922,14 +922,18 @@ def ogr_wkts(src_ds):
         poly = None
     return(these_regions)
 
-def parse_cli_region(region_str, verbose=True):
+def parse_cli_region(region_list, verbose=True):
     these_regions = []
-    for i_region in region_str:
+    for i_region in region_list:
         tmp_region = Region().from_string(i_region)
+        i_region_s = i_region.split(':')
         if tmp_region.valid_p(check_xy=True):
             these_regions.append(tmp_region)
+        elif str(i_region_s[0]) == 'tile_set':
+            args = utils.args2dict(i_region_s[1:], {})
+            these_regions = generate_tile_set(**args)
         else:
-            i_region_s = i_region.split(':')
+            #i_region_s = i_region.split(':')
             tmp_region = ogr_wkts(i_region_s[0])
             for i in tmp_region:
                 if i.valid_p():
@@ -947,36 +951,32 @@ def parse_cli_region(region_str, verbose=True):
             if len(these_regions) > 0:
                 utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
             else:
-                utils.echo_error_msg('failed to parse region(s), {}'.format(region_str))
+                utils.echo_error_msg('failed to parse region(s), {}'.format(region_list))
             
     return(these_regions)
 
 def generate_tile_set(in_region=None, inc=.25):
-    if in_region is None:
-        in_region = Region(xmin=-180, xmax=180, ymin=-90, ymax=90)
-
     tile_regions = []
-    this_xmin = in_region.xmin
-    this_xmax = in_region.xmin+inc
-    this_ymin = in_region.ymin
-    this_ymax = in_region.ymin+inc
-    
-    # this_region = Region(
-    #     xmin=this_xmin,
-    #     xmax=this_xmax,
-    #     ymin=this_ymin,
-    #     ymax=this_ymax
-    # )
-    # tile_regions.append(this_region)
-
-    while this_xmax < in_region.xmax:
-        while this_ymax < in_region.ymax:
-            this_ymin = this_ymax
-            this_ymax += inc        
+    if in_region is not None:
+        tmp_region = Region().from_string(in_region)
+        if not tmp_region.valid_p(check_xy=True):
+            tmp_region = Region(xmin=-180, xmax=180, ymin=-90, ymax=90)
+    else:
+        tmp_region = Region(xmin=-180, xmax=180, ymin=-90, ymax=90)
+        
+    inc = utils.float_or(inc, .25)
+    this_xmin = tmp_region.xmin
+    this_xmax = tmp_region.xmin+inc
+    this_ymin = tmp_region.ymin
+    this_ymax = tmp_region.ymin+inc
+    while this_xmax <= tmp_region.xmax:
+        while this_ymax <= tmp_region.ymax: 
             this_region = Region(xmin=this_xmin, xmax=this_xmax, ymin=this_ymin, ymax=this_ymax)
             tile_regions.append(this_region)
+            this_ymin = this_ymax
+            this_ymax += inc
             
-        this_ymin = in_region.ymin
+        this_ymin = tmp_region.ymin
         this_ymax = this_ymin + inc
         this_xmin = this_xmax
         this_xmax += inc
