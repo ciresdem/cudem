@@ -188,7 +188,8 @@ class Waffle:
             weight=self.weights,
             x_inc=self.xinc if set_incs else None,
             y_inc=self.yinc if set_incs else None,
-            sample_alg=self.sample
+            sample_alg=self.sample,
+            cache_dir=self.cache_dir
         ).acquire() for dl in self.data_]
         self.data = [d for d in self.data if d is not None]
 
@@ -4105,7 +4106,8 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
                 src_region=self.region.copy().buffer(pct=.25),
                 verbose=self.verbose,
                 dst_srs=self.dst_srs,
-                weight=self.weights
+                weight=self.weights,
+                cache_dir=self.cache_dir
             ).acquire() for dl in self.data]
             
             return([d for d in data if d is not None])
@@ -4575,6 +4577,6 @@ def waffles_cli(argv = sys.argv):
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
                         
             #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
-    if not keep_cache:
-        utils.remove_glob(wg['cache_dir'])
+        if not keep_cache:
+            utils.remove_glob(wg['cache_dir'])
 ### End

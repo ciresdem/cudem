@@ -170,7 +170,6 @@ class GMRT(f_utils.FetchModule):
                 y_inc=self.y_inc,
                 weight=self.weight,
                 src_region=self.gmrt_p_region,
-                #src_region=self.region,
                 verbose=self.verbose
             )
             yield(gmrt_ds)

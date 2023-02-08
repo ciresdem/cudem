@@ -45,16 +45,10 @@ class MarGrav(f_utils.FetchModule):
         super().__init__(name='mar_grav', **kwargs) 
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
         self.mag = mag if mag == 1 else 0.1
-
-        #self.grav_region = self.region.copy()
-        #self.grav_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
-        
-        
         self.grav_region = self.region.copy()
         self.grav_region._wgs_extremes(just_below=True)
         self.grav_region.zmax = utils.float_or(upper_limit)
         self.grav_region.zmin = utils.float_or(lower_limit)
-        #print(self.x_inc)
         self.raster = raster
 
     def run(self):
@@ -72,7 +66,6 @@ class MarGrav(f_utils.FetchModule):
         }
         _req = f_utils.Fetch(self._mar_grav_url, verify=False).fetch_req(params=_data)
         if _req is not None:
-            #outf = 'mar_grav_{}.xyz'.format(self.region.format('fn'))
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
             self.results.append([_req.url, os.path.join(self._outdir, outf), 'mar_grav'])
             
@@ -93,7 +86,7 @@ class MarGrav(f_utils.FetchModule):
                 )
                 
                 utils.run_cmd(
-                    'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
+                    'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
                         self.region.format('gmt'), self.x_inc, mar_grav_fn, src_data
                     ),
                     verbose=True

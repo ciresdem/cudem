@@ -68,7 +68,8 @@ def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sam
         x_inc=x_inc,
         y_inc=y_inc,
         sample_alg=sample_alg,
-        parent=xdl
+        parent=xdl,
+        cache_dir=self.cache_dir,
     ).acquire() for dl in data_list]
     return(xdl)
 
@@ -84,7 +85,7 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose, invert_region=False):
+def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose, invert_region=False, cache_dir=None):
 
     xdls = [DatasetFactory(
         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
@@ -95,7 +96,8 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want
         dst_srs=dst_srs,
         x_inc=xy_inc[0],
         y_inc=xy_inc[1],
-        sample_alg=sample_alg
+        sample_alg=sample_alg,
+        cache_dir=cache_dir
     ).acquire() for dl in data_list]
 
     if len(xdls) > 1:
@@ -109,7 +111,8 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want
             dst_srs=dst_srs,
             x_inc=xy_inc[0],
             y_inc=xy_inc[1],
-            sample_alg=sample_alg
+            sample_alg=sample_alg,
+            cache_dir=cache_dir
         ).acquire()
     else:
         this_datalist = xdls[0]
@@ -308,6 +311,7 @@ class Datalist(datasets.ElevationDataset):
                         x_inc=self.x_inc,
                         y_inc=self.y_inc,
                         sample_alg=self.sample_alg,
+                        cache_dir=self.cache_dir,
                         verbose=self.verbose
                     ).acquire()
                     if data_set is not None and data_set.valid_p(
@@ -363,6 +367,7 @@ class Datalist(datasets.ElevationDataset):
                             x_inc=self.x_inc,
                             y_inc=self.y_inc,
                             sample_alg=self.sample_alg,
+                            cache_dir=self.cache_dir,
                             verbose=self.verbose
                         ).acquire()
                         if data_set is not None and data_set.valid_p(
@@ -506,6 +511,7 @@ class ZIPlist(datasets.ElevationDataset):
                 metadata=copy.deepcopy(self.metadata),
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
+                cache_dir=self.cache_dir,
                 verbose=self.verbose
             ).acquire()
             if data_set is not None and data_set.valid_p(
@@ -561,7 +567,6 @@ parsing and processing.
         super().__init__(**kwargs)
         self.remote=True
         self.metadata['name'] = self.fn
-        
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
@@ -569,7 +574,8 @@ parsing and processing.
             verbose=self.verbose,
             weight=self.weight,
             x_inc=self.x_inc,
-            y_inc=self.y_inc
+            y_inc=self.y_inc,
+            outdir=self.cache_dir
         ).acquire()
         
         if self.fetch_module is None:
@@ -603,8 +609,9 @@ parsing and processing.
                 src_srs=self.src_srs,
                 dst_srs=self.dst_srs,
                 verbose=self.verbose,
+                cache_dir=self.outdir
             ).acquire(remote=True)
-            
+
             yield(data_set)
     
     def yield_xyz(self):
@@ -683,7 +690,7 @@ class DatasetFactory:
                   'earthdata',
                   'bluetopo',
                   'hydrolakes',
-                  'gebco'
+                  'gebco',
               ],
               'opts': '< -11 >',
               'class': Fetcher,
@@ -909,6 +916,7 @@ class DatasetFactory:
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 sample_alg=self.sample_alg,
+                cache_dir=self.cache_dir,
                 **self.ds_args,
                 **kwargs
             )
@@ -1076,7 +1084,7 @@ def datalists_cli(argv=sys.argv):
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
-            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose, invert_region)
+            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose, invert_region, None)
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory.data_types[this_datalist.data_format]['fmts']
             ):

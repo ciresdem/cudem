@@ -610,7 +610,7 @@ class FetchModule:
         #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
         self.headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
         self.outdir = outdir
-        
+
         if self.outdir is None:
             self._outdir = os.path.join(os.getcwd(), self.name)
         else:

@@ -424,6 +424,7 @@ https://www.hydrosheds.org/products/hydrolakes
             dst_srs=None,
             x_inc=None,
             y_inc=None,
+            outdir=None,
             verbose=True
     ):
         self.mod = mod
@@ -436,12 +437,13 @@ https://www.hydrosheds.org/products/hydrolakes
         self.dst_srs = dst_srs
         self.x_inc = utils.str2inc(x_inc)
         self.y_inc = utils.str2inc(y_inc)
+        self.outdir = outdir
         self.results = []
         if self.mod is not None:
             this_mod = self.parse_mod()
             #if this_mod is None:
             #    self.mod = None
-            
+        
     def parse_mod(self):
         opts = self.mod.split(':')
         if opts[0] in FetchesFactory.mods.keys():
@@ -471,6 +473,7 @@ https://www.hydrosheds.org/products/hydrolakes
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
                     verbose=self.verbose,
+                    outdir=self.outdir,
                     **kwargs,
                     **self.mod_args
                 )
