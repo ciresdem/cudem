@@ -322,7 +322,11 @@ class Fetch:
             utils.echo_error_msg('max-tries exhausted')
             return(None)
         try:
-            return(requests.get(self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify))
+            return(
+                requests.get(
+                    self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify
+                )
+            )
         except:
             return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
             

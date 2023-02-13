@@ -105,12 +105,6 @@ class MarGrav(f_utils.FetchModule):
                     verbose=self.verbose
                 )
             else:
-                # utils.run_cmd(
-                #     'waffles {} -E 30s -M IDW:min_points=16 -O mar_grav30s {},168:x_offset=REM,1 -T 1:2'.format(
-                #         self.region.format('gmt'), src_data
-                #     ),
-                #     verbose=True
-                # )
                 _ds = datasets.XYZFile(
                     fn=src_data,
                     data_format=168,
@@ -128,8 +122,6 @@ class MarGrav(f_utils.FetchModule):
             yield(_ds)
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
-            
-        #utils.remove_glob('{}*'.format(src_data))
         
     def yield_xyz(self, entry):
         for ds in self.yield_ds(entry):
@@ -137,7 +129,7 @@ class MarGrav(f_utils.FetchModule):
                 yield(xyz)
 
     def yield_array(self, entry):
-        #self.raster = True
+        self.raster = True
         for ds in self.yield_ds(entry):
             for arr in ds.yield_array():
                 yield(arr)

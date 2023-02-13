@@ -925,6 +925,10 @@ def ogr_wkts(src_ds):
 def parse_cli_region(region_list, verbose=True):
     these_regions = []
     for i_region in region_list:
+        if i_region is None:
+            these_regions.append(None)
+            continue
+        
         tmp_region = Region().from_string(i_region)
         i_region_s = i_region.split(':')
         if tmp_region.valid_p(check_xy=True):
@@ -946,12 +950,11 @@ def parse_cli_region(region_list, verbose=True):
                     else:
                         these_regions.append(i)
 
-    if len(these_regions) > 0:
-        if verbose:
-            if len(these_regions) > 0:
-                utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
-            else:
-                utils.echo_error_msg('failed to parse region(s), {}'.format(region_list))
+    if verbose:
+        if len(these_regions) > 0:
+            utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
+        else:
+            utils.echo_error_msg('failed to parse region(s), {}'.format(region_list))
             
     return(these_regions)
 

@@ -215,26 +215,30 @@ class Multibeam(f_utils.FetchModule):
         
     def parse_entry_inf(self, entry, keep_inf=False):
         src_data = os.path.basename(entry[1])
-        src_mb = src_data[:-4]
+        if src_data[-3:] == 'fbt':
+            src_mb = utils.fn_basename2(src_data)
+            inf_url = utils.fn_basename2(entry[0])
+        else:
+            inf_url = entry[0]
+            src_mb = src_data
+            
         survey = entry[0].split('/')[7]
-        if f_utils.Fetch('{}.inf'.format(entry[0][:-4]), callback=self.callback, verbose=False).fetch_file('{}.inf'.format(src_mb)) == 0:
+        if f_utils.Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=False).fetch_file('{}.inf'.format(src_mb)) == 0:
             mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
             mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
             mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
             if not keep_inf:
                 utils.remove_glob('{}.inf'.format(src_mb))
             return(survey, src_data, mb_fmt, mb_perc, mb_date)
-        #else:
-        #    return(None)
             
     def yield_xyz(self, entry):
         src_data = os.path.basename(entry[1])
-        src_mb = src_data[:-4]
+        src_mb = utils.fn_basename2(src_data)
         try:
             survey, src_data, mb_fmt, mb_perc, mb_date = self.parse_entry_inf(entry)
-        except TypeError:
+        except TypeError as e:
+            utils.echo_error_msg(e)
             return
-        this_inf = self.parse_entry_inf(entry)
 
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_data) == 0:
             src_xyz = os.path.basename(src_data) + '.xyz'

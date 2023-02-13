@@ -82,7 +82,7 @@ class ElevationDataset():
             data_format=None,
             weight=1,
             src_srs=None,
-            dst_srs=None,
+            dst_srs='epsg:4326',
             x_inc=None,
             y_inc=None,
             sample_alg='bilinear',
@@ -346,7 +346,7 @@ class ElevationDataset():
     def set_yield(self):
         """set the yield strategy, either default block or mask"""
 
-        if self.x_inc is not None and (self.data_format != 200 and self.data_format != 201):
+        if self.x_inc is not None and (self.data_format not in [200, 201, -11]):
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
                 self.y_inc = self.x_inc
@@ -491,6 +491,7 @@ class ElevationDataset():
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
                 self.trans_region.warp(out_src_srs)
+                self.trans_region.src_srs = out_src_srs
             else:
                 #self.trans_region = self.
                 self.trans_region = regions.Region().from_string(self.infos['wkt'])
@@ -1078,8 +1079,11 @@ class LASFile(ElevationDataset):
 
         if self.src_srs is None:
             self.src_srs = self.get_epsg()
+            if self.src_srs is None:
+                self.src_srs = self.infos['src_srs']
+            
             self.set_transform()
-        
+
     def get_epsg(self):
         with lp.open(self.fn) as lasf:
             lasf_vlrs = lasf.header.vlrs
@@ -1290,6 +1294,7 @@ class RasterFile(ElevationDataset):
         self.check_path = check_path
         self.dem_infos = demfun.infos(self.fn)
         self.super_grid = super_grid
+
         if self.x_inc is not None and self.y_inc is not None and self.resample:
             self.resample_and_warp = True
         else:
@@ -1305,27 +1310,30 @@ class RasterFile(ElevationDataset):
             return(None)
 
         ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
-            
+
         if self.region is not None:
             self.warp_region = self.region.copy()
         else:
             self.warp_region = regions.Region().from_list(self.infos['minmax'])
+            if self.dst_trans is not None:
+                self.warp_region.src_srs = self.src_srs
+                self.warp_region.warp(self.dst_srs)
             
-        if self.region.src_srs != self.src_srs:
-            #if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
-            #    self.warp_region = self.region.copy()
-            #else:
-            if regions.regions_within_ogr_p(self.warp_region, self.region):
-                self.warp_region.cut(self.region, self.x_inc, self.y_inc)
+        # if self.region.src_srs != self.src_srs:
+        #     #if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
+        #     #    self.warp_region = self.region.copy()
+        #     #else:
+        #     if regions.regions_within_ogr_p(self.warp_region, self.region):
+        #         self.warp_region.cut(self.region, self.x_inc, self.y_inc)
                 
+        #     if self.dst_trans is not None:
+        #         self.dst_trans = None
+                            
+        if self.resample_and_warp:
             if self.dst_trans is not None:
                 self.dst_trans = None
-                            
-        if self.dst_trans is not None:
-            self.warp_region.src_srs = self.src_srs
-            self.warp_region.warp(self.dst_srs)
-                
-        if self.resample_and_warp:
+
+            #if self.resample:
             dem_inf = demfun.infos(self.fn)
 
             tmp_ds = self.fn
@@ -1334,31 +1342,31 @@ class RasterFile(ElevationDataset):
             else:
                 src_ds = gdal.Open(self.fn)
 
-            if src_ds is not None:
-                remake = False
-                mt = src_ds.GetMetadata()            
-                ## remake this grid if it's grid-node
-                if 'AREA_OR_POINT' in mt.keys():
-                    if mt['AREA_OR_POINT'].lower() == 'point':
-                        remake = True
+            # if src_ds is not None:
+            #     remake = False
+            #     mt = src_ds.GetMetadata()            
+            #     ## remake this grid if it's grid-node
+            #     if 'AREA_OR_POINT' in mt.keys():
+            #         if mt['AREA_OR_POINT'].lower() == 'point':
+            #             remake = True
                         
-                if self.open_options is not None:# or self.super_grid:
-                    remake = True
+            #     if self.open_options is not None:# or self.super_grid:
+            #         remake = True
 
-                if remake:
-                    ds_config = demfun.gather_infos(src_ds)
-                    tmp_ds = demfun.generate_mem_ds(ds_config)
-                    band = tmp_ds.GetRasterBand(1)
-                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
-                    tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
-                    tmp_ds.FlushCache()
-                # else:
-                #     tmp_ds = gdal.Open(self.fn)
+            #     if remake:
+            #         ds_config = demfun.gather_infos(src_ds)
+            #         tmp_ds = demfun.generate_mem_ds(ds_config)
+            #         band = tmp_ds.GetRasterBand(1)
+            #         band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
+            #         tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
+            #         tmp_ds.FlushCache()
+            #     # else:
+            #     #     tmp_ds = gdal.Open(self.fn)
                     
-                src_ds = None
+            #     src_ds = None
 
             ## sample
-            #print(self.warp_region)
+
             warp_ds = demfun.sample_warp(
                 tmp_ds, None, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
@@ -1389,6 +1397,7 @@ class RasterFile(ElevationDataset):
                 warp_ds = warp_arr = None
             
         else:
+
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
                 if src_ds is None:

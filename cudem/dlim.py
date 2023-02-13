@@ -691,6 +691,7 @@ class DatasetFactory:
                   'bluetopo',
                   'hydrolakes',
                   'gebco',
+                  'arcticdem',
               ],
               'opts': '< -11 >',
               'class': Fetcher,
@@ -1078,6 +1079,7 @@ def datalists_cli(argv=sys.argv):
                     
         sys.exit(0)
 
+    if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):
         if len(dls) == 0:

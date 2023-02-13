@@ -36,6 +36,7 @@ import datetime
 import shutil
 import subprocess
 import zipfile
+import tarfile
 import gzip
 import bz2
 import re
@@ -740,7 +741,25 @@ def gunzip(gz_file):
         guz_file = None
         
     return(guz_file)
-    
+
+def p_untar(tar_file, exts=None, outdir='./'):
+    src_procs = []
+    with tarfile.open(tar_file, 'r') as tar:
+        tar_fns = tar.getnames()
+
+        for ext in exts:
+            for tfn in tar_fns:
+                #if ext == tfn.split('.')[-1]:
+                if ext == tfn[-len(ext):]:
+                    ext_tfn = os.path.join(outdir, os.path.basename(tfn))
+                    src_procs.append(ext_tfn)
+                    if not os.path.exists(ext_tfn):
+                        echo_msg('Extracting {}'.format(ext_tfn))
+                        t = tar.extractfile(tfn)
+                        with open(ext_tfn, 'wb') as f:
+                            f.write(t.read())
+    return(src_procs)
+                            
 def p_unzip(src_file, exts=None, outdir='./'):
     """unzip/gunzip src_file based on `exts`
     
