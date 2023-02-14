@@ -159,11 +159,21 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
             wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=geotiff_float"\
                 .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
             if self.want_wcs:
-                self.results.append([wcs_url, os.path.join(self._outdir, surv['DataLink'].split(',')[0].split('/')[-1]).replace('.nc', '.tif'), surv['DataType']])
+                self.results.append(
+                    [wcs_url,
+                     os.path.join(
+                         self._outdir,
+                         surv['DataLink'].split(',')[0].split('/')[-1]
+                     ).replace('.nc', '.tif'),
+                     surv['DataType']])
             else:
                 for d in surv['DataLink'].split(','):
                     if d != '':
-                        self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
+                        self.results.append(
+                            [d,
+                             os.path.join(self._outdir, d.split('/')[-1]),
+                             surv['DataType']]
+                        )
 
     def yield_xyz(self, entry):
         src_ncei = os.path.basename(entry[1])
