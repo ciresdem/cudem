@@ -564,14 +564,13 @@ parsing and processing.
 """
     
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.remote=True
+        super().__init__(remote=True, **kwargs)
         self.metadata['name'] = self.fn
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn,
             src_region=self.region,
             dst_srs=self.dst_srs,
-            verbose=self.verbose,
+            verbose=False,
             weight=self.weight,
             x_inc=self.x_inc,
             y_inc=self.y_inc,

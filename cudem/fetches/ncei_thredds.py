@@ -49,13 +49,12 @@ import cudem.fetches.FRED as FRED
 class NCEIThreddsCatalog(f_utils.FetchModule):
     """Fetch DEMs from NCEI THREDDS Catalog"""
 
-    def __init__(self, where=[], **kwargs):
+    def __init__(self, where=[], want_wcs=False, **kwargs):
         super().__init__(name='ncei_thredds', **kwargs)
         self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
         self._ngdc_url = "https://www.ngdc.noaa.gov"
-        ##self.where = where
-        ##self.where.append(where)
-        self.where = [where] if len(where) > 0 else []        
+        self.where = [where] if len(where) > 0 else []
+        self.want_wcs = want_wcs
         self._urls = [self._nt_catalog, self._ngdc_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
@@ -76,7 +75,9 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
             ntCatHref =ntCatRef.attrib['{http://www.w3.org/1999/xlink}href']
             if ntCatHref[0] == "/":
                 ntCatUrl = '{}{}'.format(self._ngdc_url, ntCatHref)
-            else: ntCatUrl = '{}/{}'.format(os.path.dirname(catalog_url), ntCatHref)
+            else:
+                ntCatUrl = '{}/{}'.format(os.path.dirname(catalog_url), ntCatHref)
+                
             self._parse_dataset(ntCatUrl)
             
     def _parse_dataset(self, catalog_url):
@@ -89,7 +90,11 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         surveys = []
         for i, node in enumerate(this_ds):
             this_title = node.attrib['name']
-            this_id = node.attrib['ID']
+            try:
+                this_id = node.attrib['ID']
+            except:
+                this_id = None
+                
             if self.verbose:
                 _prog.update_perc((i, len(this_ds)))
                 
@@ -102,7 +107,8 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
                 
                 try:
                     ds_path = node.attrib['urlPath']
-                except: continue
+                except:
+                    continue
 
                 iso_url = False
                 wcs_url = False
@@ -122,7 +128,6 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
                 )
                 if zv is not None:
                     for zvs in zv:
-                        #print(zvs.text)
                         if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
                             zvar = zvs.text
                             break
@@ -153,27 +158,21 @@ class NCEIThreddsCatalog(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=geotiff_float"\
                 .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
-            print(wcs_url)
-            #self.results.append([wcs_url, surv['DataLink'].split(',')[0].split('/')[-1], surv['DataType']])
-            for d in surv['DataLink'].split(','):
-                if d != '':
-                    self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
+            if self.want_wcs:
+                self.results.append([wcs_url, os.path.join(self._outdir, surv['DataLink'].split(',')[0].split('/')[-1]).replace('.nc', '.tif'), surv['DataType']])
+            else:
+                for d in surv['DataLink'].split(','):
+                    if d != '':
+                        self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
 
     def yield_xyz(self, entry):
         src_ncei = os.path.basename(entry[1])
-        #try:
-        #    src_ds = gdal.Open(entry[0])
-        #    src_dc = entry[0]
-        #except Exception as e:
         f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_ncei)
         try:
             src_ds = gdal.Open(src_ncei)
         except Exception as e:
             utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
             src_ds = None
-        #except Exception as e:
-        #    utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
-        #    src_ds = None
             
         if src_ds is not None:
             _ds = datasets.RasterFile(

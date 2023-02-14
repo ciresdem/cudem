@@ -30,7 +30,7 @@
 ## Supported gridding modules include:
 ## surface (GMT), triangulate (GMT), nearneighbor (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
 ## coastline (CUDEM), cudem (CUDEM), stacks (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
-## nearest (GDAL)
+## nearest (GDAL), scipy (SCIPY)
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
 ##
@@ -68,6 +68,9 @@ from cudem import vdatumfun
 ## mostly stores fetches related data here
 waffles_cache = utils.cudem_cache()
 
+## TODO
+## add upper/lower limits to waffle class and
+## remove from individual waffle modules.
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
@@ -572,8 +575,11 @@ class Waffle:
         
         if fn is None:
             fn = self.fn
-        
+
+        ## SET NODATA
         demfun.set_nodata(fn, nodata=self.ndv, convert_array=True, verbose=self.verbose)
+
+        ## FILTER
         if filter_:
             if len(self.fltr) > 0:
                 for f in self.fltr:
@@ -592,14 +598,16 @@ class Waffle:
                             fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                     ) == 0:
                         os.rename('__tmp_fltr.tif', fn)
-            
+
+        ## SAMPLE
         if self.xsample is not None or self.ysample is not None:
             if demfun.sample_warp(fn, '__tmp_sample.tif', self.xsample, self.ysample,
                              src_region=self.p_region, sample_alg=self.sample,
                              ndv=self.ndv, verbose=self.verbose)[1] == 0:
                 os.rename('__tmp_sample.tif', fn)
 
-                
+
+        ## CLIP
         if self.clip is not None:
             clip_args = {}
             cp = self.clip.split(':')
@@ -636,6 +644,7 @@ class Waffle:
                 if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
                     os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
+        ## CUT
         #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
         if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
             try:
@@ -643,9 +652,12 @@ class Waffle:
             except Exception as e:
                 utils.echo_error_msg('could not cut {}; {}'.format(fn, e))
 
+        ## SET SRS/METADATA
         ## if set_srs fails, set_metadata will skip first entry...
         demfun.set_srs(fn, self.dst_srs, verbose=self.verbose)
         demfun.set_metadata(fn, node=self.node, cudem=True, verbose=self.verbose)
+
+        ## REFORMAT
         if self.fmt != 'GTiff':
             out_dem = utils.gdal2gdal(fn, dst_fmt=self.fmt)
             if out_dem is not None:
@@ -658,7 +670,7 @@ class Waffle:
         
         if os.path.exists(self.fn):
             if not self.clobber:
-                utils.echo_msg(
+                utils.echo_warning_msg(
                     'DEM {} already exists, skipping...'.format(self.fn)
                 )
                 if self.mask:
@@ -730,25 +742,22 @@ class Waffle:
                 g = None
                 
             utils.remove_glob(*chunks)
-            if self.valid_p():
-                return(self._process(filter_=True))
-            else:
-                return(self)
+            # if self.valid_p():
+            #     return(self._process(filter_=True))
+            # else:
+            #     return(self)
         else:
             self.run()
-            
             if self.mask:
                 if os.path.exists(self.mask_fn):
                     self._process(fn=self.mask_fn, filter_=False)
-                    
+
+        if self.valid_p():
             self.waffled = True
-            
             [self._process(fn=x, filter_=False) for x in self.aux_dems]
-            
-            if self.valid_p():
-                return(self._process(filter_=True))
-            else:
-                return(self)
+            return(self._process(filter_=True))
+        else:
+            return(self)
 
     def set_limits(self, upper_limit=None, lower_limit=None):
         upper_limit = utils.float_or(upper_limit)
@@ -860,8 +869,8 @@ class GMTSurface(Waffle):
     
     def __init__(self, tension=.35, relaxation=1.4, max_radius=None,
                  lower_limit=None, upper_limit=None, aspect=None,
-                 breakline=None, convergence=None, blockmean=True, geographic=True,
-                 **kwargs):
+                 breakline=None, convergence=None, blockmean=True,
+                 geographic=True, **kwargs):
         """generate a DEM with GMT surface"""
 
         self.mod = 'surface'
@@ -2219,7 +2228,6 @@ DEM generation.
         pre = self.pre_count
         pre_weight = 0
         final_region = self.d_region.copy()
-        #self.p_region.buffer(pct=10, x_inc=self.xinc, y_inc=self.yinc)
         pre_region = self.p_region.copy()
         pre_region.wmin = None
         pre_clip = None 
