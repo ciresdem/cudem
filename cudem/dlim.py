@@ -127,14 +127,19 @@ class Datalist(datasets.ElevationDataset):
     
     A datalist is an extended MB-System style datalist.
     """
-
+    
     def __init__(self, fmt=None, **kwargs):
+        self.ds_args = {
+            'fmt': fmt
+        }
         self.v_fields = [
             'Path',
             'Format',
             'Weight',
+            'ds_args',
         ]
         self.t_fields = [
+            ogr.OFTString,
             ogr.OFTString,
             ogr.OFTString,
             ogr.OFTString,
@@ -174,6 +179,7 @@ class Datalist(datasets.ElevationDataset):
             entry_path,
             entry.data_format,
             entry.weight,
+            utils.dict2args(entry.ds_args)
         ]
         dst_defn = self.layer.GetLayerDefn()
         entry_geom = ogr.CreateGeometryFromWkt(entry_region.export_as_wkt())
@@ -299,6 +305,8 @@ class Datalist(datasets.ElevationDataset):
                             if float(feat.GetField('Weight')) > w_region[1]:
                                 continue
 
+                    ds_args = feat.GetField('ds_args')
+                    data_set_args = utils.args2dict(list(ds_args.split(':')), {})
                     data_set = DatasetFactory(
                         '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
                         weight=self.weight,
@@ -313,7 +321,7 @@ class Datalist(datasets.ElevationDataset):
                         sample_alg=self.sample_alg,
                         cache_dir=self.cache_dir,
                         verbose=self.verbose
-                    ).acquire()
+                    ).acquire(**data_set_args)
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                     ):
@@ -370,6 +378,7 @@ class Datalist(datasets.ElevationDataset):
                             cache_dir=self.cache_dir,
                             verbose=self.verbose
                         ).acquire()
+
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):
@@ -440,6 +449,7 @@ class Datalist(datasets.ElevationDataset):
 ## ==============================================
 class ZIPlist(datasets.ElevationDataset):
     def __init__(self, **kwargs):
+        self.ds_args = {}
         super().__init__(**kwargs)
 
     def generate_inf(self, callback=lambda: False):
@@ -564,6 +574,7 @@ parsing and processing.
 """
     
     def __init__(self, **kwargs):
+        self.ds_args = {}
         super().__init__(remote=True, **kwargs)
         self.metadata['name'] = self.fn
         self.fetch_module = fetches.FetchesFactory(

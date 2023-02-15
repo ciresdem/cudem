@@ -844,6 +844,20 @@ class XYZFile(ElevationDataset):
             y_offset=0,
             **kwargs
     ):
+        ds_args = {
+            'delim': delim,
+            'xpos': xpos,
+            'ypos': ypos,
+            'zpos': zpos,
+            'wpos': wpos,
+            'skip': skip,
+            'x_scale': x_scale,
+            'y_scale': y_scale,
+            'z_scale': z_scale,
+            'x_offset': x_offset,
+            'y_offset': y_offset,
+        }
+        
         self.xpos = utils.int_or(xpos, 0)
         self.ypos = utils.int_or(ypos, 1)
         self.zpos = utils.int_or(zpos, 2)
@@ -1010,6 +1024,9 @@ class LASFile(ElevationDataset):
     """representing an LAS/LAZ dataset."""
 
     def __init__(self, classes='0/2/29/40', **kwargs):
+        self.ds_args = {
+            'classes': classes
+        }
         self.classes = [int(x) for x in classes.split('/')]
         super().__init__(**kwargs)
 
@@ -1208,6 +1225,17 @@ class RasterFile(ElevationDataset):
             super_grid=False,
             **kwargs
     ):
+
+        self.ds_args = {
+            'mask': mask,
+            'weight_mask': weight_mask,
+            'open_options': open_options,
+            'sample': sample,
+            'resample': resample,
+            'check_path': check_path,
+            'super_grid': super_grid
+        }
+        
         try:
             self.open_options = open_options.split('/')
         except AttributeError:
@@ -1224,8 +1252,8 @@ class RasterFile(ElevationDataset):
             self.src_srs = demfun.get_srs(self.fn)
             
         self.set_transform()
-
         self.sample_alg = sample if sample is not None else self.sample_alg
+
         self.resample = resample
         self.check_path = check_path
         self.dem_infos = demfun.infos(self.fn)
@@ -1616,6 +1644,11 @@ class BAGFile(ElevationDataset):
     """
 
     def __init__(self, explode=False, force_vr=False, vr_strategy='MIN', **kwargs):
+        self.ds_args = {
+            'explode': explode,
+            'force_vr': force_vr,
+            'vr_strategy': vr_strategy,
+        }
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
@@ -1755,6 +1788,10 @@ class MBSParser(ElevationDataset):
     """providing an mbsystem parser"""
 
     def __init__(self, mb_fmt=None, mb_exclude='A', **kwargs):
+        self.ds_args = {
+            'mb_fmt': mb_fmt,
+            'mb_exclude': mb_exclude,
+        }
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude

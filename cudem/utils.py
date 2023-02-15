@@ -254,6 +254,12 @@ def args2dict(args, dict_args={}):
         
     return(dict_args)
 
+def dict2args(in_dict):
+    out_args = ''
+    for i, key in enumerate(in_dict.keys()):
+        out_args += '{}={}{}'.format(key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else '')
+    return(out_args)
+    
 def remove_glob(*args):
     """glob `glob_str` and os.remove results, pass if error
     
