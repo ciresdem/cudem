@@ -365,60 +365,12 @@ class ElevationDataset():
         if self.dst_srs is not None \
            and self.src_srs is not None \
            and self.src_srs != self.dst_srs:
-            #src_srs = osr.SpatialReference()
-            
-            # src_srs.SetFromUserInput(self.src_srs)
-            # #src_srs = self.parse_srs(src_srs)
-
-            # dst_srs = osr.SpatialReference()
-            # dst_srs.SetFromUserInput(self.dst_srs)
-            # #dst_srs = self.parse_srs(dst_srs)
-
-            # ## HORZ
-            # if src_srs.IsGeographic() == 1:
-            #     cstype = 'GEOGCS'
-            # else:
-            #     cstype = 'PROJCS'
-
-            # src_srs.AutoIdentifyEPSG()
-            # an = src_srs.GetAuthorityName(cstype)
-            # src_horz_epsg = src_srs.GetAuthorityCode(cstype)
-
-            # if dst_srs.IsGeographic() == 1:
-            #     cstype = 'GEOGCS'
-            # else:
-            #     cstype = 'PROJCS'
-
-            # dst_srs.AutoIdentifyEPSG()
-            # an = dst_srs.GetAuthorityName(cstype)
-            # dst_horz_epsg = dst_srs.GetAuthorityCode(cstype)
-
-            # ## VERT
-            # if src_srs.IsVertical() == 1:
-            #     csvtype = 'VERT_CS'
-            #     src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
-            #     #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-            # else:
-            #     src_vert_epsg = None
-                
-            # if dst_srs.IsVertical() == 1:
-            #     csvtype = 'VERT_CS'
-            #     dst_vert_epsg = dst_srs.GetAuthorityCode(csvtype)
-            #     #dst_vert_epsg = dst_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-            # else:
-            #     dst_vert_epsg = None
-
-            # #print(src_horz_epsg)
-            # #print(dst_horz_epsg)
-
             src_horz_epsg, src_vert_epsg = utils.epsg_from_input(self.src_srs)
             dst_horz_epsg, dst_vert_epsg = utils.epsg_from_input(self.dst_srs)
-            
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput('epsg:{}'.format(dst_horz_epsg))
-
             if dst_vert_epsg is not None \
                and src_vert_epsg is not None \
                and dst_vert_epsg != src_vert_epsg:
@@ -468,14 +420,10 @@ class ElevationDataset():
                 out_src_srs = src_srs.ExportToProj4()
                 out_dst_srs = dst_srs.ExportToProj4()
 
-            #utils.echo_msg('in srs: {}'.format(out_src_srs))
-            #utils.echo_msg('out srs: {}'.format(out_dst_srs))
-            
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
             dst_osr_srs.SetFromUserInput(out_dst_srs)
-
             try:
                 src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
                 dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
@@ -484,29 +432,17 @@ class ElevationDataset():
 
             self.src_trans_srs = out_src_srs
             self.dst_trans_srs = out_dst_srs
-
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
-
             if self.region is not None and self.region.src_srs != self.src_srs:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
                 self.trans_region.warp(out_src_srs)
                 self.trans_region.src_srs = out_src_srs
             else:
-                #self.trans_region = self.
                 self.trans_region = regions.Region().from_string(self.infos['wkt'])
                 self.trans_region.src_srs = self.src_srs
                 self.trans_region.warp(self.dst_srs)
 
-            #utils.echo_msg('trans_region: {}'.format(self.trans_region))
-                
-                # utils.echo_msg(self.dst_srs)
-                # utils.echo_msg(self.src_srs)
-                # self.trans_region.src_srs = self.dst_srs
-                # self.trans_region.warp(self.src_srs)
-                # utils.echo_msg(self.region)
-                # utils.echo_msg(self.trans_region)
-                
             src_osr_srs = dst_osr_srs = None
             
     def parse_json(self):
@@ -1318,7 +1254,7 @@ class RasterFile(ElevationDataset):
             if self.dst_trans is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
-            
+
         # if self.region.src_srs != self.src_srs:
         #     #if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
         #     #    self.warp_region = self.region.copy()
@@ -1365,23 +1301,23 @@ class RasterFile(ElevationDataset):
                     
             #     src_ds = None
 
-            ## sample
-
-            warp_ds = demfun.sample_warp(
-                tmp_ds, None, self.x_inc, self.y_inc,
+            ## Sample/Warp
+            tmp_warp = '_tmp_gdal.tif'
+            warp_ = demfun.sample_warp(
+                tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
                 ndv=ndv, verbose=False
             )[0] 
             tmp_ds = None
-            utils.remove_glob('_tmp_gdal.tif')
+            warp_ds = gdal.Open(tmp_warp)
+            #utils.remove_glob('_tmp_gdal.tif')
 
             if warp_ds is not None:
                 ## clip
                 warp_ds_config = demfun.gather_infos(warp_ds)
                 gt = warp_ds_config['geoT']
                 srcwin = self.warp_region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
-
                 warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
                 out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
@@ -1395,6 +1331,7 @@ class RasterFile(ElevationDataset):
                     src_ds.FlushCache()
                     
                 warp_ds = warp_arr = None
+                utils.remove_glob(tmp_warp)
             
         else:
 
@@ -1638,13 +1575,7 @@ class RasterFile(ElevationDataset):
                     'GTiff'
                 )
 
-                # if y >= srcwin[3]:
-                #     ysize = 0
-                # else:
-                #     ysize = 1
-                    
                 this_srcwin = (srcwin[0], y, srcwin[2], 1)
-                #print(this_srcwin)
                 yield(out_arrays, this_srcwin, this_gt)
                                             
             band = mask_band = weight_band = src_weight = src_mask = src_ds = None
