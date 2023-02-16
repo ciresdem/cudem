@@ -5,16 +5,17 @@
 # GDAL
 
 minmax=$(gdal_minmax.py $1)
+echo $(minmax)
 
 xdim=$(echo $minmax | awk '{print $7}')
 ydim=$(echo $minmax | awk '{print $8}')
-ymin=$(echo $minmax | awk '{print $2}')
-ymax=$(echo $minmax | awk '{print $1}')
+ymin=$(echo $minmax | awk '{print $4}')
+ymax=$(echo $minmax | awk '{print $3}')
 zmin=$(echo $minmax | awk '{print $5}')
 zmax=$(echo $minmax | awk '{print $6}')
 
-deg_lat_len=$(lonlatlen.scm $ymin | awk '{print $2}')
-deg_lon_len=$(lonlatlen.scm $ymin | awk '{print $1}')
+deg_lat_len=$(lll.py $ymin | awk '{print $2}')
+deg_lon_len=$(lll.py $ymin | awk '{print $1}')
 
 # GMT
 # xdim=$(grdinfo $1 | grep x_min | awk '{print $11}')
@@ -29,10 +30,8 @@ deg_lon_len=$(lonlatlen.scm $ymin | awk '{print $1}')
 echo "
 // DEM
 
-//global_settings { assumed_gamma 2.2 }
-      
+global_settings { assumed_gamma 1 }
 #include \"colors.inc\" 
-     
 #declare Bi = 2;
 
 //

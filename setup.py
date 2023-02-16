@@ -102,6 +102,8 @@ setuptools.setup(
         'scripts/create_datalist.sh',
         'scripts/create_outliers.sh',
         'scripts/create_povray_template.sh',
+        'scripts/create_povray_perspective.sh',
+        'scripts/lll.py',
         'scripts/tif2chunks2xyz.sh',
         'scripts/bag2tif2chunks2xyz.sh',
         'scripts/ogr_edit_field.py',

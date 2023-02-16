@@ -147,9 +147,6 @@ class Datalist(datasets.ElevationDataset):
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
 
-    ##TODO:
-    ## add more dataset parameters into json fields
-    ## including dataset specific options (ds_args)
     def _init_datalist_vector(self):
         self.dst_layer = '{}'.format(self.fn)
         self.dst_vector = self.dst_layer + '.json'
@@ -310,6 +307,7 @@ class Datalist(datasets.ElevationDataset):
                         data_set_args = utils.args2dict(list(ds_args.split(':')), {})
                     except:
                         data_set_args = {}
+                        
                     data_set = DatasetFactory(
                         '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
                         weight=self.weight,
