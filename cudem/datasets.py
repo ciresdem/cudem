@@ -303,7 +303,7 @@ class ElevationDataset():
         else:
             gen_inf = False
 
-        if gen_inf and not self.remote:
+        if gen_inf:# and not self.remote:
             if self.verbose:
                 _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 

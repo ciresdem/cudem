@@ -78,6 +78,9 @@ class MarGrav(f_utils.FetchModule):
                 entry[0], callback=self.callback, verbose=self.verbose, verify=False
         ).fetch_file(src_data) == 0:
             if self.raster:
+                if self.x_inc is None:
+                    self.x_inc = utils.str2inc('15s')
+                    
                 mar_grav_fn = os.path.join(
                     self._outdir,
                     utils.append_fn(

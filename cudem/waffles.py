@@ -667,7 +667,7 @@ class Waffle:
     
     def generate(self):
         """run and process the WAFFLES module"""
-        
+
         if os.path.exists(self.fn):
             if not self.clobber:
                 utils.echo_warning_msg(
