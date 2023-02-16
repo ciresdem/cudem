@@ -32,6 +32,8 @@
 ## etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
 ## community preparedness.
 ##
+## datatypes are 'tiled_19', 'tiled_13', etc.
+##
 ### Code:
 
 import os
@@ -49,12 +51,16 @@ import cudem.fetches.FRED as FRED
 class NCEIThreddsCatalog(f_utils.FetchModule):
     """Fetch DEMs from NCEI THREDDS Catalog"""
 
-    def __init__(self, where=[], want_wcs=False, **kwargs):
+    def __init__(self, where=[], want_wcs=False, datatype=None, **kwargs):
         super().__init__(name='ncei_thredds', **kwargs)
         self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
         self._ngdc_url = "https://www.ngdc.noaa.gov"
         self.where = [where] if len(where) > 0 else []
         self.want_wcs = want_wcs
+        self.datatype = datatype
+        if self.datatype is not None:
+            self.where.append("ID LIKE '%{}%'".format(datatype))
+            
         self._urls = [self._nt_catalog, self._ngdc_url]
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()

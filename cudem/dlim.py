@@ -582,7 +582,7 @@ parsing and processing.
             mod=self.fn,
             src_region=self.region,
             dst_srs=self.dst_srs,
-            verbose=False,
+            verbose=self.verbose,
             weight=self.weight,
             x_inc=self.x_inc,
             y_inc=self.y_inc,
@@ -782,6 +782,7 @@ class DatasetFactory:
         ## guess format based on fn if not specified and
         ## parse format for dataset specific opts.
         ## ==============================================
+
         if len(entry) < 2:
             for key in self.data_types.keys():
                 se = entry[0].split('.')

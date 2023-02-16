@@ -167,7 +167,7 @@ class ArcticDEM(f_utils.FetchModule):
                     x_inc=self.x_inc,
                     y_inc=self.y_inc,
                     verbose=self.verbose,
-                    remote=True
+                    #remote=True
                 )
                 
             for xyz in _ds.yield_xyz():
