@@ -305,8 +305,11 @@ class Datalist(datasets.ElevationDataset):
                             if float(feat.GetField('Weight')) > w_region[1]:
                                 continue
 
-                    ds_args = feat.GetField('ds_args')
-                    data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                    try:
+                        ds_args = feat.GetField('ds_args')
+                        data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                    except:
+                        data_set_args = {}
                     data_set = DatasetFactory(
                         '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
                         weight=self.weight,
