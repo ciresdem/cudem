@@ -3653,7 +3653,7 @@ class WafflesPatch(Waffle):
             self.dem = '{}.tif'.format(self.name)
             self.name = '{}_update'.format(self.name)
         else:
-            utils.echo_error_msg('must specify DEM to update (:dem=fn) to run the update module.')
+            utils.echo_error_msg('must specify DEM to patch (:dem=fn) to run the patch module.')
             return(None)
 
     def yield_diff(self, src_dem, max_diff=.25):
@@ -3757,7 +3757,8 @@ class WafflesPatch(Waffle):
             None,
             dem_infos['geoT'][1],
             -1*dem_infos['geoT'][5],
-            src_region=dem_region)[0]
+            src_region=dem_region
+        )[0]
         
         #utils.remove_glob('{}.tif'.format(self.name))
 

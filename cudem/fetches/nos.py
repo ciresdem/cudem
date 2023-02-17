@@ -331,6 +331,50 @@ class NOS(f_utils.FetchModule):
                     else:
                         self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
 
+    def yield_ds(self, entry):
+        src_nos = os.path.basename(entry[1])
+        status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos)
+        if status == 0:
+            dt = self._data_type(src_nos)
+            if dt == 'geodas_xyz':
+                nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
+                for nos_f_r in nos_fns:
+                    _ds = datasets.XYZFile(
+                        fn=nos_f_r,
+                        data_format=168,
+                        skip=1,
+                        xpos=2,
+                        ypos=1,
+                        zpos=3,
+                        z_scale=-1,
+                        #src_srs='epsg:4326+1089',
+                        src_srs='epsg:4326',
+                        dst_srs=self.dst_srs,
+                        src_region=self.region,
+                        verbose=self.verbose,
+                        remote=True
+                    )
+                    yield(_ds)
+                    
+                utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
+
+            elif dt == 'grid_bag':
+                src_bags = utils.p_unzip(src_nos, exts=['bag'])
+                for src_bag in src_bags:
+                    ## get bag proj from bag itself
+                    _ds = datasets.RasterFile(
+                        fn=src_bag,
+                        data_format=200,
+                        dst_srs=self.dst_srs,
+                        #name=src_bag,
+                        src_region=self.region,
+                        verbose=self.verbose
+                    )
+                    yield(_ds)
+                utils.remove_glob(*src_bags)
+        utils.remove_glob(src_nos)
+        
+                        
     def yield_xyz(self, entry):
         src_nos = os.path.basename(entry[1])
         dt = None

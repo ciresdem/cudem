@@ -74,10 +74,12 @@ class GEBCO(f_utils.FetchModule):
         self.want_sub_ice = utils.str_or(want_sub_ice, 'geotiff') if want_sub_ice else False
         self.want_tid = utils.str_or(want_tid, 'geotiff') if want_tid else False
 
+        exclude_tid = utils.str_or(exclude_tid)
         self.exclude_tid = []
-        for tid_key in exclude_tid.split('/'):
-            self.exclude_tid.append(utils.int_or(tid_key))
-
+        if exclude_tid is not None:
+            for tid_key in exclude_tid.split('/'):
+                self.exclude_tid.append(utils.int_or(tid_key))
+                
         try:
             self.exclude_tid.remove(None)
         except:
