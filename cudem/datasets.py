@@ -844,7 +844,7 @@ class XYZFile(ElevationDataset):
             y_offset=0,
             **kwargs
     ):
-        ds_args = {
+        self.ds_args = {
             'delim': delim,
             'xpos': xpos,
             'ypos': ypos,
