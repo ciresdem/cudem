@@ -259,7 +259,8 @@ class Waffle:
             block=self.block
         ))
 
-    def _stacks_array(self, supercede=False, out_name=None):
+    ## todo: add blend option
+    def _stacks_array(self, supercede=False, out_name=None, method='weighted_mean'):
         if not self.weights:
             self.weights = 1
         #print(self.p_region)
@@ -3716,39 +3717,38 @@ class WafflesPatch(Waffle):
             utils.echo_error_msg('input region does not intersect with input DEM')
 
 
-        ## grid the difference to array using query_dump / num
-        ## polygonize the differences and add small buffer (1% or so)
-        ## make zero array, inverse clipped to buffered polygonized diffs
-        ## surface zero array and diffs...
-        ## add surfaced diffs to self.dem
+        # grid the difference to array using query_dump / num
+        # polygonize the differences and add small buffer (1% or so)
+        # make zero array, inverse clipped to buffered polygonized diffs
+        # surface zero array and diffs...
+        # add surfaced diffs to self.dem
                         
-        # # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
-        # #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
-        # # )
-        # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n{ndv}:GTiff -T.1 -Z1.2 -V -Lud -Lld'.format(
-        #     region=self.region, xinc=self.xinc, yinc=self.yinc, ndv=self.ndv, radius=self.radius
+        # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
+        #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
         # )
+        diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n{ndv}:GTiff -T.1 -Z1.2 -V -Lud -Lld'.format(
+            region=self.region.format('gmt'), xinc=self.xinc, yinc=self.yinc, ndv=self.ndv, radius=self.radius
+        )
 
-        # out, status = utils.run_cmd(
-        #     diff_cmd,
-        #     verbose=self.verbose,
-        #     data_fun=lambda p: self.query_dump(
-        #         dst_port=p, encode=True, max_diff=self.max_diff
-        #     )
-        # )
+        out, status = utils.run_cmd(
+            diff_cmd,
+            verbose=self.verbose,
+            data_fun=lambda p: self.query_dump(
+                dst_port=p, encode=True, max_diff=self.max_diff
+            )
+        )
 
-        #utils.echo_msg('smoothing diff grid...')
-        #smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
-
+        utils.echo_msg('smoothing diff grid...')
+        smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
         #out, status = demfun.grdfilter('_diff.tif', '_tmp_smooth.tif', dist=self.radius, node='pixel', verbose=self.verbose)
 
-        # if self.xinc != dem_infos['geoT']:
-        #     utils.echo_msg('resampling diff grid...')
-        #     if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
-        #                      src_region=dem_region)[1] == 0:
-        #         os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
-        #     else:
-        #         utils.echo_warning_msg('failed to resample diff grid')
+        if self.xinc != dem_infos['geoT']:
+            utils.echo_msg('resampling diff grid...')
+            if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
+                             src_region=dem_region)[1] == 0:
+                os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
+            else:
+                utils.echo_warning_msg('failed to resample diff grid')
 
         #if self.xinc != dem_infos['geoT']:
         utils.echo_msg('resampling diff grid...')

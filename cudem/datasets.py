@@ -1306,28 +1306,28 @@ class RasterFile(ElevationDataset):
             else:
                 src_ds = gdal.Open(self.fn)
 
-            # if src_ds is not None:
-            #     remake = False
-            #     mt = src_ds.GetMetadata()            
-            #     ## remake this grid if it's grid-node
-            #     if 'AREA_OR_POINT' in mt.keys():
-            #         if mt['AREA_OR_POINT'].lower() == 'point':
-            #             remake = True
+            if src_ds is not None:
+                remake = False
+                mt = src_ds.GetMetadata()            
+                ## remake this grid if it's grid-node
+                if 'AREA_OR_POINT' in mt.keys():
+                    if mt['AREA_OR_POINT'].lower() == 'point':
+                        remake = True
                         
-            #     if self.open_options is not None:# or self.super_grid:
-            #         remake = True
+                if self.open_options is not None:# or self.super_grid:
+                    remake = True
 
-            #     if remake:
-            #         ds_config = demfun.gather_infos(src_ds)
-            #         tmp_ds = demfun.generate_mem_ds(ds_config)
-            #         band = tmp_ds.GetRasterBand(1)
-            #         band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
-            #         tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
-            #         tmp_ds.FlushCache()
-            #     # else:
-            #     #     tmp_ds = gdal.Open(self.fn)
+                if remake:
+                    ds_config = demfun.gather_infos(src_ds)
+                    tmp_ds = demfun.generate_mem_ds(ds_config)
+                    band = tmp_ds.GetRasterBand(1)
+                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
+                    tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
+                    tmp_ds.FlushCache()
+                # else:
+                #     tmp_ds = gdal.Open(self.fn)
                     
-            #     src_ds = None
+                src_ds = None
 
             ## Sample/Warp
             tmp_warp = '_tmp_gdal.tif'

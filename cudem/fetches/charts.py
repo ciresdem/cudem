@@ -165,10 +165,11 @@ class NauticalCharts(f_utils.FetchModule):
         VDatum and/or it's associated grids (mhw.gtx or tss.gtx)
         """
             
-        src_zip = os.path.basename(entry[1])
+        #src_zip = os.path.basename(entry[1])
+        src_zip = entry[1]
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_zip) == 0:
             if entry[2].lower() == 'enc':
-                src_encs = utils.p_unzip(src_zip, ['000'])
+                src_encs = utils.p_unzip(src_zip, ['000'], self._outdir)
                 for src_ch in src_encs:
                     dst_xyz = src_ch.split('.')[0] + '.xyz'
                     try:

@@ -132,7 +132,7 @@ class GEBCO(f_utils.FetchModule):
 
             gebco_fns = utils.p_unzip(entry[1], ['tif'], self._outdir)
             ## fetch the TID zip if needed
-            if self.exclude_tid is not None:
+            if self.exclude_tid:
                 if f_utils.Fetch(
                         self._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
                 ).fetch_file(os.path.join(self._outdir, 'gebco_tid.zip')) == 0:

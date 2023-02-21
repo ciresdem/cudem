@@ -788,6 +788,10 @@ def p_unzip(src_file, exts=None, outdir='./'):
                         src_procs.append(ext_zf)
                         if not os.path.exists(ext_zf):
                             echo_msg('Extracting {}'.format(ext_zf))
+                            _dirname = os.path.dirname(ext_zf)
+                            if not os.path.exists(_dirname):
+                                os.makedirs(_dirname)
+                                
                             with open(ext_zf, 'wb') as f:
                                 f.write(z.read(zf))
     elif src_file.split('.')[-1] == 'gz':
