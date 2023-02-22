@@ -36,6 +36,7 @@ from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
