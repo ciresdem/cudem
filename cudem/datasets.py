@@ -1250,7 +1250,7 @@ class RasterFile(ElevationDataset):
 
         if self.valid_p() and self.src_srs is None:
             self.src_srs = demfun.get_srs(self.fn)
-            
+
         self.set_transform()
         self.sample_alg = sample if sample is not None else self.sample_alg
 

@@ -172,21 +172,19 @@ class HRDEM(f_utils.FetchModule):
                     self.results.append([d, d.split('/')[-1], surv['DataType']])
 
     def yield_ds(self, entry):
-        src_tif = os.path.basename(entry[1])
+        src_tif = entry[1]
         status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_tif)
         print(status)
         if status == 0:
             _ds = datasets.RasterFile(
                 fn=src_tif,
                 data_format=200,
-                src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
                 src_region=self.region,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
                 verbose=self.verbose
             )
-
             yield(_ds)
                     
     def yield_xyz(self, entry):
