@@ -226,6 +226,7 @@ between adjacent DEM tiles.
 | earthdata | NASA Earthdata | https://cmr.earthdata.nasa.gov |
 | ehydro | USACE hydrographic surveys | https://navigation.usace.army.mil/Survey/Hydro |
 | emodnet | EmodNET European Bathymetric/Topographic DEM | https://portal.emodnet-bathymetry.eu/ |
+| fabdem | FABDEM  (Forest And Buildings removed Copernicus DEM) | https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn |
 | gebco | A global continuous terrain model for ocean and land with a spatial resolution of 15 arc seconds. | https://www.gebco.net/data_and_products/gridded_bathymetry_data/ |
 | gmrt | The Global MultiResolution Topography synthesis | https://www.gmrt.org |
 | hrdem | High-Resolution DEMs from Canada | https://open.canada.ca |
