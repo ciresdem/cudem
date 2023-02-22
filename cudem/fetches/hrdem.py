@@ -42,6 +42,68 @@ import cudem.fetches.FRED as FRED
 class HRDEM(f_utils.FetchModule):
     """Fetch HRDEM data from Canada (NRCAN)"""
     
+    def __init__(self, **kwargs):
+        super().__init__(name='hrdem', **kwargs)
+        self._hrdem_footprints_url = 'ftp://ftp.maps.canada.ca/pub/elevation/dem_mne/highresolution_hauteresolution/Datasets_Footprints.zip'
+        self._hrdem_info_url = 'https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6'
+
+    def run(self):
+        v_zip = os.path.join(self._outdir, 'Datasets_Footprints.zip')
+        status = f_utils.Fetch(self._hrdem_footprints_url, verbose=self.verbose).fetch_ftp_file(v_zip)
+        v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
+        v_shp = None
+        for v in v_shps:
+            if v.split('.')[-1] == 'shp':
+                v_shp = v
+                break
+        try:
+            v_ds = ogr.Open(v_shp)
+        except:
+            v_ds = None
+            status = -1
+                
+        if v_ds is not None:
+            layer = v_ds.GetLayer()
+            fcount = layer.GetFeatureCount()
+            for f in range(0, fcount):
+                feature = layer[f]
+                geom = feature.GetGeometryRef()
+                if geom.Intersects(self.region.export_as_geom()):
+                    data_link = feature.GetField('Ftp_dtm')
+                    self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), 'raster'])
+            v_ds = None
+
+        utils.remove_glob(v_zip, *v_shps)
+            
+    def yield_ds(self, entry):
+        src_tif = entry[1]
+        status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_tif)
+        print(status)
+        if status == 0:
+            _ds = datasets.RasterFile(
+                fn=src_tif,
+                data_format=200,
+                dst_srs=self.dst_srs,
+                src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                verbose=self.verbose
+            )
+            yield(_ds)
+                    
+    def yield_xyz(self, entry):
+        for _ds in self.yield_ds(entry):
+            for xyz in _ds.yield_xyz():
+                yield(xyz)
+                
+    def yield_array(self, entry):
+        for _ds in self.yield_ds(entry):
+            for arr in _ds.yield_array():
+                yield(arr)
+
+class HRDEM_FRED(f_utils.FetchModule):
+    """Fetch HRDEM data from Canada (NRCAN)"""
+    
     def __init__(self, where='', **kwargs):
         super().__init__(name='hrdem', **kwargs)
         self._hrdem_footprints_url = 'ftp://ftp.maps.canada.ca/pub/elevation/dem_mne/highresolution_hauteresolution/Datasets_Footprints.zip'
