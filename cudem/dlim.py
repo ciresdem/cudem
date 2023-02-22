@@ -87,23 +87,9 @@ def write_datalist(data_list, outname=None):
 
 def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose, invert_region=False, cache_dir=None):
 
-    xdls = [DatasetFactory(
-        fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-        src_region=this_region,
-        invert_region=invert_region,
-        verbose=want_verbose,
-        src_srs=src_srs,
-        dst_srs=dst_srs,
-        x_inc=xy_inc[0],
-        y_inc=xy_inc[1],
-        sample_alg=sample_alg,
-        cache_dir=cache_dir
-    ).acquire() for dl in data_list]
-
-    if len(xdls) > 1:
-        dl_fn = write_datalist(xdls, 'dlim')
-        this_datalist = DatasetFactory(
-            fn=dl_fn,
+    try:
+        xdls = [DatasetFactory(
+            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
             src_region=this_region,
             invert_region=invert_region,
             verbose=want_verbose,
@@ -113,11 +99,29 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want
             y_inc=xy_inc[1],
             sample_alg=sample_alg,
             cache_dir=cache_dir
-        ).acquire()
-    else:
-        this_datalist = xdls[0]
+        ).acquire() for dl in data_list]
 
-    return(this_datalist)
+        if len(xdls) > 1:
+            dl_fn = write_datalist(xdls, 'dlim')
+            this_datalist = DatasetFactory(
+                fn=dl_fn,
+                src_region=this_region,
+                invert_region=invert_region,
+                verbose=want_verbose,
+                src_srs=src_srs,
+                dst_srs=dst_srs,
+                x_inc=xy_inc[0],
+                y_inc=xy_inc[1],
+                sample_alg=sample_alg,
+                cache_dir=cache_dir
+            ).acquire()
+        else:
+            this_datalist = xdls[0]
+
+        return(this_datalist)
+    except Exception as e:
+        utils.echo_error_msg('could not initialize data, {}'.format(e))
+        return(None)
     
 ## ==============================================
 ## Datalist Class - Recursive data structure
@@ -703,6 +707,7 @@ class DatasetFactory:
                   'hydrolakes',
                   'gebco',
                   'arcticdem',
+                  'fabdem',
               ],
               'opts': '< -11 >',
               'class': Fetcher,

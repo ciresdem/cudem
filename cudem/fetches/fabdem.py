@@ -67,15 +67,49 @@ class FABDEM(f_utils.FetchModule):
                 geom = feature.GetGeometryRef()
                 if geom.Intersects(self.region.export_as_geom()):
                     zipfile_name = feature.GetField('zipfile_name')
-                    self.results.append(
-                        ['/'.join([self._fabdem_data_url, zipfile_name]),
-                         os.path.join(self._outdir, zipfile_name),
-                         'raster']
+                    zipfile_url = '/'.join([self._fabdem_data_url, zipfile_name])
+                    if zipfile_url not in [x[0] for x in self.results]:
+                        self.results.append(
+                            [zipfile_url,
+                             os.path.join(self._outdir, zipfile_name),
+                             'raster']
                     )
             v_ds = None
                         
         utils.remove_glob(v_json)
 
+    def yield_ds(self, entry):
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+            src_fab_dems = utils.p_unzip(entry[1], ['tif'])
+            for src_fab_dem in src_fab_dems:
+                demfun.set_nodata(src_fab_dem, 0, verbose=False)
+                _ds = datasets.RasterFile(
+                    fn=src_fab_dem,
+                    data_format=200,
+                    src_srs='epsg:4326+3855',
+                    dst_srs=self.dst_srs,
+                    weight=self.weight,
+                    src_region=self.region,
+                    x_inc=self.x_inc,
+                    y_inc=self.y_inc,
+                    verbose=self.verbose
+                )
+                yield(_ds)
+    
+    def yield_xyz(self, entry):
+        """yield the xyz data from the fabdem fetch module"""
+        
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
+                    yield(xyz)
+
+    def yield_array(self, entry):
+        """yield the array data from the fabdem fetch module"""
+        
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
+                yield(arr)
+        
 class FABDEM_FRED(f_utils.FetchModule):
     """Fetch FABDEM data"""
     
@@ -137,4 +171,6 @@ class FABDEM_FRED(f_utils.FetchModule):
                         self.results.append(['/'.join([self._fabdem_data_url, zipfile_name]), os.path.join(self._outdir, zipfile_name), 'raster'])
             utils.remove_glob(v_zip)
 
+if __name__ == '__main__':
+    fabdem_dem = FABDEM()
 ### End
