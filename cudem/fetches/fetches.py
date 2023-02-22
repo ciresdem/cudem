@@ -67,6 +67,7 @@ import cudem.fetches.bluetopo as bluetopo
 import cudem.fetches.hydrolakes as hydrolakes
 import cudem.fetches.gebco as gebco
 import cudem.fetches.wsf as wsf
+import cudem.fetches.fabdem as fabdem
 
 ## ==============================================
 ## Fetches Module Parser
@@ -309,6 +310,17 @@ infrastructure and vegetation.
 https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation
 
 < copernicus >""",
+        },
+        'fabdem': {
+            'class': fabdem.FABDEM,
+            'description': """FABDEM elevation data
+FABDEM (Forest And Buildings removed Copernicus DEM) is a global elevation map that removes building and tree height
+biases from the Copernicus GLO 30 Digital Elevation Model (DEM). The data is available at 1 arc second
+grid spacing (approximately 30m at the equator) for the globe.
+
+https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
+
+< fabdem >""",
         },
         'nasadem': {
             'class': nasadem.NASADEM,
