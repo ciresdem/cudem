@@ -85,7 +85,9 @@ class HRDEM(f_utils.FetchModule):
 
     def run(self):
         for surv in FRED._filter_FRED(self):
-            status = f_utils.Fetch(surv['IndexLink']).fetch_ftp_file(v_zip, verbose=self.verbose)
+            #data_link = None
+            v_zip = os.path.basename(surv['IndexLink'])
+            status = f_utils.Fetch(surv['IndexLink'], verbose=self.verbose).fetch_ftp_file(v_zip)
             v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
             v_shp = None
             for v in v_shps:
@@ -97,19 +99,20 @@ class HRDEM(f_utils.FetchModule):
             except:
                 v_ds = None
                 status = -1
+                
             if v_ds is not None:
                 layer = v_ds.GetLayer()
-                try:
-                    self.FRED.layer.SetAttributeFilter("Name = '{}'".format(name))
-                except: pass                
                 fcount = layer.GetFeatureCount()
                 for f in range(0, fcount):
                     feature = layer[f]
-                    if data_link is not None:
-                        geom = feature.GetGeometryRef()
-                        if geom.Intersects(self.region.export_as_geom()):
-                            data_link = feature.GetField('Ftp_dtm').replace('http', 'ftp')
-                            self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), surv['DataType']])
+                    #if data_link is not None:
+                    geom = feature.GetGeometryRef()
+                    if geom.Intersects(self.region.export_as_geom()):
+                        #data_link = feature.GetField('Ftp_dtm').replace('http', 'ftp')
+                        data_link = feature.GetField('Ftp_dtm')
+                        self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), surv['DataType']])
+                v_ds = None
+                
             utils.remove_glob(v_zip, *v_shps)
             
     ## ==============================================
@@ -167,28 +170,14 @@ class HRDEM(f_utils.FetchModule):
             for d in surv['DataLink'].split(','):
                 if d != '':
                     self.results.append([d, d.split('/')[-1], surv['DataType']])
-                    
-    def yield_xyz(self, entry):
-        src_dc = os.path.basename(entry[1])
-        src_ext = src_dc.split('.')[-1]
-        try:
-            src_ds = gdal.Open(entry[0])
-            src_dc = entry[0]
-        except Exception as e:
-            f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc)
-            try:
-                src_ds = gdal.Open(src_dc)
-            except Exception as e:
-                echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
-                src_ds = None
-        except Exception as e:
-            echo_error_msg('could not read dc raster file: {}, {}'.format(entry[0], e))
-            src_ds = None
 
-        if src_ds is not None:
-
+    def yield_ds(self, entry):
+        src_tif = os.path.basename(entry[1])
+        status = f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_tif)
+        print(status)
+        if status == 0:
             _ds = datasets.RasterFile(
-                fn=src_dc,
+                fn=src_tif,
                 data_format=200,
                 src_srs='epsg:4326',
                 dst_srs=self.dst_srs,
@@ -197,12 +186,18 @@ class HRDEM(f_utils.FetchModule):
                 y_inc=self.y_inc,
                 verbose=self.verbose
             )
-            _ds.src_ds = src_ds
-            _ds.ds_open_p = True
+
+            yield(_ds)
+                    
+    def yield_xyz(self, entry):
+        for _ds in self.yield_ds(entry):
             for xyz in _ds.yield_xyz():
                 yield(xyz)
                 
-        src_ds = None
-        utils.remove_glob(src_dc)
-                    
+    def yield_array(self, entry):
+        for _ds in self.yield_ds(entry):
+            for arr in _ds.yield_array():
+                yield(arr)
+                
+                                    
 ### End
