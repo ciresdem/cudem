@@ -395,7 +395,7 @@ https://coast.noaa.gov/inventory/
             'class': wsf.WSF,
             'description': """WSF from German Aerospace Service (DLR)
 
-            World Settlement Footprint (WSF) 2019
+World Settlement Footprint (WSF) 2019
 
 < usiei:where=None:datatype=None >""",
         },

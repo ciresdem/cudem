@@ -113,45 +113,11 @@ class WSF(f_utils.FetchModule):
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
-                #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                 
         return(self)
-
-    # def yield_ds(self, entry):
-    #     if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
-    #         src_cop_dems = utils.p_unzip(entry[1], ['tif'])
-    #         for src_cop_dem in src_cop_dems:
-    #             demfun.set_nodata(src_cop_dem, 0, verbose=False)
-    #             _ds = datasets.RasterFile(
-    #                 fn=src_cop_dem,
-    #                 data_format=200,
-    #                 src_srs='epsg:4326+3855',
-    #                 dst_srs=self.dst_srs,
-    #                 weight=self.weight,
-    #                 src_region=self.region,
-    #                 x_inc=self.x_inc,
-    #                 y_inc=self.y_inc,
-    #                 verbose=self.verbose
-    #             )
-    #             yield(_ds)
-    
-    # def yield_xyz(self, entry):
-    #     """yield the xyz data from the copernicus fetch module"""
-        
-    #     for ds in self.yield_ds(entry):
-    #         for xyz in ds.yield_xyz():
-    #                 yield(xyz)
-
-    # def yield_array(self, entry):
-    #     """yield the array data from the copernicus fetch module"""
-        
-    #     for ds in self.yield_ds(entry):
-    #         for arr in ds.yield_array():
-    #             yield(arr)
         
 if __name__ == '__main__':
     wsf_fetch = WSF()
-    #dlr_fetch.update()
     
 ### End
         
