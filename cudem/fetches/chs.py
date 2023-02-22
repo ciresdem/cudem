@@ -47,6 +47,7 @@ class CHS(f_utils.FetchModule):
         super().__init__(name='chs', **kwargs)
         self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
         self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
+        #self._chs_url_new = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?'
         
     def run(self):
         """Run the CHS fetching module"""
@@ -55,12 +56,12 @@ class CHS(f_utils.FetchModule):
         _data = {
             'request': 'DescribeCoverage',
             'version': '2.0.1',
-            'CoverageID': 'caris:NONNA 100',
+            'CoverageID': 'nonna__NONNA 10 Coverage',
             'service': 'WCS',
             }
         _req = f_utils.Fetch(self._chs_url).fetch_req(params=_data)
         _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
-        
+        print(lxml.etree.tostring(_results))
         g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=f_utils.namespaces)[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
 
@@ -75,7 +76,8 @@ class CHS(f_utils.FetchModule):
         resy = (uc[0] - lc[0]) / hl[1]
 
         if regions.regions_intersect_ogr_p(self.region, ds_region):
-            chs_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=caris:NONNA+100&coverage=caris:NONNA+100&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
+            #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&format=BAG&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
+            chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
                                   .format(self._chs_url, self.region.format('bbox'), resx, resy)
             outf = 'chs_{}.tif'.format(self.region.format('fn'))
             self.results.append([chs_wcs, os.path.join(self._outdir, outf), 'chs'])

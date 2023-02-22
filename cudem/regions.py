@@ -1120,7 +1120,7 @@ def regions_cli(argv = sys.argv):
 
     if tile_set is not None:
         for rn, this_region in enumerate(these_regions):
-            these_tiles = generate_tile_set(this_region, tile_set)
+            these_tiles = generate_tile_set(this_region.format('gmt'), tile_set)
             region_list_to_ogr(these_tiles, 'regions_tile_set.shp')
             
         these_regions = []

@@ -218,7 +218,19 @@ increment to save space.
                                     for index_feature in index_layer:
                                         index_geom = index_feature.GetGeometryRef()
                                         if index_geom.Intersects(self.region.export_as_geom()):
+                                            tile_name = None
+                                            try:
+                                                tile_name = index_feature.GetField('Name').strip()
+                                            except:
+                                                #pass
+                                                #if tile_name is None:
+                                                #try:
+                                                tile_name = index_feature.GetField('location').strip()
+                                                #except:
+                                                #    tile_name = ''
+                                                
                                             tile_url = index_feature.GetField('URL').strip()
+                                            tile_url = '/'.join(tile_url.split('/')[:-1]) + '/' + tile_name.split('/')[-1]
                                             ## add vertical datum to output;
                                             ## field is NativeVdatum
                                             ## must get from metadata
@@ -419,6 +431,8 @@ class DigitalCoast(f_utils.FetchModule):
                     geom = sf1.GetGeometryRef()
                     if geom.Intersects(self.region.export_as_geom()):
                         tile_url = sf1.GetField('URL').strip()
+                        utils.echo_msg(tile_url)
+                        utils.echo_msg(sf1.GetField('URL'))
                         self.results.append([tile_url, os.path.join(self._outdir, '{}/{}'.format(surv['ID'], tile_url.split('/')[-1])), surv['DataType']])
                 v_ds = slay1 = None
                 #except: pass

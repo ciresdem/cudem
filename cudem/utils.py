@@ -527,9 +527,12 @@ def sr_wkt(src_srs, esri=False):
     try:
         sr = osr.SpatialReference()
         sr.SetFromUserInput(src_srs)
-        if esri: sr.MorphToESRI()
+        if esri:
+            sr.MorphToESRI()
+            
         return(sr.ExportToWkt())
-    except: return(None)
+    except:
+        return(None)
 
 def gdal_prj_file(dst_fn, src_srs):
     """generate a .prj file given a src_srs"""

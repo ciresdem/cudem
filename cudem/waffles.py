@@ -3160,8 +3160,11 @@ class WafflesCoastline(Waffle):
                 self.name, self.name),
             verbose=self.verbose
         )
-
-        utils.gdal_prj_file(self.name + '.prj', self.cst_srs)
+        
+        #utils.gdal_prj_file(self.name + '.prj', self.cst_srs)
+        print(self.dst_srs)
+        print(self.cst_srs.ExportToProj4())
+        utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
 ## Waffles Lakes Bathymetry

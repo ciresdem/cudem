@@ -78,11 +78,12 @@ layers:
   4 - Other Bathy
 """
     
-    def __init__(self, where='1=1', layer=0, **kwargs):
+    def __init__(self, where='1=1', want_geometry=False, layer=0, **kwargs):
         super().__init__(name='usiei', **kwargs)
         self._usiei_api_url = 'https://coast.noaa.gov/arcgis/rest/services/USInteragencyElevationInventory/USIEIv2/MapServer'
         self._usiei_query_url = '{0}/{1}/query?'.format(self._usiei_api_url, layer)
         self.where = where
+        self.want_geometry = want_geometry
         
     def run(self):
         if self.region is None:
@@ -95,7 +96,7 @@ layers:
             'inSR':4326,
             'outSR':4326,
             'f':'pjson',
-            'returnGeometry':'False',
+            'returnGeometry':'True' if self.want_geometry else 'False',
         }
         _req = f_utils.Fetch(self._usiei_query_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
