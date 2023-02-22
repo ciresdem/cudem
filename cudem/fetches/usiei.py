@@ -101,23 +101,7 @@ layers:
         _req = f_utils.Fetch(self._usiei_query_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
             print(_req.text)
-            features = _req.json()
-            # for feature in features['features']:
-            #     links = json.loads(feature['attributes']['ExternalProviderLink'])
-            #     for link in links['links']:
-            #         if link['serviceID'] == 46:
-            #             urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-            #             index_zipfile = 'tileindex.zip'
-            #             index_zipurl = link['link'] + '/' + index_zipfile
-            #             if f_utils.Fetch(link['link'] + '/' + urllist, verbose=True).fetch_file(urllist) == 0:
-            #                 with open(urllist, 'r') as ul:
-            #                     for line in ul:
-            #                         if 'tileindex' in line:
-            #                             index_zipurl = line.strip()
-            #                             break
-                                    
-            #                 utils.remove_glob(urllist)
-
-
+            #features = _req.json()
+            
         return(self)
 ### End

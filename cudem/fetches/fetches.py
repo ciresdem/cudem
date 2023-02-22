@@ -378,6 +378,7 @@ https://cmr.earthdata.nasa.gov
             'description': """US Interagency Elevation Inventory
 
 No data is fetched with this module. Will list out query results from the USIEI.
+Set 'want_geometry' to True to output a geojson formatted vector.
 
 layers:
   0 - Lidar-Topobathy
@@ -388,7 +389,7 @@ layers:
 
 https://coast.noaa.gov/inventory/
 
-< usiei:where=None:layer=0 >""",
+< usiei:where=None:layer=0:want_geometry=False >""",
         },
         'wsf': {
             'class': wsf.WSF,
