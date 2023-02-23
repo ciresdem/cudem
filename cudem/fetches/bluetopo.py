@@ -53,6 +53,85 @@ import boto3
 class BlueTopo(f_utils.FetchModule):
     """BlueTOPO"""
     
+    def __init__(self, **kwargs):
+        super().__init__(name='bluetopo', **kwargs)
+        self._bt_bucket = 'noaa-ocs-nationalbathymetry-pds'
+        self._bluetopo_base_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/'
+
+        s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
+        s3._request_signer.sign = (lambda *args, **kwargs: None)
+
+        r = s3.list_objects(Bucket = self._bt_bucket, Prefix='BlueTopo/_BlueTopo_Tile_Scheme')
+        
+        self._bluetopo_index_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(r['Contents'][0]['Key'])
+        
+    def run(self):
+        s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
+        s3._request_signer.sign = (lambda *args, **kwargs: None)
+        status = f_utils.Fetch(self._bluetopo_index_url, verbose=self.verbose).fetch_file('bluetopo.gpkg')
+        try:
+            v_ds = ogr.Open('bluetopo.gpkg')
+        except:
+            v_ds = None
+            status = -1
+            
+        if v_ds is not None:
+            layer = v_ds.GetLayer()
+            fcount = layer.GetFeatureCount()
+            for f in range(0, fcount):
+                feature = layer[f]
+                if feature is None:
+                    continue
+                
+                geom = feature.GetGeometryRef()
+                if geom.Intersects(self.region.export_as_geom()):
+                    try:
+                        tile_name = feature.GetField('TileName')
+                    except:
+                        tile_name = feature.GetField('tile')
+                        
+                    r = s3.list_objects(Bucket = 'noaa-ocs-nationalbathymetry-pds', Prefix='BlueTopo/{}'.format(tile_name))
+                    if 'Contents' in r:
+                        for key in r['Contents']:
+                            if key['Key'].split('.')[-1] == 'tiff':
+                                data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
+                                self.results.append(
+                                    [data_link,
+                                     os.path.join(self._outdir, data_link.split('/')[-1]),
+                                     'raster']
+                                )
+            v_ds = None
+            
+        utils.remove_glob('bluetopo.gpkg')
+        return(self)
+
+    def yield_ds(self, entry):
+        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
+            _ds = datasets.RasterFile(
+                fn=entry[1],
+                data_format=200,
+                dst_srs=self.dst_srs,
+                src_region=self.region,
+                x_inc=self.x_inc,
+                y_inc=self.y_inc,
+                verbose=self.verbose
+            )
+            yield(_ds)
+
+    def yield_xyz(self, entry):
+        for _ds in self.yield_ds(entry):
+            for xyz in _ds.yield_xyz():
+                yield(xyz)
+
+    def yield_xyz(self, entry):
+        for _ds in self.yield_ds(entry):
+            for arr in _ds.yield_array():
+                yield(arr)
+
+
+class BlueTopo_FRED(f_utils.FetchModule):
+    """BlueTOPO"""
+    
     def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='bluetopo', **kwargs)
         self._bluetopo_base_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/'
