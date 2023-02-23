@@ -1156,18 +1156,18 @@ def datalists_cli(argv=sys.argv):
                         p = this_datalist.data_lists[x]['parent']
                         print('{} ({})|{}'.format(p.metadata['title'], p.metadata['name'], p.weight))
                 else:
-                    try:
-                        if want_separate:
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else:
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                        utils.echo_error_msg('Killed by user')
-                        break
-                    except BrokenPipeError:
-                        utils.echo_error_msg('Pipe Broken')
-                        break
-                    except Exception as e:
-                        utils.echo_error_msg(e)
+                    #try:
+                    if want_separate:
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else:
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #     utils.echo_error_msg('Killed by user')
+                    #     break
+                    # except BrokenPipeError:
+                    #     utils.echo_error_msg('Pipe Broken')
+                    #     break
+                    # except Exception as e:
+                    #     utils.echo_error_msg(e)
 ### End

@@ -263,6 +263,26 @@ def get_array(src_dem):
         utils.echo_error_msg('could not open {}'.format(src_dem))
         return(None, None)
 
+def extract_band(data_set, output_data_set, band=1, exclude=[], inverse=False):
+    _ds = gdal.Open(data_set)
+    _ds_config = gather_infos(_ds)
+    _ds_band = _ds.GetRasterBand(band)
+    _ds_array = _ds_band.ReadAsArray()
+    _ds = None
+
+    if _ds_config['ndv'] is None:
+        _ds_config['ndv'] = -9999
+    
+    if exclude:
+        for key in exclude:
+            _ds_array[_ds_array == key] = _ds_config['ndv']
+
+    if inverse:
+        _ds_array = 1/_ds_array
+            
+    utils.gdal_write(_ds_array, output_data_set, _ds_config)
+    return(output_data_set)
+    
 def mask_(src_dem, msk_dem, out_dem, msk_value = None):
     src_ds = gdal.Open(src_dem)
     if src_ds is not None:

@@ -29,9 +29,11 @@
 ## yield_xyz outputs elevation (band 1)
 ## elevation data is in NAVD88
 ##
+##
 ## https://nauticalcharts.noaa.gov/data/bluetopo_specs.html
 ## https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#
 ## https://www.nauticalcharts.noaa.gov/data/bluetopo.html
+## https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/
 ##
 ### Code:
 
@@ -43,6 +45,7 @@ from osgeo import ogr
 from cudem import utils
 from cudem import regions
 from cudem import datasets
+from cudem import demfun
 
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
@@ -53,24 +56,24 @@ import boto3
 class BlueTopo(f_utils.FetchModule):
     """BlueTOPO"""
     
-    def __init__(self, **kwargs):
+    def __init__(self, want_interpolation=False, unc_weights=False, keep_index=False, **kwargs):
         super().__init__(name='bluetopo', **kwargs)
+        self.unc_weights = unc_weights
+        self.want_interpolation = want_interpolation
+        self.keep_index = keep_index
         self._bt_bucket = 'noaa-ocs-nationalbathymetry-pds'
-        self._bluetopo_base_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/'
-
         s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
         s3._request_signer.sign = (lambda *args, **kwargs: None)
-
         r = s3.list_objects(Bucket = self._bt_bucket, Prefix='BlueTopo/_BlueTopo_Tile_Scheme')
-        
-        self._bluetopo_index_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(r['Contents'][0]['Key'])
+        self._bluetopo_index_url = 'https://{}.s3.amazonaws.com/{}'.format(self._bt_bucket, r['Contents'][0]['Key'])
+        self._bluetopo_index = self._bluetopo_index_url.split('/')[-1]
         
     def run(self):
         s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
         s3._request_signer.sign = (lambda *args, **kwargs: None)
-        status = f_utils.Fetch(self._bluetopo_index_url, verbose=self.verbose).fetch_file('bluetopo.gpkg')
+        status = f_utils.Fetch(self._bluetopo_index_url, verbose=self.verbose).fetch_file(self._bluetopo_index)
         try:
-            v_ds = ogr.Open('bluetopo.gpkg')
+            v_ds = ogr.Open(self._bluetopo_index)
         except:
             v_ds = None
             status = -1
@@ -96,33 +99,42 @@ class BlueTopo(f_utils.FetchModule):
                                  'raster']
                             )
             v_ds = None
+
+        if not self.keep_index:
+            utils.remove_glob(self._bluetopo_index)
             
-        utils.remove_glob('bluetopo.gpkg')
         return(self)
 
     def yield_ds(self, entry):
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(entry[1]) == 0:
+            elev = demfun.extract_band(entry[1], '_tmp_bt_elev.tif', band=1)
+            sid = demfun.extract_band(entry[1], '_tmp_bt_tid.tif', band=3, exclude=[0] if self.want_interpolation else [])
+            if self.unc_weights:
+                unc = demfun.extract_band(entry[1], '_tmp_bt_unc.tif', band=2, inverse=True)
+                
             _ds = datasets.RasterFile(
-                fn=entry[1],
+                fn=elev,
                 data_format=200,
                 dst_srs=self.dst_srs,
                 src_region=self.region,
                 x_inc=self.x_inc,
                 y_inc=self.y_inc,
-                verbose=self.verbose
+                verbose=self.verbose,
+                mask=sid,
+                weight_mask=unc if self.unc_weights else None,
             )
             yield(_ds)
+            utils.remove_glob(elev, unc, sid)
 
     def yield_xyz(self, entry):
         for _ds in self.yield_ds(entry):
             for xyz in _ds.yield_xyz():
                 yield(xyz)
 
-    def yield_xyz(self, entry):
+    def yield_array(self, entry):
         for _ds in self.yield_ds(entry):
             for arr in _ds.yield_array():
                 yield(arr)
-
 
 class BlueTopo_FRED(f_utils.FetchModule):
     """BlueTOPO"""

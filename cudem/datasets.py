@@ -1487,6 +1487,7 @@ class RasterFile(ElevationDataset):
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
                         self.weight_mask, None, self.x_inc, self.y_inc,
+                        src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
                          ndv=ndv, verbose=False
                     )[0]
@@ -1499,6 +1500,7 @@ class RasterFile(ElevationDataset):
                 if self.x_inc is not None and self.y_inc is not None:
                     src_mask = demfun.sample_warp(
                         self.mask, None, self.x_inc, self.y_inc,
+                        src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
                         ndv=ndv, verbose=False
                     )[0]

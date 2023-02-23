@@ -288,7 +288,7 @@ and the Great Lakes.
 
 https://www.nauticalcharts.noaa.gov/data/bluetopo.html
 
-< bluetopo >""",
+< bluetopo:want_interpolation=False:unc_weights=False:keep_index=False >""",
         },
 'osm': {
             'class': osm.OpenStreetMap,
