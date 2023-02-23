@@ -77,29 +77,24 @@ class BlueTopo(f_utils.FetchModule):
             
         if v_ds is not None:
             layer = v_ds.GetLayer()
+            _boundsGeom = self.region.export_as_geom()
+            layer.SetSpatialFilter(_boundsGeom)            
             fcount = layer.GetFeatureCount()
-            for f in range(0, fcount):
-                feature = layer[f]
+            for feature in layer:
                 if feature is None:
                     continue
                 
-                geom = feature.GetGeometryRef()
-                if geom.Intersects(self.region.export_as_geom()):
-                    try:
-                        tile_name = feature.GetField('TileName')
-                    except:
-                        tile_name = feature.GetField('tile')
-                        
-                    r = s3.list_objects(Bucket = 'noaa-ocs-nationalbathymetry-pds', Prefix='BlueTopo/{}'.format(tile_name))
-                    if 'Contents' in r:
-                        for key in r['Contents']:
-                            if key['Key'].split('.')[-1] == 'tiff':
-                                data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
-                                self.results.append(
-                                    [data_link,
-                                     os.path.join(self._outdir, data_link.split('/')[-1]),
-                                     'raster']
-                                )
+                tile_name = feature.GetField('tile')
+                r = s3.list_objects(Bucket = 'noaa-ocs-nationalbathymetry-pds', Prefix='BlueTopo/{}'.format(tile_name))
+                if 'Contents' in r:
+                    for key in r['Contents']:
+                        if key['Key'].split('.')[-1] == 'tiff':
+                            data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
+                            self.results.append(
+                                [data_link,
+                                 os.path.join(self._outdir, data_link.split('/')[-1]),
+                                 'raster']
+                            )
             v_ds = None
             
         utils.remove_glob('bluetopo.gpkg')
