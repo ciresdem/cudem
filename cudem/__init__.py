@@ -17,7 +17,7 @@
 ##
 ### Code:
 
-__version__ = "1.10.3"
+__version__ = "1.10.4"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
