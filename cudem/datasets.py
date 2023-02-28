@@ -1306,28 +1306,28 @@ class RasterFile(ElevationDataset):
             else:
                 src_ds = gdal.Open(self.fn)
 
-            if src_ds is not None:
-                remake = False
-                mt = src_ds.GetMetadata()            
-                ## remake this grid if it's grid-node
-                if 'AREA_OR_POINT' in mt.keys():
-                    if mt['AREA_OR_POINT'].lower() == 'point':
-                        remake = True
+            # if src_ds is not None:
+            #     remake = False
+            #     mt = src_ds.GetMetadata()            
+            #     ## remake this grid if it's grid-node
+            #     if 'AREA_OR_POINT' in mt.keys():
+            #         if mt['AREA_OR_POINT'].lower() == 'point':
+            #             remake = True
                         
-                if self.open_options is not None:# or self.super_grid:
-                    remake = True
+            #     if self.open_options is not None:# or self.super_grid:
+            #         remake = True
 
-                if remake:
-                    ds_config = demfun.gather_infos(src_ds)
-                    tmp_ds = demfun.generate_mem_ds(ds_config)
-                    band = tmp_ds.GetRasterBand(1)
-                    band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
-                    tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
-                    tmp_ds.FlushCache()
-                # else:
-                #     tmp_ds = gdal.Open(self.fn)
+            #     if remake:
+            #         ds_config = demfun.gather_infos(src_ds)
+            #         tmp_ds = demfun.generate_mem_ds(ds_config)
+            #         band = tmp_ds.GetRasterBand(1)
+            #         band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
+            #         tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
+            #         tmp_ds.FlushCache()
+            #     # else:
+            #     #     tmp_ds = gdal.Open(self.fn)
                     
-                src_ds = None
+            #     src_ds = None
 
             ## Sample/Warp
             tmp_warp = '_tmp_gdal.tif'
@@ -1359,10 +1359,8 @@ class RasterFile(ElevationDataset):
                     src_ds.FlushCache()
                     
                 warp_ds = warp_arr = None
-                utils.remove_glob(tmp_warp)
-            
+                utils.remove_glob(tmp_warp)            
         else:
-
             if self.open_options:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
                 if src_ds is None:
@@ -1483,19 +1481,23 @@ class RasterFile(ElevationDataset):
 
             band_data = count_data = weight_data = mask_data = None
             out_arrays = {'z':None, 'count':None, 'weight':None, 'mask':None}
+
+            #tmp_wm_warp = '_tmp_gdal_wm.tif'
             if self.weight_mask is not None:
                 if self.x_inc is not None and self.y_inc is not None:
                     src_weight = demfun.sample_warp(
                         self.weight_mask, None, self.x_inc, self.y_inc,
                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                         ndv=ndv, verbose=False
+                        ndv=ndv, verbose=False
                     )[0]
+                    #src_weight = gdal.Open(tmp_wm_warp)
                 else:
                     src_weight = gdal.Open(self.weight_mask)
                     
                 weight_band = src_weight.GetRasterBand(1)
 
+            #tmp_mask_warp = '_tmp_gdal_m.tif'
             if self.mask is not None:
                 if self.x_inc is not None and self.y_inc is not None:
                     src_mask = demfun.sample_warp(
@@ -1504,6 +1506,7 @@ class RasterFile(ElevationDataset):
                         src_region=self.warp_region, sample_alg=self.sample_alg,
                         ndv=ndv, verbose=False
                     )[0]
+                    #src_mask = gdal.Open(tmp_mask_warp)
                 else:
                     if not self.invert_region:
                         src_mask = gdal.Open(self.mask)
@@ -1514,7 +1517,7 @@ class RasterFile(ElevationDataset):
 
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize, node='pixel')
             for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
+                    srcwin[1], (srcwin[1] + srcwin[3])-1, 1
             ):
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
@@ -1525,7 +1528,7 @@ class RasterFile(ElevationDataset):
                 if np.all(np.isnan(band_data)):
                     continue
                 
-                this_origin = utils._pixel2geo(srcwin[0], y, gt, node='grid')
+                this_origin = utils._pixel2geo(srcwin[0], y, gt, node='pixel')
                 this_gt = (this_origin[0], gt[1], 0, this_origin[1], 0, gt[5])
                                     
                 if weight_band is not None:
@@ -1609,6 +1612,7 @@ class RasterFile(ElevationDataset):
                 yield(out_arrays, this_srcwin, this_gt)
                                             
             band = mask_band = weight_band = src_weight = src_mask = src_ds = None
+            #utils.remove_glob(tmp_wm_warp, tmp_mask_warp)
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}{}'.format(

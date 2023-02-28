@@ -368,6 +368,9 @@ class Waffle:
                 z_band.WriteArray(z_data, srcwin[0], y)
                 c_band.WriteArray(c_data, srcwin[0], y)
                 w_band.WriteArray(w_data, srcwin[0], y)
+
+        #utils.echo_msg('maximum stacked value: {}'.format(z_data.max()))
+        #utils.echo_msg('minimum stacked value: {}'.format(z_data.min()))
         
         z_ds = c_ds = w_ds = None
     
@@ -617,26 +620,21 @@ class Waffle:
             clip_args = utils.args2dict(cp[1:], clip_args)
             if clip_args['src_ply'] == 'coastline':
                 self.coast = WaffleFactory(
-                    mod='coastline:invert=True:polygonize=False',
+                    mod='coastline:polygonize=False',
                     data=self.data_,
                     src_region=self.p_region,
                     xinc=self.xsample if self.xsample is not None else self.xinc,
                     yinc=self.ysample if self.ysample is not None else self.yinc,
                     name='tmp_coast',
                     node=self.node,
-                    #extend=self.extend,
-                    #extend_proc=self.extend_proc,
                     weights=self.weights,
-                    #xsample=self.xsample,
-                    #ysample=self.ysample,
                     dst_srs=self.dst_srs,
                     srs_transform=self.srs_transform,
                     clobber=True,
                     verbose=self.verbose,
                 ).acquire().generate()
                 
-                clip_args['src_ply'] = 'tmp_coast.shp'
-                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=0)
+                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1)
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
                 
             else:
@@ -646,12 +644,15 @@ class Waffle:
                     os.rename('__tmp_clip__.tif', '{}'.format(fn))
 
         ## CUT
-        #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid' if self.mod == 'mbgrid' else 'pixel', mode=None)[1] == 0:
-        if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
+        #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
+        _tmp_cut, cut_status = demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)
+        if cut_status == 0:
             try:
-                os.rename('__tmp_cut__.tif', '{}'.format(fn))
+                os.rename(_tmp_cut, fn)
             except Exception as e:
                 utils.echo_error_msg('could not cut {}; {}'.format(fn, e))
+        else:
+            utils.echo_error_msg('could not cut {}'.format(fn))
 
         ## SET SRS/METADATA
         ## if set_srs fails, set_metadata will skip first entry...
@@ -868,7 +869,7 @@ class GMTSurface(Waffle):
     Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
     """
     
-    def __init__(self, tension=.35, relaxation=1.4, max_radius=None,
+    def __init__(self, tension=.35, relaxation=1, max_radius=None,
                  lower_limit=None, upper_limit=None, aspect=None,
                  breakline=None, convergence=None, blockmean=True,
                  geographic=True, **kwargs):
@@ -1188,7 +1189,7 @@ class WafflesMBGrid(Waffle):
             return(None)
     
     def run(self):
-        if use_datalists:
+        if self.use_datalists:
             #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
             archive = wg['archive']
             wg['archive'] = True
@@ -2344,7 +2345,7 @@ DEM generation.
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
-            ).acquire().generate()                
+            ).acquire().generate()
 
             if self.coast is not None:
                 if pre !=0:
