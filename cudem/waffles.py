@@ -1190,19 +1190,22 @@ class WafflesMBGrid(Waffle):
     
     def run(self):
         if self.use_datalists:
-            #datalist_archive(wg, arch_dir = '.mb_tmp_datalist', verbose = True)
-            archive = wg['archive']
-            wg['archive'] = True
-            #for xyz in waffles_yield_datalist(wg): pass
+            archive = self.archive
+            self.archive = True
             [x for x in self.yield_xyz()]
-            #wg['datalist'] = datalists.datalist_major(['archive/{}.datalist'.format(wg['name'])])
-            wg['archive'] = archive
+            self.archive = archive
 
         mb_region = self.p_region.copy()
         mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
         xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
+        print(self.data[0].archive_datalist)
+        if self.data[0].archive_datalist is not None:
+            dl_name = self.data[0].archive_datalist
+        else:
+            dl_name = self.data[0].fn
+            
         mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
-            self.data[0].fn,
+            dl_name,
             mb_region.format('gmt'),
             xsize,
             ysize,
@@ -2196,6 +2199,7 @@ DEM generation.
             keep_auxiliary=False,
             mode='surface',
             filter_outliers=None,
+            supercede=True,
             **kwargs
     ):
         self.mod = 'cudem'
@@ -2207,6 +2211,7 @@ DEM generation.
             'poly_count':poly_count,
             'keep_auxiliary':keep_auxiliary,
             'mode':mode,
+            'supercede':supercede,
             'filter_outliers':filter_outliers,
         }
         try:
@@ -2222,6 +2227,7 @@ DEM generation.
         self.poly_count = poly_count
         self.keep_auxiliary = keep_auxiliary
         self.mode = mode
+        self.supercede = supercede
         self.filter_outliers = utils.int_or(filter_outliers)
         if self.filter_outliers is not None:
             self.filter_outliers = 1 if self.filter_outliers > 9 or self.filter_outliers < 1 else self.filter_outliers
@@ -2238,7 +2244,7 @@ DEM generation.
         
         ## Block/Stack the data with weights
         self._stacks_array(
-            out_name='{}_stack'.format(self.name), supercede=True
+            out_name='{}_stack'.format(self.name), supercede=self.supercede
         )
         n = '{}_stack_s.tif'.format(self.name)
         w = '{}_stack_w.tif'.format(self.name)

@@ -124,6 +124,7 @@ class ElevationDataset():
         self.metadata = copy.deepcopy(metadata)
         self.x_inc = utils.str2inc(x_inc)
         self.y_inc = utils.str2inc(y_inc)
+        self.archive_datalist = None
         if sample_alg in self.gdal_sample_methods:
             self.sample_alg = sample_alg
         else:
@@ -512,6 +513,7 @@ class ElevationDataset():
                 self.metadata['name'], self.region.format('fn'), utils.this_year())
             
         self.parse_data_lists()
+        self.archive_datalist = '{}.datalist'.format(a_name)
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
                 if self.region is None:

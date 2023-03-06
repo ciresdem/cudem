@@ -150,6 +150,7 @@ class Datalist(datasets.ElevationDataset):
         ]
         super().__init__(**kwargs)
         self.metadata['name'] = os.path.basename('.'.join(self.fn.split('.')[:-1]))
+        self.name = self.metadata['name']
 
     def _init_datalist_vector(self):
         self.dst_layer = '{}'.format(self.fn)
