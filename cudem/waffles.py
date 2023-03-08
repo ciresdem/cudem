@@ -788,21 +788,17 @@ class Waffle:
         """check if the output WAFFLES DEM is valid"""
 
         if not os.path.exists(self.fn):
-            #print('os path no exist')
             return(False)
         
         if self.mask:
             if not os.path.exists(self.mask_fn):
-                #print('mask os path no exist')
                 return(False)
             
         gdi = demfun.infos(self.fn, scan=True)        
         if gdi is not None:
             if np.isnan(gdi['zr'][0]):
-                #print('zr is nan')
                 return(False)
         else:
-            #print('gdi is none')
             return(False)
         
         return(True)            
@@ -811,54 +807,6 @@ class Waffle:
         """run the WAFFLES module (set via sub-module class)."""
         
         raise(NotImplementedError)
-
-    # def _xyz_ds(self):
-    #     """Make a point vector OGR DataSet Object from src_xyz
-
-    #     for use in gdal gridding functions.
-    #     """
-
-    #     dst_ogr = '{}'.format(self.name)
-    #     self.ogr_ds = gdal.GetDriverByName('Memory').Create(
-    #         '', 0, 0, 0, gdal.GDT_Unknown
-    #     )
-    #     layer = self.ogr_ds.CreateLayer(
-    #         dst_ogr,
-    #         geom_type=ogr.wkbPoint25D
-    #     )
-    #     fd = ogr.FieldDefn('long', ogr.OFTReal)
-    #     fd.SetWidth(10)
-    #     fd.SetPrecision(8)
-    #     layer.CreateField(fd)
-    #     fd = ogr.FieldDefn('lat', ogr.OFTReal)
-    #     fd.SetWidth(10)
-    #     fd.SetPrecision(8)
-    #     layer.CreateField(fd)
-    #     fd = ogr.FieldDefn('elev', ogr.OFTReal)
-    #     fd.SetWidth(12)
-    #     fd.SetPrecision(12)
-    #     layer.CreateField(fd)
-        
-    #     if self.weights:
-    #         fd = ogr.FieldDefn('weight', ogr.OFTReal)
-    #         fd.SetWidth(6)
-    #         fd.SetPrecision(6)
-    #         layer.CreateField(fd)
-            
-    #     f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-    #     for this_xyz in self.yield_xyz():
-    #         f.SetField(0, this_xyz.x)
-    #         f.SetField(1, this_xyz.y)
-    #         f.SetField(2, float(this_xyz.z))
-    #         if self.weights:
-    #             f.SetField(3, this_xyz.w)
-                
-    #         wkt = this_xyz.export_as_wkt(include_z=True)
-    #         g = ogr.CreateGeometryFromWkt(wkt)
-    #         f.SetGeometryDirectly(g)
-    #         layer.CreateFeature(f)
-            
-    #     return(self.ogr_ds)
     
 ## ==============================================
 ## GMT Surface
