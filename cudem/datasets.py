@@ -1303,7 +1303,7 @@ class RasterFile(ElevationDataset):
             dem_inf = demfun.infos(self.fn)
 
             if self.sample_alg == 'auto':
-                if dem_inf['geoT'][1] > self.x_inc and (dem_inf['geoT'][5]*-1) > self.y_inc:
+                if dem_inf['geoT'][1] >= self.x_inc and (dem_inf['geoT'][5]*-1) >= self.y_inc:
                     self.sample_alg = 'bilinear'
                 else:
                     self.sample_alg = 'average'
