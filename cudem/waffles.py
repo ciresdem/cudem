@@ -4196,6 +4196,9 @@ Options:
   -E, --increment\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
 \t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
   -S, --sample_alg\tReSAMPLE algorithm to use (from gdalwarp)
+\t\t\tSet as 'auto' to use 'average' when down-sampling and 'bilinear' when up-sampling
+\t\t\tThis switch controls resampling of input raster datasets as well as resampling
+\t\t\tthe final DEM if RESAMPLE-INCREMENT is set in -E
   -F, --format\t\tOutput grid FORMAT. [GTiff]
   -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
