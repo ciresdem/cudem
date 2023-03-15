@@ -54,7 +54,8 @@ setuptools.setup(
         'laspy[laszip]',
         'h5py',
         'boto3',
-        'tqdm'
+        'tqdm',
+        #'pygmt',
     ], 
     entry_points = {
         'console_scripts': [
@@ -68,6 +69,7 @@ setuptools.setup(
             'fetches3 = cudem.fetches.fetches:fetches_cli',
             'spatial_metadata = cudem.metadata:spat_meta_cli',
             'uncertainties = cudem.uncertainties:uncertainties_cli',
+            #'demage = cudem.demage:demage_cli',
         ],
     },
     scripts = [

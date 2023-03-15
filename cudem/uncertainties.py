@@ -799,9 +799,9 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
            wf_version=cudem.__version__)
 
 def uncertainties_cli(argv = sys.argv):
-    """run waffles from command-line
+    """run uncertainties from command-line
 
-    See `waffles_cli_usage` for full cli options.
+    See `uncertainties_cli_usage` for full cli options.
     """
     
     wg_user = None

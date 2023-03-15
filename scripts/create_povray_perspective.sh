@@ -53,7 +53,6 @@ while getopts ":I:O:Z:P:C:A:T:i" options; do
 	* ) echo -e $_usage
 	    exit 1;;
     esac
-
 done
 
 if [ ! $ingrd ] ; then

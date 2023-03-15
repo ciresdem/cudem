@@ -73,7 +73,7 @@ class ElevationDataset():
 
     gdal_sample_methods = [
         'near', 'bilinear', 'cubic', 'cubicspline', 'lanczos',
-        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum'
+        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum', 'auto'
     ]
     
     def __init__(
@@ -1255,7 +1255,7 @@ class RasterFile(ElevationDataset):
 
         self.set_transform()
         self.sample_alg = sample if sample is not None else self.sample_alg
-
+        
         self.resample = resample
         self.check_path = check_path
         self.dem_infos = demfun.infos(self.fn)
@@ -1302,6 +1302,12 @@ class RasterFile(ElevationDataset):
             #if self.resample:
             dem_inf = demfun.infos(self.fn)
 
+            if self.sample_alg == 'auto':
+                if dem_inf['geoT'][1] > self.x_inc and (dem_inf['geoT'][5]*-1) > self.y_inc:
+                    self.sample_alg = 'bilinear'
+                else:
+                    self.sample_alg = 'average'
+                
             tmp_ds = self.fn
             if self.open_options is not None:
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -1519,7 +1525,7 @@ class RasterFile(ElevationDataset):
 
             srcwin = self.get_srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize, node='pixel')
             for y in range(
-                    srcwin[1], (srcwin[1] + srcwin[3])-1, 1
+                    srcwin[1], (srcwin[1] + srcwin[3]), 1
             ):
                 band_data = band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
