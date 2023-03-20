@@ -39,8 +39,13 @@ from cudem import utils
 from cudem import demfun
 from cudem import regions
 
-import pygmt
-
+try:
+    import pygmt
+    has_pygmt = True
+except ImportError as e:
+    utils.echo_error_msg('Could not import pygmt, {}'.format(e))
+    has_pygmt = False
+    
 ## lll
 def lll(src_lat):
     gds_equator = 111321.543
