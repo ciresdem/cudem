@@ -1287,9 +1287,8 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
     """
 
     utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
-
     if os.path.exists(src_dem):
-        
+        ## Filter the DEM (1=blur, 2=grdfilter, 3=outliers)
         if int(fltr) == 1:
             out, status = blur(
                 src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
@@ -1303,8 +1302,10 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
         else:
             utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
             out, status = blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
-        if status != 0: return(status)
+        if status != 0:
+            return(status)
 
+        ## Split the filtered DEM by z-value
         split_val = utils.float_or(split_val)
         if split_val is not None:
             try:
@@ -1314,14 +1315,10 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
 
             if ds is not None:
                 ds_config = gather_infos(ds)
-
                 elev_array = ds.GetRasterBand(1).ReadAsArray()
-                mask_array = np.zeros((ds_config['ny'],ds_config['nx']))
-                
+                mask_array = np.zeros((ds_config['ny'],ds_config['nx']))                
                 mask_array[elev_array == ds_config['ndv']] = 0
                 mask_array[elev_array < split_val] = 1
-                #mask_array[~np.isnan(mask_array)] = 0
-
                 elev_array[elev_array < split_val] = 0
 
                 try:

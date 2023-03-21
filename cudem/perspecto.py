@@ -139,7 +139,8 @@ class Perspecto:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
             self.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
         else:
-            self.makecpt(self.cpt, output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+            if has_gmt:
+                self.makecpt(self.cpt, output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
 
     def makecpt(self, cmap='etopo1', output=None):
         pygmt.makecpt(

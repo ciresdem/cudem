@@ -24,6 +24,10 @@
 ## Dataset parsing.
 ## datasets include: xyz, raster (gdal), las/laz (laspy), mbs (MBSystem), fetches
 ##
+## ElevationDataset
+##
+## Parse various dataset types by region/increments and yield data as xyz or array
+##
 ### Code:
 
 import os
@@ -73,7 +77,8 @@ class ElevationDataset():
 
     gdal_sample_methods = [
         'near', 'bilinear', 'cubic', 'cubicspline', 'lanczos',
-        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum', 'auto'
+        'average', 'mode',  'max', 'min', 'med', 'Q1', 'Q3', 'sum',
+        'auto'
     ]
     
     def __init__(
@@ -128,7 +133,11 @@ class ElevationDataset():
         if sample_alg in self.gdal_sample_methods:
             self.sample_alg = sample_alg
         else:
-            utils.echo_warning_msg('{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(sample_alg))
+            utils.echo_warning_msg(
+                '{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(
+                    sample_alg
+                )
+            )
             self.sample_alg = 'bilinear'
 
         self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
@@ -468,8 +477,10 @@ class ElevationDataset():
                 except:
                     inf_region = self.region.copy()
                 
-            #if regions.regions_intersect_p(inf_region, self.region):
-            if regions.regions_intersect_p(inf_region, self.region if self.dst_trans is None else self.trans_region):
+            if regions.regions_intersect_p(
+                    inf_region,
+                    self.region if self.dst_trans is None else self.trans_region
+            ):
                 self.data_entries.append(self)
                 yield(self)
         else:
@@ -827,9 +838,36 @@ class ElevationDataset():
         return(xyz_l)
     
 ## ==============================================
+## XYZ dataset.
+## file or stdin...
 ## ==============================================
 class XYZFile(ElevationDataset):
-    """representing an ASCII xyz dataset stream."""
+    """representing an ASCII xyz dataset stream.
+
+    parse data from an xyz file/stdin
+
+    generate_inf - generate an inf file for the xyz data
+    yield_xyz - yield the xyz data as xyz
+    yield_array - yield the xyz data as an array
+                  must set the x_inc/y_inc in the
+                  super class
+    
+    ---
+    Parameters:
+    
+    delim - the delimiter of the xyz data (str)
+    xpos - the position (int) of the x value
+    ypos - the position (int) of the y value
+    zpos - the position (int) of the z value
+    wpos - the position (int) of the w value (weight)
+    skip - number of lines to skip
+    x_scale - scale the x value
+    y_scale - scale the y value
+    z_scale - scale the z value
+    x_offset - offset the x value
+    y_offset - offset the y value
+    
+    """
 
     def __init__(
             self,
@@ -1021,9 +1059,22 @@ class XYZFile(ElevationDataset):
         self.src_data.close()
 
 ## ==============================================
+## LAS/LAZ Dataset.
 ## ==============================================
 class LASFile(ElevationDataset):
-    """representing an LAS/LAZ dataset."""
+    """representing an LAS/LAZ dataset.
+
+    get_epsg - attempt to parse the EPSG from the LAS file header
+    generate_inf - generate an inf file for the LAS data
+    yield_xyz - yield the LAS data as xyz
+    yield_array - yield the LAS data as an array
+                  must set the x_inc/y_inc in the
+                  super class    
+    ---
+    Parameters:
+
+    classes - a list of classes to parse, being a string with `/` seperator 
+    """
 
     def __init__(self, classes='0/2/29/40', **kwargs):
         self.ds_args = {
@@ -1164,19 +1215,6 @@ class LASFile(ElevationDataset):
                             points =  points[(points.z < tmp_region.zmax)]
                                               
                 dataset = np.vstack((points.x, points.y, points.z)).transpose()
-                # if self.region is not None  and self.region.valid_p():
-                #     tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-                #     if not self.invert_region:
-                #         dataset = dataset[dataset[:,0] > tmp_region.xmin,:]
-                #         dataset = dataset[dataset[:,0] < tmp_region.xmax,:]
-                #         dataset = dataset[dataset[:,1] > tmp_region.ymin,:]
-                #         dataset = dataset[dataset[:,1] < tmp_region.ymax,:]
-                #         if self.region.zmin is not None:
-                #             dataset = dataset[dataset[:,2] > tmp_region.zmin,:]
-
-                #         if self.region.zmax is not None:
-                #             dataset = dataset[dataset[:,2] < tmp_region.zmax,:]
-                
                 count += len(dataset)
                 for point in dataset:
                     this_xyz = xyzfun.XYZPoint(
@@ -1201,20 +1239,31 @@ class LASFile(ElevationDataset):
     def yield_array(self):        
         for arrs in self.yield_block_array():
             yield(arrs)
-            
-    # def yield_array(self):        
-    #     for src_arrs, src_gt, src_ds_config in self.yield_block_array():
-    #         x_count, y_count, dst_gt = self.region.geo_transform(self.x_inc, self.y_inc)
-    #         srcwin_region = regions.Region().from_geo_transform(
-    #             geo_transform=src_gt, x_count=src_ds_config['nx'], y_count=src_ds_config['ny']
-    #         )
-    #         dst_srcwin = srcwin_region.srcwin(dst_gt, x_count, y_count, 'grid')
-    #         yield(src_arrs, dst_srcwin, src_gt)
-            
+                       
 ## ==============================================
+## Raster Dataset.
+## Parses with GDAL
 ## ==============================================
 class RasterFile(ElevationDataset):
-    """providing a GDAL raster dataset parser."""
+    """providing a GDAL raster dataset parser.
+
+    generate_inf - generate an inf file for the RASTER data
+    yield_xyz - yield the RASTER data as xyz
+    yield_array - yield the RASTER data as an array
+
+    ---
+    Parameters:
+
+    mask - raster dataset to use as MASK dataset (1/0)
+    weight_mask - raster dataset to use as a weights (per-cell).
+                  otherwise will use single value (weight) from
+                  superclass
+    open_options - GDAL open_options for raster dataset
+    sample - sample method to use in resamplinig
+    resample - resample the grid to `x_inc` and `y_inc` from superclass
+    check_path - check to make sure path exists
+    super_grid - Force processing of a supergrid (BAG files) (True/False)
+    """
     
     def __init__(
             self,
@@ -1313,29 +1362,6 @@ class RasterFile(ElevationDataset):
                 src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
             else:
                 src_ds = gdal.Open(self.fn)
-
-            # if src_ds is not None:
-            #     remake = False
-            #     mt = src_ds.GetMetadata()            
-            #     ## remake this grid if it's grid-node
-            #     if 'AREA_OR_POINT' in mt.keys():
-            #         if mt['AREA_OR_POINT'].lower() == 'point':
-            #             remake = True
-                        
-            #     if self.open_options is not None:# or self.super_grid:
-            #         remake = True
-
-            #     if remake:
-            #         ds_config = demfun.gather_infos(src_ds)
-            #         tmp_ds = demfun.generate_mem_ds(ds_config)
-            #         band = tmp_ds.GetRasterBand(1)
-            #         band.WriteArray(src_ds.GetRasterBand(1).ReadAsArray())
-            #         tmp_ds.SetProjection(utils.sr_wkt(self.src_srs))
-            #         tmp_ds.FlushCache()
-            #     # else:
-            #     #     tmp_ds = gdal.Open(self.fn)
-                    
-            #     src_ds = None
 
             ## Sample/Warp
             tmp_warp = '_tmp_gdal.tif'
@@ -1649,12 +1675,25 @@ class RasterFile(ElevationDataset):
                         yield(out_xyz)
             
 ## ==============================================
+## BAG Raster File.
+## Uses GDAL
 ## ==============================================
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
     process supergrids at native resolution if they
     exist, otherwise process as normal grid
+
+    generate_inf - generate an inf file for the BAG data
+    yield_xyz - yield the BAG data as xyz
+    yield_array - yield the BAG data as an array
+    
+    ---
+    Parameters:
+
+    explode - Explode the BAG and process each super grid seperately.
+    force_vr - Force VR processing (if BAG file has bad header info)
+    vr_strategy - VR strategy to use (MIN/MAX/AUTO)
     """
 
     def __init__(self, explode=False, force_vr=False, vr_strategy='MIN', **kwargs):
@@ -1797,9 +1836,22 @@ class BAGFile(ElevationDataset):
                 yield(arr)
                 
 ## ==============================================
+## Multibeam Data.
+## Uses MB-System
 ## ==============================================
 class MBSParser(ElevationDataset):
-    """providing an mbsystem parser"""
+    """providing an mbsystem parser
+
+    generate_inf - generate an inf file for the MBS data
+    yield_xyz - yield the MBS data as xyz
+    yield_array - yield the MBS data as an array
+ 
+    ---
+    Parameters:
+
+    mb_fmt
+    mb_exclude
+    """
 
     def __init__(self, mb_fmt=None, mb_exclude='A', **kwargs):
         self.ds_args = {
