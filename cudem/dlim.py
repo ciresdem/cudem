@@ -45,7 +45,11 @@ from cudem import datasets
 
 from cudem.fetches import fetches
 
-def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
+def make_datalist(
+        data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose
+):
+    """Make a datalist object from a list of supported datasets"""
+    
     xdl = Datalist(
         fn='<scratch-datalist>',
         data_format=-1,
@@ -74,6 +78,8 @@ def make_datalist(data_list, weight, region, src_srs, dst_srs, x_inc, y_inc, sam
     return(xdl)
 
 def write_datalist(data_list, outname=None):
+    """write a datalist file from a datalist object"""
+    
     if outname is None:
         outname = '{}_{}'.format(self.metadata['name'], utils.this_year())
     
@@ -85,8 +91,19 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want_verbose, invert_region=False, cache_dir=None):
-
+def init_data(
+        data_list,
+        this_region,
+        src_srs,
+        dst_srs,
+        xy_inc,
+        sample_alg,
+        want_verbose,
+        invert_region=False,
+        cache_dir=None
+):
+    """initialize a datalist object from a list of supported datasets"""
+    
     try:
         xdls = [DatasetFactory(
             fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
@@ -119,12 +136,15 @@ def init_data(data_list, this_region, src_srs, dst_srs, xy_inc, sample_alg, want
             this_datalist = xdls[0]
 
         return(this_datalist)
+    
     except Exception as e:
         utils.echo_error_msg('could not initialize data, {}'.format(e))
         return(None)
     
 ## ==============================================
 ## Datalist Class - Recursive data structure
+##
+## see cudem.datasets for superclass ElevationDataset
 ## ==============================================
 class Datalist(datasets.ElevationDataset):
     """representing a datalist parser
@@ -571,6 +591,9 @@ class ZIPlist(datasets.ElevationDataset):
 
 ## ==============================================
 ## dlim Fetcher dataset class
+##
+## see cudem.fetches for various fetches supported
+## datasets
 ## ==============================================
 class Fetcher(datasets.ElevationDataset):
     """The fetches dataset type.
@@ -644,9 +667,11 @@ parsing and processing.
             
 ## ==============================================
 ## Dataset generator
+##
+## Parse a datalist entry and return the dataset
+## object
 ## ==============================================
 class DatasetFactory:
-
     data_types = {
         -1: {'name': 'datalist',
              'fmts': ['datalist', 'mb-1', 'dl'],
@@ -776,6 +801,9 @@ class DatasetFactory:
         
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.fn.rstrip())
 
+        ## ==============================================
+        ## data path file-name
+        ## ==============================================
         try:
             entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
@@ -788,7 +816,6 @@ class DatasetFactory:
         ## guess format based on fn if not specified and
         ## parse format for dataset specific opts.
         ## ==============================================
-
         if len(entry) < 2:
             for key in self.data_types.keys():
                 se = entry[0].split('.')
@@ -1104,7 +1131,9 @@ def datalists_cli(argv=sys.argv):
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
-            this_datalist = init_data(dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose, invert_region, None)
+            this_datalist = init_data(
+                dls, this_region, src_srs, dst_srs, xy_inc, 'bilinear', want_verbose, invert_region, None
+            )
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory.data_types[this_datalist.data_format]['fmts']
             ):
