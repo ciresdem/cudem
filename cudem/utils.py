@@ -1,6 +1,6 @@
 ### utils.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## utils.py is part of CUDEM
 ##
@@ -335,6 +335,8 @@ def float_or(val, or_val=None):
     except: return(or_val)
 
 def str_or(instr, or_val=None):
+    """return instr if instr is a string, else or_val"""
+    
     try:
         return(str(instr).replace('"', ''))
     except:
@@ -392,7 +394,12 @@ def hav_dst(pnt0, pnt1):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     
     return(rad_m*c)
-    
+
+## ==============================================
+##
+## Geotransform functions
+##
+## ==============================================
 def _geo2pixel(geo_x, geo_y, geo_transform, node='grid'):
     """convert a geographic x,y value to a pixel location of geoTransform
 
@@ -508,164 +515,6 @@ def _invert_gt(geo_transform):
     out_geo_transform[0] = (geo_transform[2] * geo_transform[3] - geo_transform[0] * geo_transform[5]) * inv_det
     out_geo_Transform[3] = (-geo_transform[1] * geo_transform[3] + geo_transform[0] * geo_transform[4]) * inv_det
     return(outGeoTransform)
-
-def wkt2geom(wkt):
-    """transform a wkt to an ogr geometry
-    
-    Args:
-      wkt (wkt): a wkt geometry
-
-    Returns:
-      ogr-geom: the ogr geometry
-    """
-    
-    return(ogr.CreateGeometryFromWkt(wkt))
-
-def sr_wkt(src_srs, esri=False):
-    """convert a src_srs to wkt"""
-    
-    try:
-        sr = osr.SpatialReference()
-        sr.SetFromUserInput(src_srs)
-        if esri:
-            sr.MorphToESRI()
-            
-        return(sr.ExportToWkt())
-    except:
-        return(None)
-
-def gdal_prj_file(dst_fn, src_srs):
-    """generate a .prj file given a src_srs"""
-    
-    with open(dst_fn, 'w') as out:
-        out.write(sr_wkt(src_srs, True))
-        
-    return(0)
-
-def epsg_from_input(in_srs):
-    src_srs = osr.SpatialReference()
-    src_srs.SetFromUserInput(in_srs)
-
-    ## HORZ
-    if src_srs.IsGeographic() == 1:
-        cstype = 'GEOGCS'
-    else:
-        cstype = 'PROJCS'
-
-    src_srs.AutoIdentifyEPSG()
-    an = src_srs.GetAuthorityName(cstype)
-    src_horz_epsg = src_srs.GetAuthorityCode(cstype)
-
-    ## VERT
-    if src_srs.IsVertical() == 1:
-        csvtype = 'VERT_CS'
-        src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
-        #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
-    else:
-        src_vert_epsg = None
-                
-    #src_srs = osr.SpatialReference()
-    #src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
-
-    return(src_horz_epsg, src_vert_epsg)
-    
-def gdal_fext(src_drv_name):
-    """find the common file extention given a GDAL driver name
-    older versions of gdal can't do this, so fallback to known standards.
-
-    Args:
-      src_drv_name (str): a source GDAL driver name
-
-    Returns:
-      list: a list of known file extentions or None
-    """
-    
-    fexts = None
-    try:
-        drv = gdal.GetDriverByName(src_drv_name)
-        if drv.GetMetadataItem(gdal.DCAP_RASTER):
-            fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
-            
-        if fexts is not None:
-            return(fexts.split()[0])
-        else:
-            return(None)
-    except:
-        if src_drv_name.lower() == 'gtiff': fext = 'tif'
-        elif src_drv_name == 'HFA': fext = 'img'
-        elif src_drv_name == 'GMT': fext = 'grd'
-        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
-        else: fext = 'gdal'
-        
-        return(fext)
-
-def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
-
-    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
-    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
-    
-    if not os.path.exists(dst_ogr_fn) or overwrite:
-        run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
-                
-    return(dst_ogr_fn)
-
-def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
-
-    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
-    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
-    
-    if not os.path.exists(dst_ogr_fn) or overwrite:
-    
-        src_ds = ogr.Open(src_ogr_fn)
-        if layer is not None:
-            src_layer = src_ds.GetLayer(layer)
-        else:
-            src_layer = src_ds.GetLayer()
-            
-        region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
-        dst_region.export_as_ogr(region_ogr)
-        region_ds = ogr.Open(region_ogr)
-        region_layer = region_ds.GetLayer()
-
-        driver = ogr.GetDriverByName('GPKG')
-        dst_ds = driver.CreateDataSource(dst_ogr_fn)
-        dst_layer = dst_ds.CreateLayer(layer if layer is not None else 'clipped', geom_type=ogr.wkbPolygon)
-
-        ogr.Layer.Clip(src_layer, region_layer, dst_layer)
-
-        src_ds = region_ds = dst_ds = None
-        remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
-        
-    return(dst_ogr_fn)
-
-    
-def ogr_fext(src_drv_name):
-    """find the common file extention given a OGR driver name
-    older versions of gdal can't do this, so fallback to known standards.
-
-    Args:
-      src_drv_name (str): a source OGR driver name
-
-    Returns:
-      list: a list of known file extentions or None
-    """
-    
-    fexts = None
-    try:
-        drv = ogr.GetDriverByName(src_drv_name)
-        fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
-        if fexts is not None:
-            return(fexts.split()[0])
-        else:
-            return(None)
-    except:
-        if src_drv_name.lower() == 'gtiff': fext = 'tif'
-        elif src_drv_name == 'HFA': fext = 'img'
-        elif src_drv_name == 'GMT': fext = 'grd'
-        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
-        else: fext = 'gdal'
-        
-        return(fext)
 
 def x360(x):
     if x == 0:
@@ -860,6 +709,12 @@ def p_f_unzip(src_file, fns=None):
             
     return(src_procs)
 
+## ==============================================
+##
+## srcwin functions
+##
+## ==============================================
+
 def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     """yield source windows in n_chunks at step"""
     
@@ -923,7 +778,171 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     y_size = (n_size[0] - y_origin) if (y_origin + y_size) > n_size[0] else y_size
     
     return(x_origin, y_origin, x_size, y_size)
-       
+
+## ==============================================
+##
+## GDAL/OGR/OSR functions
+##
+## ==============================================
+
+def wkt2geom(wkt):
+    """transform a wkt to an ogr geometry
+    
+    Args:
+      wkt (wkt): a wkt geometry
+
+    Returns:
+      ogr-geom: the ogr geometry
+    """
+    
+    return(ogr.CreateGeometryFromWkt(wkt))
+
+def sr_wkt(src_srs, esri=False):
+    """convert a src_srs to wkt"""
+    
+    try:
+        sr = osr.SpatialReference()
+        sr.SetFromUserInput(src_srs)
+        if esri:
+            sr.MorphToESRI()
+            
+        return(sr.ExportToWkt())
+    except:
+        return(None)
+
+def gdal_prj_file(dst_fn, src_srs):
+    """generate a .prj file given a src_srs"""
+    
+    with open(dst_fn, 'w') as out:
+        out.write(sr_wkt(src_srs, True))
+        
+    return(0)
+
+def epsg_from_input(in_srs):
+    src_srs = osr.SpatialReference()
+    src_srs.SetFromUserInput(in_srs)
+
+    ## HORZ
+    if src_srs.IsGeographic() == 1:
+        cstype = 'GEOGCS'
+    else:
+        cstype = 'PROJCS'
+
+    src_srs.AutoIdentifyEPSG()
+    an = src_srs.GetAuthorityName(cstype)
+    src_horz_epsg = src_srs.GetAuthorityCode(cstype)
+
+    ## VERT
+    if src_srs.IsVertical() == 1:
+        csvtype = 'VERT_CS'
+        src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
+        #src_vert_epsg = src_srs.GetAttrValue('VERT_CS|AUTHORITY', 1)
+    else:
+        src_vert_epsg = None
+                
+    #src_srs = osr.SpatialReference()
+    #src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
+
+    return(src_horz_epsg, src_vert_epsg)
+    
+def gdal_fext(src_drv_name):
+    """find the common file extention given a GDAL driver name
+    older versions of gdal can't do this, so fallback to known standards.
+
+    Args:
+      src_drv_name (str): a source GDAL driver name
+
+    Returns:
+      list: a list of known file extentions or None
+    """
+    
+    fexts = None
+    try:
+        drv = gdal.GetDriverByName(src_drv_name)
+        if drv.GetMetadataItem(gdal.DCAP_RASTER):
+            fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+            
+        if fexts is not None:
+            return(fexts.split()[0])
+        else:
+            return(None)
+    except:
+        if src_drv_name.lower() == 'gtiff': fext = 'tif'
+        elif src_drv_name == 'HFA': fext = 'img'
+        elif src_drv_name == 'GMT': fext = 'grd'
+        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
+        else: fext = 'gdal'
+        
+        return(fext)
+
+def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
+
+    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
+    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
+    
+    if not os.path.exists(dst_ogr_fn) or overwrite:
+        run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
+                
+    return(dst_ogr_fn)
+
+def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
+
+    dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
+    dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
+    
+    if not os.path.exists(dst_ogr_fn) or overwrite:
+    
+        src_ds = ogr.Open(src_ogr_fn)
+        if layer is not None:
+            src_layer = src_ds.GetLayer(layer)
+        else:
+            src_layer = src_ds.GetLayer()
+            
+        region_ogr = 'region_{}.shp'.format(dst_region.format('fn'))
+        dst_region.export_as_ogr(region_ogr)
+        region_ds = ogr.Open(region_ogr)
+        region_layer = region_ds.GetLayer()
+
+        driver = ogr.GetDriverByName('GPKG')
+        dst_ds = driver.CreateDataSource(dst_ogr_fn)
+        dst_layer = dst_ds.CreateLayer(layer if layer is not None else 'clipped', geom_type=ogr.wkbPolygon)
+
+        ogr.Layer.Clip(src_layer, region_layer, dst_layer)
+
+        src_ds = region_ds = dst_ds = None
+        remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
+        
+    return(dst_ogr_fn)
+
+    
+def ogr_fext(src_drv_name):
+    """find the common file extention given a OGR driver name
+    older versions of gdal can't do this, so fallback to known standards.
+
+    Args:
+      src_drv_name (str): a source OGR driver name
+
+    Returns:
+      list: a list of known file extentions or None
+    """
+    
+    fexts = None
+    try:
+        drv = ogr.GetDriverByName(src_drv_name)
+        fexts = drv.GetMetadataItem(gdal.DMD_EXTENSIONS)
+        if fexts is not None:
+            return(fexts.split()[0])
+        else:
+            return(None)
+    except:
+        if src_drv_name.lower() == 'gtiff': fext = 'tif'
+        elif src_drv_name == 'HFA': fext = 'img'
+        elif src_drv_name == 'GMT': fext = 'grd'
+        elif src_drv_name.lower() == 'netcdf': fext = 'nc'
+        else: fext = 'gdal'
+        
+        return(fext)
+
 def gdal_write(
         src_arr,
         dst_gdal,
@@ -997,7 +1016,12 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
             return(None)
     else:
         return(None)
-    
+
+## ==============================================
+##
+## MB-System functions
+##
+## ==============================================
 def mb_inf(src_xyz, src_fmt=168):
     """generate an info (.inf) file from a src_xyz file using MBSystem.
 
