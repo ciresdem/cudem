@@ -20,12 +20,14 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## Regions are bounding boxes made up of corner coordinates
+##
 ### Code:
 
 import os
 import sys
 
-import numpy as np
 from osgeo import ogr
 from osgeo import osr
 
@@ -127,6 +129,8 @@ class Region:
                       wkt = self.wkt))
 
     def _wgs_extremes(self, just_below=False):
+        """adjust the region to make sure it is within WGS extremes..."""
+        
         if self.xmin <= -180:
             self.xmin = -180 if not just_below else -179.85
         if self.xmax >= 180:
@@ -419,8 +423,12 @@ class Region:
         """
 
         ## geo_transform is considered in grid-node to properly capture the region
-        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(self.xmin, self.ymax, geo_transform, node=node)]
-        this_end = [0 if x < 0 else x for x in utils._geo2pixel(self.xmax, self.ymin, geo_transform, node=node)]
+        this_origin = [0 if x < 0 else x for x in utils._geo2pixel(
+            self.xmin, self.ymax, geo_transform, node=node
+        )]
+        this_end = [0 if x < 0 else x for x in utils._geo2pixel(
+            self.xmax, self.ymin, geo_transform, node=node
+        )]
         this_size = [0 if x < 0 else x for x in ((this_end[0] - this_origin[0]), (this_end[1] - this_origin[1]))]
         if this_size[0] > x_count - this_origin[0]:
             this_size[0] = x_count - this_origin[0]
@@ -619,19 +627,13 @@ class Region:
         
         try:
             if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
-
                 xs = [pointA.GetX(), pointB.GetX(), pointC.GetX(), pointD.GetX()]
                 ys = [pointA.GetY(), pointB.GetY(), pointC.GetY(), pointD.GetY()]
-
                 self.xmin = min(xs)
                 self.xmax = max(xs)
                 self.ymin = min(ys)
                 self.ymax = max(ys)
-                
-                #self.xmin = pointA.GetX() if pointA.GetX() < pointB.GetX() else pointB.GetX()
-                #self.xmax = pointB.GetX() if pointB.GetX() > pointA.GetX() else pointA.GetX()
-                #self.ymin = pointA.GetY() if pointA.GetY() < pointB.GetY() else pointB.GetY()
-                #self.ymax = pointB.GetY() if pointB.GetY() > pointA.GetY() else pointA.GetY()
+            
         except Exception as e:
             sys.stderr.write('transform error: {}\n'.format(str(e)))
 
@@ -639,7 +641,8 @@ class Region:
         return(self)
     
 ## ==============================================
-## do things to and with regions 
+## do things to and with regions...
+## various region related functions
 ## ==============================================
 def regions_reduce(region_a, region_b):
     """combine two regions and find their minimum combined region.
@@ -923,6 +926,11 @@ def ogr_wkts(src_ds):
     return(these_regions)
 
 def parse_cli_region(region_list, verbose=True):
+    """parse a region list into region(s).
+
+    for use in clis
+    """
+    
     these_regions = []
     for i_region in region_list:
         if i_region is None:
@@ -959,6 +967,11 @@ def parse_cli_region(region_list, verbose=True):
     return(these_regions)
 
 def generate_tile_set(in_region=None, inc=.25):
+    """Generate a tile-set based on `in_region` and `inc`.
+
+    returns a list of regions
+    """
+    
     tile_regions = []
     if in_region is not None:
         tmp_region = Region().from_string(in_region)
@@ -1014,7 +1027,6 @@ def region_list_to_ogr(region_list, dst_ogr, dst_fmt='ESRI Shapefile'):
         dst_feat = None
         
     dst_ds = None
-
 
 ## ==============================================
 ##
