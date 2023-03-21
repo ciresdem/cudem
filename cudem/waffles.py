@@ -260,14 +260,24 @@ class Waffle:
         ))
 
     ## todo: add blend option
-    def _stacks_array(self, supercede=False, out_name=None, method='weighted_mean'):
+    def _stacks_array(
+            self,
+            supercede=False,
+            out_name=None,
+            method='weighted_mean'
+    ):
+        """stack incoming arrays together
+
+        method is either 'weighted_mean' or 'supercede'
+        """
+        
         if not self.weights:
             self.weights = 1
-        #print(self.p_region)
+
         xcount, ycount, dst_gt = self.p_region.geo_transform(
             x_inc=self.xinc, y_inc=self.yinc, node='grid'
         )
-        #print(xcount, ycount)
+
         gdt = gdal.GDT_Float32
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(self.fmt)
@@ -300,6 +310,7 @@ class Waffle:
                 ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
             ))
 
+        ## incoming arrays can be quite large...perhaps chunks these
         for arrs, srcwin, gt in self.yield_array():
             arr = arrs['z']
             w_arr = arrs['weight']
@@ -307,8 +318,6 @@ class Waffle:
             c_arr[np.isnan(arr)] = 0
             w_arr[np.isnan(arr)] = 0
             arr[np.isnan(arr)] = 0
-            #print(srcwin)
-            #print(xcount, ycount)
             z_array = z_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -337,7 +346,6 @@ class Waffle:
             arr = w_arr = c_arr = z_array = w_array = c_array = None
 
         ## Finalize and close datasets
-
         if not supercede:
             srcwin = (0, 0, z_ds.RasterXSize, z_ds.RasterYSize)
             for y in range(
@@ -371,7 +379,6 @@ class Waffle:
 
         #utils.echo_msg('maximum stacked value: {}'.format(z_data.max()))
         #utils.echo_msg('minimum stacked value: {}'.format(z_data.min()))
-        
         z_ds = c_ds = w_ds = None
     
     ## TODO: process and write out to file in chunks...
@@ -475,7 +482,8 @@ class Waffle:
         return(z_array, weight_array, count_array, ds_config)
 
     def yield_array(self, **kwargs):
-
+        """yield the arrays from the datalist for use in gridding"""
+        
         if self.mask:
             xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
             mask_array = np.zeros((ycount, xcount))
@@ -810,6 +818,8 @@ class Waffle:
     
 ## ==============================================
 ## GMT Surface
+##
+## TODO: update to use pygmt
 ## ==============================================
 class GMTSurface(Waffle):
     """Waffles GMT surface module.
@@ -932,6 +942,8 @@ class GMTSurface(Waffle):
 
 ## ==============================================
 ## GMT Triangulate
+##
+## TODO: update to use pygmt
 ## ==============================================
 class GMTTriangulate(Waffle):
     """Waffles GMT triangulate module
@@ -977,6 +989,8 @@ class GMTTriangulate(Waffle):
 
 ## ==============================================
 ## GMT Near Neighbor
+##
+## TODO: update to use pygmt
 ## ==============================================
 class GMTNearNeighbor(Waffle):
     """Waffles GMT nearneighbor module
@@ -1187,6 +1201,8 @@ class WafflesMBGrid(Waffle):
 
 ## ==============================================
 ## Waffles 'num' - no interpolation
+##
+## just use stacks...
 ## ==============================================
 class WafflesNum(Waffle):
     """Generate an Uninterpolated grid from XYZ data;
@@ -1301,22 +1317,8 @@ class WafflesNum(Waffle):
             )
         else:
             self._xyz_num()
-            
-            # #self._xyz_block_array(self.yield_xyz(), min_count=self.min_count, out_name=self.name)
-            # self._xyz_block_array(min_count=self.min_count, out_name=self.name)
-            # if self.mode != 'm':
-            #     utils.remove_glob('{}_n.tif'.format(self.name))
-            # else:
-            #     os.rename('{}_n.tif'.format(self.name), '{}.tif'.format(self.name))
-                
-            # if self.mode != 'n':
-            #     utils.remove_glob('{}_c.tif'.format(self.name))
-
-            # if not self.weights:
-            #     utils.remove_glob('{}_w.tif'.format(self.name))
-            
+                        
         return(self)
-
 
 ## ==============================================
 ## Waffles IDW
@@ -1425,6 +1427,9 @@ class WafflesIDW(Waffle):
     """Inverse Distance Weighted.
 
     radius is in cell-units
+
+    ---
+    Parameters:
     """
     
     def __init__(
@@ -1564,239 +1569,10 @@ class WafflesIDW(Waffle):
         return(self)    
     
 ## ==============================================
-## old IDW classes...slow, but low mem!
-## use WafflesIDW instead.
-## ==============================================
-class WafflesIDW_(Waffle):
-    """Inverse Distance Weighted."""
-    
-    def __init__(self, power=1, min_points=8, upper_limit=None, lower_limit=None, radius=None, **kwargs):
-        self.mod = 'IDW'
-        self.mod_args = {
-            'power':power,
-            'min_points':min_points,
-            'upper_limit':upper_limit,
-            'lower_limit':lower_limit,
-            'radius':radius
-        }
-        super().__init__(**kwargs)
-        self.power = utils.float_or(power)
-        self.min_points = utils.int_or(min_points)
-        self.radius = np.inf if radius is None else utils.str2inc(radius) 
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-
-    def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-        outArray = np.empty((ycount, xcount))
-        outArray[:] = np.nan
-        if self.verbose:
-            if self.min_points:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {}/{} looking for at least {} neighbors'.format(
-                        ycount, xcount, self.min_points
-                    )
-                )
-            else:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {}/{}'.format(ycount, xcount)
-                )
-            i=0
-            
-        x, y, z, w = [], [], [], []
-        for xyz in self.yield_xyz():
-            x.append(xyz.x)
-            y.append(xyz.y)
-            z.append(xyz.z)
-            w.append(xyz.w)
-
-        x, y, z, w = np.array(x), np.array(y), np.array(z), np.array(w)        
-        obs = np.vstack((x, y)).T
-        x = y = None
-
-        xi = np.linspace(self.p_region.xmin, self.p_region.xmax, xcount+1)
-        yi = np.linspace(self.p_region.ymin, self.p_region.ymax, ycount+1)
-        xi, yi = np.meshgrid(xi, yi)
-        xi, yi = xi.flatten(), yi.flatten()
-        ask = np.vstack((xi, yi)).T
-
-        # if no data break now...
-        if len(obs) == 0:
-            if self.verbose:
-                progress.end(
-                    -1,
-                    'generated IDW grid @ {}/{}'.format(
-                        ycount, xcount
-                    )
-                )
-            return(self)
-
-        utils.echo_msg('loaded {} observations for processing...'.format(len(obs)))
-        invdisttree = Invdisttree(obs, z, leafsize=10, stat=1)
-        interpol = invdisttree(
-            ask,
-            nnear=self.min_points,
-            eps=.1,
-            p=self.power,
-            dub=self.radius,
-            weights=w if self.weights else None
-        )
-        z = obs = ask = None
-        
-        if self.upper_limit is not None:
-            interpol[interpol > self.upper_limit] = self.upper_limit
-
-        if self.lower_limit is not None:
-            interpol[interpol < self.lower_limit] = self.lower_limit
-
-        ## fill the grid, interpol.reshape((ycount, xcount)) is flipped...
-        ## use 'grid' option in _geo2pixel (nodes from linespace are
-        ## at ul corner of cells
-        for n, this_z in enumerate(interpol):
-            xpos, ypos = utils._geo2pixel(
-                xi[n], yi[n], dst_gt, 'grid'
-            )
-            try:
-                outArray[ypos, xpos] = this_z
-            except: pass
-
-        if self.verbose:
-            progress.end(
-                0,
-                'generated IDW grid @ {}/{}'.format(
-                    ycount, xcount
-                )
-            )
-            
-        outArray[np.isnan(outArray)] = self.ndv
-        out, status = utils.gdal_write(
-            outArray, '{}.tif'.format(self.name), ds_config
-        )
-        
-        return(self)    
-
-class WafflesUIDW_(Waffle):
-    """Uncertainty Weighted Inverse Distance Weighted.
-    
-    see: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-    """
-    
-    def __init__(
-            self, radius=None, power=2, min_points=None, **kwargs
-    ):
-        self.mod = 'IDW'
-        self.mod_args = {
-            'radius':radius,
-            'power':power,
-            'min_points':min_points
-        }
-        super().__init__(**kwargs)
-        if radius is not None:
-            self.radius = utils.str2inc(radius)
-        else:
-            self.radius = self.xinc
-        
-        self.power = utils.float_or(power)
-        self.min_points = utils.int_or(min_points)
-        
-    def _distance(self, pnt0, pnt1):
-        return(math.sqrt(sum([(a-b)**2 for a, b in zip(pnt0, pnt1)])))
-            
-    def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-        outArray = np.empty((ycount, xcount))
-        outArray[:] = np.nan
-        if self.verbose:
-            if self.min_points:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{} looking for at least {} volunteers'.format(
-                        self.radius, ycount, xcount, self.min_points
-                    )
-                )
-            else:
-                progress = utils.CliProgress(
-                    'generating IDW grid @ {} and {}/{}'.format(
-                        self.radius, ycount, xcount
-                    )
-                )
-            i=0
-
-        x, y, z, w = [], [], [], []
-        for xyz in self.yield_xyz():
-            x.append(xyz.x)
-            y.append(xyz.y)
-            z.append(xyz.z)
-            w.append(xyz.w)
-
-        x, y, z, w = np.array(x), np.array(y), np.array(z), np.array(w)        
-        obs = np.vstack((x, y)).T
-        tree = spatial.cKDTree(obs)
-        for y_g in range(0, ycount):
-            if self.verbose:
-                i+=1
-                progress.update_perc((i, ycount))
-                
-            for x_g in range(0, xcount):
-                xg, yg = utils._pixel2geo(x_g, y_g, dst_gt)
-                bucket = tree.query_ball_point([xg, yg], self.radius)
-                if bucket:
-                    zs, ds, ws = [], [], []                    
-                    for obs_index in bucket:
-                        d = self._distance(obs[obs_index], [xg, yg])
-                        zs.append(z[obs_index])
-                        ws.append(w[obs_index]**self.power)
-                        if d > 0:
-                            ds.append(1./d**self.power)
-                        else: ds.append(0)
-
-                    distances = np.transpose(ds)
-                    weights = np.transpose(ws)
-                    out_weights = distances*weights if self.weights else distances
-                    sums = sum(out_weights)
-                    if sums > 0:
-                        outArray[y_g, x_g] = np.dot(zs, out_weights)/sums
-                    else:
-                        outArray[y_g, x_g] = sum(zs)/len(zs)
-                            
-        if self.verbose:
-            progress.end(
-                0,
-                'generated IDW grid {}/{}'.format(
-                    ycount, xcount
-                )
-            )
-
-        ds = None            
-        outArray[np.isnan(outArray)] = self.ndv
-        out, status = utils.gdal_write(
-            outArray, '{}.tif'.format(self.name), ds_config
-        )        
-        return(self)    
-
-## ==============================================
 ## Scipy gridding (linear, cubic, nearest)
 ##
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+## TODO: rename this in some way
 ## ==============================================
 class WafflesSciPy(Waffle):
     def __init__(
@@ -1807,6 +1583,8 @@ class WafflesSciPy(Waffle):
             chunk_size=None,
             chunk_buffer=40,
             **kwargs):
+        """generate a `scipy` dem"""
+        
         self.mod = 'scipy'
         self.mod_args = {
             'method':method,
@@ -1943,13 +1721,18 @@ class WafflesVDatum(Waffle):
 
     def run(self):
         cudem.vdatums.VerticalTransform(
-            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out, cache_dir=waffles_cache
+            self.p_region,
+            self.xinc,
+            self.yinc,
+            self.vdatum_in,
+            self.vdatum_out,
+            cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
         
         return(self)
     
 ## ==============================================
-## GDAL gridding
+## GDAL gridding (invdst, linear, nearest, average)
 ## ==============================================
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
@@ -2125,6 +1908,8 @@ class WafflesNearest(WafflesGDALGrid):
 
 ## ==============================================
 ## Waffles 'CUDEM' gridding
+##
+## combined gridding method (stacks/surface/coastline/IDW)
 ## ==============================================
 class WafflesCUDEM(Waffle):
     """Waffles CUDEM gridding module
@@ -2501,113 +2286,11 @@ class WafflesStacks(Waffle):
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
         self._init_data(set_incs=True)
-
-    def _stacks_array_pre(self, supercede=False, keep_weights=False, keep_count=False, out_name=None, min_count=None, upper_limit=None, lower_limit=None):
-        if not self.weights:
-            self.weights = 1
-            
-        xcount, ycount, dst_gt = self.p_region.geo_transform(
-            x_inc=self.xinc, y_inc=self.yinc, node='grid'
-        )
-
-        gdt = gdal.GDT_Float32
-        z_array = np.zeros((ycount, xcount))
-        count_array = np.zeros((ycount, xcount))
-        weight_array = np.zeros((ycount, xcount))
-
-        if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
-                ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-            ))
-
-        for arrs, srcwin, gt in self.yield_array():
-            arr = arrs['z']
-            w_arr = arrs['weight']
-            c_arr = arrs['count']
-            c_arr[np.isnan(arr)] = 0
-            c_arr[np.isnan(c_arr)] = 0
-            w_arr[np.isnan(arr)] = 0
-            w_arr[np.isnan(w_arr)] = 0
-            arr[np.isnan(arr)] = 0
-                  
-            #c_arr = np.zeros((srcwin[3], srcwin[2]))
-            #c_arr[~np.isnan(arr)] = 1
-            
-            count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr            
-            if not supercede:
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += (arr * w_arr)
-                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
-            else:
-                tmp_z = z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-                tmp_w = weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-                tmp_z[w_arr > tmp_w] = arr[w_arr > tmp_w]
-                tmp_w[w_arr > tmp_w] = w_arr[w_arr > tmp_w]
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
-                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
-                tmp_w = tmp_z = None
-                
-            arr = w_arr = c_arr = None
-
-        count_array[count_array == 0] = np.nan
-        weight_array[weight_array == 0] = np.nan
-        z_array[np.isnan(weight_array)] = np.nan
-        
-        if not supercede:
-            weight_array = weight_array/count_array
-            z_array = (z_array/weight_array)/count_array
-
-        if min_count is not None:
-            z_array[count_array < min_count] = np.nan
-            weight_array[count_array < min_count] = np.nan
-
-        if upper_limit is not None:
-            z_array[z_array > upper_limit] = upper_limit
-            
-        if lower_limit is not None:
-            z_array[z_array < lower_limit] = lower_limit
-
-        if out_name is not None:
-            z_array[np.isnan(z_array)] = self.ndv
-            weight_array[np.isnan(weight_array)] = self.ndv
-            count_array[np.isnan(count_array)] = self.ndv
-            ds_config = demfun.set_infos(
-                xcount,
-                ycount,
-                xcount * ycount,
-                dst_gt,
-                self.dst_srs,
-                gdal.GDT_Float32,
-                self.ndv,
-                'GTiff'
-            )
-
-            utils.gdal_write(z_array, '{}_s.tif'.format(out_name), ds_config, verbose=True)
-            if keep_weights:
-                utils.gdal_write(weight_array, '{}_w.tif'.format(out_name), ds_config, verbose=True)
-                
-            if keep_count:
-                utils.gdal_write(count_array, '{}_c.tif'.format(out_name), ds_config, verbose=True)
-
-            if self.mask:
-                mask_array = np.zeros((ycount, xcount))
-                mask_array[weight_array != self.ndv] = 1
-                utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=True)
-                mask_array = None
-            
-        #z_array[z_array == self.ndv] = np.nan
-        #weight_array[weight_array == self.ndv] = np.nan
-        #count_array[count_array == self.ndv] = np.nan
-        #return(z_array, weight_array, count_array, ds_config)
         
     def run(self):
         self._stacks_array(
             out_name=self.name,
             supercede=self.supercede,
-            #keep_weights=self.keep_weights,
-            #keep_count=self.keep_count,
-            #upper_limit=self.upper_limit,
-            #lower_limit=self.lower_limit,
-            #min_count=self.min_count
         )
         os.rename('{}_s.tif'.format(self.name), '{}.tif'.format(self.name))
         
@@ -4525,13 +4208,11 @@ def waffles_cli(argv = sys.argv):
         if want_config:
             this_waffle = WaffleFactory(mod=module, **wg)
             this_wg = this_waffle._export_config(parse_data=True)
-            #this_wg = this_wg._config
             utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
             with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
                 utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
                 wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
-            #this_waffle = WaffleFactory(mod=module, **wg).acquire()
             this_waffle = WaffleFactory(mod=module, **wg)
             if this_waffle is not None:
                 if wg['verbose']:
