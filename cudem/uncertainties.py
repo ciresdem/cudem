@@ -19,6 +19,10 @@
 ##
 ### Commentary:
 ##
+## Generate uncertainty raster(s) from DEMs
+## currently:
+## - interpolation uncertainty
+##
 ## TODO:
 ## source data uncertainty, slope (within cell)...
 ## generate a "Low Confidence Raster" <- uncertainty raster
@@ -38,7 +42,6 @@ import json
 from osgeo import gdal
 
 import cudem
-
 from cudem import utils
 from cudem import regions
 from cudem import dlim
@@ -48,6 +51,10 @@ from cudem import waffles
 
 ## ==============================================
 ## Waffles Interpolation Uncertainty module
+##
+## Calculate the uncertainty of interpolated cells in a
+## (waffles) raster
+##
 ## ==============================================
 class InterpolationUncertainty: #(waffles.Waffle):
 
