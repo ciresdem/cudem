@@ -629,12 +629,14 @@ CUDEM (Version 1.10.5) \[Computer software\].
 
 # References
 
+Amante CJ, Love M, Carignan K, Sutherland MG, MacFerrin M, Lim E. Continuously Updated Digital Elevation Models (CUDEMs) to Support Coastal Inundation Modeling. Remote Sensing. 2023; 15(6):1702. https://doi.org/10.3390/rs15061702
+
 Amante, C. J. (2018). Estimating coastal digital elevation model
-uncertainty. Journal of Coastal Research, 34(6), 1382-1397.
+uncertainty. Journal of Coastal Research, 34(6), 1382-1397. https://doi.org/10.2112/JCOASTRES-D-17-00211.1
 
 Amante, C. J., & Eakins, B. W. (2016). Accuracy of interpolated
 bathymetry in digital elevation models. Journal of Coastal Research, (76
-(10076)), 123-133.
+(10076)), 123-133. https://doi.org/10.2112/SI76-011
 
 Eakins, B. W., & Grothe, P. R. (2014). Challenges in building coastal
 digital elevation models. Journal of Coastal Research, 30(5), 942-953.
