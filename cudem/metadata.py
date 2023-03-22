@@ -1,6 +1,6 @@
 ### metadata.py
 ##
-## Copyright (c) 2019 - 2022 Regents of the University of Colorado
+## Copyright (c) 2019 - 2023 Regents of the University of Colorado
 ##
 ## metadata.py is part of CUDEM
 ##

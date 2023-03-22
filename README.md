@@ -498,7 +498,7 @@ earthdata, usiei, wsf, hydrolakes
 
 ### Waffles Module:
 ```
-waffles (1.10.4): Generate DEMs and derivatives.
+waffles (1.10.5): Generate DEMs and derivatives.
 
 usage: waffles \[OPTIONS\] DATALIST
 
@@ -624,7 +624,7 @@ License:
 ## Code Citation
 
 Love, M., Amante, C., Carignan, K., MacFerrin, M., & Lim, E. (2023).
-CUDEM (Version 1.10.4) \[Computer software\].
+CUDEM (Version 1.10.5) \[Computer software\].
 [[https://github.com/ciresdem/cudem]{.ul}](https://github.com/ciresdem/cudem)
 
 # References
