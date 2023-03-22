@@ -945,7 +945,6 @@ def parse_cli_region(region_list, verbose=True):
             args = utils.args2dict(i_region_s[1:], {})
             these_regions = generate_tile_set(**args)
         else:
-            #i_region_s = i_region.split(':')
             tmp_region = ogr_wkts(i_region_s[0])
             for i in tmp_region:
                 if i.valid_p():

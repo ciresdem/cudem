@@ -474,6 +474,10 @@ class Datalist(datasets.ElevationDataset):
 ## ZIPlist Class - Recursive data structure - testing
 ## ==============================================
 class ZIPlist(datasets.ElevationDataset):
+    """Zip file parser.
+
+    Parse supported datasets from a zipfile.
+    """
     def __init__(self, **kwargs):
         self.ds_args = {}
         super().__init__(**kwargs)
@@ -681,16 +685,18 @@ class DatasetFactory:
         -2: {'name': 'zip',
              'fmts': ['zip'],
              'opts': '< -2 >',
+             'description': """
+              """,
              'class': ZIPlist,
              },
         168: {'name': 'xyz',
               'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'],
-              'opts': '< 168:delim=None:xpos=0:ypos=1:zpos=2:skip=0:x_scale=1:y_scale=1:z_scale=1:x_offset=0:y_offset=0 >',
+              'opts': '< 168:delim=None:xpos=0:ypos=1:zpos=2:wpos=3,skip=0:x_scale=1:y_scale=1:z_scale=1:x_offset=0:y_offset=0 >',
               'class': datasets.XYZFile,
               },
         200: {'name': 'raster',
               'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'],
-              'opts': '< 200:open_options="OPT1=KEY"/"OPT2=KEY2" >',
+              'opts': '< 200:mask=None:weight_mask=None:open_options="OPT1=KEY"/"OPT2=KEY2:sample=None:resample=None:check_path=True:super_grid=False" >',
               'class': datasets.RasterFile,
               },
         201: {'name': 'bag',
@@ -968,8 +974,8 @@ class DatasetFactory:
             )
         )
 
-_datalist_fmts_long_desc = lambda: '\n  '.join(
-    ['{}:\t{}'.format(key, DatasetFactory().data_types[key]['name']) for key in DatasetFactory().data_types])
+_datalist_fmts_long_desc = lambda x: 'dlim datasets:\n% dlim... <data_path>,<data_format>:key=val:key=val...,<data_weight>\n\n  ' + '\n  '.join(
+    ['\033[1m{:14}\033[0m{}\n\nSupported Formats: {}\n\n{}'.format(str(key), x[key]['name'], x[key]['fmts'], x[key]['class'].__doc__) for key in x]) + '\n'
 _datalist_fmts_short_desc = lambda: ',  '.join(
     ['{} ({})'.format(DatasetFactory().data_types[key]['name'], key) for key in DatasetFactory().data_types])
 
@@ -1001,10 +1007,11 @@ Options:
   --weights\t\tOutput WEIGHT values along with xyz
   --quiet\t\tLower the verbosity to a quiet
 
+  --datasets\t\tDisplay the dataset descriptions and usage
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
-Supported datalist formats: 
+Supported datalist formats (see {cmd} --datasets <dataset-key> for more info): 
   {dl_formats}
 
 Examples:
@@ -1088,6 +1095,21 @@ def datalists_cli(argv=sys.argv):
             want_json = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
+
+        elif arg == '--datasets':
+            try:
+                if int(argv[i + 1]) in DatasetFactory().data_types.keys():
+                    sys.stderr.write(
+                        _datalist_fmts_long_desc({k: DatasetFactory().data_types[k] for k in (int(argv[i + 1]),)})
+                    )
+                else: sys.stderr.write(
+                        _datalist_fmts_long_desc(DatasetFactory().data_types)
+                )
+            except: sys.stderr.write(
+                    _datalist_fmts_long_desc(DatasetFactory().data_types)
+            )
+            sys.exit(0)
+           
         elif arg == '--help' or arg == '-h':
             print(datalists_usage)
             sys.exit(1)

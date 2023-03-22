@@ -722,9 +722,18 @@ class Waffle:
 ## TODO: update to use pygmt
 ## ==============================================
 class GMTSurface(Waffle):
-    """Waffles GMT surface module.
-    Grid the data using GMT 'surface'.
-    Data passes through GMT 'blockmean' using weighted mean value if self.weights is True
+    """SPLINE DEM via GMT surface
+    
+Generate a DEM using GMT's surface command
+see gmt surface --help for more info.
+
+    ---
+    Parameters:
+    
+    tension=[0-1] - spline tension.
+    relaxation=[val] - spline relaxation factor.
+    lower_limit=[val] - constrain interpolation to lower limit.
+    upper_limit=[val] - constrain interpolation to upper limit.
     """
     
     def __init__(self, tension=.35, relaxation=1, max_radius=None,
@@ -846,8 +855,10 @@ class GMTSurface(Waffle):
 ## TODO: update to use pygmt
 ## ==============================================
 class GMTTriangulate(Waffle):
-    """Waffles GMT triangulate module
-    Grid the data using GMT 'triangulate'.
+    """TRIANGULATION DEM via GMT triangulate
+    
+Generate a DEM using GMT's triangulate command.
+see gmt triangulate --help for more info.        
     """
     
     def __init__(self, **kwargs):
@@ -893,8 +904,16 @@ class GMTTriangulate(Waffle):
 ## TODO: update to use pygmt
 ## ==============================================
 class GMTNearNeighbor(Waffle):
-    """Waffles GMT nearneighbor module
-    Grid the data using GMT 'nearneighbor'.
+    """NEARNEIGHBOR DEM via GMT nearneighbor
+    
+Generate a DEM using GMT's nearneighbor command.
+see gmt nearneighbor --help for more info.
+
+    ---
+    Parameters:
+    
+    radius=[val]\t\tsearch radius
+    sectors=[val]\t\tsector information
     """
     
     def __init__(self, radius=None, sectors=None, **kwargs):
@@ -947,10 +966,21 @@ class GMTNearNeighbor(Waffle):
 ## MB-System mbgrid
 ## ==============================================
 class WafflesMBGrid(Waffle):
-    """Waffles MBGrid module
-    Does not use internal datalists processing,
-    input datalist must be compatible with MB-SYSTEM.
-    Use dlim --archive to convert a dlim datalist to MB-SYSTEM
+    """SPLINE DEM via MB-System's mbgrid.
+    
+Generate a DEM using MB-System's mbgrid command.
+By default, will use MB-Systems datalist processes.
+set `use_datalist=True` to use CUDEM's dlim instead.
+see mbgrid --help for more info
+
+< mbgrid:dist='10/3':tension=35:use_datalists=False >
+
+    ---
+    Parameters:
+    
+    dist=[val] - the dist variable to use in mbgrid
+    tension=[val] - the spline tension value (0-inf)
+    use_datalist=[True/False] - use built-in datalists rather than mbdatalist
     """
     
     def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
@@ -1105,8 +1135,20 @@ class WafflesMBGrid(Waffle):
 ## just use stacks...
 ## ==============================================
 class WafflesNum(Waffle):
-    """Generate an Uninterpolated grid from XYZ data;
-    num methods include: mask, mean, num, landmask and any gmt grd2xyz -A option.
+    """Uninterpolated DEM populated by <mode>.
+    
+Generate an uninterpolated DEM using <mode> option.
+Using mode of 'A<mode>' uses GMT's xyz2grd command, 
+see gmt xyz2grd --help for more info.
+
+mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
+
+< num:mode=n >
+
+    ---
+    Parameters:
+    
+    mode=[key] - specify mode of grid population
     """
     
     def __init__(self, mode='n', min_count=None, **kwargs):
@@ -1324,12 +1366,26 @@ quite heavy on memory when large grid-size...
         return interpol if qdim > 1  else interpol[0]
 
 class WafflesIDW(Waffle):
-    """Inverse Distance Weighted.
+    """INVERSE DISTANCE WEIGHTED DEM
+    
+Generate a DEM using an Inverse Distance Weighted algorithm.
+If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
+as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
-    radius is in cell-units
+< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
 
     ---
     Parameters:
+    
+    power=[val] - weight**power
+    min_points=[val] - minimum neighbor points for IDW
+    radius=[val] - search radius (in cells), only fill data cells within radius from data
+    upper_limit=[val] - Restrict output DEM to values below val
+    lower_limit=[val] - Restrict output DEM to values above val
+    supercede=[True/False] - supercede higher weighted data,
+    keep_auxiliary=[True/False] - retain auxiliary files
+    chunk_size=[val] - size of chunks in pixels
     """
     
     def __init__(
@@ -1475,6 +1531,24 @@ class WafflesIDW(Waffle):
 ## TODO: rename this in some way
 ## ==============================================
 class WafflesSciPy(Waffle):
+    """Generate DEM using Scipy gridding interpolation
+    
+Generate a DEM using Scipy's gridding interpolation
+Optional gridding methods are 'linear', 'cubic' and 'nearest'
+https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+            
+< scipy:method=<method> >
+
+    ---
+    Parameters:
+    
+    method=[linear/cubic/nearest] - interpolation method to use
+    supercede=[True/False] - supercede higher weighted data,
+    keep_auxiliary=[True/False] - retain auxiliary files
+    chunk_size=[val] - size of chunks in pixels
+    chunk_buffer=[val] - size of the chunk buffer in pixels
+    """
+    
     def __init__(
             self,
             method='linear',
@@ -1605,7 +1679,17 @@ class WafflesSciPy(Waffle):
 ## Waffles VDatum
 ## ==============================================
 class WafflesVDatum(Waffle):
-    """vertical datum transformation grid"""
+    """VDATUM transformation grid.
+Generate a Vertical DATUM transformation grid.
+
+< vdatum:vdatum_in=None:vdatum_out=None >
+
+    ---
+    Parameters:
+    
+    vdatum_in=[vdatum] - input vertical datum
+    vdatum_out=[vdatum] - output vertical datum
+    """
 
     def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
         self.mod = 'vdatum'
@@ -1745,6 +1829,18 @@ class WafflesGDALGrid(Waffle):
         return(self)
 
 class WafflesLinear(WafflesGDALGrid):
+    """LINEAR DEM via gdal_grid
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< linear:radius=-1 >
+
+    ---
+    Parameters:
+    
+    radius=[val] - search radius
+    """
+    
     def __init__(self, radius=None, nodata=-9999, **kwargs):
         self.mod = 'linear'
         self.mod_args = {
@@ -1756,6 +1852,21 @@ class WafflesLinear(WafflesGDALGrid):
         self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
         
 class WafflesInvDst(WafflesGDALGrid):
+    """INVERSE DISTANCE DEM via gdal_grid
+    
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
+
+    ---
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    power=[val] - weight**power
+    min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
+    """
     def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
                    max_points = 0, min_points = 0, nodata = -9999, **kwargs):
         self.mod = 'invdst'
@@ -1776,6 +1887,21 @@ class WafflesInvDst(WafflesGDALGrid):
             .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
                 
 class WafflesMovingAverage(WafflesGDALGrid):
+    """Moving AVERAGE DEM via gdal_grid
+    
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
+
+    ---
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    min_points=[val] - minimum points per bucket (use to fill entire DEM)
+    """
+    
     def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
         self.mod = 'average'
         self.mod_args = {
@@ -1792,6 +1918,22 @@ class WafflesMovingAverage(WafflesGDALGrid):
             .format(radius1, radius2, angle, min_points, nodata)
                 
 class WafflesNearest(WafflesGDALGrid):
+    """NEAREST DEM via gdal_grid
+    
+Generate a DEM using GDAL's gdal_grid command.
+see gdal_grid --help for more info
+
+< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
+
+    ---
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    angle=[val] - angle
+    nodata=[val] - nodata
+    """
+    
     def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
         self.mod = 'nearest'
         self.mod_args = {
@@ -1812,14 +1954,34 @@ class WafflesNearest(WafflesGDALGrid):
 ## combined gridding method (stacks/surface/coastline/IDW)
 ## ==============================================
 class WafflesCUDEM(Waffle):
-    """Waffles CUDEM gridding module
+    """CUDEM integrated DEM generation.
+    
+Generate an topo/bathy integrated DEM using a variety of data sources.
+Will iterate <pre_count> pre-surfaces at lower-resolutions.
+Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
+Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
 
-    generate a DEM with `pre_surface`s which are generated
-    at lower resolution and with various weight threshholds.
+generate a DEM with `pre_surface`s which are generated
+at lower resolution and with various weight threshholds.
 
 To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
 Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
 DEM generation. 
+    
+    < cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:mode=surface:supercede=True >
+
+    ---
+    Parameters:
+    
+    landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
+    min_weight=[val] - the minumum weight to include in the final DEM
+    smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
+    pre_count=[val] - number of pre-surface iterations to perform
+    poly_count=[True/False]
+    keep_auxiliary=[True/False]
+    mode=surface
+    filter_outliers=[val]
+    supercede=[True/False]
     """
     
     def __init__(
@@ -2141,20 +2303,28 @@ class WafflesStacks_ETOPO(Waffle):
         return(self)
 
 class WafflesStacks(Waffle):
-    """Waffles STACKS gridding module.
+    """STACK data into a DEM.
+    
+Generate a DEM using a raster STACKing method. 
+By default, will calculate the [weighted]-mean where overlapping cells occur. 
+Set supercede to True to overwrite overlapping cells with higher weighted data.
 
-    stack data to generate DEM. No interpolation
-    occurs with this module. To guarantee a full DEM,
-    use a background DEM with a low weight, such as GMRT or GEBCO,
-    which will be stacked upon to create the final DEM.
+stack data to generate DEM. No interpolation
+occurs with this module. To guarantee a full DEM,
+use a background DEM with a low weight, such as GMRT or GEBCO,
+which will be stacked upon to create the final DEM.
+    
+< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
 
-    XYZ input data is converted to raster; currently uses `mbgrid` to
-    grid the XYZ data before stacking.
-
-    set `supercede` to True to have higher weighted data overwrite 
-    lower weighted data in overlapping cells. Default performs a weighted
-    mean of overlapping data.
+    ---
+    Parameters:
+    
+    supercede=[True/False] - superced data cells with higher weighted data
+    keep_weights=[True/False] - retain weight raster
+    keep_count=[True/False] - retain count raster
+    min_count=[val] - only retain data cells if they contain `min_count` overlapping data
     """
+    
     def __init__(
             self,
             supercede=False,
@@ -2210,6 +2380,30 @@ class WafflesStacks(Waffle):
 ## Waffles Coastline/Landmask
 ## ==============================================
 class WafflesCoastline(Waffle):
+    """COASTLINE (land/etc-mask) generation
+    
+Generate a coastline (land/etc-mask) using a variety of sources. 
+User data can be provided to provide source for further land masking. 
+Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
+Output vector will polygonize land-areas.
+
+< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
+
+    ---
+    Parameters:
+    
+    want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
+    want_copernicus=[True/False] - use COPERNICUS to fill background
+    want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
+    want_lakes=[True/False] - mask LAKES using HYDROLAKES
+    want_buildings=[True/False] - mask BUILDINGS using OSM
+    osm_tries=[val] - OSM max server attempts
+    min_building_length=[val] - only use buildings larger than val
+    want_wsf=[True/False] - mask BUILDINGS using WSF
+    invert=[True/False] - invert the output results
+    polygonize=[True/False] - polygonize the output
+    """
+    
     def __init__(
             self,
             want_nhd=True,
@@ -2708,6 +2902,24 @@ class WafflesCoastline(Waffle):
 ## Waffles Lakes Bathymetry
 ## ==============================================
 class WafflesLakes(Waffle):
+    """Estimate lake bathymetry.
+    
+By default, will return lake bathymetry as depth values (positive down), 
+to get elevations (positive up), set apply_elevations=True.
+
+< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
+
+    ---
+    Parameters:
+    
+    apply_elevations=[True/False] - use COPERNICUS to apply lake level elevations to output
+    min_area=[val] - minimum lake area to consider
+    max_area=[val] - maximum lake area to consider
+    min_id=[val] - minimum lake ID to consider
+    max_id=[val] - maximum lake ID to consider
+    depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
+    """
+    
     def __init__(
             self,
             apply_elevations=False,
@@ -3163,6 +3375,19 @@ class WafflesLakes(Waffle):
 ## Waffles DEM update - testing
 ## ==============================================
 class WafflesPatch(Waffle):
+    """PATCH an existing DEM with new data.
+    
+Patch an existing DEM with data from the datalist.
+
+< patch:min_weight=.5:dem=None >
+
+    ---
+    Parameters:
+    
+    dem=[path] - the path the the DEM to update
+    min_weight=[val] - the minumum data weight to include in the patched DEM
+    """
+    
     def __init__(
             self,
             radius=None,
@@ -3329,103 +3554,41 @@ class WaffleFactory():
             'name': 'surface',
             'datalist-p': True,
             'class':GMTSurface,
-            'description': '''SPLINE DEM via GMT surface\n
-Generate a DEM using GMT's surface command
-see gmt surface --help for more info.
-        
-< surface:tension=.35:relaxation=1.2:lower_limit=d:upper_limit=d >
- :tension=[0-1]\t\tspline tension.
- :relaxation=[val]\tspline relaxation factor.
- :lower_limit=[val]\tconstrain interpolation to lower limit.
- :upper_limit=[val]\tconstrain interpolation to upper limit.''',
         },
         'triangulate': {
             'name': 'triangulate',
             'datalist-p': True,
             'class': GMTTriangulate,
-            'description': '''TRIANGULATION DEM via GMT triangulate\n
-Generate a DEM using GMT's triangulate command.
-see gmt triangulate --help for more info.        
-
-< triangulate >''',
         },
         'nearneighbor': {
             'name': 'nearneihbor',
             'datalist-p': True,
             'class': GMTNearNeighbor,
-            'description': """NEARNEIGHBOR DEM via GMT nearneighbor\n
-Generate a DEM using GMT's nearneighbor command.
-see gmt nearneighbor --help for more info.
-
-< nearneighbor:radius=None:sector=None >
- :radius=[val]\t\tsearch radius
- :sectors=[val]\t\tsector information""",
         },
         'num': {
             'name': 'num',
             'datalist-p': True,
             'class': WafflesNum,
-            'description': """Uninterpolated DEM populated by <mode>.\n
-Generate an uninterpolated DEM using <mode> option.
-Using mode of 'A<mode>' uses GMT's xyz2grd command, 
-see gmt xyz2grd --help for more info.
-
-mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
-
-< num:mode=n >
- :mode=[key]\tspecify mode of grid population""",
         },
         'linear': {
             'name': 'linear',
             'datalist-p': True,
             'class': WafflesLinear,
-            'description': """LINEAR DEM via gdal_grid\n
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
-< linear:radius=-1 >
- :radius=[val]\t\tsearch radius""",
         },
         'nearest': {
             'name': 'nearest',
             'datalist-p': True,
             'class': WafflesNearest,
-            'description': """NEAREST DEM via gdal_grid\n
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
-< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
- :radius1=[val]\t\tsearch radius 1
- :radius2=[val]\t\tsearch radius 2
- :angle=[val]\t\tangle
- :nodata=[val]\t\tnodata""",
         },
         'average': {
             'name': 'average',
             'datalist-p': True,
             'class': WafflesMovingAverage,
-            'description': """Moving AVERAGE DEM via gdal_grid\n
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
-< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
- :radius1=[val]\t\tsearch radius 1
- :radius2=[val]\t\tsearch radius 2
- :min_points=[val]\tminimum points per bucket (use to fill entire DEM)""",
         },
         'invdst': {
             'name': 'invdst',
             'datalist-p': True,
             'class': WafflesInvDst,
-            'description': """INVERSE DISTANCE DEM via gdal_grid\n
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
-< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
- :radius1=[val]\t\tsearch radius 1
- :radius2=[val]\t\tsearch radius 2
- :power=[val]\t\tweight**power
- :min_points=[val]\tminimum points per IDW bucket (use to fill entire DEM)""",
         },
         'IDW': {
             'name': 'IDW',
@@ -3762,8 +3925,11 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
 ## ==============================================
 _waffles_module_short_desc = lambda: ', '.join(
     ['{}'.format(key) for key in WaffleFactory()._modules])
+#_waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
+#    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
+
 _waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
-    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
+    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['class'].__doc__) for key in x]) + '\n'
 
 waffles_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
 
