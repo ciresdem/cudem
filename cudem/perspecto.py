@@ -200,6 +200,11 @@ class Perspecto:
 ## uses gdal/ImageMagick
 ## ==============================================
 class Hillshade(Perspecto):
+    """Generate a Hillshade Image
+
+< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
+    """
+    
     def __init__(
             self,
             vertical_exaggeration=1,
@@ -261,6 +266,11 @@ class POVRay(Perspecto):
         utils.run_cmd('povray {} +W{} +H{} -D'.format(src_pov_template, pov_width, pov_height), verbose=True)
 
 class perspective(POVRay):
+    """Generate a perspective image
+
+< perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 >
+    """
+    
     def __init__(
             self,
             cam_azimuth=-130,
@@ -389,6 +399,11 @@ background {{ White }}""".format(
         self.run_povray(self.output_pov, self.dem_infos['nx'], self.dem_infos['ny'])
 
 class sphere(POVRay):
+    """Generate a sphere image
+
+< sphere:cam_azimuth=310:cam_elevation=27:cam_distance=8:cam_view_angle=33:center_lat=None:center_long=None >
+    """
+    
     def __init__(
             self,
             cam_azimuth=310,
@@ -513,7 +528,11 @@ class GMTImage(Perspecto):
         self.makecpt(self.cpt, output=None)
         
 class figure1(GMTImage):
+    """Generate Figure 1
 
+< figure1:perspective=False:vertical_exaggeration=1.5:interval=100:azimuth=-130:elevation=30 >
+    """
+    
     def __init__(
             self,
             perspective=False,
@@ -601,29 +620,16 @@ class PerspectoFactory:
     mods = {
         'hillshade': {
             'class': Hillshade,
-            'description': """Generate a Hillshade Image
-
-< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 > """,
         },
         'perspective': {
             'class': perspective,
-            'description': """Generate a perspective image
-
-< perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 >""",
         },
         'sphere': {
             'class': sphere,
-            'description': """Generate a sphere image
-
-< sphere:cam_azimuth=310:cam_elevation=27:cam_distance=8:cam_view_angle=33:center_lat=None:center_long=None >""",
         },
         'figure1': {
             'class': figure1,
-            'description': """Generate Figure 1
-
-< figure1:perspective=False:vertical_exaggeration=1.5:interval=100:azimuth=-130:elevation=30 >""",
-        },
-        
+        },        
     }
 
     def __init__(
@@ -680,11 +686,6 @@ class PerspectoFactory:
         else:
             return(None)
 
-_perspecto_module_short_desc = lambda: ', '.join(
-    ['{}'.format(key) for key in PerspectoFactory().mods])
-_perspecto_module_long_desc = lambda x: 'perspecto modules:\n% perspecto ... <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
-    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
-            
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ perspecto
@@ -710,7 +711,7 @@ Supported PERSPECTO modules (see perspecto --modules <module-name> for more info
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
-           d_formats=_perspecto_module_short_desc())
+           d_formats=utils._cudem_module_short_desc(PerspectoFactory.mods))
         
 #if __name__ == '__main__':
 def perspecto_cli(argv = sys.argv):
@@ -738,13 +739,13 @@ def perspecto_cli(argv = sys.argv):
             try:
                 if argv[i + 1] in PerspectoFactory().mods.keys():
                     sys.stderr.write(
-                        _perspecto_module_long_desc({k: PerspectoFactory().mods[k] for k in (argv[i + 1],)})
+                        utils._cudem_module_long_desc({k: PerspectoFactory().mods[k] for k in (argv[i + 1],)})
                     )
                 else: sys.stderr.write(
-                        _perspecto_module_long_desc(PerspectoFactory().mods)
+                        utils._cudem_module_long_desc(PerspectoFactory().mods)
                 )
             except: sys.stderr.write(
-                    _perspecto_module_long_desc(PerspectoFactory().mods)
+                    utils._cudem_module_long_desc(PerspectoFactory().mods)
             )
             sys.exit(0)
 

@@ -41,7 +41,17 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 class NGS(f_utils.FetchModule):
-    """Fetch NGS monuments from NOAA"""
+    """NGS Monuments
+    
+NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
+Note some survey markers installed by other organizations may not be available through NGS.
+
+Fetch NGS monuments from NOAA
+    
+http://geodesy.noaa.gov/
+
+< ngs:datum=geoidHt >"""
+
     
     def __init__(self, datum='geoidHt', **kwargs):
         super().__init__(name='ngs', **kwargs)

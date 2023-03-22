@@ -32,7 +32,19 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 
 class MGDS(f_utils.FetchModule):
-    '''Fetch marine data from MGDS'''
+    """The Marine Geoscience Data System (MGDS)
+
+Fetch marine data from MGDS
+    
+MGDS is a trusted data repository that provides free public access to a curated collection of marine geophysical 
+data products and complementary data related to understanding the formation and evolution 
+of the seafloor and sub-seafloor.
+
+https://www.marine-geo.org
+
+data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Ancillary, Bathymetry:Singlebeam, Bathymetry:BPI, Bathymetry:ReferenceSurface, Bathymetry:Paelobathymetry]
+            
+< mgds:data_type=Bathymetry >"""
     
     def __init__(self, data_type='Bathymetry', **kwargs):
         super().__init__(name='mgds', **kwargs) 

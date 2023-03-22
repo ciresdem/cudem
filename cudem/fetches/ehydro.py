@@ -81,11 +81,27 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class eHydro(f_utils.FetchModule):
-    """Fetch USACE bathymetric surveys via eHydro
+        """USACE eHydro bathymetric data.
+    
+Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
+harbors throughout the United States requires extensive surveying and mapping services, including 
+boundary, topographic, hydrographic, terrestrial lidar, and multispectral and hyperspectral aerial 
+imagery collection as well as airborne topographic and bathymetric lidar acquisition, project-level 
+GIS implementation, development of file-based geodatabases, and GIS tool development.
+
+Three representative survey and mapping datasets include the National Channel Framework (NCF)—an enterprise 
+geodatabase of information on all 61 USACE-maintained high-tonnage channels —hydrographic surveys, which 
+provide assistance in locating navigable channels, determining dredging requirements, verifying dredging 
+accuracy, and maintaining harbors and rivers —and Inland Electronic Navigational Charts(IENC), accurate 
+navigational charts provided in a highly structured data format for use in navigation systems and to increase 
+overall navigational safety.. 
+
+https://navigation.usace.army.mil/Survey/Hydro
 
 specify `inc` to blockmedian the data when processing
-"""
-    
+        
+< ehydro:where=None:inc=None >"""
+
     def __init__(self, where='1=1', inc=None, **kwargs):
         super().__init__(name='ehydro', **kwargs)
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'

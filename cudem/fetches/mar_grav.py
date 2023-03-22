@@ -39,7 +39,12 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 
 class MarGrav(f_utils.FetchModule):
-    '''Fetch mar_grav sattelite altimetry topography'''
+    """MARine GRAVity Satellite Altimetry Topography from Scripps.
+
+Fetch mar_grav sattelite altimetry topography'''
+https://topex.ucsd.edu/WWW_html/mar_grav.html
+
+< mar_grav >"""
     
     def __init__(self, mag=1, upper_limit=None, lower_limit=None, raster=False, **kwargs):
         super().__init__(name='mar_grav', **kwargs) 

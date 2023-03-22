@@ -844,7 +844,7 @@ class ElevationDataset():
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
-    parse data from an xyz file/stdin
+Parse data from an xyz file/stdin
 
     generate_inf - generate an inf file for the xyz data
     yield_xyz - yield the xyz data as xyz
@@ -1064,6 +1064,8 @@ class XYZFile(ElevationDataset):
 class LASFile(ElevationDataset):
     """representing an LAS/LAZ dataset.
 
+Process LAS/LAZ lidar files using pylas.
+    
     get_epsg - attempt to parse the EPSG from the LAS file header
     generate_inf - generate an inf file for the LAS data
     yield_xyz - yield the LAS data as xyz
@@ -1247,6 +1249,9 @@ class LASFile(ElevationDataset):
 class RasterFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
 
+Process/Parse GDAL supported raster files.
+See GDAL for more information regarding supported formats.
+    
     generate_inf - generate an inf file for the RASTER data
     yield_xyz - yield the RASTER data as xyz
     yield_array - yield the RASTER data as an array
@@ -1681,8 +1686,8 @@ class RasterFile(ElevationDataset):
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
-    process supergrids at native resolution if they
-    exist, otherwise process as normal grid
+Process supergrids at native resolution if they
+exist, otherwise process as normal grid.
 
     generate_inf - generate an inf file for the BAG data
     yield_xyz - yield the BAG data as xyz
@@ -1842,6 +1847,10 @@ class BAGFile(ElevationDataset):
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
+Process MB-System supported multibeam data files.
+See MB-System for more information regarding supported
+file formats, etc.
+    
     generate_inf - generate an inf file for the MBS data
     yield_xyz - yield the MBS data as xyz
     yield_array - yield the MBS data as an array
@@ -1849,8 +1858,8 @@ class MBSParser(ElevationDataset):
     ---
     Parameters:
 
-    mb_fmt
-    mb_exclude
+    mb_fmt=[]
+    mb_exclude=[]
     """
 
     def __init__(self, mb_fmt=None, mb_exclude='A', **kwargs):

@@ -88,7 +88,19 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class HydroNOS(f_utils.FetchModule):
-    """NOSHydro"""
+    """NOS Soundings (bag/hydro)
+    
+NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
+Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
+Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
+and its territories. 
+
+Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
+Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
+
+https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
+
+< nos:where=None:layer=0 >"""
     
     def __init__(self, where='1=1', layer=1, datatype=None, index=False, **kwargs):
         super().__init__(name='hydronos', **kwargs)

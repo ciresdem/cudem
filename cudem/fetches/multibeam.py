@@ -44,41 +44,21 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 ## ==============================================
-## MapServer testing
+## NCEI Multibeam
 ## ==============================================
-class MBDB(f_utils.FetchModule):
-    """NOSHydro"""
-    
-    def __init__(self, where='1=1', **kwargs):
-        super().__init__(name='multibeam', **kwargs)
-        self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
-        self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
-        #self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
-        self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
-        self.where = where
-        
-    def run(self):
-        if self.region is None:
-            return([])
-
-        _data = {
-            'where': self.where,
-            'outFields': '*',
-            'geometry': self.region.format('bbox'),
-            'inSR':4326,
-            'outSR':4326,
-            'f':'pjson',
-            'returnGeometry':'False',
-        }
-        _req = f_utils.Fetch(self._mb_query_url, verbose=self.verbose).fetch_req(params=_data)
-        if _req is not None:
-            print(_req.text)
-            features = _req.json()
-            for feature in features['features']:
-                pass
-
 class Multibeam(f_utils.FetchModule):
-    """Fetch multibeam data from NOAA NCEI"""
+    """NOAA MULTIBEAM bathymetric data.
+
+Fetch multibeam data from NOAA NCEI
+        
+NCEI is the U.S. national archive for multibeam bathymetric data and holds more than 9 million 
+nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
+worldwide.
+
+https://data.ngdc.noaa.gov/platforms/
+
+< multibeam:process=False:min_year=None:survey_id=None:exclude=None >"""
+
     
     def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, make_datalist=False, **kwargs):
         super().__init__(**kwargs)
@@ -269,4 +249,38 @@ class Multibeam(f_utils.FetchModule):
                 'failed to fetch remote file, {}...'.format(src_data)
             )
 
+## ==============================================
+## MapServer testing
+## ==============================================
+class MBDB(f_utils.FetchModule):
+    """NOSHydro"""
+    
+    def __init__(self, where='1=1', **kwargs):
+        super().__init__(name='multibeam', **kwargs)
+        self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
+        self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
+        #self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
+        self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
+        self.where = where
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {
+            'where': self.where,
+            'outFields': '*',
+            'geometry': self.region.format('bbox'),
+            'inSR':4326,
+            'outSR':4326,
+            'f':'pjson',
+            'returnGeometry':'False',
+        }
+        _req = f_utils.Fetch(self._mb_query_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            print(_req.text)
+            features = _req.json()
+            for feature in features['features']:
+                pass
+            
 ### End

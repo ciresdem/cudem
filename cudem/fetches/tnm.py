@@ -43,7 +43,17 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class TheNationalMap(f_utils.FetchModule):
-    """Fetch elevation data from The National Map"""
+    """USGS' The National Map
+
+Fetch elevation data from The National Map
+        
+Various datasets from USGS's National Map. The National Map is a 
+collaborative effort among the USGS and other Federal, State, and local partners to improve
+and deliver topographic information for the Nation.
+
+http://tnmaccess.nationalmap.gov/
+
+< tnm:formats=None:extents=None:q=None >"""
 
     def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
         super().__init__(name='tnm', **kwargs)

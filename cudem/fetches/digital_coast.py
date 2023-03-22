@@ -123,10 +123,11 @@ class DAV(f_utils.FetchModule):
 Uses Digital Coasts Data Access Viewer Mapserver to discover
 dataset footprints.
 
+https://coast.noaa.gov
+    
 Use where=SQL_QUERY to query the MapServer to filter datasets
 
-If inc is set, upon processing the data, will blockmedian it at `inc`
-increment to save space.
+< digital_coast:where=None:datatype=None >
 """
     
     def __init__(self, where='1=1', index=False, datatype=None, **kwargs):

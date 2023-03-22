@@ -40,7 +40,12 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 
 class SRTMPlus(f_utils.FetchModule):
-    '''Fetch SRTM+ data'''
+    """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
+
+https://topex.ucsd.edu/WWW_html/srtm15_plus.html
+
+< srtm_plus >
+"""
     
     def __init__(self, **kwargs):
         super().__init__(name='srtm_plus', **kwargs) 

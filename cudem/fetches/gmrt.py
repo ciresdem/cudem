@@ -68,9 +68,34 @@ from cudem import demfun
 import cudem.fetches.utils as f_utils
 
 class GMRT(f_utils.FetchModule):
-    '''Fetch raster data from the GMRT'''
+    """The Global Multi-Resolution Topography synthesis.
     
-    def __init__(self, res='default', fmt='geotiff', bathy_only=False, upper_limit=None, lower_limit=None, layer='topo', **kwargs):
+The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
+reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
+of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
+to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
+the global and coastal oceans.
+
+layers: 'topo' or 'topo-mask'
+
+Data is assumed instantaneous MSL (5773?)
+
+https://www.gmrt.org
+
+< gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >
+    """
+    
+    def __init__(
+            self,
+            res='default',
+            fmt='geotiff',
+            bathy_only=False,
+            upper_limit=None,
+            lower_limit=None,
+            layer='topo',
+            **kwargs
+    ):
         super().__init__(name='gmrt', **kwargs) 
 
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -147,8 +172,6 @@ class GMRT(f_utils.FetchModule):
         return(self)
 
     def yield_ds(self, entry):
-        #out_fn = 'gmrt_{}'.format(seregion.format('fn_full'))
-        #src_data = os.path.join(self._outdir, 'gmrt_tmp.{}'.format('tif' if self.fmt == 'geotiff' else 'nc'))
         src_data = entry[1]
         if f_utils.Fetch(
                 entry[0], callback=self.callback, verbose=self.verbose
@@ -175,8 +198,6 @@ class GMRT(f_utils.FetchModule):
             yield(gmrt_ds)
         else:
             utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_data))
-            
-        #utils.remove_glob('{}*'.format(src_data))
             
     def yield_xyz(self, entry):
         for ds in self.yield_ds(entry):

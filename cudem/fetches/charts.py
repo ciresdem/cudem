@@ -44,7 +44,11 @@ import cudem.fetches.FRED as FRED
 ## MapServer testing
 ## ==============================================
 class Charts(f_utils.FetchModule):
-    """charts"""
+    """NOAA Nautical CHARTS
+
+https://www.charts.noaa.gov/
+
+< charts >"""
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='charts', **kwargs)

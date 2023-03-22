@@ -49,7 +49,22 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class NCEIThreddsCatalog(f_utils.FetchModule):
-    """Fetch DEMs from NCEI THREDDS Catalog"""
+    """NOAA NCEI DEMs via THREDDS
+
+Fetch DEMs from NCEI THREDDS Catalog
+    
+Digital Elevation Models around the world at various resolutions and extents.
+NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
+bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
+and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
+
+DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
+etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
+community preparedness.
+
+https://www.ngdc.noaa.gov/thredds/demCatalog.xml
+
+< ncei_thredds:where=None:want_wcs=False >"""
 
     def __init__(self, where=[], want_wcs=False, datatype=None, **kwargs):
         super().__init__(name='ncei_thredds', **kwargs)

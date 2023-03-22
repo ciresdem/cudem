@@ -1,6 +1,6 @@
 ### fetches.py
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## fetches.py is part of CUDEM
 ##
@@ -454,8 +454,6 @@ https://www.hydrosheds.org/products/hydrolakes
         self.results = []
         if self.mod is not None:
             this_mod = self.parse_mod()
-            #if this_mod is None:
-            #    self.mod = None
         
     def parse_mod(self):
         opts = self.mod.split(':')
@@ -535,7 +533,7 @@ Supported FETCHES modules (see fetches --modules <module-name> for more info):
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]), 
            f_version=fetches.__version__,
-           f_formats=_fetches_module_short_desc())
+           f_formats=utils._cudem_module_short_desc(FetchesFactory.mods))
 
 def fetches_cli(argv = sys.argv):
     """run fetches from command-line

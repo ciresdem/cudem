@@ -1288,6 +1288,23 @@ echo_msg_inline = lambda m: echo_msg2(m, prefix = os.path.basename(sys.argv[0]),
 echo_error_msg = lambda m: echo_error_msg2(m, prefix = os.path.basename(sys.argv[0]))
 echo_warning_msg = lambda m: echo_warning_msg2(m, prefix = os.path.basename(sys.argv[0]))
 
+## ==============================================
+## echo cudem module options
+## modules are a dictionary with the module name
+## as the key and at least a 'class' key which
+## points to the class/function to call for the module
+## uses <class>.__doc__ as description
+##
+## e.g.
+## _cudem_module_long_desc({'module_name': {'class': MyClass}})
+## ==============================================
+_cudem_module_short_desc = lambda m: ', '.join(
+    ['{}'.format(key) for key in m])
+_cudem_module_name_short_desc = lambda m: ',  '.join(
+    ['{} ({})'.format(m[key]['name'], key) for key in m])
+_cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
+    ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['class'].__doc__) for key in m]) + '\n'
+
 class CliProgress:
     '''cudem minimal progress indicator'''
 

@@ -34,7 +34,11 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 
 class Trackline(f_utils.FetchModule):
-    """trackline"""
+    """NOAA TRACKLINE bathymetric data.
+
+http://www.ngdc.noaa.gov/trackline/
+
+< trackline >"""
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='trackline', **kwargs)

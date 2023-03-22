@@ -149,7 +149,7 @@ def init_data(
 class Datalist(datasets.ElevationDataset):
     """representing a datalist parser
     
-    A datalist is an extended MB-System style datalist.
+A datalist is an extended MB-System style datalist.
     """
     
     def __init__(self, fmt=None, **kwargs):
@@ -476,7 +476,7 @@ class Datalist(datasets.ElevationDataset):
 class ZIPlist(datasets.ElevationDataset):
     """Zip file parser.
 
-    Parse supported datasets from a zipfile.
+Parse supported datasets from a zipfile.
     """
     def __init__(self, **kwargs):
         self.ds_args = {}
@@ -604,6 +604,8 @@ class Fetcher(datasets.ElevationDataset):
 
 This is used in waffles/dlim for on-the-fly remote data
 parsing and processing.
+
+See `fetches` for more information.
 """
     
     def __init__(self, **kwargs):
@@ -974,11 +976,6 @@ class DatasetFactory:
             )
         )
 
-_datalist_fmts_long_desc = lambda x: 'dlim datasets:\n% dlim... <data_path>,<data_format>:key=val:key=val...,<data_weight>\n\n  ' + '\n  '.join(
-    ['\033[1m{:14}\033[0m{}\n\nSupported Formats: {}\n\n{}'.format(str(key), x[key]['name'], x[key]['fmts'], x[key]['class'].__doc__) for key in x]) + '\n'
-_datalist_fmts_short_desc = lambda: ',  '.join(
-    ['{} ({})'.format(DatasetFactory().data_types[key]['name'], key) for key in DatasetFactory().data_types])
-
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ dlim
@@ -1007,7 +1004,7 @@ Options:
   --weights\t\tOutput WEIGHT values along with xyz
   --quiet\t\tLower the verbosity to a quiet
 
-  --datasets\t\tDisplay the dataset descriptions and usage
+  --datatypes\t\tDisplay the datatype descriptions and usage
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
@@ -1022,7 +1019,7 @@ Examples:
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
-           dl_formats=_datalist_fmts_short_desc())
+           dl_formats=utils._cudem_module_name_short_desc(DatasetFactory.data_types))
 
 def datalists_cli(argv=sys.argv):
     """run datalists from command-line
@@ -1095,21 +1092,19 @@ def datalists_cli(argv=sys.argv):
             want_json = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
-
-        elif arg == '--datasets':
+        elif arg == '--datatypes':
             try:
                 if int(argv[i + 1]) in DatasetFactory().data_types.keys():
                     sys.stderr.write(
-                        _datalist_fmts_long_desc({k: DatasetFactory().data_types[k] for k in (int(argv[i + 1]),)})
+                        utils._cudem_module_long_desc({k: DatasetFactory().data_types[k] for k in (int(argv[i + 1]),)})
                     )
                 else: sys.stderr.write(
-                        _datalist_fmts_long_desc(DatasetFactory().data_types)
+                        utils._cudem_module_long_desc(DatasetFactory().data_types)
                 )
             except: sys.stderr.write(
-                    _datalist_fmts_long_desc(DatasetFactory().data_types)
+                    utils._cudem_module_long_desc(DatasetFactory().data_types)
             )
-            sys.exit(0)
-           
+            sys.exit(0)           
         elif arg == '--help' or arg == '-h':
             print(datalists_usage)
             sys.exit(1)

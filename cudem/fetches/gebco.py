@@ -38,7 +38,16 @@ from cudem import demfun
 import cudem.fetches.utils as f_utils
 
 class GEBCO(f_utils.FetchModule):
-    '''Fetch raster data from GEBCO'''
+    """GEBCO
+    
+GEBCO’s current gridded bathymetric data set, the GEBCO_2022 Grid, is a global terrain model for ocean and land, 
+providing elevation data, in meters, on a 15 arc-second interval grid. It is accompanied by a Type Identifier 
+(TID) Grid that gives information on the types of source data that the GEBCO_2022 Grid is based. 
+
+https://www.gebco.net
+
+< gebco >
+"""
     
     def __init__(
             self,

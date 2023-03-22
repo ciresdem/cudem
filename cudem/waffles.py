@@ -1128,7 +1128,6 @@ see mbgrid --help for more info
                     
         return(self)
 
-
 ## ==============================================
 ## Waffles 'num' - no interpolation
 ##
@@ -3594,141 +3593,47 @@ class WaffleFactory():
             'name': 'IDW',
             'datalist-p': True,
             'class': WafflesIDW,
-            'description': """INVERSE DISTANCE WEIGHTED DEM\n
-Generate a DEM using an Inverse Distance Weighted algorithm.
-If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
-as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
-
-< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
- :power=[val]\t\t\tweight**power
- :min_points=[val]\t\tminimum neighbor points for IDW
- :radius=[val]\t\t\tsearch radius (in cells), only fill data cells within radius from data
- :upper_limit=[val]\t\tRestrict output DEM to values below val
- :lower_limit=[val]\t\tRestrict output DEM to values above val
- :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxiliary=[True/False]\tretain auxiliary files
- :chunk_size=[val]\t\tsize of chunks in pixels""",
         },
         'vdatum': {
             'name': 'vdatum',
             'datalist-p': False,
             'class': WafflesVDatum,
-            'description': """VDATUM transformation grid.\n
-Generate a Vertical DATUM transformation grid.
-
-< vdatum:vdatum_in=None:vdatum_out=None >
- :vdatum_in=[vdatum]\tinput vertical datum
- :vdatum_out=[vdatum]\toutput vertical datum""",
         },
         'mbgrid': {
             'name': 'mbgrid',
             'datalist-p': True,
             'class': WafflesMBGrid,
-            'description': """SPLINE DEM via MB-System's mbgrid.\n
-Generate a DEM using MB-System's mbgrid command.
-By default, will use MB-Systems datalist processes.
-set `use_datalist=True` to use CUDEM's dlim instead.
-see mbgrid --help for more info
-
-< mbgrid:dist='10/3':tension=35:use_datalists=False >
- :dist=[val]\t\t\tthe dist variable to use in mbgrid
- :tension=[val]\t\t\tthe spline tension value (0-inf)
- :use_datalist=[True/False]\tuse built-in datalists rather than mbdatalist""",
         },
         'coastline': {
             'name': 'coastline',
             'datalist-p': False,
             'class': WafflesCoastline,
-            'description': """COASTLINE (land/etc-mask) generation.\n
-Generate a coastline (land/etc-mask) using a variety of sources. 
-User data can be provided to provide source for further land masking. 
-Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
-Output vector will polygonize land-areas.
-
-< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
- :want_gmrt=[True/False]\tuse GMRT to fill background (will use Copernicus otherwise)
- :want_nhd=[True/False]\t\tuse high-resolution NHD to fill US coastal zones
- :want_lakes=[True/False\tmask LAKES using HYDROLAKES
- :want_buildings=[True/False]\tmask BUILDINGS using OSM
- :invert=[True/False]\t\tinvert the output results
- :polygonize=[True/False]\tpolygonize the output""",
         },
         'cudem': {
             'name': 'cudem',
             'datalist-p': True,
             'class': WafflesCUDEM,
-            'description': """CUDEM integrated DEM generation. <beta>\n
-Generate an topo/bathy integrated DEM using a variety of data sources.
-Will iterate <pre_count> pre-surfaces at lower-resolutions.
-Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
-Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
-
-< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1 >
- :landmask=[path]\tpath to coastline vector mask or set as `coastline` to auto-generate
- :min_weight=[val]\tthe minumum weight to include in the final DEM
- :smoothing=[val]\tthe Gaussian smoothing value to apply to pre-surface(s)
- :pre_count=[val]\tnumber of pre-surface iterations to perform""",
         },
         'patch': {
             'name': 'patch',
             'datalist-p': True,
             'class': WafflesPatch,
-            'description': """PATCH an existing DEM with new data. <beta>\n
-Patch an existing DEM with data from the datalist.
-
-< patch:min_weight=.5:dem=None >
- :dem=[path]\t\tthe path the the DEM to update
- :min_weight=[val]\tthe minumum data weight to include in the patched DEM""",
         },
         'lakes': {
             'name': 'lakes',
             'datalist-p': False,
             'class': WafflesLakes,
-            'description': """estimate lake bathymetry.\n
-By default, will return lake bathymetry as depth values (positive down), 
-to get elevations (positive up), set apply_elevations=True.
-
-< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
- :apply_elevations=[True/False]\t\tuse COPERNICUS to apply lake level elevations to output
- :min_area=[val]\t\t\tminimum lake area to consider
- :max_area=[val]\t\t\tmaximum lake area to consider
- :min_id=[val]\t\t\t\tminimum lake ID to consider
- :max_id=[val]\t\t\t\tmaximum lake ID to consider
- :depth=[globathy/hydrolakes/val]\tobtain the depth value from GloBathy, HydroLakes or constant value""",
         },
         'stacks': {
             'name': 'stacks',
             'datalist-p': True,
             'class': WafflesStacks,
-            'description': """STACK data into a DEM. <beta>\n
-Generate a DEM using a raster STACKing method. 
-By default, will calculate the [weighted]-mean where overlapping cells occur. 
-Set supercede to True to overwrite overlapping cells with higher weighted data.
-
-< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
- :supercede=[True/False]\tsuperced data cells with higher weighted data
- :keep_weights=[True/False]\tretain weight raster
- :keep_count=[True/False]\tretain count raster
- :min_count=[val]\t\tonly retain data cells if they contain `min_count` overlapping data""",
         },
         'scipy': {
             'name': 'scipy',
             'datalist-p': True,
             'class': WafflesSciPy,
-            'description': """Generate DEM using Scipy gridding interpolation\n
-Generate a DEM using Scipy's gridding interpolation
-Optional gridding methods are 'linear', 'cubic' and 'nearest'
-https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
-            
-< scipy:method=<method> >
- :method=[linear/cubic/nearest]\tinterpolation method to use
- :supercede=[True/False]\tsupercede higher weighted data,
- :keep_auxiliary=[True/False]\tretain auxiliary files
- :chunk_size=[val]\t\tsize of chunks in pixels
- :chunk_buffer=[val]\t\tsize of the chunk buffer in pixels""",
         },
-
     }
 
     def __init__(
@@ -3923,14 +3828,6 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
 ##
 ## waffles cli
 ## ==============================================
-_waffles_module_short_desc = lambda: ', '.join(
-    ['{}'.format(key) for key in WaffleFactory()._modules])
-#_waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
-#    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['description']) for key in x]) + '\n'
-
-_waffles_module_long_desc = lambda x: 'waffles modules:\n% waffles ... -M <mod>:key=val:key=val...\n\n  ' + '\n  '.join(
-    ['\033[1m{:14}\033[0m{}\n'.format(key, x[key]['class'].__doc__) for key in x]) + '\n'
-
 waffles_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
 
 usage: {cmd} [OPTIONS] DATALIST
@@ -4008,8 +3905,8 @@ Modules (see waffles --modules <module-name> for more info):
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
-           dl_formats=dlim._datalist_fmts_short_desc(),
-           modules=_waffles_module_short_desc(),
+           dl_formats=utils._cudem_module_name_short_desc(dlim.DatasetFactory.data_types),
+           modules=utils._cudem_module_short_desc(WaffleFactory._modules),
            wf_version=cudem.__version__)
 
 def waffles_cli(argv = sys.argv):
@@ -4168,13 +4065,13 @@ def waffles_cli(argv = sys.argv):
             try:
                 if argv[i + 1] in WaffleFactory()._modules.keys():
                     sys.stderr.write(
-                        _waffles_module_long_desc({k: WaffleFactory()._modules[k] for k in (argv[i + 1],)})
+                        utils._cudem_module_long_desc({k: WaffleFactory()._modules[k] for k in (argv[i + 1],)})
                     )
                 else: sys.stderr.write(
-                        _waffles_module_long_desc(WaffleFactory()._modules)
+                        utils._cudem_module_long_desc(WaffleFactory()._modules)
                 )
             except: sys.stderr.write(
-                    _waffles_module_long_desc(WaffleFactory()._modules)
+                    utils._cudem_module_long_desc(WaffleFactory()._modules)
             )
             sys.exit(0)
         elif arg == '--help' or arg == '-h':
