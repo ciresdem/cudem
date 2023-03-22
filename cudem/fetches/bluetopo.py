@@ -54,7 +54,18 @@ import cudem.fetches.FRED as FRED
 import boto3
 
 class BlueTopo(f_utils.FetchModule):
-    """BlueTOPO"""
+    """BlueTOPO DEM
+    
+BlueTopo is a compilation of the nation's best available bathymetric data. 
+In the same way that topographic map details the height of land, BlueTopo details the depth of 
+lake beds and seafloor beneath navigationally significant U.S. waters. Created as part of the 
+Office of Coast Survey nautical charting mission and its National Bathymetric Source project, 
+BlueTopo is curated bathymetric source data to provide a definitive nationwide model of the seafloor 
+and the Great Lakes.
+
+https://www.nauticalcharts.noaa.gov/data/bluetopo.html
+
+< bluetopo:want_interpolation=False:unc_weights=False:keep_index=False >"""
     
     def __init__(self, want_interpolation=False, unc_weights=False, keep_index=False, **kwargs):
         super().__init__(name='bluetopo', **kwargs)

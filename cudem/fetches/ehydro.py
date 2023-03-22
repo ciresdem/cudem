@@ -80,8 +80,11 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
+## ==============================================
+## eHydro (USACE)
+## ==============================================
 class eHydro(f_utils.FetchModule):
-        """USACE eHydro bathymetric data.
+    """USACE eHydro bathymetric data.
     
 Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
 harbors throughout the United States requires extensive surveying and mapping services, including 
@@ -98,7 +101,7 @@ overall navigational safety..
 
 https://navigation.usace.army.mil/Survey/Hydro
 
-specify `inc` to blockmedian the data when processing
+specify inc to blockmedian the data when processing
         
 < ehydro:where=None:inc=None >"""
 

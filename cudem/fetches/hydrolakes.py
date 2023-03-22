@@ -52,7 +52,19 @@ import cudem.fetches.FRED as FRED
 import cudem.fetches.copernicus
         
 class HydroLakes(f_utils.FetchModule):
-    """hydrolakes"""
+    """HydroLakes vector and derived elevations
+    
+HydroLAKES aims to provide the shoreline polygons of all global lakes with a surface area 
+of at least 10 ha. HydroLAKES has been developed using a suite of auxiliary data sources of 
+lake polygons and gridded lake surface areas. All lakes are co-registered to the global 
+river network of the HydroSHEDS database via their lake pour points. The global coverage of 
+HydroLAKES encompasses 1.4 million individual lakes or reservoirs representing a total 
+surface area of 2.67 million km², a total shoreline length of 7.2 million km, and a total 
+storage volume of 181,900 km³.
+
+https://www.hydrosheds.org/products/hydrolakes
+
+< hydrolakes >"""
     
     def __init__(self, where='1=1', want_globathy=False, **kwargs):
         super().__init__(name='hydrolakes', **kwargs)

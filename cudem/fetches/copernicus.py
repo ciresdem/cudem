@@ -46,7 +46,14 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class CopernicusDEM(f_utils.FetchModule):
-    '''Fetch COPERNICUS data'''
+    """COPERNICUS sattelite elevation data
+    
+The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
+infrastructure and vegetation.
+
+https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation
+
+< copernicus >"""
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='copernicus', **kwargs)

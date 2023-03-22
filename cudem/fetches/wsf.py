@@ -42,7 +42,11 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class WSF(f_utils.FetchModule):
-    '''Fetch WSF data'''
+    """WSF from German Aerospace Service (DLR)
+
+World Settlement Footprint (WSF) 2019
+
+< usiei:where=None:datatype=None >"""
 
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='wsf', **kwargs)

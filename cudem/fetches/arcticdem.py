@@ -58,7 +58,14 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class ArcticDEM(f_utils.FetchModule):
-    """ArcticDEM"""
+    """Arctic DEM
+ArcticDEM is an NGA-NSF public-private initiative to automatically produce a high-resolution, 
+high quality, digital surface model (DSM) of the Arctic using optical stereo imagery, 
+high-performance computing, and open source photogrammetry software.
+
+https://www.pgc.umn.edu/data/arcticdem/
+
+< arcticdem >"""
     
     def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='arcticdem', **kwargs)

@@ -48,7 +48,18 @@ import cudem.fetches.utils as f_utils
 ## =============================================================================
 
 class BUOYS(f_utils.FetchModule):
-    """Fetch NOS Tide Stations"""
+    """NOAA BUOY data (beta)
+
+Fetch NOS Tide Stations
+
+A sustainable and resilient marine observation and monitoring infrastructure which enhances healthy 
+ecosystems, communities, and economies in the face of change and To provide quality observations in 
+the marine environment in a safe and sustainable manner to support the understanding of and predictions 
+to changes in weather, climate, oceans and coast. 
+
+https://www.ndbc.noaa.gov
+
+< buoys >"""
     
     def __init__(self, buoy_id=None, **kwargs):
         super().__init__(name='buoys', **kwargs)

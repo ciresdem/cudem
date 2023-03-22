@@ -38,7 +38,15 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 class OpenStreetMap(f_utils.FetchModule):
-    """Fetch OSM data"""
+    """OpenStreetMap data.
+    
+OpenStreetMap is a free, editable map of the whole world that is 
+being built by volunteers largely from scratch and released with an 
+open-content license.
+
+https://wiki.openstreetmap.org/
+
+< osm:q=None:fmt=osm >"""
     
     def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
         super().__init__(name='osm', **kwargs)

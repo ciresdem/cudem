@@ -69,7 +69,14 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 class Tides(f_utils.FetchModule):
-    """Fetch NOS Tide Stations"""
+    """TIDE station information from NOAA/NOS
+
+Fetch NOS Tide Stations
+    
+https://tidesandcurrents.noaa.gov/
+
+< tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""
+
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
         super().__init__(name='tides', **kwargs)

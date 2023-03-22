@@ -38,7 +38,16 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class NASADEM(f_utils.FetchModule):
-    '''Fetch NASADEM data'''
+    """NASA Digital Elevation Model
+    
+Our objective is to provide the scientific and civil communities with a state-of-the-art global 
+digital elevation model (DEM) derived from a combination of Shuttle Radar Topography Mission (SRTM) 
+processing improvements, elevation control, void-filling and merging with data unavailable at the 
+time of the original SRTM production.
+
+https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
+
+< nasadem >"""
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='nasadem', **kwargs)

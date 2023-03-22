@@ -109,6 +109,19 @@ from cudem import xyzfun
 import cudem.fetches.utils as f_utils
 
 class EarthData(f_utils.FetchModule):
+    """ACCESS NASA EARTH SCIENCE DATA
+    
+NASA promotes the full and open sharing of all its data to research and applications communities, 
+private industry, academia, and the general public. In order to meet the needs of these different 
+communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
+ways to discover, access, and use the data.
+
+If version is omitted, will fetch all versions
+Use wildcards in 'short_name' to return granules for all matching short_name entries.
+
+https://cmr.earthdata.nasa.gov
+
+< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
 
     def __init__(
             self,

@@ -68,7 +68,10 @@ from cudem import datasets
 import cudem.fetches.utils as f_utils
 
 class USIEI(f_utils.FetchModule):
-    """USIEI
+    """US Interagency Elevation Inventory
+
+No data is fetched with this module. Will list out query results from the USIEI.
+Set 'want_geometry' to True to output a geojson formatted vector.
 
 layers:
   0 - Lidar-Topobathy
@@ -76,7 +79,10 @@ layers:
   2 - Lidar-Topo
   3 - IfSAR/InSAR
   4 - Other Bathy
-"""
+
+https://coast.noaa.gov/inventory/
+
+< usiei:where=None:layer=0:want_geometry=False >"""
     
     def __init__(self, where='1=1', want_geometry=False, layer=0, **kwargs):
         super().__init__(name='usiei', **kwargs)

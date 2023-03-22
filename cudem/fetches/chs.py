@@ -41,7 +41,13 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class CHS(f_utils.FetchModule):
-    """Fetch bathymetric soundings from the CHS"""
+    """High-Resolution Digital Elevation Model data for Canada
+
+Fetch bathymetric soundings from the CHS
+    
+https://open.canada.ca
+
+< chs >"""
     
     def __init__(self, **kwargs):
         super().__init__(name='chs', **kwargs)

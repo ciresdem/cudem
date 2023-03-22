@@ -141,7 +141,23 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
         return(_results)
 
 class VDATUM(f_utils.FetchModule):
-    """Fetch vertical datum conversion grids from NOAA, etc."""
+    """NOAA's VDATUM transformation grids
+
+Fetch vertical datum conversion grids from NOAA, etc.
+    
+VDatum is a free software tool being developed jointly by NOAA's National Geodetic Survey (NGS), 
+Office of Coast Survey (OCS), and Center for Operational Oceanographic Products and Services (CO-OPS). 
+
+VDatum is designed to vertically transform geospatial data among a variety of tidal, orthometric and 
+ellipsoidal vertical datums - allowing users to convert their data from different horizontal/vertical 
+references into a common system and enabling the fusion of diverse geospatial data in desired reference 
+levels.
+
+https://vdatum.noaa.gov
+https://cdn.proj.org
+
+< vdatum:datatype=None:gtx=False >"""
+    
 
     _tidal_references = {
         1089: {'name': 'mllw',

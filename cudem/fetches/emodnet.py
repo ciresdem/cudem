@@ -39,7 +39,13 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class EMODNet(f_utils.FetchModule):
-    """Fetch raster data from the EMODNET DTM"""
+    """EU elevation data extracts from EMOD DTM.
+
+Fetch raster data from the EMODNET DTM
+    
+https://portal.emodnet-bathymetry.eu/
+
+< emodnet >"""
 
     def __init__(self, **kwargs):
         super().__init__(name='emodnet', **kwargs) 

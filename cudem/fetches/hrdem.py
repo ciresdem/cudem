@@ -40,7 +40,13 @@ import cudem.fetches.utils as f_utils
 import cudem.fetches.FRED as FRED
 
 class HRDEM(f_utils.FetchModule):
-    """Fetch HRDEM data from Canada (NRCAN)"""
+    """High-Resolution Digital Elevation Model data for Canada
+
+Fetch HRDEM data from Canada (NRCAN)
+    
+https://open.canada.ca
+
+< hrdem >"""
     
     def __init__(self, **kwargs):
         super().__init__(name='hrdem', **kwargs)
