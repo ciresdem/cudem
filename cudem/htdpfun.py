@@ -1,6 +1,6 @@
 ### htdp.py
 ##
-## Copyright (c) 2022  Regents of the University of Colorado
+## Copyright (c) 2022 - 2023  Regents of the University of Colorado
 ##
 ## htdp.py is part of CUDEM
 ##
@@ -60,7 +60,6 @@
 ## 17...ITRF94 (=ITRF96=ITRF97) 
 ### Code:
 
-import os
 import sys
 import numpy as np
 from cudem import utils
@@ -70,7 +69,6 @@ from cudem import utils
 ## =============================================================================
 
 class HTDP:
-    
     def __init__(self, htdp_bin='htdp', verbose=True):
         self.htdp_bin = htdp_bin
         self.verbose=verbose
@@ -79,7 +77,6 @@ class HTDP:
             utils.echo_error_msg('you must have HTDP installed to perform vertical transformations')
         
     def _next_point(self, fd):
-
         line = fd.readline().strip()
         while line != '' and line.find('PNT_') == -1:
             line = fd.readline()
@@ -98,6 +95,8 @@ class HTDP:
                 lat_dst, lon_dst, eht_dst))
 
     def _read_grid(self, filename, shape):
+        """read grid created by `_create_grid`"""
+        
         fd = open(filename)
         grid = np.zeros(shape)
 
@@ -191,20 +190,5 @@ class HTDP:
         
     def run(self, htdp_control):
         utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
-
-
-# if __name__ == '__main__':
-
-#     in_epsg = 6781
-#     out_epsg = 7912
-
-#     htdp = HTDP()
-#     griddef = (144.5, 13.75, 144.75, 13.5, 212, 212)
-#     grid = htdp._new_create_grid(griddef)
-#     htdp._write_grid(grid, '_tmp_input.xyz')
-#     htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz', htdp._reference_frames[in_epsg]['htdp_id'], 2012.0, htdp._reference_frames[out_epsg]['htdp_id'], 2012.0)
-#     htdp.run('_tmp_control.txt')
-#     out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[4],griddef[5]))
-#     print(out_grid)
         
 ### End
