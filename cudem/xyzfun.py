@@ -1,6 +1,6 @@
 ### xyzfun.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## xyzfun.py is part of CUDEM
 ##
@@ -20,6 +20,9 @@
 ## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ##
 ### Commentary:
+##
+## XYZ file parsing.
+##
 ### Code:
 
 import sys
@@ -247,23 +250,6 @@ class XYZPoint:
         
         self.transform(dst_trans)
         return(self)
-
-# def xyz_line(xyz_line, dst_port=sys.stdout, encode=False):
-#     """write "xyz" `line` to `dst_port`
-#     `line` should be a list of xyz values [x, y, z, ...].
-    
-#     Args:
-#       xyz_line (str): a string representing delimited data.
-#       dst_port (port): an open destination port
-#       encode (bool): encode the output
-#         sys.stdout, etc prefer encoded data, while
-#         files usually like unencoded...
-#     """
-    
-#     delim = ' '
-    
-#     l = '{}\n'.format(delim.join(['{:.7f}'.format(x) for x in xyz_line]))
-#     dst_port.write(l.encode('utf-8') if encode else l)
 
 ## ==============================================
 ## xyz processing (datalists fmt:168)

@@ -35,7 +35,9 @@ from cudem import regions
 from cudem import xyzfun
 
 ## ==============================================
+##
 ## DEM/GDAL/GMT functions, etc
+##
 ## ==============================================
 def infos(src_dem, region=None, scan=False):
     """scan gdal file src_fn and gather region info.
@@ -283,6 +285,22 @@ def extract_band(data_set, output_data_set, band=1, exclude=[], inverse=False):
     utils.gdal_write(_ds_array, output_data_set, _ds_config)
     return(output_data_set)
     
+def has_nodata_p(src_gdal):
+    try:
+        ds = gdal.Open('{}'.format(src_gdal))
+    except: ds = None
+    if ds is not None:
+        ds_config = gather_infos(ds)
+        ds_arr = ds.GetRasterBand(1).ReadAsArray()
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+
+        if np.any(np.isnan(ds_arr)):
+            return(True)
+    return(False)
+        
+## ==============================================
+## Operations
+## ==============================================
 def mask_(src_dem, msk_dem, out_dem, msk_value = None):
     src_ds = gdal.Open(src_dem)
     if src_ds is not None:
@@ -311,7 +329,7 @@ def mask_(src_dem, msk_dem, out_dem, msk_value = None):
             utils.gdal_write(src_array, out_dem, src_config)
             msk_ds = None
         src_ds = None
-        
+
 def split(src_dem, split_value = 0):
     """split raster file `src_dem`into two files based on z value, 
     or if split_value is a filename, split raster by overlay, where upper is outside and lower is inside.
@@ -453,19 +471,6 @@ def crop(src_dem, dst_dem):
         return(utils.gdal_write(dst_arr, dst_dem, ds_config))
     else:
         return(None, -1)
-
-def has_nodata_p(src_gdal):
-    try:
-        ds = gdal.Open('{}'.format(src_gdal))
-    except: ds = None
-    if ds is not None:
-        ds_config = gather_infos(ds)
-        ds_arr = ds.GetRasterBand(1).ReadAsArray()
-        ds_arr[ds_arr == ds_config['ndv']] = np.nan
-
-        if np.any(np.isnan(ds_arr)):
-            return(True)
-    return(False)
     
 def polygonize(src_gdal, dst_layer, verbose=False):
     '''run gdal.Polygonize on src_ds and add polygon to dst_layer'''
@@ -609,6 +614,160 @@ def yield_srcwin(src_dem, n_chunk=10, step=5, verbose=False):
     if verbose:
        _prog.end(0, 'parsed dataset {}'.format(src_dem))
 
+def slope(src_gdal, dst_gdal, s = 111120):
+    """generate a slope grid with GDAL
+
+    return cmd output and status
+    """
+    
+    gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
+    return(utils.run_cmd(gds_cmd))
+    
+def proximity(src_fn, dst_fn):
+    """compute a proximity grid via GDAL
+
+    return 0 if success else None
+    """
+
+    prog_func = None
+    dst_ds = None
+    try:
+        src_ds = gdal.Open(src_fn)
+    except: src_ds = None
+    if src_ds is not None:
+        src_band = src_ds.GetRasterBand(1)
+        ds_config = gather_infos(src_ds)
+
+        if dst_ds is None:
+            drv = gdal.GetDriverByName('GTiff')
+            dst_ds = drv.Create(dst_fn, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])
+        dst_ds.SetGeoTransform(ds_config['geoT'])
+        dst_ds.SetProjection(ds_config['proj'])
+        dst_band = dst_ds.GetRasterBand(1)
+        dst_band.SetNoDataValue(ds_config['ndv'])
+        gdal.ComputeProximity(src_band, dst_band, ['DISTUNITS=PIXEL'], callback = prog_func)
+        dst_band = src_band = dst_ds = src_ds = None
+        return(0)
+    else: return(None)
+    
+def percentile(src_gdal, perc = 95):
+    """calculate the `perc` percentile of src_fn gdal file.
+
+    return the calculated percentile
+    """
+    
+    try:
+        ds = gdal.Open(src_gdal)
+    except: ds = None
+    if ds is not None:
+        ds_array = np.array(ds.GetRasterBand(1).ReadAsArray())
+        ds_array[ds_array == ds.GetRasterBand(1).GetNoDataValue()] = np.nan
+        x_dim = ds_array.shape[0]
+        ds_array_flat = ds_array.flatten()
+        ds_array = ds_array_flat[ds_array_flat != 0]
+        if len(ds_array) > 0:
+            p = np.nanpercentile(ds_array, perc)
+            #percentile = 2 if p < 2 else p
+        else: p = 2
+        ds = ds_array = ds_array_flat = None
+        return(p)
+    else: return(None)
+
+def generate_mem_ds(ds_config, name='MEM'):
+    """Create temporary gdal mem dataset"""
+        
+    mem_driver = gdal.GetDriverByName('MEM')
+    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
+    if mem_ds is not None:
+        mem_ds.SetGeoTransform(ds_config['geoT'])
+        if ds_config['proj'] is not None:
+            mem_ds.SetProjection(ds_config['proj'])
+            
+        mem_band = mem_ds.GetRasterBand(1)
+        mem_band.SetNoDataValue(ds_config['ndv'])
+        
+    return(mem_ds)
+
+def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
+    """parse the data from gdal dataset src_ds (first band only)
+    optionally mask the output with `mask` or transform the coordinates to `dst_srs`
+
+    yields the parsed xyz data
+    """
+
+    #if verbose: sys.stderr.write('waffles: parsing gdal file {}...'.format(src_ds.GetDescription()))
+    ln = 0
+    band = src_ds.GetRasterBand(1)
+    ds_config = gather_infos(src_ds)
+    src_srs = osr.SpatialReference()
+    try:
+        src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    except: pass
+    src_srs.ImportFromWkt(ds_config['proj'])
+    src_srs.AutoIdentifyEPSG()
+    srs_auth = src_srs.GetAuthorityCode(None)
+
+    if srs_auth is None:
+        src_srs.ImportFromEPSG(4326)
+        src_srs.AutoIdentifyEPSG()
+        srs_auth = src_srs.GetAuthorityCode(None)
+
+    #if srs_auth == warp: dst_srs = None
+
+    if dst_srs is not None:
+        dst_srs_ = osr.SpatialReference()
+        dst_srs_.SetFromUserInput(dst_srs)
+        ## GDAL 3+
+        try:
+            dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        except: pass
+        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
+
+    gt = ds_config['geoT']
+    msk_band = None
+    if mask is not None:
+        src_mask = gdal.Open(mask)
+        msk_band = src_mask.GetRasterBand(1)
+    if srcwin is None: srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+    nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
+    if band.GetNoDataValue() is not None: nodata.append('{:g}'.format(band.GetNoDataValue()))
+    if dump_nodata: nodata = []
+    for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+        band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+        if z_region is not None:
+            if z_region[0] is not None:
+                band_data[band_data < z_region[0]] = -9999
+            if z_region[1] is not None:
+                band_data[band_data > z_region[1]] = -9999
+        if msk_band is not None:
+            msk_data = msk_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            band_data[msk_data==0]=-9999
+        band_data = np.reshape(band_data, (srcwin[2], ))
+        for x_i in range(0, srcwin[2], 1):
+            x = x_i + srcwin[0]
+            z = band_data[x_i]
+            if '{:g}'.format(z) not in nodata:
+                ln += 1
+                geo_x,geo_y = utils._pixel2geo(x, y, gt)
+                # if warp is not None:
+                #     #point = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, epsg=4326)
+                #     point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
+                #     point.Transform(dst_trans)
+                #     pnt = point.GetPoint()
+                #     xyz = xyzfun.XYZPoint(x=point.GetX(), y=point.GetY(), z=z)#from_list([pnt[0], pnt[1], z])
+                # else:
+                xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z)#line = [geo_x, geo_y, z]
+                yield(xyz)
+    band = None
+    src_mask = None
+    msk_band = None
+    if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+
+## ==============================================
+##
+## filters
+##
+## ==============================================
 def blur(src_dem, dst_dem, sf = 1):
     """gaussian blur on src_dem using a smooth-factor of `sf`
     runs np_gaussian_blur(ds.Array, sf)
@@ -1341,81 +1500,7 @@ def filter_(src_dem, dst_dem, fltr=1, fltr_val=None, split_val=None, mask=None, 
             os.rename('tmp_fltr.tif', dst_dem)
         return(0)
     else: return(-1)
-    
-def slope(src_gdal, dst_gdal, s = 111120):
-    """generate a slope grid with GDAL
-
-    return cmd output and status
-    """
-    
-    gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
-    return(utils.run_cmd(gds_cmd))
-    
-def proximity(src_fn, dst_fn):
-    """compute a proximity grid via GDAL
-
-    return 0 if success else None
-    """
-
-    prog_func = None
-    dst_ds = None
-    try:
-        src_ds = gdal.Open(src_fn)
-    except: src_ds = None
-    if src_ds is not None:
-        src_band = src_ds.GetRasterBand(1)
-        ds_config = gather_infos(src_ds)
-
-        if dst_ds is None:
-            drv = gdal.GetDriverByName('GTiff')
-            dst_ds = drv.Create(dst_fn, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])
-        dst_ds.SetGeoTransform(ds_config['geoT'])
-        dst_ds.SetProjection(ds_config['proj'])
-        dst_band = dst_ds.GetRasterBand(1)
-        dst_band.SetNoDataValue(ds_config['ndv'])
-        gdal.ComputeProximity(src_band, dst_band, ['DISTUNITS=PIXEL'], callback = prog_func)
-        dst_band = src_band = dst_ds = src_ds = None
-        return(0)
-    else: return(None)
-    
-def percentile(src_gdal, perc = 95):
-    """calculate the `perc` percentile of src_fn gdal file.
-
-    return the calculated percentile
-    """
-    
-    try:
-        ds = gdal.Open(src_gdal)
-    except: ds = None
-    if ds is not None:
-        ds_array = np.array(ds.GetRasterBand(1).ReadAsArray())
-        ds_array[ds_array == ds.GetRasterBand(1).GetNoDataValue()] = np.nan
-        x_dim = ds_array.shape[0]
-        ds_array_flat = ds_array.flatten()
-        ds_array = ds_array_flat[ds_array_flat != 0]
-        if len(ds_array) > 0:
-            p = np.nanpercentile(ds_array, perc)
-            #percentile = 2 if p < 2 else p
-        else: p = 2
-        ds = ds_array = ds_array_flat = None
-        return(p)
-    else: return(None)
-
-def generate_mem_ds(ds_config, name='MEM'):
-    """Create temporary gdal mem dataset"""
         
-    mem_driver = gdal.GetDriverByName('MEM')
-    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'])
-    if mem_ds is not None:
-        mem_ds.SetGeoTransform(ds_config['geoT'])
-        if ds_config['proj'] is not None:
-            mem_ds.SetProjection(ds_config['proj'])
-            
-        mem_band = mem_ds.GetRasterBand(1)
-        mem_band.SetNoDataValue(ds_config['ndv'])
-        
-    return(mem_ds)
-    
 # def xyz_block_array(src_xyz, region=None, xinc=None, yinc=None, weights=False, min_count=None, out_name=None, verbose=True):
 #     """block the src_xyz data to the mean block value
 #     src_xyz should be a list or generator of xyzfun.XYZPoint objects.
@@ -1510,81 +1595,11 @@ def generate_mem_ds(ds_config, name='MEM'):
 
 #     z_array = weight_array = count_array = None
     
-def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
-    """parse the data from gdal dataset src_ds (first band only)
-    optionally mask the output with `mask` or transform the coordinates to `dst_srs`
-
-    yields the parsed xyz data
-    """
-
-    #if verbose: sys.stderr.write('waffles: parsing gdal file {}...'.format(src_ds.GetDescription()))
-    ln = 0
-    band = src_ds.GetRasterBand(1)
-    ds_config = gather_infos(src_ds)
-    src_srs = osr.SpatialReference()
-    try:
-        src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    except: pass
-    src_srs.ImportFromWkt(ds_config['proj'])
-    src_srs.AutoIdentifyEPSG()
-    srs_auth = src_srs.GetAuthorityCode(None)
-
-    if srs_auth is None:
-        src_srs.ImportFromEPSG(4326)
-        src_srs.AutoIdentifyEPSG()
-        srs_auth = src_srs.GetAuthorityCode(None)
-
-    #if srs_auth == warp: dst_srs = None
-
-    if dst_srs is not None:
-        dst_srs_ = osr.SpatialReference()
-        dst_srs_.SetFromUserInput(dst_srs)
-        ## GDAL 3+
-        try:
-            dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-        except: pass
-        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
-
-    gt = ds_config['geoT']
-    msk_band = None
-    if mask is not None:
-        src_mask = gdal.Open(mask)
-        msk_band = src_mask.GetRasterBand(1)
-    if srcwin is None: srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
-    nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-    if band.GetNoDataValue() is not None: nodata.append('{:g}'.format(band.GetNoDataValue()))
-    if dump_nodata: nodata = []
-    for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
-        band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-        if z_region is not None:
-            if z_region[0] is not None:
-                band_data[band_data < z_region[0]] = -9999
-            if z_region[1] is not None:
-                band_data[band_data > z_region[1]] = -9999
-        if msk_band is not None:
-            msk_data = msk_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            band_data[msk_data==0]=-9999
-        band_data = np.reshape(band_data, (srcwin[2], ))
-        for x_i in range(0, srcwin[2], 1):
-            x = x_i + srcwin[0]
-            z = band_data[x_i]
-            if '{:g}'.format(z) not in nodata:
-                ln += 1
-                geo_x,geo_y = utils._pixel2geo(x, y, gt)
-                # if warp is not None:
-                #     #point = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, epsg=4326)
-                #     point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
-                #     point.Transform(dst_trans)
-                #     pnt = point.GetPoint()
-                #     xyz = xyzfun.XYZPoint(x=point.GetX(), y=point.GetY(), z=z)#from_list([pnt[0], pnt[1], z])
-                # else:
-                xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z)#line = [geo_x, geo_y, z]
-                yield(xyz)
-    band = None
-    src_mask = None
-    msk_band = None
-    if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
-
+## ==============================================
+##
+## Query
+##
+## ==============================================
 def yield_query(src_xyz, src_grd, out_form):
     """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
