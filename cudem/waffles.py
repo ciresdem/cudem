@@ -4062,17 +4062,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--quiet' or arg == '-q': wg['verbose'] = False
         elif arg == '--config': want_config = True
         elif arg == '--modules' or arg == '-m':
-            try:
-                if argv[i + 1] in WaffleFactory()._modules.keys():
-                    sys.stderr.write(
-                        utils._cudem_module_long_desc({k: WaffleFactory()._modules[k] for k in (argv[i + 1],)})
-                    )
-                else: sys.stderr.write(
-                        utils._cudem_module_long_desc(WaffleFactory()._modules)
-                )
-            except: sys.stderr.write(
-                    utils._cudem_module_long_desc(WaffleFactory()._modules)
-            )
+            utils.echo_modules(WaffleFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
             sys.exit(0)
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(waffles_cli_usage)

@@ -733,23 +733,10 @@ def perspecto_cli(argv = sys.argv):
             src_cpt = str(argv[i + 1])
             i += 1
         elif arg[:2] == '-C':
-            src_cpt = str(arg[2:])
-            
+            src_cpt = str(arg[2:])            
         elif arg == '--modules' or arg == '-m':
-            try:
-                if argv[i + 1] in PerspectoFactory().mods.keys():
-                    sys.stderr.write(
-                        utils._cudem_module_long_desc({k: PerspectoFactory().mods[k] for k in (argv[i + 1],)})
-                    )
-                else: sys.stderr.write(
-                        utils._cudem_module_long_desc(PerspectoFactory().mods)
-                )
-            except: sys.stderr.write(
-                    utils._cudem_module_long_desc(PerspectoFactory().mods)
-            )
-            sys.exit(0)
-
-            
+            utils.echo_modules(PerspectoFactory.mods, None if i+1 >= len(argv) else sys.argv[i+1])
+            sys.exit(0)            
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(perspecto_cli_usage)
             sys.exit(0)

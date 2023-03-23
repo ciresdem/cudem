@@ -329,19 +329,7 @@ See `fetches_cli_usage` for full cli options.
                   )
             sys.exit(1)
         elif arg == '--modules' or arg == '-m':
-            try:
-                if argv[i + 1] in FetchesFactory.mods.keys():
-                    sys.stderr.write(
-                        utils._cudem_module_long_desc(
-                            {k: FetchesFactory.mods[k] for k in (argv[i + 1],)}
-                        )
-                    )
-                else:
-                    sys.stderr.write(utils._cudem_module_long_desc(FetchesFactory.mods))
-                    
-            except:
-                sys.stderr.write(utils._cudem_module_long_desc(FetchesFactory.mods))
-                
+            utils.echo_modules(FetchesFactory.mods, None if i+1 >= len(argv) else sys.argv[i+1])
             sys.exit(0)
         elif arg[0] == '-':
             sys.stderr.write(fetches_usage)

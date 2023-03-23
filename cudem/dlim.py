@@ -1093,17 +1093,7 @@ def datalists_cli(argv=sys.argv):
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--datatypes':
-            try:
-                if int(argv[i + 1]) in DatasetFactory().data_types.keys():
-                    sys.stderr.write(
-                        utils._cudem_module_long_desc({k: DatasetFactory().data_types[k] for k in (int(argv[i + 1]),)})
-                    )
-                else: sys.stderr.write(
-                        utils._cudem_module_long_desc(DatasetFactory().data_types)
-                )
-            except: sys.stderr.write(
-                    utils._cudem_module_long_desc(DatasetFactory().data_types)
-            )
+            utils.echo_modules(DatasetFactory.data_types, None if i+1 >= len(argv) else int(sys.argv[i+1]))
             sys.exit(0)           
         elif arg == '--help' or arg == '-h':
             print(datalists_usage)
