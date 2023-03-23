@@ -31,6 +31,8 @@
 import os
 import lxml.etree
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -81,6 +83,7 @@ https://portal.emodnet-bathymetry.eu/
                                       .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
             outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
             self.results.append([emodnet_wcs, os.path.join(self._outdir, outf), 'emodnet'])
+            
         return(self)
 
     def yield_xyz(self, entry):
@@ -139,36 +142,45 @@ class EMODNetFRED(f_utils.FetchModule):
         self.FRED._open_ds(1)
         emod_wcs = f_utils.WCS(self._emodnet_grid_url)
         contents = emod_wcs._contents()
-        if self.verbose:
-            _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._emodnet_grid_url))
-        for i, layer in enumerate(contents):
-            if self.verbose:
-                _prog.update_perc((i, len(contents)))
-            self.FRED._attribute_filter(["ID = '{}'".format(layer['CoverageId'][0])])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                d = emod_wcs._describe_coverage(layer['CoverageId'][0])
-                if d is not None:
-                    ds_region = emod_wcs._get_coverage_region(d)
-                    geom = ds_region.export_as_geom()
-                    url = emod_wcs._get_coverage_url(layer['CoverageId'][0], region = ds_region)
-                    self.FRED._add_survey(Name = d['name'][0], ID = layer['CoverageId'][0], Date = this_year(), MetadataLink = layer['Metadata'],
-                                          MetadataDate = this_year(), DataLink = url, DataType = 'raster',
-                                          DataSource = 'emodnet', HorizontalDatum = 4326, VerticalDatum = 1092,
-                                          Info = layer['Abstract'], geom = geom)
-        if self.verbose:
-            _prog.end(0, 'Scanned {} WCS coverages from {}'.format(len(contents), self._emodnet_grid_url))
+        with tqdm(total=len(contents), desc='scanning for EMODNET datasets') as pbar:
+            for i, layer in enumerate(contents):
+                pbar.update(1)
+                self.FRED._attribute_filter(["ID = '{}'".format(layer['CoverageId'][0])])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    d = emod_wcs._describe_coverage(layer['CoverageId'][0])
+                    if d is not None:
+                        ds_region = emod_wcs._get_coverage_region(d)
+                        geom = ds_region.export_as_geom()
+                        url = emod_wcs._get_coverage_url(layer['CoverageId'][0], region = ds_region)
+                        self.FRED._add_survey(
+                            Name = d['name'][0],
+                            ID = layer['CoverageId'][0],
+                            Date = this_year(),
+                            MetadataLink = layer['Metadata'],
+                            MetadataDate = this_year(),
+                            DataLink = url,
+                            DataType = 'raster',
+                            DataSource = 'emodnet',
+                            HorizontalDatum = 4326,
+                            VerticalDatum = 1092,
+                            Info = layer['Abstract'],
+                            geom = geom
+                        )
+                        
         self.FRED._close_ds()
         
     def run(self):        
         emod_wcs = f_utils.WCS(self._emodnet_grid_url)
-        for surv in FRED._filter_FRED(self):
-            d = emod_wcs._describe_coverage(surv['ID'])
-            if d is not None:
-                ds_region = emod_wcs._get_coverage_region(d)
-                if regions_intersect_ogr_p(self.region, ds_region):
-                    emod_url = emod_wcs._get_coverage_url(surv['ID'], region=self.region)
-                    outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-                    self.results.append([emod_url, os.path.join(self._outdir, outf), surv['DataType']])
+        _results = FRED._filter_FRED(self)
+        with tqdm(total=len(_results), desc='scanning for EMODNET datasets') as pbar:
+            for surv in _results:
+                d = emod_wcs._describe_coverage(surv['ID'])
+                if d is not None:
+                    ds_region = emod_wcs._get_coverage_region(d)
+                    if regions_intersect_ogr_p(self.region, ds_region):
+                        emod_url = emod_wcs._get_coverage_url(surv['ID'], region=self.region)
+                        outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
+                        self.results.append([emod_url, os.path.join(self._outdir, outf), surv['DataType']])
 
     def yield_xyz(self, entry):
         src_emodnet = 'emodnet_tmp.tif'

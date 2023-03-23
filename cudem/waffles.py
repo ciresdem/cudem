@@ -1596,12 +1596,13 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
             self.fmt
         )
 
-        if self.verbose:
-            progress = utils.CliProgress(
-                'generating {} (scipy) grid @ {}/{}'.format(
-                    self.method, ycount, xcount
-                )
-            )
+        #if self.verbose:
+        #    progress = tqdm(total=)
+            # progress = utils.CliProgress(
+            #     'generating {} (scipy) grid @ {}/{}'.format(
+            #         self.method, ycount, xcount
+            #     )
+            # )
 
         self._stacks_array(
             out_name='{}_scipy_stack'.format(self.name),
@@ -1637,7 +1638,8 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
         
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
-                
+            #progress = tqdm(total=)
+       
         for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose): #, step=n_step):                
             srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)

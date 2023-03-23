@@ -35,6 +35,8 @@
 import os
 import sys
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -137,14 +139,20 @@ http://tnmaccess.nationalmap.gov/
                 datatype = 'raster'
             elif 'LAS' in fmt or 'LAZ' in fmt:
                 datatype = 'lidar'
-            else: datatype = 'tnm'
+            else:
+                datatype = 'tnm'
+                
             url_enc = f_utils.urlencode({'datasets': ds['sbDatasetTag']})
             try:
                 pubDate = ds['lastPublishedDate']
-            except: pubDate = utils.this_year()
+            except:
+                pubDate = utils.this_year()
+                
             try:
                 metadataDate = ds['lastUpdatedDate']
-            except: metadataDate = utils.this_year()            
+            except:
+                metadataDate = utils.this_year()
+                
             if geom is not None:
                 self.FRED._add_survey(
                     Name = ds['sbDatasetTag'], ID = ds['id'], Agency = 'USGS', Date = pubDate[-4:],
@@ -164,34 +172,30 @@ http://tnmaccess.nationalmap.gov/
         
         datasets = self._datasets()
         self.FRED._open_ds(1)
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} datasets from TNM...'.format(len(datasets)))
-        for i, ds in enumerate(datasets):
-            if self.verbose:
-                _prog.update_perc((i, len(datasets)))
-            for fmt in ds['formats']:
-                if 'isDefault' in fmt.keys():
-                    fmt = fmt['value']
-                    break
-                #print(ds)
-            #print(len(ds))
-            #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
+        with tqdm(total=len(datasets), desc='scanning TNM datasets') as pbar:
+            for i, ds in enumerate(datasets):
+                pbar.update(1)
+                for fmt in ds['formats']:
+                    if 'isDefault' in fmt.keys():
+                        fmt = fmt['value']
+                        break
+                    #print(ds)
+                #print(len(ds))
+                #this_xml = FRED.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
 
-            tags = ds['tags']
-            if len(tags) > 0:
-                for tag in tags:
-                    print(tag)
-                    this_xml = f_utils.iso_xml('{}?format=iso'.format(tag['infoUrl']))
-                    geom = this_xml.bounds(geom=True)
+                tags = ds['tags']
+                if len(tags) > 0:
+                    for tag in tags:
+                        #print(tag)
+                        this_xml = f_utils.iso_xml('{}?format=iso'.format(tag['infoUrl']))
+                        geom = this_xml.bounds(geom=True)
+                        h_epsg, v_epsg = this_xml.reference_system()
+                        self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
+                else:
+                    this_xml = f_utils.iso_xml('{}?format=iso'.format(ds['infoUrl']))
+                    geom = this_xml.bounds(geom = True)
                     h_epsg, v_epsg = this_xml.reference_system()
-                    self._update_dataset(tag, fmt, geom, h_epsg, v_epsg)
-            else:
-                this_xml = f_utils.iso_xml('{}?format=iso'.format(ds['infoUrl']))
-                geom = this_xml.bounds(geom = True)
-                h_epsg, v_epsg = this_xml.reference_system()
-                self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
-        if self.verbose:
-            _prog.end(0, 'scanned {} datasets from TNM'.format(len(datasets)))
+                    self._update_dataset(ds, fmt, geom, h_epsg, v_epsg)
         self.FRED._close_ds()
 
     def run(self):#, f = None, e = None, q = None):
@@ -200,60 +204,73 @@ http://tnmaccess.nationalmap.gov/
         e = self.extents.split(',') if self.extents is not None else None
         f = self.formats.split(',') if self.formats is not None else None
         q = self.q
-        for surv in FRED._filter_FRED(self):
-            offset = 0
-            total = 0
+        _results = FRED._filter_FRED(self)
+        with tqdm(total=len(_results), desc='scanning for TNM datasets') as pbar:
+            for surv in _results:
+                offset = 0
+                total = 0
+                pbar.update(1)
+                while True:
+                    _dataset_results = []
+                    _data = {'bbox': self.wgs_region.format('bbox'), 'max': 100, 'offset': offset}
+                    if q is not None: _data['q'] = str(q)
+                    if f is None:
+                        _data['prodFormats'] = surv['Etcetra']
+                    else:
+                        _data['prodFormats'] = ','.join(f)
 
-            while True:
-                _dataset_results = []
-                _data = {'bbox': self.wgs_region.format('bbox'), 'max': 100, 'offset': offset}
-                if q is not None: _data['q'] = str(q)
-                if f is None:
-                    _data['prodFormats'] = surv['Etcetra']
-                else:
-                    _data['prodFormats'] = ','.join(f)
-                    
-                if e is None: e = []
+                    if e is None: e = []
 
-                _req = f_utils.Fetch(surv['DataLink']).fetch_req(params=_data)
-                if _req is not None and _req.status_code == 200:
-                    try:
-                        _dataset_results = _req.json()
-                        total = _dataset_results['total']
-                    except ValueError:
-                        utils.echo_error_msg('tnm server error resulting in {}, try again'.format(e))
-                    except Exception as e:
-                        utils.echo_error_msg('error, {}'.format(e))
+                    _req = f_utils.Fetch(surv['DataLink']).fetch_req(params=_data)
+                    if _req is not None and _req.status_code == 200:
+                        try:
+                            _dataset_results = _req.json()
+                            total = _dataset_results['total']
+                        except ValueError:
+                            utils.echo_error_msg('tnm server error resulting in {}, try again'.format(e))
+                        except Exception as e:
+                            utils.echo_error_msg('error, {}'.format(e))
+
+                    if len(_dataset_results) > 0:
+                        for item in _dataset_results['items']:
+                            p_dir = '_'.join(item['title'].split(' '))
+                            if _data['prodFormats'] is None:
+                                fmts = []
+                            else:
+                                fmts = _data['prodFormats'].split(',')
+
+                            f_url = None
+                            if len(e) > 0:
+                                for extent in e:
+                                    if item['extent'] == extent:
+                                        for fmt in fmts:
+                                            if fmt in item['urls'].keys():
+                                                f_url = item['urls'][fmt]
+                                                break
+
+                                        if f_url is None:
+                                            f_url = item['downloadURL']
+
+                                        #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                                        #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                                        self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+                            else:
+                                for fmt in fmts:
+                                    if fmt in item['urls'].keys():
+                                        f_url = item['urls'][fmt]
+                                        break
+
+                                if f_url is None:
+                                    f_url = item['downloadURL']
+
+                                #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
+                                #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
+                                self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+
+                    offset += 100
+                    if offset >= total:
+                        break
                 
-                if len(_dataset_results) > 0:
-                    for item in _dataset_results['items']:
-                        p_dir = '_'.join(item['title'].split(' '))
-                        if _data['prodFormats'] is None:
-                            fmts = []
-                        else: fmts = _data['prodFormats'].split(',')
-                        f_url = None
-                        if len(e) > 0:
-                            for extent in e:
-                                if item['extent'] == extent:
-                                    for fmt in fmts:
-                                        if fmt in item['urls'].keys():
-                                            f_url = item['urls'][fmt]
-                                            break
-                                    if f_url is None: f_url = item['downloadURL']
-                                    #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                                    #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                                    self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
-                        else:
-                            for fmt in fmts:
-                                if fmt in item['urls'].keys():
-                                    f_url = item['urls'][fmt]
-                                    break
-                            if f_url is None:  f_url = item['downloadURL']
-                            #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                            #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                            self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
-                offset += 100
-                if offset >= total: break
         return(self)
     
     ## ==============================================
@@ -279,14 +296,11 @@ http://tnmaccess.nationalmap.gov/
                 utils.echo_error_msg('error, {}'.format(e))
                 
             total = _dsTag_results['total']
-            if self.verbose:
-                _prog = utils.CliProgress('gathering {} products from {}...'.format(total, dsTag))
-            
             ds = self._datasets(dataset = dsTag)
             #this_xml = f_utils.iso_xml('{}{}?format=iso'.format(self._tnm_meta_base, ds['id']))
             this_xml = f_utils.iso_xml('{}?format=iso'.format(ds['infoUrl']))
             h_epsg, v_epsg = this_xml.reference_system()
-            
+            ##offset for prog
             while True:
                 _data = {'max': 100, 'datasets': dsTag, 'offset': offset}
                 _req = f_utils.Fetch(self._tnm_product_url).fetch_req(params = _data)
@@ -296,8 +310,6 @@ http://tnmaccess.nationalmap.gov/
                     utils.echo_error_msg('tnm server error, try again')
                 except Exception as e:
                     utils.echo_error_msg('error, {}'.format(e))
-                if self.verbose:
-                    _prog.update_perc((offset,total), msg = 'gathering {} products from {}...'.format(total, dsTag))
                 
                 for i, item in enumerate(_dsTag_results['items']):
                     if self.verbose:
@@ -323,8 +335,6 @@ http://tnmaccess.nationalmap.gov/
                                                   VerticalDatum = v_epsg, Etcetra = dsTag, Info = item['moreInfo'], geom = geom)
                 offset += 100
                 if total - offset <= 0: break
-            if self.verbose:
-                _prog.end(0, 'gathered {} products from {}'.format(total, dsTag))
                            
     def _parse_prods_results(self, r, f = None, e = None, q = None):
         for surv in FRED._filter_FRED(self):

@@ -33,6 +33,8 @@ import json
 
 from osgeo import ogr
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 
@@ -209,46 +211,41 @@ class FRED:
         else:
             _boundsGeom = None
 
-        if self._verbose:
-            _prog = utils.CliProgress('filtering {}...'.format(self.FREDloc))
-            
         if not self.open_p:
             self._open_ds()
             close_p = True
         else:
             close_p = False
 
-        for i, layer in enumerate(layers):
-            if self._verbose: _prog.update_perc((i, len(layers)))
-            #this_layer = self.layer
-            where.append("DataSource = '{}'".format(layer))
-            if self._verbose:
-                utils.echo_msg('FRED region: {}'.format(region))
-                utils.echo_msg('FRED filter: {}'.format(where))
-                
-            self._attribute_filter(where = where)
-            for feat in self.layer:
-                if _boundsGeom is not None:
-                    geom = feat.GetGeometryRef()
-                    if geom is not None:
-                        if _boundsGeom.Intersects(geom):
-                            _results.append({})
-                            f_j = json.loads(feat.ExportToJson())
-                            for key in f_j['properties'].keys():
-                                _results[-1][key] = feat.GetField(key)
-                else:
-                    _results.append({})
-                    f_j = json.loads(feat.ExportToJson())
-                    for key in f_j['properties'].keys():
-                        _results[-1][key] = feat.GetField(key)
+        with tqdm(total=len(layers), desc='filtering {}'.format(self.FREDloc)) as pbar:
+            for i, layer in enumerate(layers):
+                pbar.update(1)
+                #this_layer = self.layer
+                where.append("DataSource = '{}'".format(layer))
+                if self._verbose:
+                    utils.echo_msg('FRED region: {}'.format(region))
+                    utils.echo_msg('FRED filter: {}'.format(where))
+
+                self._attribute_filter(where = where)
+                for feat in self.layer:
+                    if _boundsGeom is not None:
+                        geom = feat.GetGeometryRef()
+                        if geom is not None:
+                            if _boundsGeom.Intersects(geom):
+                                _results.append({})
+                                f_j = json.loads(feat.ExportToJson())
+                                for key in f_j['properties'].keys():
+                                    _results[-1][key] = feat.GetField(key)
+                    else:
+                        _results.append({})
+                        f_j = json.loads(feat.ExportToJson())
+                        for key in f_j['properties'].keys():
+                            _results[-1][key] = feat.GetField(key)
                         
             #this_layer = None
         if close_p:
             self._close_ds()
             
-        if self._verbose:
-            _prog.end(0, 'filtered \033[1m{}\033[m data records from FRED'.format(len(_results)))
-
         #clear where
         #where = []
             

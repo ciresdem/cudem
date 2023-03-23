@@ -79,6 +79,8 @@ import json
 from osgeo import osr
 from osgeo import gdal
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -206,12 +208,14 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
             utils.remove_glob(src_nos)
                         
 ## ==============================================
+##
 ## the NOS class is the old NOS fetches module.
 ## This module scrapes the data from NOAA and generates
 ## a reference vector to discover dataset footprints. This is prone
 ## to possible error and can miss newer datasets if the reference
 ## vector is not up-to-date. Use HydroNOS class instead, which uses
 ## the NOAA MapServer to discover dataset footprints.
+##
 ## ==============================================
 class NOS(f_utils.FetchModule):
     """Fetch NOS BAG and XYZ sounding data from NOAA"""
@@ -276,41 +280,47 @@ class NOS(f_utils.FetchModule):
                 break
             
             rows = page.xpath('//a[contains(@href, ".xml")]/@href')
-            if self.verbose:
-                _prog = utils.CliProgress('scanning {} surveys in {}...'.format(len(rows), nosdir))
+            with tqdm(total=len(rows), desc='scanning NOS datasets in {}'.format(nosdir)) as pbar:
+                for i, survey in enumerate(rows):
+                    if self.callback():
+                        break
 
-            for i, survey in enumerate(rows):
-                if self.callback():
-                    break
-                
-                sid = survey[:-4]
-                if self.verbose:
-                    _prog.update_perc((i, len(rows)))
-                    
-                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-                if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    this_xml = f_utils.iso_xml(xml_catalog + survey)
-                    h_epsg, v_epsg = this_xml.reference_system()
-                    this_data = this_xml.data_links()
-                    d_links = []
-                    d_types = []
+                    sid = survey[:-4]
+                    pbar.update(1)
 
-                    for key in this_data.keys():
-                        if key in ['GEODAS_XYZ', 'BAG', 'GRID_BAG']:
-                            d_links.append(this_data[key])
-                            d_types.append(key)
+                    self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                    if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                        this_xml = f_utils.iso_xml(xml_catalog + survey)
+                        h_epsg, v_epsg = this_xml.reference_system()
+                        this_data = this_xml.data_links()
+                        d_links = []
+                        d_types = []
 
-                    geom = this_xml.bounds(geom=True)
-                    if geom is not None:
-                        surveys.append({'Name': this_xml.title(), 'ID': sid, 'Agency': 'NOAA/NOS', 'Date': this_xml.date(),
-                                        'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(), 'DataLink': ','.join([','.join(x) for x in d_links]),
-                                        'DataType': ','.join(list(set(d_types))), 'DataSource': 'nos', 'HorizontalDatum': h_epsg,
-                                        'VerticalDatum': v_epsg, 'Info': this_xml.abstract(), 'geom': geom})
-                        
-            if self.verbose:
-                _prog.end(0, 'scanned {} surveys in {}.'.format(len(rows), nosdir))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), nosdir))
-                
+                        for key in this_data.keys():
+                            if key in ['GEODAS_XYZ', 'BAG', 'GRID_BAG']:
+                                d_links.append(this_data[key])
+                                d_types.append(key)
+
+                        geom = this_xml.bounds(geom=True)
+                        if geom is not None:
+                            surveys.append(
+                                {
+                                    'Name': this_xml.title(),
+                                    'ID': sid,
+                                    'Agency': 'NOAA/NOS',
+                                    'Date': this_xml.date(),
+                                    'MetadataLink': this_xml.url,
+                                    'MetadataDate': this_xml.xml_date(),
+                                    'DataLink': ','.join([','.join(x) for x in d_links]),
+                                    'DataType': ','.join(list(set(d_types))),
+                                    'DataSource': 'nos',
+                                    'HorizontalDatum': h_epsg,
+                                    'VerticalDatum': v_epsg,
+                                    'Info': this_xml.abstract(),
+                                    'geom': geom
+                                }
+                            )
+                                        
             self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 

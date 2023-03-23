@@ -41,7 +41,8 @@ import gzip
 import bz2
 import re
 import curses
-        
+from tqdm import tqdm
+
 import numpy as np
 from osgeo import gdal
 from osgeo import ogr
@@ -726,15 +727,16 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     x_i_chunk = 0
 
     if verbose:
-        _prog = CliProgress(
-           'chunking srcwin from {} @ {}/{}'.format(n_size, n_chunk, step)
-        )
+        # _prog = CliProgress(
+        #    'chunking srcwin from {} @ {}/{}'.format(n_size, n_chunk, step)
+        # )
+        _prog = tqdm(total=(n_size[0]*n_size[1])/step, desc='chunking srcwin', ascii=True)
         
     while True:
-        if verbose:
-           _prog.update_perc((i_chunk*step, (n_size[0]*n_size[1])/step))
-           
         y_chunk = n_chunk
+        #if verbose:
+            #_prog.update_perc((i_chunk*step, (n_size[0]*n_size[1])/step))
+
         while True:
             this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
             this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
@@ -746,18 +748,24 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
             srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
             yield(srcwin)
 
+            _prog.update(step)
+
             if y_chunk > n_size[0]:
                 break
             else:
                 y_chunk += step
                 i_chunk += 1
+                
         if x_chunk > n_size[1]:
             break
         else:
             x_chunk += step
             x_i_chunk += 1
+            
     if verbose:
-       _prog.end(0, 'chunked srcwin from {} @ {}/{}'.format(n_size, n_chunk, step))
+        _prog.close()
+    # if verbose:
+    #    _prog.end(0, 'chunked srcwin from {} @ {}/{}'.format(n_size, n_chunk, step))
 
 def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     """yield source windows in n_chunks at step"""
@@ -1319,6 +1327,9 @@ def echo_modules(module_dict, key):
         else:
             sys.stderr.write('Invalid Module Key: {}\nValid Modules: {}\n'.format(key, _cudem_module_short_desc(module_dict)))
 
+## ==============================================
+## Progress indicator...
+## ==============================================
 class CliProgress:
     '''cudem minimal progress indicator'''
 

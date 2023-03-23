@@ -41,6 +41,7 @@ from osgeo import osr
 from osgeo import gdal
 
 import numpy as np
+from tqdm import tqdm
 
 from cudem import utils
 from cudem import regions
@@ -259,42 +260,41 @@ https://www.hydrosheds.org/products/hydrolakes
                 lk_layer = lk_ds.GetLayer()
                 lk_layer.SetSpatialFilter(self.region.export_as_geom())
                 lk_features = lk_layer.GetFeatureCount()
-                lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
 
-                for i, feat in enumerate(lk_layer):
-                    lk_id = feat.GetField('Hylak_id')
-                    lk_prog.update_perc((i, lk_features), msg='processing {} lakes: {}'.format(lk_features, lk_id))
-                    lk_elevation = feat.GetField('Elevation')
-                    lk_depth = feat.GetField('Depth_avg')
-                    lk_depth_glb = globd[lk_id]
+                with tqdm(total=len(lk_layer), desc='Processing {} HYDROLAKES'.format(lk_features)) as pbar:
+                    for i, feat in enumerate(lk_layer):
+                        pbar.update(1)
+                        lk_id = feat.GetField('Hylak_id')
+                        lk_elevation = feat.GetField('Elevation')
+                        lk_depth = feat.GetField('Depth_avg')
+                        lk_depth_glb = globd[lk_id]
 
-                    tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
-                    tmp_layer = tmp_ds.GetLayer()            
-                    gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
-                    msk_band = msk_ds.GetRasterBand(1)
-                    msk_band.SetNoDataValue(self.ds_config['ndv'])
+                        tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
+                        tmp_layer = tmp_ds.GetLayer()            
+                        gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
+                        msk_band = msk_ds.GetRasterBand(1)
+                        msk_band.SetNoDataValue(self.ds_config['ndv'])
 
-                    prox_band = prox_ds.GetRasterBand(1)
-                    proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-                    gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
+                        prox_band = prox_ds.GetRasterBand(1)
+                        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+                        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
 
-                    prox_arr = prox_band.ReadAsArray()
-                    msk_arr = msk_band.ReadAsArray()
-                    
-                    self.bathy_arr += self.apply_calculation(
-                        prox_band.ReadAsArray(),
-                        max_depth=lk_depth_glb,
-                        shore_arr=cop_band.ReadAsArray(),
-                        shore_elev=lk_elevation
-                    )
+                        prox_arr = prox_band.ReadAsArray()
+                        msk_arr = msk_band.ReadAsArray()
 
-                    prox_arr[msk_arr == 1] = 0
-                    prox_ds.GetRasterBand(1).WriteArray(prox_arr)
-                    msk_arr[msk_arr == 1] = 0
-                    msk_ds.GetRasterBand(1).WriteArray(msk_arr)
-                    tmp_ds = None
+                        self.bathy_arr += self.apply_calculation(
+                            prox_band.ReadAsArray(),
+                            max_depth=lk_depth_glb,
+                            shore_arr=cop_band.ReadAsArray(),
+                            shore_elev=lk_elevation
+                        )
 
-                lk_prog.end(0, 'processed {} lakes'.format(lk_features))
+                        prox_arr[msk_arr == 1] = 0
+                        prox_ds.GetRasterBand(1).WriteArray(prox_arr)
+                        msk_arr[msk_arr == 1] = 0
+                        msk_ds.GetRasterBand(1).WriteArray(msk_arr)
+                        tmp_ds = None
+
                 self.bathy_arr[self.bathy_arr == 0] = self.ds_config['ndv']
                 utils.gdal_write(
                     self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
@@ -305,7 +305,6 @@ https://www.hydrosheds.org/products/hydrolakes
 
     def yield_xyz(self, entry):
         lk_elev = self.generate_elevations(entry)
-
         _ds = datasets.RasterFile(
             fn=lk_elev,
             data_format=200,

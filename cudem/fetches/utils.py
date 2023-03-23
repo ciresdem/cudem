@@ -42,6 +42,7 @@ import threading
 try:
     import Queue as queue
 except: import queue as queue
+from tqdm import tqdm
 
 from cudem import utils
 from cudem import fetches
@@ -358,11 +359,6 @@ class Fetch:
     
         status = 0
         req = None
-        #start = time.perf_counter()
-        
-        if self.verbose:
-            progress = utils.CliProgress('fetching remote file: {}...'.format(self.url))
-            
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
                 os.makedirs(os.path.dirname(dst_fn))
@@ -393,7 +389,6 @@ class Fetch:
                     pass
 
                 if req.status_code == 300:
-                    #if req_h['Location']
                     pass
 
                 ## ==============================================
@@ -419,17 +414,21 @@ class Fetch:
                 elif req.status_code == 200:
                     curr_chunk = 0
                     with open(dst_fn, 'wb') as local_file:
-                        for chunk in req.iter_content(chunk_size = 8196):
-                            if self.callback():
-                                break
-                            if self.verbose:
-                                done = int(50 * curr_chunk / req_s)
-                                #utils.echo_msg_inline("[%s%s] %s bps" % ('=' * done, ' ' * (50-done), curr_chunk//(time.perf_counter() - start)))
+
+                        with tqdm(
+                                unit='B', unit_scale=True, unit_divisor=1024, miniters=1,
+                                desc=self.url, total=int(req.headers.get('content-length', 0))
+                        ) as pbar:
+                        
+                            for chunk in req.iter_content(chunk_size = 8196):
+                                if self.callback():
+                                    break
                                 if self.verbose:
-                                    progress.update_perc((curr_chunk, req_s))
-                                curr_chunk += 8196
-                            if chunk:
-                                local_file.write(chunk)
+                                    done = int(50 * curr_chunk / req_s)
+                                    pbar.update(len(chunk))
+                                    #curr_chunk += 8196
+                                if chunk:
+                                    local_file.write(chunk)
 
                 elif req.status_code == 429 or req.status_code == 504:
                     if tries < 0:
@@ -442,6 +441,7 @@ class Fetch:
                         ## ==============================================
                         if self.verbose:
                             utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
+                            
                         time.sleep(10)
                         Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                             dst_fn,
@@ -463,7 +463,6 @@ class Fetch:
             #utils.echo_warning_msg(e)
             #status = 1
             pass
-            #progress.end(0, 'remote file already exists as: {}.'.format(dst_fn))
             
         except Exception as e:
             utils.echo_error_msg(e)
@@ -472,12 +471,7 @@ class Fetch:
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             utils.echo_error_msg('data not fetched...')
             status = -1
-            
-        if self.verbose and status == 0:
-            progress.end(status, 'fetched remote file as: {}.'.format(dst_fn))
-            #utils.echo_msg_inline('fetched remote file as: {}'.format(dst_fn))
-            #utils.echo_msg('fetched remote file as: {} @ {}'.format(dst_fn, time.perf_counter() - start))
-            
+                        
         return(status)
 
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):

@@ -41,6 +41,8 @@ import os
 from osgeo import ogr
 from osgeo import gdal
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -105,68 +107,61 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
         ntCatXml = f_utils.iso_xml(catalog_url)
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(this_ds), this_ds[0].attrib['name']))
-            
         surveys = []
-        for i, node in enumerate(this_ds):
-            this_title = node.attrib['name']
-            try:
-                this_id = node.attrib['ID']
-            except:
-                this_id = None
-                
-            if self.verbose:
-                _prog.update_perc((i, len(this_ds)))
-                
-            self.FRED._attribute_filter(["ID = '{}'".format(this_id)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                subCatRefs = node.findall('.//th:catalogRef', namespaces=ntCatXml.namespaces)
-                if len(subCatRefs) > 0:
-                    self._parse_catalog(catalog_url)
-                    break
-                
+        with tqdm(total=len(this_ds), desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name'])) as pbar:
+            for i, node in enumerate(this_ds):
+                this_title = node.attrib['name']
                 try:
-                    ds_path = node.attrib['urlPath']
+                    this_id = node.attrib['ID']
                 except:
-                    continue
+                    this_id = None
 
-                iso_url = False
-                wcs_url = False
-                http_url = False
-                for service in this_ds_services:
-                    service_name = service.attrib['name']
-                    if service_name == 'iso': iso_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
-                    if service_name == 'wcs': wcs_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
-                    if service_name == 'http': http_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                pbar.update(1)
+                self.FRED._attribute_filter(["ID = '{}'".format(this_id)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    subCatRefs = node.findall('.//th:catalogRef', namespaces=ntCatXml.namespaces)
+                    if len(subCatRefs) > 0:
+                        self._parse_catalog(catalog_url)
+                        break
 
-                this_xml = f_utils.iso_xml(iso_url)
-                title = this_xml.title()
-                h_epsg, v_epsg = this_xml.reference_system()
-                zv = this_xml.xml_doc.findall(
-                    './/gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString',
-                    namespaces=this_xml.namespaces
-                )
-                if zv is not None:
-                    for zvs in zv:
-                        if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
-                            zvar = zvs.text
-                            break
-                        else:
-                            zvar = 'z'
-                            
-                geom = this_xml.bounds(geom=True)
-                if geom is not None:
-                    surveys.append({'Name': title, 'ID': this_id, 'Agency': 'NOAA', 'Date': this_xml.date(),
-                                    'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(),
-                                    'DataLink': http_url, 'IndexLink': wcs_url, 'Link': self._nt_catalog,
-                                    'DataType': 'raster', 'DataSource': 'ncei_thredds', 'HorizontalDatum': h_epsg,
-                                    'VerticalDatum': v_epsg, 'Etcetra': zvar, 'Info': this_xml.abstract(), 'geom': geom})
+                    try:
+                        ds_path = node.attrib['urlPath']
+                    except:
+                        continue
+
+                    iso_url = False
+                    wcs_url = False
+                    http_url = False
+                    for service in this_ds_services:
+                        service_name = service.attrib['name']
+                        if service_name == 'iso': iso_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                        if service_name == 'wcs': wcs_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                        if service_name == 'http': http_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+
+                    this_xml = f_utils.iso_xml(iso_url)
+                    title = this_xml.title()
+                    h_epsg, v_epsg = this_xml.reference_system()
+                    zv = this_xml.xml_doc.findall(
+                        './/gmd:dimension/gmd:MD_Band/gmd:sequenceIdentifier/gco:MemberName/gco:aName/gco:CharacterString',
+                        namespaces=this_xml.namespaces
+                    )
+                    if zv is not None:
+                        for zvs in zv:
+                            if zvs.text == 'bathy' or zvs.text == 'Band1' or zvs.text == 'z':
+                                zvar = zvs.text
+                                break
+                            else:
+                                zvar = 'z'
+
+                    geom = this_xml.bounds(geom=True)
+                    if geom is not None:
+                        surveys.append({'Name': title, 'ID': this_id, 'Agency': 'NOAA', 'Date': this_xml.date(),
+                                        'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(),
+                                        'DataLink': http_url, 'IndexLink': wcs_url, 'Link': self._nt_catalog,
+                                        'DataType': 'raster', 'DataSource': 'ncei_thredds', 'HorizontalDatum': h_epsg,
+                                        'VerticalDatum': v_epsg, 'Etcetra': zvar, 'Info': this_xml.abstract(), 'geom': geom})
                     
         self.FRED._add_surveys(surveys) 
-        if self.verbose:
-            _prog.end(0, 'scanned {} datasets in {}.'.format(len(this_ds), this_ds[0].attrib['name']))
-            utils.echo_msg('added {} surveys from {}'.format(len(surveys), this_ds[0].attrib['name']))
         
     def update(self):
         self.FRED._open_ds(1)

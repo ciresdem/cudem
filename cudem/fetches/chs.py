@@ -33,6 +33,8 @@
 import os
 import lxml.etree
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -146,55 +148,79 @@ class CHS_FRED(f_utils.FetchModule):
         self.FRED._open_ds(1)
         chs_wcs = f_utils.WCS(self._chs_url)
         contents = chs_wcs._contents()
-        if self.verbose:
-            _prog = utils.CliProgress('Scanning {} WCS coverages from {}...'.format(len(contents), self._chs_url))
-            
-        for i, layer in enumerate(contents):
-            if self.verbose:
-                _prog.update_perc((i, len(contents)))
-            if 'Tiles' not in layer['CoverageId'][0]:
-                self.FRED._attribute_filter(["ID = '{}'".format(layer['CoverageId'][0])])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:                
-                d = chs_wcs._describe_coverage(layer['CoverageId'][0])
-                if d is not None:
-                    ds_region = chs_wcs._get_coverage_region(d)
-                    geom = ds_region.export_as_geom()
-                    url = chs_wcs._get_coverage_url(layer['CoverageId'][0], region=ds_region)
-                    try:
-                        name = d['name'][0]
-                    except: name = d['CoverageId'][0]
-                    try:
-                        meta = layer['Metadata']
-                    except: meta = None
-                    try:
-                        info = layer['Abstract']
-                    except: info = None
-                    self.FRED._add_survey(Name = name, ID = layer['CoverageId'][0], Date = this_year(), MetadataLink = meta,
-                                          MetadataDate = this_year(), DataLink = url, DataType = 'raster',
-                                          DataSource = 'chs', HorizontalDatum = 4326, VerticalDatum = 1092,
-                                          Info = info, geom = geom)
-        if self.verbose:
-            _prog.end(0, 'Scanned {} WCS coverages from {}'.format(len(contents), self._chs_url))
+        with tqdm(total=len(contents), desc='scanning for CHS datasets') as pbar:
+            for i, layer in enumerate(contents):
+                pbar.update(1)
+                if 'Tiles' not in layer['CoverageId'][0]:
+                    self.FRED._attribute_filter(["ID = '{}'".format(layer['CoverageId'][0])])
+                    
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:                
+                    d = chs_wcs._describe_coverage(layer['CoverageId'][0])
+                    if d is not None:
+                        ds_region = chs_wcs._get_coverage_region(d)
+                        geom = ds_region.export_as_geom()
+                        url = chs_wcs._get_coverage_url(layer['CoverageId'][0], region=ds_region)
+                        try:
+                            name = d['name'][0]
+                        except:
+                            name = d['CoverageId'][0]
+                            
+                        try:
+                            meta = layer['Metadata']
+                        except:
+                            meta = None
+                            
+                        try:
+                            info = layer['Abstract']
+                        except:
+                            info = None
+                            
+                        self.FRED._add_survey(
+                            Name = name,
+                            ID = layer['CoverageId'][0],
+                            Date = this_year(),
+                            MetadataLink = meta,
+                            MetadataDate = this_year(),
+                            DataLink = url,
+                            DataType = 'raster',
+                            DataSource = 'chs',
+                            HorizontalDatum = 4326,
+                            VerticalDatum = 1092,
+                            Info = info,
+                            geom = geom
+                        )
+                        
         self.FRED._close_ds()
         
     def run(self):        
         chs_wcs = f_utils.WCS(self._chs_url)
-        for surv in FRED._filter_FRED(self):
-            d = chs_wcs._describe_coverage(surv['ID'])
-            if d is not None:
-                ds_region = chs_wcs._get_coverage_region(d)
-                if regions_intersect_ogr_p(self.region, ds_region):
-                    chs_url = chs_wcs._get_coverage_url(chs_wcs.fix_coverage_id(surv['ID']), region=self.region)
-                    outf = '{}_{}.tif'.format(surv['ID'].replace(' ', '_').replace('caris__', 'chs_'), self.region.format('fn'))
-                    self.results.append([chs_url, outf, surv['DataType']])
+        _results = FRED._filter_FRED(self)
+        with tqdm(total=len(_results), desc='scanning CHS datasets') as pbar:
+            for surv in _results:
+                pbar.update(1)
+                d = chs_wcs._describe_coverage(surv['ID'])
+                if d is not None:
+                    ds_region = chs_wcs._get_coverage_region(d)
+                    if regions_intersect_ogr_p(self.region, ds_region):
+                        chs_url = chs_wcs._get_coverage_url(chs_wcs.fix_coverage_id(surv['ID']), region=self.region)
+                        outf = '{}_{}.tif'.format(surv['ID'].replace(' ', '_').replace('caris__', 'chs_'), self.region.format('fn'))
+                        self.results.append([chs_url, outf, surv['DataType']])
 
     def _yield_xyz(self, entry):
         src_chs = 'chs_tmp.tif'
         if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_chs) == 0:
-            _ds = datasets.RasterFile(fn=src_chs, data_format=200, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                                      name=src_chs, src_region=self.region, verbose=self.verbose)
+            _ds = datasets.RasterFile(
+                fn=src_chs,
+                data_format=200,
+                src_srs='epsg:4326',
+                dst_srs=self.dst_srs,
+                name=src_chs,
+                src_region=self.region,
+                verbose=self.verbose
+            )
             for xyz in _ds.yield_xyz():
                 yield(xyz)
+                
         else: utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_chs))
         utils.remove_glob(src_chs)
         

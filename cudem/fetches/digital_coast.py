@@ -108,6 +108,8 @@ import json
 from osgeo import ogr
 from osgeo import gdal
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -153,14 +155,13 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
             'returnGeometry':'False',
         }
         _req = f_utils.Fetch(self._dav_api_url, verbose=self.verbose).fetch_req(params=_data)
-        print(_req.url)
+        utils.echo_msg(_req.url)
         if _req is not None:
             features = _req.json()
             if not 'features' in features.keys():
                 utils.echo_error_msg('DAV failed to execute query...try again later')
             else:
                 for feature in features['features']:
-
                     if self.datatype is not None:
                         if self.datatype.lower() != feature['attributes']['DataType'].lower():
                             continue
@@ -176,10 +177,9 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                 ept_infos = ept_req.json()
 
                     ## get metadata for datum infos...for raster data
-
                     if self.index:
                         feature['attributes']['ExternalProviderLink'] = links
-                        print(json.dumps(feature['attributes'], indent=4))
+                        utils.echo_msg(json.dumps(feature['attributes'], indent=4))
                     else:
                         for link in links['links']:
                             if link['serviceID'] == 46:
@@ -194,6 +194,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                     if f_utils.Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
                                         if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
                                             break
+                                        
                                         urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
                                     else:
                                         break
@@ -218,6 +219,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                     index_layer = index_ds.GetLayer(0)
                                     for index_feature in index_layer:
                                         index_geom = index_feature.GetGeometryRef()
+                                        
                                         if index_geom.Intersects(self.region.export_as_geom()):
                                             tile_name = None
                                             try:
@@ -286,18 +288,6 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                     verbose=self.verbose,
                     remote=True
                 )
-                # if self.inc is not None:
-                #     b_region = regions.regions_reduce(self.region, regions.Region().from_list(_ds.infos['minmax']))
-                #     xyz_func = lambda p: _ds.dump_xyz(dst_port=p, encode=True)
-                #     for xyz in utils.yield_cmd(
-                #             'gmt blockmedian -I{:.10f} {} -r -V'.format(self.inc, b_region.format('gmt')),
-                #             verbose=self.verbose,
-                #             data_fun=xyz_func
-                #     ):
-                #         yield(xyzfun.XYZPoint().from_list([float(x) for x in xyz.split()]))
-                        
-                # else:
-                #for xyz in _ds.yield_xyz():
                 for xyz in _ds.yield_xyz():
                     yield(xyz)
                         
@@ -370,45 +360,58 @@ class DigitalCoast(f_utils.FetchModule):
             if page is None: continue
             tr = page.xpath('//table')[0].xpath('.//tr')
             if len(tr) <= 0: continue
-            [cols.append(i.text_content()) for i in tr[0]]
-            
-            if self.verbose:
-                _prog = utils.CliProgress('scanning {} datasets in {}...'.format(len(tr), ld))
-                
-            for i in range(1, len(tr)):
-                if self.callback(): break
-                if self.verbose:
-                    _prog.update_perc((i, len(tr))) #dc['ID #']))
+            [cols.append(i.text_content()) for i in tr[0]]            
+            with tqdm(total=len(tr), desc='scanning for DIGITAL COAST datasets') as pbar:
+                for i in range(1, len(tr)):
+                    if self.callback():
+                        break
                     
-                cells = tr[i].getchildren()
-                dc = {}
-                for j, cell in enumerate(cells):
-                    cl = cell.xpath('a')
-                    if len(cl) > 0:
-                        if cols[j] == 'Dataset Name':
-                            dc[cols[j]] = cell.text_content()
-                            dc['Metadata'] = cl[0].get('href')
-                        else: dc[cols[j]] = cl[0].get('href')
-                    else: dc[cols[j]] = cell.text_content()
-                self.FRED._attribute_filter(["ID = '{}'".format(dc['ID #'])])
-                if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    if 'Metadata' in dc.keys():
-                        this_xml = f_utils.iso_xml(dc['Metadata'])
-                        h_epsg, v_epsg = this_xml.reference_system()
-                        geom = this_xml.bounds(geom=True)
-                        if geom is not None:
-                            if self.verbose:
-                                _prog.update_perc((i, len(tr)), msg = '{} ** adding: {} **'.format(_prog.opm, dc['ID #']))
+                    pbar.update(1)
+                    cells = tr[i].getchildren()
+                    dc = {}
+                    for j, cell in enumerate(cells):
+                        cl = cell.xpath('a')
+                        if len(cl) > 0:
+                            if cols[j] == 'Dataset Name':
+                                dc[cols[j]] = cell.text_content()
+                                dc['Metadata'] = cl[0].get('href')
+                            else:
+                                dc[cols[j]] = cl[0].get('href')
                                 
-                            surveys.append({'Name': dc['Dataset Name'], 'ID': dc['ID #'], 'Date': this_xml.date(),
-                                            'MetadataLink': dc['Metadata'], 'MetadataDate': this_xml.xml_date(),
-                                            'DataLink': dc['https'], 'IndexLink': dc['Tile Index'], 'Link': self._dc_url,
-                                            'DataType': ld.split('_')[0], 'DataSource': 'dc', 'HorizontalDatum': h_epsg,
-                                            'VerticalDatum': v_epsg, 'Info': this_xml.abstract(), 'geom': geom})
+                        else:
+                            dc[cols[j]] = cell.text_content()
+                        
+                    self.FRED._attribute_filter(["ID = '{}'".format(dc['ID #'])])
+                    if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                        if 'Metadata' in dc.keys():
+                            this_xml = f_utils.iso_xml(dc['Metadata'])
+                            h_epsg, v_epsg = this_xml.reference_system()
+                            geom = this_xml.bounds(geom=True)
+                            if geom is not None:
+                                if self.verbose:
+                                    utils.echo_msg('{} ** adding: {} **'.format(_prog.opm, dc['ID #']))
+
+                                surveys.append(
+                                    {
+                                        'Name': dc['Dataset Name'],
+                                        'ID': dc['ID #'],
+                                        'Date': this_xml.date(),
+                                        'MetadataLink': dc['Metadata'],
+                                        'MetadataDate': this_xml.xml_date(),
+                                        'DataLink': dc['https'],
+                                        'IndexLink': dc['Tile Index'],
+                                        'Link': self._dc_url,
+                                        'DataType': ld.split('_')[0],
+                                        'DataSource': 'dc',
+                                        'HorizontalDatum': h_epsg,
+                                        'VerticalDatum': v_epsg,
+                                        'Info': this_xml.abstract(),
+                                        'geom': geom
+                                    }
+                                )
+                                
             self.FRED._add_surveys(surveys)
-            if self.verbose:
-                _prog.end(0, 'scanned {} datasets in {}.'.format(len(tr), ld))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), ld))
+            
         self.FRED._close_ds()
 
     def run(self):
@@ -435,6 +438,7 @@ class DigitalCoast(f_utils.FetchModule):
                         utils.echo_msg(tile_url)
                         utils.echo_msg(sf1.GetField('URL'))
                         self.results.append([tile_url, os.path.join(self._outdir, '{}/{}'.format(surv['ID'], tile_url.split('/')[-1])), surv['DataType']])
+                        
                 v_ds = slay1 = None
                 #except: pass
                 utils.remove_glob(surv_shp_zip, *v_shps)
@@ -442,9 +446,13 @@ class DigitalCoast(f_utils.FetchModule):
     def yield_xyz(self, entry):
         src_dc = os.path.basename(entry[1])
         src_ext = src_dc.split('.')[-1].lower()
-        if src_ext == 'laz' or src_ext == 'las': dt = 'lidar'
-        elif src_ext == 'tif' or src_ext == 'img': dt = 'raster'
-        else: dt = None
+        if src_ext == 'laz' or src_ext == 'las':
+            dt = 'lidar'
+        elif src_ext == 'tif' or src_ext == 'img':
+            dt = 'raster'
+        else:
+            dt = None
+            
         if dt == 'lidar':
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_dc) == 0:
                 # xyz_dat = utils.yield_cmd('las2txt -stdout -parse xyz -keep_xy {} -keep_class {} -i {}\

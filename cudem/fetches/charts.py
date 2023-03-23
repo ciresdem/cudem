@@ -32,6 +32,8 @@ import json
 
 from osgeo import ogr
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -75,7 +77,13 @@ https://www.charts.noaa.gov/
             print(_req.text)
 
 class NauticalCharts(f_utils.FetchModule):
-    """Fetch digital chart data from NOAA"""
+    """NOAA Nautical CHARTS
+
+Fetch digital chart data from NOAA
+        
+https://www.charts.noaa.gov/
+
+< charts >"""
 
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(**kwargs)
@@ -120,31 +128,37 @@ class NauticalCharts(f_utils.FetchModule):
             surveys = []
             this_xml = f_utils.iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
-            if self.verbose:
-                _prog = utils.CliProgress('scanning {} surveys in {}.'.format(len(charts), dt))
-                
-            for i, chart in enumerate(charts):
-                this_xml.xml_doc = chart
-                title = this_xml.title()
-                if self.verbose:
-                    _prog.update_perc((i, len(charts)))
-                    
-                self.FRED._attribute_filter(["ID = '{}'".format(title)])
-                if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    h_epsg, v_epsg = this_xml.reference_system()
-                    this_data = this_xml.linkages()
-                    geom = this_xml.polygon(geom=True)
-                    if geom is not None:
-                        surveys.append({'Name': title, 'ID': title, 'Agency': 'NOAA', 'Date': this_xml.date(),
-                                        'MetadataLink': this_xml.url, 'MetadataDate': this_xml.xml_date(),
-                                        'DataLink': this_data, 'Link': self._charts_url, 'DataType': dt,
-                                        'DataSource': 'charts', 'HorizontalDatum': h_epsg, 'VerticalDatum': v_epsg,
-                                        'Info': this_xml.abstract, 'geom': geom})
+            with tqdm(total=len(charts), desc='scanning for CHARTS ({}) datasets'.format(dt)) as pbar:
+                for i, chart in enumerate(charts):
+                    pbar.update(1)
+                    this_xml.xml_doc = chart
+                    title = this_xml.title()
+                    self.FRED._attribute_filter(["ID = '{}'".format(title)])
+                    if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                        h_epsg, v_epsg = this_xml.reference_system()
+                        this_data = this_xml.linkages()
+                        geom = this_xml.polygon(geom=True)
+                        if geom is not None:
+                            surveys.append(
+                                {
+                                    'Name': title,
+                                    'ID': title,
+                                    'Agency': 'NOAA',
+                                    'Date': this_xml.date(),
+                                    'MetadataLink': this_xml.url,
+                                    'MetadataDate': this_xml.xml_date(),
+                                    'DataLink': this_data,
+                                    'Link': self._charts_url,
+                                    'DataType': dt,
+                                    'DataSource': 'charts',
+                                    'HorizontalDatum': h_epsg,
+                                    'VerticalDatum': v_epsg,
+                                    'Info': this_xml.abstract,
+                                    'geom': geom
+                                }
+                            )
                         
             self.FRED._add_surveys(surveys)
-            if self.verbose:
-                _prog.end(0, 'scanned {} surveys in {}'.format(len(charts), dt))
-                utils.echo_msg('added {} surveys from {}'.format(len(surveys), dt))
                 
         self.FRED._close_ds()
 
@@ -156,10 +170,12 @@ class NauticalCharts(f_utils.FetchModule):
 
         if self.datatype is not None:
             self.where.append("DataType = '{}'".format(self.datatype))
-        
-        for surv in FRED._filter_FRED(self):
-            for i in surv['DataLink'].split(','):
-                self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
+
+        _results = FRED._filter_FRED(self)
+        with tqdm(total=len(_results), desc='scanning CHARTS datasets') as pbar:
+            for surv in _results:
+                for i in surv['DataLink'].split(','):
+                    self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
 
     def yield_xyz(self, entry):
         """ENC data comes as a .000 file in a zip.

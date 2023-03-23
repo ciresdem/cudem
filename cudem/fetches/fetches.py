@@ -353,6 +353,14 @@ See `fetches_cli_usage` for full cli options.
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     if not these_regions:
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
+
+    if want_proc:
+        if None in xy_inc:
+            utils.echo_error_msg('You must supply an increment -E in order to process this dataset')
+            sys.exit(-1)
+        else:
+            if want_verbose:
+                utils.echo_msg('Process fetched data to region(s) {} @ {}x{}'.format(these_regions, xy_inc[0], xy_inc[1]))
         
     for rn, this_region in enumerate(these_regions):
         if stop_threads:
@@ -392,16 +400,12 @@ See `fetches_cli_usage` for full cli options.
             else:
                 fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads, check_size=check_size)
                 fr.daemon = True
-                _p = utils.CliProgress('fetching {} remote data files'.format(len(x_f.results)))
                 try:
                     fr.start()
                     while True:
                         time.sleep(2)
                         sys.stderr.write('\x1b[2K\r')
                         perc = float((len(x_f.results)-fr.fetch_q.qsize())) / len(x_f.results)*100 if len(x_f.results) > 0 else 1
-                        if want_verbose:
-                            _p.update_perc((len(x_f.results) - fr.fetch_q.qsize(), len(x_f.results)))
-                            
                         sys.stderr.flush()
                         if not fr.is_alive():
                             break
@@ -419,7 +423,6 @@ See `fetches_cli_usage` for full cli options.
                         fr.fetch_q.task_done()
                         
                 fr.join()
-                _p.end(x_f.status, 'fetched {} remote data files'.format(len(x_f.results)))
                 
             if want_verbose:
                 utils.echo_msg('ran fetch module {} on region {}...\

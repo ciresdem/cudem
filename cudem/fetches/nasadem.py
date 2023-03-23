@@ -30,6 +30,8 @@
 import os
 import sys
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -80,38 +82,45 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
 
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.nasadem_url))
-        
-        for i, fn in enumerate(fns):
-            sid = fn.text.split('/')[-1].split('.')[0]
-            if self.verbose:
-                _prog.update_perc((i, len(fns)))
-                
-            self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                spat = fn.text.split('_HGT_')[-1].split('.')[0]
-                xsplit = 'e' if 'e' in spat else 'w'
-                ysplit = 's' if 's' in spat else 'n'
-                x = int(spat.split(xsplit)[-1])
-                y = int(spat.split(xsplit)[0].split(ysplit)[-1])
+        with tqdm(total=len(fns), desc='scanning NASADEM datasets') as pbar:        
+            for i, fn in enumerate(fns):
+                sid = fn.text.split('/')[-1].split('.')[0]
+                pbar.update(1)
+                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    spat = fn.text.split('_HGT_')[-1].split('.')[0]
+                    xsplit = 'e' if 'e' in spat else 'w'
+                    ysplit = 's' if 's' in spat else 'n'
+                    x = int(spat.split(xsplit)[-1])
+                    y = int(spat.split(xsplit)[0].split(ysplit)[-1])
 
-                if xsplit == 'w':
-                    x = x * -1
-                if ysplit == 's':
-                    y = y * -1
+                    if xsplit == 'w':
+                        x = x * -1
+                    if ysplit == 's':
+                        y = y * -1
 
-                this_region = regions.Region().from_list([x, x + 1, y, y + 1])
-                geom = this_region.export_as_geom()
-                if geom is not None:
-                    surveys.append({'Name': fn.text.split('.')[0].split('/')[-1], 'ID': sid, 'Agency': 'NASA', 'Date': utils.this_date(),
-                                    'MetadataLink': '', 'MetadataDate': utils.this_date(), 'DataLink': self.nasadem_url + fn.text.split('/')[-1] + '?token=',
-                                    'DataType': '1', 'DataSource': 'nasadem', 'HorizontalDatum': 4326, 'Etcetra': self.nasadem_rurl,
-                                    'VerticalDatum': 'msl', 'Info': '', 'geom': geom})
+                    this_region = regions.Region().from_list([x, x + 1, y, y + 1])
+                    geom = this_region.export_as_geom()
+                    if geom is not None:
+                        surveys.append(
+                            {
+                                'Name': fn.text.split('.')[0].split('/')[-1],
+                                'ID': sid,
+                                'Agency': 'NASA',
+                                'Date': utils.this_date(),
+                                'MetadataLink': '',
+                                'MetadataDate': utils.this_date(),
+                                'DataLink': self.nasadem_url + fn.text.split('/')[-1] + '?token=',
+                                'DataType': '1',
+                                'DataSource': 'nasadem',
+                                'HorizontalDatum': 4326,
+                                'Etcetra': self.nasadem_rurl,
+                                'VerticalDatum': 'msl',
+                                'Info': '',
+                                'geom': geom
+                            }
+                        )
 
-        if self.verbose:
-            _prog.end(0, 'scanned {} tiles in {}.'.format(len(fns), self.nasadem_url))
-            utils.echo_msg('added {} NASADEM DEM tiles'.format(len(surveys)))
         self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -126,7 +135,12 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
     def yield_xyz(self, entry):
         """yield the xyz data from the nasadem fetch module"""
         
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+        if f_utils.Fetch(
+                entry[0],
+                callback=self.callback,
+                verbose=self.verbose,
+                headers=self.headers
+        ).fetch_file(entry[1]) == 0:
             _ds = datasets.RasterFile(
                 fn=entry[1],
                 data_format=200,
@@ -146,6 +160,5 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
 
 if __name__ == '__main__':
     nasa_dem = NASADEM()
-    #cop_dem.update()
     
 ### End

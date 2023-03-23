@@ -37,6 +37,8 @@ import sys
 
 from osgeo import gdal
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -88,68 +90,80 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         surveys = []
         page = f_utils.Fetch(self.cop_10_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(rows), self.cop_10_url))
-        
-        for i, row in enumerate(rows):
-            sid = row.split('.')[0]
-            if self.verbose:
-                _prog.update_perc((i, len(rows)))
-                
-            self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                spat = row.split('.')[0].split('_')[-1]
-                x = int(spat.split('x')[-1])
-                y = int(spat.split('x')[0].split('y')[-1])
-                this_region = regions.Region().from_list(
-                    [x, x + 10, y, y + 10]
-                )
-                geom = this_region.export_as_geom()
-                if geom is not None:
-                    surveys.append({'Name': row.split('.')[0], 'ID': sid, 'Agency': 'EU', 'Date': utils.this_date(),
-                                    'MetadataLink': self.cop_10_aux_url, 'MetadataDate': utils.this_date(), 'DataLink': self.cop_10_url + row,
-                                    'DataType': '3', 'DataSource': 'copernicus', 'HorizontalDatum': 'epsg:4326',
-                                    'VerticalDatum': 'msl', 'Info': '', 'geom': geom})
+        with tqdm(total=len(rows), desc='scanning for COPERNICUS COP-10 datasets') as pbar:
+            for i, row in enumerate(rows):
+                pbar.update(1)
+                sid = row.split('.')[0]
+                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    spat = row.split('.')[0].split('_')[-1]
+                    x = int(spat.split('x')[-1])
+                    y = int(spat.split('x')[0].split('y')[-1])
+                    this_region = regions.Region().from_list(
+                        [x, x + 10, y, y + 10]
+                    )
+                    geom = this_region.export_as_geom()
+                    if geom is not None:
+                        surveys.append(
+                            {
+                                'Name': row.split('.')[0],
+                                'ID': sid,
+                                'Agency': 'EU',
+                                'Date': utils.this_date(),
+                                'MetadataLink': self.cop_10_aux_url,
+                                'MetadataDate': utils.this_date(),
+                                'DataLink': self.cop_10_url + row,
+                                'DataType': '3',
+                                'DataSource': 'copernicus',
+                                'HorizontalDatum': 'epsg:4326',
+                                'VerticalDatum': 'msl',
+                                'Info': '',
+                                'geom': geom
+                            }
+                        )
 
-        if self.verbose:
-            _prog.end(0, 'scanned {} tiles in {}.'.format(len(rows), self.cop_10_url))
-                    
         f = f_utils.Fetch(self.cop30_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(fns), self.cop30_url))
-        
-        for i, fn in enumerate(fns):
-            sid = fn.text.split('/')[-1].split('.')[0]
-            if self.verbose:
-                _prog.update_perc((i, len(fns)))
-                
-            self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:            
-                spat = fn.text.split('_10_')[-1].split('_DEM')[0]
-                xsplit = '_E' if 'E' in spat else '_W'
-                ysplit = 'S' if 'S' in spat else 'N'
-                x = int(spat.split(xsplit)[-1].split('_')[0])
-                y = int(spat.split(xsplit)[0].split(ysplit)[-1].split('_')[0])
+        with tqdm(total=len(fns), desc='scanning for COPERNICUS COP-30 datasets') as pbar:
+            for i, fn in enumerate(fns):
+                pbar.update(1)
+                sid = fn.text.split('/')[-1].split('.')[0]
+                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:            
+                    spat = fn.text.split('_10_')[-1].split('_DEM')[0]
+                    xsplit = '_E' if 'E' in spat else '_W'
+                    ysplit = 'S' if 'S' in spat else 'N'
+                    x = int(spat.split(xsplit)[-1].split('_')[0])
+                    y = int(spat.split(xsplit)[0].split(ysplit)[-1].split('_')[0])
 
-                if xsplit == '_W':
-                    x = x * -1
-                if ysplit == 'S':
-                    y = y * -1
+                    if xsplit == '_W':
+                        x = x * -1
+                    if ysplit == 'S':
+                        y = y * -1
 
-                this_region = regions.Region().from_list([x, x + 1, y, y + 1])
-                geom = this_region.export_as_geom()
-                if geom is not None:
-                    surveys.append({'Name': fn.text.split('.')[0].split('/')[-1], 'ID': sid, 'Agency': 'EU', 'Date': utils.this_date(),
-                                    'MetadataLink': '', 'MetadataDate': utils.this_date(), 'DataLink': self.cop30_url + fn.text.split('/')[-1] + '?token=',
-                                    'DataType': '1', 'DataSource': 'copernicus', 'HorizontalDatum': 'epsg:4326', 'Etcetra': self.cop30_rurl,
-                                    'VerticalDatum': 'msl', 'Info': '', 'geom': geom})
+                    this_region = regions.Region().from_list([x, x + 1, y, y + 1])
+                    geom = this_region.export_as_geom()
+                    if geom is not None:
+                        surveys.append(
+                            {
+                                'Name': fn.text.split('.')[0].split('/')[-1],
+                                'ID': sid,
+                                'Agency': 'EU',
+                                'Date': utils.this_date(),
+                                'MetadataLink': '',
+                                'MetadataDate': utils.this_date(),
+                                'DataLink': self.cop30_url + fn.text.split('/')[-1] + '?token=',
+                                'DataType': '1',
+                                'DataSource': 'copernicus',
+                                'HorizontalDatum': 'epsg:4326',
+                                'Etcetra': self.cop30_rurl,
+                                'VerticalDatum': 'msl',
+                                'Info': '',
+                                'geom': geom
+                            }
+                        )
 
-        if self.verbose:
-            _prog.end(0, 'scanned {} tiles in {}.'.format(len(fns), self.cop30_url))
-            utils.echo_msg('added {} COPERNICUS DEM tiles'.format(len(surveys)))
-            
         self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -159,10 +173,13 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         if self.datatype is not None:
             self.where.append("DataType = '{}'".format(self.datatype))
 
-        for surv in FRED._filter_FRED(self):
-            for i in surv['DataLink'].split(','):
-                self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
-                #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
+        _results = FRED._filter_FRED(self)
+        with tqdm(total=len(_results), desc='scanning COPERNICUS datasets') as pbar:
+            for surv in _results:
+                pbar.update(1)
+                for i in surv['DataLink'].split(','):
+                    self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
+                    #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                 
         return(self)
 

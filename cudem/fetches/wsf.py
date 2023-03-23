@@ -32,6 +32,7 @@ import os
 import sys
 
 from osgeo import gdal
+from tqdm import tqdm
 
 from cudem import utils
 from cudem import regions
@@ -75,36 +76,41 @@ World Settlement Footprint (WSF) 2019
         surveys = []
         page = f_utils.Fetch(self._wsf_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".tif")]/@href')
-        if self.verbose:
-            _prog = utils.CliProgress('scanning {} tiles in {}...'.format(len(rows), self._wsf_url))
-        
-        for i, row in enumerate(rows):
-            sid = row.split('.')[0]
-            if sid == 'WSF2019_cog':
-                continue
-            
-            if self.verbose:
-                _prog.update_perc((i, len(rows)))
-                
-            self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-            if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                spat = row.split('.')[0].split('_')
-                x = int(spat[-2])
-                y = int(spat[-1])
-                this_region = regions.Region().from_list(
-                    [x, x + 2, y, y + 2]
-                )
-                geom = this_region.export_as_geom()
-                if geom is not None:
-                    surveys.append({'Name': row.split('.')[0], 'ID': sid, 'Agency': 'DLR', 'Date': utils.this_date(),
-                                    'MetadataLink': row.split('.')[0] + '_stac.json', 'MetadataDate': utils.this_date(), 'DataLink': self._wsf_url + row,
-                                    'DataType': 'WSF', 'DataSource': 'WSF', 'HorizontalDatum': 'epsg:4326',
-                                    'VerticalDatum': 'None', 'Info': '', 'geom': geom})
+        with tqdm(total=len(rows), desc='scanning WSF datasets') as pbar:
+            for i, row in enumerate(rows):
+                pbar.update(1)
+                sid = row.split('.')[0]
+                if sid == 'WSF2019_cog':
+                    continue
 
-        if self.verbose:
-            _prog.end(0, 'scanned {} tiles in {}.'.format(len(rows), self._wsf_url))                    
-            utils.echo_msg('added {} WSF tiles'.format(len(surveys)))
-            
+                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    spat = row.split('.')[0].split('_')
+                    x = int(spat[-2])
+                    y = int(spat[-1])
+                    this_region = regions.Region().from_list(
+                        [x, x + 2, y, y + 2]
+                    )
+                    geom = this_region.export_as_geom()
+                    if geom is not None:
+                        surveys.append(
+                            {
+                                'Name': row.split('.')[0],
+                                'ID': sid,
+                                'Agency': 'DLR',
+                                'Date': utils.this_date(),
+                                'MetadataLink': row.split('.')[0] + '_stac.json',
+                                'MetadataDate': utils.this_date(),
+                                'DataLink': self._wsf_url + row,
+                                'DataType': 'WSF',
+                                'DataSource': 'WSF',
+                                'HorizontalDatum': 'epsg:4326',
+                                'VerticalDatum': 'None',
+                                'Info': '',
+                                'geom': geom,
+                            }
+                        )
+
         self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -116,7 +122,9 @@ World Settlement Footprint (WSF) 2019
 
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
+                self.results.append(
+                    [i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']]
+                )
                 
         return(self)
         

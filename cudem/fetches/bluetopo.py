@@ -153,7 +153,6 @@ class BlueTopo_FRED(f_utils.FetchModule):
     def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='bluetopo', **kwargs)
         self._bluetopo_base_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/'
-        #self._bluetopo_index_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/BlueTopo-Tile-Scheme/BlueTopo_Tile_Scheme_20211214.gpkg'
         self._bluetopo_index_url = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/BlueTopo/BlueTopo-Tile-Scheme/BlueTopo_Tile_Scheme_20230114.gpkg'
         self.where = [where] if len(where) > 0 else []
         

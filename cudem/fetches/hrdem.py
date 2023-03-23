@@ -32,6 +32,8 @@ import os
 
 from osgeo import ogr
 
+from tqdm import tqdm
+
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -134,20 +136,33 @@ class HRDEM_FRED(f_utils.FetchModule):
         v_shp = None
         for v in v_shps:
             if '.shp' in v: v_shp = v
+            
         shp_regions = regions.gdal_ogr_regions(v_shp)
         shp_region = regions.Region()
         for this_region in shp_regions:
             if shp_region.valid_p(check_xy=True):
                 shp_region = regions.regions_merge(shp_region, this_region)
-            else: shp_region = this_region
+            else:
+                shp_region = this_region
+                
         geom = shp_region.export_as_geom()
         
         self.FRED._attribute_filter(["ID = '{}'".format('HRDEM-1')])
         if self.FRED.layer is None or len(self.FRED.layer) == 0:
-            self.FRED._add_survey(Name = 'High-Resolution DEM (Canada)', ID = 'HRDEM-1', Agency = 'NRCAN', Date = utils.this_year(),
-                                  MetadataLink = self._hrdem_info_url, MetadataDate = utils.this_year(),
-                                  DataLink = self._hrdem_footprints_url, IndexLink = self._hrdem_footprints_url,
-                                  DataType = 'raster', DataSource = 'hrdem', Info = 'Canada Only', geom = geom)
+            self.FRED._add_survey(
+                Name = 'High-Resolution DEM (Canada)',
+                ID = 'HRDEM-1',
+                Agency = 'NRCAN',
+                Date = utils.this_year(),
+                MetadataLink = self._hrdem_info_url,
+                MetadataDate = utils.this_year(),
+                DataLink = self._hrdem_footprints_url,
+                IndexLink = self._hrdem_footprints_url,
+                DataType = 'raster',
+                DataSource = 'hrdem',
+                Info = 'Canada Only',
+                geom = geom
+            )
         utils.remove_glob(v_zip, *v_shps)
         self.FRED._close_ds()
 
@@ -198,36 +213,46 @@ class HRDEM_FRED(f_utils.FetchModule):
         v_shp = None
         for v in v_shps:
             if '.shp' in v: v_shp = v
+            
         try:
             v_ds = ogr.Open(v_shp)
         except:
             v_ds = None
             status = -1
+            
         if v_ds is not None:
             layer = v_ds.GetLayer()
             fcount = layer.GetFeatureCount()
-            if self.verbose:
-                _prog = utils.CliProgress('scanning {} datasets...'.format(fcount))
-            for f in range(0, fcount):
-                feature = layer[f]
-                name = feature.GetField('Tile_name')
-                if self.verbose:
-                    _prog.update_perc((f, fcount))
-                try:
-                    self.FRED.layer.SetAttributeFilter("Name = '{}'".format(name))
-                except: pass
-                if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    data_link = feature.GetField('Ftp_dtm')
-                    if data_link is not None:
-                        geom = feature.GetGeometryRef()
-                        self.FRED._add_survey(Name = name, ID = feature.GetField('Project'), Agency = 'NRCAN', Date = utils.this_year(),
-                                              MetadataLink = feature.GetField('Meta_dtm'), MetadataDate = utils.this_year(),
-                                              DataLink = data_link.replace('http', 'ftp'), IndexLink = self._hrdem_footprints_url,
-                                              DataType = 'raster', DataSource = 'hrdem', HorizontalDatum = feature.GetField('Coord_Sys').split(':')[-1],
-                                              Info = feature.GetField('Provider'), geom = geom)
+            with tqdm(total=len(fcount), desc='scanning HRDEM datasets') as pbar:
+                for f in range(0, fcount):
+                    pbar.update(1)
+                    feature = layer[f]
+                    name = feature.GetField('Tile_name')
+                    try:
+                        self.FRED.layer.SetAttributeFilter("Name = '{}'".format(name))
+                    except:
+                        pass
+                    
+                    if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                        data_link = feature.GetField('Ftp_dtm')
+                        if data_link is not None:
+                            geom = feature.GetGeometryRef()
+                            self.FRED._add_survey(
+                                Name = name,
+                                ID = feature.GetField('Project'),
+                                Agency = 'NRCAN',
+                                Date = utils.this_year(),
+                                MetadataLink = feature.GetField('Meta_dtm'),
+                                MetadataDate = utils.this_year(),
+                                DataLink = data_link.replace('http', 'ftp'),
+                                IndexLink = self._hrdem_footprints_url,
+                                DataType = 'raster',
+                                DataSource = 'hrdem',
+                                HorizontalDatum = feature.GetField('Coord_Sys').split(':')[-1],
+                                Info = feature.GetField('Provider'),
+                                geom = geom
+                            )
 
-            if self.verbose:
-                _prog.end('scanned {} datasets.'.format(fcount))
         utils.remove_glob(v_zip, *v_shps)
         self.FRED._close_ds()
 
