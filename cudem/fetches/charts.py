@@ -174,6 +174,7 @@ https://www.charts.noaa.gov/
         _results = FRED._filter_FRED(self)
         with tqdm(total=len(_results), desc='scanning CHARTS datasets') as pbar:
             for surv in _results:
+                pbar.update(1)
                 for i in surv['DataLink'].split(','):
                     self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
 

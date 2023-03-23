@@ -41,6 +41,7 @@ import gzip
 import bz2
 import re
 import curses
+import io
 from tqdm import tqdm
 
 import numpy as np
@@ -644,9 +645,10 @@ def p_unzip(src_file, exts=None, outdir='./'):
                             _dirname = os.path.dirname(ext_zf)
                             if not os.path.exists(_dirname):
                                 os.makedirs(_dirname)
-                                
+
                             with open(ext_zf, 'wb') as f:
                                 f.write(z.read(zf))
+                                
     elif src_file.split('.')[-1] == 'gz':
         try:
             tmp_proc = gunzip(src_file)
@@ -659,7 +661,10 @@ def p_unzip(src_file, exts=None, outdir='./'):
                 if ext == tmp_proc.split('.')[-1]:
                     src_procs.append(os.path.basename(tmp_proc))
                     break
-                else: remove_glob(tmp_proc)
+                
+                else:
+                    remove_glob(tmp_proc)
+                    
     else:
         for ext in exts:
             if ext == src_file.split('.')[-1]:
@@ -726,47 +731,36 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     i_chunk = 0
     x_i_chunk = 0
 
-    if verbose:
-        # _prog = CliProgress(
-        #    'chunking srcwin from {} @ {}/{}'.format(n_size, n_chunk, step)
-        # )
-        _prog = tqdm(total=(n_size[0]*n_size[1])/step, desc='chunking srcwin', ascii=True)
-        
-    while True:
-        y_chunk = n_chunk
-        #if verbose:
-            #_prog.update_perc((i_chunk*step, (n_size[0]*n_size[1])/step))
-
+    with tqdm(total=(n_size[0]*n_size[1])/step, desc='chunking srcwin') as pbar:
         while True:
-            this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
-            this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
-            this_x_origin = x_chunk - n_chunk
-            this_y_origin = y_chunk - n_chunk
-            this_x_size = int(this_x_chunk - this_x_origin)
-            this_y_size = int(this_y_chunk - this_y_origin)
-            if this_x_size == 0 or this_y_size == 0: break
-            srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
-            yield(srcwin)
-
-            _prog.update(step)
-
-            if y_chunk > n_size[0]:
+            y_chunk = n_chunk
+            while True:
+                this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
+                this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
+                this_x_origin = x_chunk - n_chunk
+                this_y_origin = y_chunk - n_chunk
+                this_x_size = int(this_x_chunk - this_x_origin)
+                this_y_size = int(this_y_chunk - this_y_origin)
+                if this_x_size == 0 or this_y_size == 0:
+                    break
+                
+                srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
+                yield(srcwin)
+                
+                if y_chunk > n_size[0]:
+                    break
+                else:
+                    y_chunk += step
+                    i_chunk += 1
+                    
+                pbar.update(step)
+                
+            if x_chunk > n_size[1]:
                 break
             else:
-                y_chunk += step
-                i_chunk += 1
-                
-        if x_chunk > n_size[1]:
-            break
-        else:
-            x_chunk += step
-            x_i_chunk += 1
+                x_chunk += step
+                x_i_chunk += 1
             
-    if verbose:
-        _prog.close()
-    # if verbose:
-    #    _prog.end(0, 'chunked srcwin from {} @ {}/{}'.format(n_size, n_chunk, step))
-
 def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     """yield source windows in n_chunks at step"""
 
@@ -1072,40 +1066,38 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    if verbose:
-        _prog = CliProgress('running cmd: `{}`'.format(cmd.rstrip()))
-        
-    if data_fun is not None:
-        pipe_stdin = subprocess.PIPE
-    else: pipe_stdin = None
-    
-    if verbose:
+    with tqdm(desc='cmd: `{}...`'.format(cmd.rstrip()[:14])) as pbar:
+        if data_fun is not None:
+            pipe_stdin = subprocess.PIPE
+        else:
+            pipe_stdin = None
+
         p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, close_fds=True
-        )
-    else:
-        p = subprocess.Popen(
-            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE, close_fds=True
+            cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, #encoding='utf-8',
+            stderr=subprocess.PIPE, close_fds=True#, universal_newlines=True, bufsize=1,
         )
 
-    if data_fun is not None:
-        if verbose: echo_msg('piping data to cmd subprocess...')
-        data_fun(p.stdin)
-        p.stdin.close()
-    
-    while p.poll() is None:
-        if verbose:
-            time.sleep(2)
-            _prog.update()
+        if data_fun is not None:
+            if verbose:
+                echo_msg('piping data to cmd subprocess...')
 
-    out = p.stdout.read()
-    if not verbose:
+            data_fun(p.stdin)
+            p.stdin.close()
+
+        io_reader = io.TextIOWrapper(p.stderr, encoding='utf-8')
+        while p.poll() is None:
+            err_line = io_reader.readline()
+            if err_line:
+                pbar.write(err_line.rstrip())
+                sys.stderr.flush()
+                
+            pbar.update()
+
+        out = p.stdout.read()
         p.stderr.close()
-        
-    p.stdout.close()
-    if verbose:
-        _prog.end(p.returncode, 'ran cmd: `{}` and returned {}.'.format(cmd.rstrip(), p.returncode))
+        p.stdout.close()
+        if verbose:
+            echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
         
     return(out, p.returncode)
 
@@ -1242,6 +1234,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
     """echo error msg to stderr using `prefix`
@@ -1258,7 +1251,8 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-
+    sys.stderr.flush()
+    
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     """echo `msg` to stderr using `prefix`
 
@@ -1327,8 +1321,12 @@ def echo_modules(module_dict, key):
         else:
             sys.stderr.write('Invalid Module Key: {}\nValid Modules: {}\n'.format(key, _cudem_module_short_desc(module_dict)))
 
+    sys.stderr.flush()
+
 ## ==============================================
 ## Progress indicator...
+##
+## just use tqdm!
 ## ==============================================
 class CliProgress:
     '''cudem minimal progress indicator'''
@@ -1388,7 +1386,10 @@ class CliProgress:
             sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
                 self.perc(p), msg if msg is not None else self.opm
             ))
-        else: self.update()
+        else:
+            self.update()
+            
+        sys.stderr.flush()
         
     def update(self, msg = None):
         self._init_opm()
@@ -1403,7 +1404,8 @@ class CliProgress:
         if self.count == self.tw: self.spin_way = self.sub_one
         if self.count == 0: self.spin_way = self.add_one
         self.count = self.spin_way(self.count)
-
+        sys.stderr.flush()
+    
     def end(self, status, end_msg = None):
         self._init_opm()
         self._clear_stderr()
@@ -1418,6 +1420,7 @@ class CliProgress:
             sys.stderr.write(
                 '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg)
             )
+        sys.stderr.flush()
 
 import multiprocessing as mp
 import numpy

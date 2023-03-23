@@ -423,10 +423,8 @@ class Fetch:
                             for chunk in req.iter_content(chunk_size = 8196):
                                 if self.callback():
                                     break
-                                if self.verbose:
-                                    done = int(50 * curr_chunk / req_s)
-                                    pbar.update(len(chunk))
-                                    #curr_chunk += 8196
+                                
+                                pbar.update(len(chunk))
                                 if chunk:
                                     local_file.write(chunk)
 

@@ -473,8 +473,10 @@ class Waffle:
 
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the xyz data to dst_port"""
-        
+
+        #with tqdm(desc='dumping xyz data...') as pbar:
         for xyz in self.yield_xyz(**kwargs):
+            #pbar.update()
             xyz.dump(
                 include_w = True if self.weights is not None else False,
                 dst_port=dst_port,

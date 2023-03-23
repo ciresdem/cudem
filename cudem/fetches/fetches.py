@@ -402,14 +402,6 @@ See `fetches_cli_usage` for full cli options.
                 fr.daemon = True
                 try:
                     fr.start()
-                    while True:
-                        time.sleep(2)
-                        sys.stderr.write('\x1b[2K\r')
-                        perc = float((len(x_f.results)-fr.fetch_q.qsize())) / len(x_f.results)*100 if len(x_f.results) > 0 else 1
-                        sys.stderr.flush()
-                        if not fr.is_alive():
-                            break
-                        
                 except (KeyboardInterrupt, SystemExit):
                     utils.echo_error_msg('user breakage...please wait for while fetches exits.')
                     x_f.status = -1
@@ -424,7 +416,4 @@ See `fetches_cli_usage` for full cli options.
                         
                 fr.join()
                 
-            if want_verbose:
-                utils.echo_msg('ran fetch module {} on region {}...\
-            '.format(x_f.name, this_region.format('str')))                
 ### End
