@@ -1530,16 +1530,16 @@ Generate a DEM using Scipy's gridding interpolation
 Optional gridding methods are 'linear', 'cubic' and 'nearest'
 https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
             
-< scipy:method=<method> >
+< scipy:method=<method>:supercede=False:keep_auxiliary=False:chunk_size=None:chunk_buffer=40 >
 
-    ---
-    Parameters:
+---
+Parameters:
     
-    method=[linear/cubic/nearest] - interpolation method to use
-    supercede=[True/False] - supercede higher weighted data,
-    keep_auxiliary=[True/False] - retain auxiliary files
-    chunk_size=[val] - size of chunks in pixels
-    chunk_buffer=[val] - size of the chunk buffer in pixels
+method=[linear/cubic/nearest] - interpolation method to use
+supercede=[True/False] - supercede higher weighted data,
+keep_auxiliary=[True/False] - retain auxiliary files
+chunk_size=[val] - size of chunks in pixels
+chunk_buffer=[val] - size of the chunk buffer in pixels
     """
     
     def __init__(

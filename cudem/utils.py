@@ -636,18 +636,26 @@ def p_unzip(src_file, exts=None, outdir='./'):
         with zipfile.ZipFile(src_file) as z:
             zfs = z.namelist()
             for ext in exts:
-                for zf in zfs:
-                    if ext == zf.split('.')[-1]:
-                        ext_zf = os.path.join(outdir, zf)
-                        src_procs.append(ext_zf)
-                        if not os.path.exists(ext_zf):
-                            echo_msg('Extracting {}'.format(ext_zf))
-                            _dirname = os.path.dirname(ext_zf)
-                            if not os.path.exists(_dirname):
-                                os.makedirs(_dirname)
+                with tqdm(total=len(zfs), desc='unzipping {}'.format(src_file)) as pbar:
+                    for zf in zfs:
+                        if ext == zf.split('.')[-1]:
+                            ext_zf = os.path.join(outdir, zf)
+                            src_procs.append(ext_zf)
+                            if not os.path.exists(ext_zf):
+                                echo_msg('Extracting {}'.format(ext_zf))
+                                pbar.update()
+                                _dirname = os.path.dirname(ext_zf)
+                                if not os.path.exists(_dirname):
+                                    os.makedirs(_dirname)
 
-                            with open(ext_zf, 'wb') as f:
-                                f.write(z.read(zf))
+                                with open(ext_zf, 'wb') as f:
+                                    f.write(z.read(zf))
+                                    
+                            else:
+                                pbar.update()
+
+                        else:
+                            pbar.update()
                                 
     elif src_file.split('.')[-1] == 'gz':
         try:
