@@ -41,6 +41,8 @@ import math
 import numpy as np
 from scipy.spatial import ConvexHull
 
+from tqdm import tqdm
+
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
@@ -314,10 +316,9 @@ class ElevationDataset():
             gen_inf = False
 
         if gen_inf:# and not self.remote:
-            if self.verbose:
-                _prog = utils.CliProgress('generating inf for {}'.format(self.fn))
 
-            self.infos = self.generate_inf(None if not self.verbose else _prog.update)
+            #self.infos = self.generate_inf(None if not self.verbose else _prog.update)
+            self.infos = self.generate_inf()
             if self.infos is not None:
                 if 'minmax' in self.infos:
                     if self.infos['minmax'] is not None:
@@ -331,8 +332,6 @@ class ElevationDataset():
                 if recursive_check and self.parent is not None:
                     self.parent.inf(check_hash=True)
 
-                if self.verbose:
-                    _prog.end(0, 'generated inf for {}'.format(self.fn))
             else:
                 sys.exit(-1)    
                 

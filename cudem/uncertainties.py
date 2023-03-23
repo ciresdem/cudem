@@ -39,6 +39,8 @@ import numpy as np
 import math
 import json
 
+from tqdm import tqdm
+
 from osgeo import gdal
 
 import cudem
@@ -383,55 +385,53 @@ class InterpolationUncertainty: #(waffles.Waffle):
         msk_ds = gdal.Open(self.dem.mask_fn)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        _prog = utils.CliProgress('analyzing {} sub-regions.'.format(len(sub_regions)))
-        for sc, sub_region in enumerate(sub_regions):
-            _prog.update_perc((sc, len(sub_regions)))
-            s_sum, s_g_max, s_perc = self._mask_analysis(msk_ds, region=sub_region)
-            #s_sum, s_g_max, s_perc = self._mask_analysis(slp_ds, region=sub_region)
-            s_dc = demfun.gather_infos(dem_ds, region=sub_region, scan=True)
-            p_perc = self._prox_analysis(prox_ds, region=sub_region)
-            slp_perc = self._prox_analysis(slp_ds, region=sub_region)
-            #slp_perc = 0
-            
-            # if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
-            #     zone = self._zones[2]
-            # elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
-            #     zone = self._zones[1]
-            # else:
-            #     zone = self._zones[0]
-            zone = None
-            if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
-                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
-                    zone = self._zones[6]
-                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
-                    zone = self._zones[7]
-                else:
-                    zone = None
-                    #    zone = self._zones[8]
+        with tqdm(total=len(sub_regions), desc='analyzing {} sub-regions'.format(len(sub_regions))) as pbar:
+            for sc, sub_region in enumerate(sub_regions):
+                pbar.update()
+                s_sum, s_g_max, s_perc = self._mask_analysis(msk_ds, region=sub_region)
+                #s_sum, s_g_max, s_perc = self._mask_analysis(slp_ds, region=sub_region)
+                s_dc = demfun.gather_infos(dem_ds, region=sub_region, scan=True)
+                p_perc = self._prox_analysis(prox_ds, region=sub_region)
+                slp_perc = self._prox_analysis(slp_ds, region=sub_region)
+                #slp_perc = 0
 
-            elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
-                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
-                    zone = self._zones[3]
-                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
-                    zone = self._zones[4]
+                # if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
+                #     zone = self._zones[2]
+                # elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
+                #     zone = self._zones[1]
+                # else:
+                #     zone = self._zones[0]
+                zone = None
+                if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[6]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[7]
+                    else:
+                        zone = None
+                        #    zone = self._zones[8]
+
+                elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[3]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[4]
+                    else:
+                        zone = None
+                        #    zone = self._zones[5]
                 else:
-                    zone = None
-                    #    zone = self._zones[5]
-            else:
-                if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
-                    zone = self._zones[0]
-                elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
-                    zone = self._zones[1]
-                else:
-                    zone = None
-                    #    zone = self._zones[2]
-                    
-            if zone is not None:
-                sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
-            #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, slp_perc, zone]
-            #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, slp_perc, s_dc['zr'][0], s_dc['zr'][1], zone]
-            
-        _prog.end(0, 'analyzed {} sub-regions.'.format(len(sub_regions)))
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[0]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[1]
+                    else:
+                        zone = None
+                        #    zone = self._zones[2]
+
+                if zone is not None:
+                    sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
+                #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, slp_perc, zone]
+                #sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, slp_perc, s_dc['zr'][0], s_dc['zr'][1], zone]
             
         dem_ds = msk_ds = prox_ds = slp_ds = None
         return(sub_zones)
@@ -441,7 +441,6 @@ class InterpolationUncertainty: #(waffles.Waffle):
         sims = max-simulations
         """
             
-        _prog = utils.CliProgress('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample))
         #utils.echo_msg('simulation\terrors\tproximity-coeff\tp_diff\tslp-coeff\tslp_diff')
         #utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
         utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
@@ -450,185 +449,187 @@ class InterpolationUncertainty: #(waffles.Waffle):
         last_ec_d = None
         #s_dp = sub_dp = None
         s_dp = []
-        
-        while True:
-            status = 0
-            sim += 1
-            #utils.echo_msg('sorting training tiles by distance...')
-            #trains = self._regions_sort(trainers, verbose=False)
-            trains = self._regions_sort(trainers, verbose = False)
-            tot_trains = len([x for s in trains for x in s])
-            #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
-            
-            for z, train in enumerate(trains):
-                train_h = train[:25]
-                ss_samp = perc
 
-                ## ==============================================
-                ## perform split-sample analysis on each training region.
-                ## ==============================================
-                for n, sub_region in enumerate(train_h):
-                    #print(sub_region)
-                    _prog.update()
+        with tqdm(desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)) as pbar:
+            while True:
+                status = 0
+                sim += 1
+                #utils.echo_msg('sorting training tiles by distance...')
+                #trains = self._regions_sort(trainers, verbose=False)
+                trains = self._regions_sort(trainers, verbose = False)
+                tot_trains = len([x for s in trains for x in s])
+                #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
+
+                for z, train in enumerate(trains):
+                    train_h = train[:25]
                     ss_samp = perc
-                    this_region = sub_region[0].copy()
-                    #if sub_region[3] < ss_samp:
-                    #   ss_samp = sub_region[3]
-                    ss_samp = sub_region[3]
 
                     ## ==============================================
-                    ## extract the xyz data for the region from the DEM
+                    ## perform split-sample analysis on each training region.
                     ## ==============================================
-                    o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
-                    ds = gdal.Open(self.dem.fn)
-                    ds_config = demfun.gather_infos(ds)
-                    b_region = this_region.copy()
-                    b_region.buffer(pct=20, x_inc=self.dem.xinc, y_inc=self.dem.yinc)
-                    srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
-                    #cnt = 0
-                    
-                    ## TODO: extract weights here as well...
-                    with open(o_xyz, 'w') as o_fh:
-                        for xyz in demfun.parse(ds, srcwin=srcwin, mask=self.dem.mask_fn):
-                            #cnt+=1
-                            xyz.dump(dst_port=o_fh)
-                            
-                    ds = None
-                   
-                    if os.stat(o_xyz).st_size != 0:
+                    for n, sub_region in enumerate(train_h):
+                        #print(sub_region)
+                        #_prog.update()
+                        pbar.update()
+                        ss_samp = perc
+                        this_region = sub_region[0].copy()
+                        #if sub_region[3] < ss_samp:
+                        #   ss_samp = sub_region[3]
+                        ss_samp = sub_region[3]
+
                         ## ==============================================
-                        ## split the xyz data to inner/outer; outer is
-                        ## the data buffer, inner will be randomly sampled
+                        ## extract the xyz data for the region from the DEM
                         ## ==============================================
+                        o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
+                        ds = gdal.Open(self.dem.fn)
+                        ds_config = demfun.gather_infos(ds)
+                        b_region = this_region.copy()
+                        b_region.buffer(pct=20, x_inc=self.dem.xinc, y_inc=self.dem.yinc)
+                        srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+                        #cnt = 0
 
-                        s_inner, s_outer = self._gmt_select_split(
-                            o_xyz, this_region, 'sub_{}'.format(n), verbose=False
-                        )
-                        if os.stat(s_inner).st_size != 0:
-                            sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
-                            ss_len = len(sub_xyz)
-                            #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                            #if ss_samp is not None:
-                            #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                            sx_cnt = int(ss_len * (ss_samp / 100.))
-                            #else:
-                            #    #sx_cnt = ss_len-1
-                            #    sx_cnt = 1
-                                
-                            #if sx_cnt >= ss_len: sx_cnt = ss_len=-1
-                            sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                        ## TODO: extract weights here as well...
+                        with open(o_xyz, 'w') as o_fh:
+                            for xyz in demfun.parse(ds, srcwin=srcwin, mask=self.dem.mask_fn):
+                                #cnt+=1
+                                xyz.dump(dst_port=o_fh)
 
-                            #print('sx_cnt', sx_cnt)
-                            #print('ss_len', ss_len)
-                            #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
-                            #_prog.update('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors: {} {} {} {} {}'.format(self.sims, self.max_sample, sub_region[5], ss_samp, sx_cnt, ss_len, len(sub_xyz[sx_cnt:])))
-                            sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
-                            np.random.shuffle(sub_xyz)
-                            np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
+                        ds = None
 
+                        if os.stat(o_xyz).st_size != 0:
                             ## ==============================================
-                            ## generate the random-sample DEM
+                            ## split the xyz data to inner/outer; outer is
+                            ## the data buffer, inner will be randomly sampled
                             ## ==============================================
-                            waff = waffles.WaffleFactory(
-                                mod=self.dem.mod,
-                                data=[s_outer, sub_xyz_head],
-                                src_region=b_region,
-                                xinc=self.dem.xinc,
-                                yinc=self.dem.yinc,
-                                name='sub_{}'.format(n),
-                                node=self.dem.node,
-                                fmt=self.dem.fmt,
-                                extend=self.dem.extend,
-                                extend_proc=self.dem.extend_proc,
-                                weights=self.dem.weights,
-                                sample=self.dem.sample,
-                                clip=self.dem.clip,
-                                dst_srs=self.dem.dst_srs,
-                                mask=True,
-                                verbose=False,
-                                clobber=True,
+
+                            s_inner, s_outer = self._gmt_select_split(
+                                o_xyz, this_region, 'sub_{}'.format(n), verbose=False
                             )
-                            waff.mod_args = self.dem.mod_args
-                            wf = waff.acquire().generate()
-                            
-                            if wf.valid_p():
-                                ## ==============================================
-                                ## generate the random-sample data PROX and SLOPE
-                                ## ==============================================
-                                sub_prox = '{}_prox.tif'.format(wf.name)
-                                demfun.proximity('{}_m.tif'.format(wf.name), sub_prox)
-                                #sub_slp = '{}_slp.tif'.format(wf.name)
-                                #demfun.slope(wf.fn, sub_slp)
+                            if os.stat(s_inner).st_size != 0:
+                                sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
+                                ss_len = len(sub_xyz)
+                                #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
+                                #if ss_samp is not None:
+                                #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                                sx_cnt = int(ss_len * (ss_samp / 100.))
+                                #else:
+                                #    #sx_cnt = ss_len-1
+                                #    sx_cnt = 1
+
+                                #if sx_cnt >= ss_len: sx_cnt = ss_len=-1
+                                sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+
+                                #print('sx_cnt', sx_cnt)
+                                #print('ss_len', ss_len)
+                                #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
+                                #_prog.update('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors: {} {} {} {} {}'.format(self.sims, self.max_sample, sub_region[5], ss_samp, sx_cnt, ss_len, len(sub_xyz[sx_cnt:])))
+                                sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
+                                np.random.shuffle(sub_xyz)
+                                np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
 
                                 ## ==============================================
-                                ## Calculate the random-sample errors
+                                ## generate the random-sample DEM
                                 ## ==============================================
-                                sub_xyd = demfun.query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
-                                sub_dp = demfun.query(sub_xyd, sub_prox, 'xyzg')
-                                #sub_ds = demfun.query(sub_dp, self.slope, 'g')
-                                #if len(sub_dp) > 0:
-                                #   if sub_dp.shape[0] == sub_ds.shape[0]:
-                                #       sub_dp = np.append(sub_dp, sub_ds, 1)
-                                #   else: sub_dp = []
-                            else:
-                                sub_dp = None
-                                
-                            utils.remove_glob(sub_xyz_head)
-                            if sub_dp is not None and len(sub_dp) > 0:
-                                try:
-                                    s_dp = np.vstack((s_dp, sub_dp))
-                                except:
-                                    s_dp = sub_dp
-                                    
-                    utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
+                                waff = waffles.WaffleFactory(
+                                    mod=self.dem.mod,
+                                    data=[s_outer, sub_xyz_head],
+                                    src_region=b_region,
+                                    xinc=self.dem.xinc,
+                                    yinc=self.dem.yinc,
+                                    name='sub_{}'.format(n),
+                                    node=self.dem.node,
+                                    fmt=self.dem.fmt,
+                                    extend=self.dem.extend,
+                                    extend_proc=self.dem.extend_proc,
+                                    weights=self.dem.weights,
+                                    sample=self.dem.sample,
+                                    clip=self.dem.clip,
+                                    dst_srs=self.dem.dst_srs,
+                                    mask=True,
+                                    verbose=False,
+                                    clobber=True,
+                                )
+                                waff.mod_args = self.dem.mod_args
+                                wf = waff.acquire().generate()
 
-            if s_dp is not None and len(s_dp) > 0:
-                d_max = self.region_info[self.dem.name][4]
-                #s_max = self.region_info[self.dem.name][5]
-                s_dp = s_dp[s_dp[:,3] < max_dist,:]
-                s_dp = s_dp[s_dp[:,3] >= 1,:]
-                prox_err = s_dp[:,[2,3]]
+                                if wf.valid_p():
+                                    ## ==============================================
+                                    ## generate the random-sample data PROX and SLOPE
+                                    ## ==============================================
+                                    sub_prox = '{}_prox.tif'.format(wf.name)
+                                    demfun.proximity('{}_m.tif'.format(wf.name), sub_prox)
+                                    #sub_slp = '{}_slp.tif'.format(wf.name)
+                                    #demfun.slope(wf.fn, sub_slp)
 
-                if last_ec_d is None:
-                    last_ec_d = [0, 0.1, 0.2]
-                    last_ec_diff = 10
+                                    ## ==============================================
+                                    ## Calculate the random-sample errors
+                                    ## ==============================================
+                                    sub_xyd = demfun.query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
+                                    sub_dp = demfun.query(sub_xyd, sub_prox, 'xyzg')
+                                    #sub_ds = demfun.query(sub_dp, self.slope, 'g')
+                                    #if len(sub_dp) > 0:
+                                    #   if sub_dp.shape[0] == sub_ds.shape[0]:
+                                    #       sub_dp = np.append(sub_dp, sub_ds, 1)
+                                    #   else: sub_dp = []
+                                else:
+                                    sub_dp = None
+
+                                utils.remove_glob(sub_xyz_head)
+                                if sub_dp is not None and len(sub_dp) > 0:
+                                    try:
+                                        s_dp = np.vstack((s_dp, sub_dp))
+                                    except:
+                                        s_dp = sub_dp
+
+                        utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
+
+                if s_dp is not None and len(s_dp) > 0:
+                    d_max = self.region_info[self.dem.name][4]
+                    #s_max = self.region_info[self.dem.name][5]
+                    s_dp = s_dp[s_dp[:,3] < max_dist,:]
+                    s_dp = s_dp[s_dp[:,3] >= 1,:]
+                    prox_err = s_dp[:,[2,3]]
+
+                    if last_ec_d is None:
+                        last_ec_d = [0, 0.1, 0.2]
+                        last_ec_diff = 10
+                    else:
+                        last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
+
+                    ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
+                    #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
+                    ec_diff = abs(ec_d[2] - ec_d[1])
+                    ec_l_diff = abs(last_ec_diff - ec_diff)
+                    #s_dp = s_dp[s_dp[:,4] < s_max,:]
+                    #slp_err = s_dp[:,[2,4]]
+                    #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
+                    # ec_s = [0, 1, 2]
+                    #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
+                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+
+                    if len(s_dp) < self.max_sample:
+                        last_ec_d = ec_d
+                        continue
+
+                    if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
+                        last_ec_d = ec_d
+                        continue
+
+                    if sim >= int(self.sims):
+                        break
+
+                    if abs(last_ec_diff - ec_diff) < 0.01:
+                        break
+
+                    # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
+                    #     break
+
+                    last_ec_d = ec_d
                 else:
-                    last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
+                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
 
-                ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
-                #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
-                ec_diff = abs(ec_d[2] - ec_d[1])
-                ec_l_diff = abs(last_ec_diff - ec_diff)
-                #s_dp = s_dp[s_dp[:,4] < s_max,:]
-                #slp_err = s_dp[:,[2,4]]
-                #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
-                # ec_s = [0, 1, 2]
-                #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
-                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
-                
-                if len(s_dp) < self.max_sample:
-                    last_ec_d = ec_d
-                    continue
-                
-                if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
-                    last_ec_d = ec_d
-                    continue
-                
-                if sim >= int(self.sims):
-                    break
-                
-                if abs(last_ec_diff - ec_diff) < 0.01:
-                    break
-
-                # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
-                #     break
-                
-                last_ec_d = ec_d
-            else:
-                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
-                
         np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
-        _prog.end(status, 'performed {} SPLIT-SAMPLE simulations'.format(sim))
+        #_prog.end(status, 'performed {} SPLIT-SAMPLE simulations'.format(sim))
         return([ec_d])
         
     def run(self):

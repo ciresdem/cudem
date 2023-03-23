@@ -1175,11 +1175,11 @@ mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
 
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         if self.verbose:
-            progress = utils.CliProgress(
+            utils.echo_msg(
                 'generating uninterpolated NUM grid `{}` @ {}/{}'.format(
                     self.mode, ycount, xcount
                 )
-            )
+            )          
             
         if self.mode == 'm' or self.mode == 'w':
             sum_array = np.zeros((ycount, xcount))
@@ -1223,15 +1223,7 @@ mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
         else:
             out_array = count_array
 
-        out_array[np.isnan(out_array)] = self.ndv
-        if self. verbose:
-            progress.end(
-                0,
-                'generated uninterpolated num grid `{}` @ {}/{}'.format(
-                    self.mode, ycount, xcount
-                )
-            )
-            
+        out_array[np.isnan(out_array)] = self.ndv            
         utils.gdal_write(out_array, self.fn, ds_config)
         
     def run(self):
@@ -1438,13 +1430,13 @@ and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-
 
         if self.verbose:
             if self.min_points:
-                progress = utils.CliProgress(
+                utils.echo_msg(
                     'generating IDW grid @ {}/{} looking for at least {} neighbors within {} pixels'.format(
                         ycount, xcount, self.min_points, self.radius
                     )
                 )
             else:
-                progress = utils.CliProgress(
+                utils.echo_msg(
                     'generating IDW grid @ {}/{}'.format(ycount, xcount)
                 )
             i=0
@@ -1598,14 +1590,6 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
             self.fmt
         )
 
-        #if self.verbose:
-        #    progress = tqdm(total=)
-            # progress = utils.CliProgress(
-            #     'generating {} (scipy) grid @ {}/{}'.format(
-            #         self.method, ycount, xcount
-            #     )
-            # )
-
         self._stacks_array(
             out_name='{}_scipy_stack'.format(self.name),
             supercede=self.supercede
@@ -1640,7 +1624,6 @@ https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.
         
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
-            #progress = tqdm(total=)
        
         for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose): #, step=n_step):                
             srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
@@ -1791,12 +1774,12 @@ class WafflesGDALGrid(Waffle):
         
     def run(self):
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        _prog = utils.CliProgress(
+        utils.echo_msg(
             'running GDAL GRID {} algorithm @ {} and {}/{}...'.format(
                 self.alg_str.split(':')[0], self.p_region.format('fn'), xcount, ycount
             )
         )
-        _prog_update = lambda x, y, z: _prog.update()
+        #_prog_update = lambda x, y, z: _prog.update()
         ds = self._xyz_ds()
         if ds.GetLayer().GetFeatureCount() == 0:
             utils.echo_error_msg('no input data')
@@ -1808,7 +1791,7 @@ class WafflesGDALGrid(Waffle):
             width = xcount,
             height = ycount,
             algorithm = self.alg_str,
-            callback = _prog_update if self.verbose else None,
+            #callback = _prog_update if self.verbose else None,
             outputBounds = [
                 self.p_region.xmin,
                 self.p_region.ymax,
@@ -1822,12 +1805,12 @@ class WafflesGDALGrid(Waffle):
         demfun.set_nodata(
             '{}.tif'.format(self.name, nodata=self.ndv, convert_array=False)
         )
-        _prog.end(
-            0,
-            'ran GDAL GRID {} algorithm @ {}.'.format(
-                self.alg_str.split(':')[0], self.p_region.format('fn')
-            )
-        )        
+        # _prog.end(
+        #     0,
+        #     'ran GDAL GRID {} algorithm @ {}.'.format(
+        #         self.alg_str.split(':')[0], self.p_region.format('fn')
+        #     )
+        # )        
         ds = None
         return(self)
 
@@ -2761,86 +2744,86 @@ Output vector will polygonize land-areas.
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
-        _osm_p = utils.CliProgress('processing OSM buildings')
-        for n, osm_result in enumerate(this_osm.results):
-            _osm_p.update_perc((n, len(this_osm.results)))
-            if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
-                #if True:
-                if osm_result[-1] == 'bz2':
-                    osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
-                    osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
-                    _clipped = True
-                elif osm_result[-1] == 'pbf':
-                    osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
-                    #osm_file = utils.ogr_clip(osm_result[1], self.wgs_region)
-                    _clipped = True
-                else:
-                    osm_file = osm_result[1]
-                    _clipped = False
+        with tqdm(total=len(this_osm.results), desc='processing OSM buildings') as pbar:
+            for n, osm_result in enumerate(this_osm.results):
+                pbar.update()
+                if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
+                    #if True:
+                    if osm_result[-1] == 'bz2':
+                        osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
+                        osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
+                        _clipped = True
+                    elif osm_result[-1] == 'pbf':
+                        osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
+                        #osm_file = utils.ogr_clip(osm_result[1], self.wgs_region)
+                        _clipped = True
+                    else:
+                        osm_file = osm_result[1]
+                        _clipped = False
 
-                # utils.run_cmd(
-                #     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -where "building!=\'\'" -te {} -ts {} {} -ot Int32'.format(
-                #         osm_file,
-                #         self.p_region.format('te'),
-                #         self.ds_config['nx'],
-                #         self.ds_config['ny'],
-                #     ),
-                #     verbose=True
-                # )
+                    # utils.run_cmd(
+                    #     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -where "building!=\'\'" -te {} -ts {} {} -ot Int32'.format(
+                    #         osm_file,
+                    #         self.p_region.format('te'),
+                    #         self.ds_config['nx'],
+                    #         self.ds_config['ny'],
+                    #     ),
+                    #     verbose=True
+                    # )
 
-                # osm_ds = ogr.Open(osm_file)
-                # osm_layer = osm_ds.GetLayer('multipolygons')
-                # #print(osm_layer.GetFeatureCount())
-                # osm_layer_dfn = osm_layer.GetLayerDefn()
-                # print(osm_layer_dfn)
-                # #osm_fi = osm_layer_dfn.GetFieldIndex()
-                # #print(osm_fi)
-                # osm_fi = osm_layer_dfn.GetFieldIndex('building')
-                # print(osm_fi)
-                # osm_ds = None
+                    # osm_ds = ogr.Open(osm_file)
+                    # osm_layer = osm_ds.GetLayer('multipolygons')
+                    # #print(osm_layer.GetFeatureCount())
+                    # osm_layer_dfn = osm_layer.GetLayerDefn()
+                    # print(osm_layer_dfn)
+                    # #osm_fi = osm_layer_dfn.GetFieldIndex()
+                    # #print(osm_fi)
+                    # osm_fi = osm_layer_dfn.GetFieldIndex('building')
+                    # print(osm_fi)
+                    # osm_ds = None
 
-                if os.path.getsize(osm_file) == 366:
-                    continue
-                
-                out, status = utils.run_cmd(
-                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
-                        osm_file,
-                        self.p_region.format('te'),
-                        self.ds_config['nx'],
-                        self.ds_config['ny'],
-                    ),
-                    verbose=False
-                )
+                    if os.path.getsize(osm_file) == 366:
+                        continue
 
-                if status == 0:
-                    bldg_ds = gdal.Open('bldg_osm.tif')
-                    #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=self.cst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
-                    if bldg_ds is not None:
-                        bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                        self.coast_array[bldg_ds_arr == -1] = 0
-                        bldg_ds = bldg_ds_arr = None
-                        
-                    bldg_ds = None
-                    
-                utils.remove_glob('bldg_osm.tif*')
-                
-                # osm_ds = ogr.Open(osm_file)
-                # if osm_ds is not None:
-                #     osm_layer = osm_ds.GetLayer('multipolygons')
-                #     #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
-                #     osm_layer.SetAttributeFilter("building!=''")
-                #     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-                #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
-                #     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
-                #     self.coast_array[bldg_arr == -1] = 0
-                # else:
-                #     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
-                # osm_ds = None
-                #if _clipped:
-                #    utils.remove_glob(osm_file)
-            #else:
-            #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
-        _osm_p.end(0, 'processed OSM buildings')
+                    out, status = utils.run_cmd(
+                        'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
+                            osm_file,
+                            self.p_region.format('te'),
+                            self.ds_config['nx'],
+                            self.ds_config['ny'],
+                        ),
+                        verbose=False
+                    )
+
+                    if status == 0:
+                        bldg_ds = gdal.Open('bldg_osm.tif')
+                        #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=self.cst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
+                        if bldg_ds is not None:
+                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                            self.coast_array[bldg_ds_arr == -1] = 0
+                            bldg_ds = bldg_ds_arr = None
+
+                        bldg_ds = None
+
+                    utils.remove_glob('bldg_osm.tif*')
+
+                    # osm_ds = ogr.Open(osm_file)
+                    # if osm_ds is not None:
+                    #     osm_layer = osm_ds.GetLayer('multipolygons')
+                    #     #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
+                    #     osm_layer.SetAttributeFilter("building!=''")
+                    #     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
+                    #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+                    #     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
+                    #     self.coast_array[bldg_arr == -1] = 0
+                    # else:
+                    #     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
+                    # osm_ds = None
+                    #if _clipped:
+                    #    utils.remove_glob(osm_file)
+                #else:
+                #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
+
         bldg_ds = bldg_warp_ds = None
         
     def _load_data(self):
@@ -3009,7 +2992,6 @@ to get elevations (positive up), set apply_elevations=True.
         )
         globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
         globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
-        _prog = utils.CliProgress('parsing globathy parameters...')
         with open(globathy_csv, mode='r') as globc:
             reader = csv.reader(globc)
             next(reader)
@@ -3017,7 +2999,6 @@ to get elevations (positive up), set apply_elevations=True.
                 globd = {}
                 for row in reader:
                     if int(row[0]) in ids:
-                        _prog.update()
                         globd[int(row[0])] = float(row[-1])
                         ids.remove(int(row[0]))
                         
@@ -3026,7 +3007,6 @@ to get elevations (positive up), set apply_elevations=True.
             else:
                 globd = {int(row[0]):float(row[-1]) for row in reader}
 
-        _prog.end(0, 'parsed {} globathy parameters'.format(len(globd)))
         return(globd)
 
     def _fetch_gmrt(self, gmrt_region=None):
@@ -3075,10 +3055,7 @@ to get elevations (positive up), set apply_elevations=True.
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-
-        _cop_prog = utils.CliProgress('combining Copernicus tiles')
         [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
-        _cop_prog.end(0, 'combined {} Copernicus tiles'.format(len(this_cop.results)))
         
         return(cop_ds)
     
@@ -3113,11 +3090,10 @@ to get elevations (positive up), set apply_elevations=True.
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        p = utils.CliProgress('applying labels to array...')
-        for n, x in enumerate(nfeatures):
-            p.update_perc((n,len(nfeatures)))
-            max_dist_arr[labels==x] = maxes[x-1]
-        p.end(0, 'applied labels to max_dist_arr')
+        with tqdm(total=len(nfeatures), desc='applying labels...') as pbar:
+            for n, x in enumerate(nfeatures):
+                pbar.update()
+                max_dist_arr[labels==x] = maxes[x-1]
         
         max_dist_arr[max_dist_arr == 0] = np.nan
         bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
@@ -3162,15 +3138,16 @@ to get elevations (positive up), set apply_elevations=True.
             lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
         
         lk_features = lk_layer.GetFeatureCount()
-        lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
         lk_regions = self.p_region.copy()
-        for lk_f in lk_layer:
-            this_region = regions.Region()
-            lk_geom = lk_f.GetGeometryRef()
-            lk_wkt = lk_geom.ExportToWkt()
-            this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
-            lk_regions = regions.regions_merge(lk_regions, this_region)
-            
+        with tqdm(total=len(lk_layer), desc='processing {} lakes'.format(lk_features)) as pbar:
+            for lk_f in lk_layer:
+                pbar.update()
+                this_region = regions.Region()
+                lk_geom = lk_f.GetGeometryRef()
+                lk_wkt = lk_geom.ExportToWkt()
+                this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
+                lk_regions = regions.regions_merge(lk_regions, this_region)
+
         while not regions.regions_within_ogr_p(self.p_region, lk_regions):
             utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
             self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
@@ -3224,12 +3201,11 @@ to get elevations (positive up), set apply_elevations=True.
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            _p = utils.CliProgress('Assigning Globathy Depths to rasterized lakes...')
-            for n, this_id in enumerate(lk_ids):
-                depth = globd[this_id]
-                msk_arr[msk_arr == this_id] = depth
-                _p.update_perc((n, len(lk_ids)))
-            _p.end(0, 'Assigned {} Globathy Depths to rasterized lakes.'.format(len(lk_ids)))
+            with tqdm(total=len(lk_ids), desc='Assigning Globathy Depths to rasterized lakes...') as pbar:
+                for n, this_id in enumerate(lk_ids):
+                    depth = globd[this_id]
+                    msk_arr[msk_arr == this_id] = depth
+                    pbar.update()
             
         elif self.depth == 'hydrolakes':
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
@@ -3268,7 +3244,6 @@ to get elevations (positive up), set apply_elevations=True.
             shore_arr=cop_arr,
         )
 
-        lk_prog.end(0, 'processed {} lakes'.format(lk_features))
         bathy_arr[bathy_arr == 0] = self.ndv        
         utils.gdal_write(
             bathy_arr, '{}.tif'.format(self.name), self.ds_config,
@@ -3316,57 +3291,56 @@ to get elevations (positive up), set apply_elevations=True.
         lk_layer = lk_ds.GetLayer()
         lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
         lk_features = lk_layer.GetFeatureCount()
-        lk_prog = utils.CliProgress('processing {} lakes'.format(lk_features))
 
         lk_ids = []
         for i, feat in enumerate(lk_layer):
             lk_ids.append(feat.GetField('Hylak_id'))
 
         globd = self._fetch_globathy(ids=lk_ids)
-        
-        for i, feat in enumerate(lk_layer):
-            lk_prog.update_perc((i, lk_features))
-            lk_id = feat.GetField('Hylak_id')
-            lk_elevation = feat.GetField('Elevation')
-            lk_depth_glb = globd[lk_id]
-            
-            lk_name = feat.GetField('Lake_name')
-            lk_depth = feat.GetField('Depth_avg')
-            lk_area = feat.GetField('Lake_area')
-            utils.echo_msg('lake: {}'.format(lk_name))
-            utils.echo_msg('lake elevation: {}'.format(lk_elevation))
-            utils.echo_msg('lake_depth: {}'.format(lk_depth))
-            utils.echo_msg('lake_area: {}'.format(lk_area))
-            utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
-            utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
 
-            tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
-            tmp_layer = tmp_ds.GetLayer()            
-            gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
-            msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
+        with tqdm(total=len(lk_layer), desc='processing lakes') as pbar:
+            for i, feat in enumerate(lk_layer):
+                pbar.update()
+                lk_id = feat.GetField('Hylak_id')
+                lk_elevation = feat.GetField('Elevation')
+                lk_depth_glb = globd[lk_id]
 
-            prox_band = prox_ds.GetRasterBand(1)
-            proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-            gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
-            
-            prox_arr = prox_band.ReadAsArray()
-            msk_arr = msk_band.ReadAsArray()
+                lk_name = feat.GetField('Lake_name')
+                lk_depth = feat.GetField('Depth_avg')
+                lk_area = feat.GetField('Lake_area')
+                utils.echo_msg('lake: {}'.format(lk_name))
+                utils.echo_msg('lake elevation: {}'.format(lk_elevation))
+                utils.echo_msg('lake_depth: {}'.format(lk_depth))
+                utils.echo_msg('lake_area: {}'.format(lk_area))
+                utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
+                utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
 
-            self.bathy_arr += self.apply_calculation(
-                prox_band.ReadAsArray(),
-                max_depth=lk_depth_glb,
-                shore_arr=cop_band.ReadAsArray(),
-                shore_elev=lk_elevation
-            )
+                tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
+                tmp_layer = tmp_ds.GetLayer()            
+                gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
+                msk_band = msk_ds.GetRasterBand(1)
+                msk_band.SetNoDataValue(self.ds_config['ndv'])
+
+                prox_band = prox_ds.GetRasterBand(1)
+                proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+                gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
+
+                prox_arr = prox_band.ReadAsArray()
+                msk_arr = msk_band.ReadAsArray()
+
+                self.bathy_arr += self.apply_calculation(
+                    prox_band.ReadAsArray(),
+                    max_depth=lk_depth_glb,
+                    shore_arr=cop_band.ReadAsArray(),
+                    shore_elev=lk_elevation
+                )
+
+                prox_arr[msk_arr == 1] = 0
+                prox_ds.GetRasterBand(1).WriteArray(prox_arr)
+                msk_arr[msk_arr == 1] = 0
+                msk_ds.GetRasterBand(1).WriteArray(msk_arr)
+                tmp_ds = None
             
-            prox_arr[msk_arr == 1] = 0
-            prox_ds.GetRasterBand(1).WriteArray(prox_arr)
-            msk_arr[msk_arr == 1] = 0
-            msk_ds.GetRasterBand(1).WriteArray(msk_arr)
-            tmp_ds = None
-            
-        lk_prog.end(0, 'processed {} lakes'.format(lk_features))
         self.bathy_arr[self.bathy_arr == 0] = self.ndv        
         utils.gdal_write(
             self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,

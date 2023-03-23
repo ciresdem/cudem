@@ -579,40 +579,33 @@ def yield_srcwin(src_dem, n_chunk=10, step=5, verbose=False):
     i_chunk = 0
     x_i_chunk = 0
     
-    if verbose:
-        _prog = utils.CliProgress(
-           'parsing dataset {}'.format(src_dem)
-        )
-    while True:
-        y_chunk = n_chunk
-        if verbose:
-           _prog.update_perc((i_chunk*step, ds_config['nb']/step))
-        
-        #utils.echo_msg_inline('[{:.2f}%]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
+    with tqdm(total=ds_config['nb']/step, desc='chunking srcwin') as pbar:
         while True:
-            this_x_chunk = ds_config['nx'] if x_chunk > ds_config['nx'] else x_chunk
-            this_y_chunk = ds_config['ny'] if y_chunk > ds_config['ny'] else y_chunk
-            this_x_origin = x_chunk - n_chunk
-            this_y_origin = y_chunk - n_chunk
-            this_x_size = int(this_x_chunk - this_x_origin)
-            this_y_size = int(this_y_chunk - this_y_origin)
-            if this_x_size == 0 or this_y_size == 0: break
-            srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
-            yield(srcwin)
+            y_chunk = n_chunk
+            while True:
+                this_x_chunk = ds_config['nx'] if x_chunk > ds_config['nx'] else x_chunk
+                this_y_chunk = ds_config['ny'] if y_chunk > ds_config['ny'] else y_chunk
+                this_x_origin = x_chunk - n_chunk
+                this_y_origin = y_chunk - n_chunk
+                this_x_size = int(this_x_chunk - this_x_origin)
+                this_y_size = int(this_y_chunk - this_y_origin)
+                if this_x_size == 0 or this_y_size == 0: break
+                srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
+                yield(srcwin)
 
-            if y_chunk > ds_config['ny']:
+                if y_chunk > ds_config['ny']:
+                    break
+                else:
+                    y_chunk += step
+                    i_chunk += 1
+                    
+                pbar.update(step)
+                    
+            if x_chunk > ds_config['nx']:
                 break
             else:
-                y_chunk += step
-                i_chunk += 1
-        if x_chunk > ds_config['nx']:
-            break
-        else:
-            x_chunk += step
-            x_i_chunk += 1
-    #utils.echo_msg('[OK]'.format(((i_chunk*step)/(ds_config['nb']/step) * 100)))
-    if verbose:
-       _prog.end(0, 'parsed dataset {}'.format(src_dem))
+                x_chunk += step
+                x_i_chunk += 1
 
 def slope(src_gdal, dst_gdal, s = 111120):
     """generate a slope grid with GDAL

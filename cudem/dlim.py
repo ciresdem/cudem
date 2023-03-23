@@ -36,6 +36,9 @@ import os
 import sys
 import re
 import copy
+
+from tqdm import tqdm
+
 from osgeo import ogr
 
 import cudem
@@ -292,13 +295,6 @@ A datalist is an extended MB-System style datalist.
     def parse_json(self):
         status = 0
         count = 0
-        if self.verbose:
-            _prog = utils.CliProgress(
-                'parsing datalist json {}{}'.format(
-                    self.fn,
-                    ' @{}'.format(self.weight) if self.weight is not None else '')
-            )
-
         if os.path.exists('{}.json'.format(self.fn)):
             driver = ogr.GetDriverByName('GeoJSON')
             dl_ds = driver.Open('{}.json'.format(self.fn))
@@ -316,81 +312,25 @@ A datalist is an extended MB-System style datalist.
                 dl_layer.SetSpatialFilter(_boundsGeom)
                 count = len(dl_layer)
 
-                for l,feat in enumerate(dl_layer):
-                    #_prog.update_perc((l, count))
-                    if self.region is not None:
-                        w_region = self.region.w_region()
-                        if w_region[0] is not None:
-                            if float(feat.GetField('Weight')) < w_region[0]:
-                                continue
-                        if w_region[1] is not None:
-                            if float(feat.GetField('Weight')) > w_region[1]:
-                                continue
+                with tqdm(total=len(dl_layer), desc='parsing datalist json {}'.format(self.fn)) as pbar:
+                    for l,feat in enumerate(dl_layer):
+                        if self.region is not None:
+                            w_region = self.region.w_region()
+                            if w_region[0] is not None:
+                                if float(feat.GetField('Weight')) < w_region[0]:
+                                    continue
+                            if w_region[1] is not None:
+                                if float(feat.GetField('Weight')) > w_region[1]:
+                                    continue
 
-                    try:
-                        ds_args = feat.GetField('ds_args')
-                        data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                    except:
-                        data_set_args = {}
-                        
-                    data_set = DatasetFactory(
-                        '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
-                        weight=self.weight,
-                        parent=self,
-                        src_region=self.region,
-                        invert_region=self.invert_region,
-                        metadata=copy.deepcopy(self.metadata),
-                        src_srs=self.src_srs,
-                        dst_srs=self.dst_srs,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        sample_alg=self.sample_alg,
-                        cache_dir=self.cache_dir,
-                        verbose=self.verbose
-                    ).acquire(**data_set_args)
-                    if data_set is not None and data_set.valid_p(
-                            fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                    ):
-                        for ds in data_set.parse():
-                            self.data_entries.append(ds)
-                            yield(ds)
+                        try:
+                            ds_args = feat.GetField('ds_args')
+                            data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                        except:
+                            data_set_args = {}
 
-                    _prog.update_perc((l, count))
-                dl_ds = dl_layer = None
-        else:
-            status = -1
-            for ds in self.parse():
-                yield(ds)
-            
-        if self.verbose:
-            _prog.end(
-                status, 'parsed {} datasets from datalist {}{}'.format(
-                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-                )
-            )
-                            
-    def parse(self):
-        """import a datalist entry from a string"""
-
-        status = 0
-        if self.verbose:
-            _prog = utils.CliProgress(
-                'parsing datalist {}{}'.format(
-                    self.fn,
-                    ' @{}'.format(self.weight) if self.weight is not None else '')
-            )
-        if os.path.exists(self.fn):
-            with open(self.fn, 'r') as f:
-                count = sum(1 for _ in f)
-
-            with open(self.fn, 'r') as op:
-                for l, this_line in enumerate(op):
-                    # if self.verbose:
-                    #     _prog.update_perc((l, count))
-                        
-                    if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                         data_set = DatasetFactory(
-                            this_line,
+                            '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
                             weight=self.weight,
                             parent=self,
                             src_region=self.region,
@@ -403,34 +343,74 @@ A datalist is an extended MB-System style datalist.
                             sample_alg=self.sample_alg,
                             cache_dir=self.cache_dir,
                             verbose=self.verbose
-                        ).acquire()
-
+                        ).acquire(**data_set_args)
                         if data_set is not None and data_set.valid_p(
                                 fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
                         ):
-                            if self.region is not None and self.region.valid_p(check_xy=True):
-                                try:
-                                    inf_region = regions.Region().from_list(
-                                        data_set.infos['minmax']
-                                    )
-                                except:
-                                    inf_region = self.region.copy()
+                            for ds in data_set.parse():
+                                self.data_entries.append(ds)
+                                yield(ds)
+                        pbar.update()
+                        
+                dl_ds = dl_layer = None
+        else:
+            status = -1
+            for ds in self.parse():
+                yield(ds)
+                                        
+    def parse(self):
+        """import a datalist entry from a string"""
 
-                                inf_region.wmin = data_set.weight
-                                inf_region.wmax = data_set.weight
-                                if regions.regions_intersect_p(
-                                        inf_region,
-                                        self.region if data_set.dst_trans is None else data_set.trans_region
-                                ):
+        status = 0
+        if os.path.exists(self.fn):
+            with open(self.fn, 'r') as f:
+                count = sum(1 for _ in f)
+
+            with open(self.fn, 'r') as op:
+                with tqdm(desc='parsing datalist {}'.format(self.fn)) as pbar:
+                    for l, this_line in enumerate(op):
+                        pbar.update()
+                        if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
+                            data_set = DatasetFactory(
+                                this_line,
+                                weight=self.weight,
+                                parent=self,
+                                src_region=self.region,
+                                invert_region=self.invert_region,
+                                metadata=copy.deepcopy(self.metadata),
+                                src_srs=self.src_srs,
+                                dst_srs=self.dst_srs,
+                                x_inc=self.x_inc,
+                                y_inc=self.y_inc,
+                                sample_alg=self.sample_alg,
+                                cache_dir=self.cache_dir,
+                                verbose=self.verbose
+                            ).acquire()
+
+                            if data_set is not None and data_set.valid_p(
+                                    fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                            ):
+                                if self.region is not None and self.region.valid_p(check_xy=True):
+                                    try:
+                                        inf_region = regions.Region().from_list(
+                                            data_set.infos['minmax']
+                                        )
+                                    except:
+                                        inf_region = self.region.copy()
+
+                                    inf_region.wmin = data_set.weight
+                                    inf_region.wmax = data_set.weight
+                                    if regions.regions_intersect_p(
+                                            inf_region,
+                                            self.region if data_set.dst_trans is None else data_set.trans_region
+                                    ):
+                                        for ds in data_set.parse():
+                                            self.data_entries.append(ds)
+                                            yield(ds)
+                                else:
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
                                         yield(ds)
-                            else:
-                                for ds in data_set.parse():
-                                    self.data_entries.append(ds)
-                                    yield(ds)
-                    if self.verbose:
-                        _prog.update_perc((l, count))
                                     
         elif len(self.data_entries) > 0:
             for data_set in self.data_entries:
@@ -443,11 +423,6 @@ A datalist is an extended MB-System style datalist.
                 )
             status = -1
             
-        if self.verbose:
-            _prog.end(status, 'parsed datalist {}{}'.format(
-                self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
-            ))
-           
     def yield_xyz(self):
         """parse the data from the datalist and yield as xyz"""
         
