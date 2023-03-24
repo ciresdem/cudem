@@ -384,8 +384,13 @@ See `fetches_cli_usage` for full cli options.
                         x_f.name, this_region.format('str')
                     )
                 )
-            
-            x_f.run()
+
+            try:
+                x_f.run()
+            except (KeyboardInterrupt, SystemExit):
+                utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                sys.exit(-1)
+                
             if want_verbose:
                 utils.echo_msg(
                     'found {} data files.'.format(len(x_f.results))
@@ -398,9 +403,10 @@ See `fetches_cli_usage` for full cli options.
                 for result in x_f.results:
                     print(result[0])
             else:
-                fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads, check_size=check_size)
-                fr.daemon = True
                 try:
+                    fr = f_utils.fetch_results(x_f, want_proc=want_proc, n_threads=num_threads, check_size=check_size)
+                    fr.daemon = True
+                
                     fr.start()
                     fr.join()                
                 except (KeyboardInterrupt, SystemExit):
