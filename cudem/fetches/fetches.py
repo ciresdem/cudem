@@ -402,6 +402,7 @@ See `fetches_cli_usage` for full cli options.
                 fr.daemon = True
                 try:
                     fr.start()
+                    fr.join()                
                 except (KeyboardInterrupt, SystemExit):
                     utils.echo_error_msg('user breakage...please wait for while fetches exits.')
                     x_f.status = -1
@@ -414,5 +415,5 @@ See `fetches_cli_usage` for full cli options.
                         
                         fr.fetch_q.task_done()
                         
-                fr.join()                
+
 ### End

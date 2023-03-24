@@ -393,6 +393,7 @@ class Waffle:
         )
 
         with tqdm(desc='{}: parsing ARRAY data'.format(utils._command_name)) as pbar:
+            #with utils.CliProgress('parisng ARRAY data') as pbar:
             for xdl in self.data:
                 for array in xdl.yield_array():
                     pbar.update()

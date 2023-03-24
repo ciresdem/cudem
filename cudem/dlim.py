@@ -312,45 +312,46 @@ A datalist is an extended MB-System style datalist.
                 dl_layer.SetSpatialFilter(_boundsGeom)
                 count = len(dl_layer)
 
-                #with tqdm(desc='{}: parsing datalist json {}'.format(utils._command_name, self.fn)) as pbar:
-                for l,feat in enumerate(dl_layer):
-                    #pbar.update()
-                    if self.region is not None:
-                        w_region = self.region.w_region()
-                        if w_region[0] is not None:
-                            if float(feat.GetField('Weight')) < w_region[0]:
-                                continue
-                        if w_region[1] is not None:
-                            if float(feat.GetField('Weight')) > w_region[1]:
-                                continue
+                with tqdm(total=len(dl_layer), desc='{}: parsing datalist json {}'.format(utils._command_name, self.fn)) as pbar:
+                    #with utils.CliProgress('parsing datalist json {}'.format(self.fn)) as pbar:
+                    for l,feat in enumerate(dl_layer):
+                        pbar.update()
+                        if self.region is not None:
+                            w_region = self.region.w_region()
+                            if w_region[0] is not None:
+                                if float(feat.GetField('Weight')) < w_region[0]:
+                                    continue
+                            if w_region[1] is not None:
+                                if float(feat.GetField('Weight')) > w_region[1]:
+                                    continue
 
-                    try:
-                        ds_args = feat.GetField('ds_args')
-                        data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                    except:
-                        data_set_args = {}
+                        try:
+                            ds_args = feat.GetField('ds_args')
+                            data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                        except:
+                            data_set_args = {}
 
-                    data_set = DatasetFactory(
-                        '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
-                        weight=self.weight,
-                        parent=self,
-                        src_region=self.region,
-                        invert_region=self.invert_region,
-                        metadata=copy.deepcopy(self.metadata),
-                        src_srs=self.src_srs,
-                        dst_srs=self.dst_srs,
-                        x_inc=self.x_inc,
-                        y_inc=self.y_inc,
-                        sample_alg=self.sample_alg,
-                        cache_dir=self.cache_dir,
-                        verbose=self.verbose
-                    ).acquire(**data_set_args)
-                    if data_set is not None and data_set.valid_p(
-                            fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                    ):
-                        for ds in data_set.parse():
-                            self.data_entries.append(ds)
-                            yield(ds)
+                        data_set = DatasetFactory(
+                            '{} {} {}'.format(feat.GetField('Path'),feat.GetField('Format'),feat.GetField('Weight')),
+                            weight=self.weight,
+                            parent=self,
+                            src_region=self.region,
+                            invert_region=self.invert_region,
+                            metadata=copy.deepcopy(self.metadata),
+                            src_srs=self.src_srs,
+                            dst_srs=self.dst_srs,
+                            x_inc=self.x_inc,
+                            y_inc=self.y_inc,
+                            sample_alg=self.sample_alg,
+                            cache_dir=self.cache_dir,
+                            verbose=self.verbose
+                        ).acquire(**data_set_args)
+                        if data_set is not None and data_set.valid_p(
+                                fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                        ):
+                            for ds in data_set.parse():
+                                self.data_entries.append(ds)
+                                yield(ds)
                         
                 dl_ds = dl_layer = None
         else:
@@ -367,50 +368,50 @@ A datalist is an extended MB-System style datalist.
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                #with tqdm(desc='{}: parsing datalist {}'.format(utils._command_name, self.fn)) as pbar:
-                for l, this_line in enumerate(op):
-                    #pbar.update()
-                    if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
-                        data_set = DatasetFactory(
-                            this_line,
-                            weight=self.weight,
-                            parent=self,
-                            src_region=self.region,
-                            invert_region=self.invert_region,
-                            metadata=copy.deepcopy(self.metadata),
-                            src_srs=self.src_srs,
-                            dst_srs=self.dst_srs,
-                            x_inc=self.x_inc,
-                            y_inc=self.y_inc,
-                            sample_alg=self.sample_alg,
-                            cache_dir=self.cache_dir,
-                            verbose=self.verbose
-                        ).acquire()
+                with tqdm(desc='{}: parsing datalist {}'.format(utils._command_name, self.fn)) as pbar:
+                    for l, this_line in enumerate(op):
+                        pbar.update()
+                        if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
+                            data_set = DatasetFactory(
+                                this_line,
+                                weight=self.weight,
+                                parent=self,
+                                src_region=self.region,
+                                invert_region=self.invert_region,
+                                metadata=copy.deepcopy(self.metadata),
+                                src_srs=self.src_srs,
+                                dst_srs=self.dst_srs,
+                                x_inc=self.x_inc,
+                                y_inc=self.y_inc,
+                                sample_alg=self.sample_alg,
+                                cache_dir=self.cache_dir,
+                                verbose=self.verbose
+                            ).acquire()
 
-                        if data_set is not None and data_set.valid_p(
-                                fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
-                        ):
-                            if self.region is not None and self.region.valid_p(check_xy=True):
-                                try:
-                                    inf_region = regions.Region().from_list(
-                                        data_set.infos['minmax']
-                                    )
-                                except:
-                                    inf_region = self.region.copy()
+                            if data_set is not None and data_set.valid_p(
+                                    fmts=DatasetFactory.data_types[data_set.data_format]['fmts']
+                            ):
+                                if self.region is not None and self.region.valid_p(check_xy=True):
+                                    try:
+                                        inf_region = regions.Region().from_list(
+                                            data_set.infos['minmax']
+                                        )
+                                    except:
+                                        inf_region = self.region.copy()
 
-                                inf_region.wmin = data_set.weight
-                                inf_region.wmax = data_set.weight
-                                if regions.regions_intersect_p(
-                                        inf_region,
-                                        self.region if data_set.dst_trans is None else data_set.trans_region
-                                ):
+                                    inf_region.wmin = data_set.weight
+                                    inf_region.wmax = data_set.weight
+                                    if regions.regions_intersect_p(
+                                            inf_region,
+                                            self.region if data_set.dst_trans is None else data_set.trans_region
+                                    ):
+                                        for ds in data_set.parse():
+                                            self.data_entries.append(ds)
+                                            yield(ds)
+                                else:
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds)
                                         yield(ds)
-                            else:
-                                for ds in data_set.parse():
-                                    self.data_entries.append(ds)
-                                    yield(ds)
                                     
         elif len(self.data_entries) > 0:
             for data_set in self.data_entries:

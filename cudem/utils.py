@@ -1236,7 +1236,8 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix) + 9)
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
@@ -1253,7 +1254,8 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix) + 7)
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+    #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
@@ -1272,9 +1274,11 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     if bold:
-        sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+        #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg))
     else:
-        sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+        #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+        tqdm.write('{}: {}'.format(prefix, msg))
     sys.stderr.flush()
     
 ## ==============================================
@@ -1347,8 +1351,16 @@ class CliProgress:
         self.add_one = lambda x: x + 1
         self.sub_one = lambda x: x - 1
         self.spin_way = self.add_one
-        self.spinner = ['*     ', '**    ', '***   ', ' ***  ',
-                        '  *** ', '   ***', '    **', '     *']
+        self.spinner = [
+            '*     ',
+            '**    ',
+            '***   ',
+            ' ***  ',
+            '  *** ',
+            '   ***',
+            '    **',
+            '     *'
+        ]
         
         self.perc = lambda p: ((p[0]/p[1]) * 100.)
         
@@ -1356,6 +1368,12 @@ class CliProgress:
             self._clear_stderr()
             sys.stderr.write('\r {}  {}\n'.format(" " * (self.tw - 1), self.opm))
 
+    def __enter__(self):
+        return(self)
+
+    def __exit__(self, *args):
+        self.end()
+            
     def _init_opm(self):
         self.width = int(self._terminal_width()) - (self.tw+6)
         if len(self.message) > self.width:
@@ -1384,7 +1402,6 @@ class CliProgress:
         sys.stderr.flush()
 
     def update_perc(self, p, msg = None):
-        
         if len(p) == 2 and p[0] <= p[1]:
             self._init_opm()
             self._clear_stderr()
@@ -1411,7 +1428,7 @@ class CliProgress:
         self.count = self.spin_way(self.count)
         sys.stderr.flush()
     
-    def end(self, status, end_msg = None):
+    def end(self, status=0, end_msg = None):
         self._init_opm()
         self._clear_stderr()
         if end_msg is None:
