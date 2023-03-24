@@ -404,7 +404,7 @@ See `fetches_cli_usage` for full cli options.
                     fr.start()
                     fr.join()                
                 except (KeyboardInterrupt, SystemExit):
-                    utils.echo_error_msg('user breakage...please wait for while fetches exits.')
+                    utils.echo_error_msg('user breakage...please wait while fetches exits.')
                     x_f.status = -1
                     stop_threads = True
                     while not fr.fetch_q.empty():
