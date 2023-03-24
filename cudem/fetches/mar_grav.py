@@ -97,7 +97,7 @@ https://topex.ucsd.edu/WWW_html/mar_grav.html
                     'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
                         self.region.format('gmt'), self.x_inc, mar_grav_fn, src_data
                     ),
-                    verbose=True
+                    verbose=False
                 )
 
                 _ds = datasets.RasterFile(

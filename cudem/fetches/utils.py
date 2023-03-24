@@ -417,7 +417,7 @@ class Fetch:
 
                         with tqdm(
                                 unit='B', unit_scale=True, unit_divisor=1024, miniters=1,
-                                desc=self.url, total=int(req.headers.get('content-length', 0))
+                                desc='{}: {}...'.format(utils._command_name(), self.url[:14]), total=int(req.headers.get('content-length', 0))
                         ) as pbar:
                         
                             for chunk in req.iter_content(chunk_size = 8196):

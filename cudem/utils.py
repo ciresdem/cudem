@@ -636,7 +636,7 @@ def p_unzip(src_file, exts=None, outdir='./'):
         with zipfile.ZipFile(src_file) as z:
             zfs = z.namelist()
             for ext in exts:
-                with tqdm(total=len(zfs), desc='unzipping {}'.format(src_file)) as pbar:
+                with tqdm(total=len(zfs), desc='{}: unzipping {}...'.format(_command_name(), src_file[:14])) as pbar:
                     for zf in zfs:
                         if ext == zf.split('.')[-1]:
                             ext_zf = os.path.join(outdir, zf)
@@ -739,7 +739,7 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     i_chunk = 0
     x_i_chunk = 0
 
-    with tqdm(total=(n_size[0]*n_size[1])/step, desc='chunking srcwin') as pbar:
+    with tqdm(total=(n_size[0]*n_size[1])/step, desc='{}: chunking srcwin'.format(_command_name)) as pbar:
         while True:
             y_chunk = n_chunk
             while True:
@@ -1074,7 +1074,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    with tqdm(desc='cmd: `{}...`'.format(cmd.rstrip()[:14])) as pbar:
+    with tqdm(desc='{}: `{}...`'.format(_command_name(), cmd.rstrip()[:14])) as pbar:
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
         else:
@@ -1095,9 +1095,10 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         io_reader = io.TextIOWrapper(p.stderr, encoding='utf-8')
         while p.poll() is None:
             err_line = io_reader.readline()
-            if err_line:
-                pbar.write(err_line.rstrip())
-                sys.stderr.flush()
+            if verbose:
+                if err_line:
+                    pbar.write(err_line.rstrip())
+                    sys.stderr.flush()
                 
             pbar.update()
 
@@ -1314,6 +1315,8 @@ _cudem_module_name_short_desc = lambda m: ',  '.join(
     ['{} ({})'.format(m[key]['name'], key) for key in m])
 _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
     ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['class'].__doc__) for key in m]) + '\n'
+
+_command_name = lambda: os.path.basename(sys.argv[0])
 
 def echo_modules(module_dict, key):
     if key is None:
