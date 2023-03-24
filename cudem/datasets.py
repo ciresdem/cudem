@@ -1671,11 +1671,9 @@ See GDAL for more information regarding supported formats.
                         out_xyz = xyzfun.XYZPoint(
                             x=geo_x, y=geo_y, z=z, w=w_array[y,x]
                         )
-                        #print(self.dst_trans)
                         if self.dst_trans is not None and not self.resample_and_warp:
                             out_xyz.transform(self.dst_trans)
 
-                        #print(out_xyz)
                         yield(out_xyz)
             
 ## ==============================================

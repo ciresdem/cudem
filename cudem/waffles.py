@@ -395,7 +395,6 @@ class Waffle:
         with tqdm(desc='{}: parsing ARRAY data'.format(utils._command_name)) as pbar:
             for xdl in self.data:
                 for array in xdl.yield_array():
-                    pbar.update()
                     if self.mask:
                         cnt_arr = array[0]['count']
                         srcwin = array[1]
