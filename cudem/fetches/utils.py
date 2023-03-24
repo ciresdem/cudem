@@ -416,7 +416,7 @@ class Fetch:
                     with open(dst_fn, 'wb') as local_file:
 
                         with tqdm(
-                                unit='B', unit_scale=True, unit_divisor=1024, miniters=1,
+                                unit='B', unit_scale=True, unit_divisor=1024, miniters=1, #bar_format="{l_bar}{bar}{r_bar}{bar}",
                                 desc='{}: {}'.format(utils._command_name(), self.url), total=int(req.headers.get('content-length', 0))
                         ) as pbar:
                         

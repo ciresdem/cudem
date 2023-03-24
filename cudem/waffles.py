@@ -392,7 +392,10 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        with tqdm(desc='{}: parsing ARRAY data'.format(utils._command_name)) as pbar:
+        with tqdm(
+                #bar_format="{l_bar}{bar}{r_bar}{bar}",
+                desc='{}: parsing ARRAY data'.format(utils._command_name)
+        ) as pbar:
             #with utils.CliProgress('parisng ARRAY data') as pbar:
             for xdl in self.data:
                 for array in xdl.yield_array():

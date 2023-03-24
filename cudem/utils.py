@@ -1068,7 +1068,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    with tqdm(desc='{}: `{}...`'.format(_command_name(), cmd.rstrip()[:14])) as pbar:
+    with tqdm(desc='cmd: `{}...`'.format(cmd.rstrip()[:14])) as pbar:
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
         else:
@@ -1235,7 +1235,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
 
     #msg = _init_msg(msg, len(prefix) + 9)
     #sys.stderr.flush()
-    #sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
@@ -1253,7 +1253,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
 
     #msg = _init_msg(msg, len(prefix) + 7)
     #sys.stderr.flush()
-    #sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
@@ -1272,7 +1272,7 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
 
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.flush()
-    #sys.stderr.write('\x1b[2K\r')
+    sys.stderr.write('\x1b[2K\r')
     if bold:
         #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
         tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg))

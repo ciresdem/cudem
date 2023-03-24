@@ -1369,11 +1369,12 @@ See GDAL for more information regarding supported formats.
 
             ## Sample/Warp
             tmp_warp = '_tmp_gdal.tif'
+            #t = tqdm('')
             warp_ = demfun.sample_warp(
                 tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                 src_region=self.warp_region, sample_alg=self.sample_alg,
-                ndv=ndv, verbose=False
+                ndv=ndv, verbose=self.verbose
             )[0] 
             tmp_ds = None
             warp_ds = gdal.Open(tmp_warp)
@@ -1527,7 +1528,7 @@ See GDAL for more information regarding supported formats.
                         self.weight_mask, None, self.x_inc, self.y_inc,
                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                        ndv=ndv, verbose=False
+                        ndv=ndv, verbose=self.verbose
                     )[0]
                     #src_weight = gdal.Open(tmp_wm_warp)
                 else:
@@ -1542,7 +1543,7 @@ See GDAL for more information regarding supported formats.
                         self.mask, None, self.x_inc, self.y_inc,
                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                        ndv=ndv, verbose=False
+                        ndv=ndv, verbose=self.verbose
                     )[0]
                     #src_mask = gdal.Open(tmp_mask_warp)
                 else:

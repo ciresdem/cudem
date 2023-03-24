@@ -25,6 +25,8 @@
 import os
 import shutil
 
+from tqdm import tqdm
+
 from osgeo import gdal
 from osgeo import osr
 from osgeo import ogr
@@ -497,7 +499,8 @@ def sample_warp(
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, tap=False, size=False, verbose=False
 ):
-    
+
+
     if size:
         xcount, ycount, dst_gt = src_region.geo_transform(
             x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
@@ -511,18 +514,26 @@ def sample_warp(
     else: 
         out_region = None
 
-    if verbose:
-        utils.echo_msg(
-            'sampling DEM: {} to region: {} and increments: {}/{} using {} from: {} to {}'.format(
-                src_dem, out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
-            )
-        )
-
-    dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
-                       dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
-                       options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32,
-                       callback=gdal.TermProgress if verbose else None)
+    # if verbose:
+    #     utils.echo_msg(
+    #         'sampling DEM: {} to region: {} and increments: {}/{} using {} from: {} to {}'.format(
+    #             src_dem, out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
+    #         )
+    #     )
+    
+    with tqdm(
+            #bar_format="{l_bar}{bar}{r_bar}{bar}",
+            desc='gdal: warping {} to R{}, E{}/{}, S{}, P{}, T{}'.format(
+                os.path.basename(src_dem), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
+            ),
+            #position=-1,
+            leave=None
+    ) as pbar:
+        dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
+                           xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
+                           dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
+                           options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32,
+                           callback=lambda x, y, z: pbar.update())
 
     #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
 
