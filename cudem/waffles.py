@@ -395,6 +395,7 @@ class Waffle:
         with tqdm(desc='{}: parsing ARRAY data'.format(utils._command_name)) as pbar:
             for xdl in self.data:
                 for array in xdl.yield_array():
+                    pbar.update()
                     if self.mask:
                         cnt_arr = array[0]['count']
                         srcwin = array[1]
@@ -404,7 +405,6 @@ class Waffle:
                         mask_array[mask_array > 0] = 1
 
                     yield(array)
-                    pbar.update()
                 
         if self.mask:
             utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
@@ -446,8 +446,8 @@ class Waffle:
                     xyz_yield = xdl.block_xyz()
 
                 for xyz in xyz_yield:
-                    yield(xyz)
                     pbar.update()
+                    yield(xyz)
                     if self.mask:
                         if regions.xyz_in_region_p(xyz, self.region):
                             xpos, ypos = utils._geo2pixel(
@@ -733,13 +733,20 @@ class GMTSurface(Waffle):
 Generate a DEM using GMT's surface command
 see gmt surface --help for more info.
 
-    ---
-    Parameters:
-    
-    tension=[0-1] - spline tension.
-    relaxation=[val] - spline relaxation factor.
-    lower_limit=[val] - constrain interpolation to lower limit.
-    upper_limit=[val] - constrain interpolation to upper limit.
+---
+Parameters:
+   
+tension=[0-1] - spline tension.
+relaxation=[val] - spline relaxation factor.
+lower_limit=[val] - constrain interpolation to lower limit.
+upper_limit=[val] - constrain interpolation to upper limit.
+aspect=[val/None] - gridding aspect
+breakline=[path/None] - use xyz dataset at `path` as a breakline
+convergence=[val/None] - gridding convergence
+blockmean=[True/False] - pipe the data through gmt blockmean before gridding
+geographic=[True/Faslse] - data/grid are geographic
+
+< surface:tension=.35:relaxation=1:max_radius=None:lower_limit=None:upper_limit=None:aspect=None:breakline=None:convergence=None:blockmean=True:geographic=True >
     """
     
     def __init__(self, tension=.35, relaxation=1, max_radius=None,
@@ -864,7 +871,9 @@ class GMTTriangulate(Waffle):
     """TRIANGULATION DEM via GMT triangulate
     
 Generate a DEM using GMT's triangulate command.
-see gmt triangulate --help for more info.        
+see gmt triangulate --help for more info.
+
+< triangulate >
     """
     
     def __init__(self, **kwargs):
@@ -915,11 +924,13 @@ class GMTNearNeighbor(Waffle):
 Generate a DEM using GMT's nearneighbor command.
 see gmt nearneighbor --help for more info.
 
-    ---
-    Parameters:
+---
+Parameters:
     
-    radius=[val]\t\tsearch radius
-    sectors=[val]\t\tsector information
+radius=[val] - search radius
+sectors=[val] - sector information
+
+< nearneighbor:radius=None:sectors=None >
     """
     
     def __init__(self, radius=None, sectors=None, **kwargs):
@@ -979,14 +990,14 @@ By default, will use MB-Systems datalist processes.
 set `use_datalist=True` to use CUDEM's dlim instead.
 see mbgrid --help for more info
 
-< mbgrid:dist='10/3':tension=35:use_datalists=False >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    dist=[val] - the dist variable to use in mbgrid
-    tension=[val] - the spline tension value (0-inf)
-    use_datalist=[True/False] - use built-in datalists rather than mbdatalist
+dist=[val] - the dist variable to use in mbgrid
+tension=[val] - the spline tension value (0-inf)
+use_datalist=[True/False] - use built-in datalists rather than mbdatalist
+
+< mbgrid:dist='10/3':tension=35:use_datalists=False >
     """
     
     def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
@@ -1148,12 +1159,13 @@ see gmt xyz2grd --help for more info.
 
 mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
 
-< num:mode=n >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    mode=[key] - specify mode of grid population
+mode=[key] - specify mode of grid population
+min_count=[val] - minimum number of points per cell
+
+< num:mode=n:min_count=None >
     """
     
     def __init__(self, mode='n', min_count=None, **kwargs):
@@ -1370,19 +1382,19 @@ If weights are used, will generate a UIDW DEM, using weight values as inverse un
 as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
 and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
-< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    power=[val] - weight**power
-    min_points=[val] - minimum neighbor points for IDW
-    radius=[val] - search radius (in cells), only fill data cells within radius from data
-    upper_limit=[val] - Restrict output DEM to values below val
-    lower_limit=[val] - Restrict output DEM to values above val
-    supercede=[True/False] - supercede higher weighted data,
-    keep_auxiliary=[True/False] - retain auxiliary files
-    chunk_size=[val] - size of chunks in pixels
+power=[val] - weight**power
+min_points=[val] - minimum neighbor points for IDW
+radius=[val] - search radius (in cells), only fill data cells within radius from data
+upper_limit=[val] - Restrict output DEM to values below val
+lower_limit=[val] - Restrict output DEM to values above val
+supercede=[True/False] - supercede higher weighted data,
+keep_auxiliary=[True/False] - retain auxiliary files
+chunk_size=[val] - size of chunks in pixels
+
+< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
     """
     
     def __init__(
@@ -1533,8 +1545,6 @@ class WafflesSciPy(Waffle):
 Generate a DEM using Scipy's gridding interpolation
 Optional gridding methods are 'linear', 'cubic' and 'nearest'
 https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
-            
-< scipy:method=<method>:supercede=False:keep_auxiliary=False:chunk_size=None:chunk_buffer=40 >
 
 ---
 Parameters:
@@ -1544,6 +1554,8 @@ supercede=[True/False] - supercede higher weighted data,
 keep_auxiliary=[True/False] - retain auxiliary files
 chunk_size=[val] - size of chunks in pixels
 chunk_buffer=[val] - size of the chunk buffer in pixels
+
+< scipy:method=<method>:supercede=False:keep_auxiliary=False:chunk_size=None:chunk_buffer=40 >
     """
     
     def __init__(
@@ -1672,13 +1684,13 @@ class WafflesVDatum(Waffle):
     """VDATUM transformation grid.
 Generate a Vertical DATUM transformation grid.
 
-< vdatum:vdatum_in=None:vdatum_out=None >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    vdatum_in=[vdatum] - input vertical datum
-    vdatum_out=[vdatum] - output vertical datum
+vdatum_in=[vdatum] - input vertical datum
+vdatum_out=[vdatum] - output vertical datum
+
+< vdatum:vdatum_in=None:vdatum_out=None >
     """
 
     def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
@@ -1823,12 +1835,12 @@ class WafflesLinear(WafflesGDALGrid):
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< linear:radius=-1 >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    radius=[val] - search radius
+radius=[val] - search radius
+
+< linear:radius=-1 >
     """
     
     def __init__(self, radius=None, nodata=-9999, **kwargs):
@@ -1847,16 +1859,17 @@ class WafflesInvDst(WafflesGDALGrid):
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    radius1=[val] - search radius 1
-    radius2=[val] - search radius 2
-    power=[val] - weight**power
-    min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
+radius1=[val] - search radius 1
+radius2=[val] - search radius 2
+power=[val] - weight**power
+min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
+
+< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
     """
+    
     def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
                    max_points = 0, min_points = 0, nodata = -9999, **kwargs):
         self.mod = 'invdst'
@@ -1882,14 +1895,14 @@ class WafflesMovingAverage(WafflesGDALGrid):
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    radius1=[val] - search radius 1
-    radius2=[val] - search radius 2
-    min_points=[val] - minimum points per bucket (use to fill entire DEM)
+radius1=[val] - search radius 1
+radius2=[val] - search radius 2
+min_points=[val] - minimum points per bucket (use to fill entire DEM)
+
+< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
     """
     
     def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
@@ -1913,15 +1926,15 @@ class WafflesNearest(WafflesGDALGrid):
 Generate a DEM using GDAL's gdal_grid command.
 see gdal_grid --help for more info
 
-< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    radius1=[val] - search radius 1
-    radius2=[val] - search radius 2
-    angle=[val] - angle
-    nodata=[val] - nodata
+radius1=[val] - search radius 1
+radius2=[val] - search radius 2
+angle=[val] - angle
+nodata=[val] - nodata
+
+< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
     """
     
     def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
@@ -1957,21 +1970,21 @@ at lower resolution and with various weight threshholds.
 To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
 Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
 DEM generation. 
-    
-    < cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:mode=surface:supercede=True >
 
-    ---
-    Parameters:
+---
+Parameters:
     
-    landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
-    min_weight=[val] - the minumum weight to include in the final DEM
-    smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
-    pre_count=[val] - number of pre-surface iterations to perform
-    poly_count=[True/False]
-    keep_auxiliary=[True/False]
-    mode=surface
-    filter_outliers=[val]
-    supercede=[True/False]
+landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
+min_weight=[val] - the minumum weight to include in the final DEM
+smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
+pre_count=[val] - number of pre-surface iterations to perform
+poly_count=[True/False]
+keep_auxiliary=[True/False]
+mode=surface
+filter_outliers=[val]
+supercede=[True/False]
+
+< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:mode=surface:supercede=True >
     """
     
     def __init__(
@@ -2160,19 +2173,19 @@ DEM generation.
 class WafflesStacks_ETOPO(Waffle):
     """Waffles STACKS gridding module.
 
-    stack data to generate DEM. No interpolation
-    occurs with this module. To guarantee a full DEM,
-    use a background DEM with a low weight, such as GMRT or GEBCO,
-    which will be stacked upon to create the final DEM.
+Stack data to generate DEM. No interpolation
+occurs with this module. To guarantee a full DEM,
+use a background DEM with a low weight, such as GMRT or GEBCO,
+which will be stacked upon to create the final DEM.
 
-    XYZ input data is converted to raster; currently uses `mbgrid` to
-    grid the XYZ data before stacking.
+XYZ input data is converted to raster; currently uses `mbgrid` to
+grid the XYZ data before stacking.
 
-    set `supercede` to True to have higher weighted data overwrite 
-    lower weighted data in overlapping cells. Default performs a weighted
-    mean of overlapping data.
+set `supercede` to True to have higher weighted data overwrite 
+lower weighted data in overlapping cells. Default performs a weighted
+mean of overlapping data.
 
-    note: this class was used for ETOPO2022, updated function is _stacks_array()
+note: this class was used for ETOPO2022, updated function is _stacks_array()
     """
     def __init__(
             self,
@@ -2303,16 +2316,16 @@ stack data to generate DEM. No interpolation
 occurs with this module. To guarantee a full DEM,
 use a background DEM with a low weight, such as GMRT or GEBCO,
 which will be stacked upon to create the final DEM.
-    
-< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
 
-    ---
-    Parameters:
+---
+Parameters:
     
-    supercede=[True/False] - superced data cells with higher weighted data
-    keep_weights=[True/False] - retain weight raster
-    keep_count=[True/False] - retain count raster
-    min_count=[val] - only retain data cells if they contain `min_count` overlapping data
+supercede=[True/False] - superced data cells with higher weighted data
+keep_weights=[True/False] - retain weight raster
+keep_count=[True/False] - retain count raster
+min_count=[val] - only retain data cells if they contain `min_count` overlapping data
+
+< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
     """
     
     def __init__(
@@ -2377,21 +2390,21 @@ User data can be provided to provide source for further land masking.
 Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
 Output vector will polygonize land-areas.
 
-< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
-
     ---
     Parameters:
     
-    want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
-    want_copernicus=[True/False] - use COPERNICUS to fill background
-    want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
-    want_lakes=[True/False] - mask LAKES using HYDROLAKES
-    want_buildings=[True/False] - mask BUILDINGS using OSM
-    osm_tries=[val] - OSM max server attempts
-    min_building_length=[val] - only use buildings larger than val
-    want_wsf=[True/False] - mask BUILDINGS using WSF
-    invert=[True/False] - invert the output results
-    polygonize=[True/False] - polygonize the output
+want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
+want_copernicus=[True/False] - use COPERNICUS to fill background
+want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
+want_lakes=[True/False] - mask LAKES using HYDROLAKES
+want_buildings=[True/False] - mask BUILDINGS using OSM
+osm_tries=[val] - OSM max server attempts
+min_building_length=[val] - only use buildings larger than val
+want_wsf=[True/False] - mask BUILDINGS using WSF
+invert=[True/False] - invert the output results
+polygonize=[True/False] - polygonize the output
+
+< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
     """
     
     def __init__(
@@ -2897,17 +2910,17 @@ class WafflesLakes(Waffle):
 By default, will return lake bathymetry as depth values (positive down), 
 to get elevations (positive up), set apply_elevations=True.
 
-< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
-
-    ---
-    Parameters:
+---
+Parameters:
     
-    apply_elevations=[True/False] - use COPERNICUS to apply lake level elevations to output
-    min_area=[val] - minimum lake area to consider
-    max_area=[val] - maximum lake area to consider
-    min_id=[val] - minimum lake ID to consider
-    max_id=[val] - maximum lake ID to consider
-    depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
+apply_elevations=[True/False] - use COPERNICUS to apply lake level elevations to output
+min_area=[val] - minimum lake area to consider
+max_area=[val] - maximum lake area to consider
+min_id=[val] - minimum lake ID to consider
+max_id=[val] - maximum lake ID to consider
+depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
+
+< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
     """
     
     def __init__(

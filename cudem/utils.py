@@ -1310,8 +1310,6 @@ _cudem_module_name_short_desc = lambda m: ',  '.join(
 _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
     ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['class'].__doc__) for key in m]) + '\n'
 
-_command_name = lambda: os.path.basename(sys.argv[0])
-
 def echo_modules(module_dict, key):
     if key is None:
         sys.stderr.write(_cudem_module_long_desc(module_dict))
@@ -1328,6 +1326,8 @@ def echo_modules(module_dict, key):
 
     sys.stderr.flush()
 
+_command_name = lambda: os.path.basename(sys.argv[0])
+    
 ## ==============================================
 ## Progress indicator...
 ##
