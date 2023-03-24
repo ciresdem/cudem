@@ -312,7 +312,7 @@ A datalist is an extended MB-System style datalist.
                 dl_layer.SetSpatialFilter(_boundsGeom)
                 count = len(dl_layer)
 
-                with tqdm(total=len(dl_layer), desc='parsing datalist json {}'.format(self.fn)) as pbar:
+                with tqdm(total=len(dl_layer), desc='{}: parsing datalist json {}'.format(utils._command_name, self.fn)) as pbar:
                     for l,feat in enumerate(dl_layer):
                         if self.region is not None:
                             w_region = self.region.w_region()
@@ -367,7 +367,7 @@ A datalist is an extended MB-System style datalist.
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                with tqdm(desc='parsing datalist {}'.format(self.fn)) as pbar:
+                with tqdm(desc='{}: parsing datalist {}'.format(utils._command_name, self.fn)) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()
                         if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':

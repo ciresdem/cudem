@@ -414,6 +414,5 @@ See `fetches_cli_usage` for full cli options.
                         
                         fr.fetch_q.task_done()
                         
-                fr.join()
-                
+                fr.join()                
 ### End
