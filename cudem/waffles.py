@@ -391,18 +391,21 @@ class Waffle:
                 xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
-        
-        for xdl in self.data:
-            for array in xdl.yield_array():
-                if self.mask:
-                    cnt_arr = array[0]['count']
-                    srcwin = array[1]
-                    gt = array[2]
-                    cnt_arr[np.isnan(cnt_arr)] = 0
-                    mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
-                    mask_array[mask_array > 0] = 1
-                    
-                yield(array)
+
+        with tqdm(desc='{}: parsing ARRAY data'.format(utils._command_name)) as pbar:
+            for xdl in self.data:
+                for array in xdl.yield_array():
+                    pbar.update()
+                    if self.mask:
+                        cnt_arr = array[0]['count']
+                        srcwin = array[1]
+                        gt = array[2]
+                        cnt_arr[np.isnan(cnt_arr)] = 0
+                        mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
+                        mask_array[mask_array > 0] = 1
+
+                    yield(array)
+                    pbar.update()
                 
         if self.mask:
             utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
@@ -419,40 +422,42 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        for xdl in self.data:
-            if self.spat:
-                xyz_yield = metadata.SpatialMetadata(
-                    data=[xdl.fn],
-                    src_region=self.p_region,
-                    inc=self.xinc,
-                    extend=self.extend,
-                    dst_srs=self.dst_srs if self.srs_transform else None,
-                    node=self.node,
-                    name=self.name,
-                    verbose=self.verbose,
-                    make_valid=True
-                ).yield_xyz()
-                
-            elif self.archive:
-                xyz_yield = xdl.archive_xyz()
-            else:
-                xyz_yield = xdl.yield_xyz()
-                
-            if self.block:
-                #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
-                xyz_yield = xdl.block_xyz()
-                
-            for xyz in xyz_yield:
-                yield(xyz)
-                if self.mask:
-                    if regions.xyz_in_region_p(xyz, self.region):
-                        xpos, ypos = utils._geo2pixel(
-                            xyz.x, xyz.y, dst_gt, 'pixel'
-                        )
-                        try:
-                            msk_array[ypos, xpos] = 1
-                        except:
-                            pass
+        with tqdm(desc='{}: parsing XYZ data'.format(utils._command_name)) as pbar:
+            for xdl in self.data:
+                if self.spat:
+                    xyz_yield = metadata.SpatialMetadata(
+                        data=[xdl.fn],
+                        src_region=self.p_region,
+                        inc=self.xinc,
+                        extend=self.extend,
+                        dst_srs=self.dst_srs if self.srs_transform else None,
+                        node=self.node,
+                        name=self.name,
+                        verbose=self.verbose,
+                        make_valid=True
+                    ).yield_xyz()
+
+                elif self.archive:
+                    xyz_yield = xdl.archive_xyz()
+                else:
+                    xyz_yield = xdl.yield_xyz()
+
+                if self.block:
+                    #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
+                    xyz_yield = xdl.block_xyz()
+
+                for xyz in xyz_yield:
+                    yield(xyz)
+                    pbar.update()
+                    if self.mask:
+                        if regions.xyz_in_region_p(xyz, self.region):
+                            xpos, ypos = utils._geo2pixel(
+                                xyz.x, xyz.y, dst_gt, 'pixel'
+                            )
+                            try:
+                                msk_array[ypos, xpos] = 1
+                            except:
+                                pass
         if self.mask:
             out, status = utils.gdal_write(msk_array, self.mask_fn, ds_config)    
 
