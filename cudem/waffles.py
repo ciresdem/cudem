@@ -4174,7 +4174,7 @@ def waffles_cli(argv = sys.argv):
                     utils.echo_msg('------------------------------------------------ :config')
                     this_wg = this_waffle._export_config(parse_data=False)
                     utils.echo_msg(json.dumps(this_wg, sort_keys=True))
-                    utils.echo_msg('------------------------------------------------ :config')
+                    utils.echo_msg('------------------------------------------------ :/config')
                 this_waffle_module = this_waffle.acquire()
                 if this_waffle_module is not None:
                     try:
