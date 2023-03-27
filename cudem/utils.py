@@ -734,7 +734,11 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     i_chunk = 0
     x_i_chunk = 0
 
-    with tqdm(total=(n_size[0]*n_size[1])/step, desc='{}: chunking srcwin'.format(_command_name)) as pbar:
+    with tqdm(
+            total=(n_size[0]*n_size[1])/step,
+            desc='{}: chunking srcwin'.format(_command_name),
+            leave=verbose,
+    ) as pbar:
         while True:
             y_chunk = n_chunk
             while True:
@@ -1069,7 +1073,10 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    with tqdm(desc='cmd: `{}...`'.format(cmd.rstrip()[:14])) as pbar:
+    with tqdm(
+            desc='cmd: `{}...`'.format(cmd.rstrip()[:14]),
+            leave=verbose
+    ) as pbar:
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
         else:
@@ -1178,10 +1185,11 @@ def config_check(chk_vdatum=False, verbose=False):
       dict: a dictionary of gathered results.
     """
 
-    cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
-
+    #cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
+    cudem_cmd_config = '.cudem_cmd_config.json'
+    
     if os.path.exists(cudem_cmd_config):
-        with open(cudem_cmd_config) as ccc:
+        with open(cudem_cmd_config, 'r') as ccc:
             _waff_co = json.load(ccc)
     else:
         py_vers = str(sys.version_info[0]),

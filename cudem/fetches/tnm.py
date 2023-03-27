@@ -172,7 +172,11 @@ http://tnmaccess.nationalmap.gov/
         
         datasets = self._datasets()
         self.FRED._open_ds(1)
-        with tqdm(total=len(datasets), desc='scanning TNM datasets') as pbar:
+        with tqdm(
+                total=len(datasets),
+                desc='scanning TNM datasets',
+                leave=self.verbose,
+        ) as pbar:
             for i, ds in enumerate(datasets):
                 pbar.update(1)
                 for fmt in ds['formats']:

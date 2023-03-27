@@ -261,7 +261,11 @@ https://www.hydrosheds.org/products/hydrolakes
                 lk_layer.SetSpatialFilter(self.region.export_as_geom())
                 lk_features = lk_layer.GetFeatureCount()
 
-                with tqdm(total=len(lk_layer), desc='Processing {} HYDROLAKES'.format(lk_features)) as pbar:
+                with tqdm(
+                        total=len(lk_layer),
+                        desc='Processing {} HYDROLAKES'.format(lk_features),
+                        leave=self.verbose,
+                ) as pbar:
                     for i, feat in enumerate(lk_layer):
                         pbar.update(1)
                         lk_id = feat.GetField('Hylak_id')

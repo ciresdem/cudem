@@ -108,7 +108,11 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         surveys = []
-        with tqdm(total=len(this_ds), desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name'])) as pbar:
+        with tqdm(
+                total=len(this_ds),
+                desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
+                leave=self.verbose,
+        ) as pbar:
             for i, node in enumerate(this_ds):
                 this_title = node.attrib['name']
                 try:

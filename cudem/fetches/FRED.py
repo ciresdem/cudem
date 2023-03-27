@@ -217,7 +217,11 @@ class FRED:
         else:
             close_p = False
 
-        with tqdm(total=len(layers), desc='filtering {}'.format(self.FREDloc)) as pbar:
+        with tqdm(
+                total=len(layers),
+                desc='filtering {}'.format(self.FREDloc),
+                leave=self.verbose,
+        ) as pbar:
             for i, layer in enumerate(layers):
                 pbar.update(1)
                 #this_layer = self.layer

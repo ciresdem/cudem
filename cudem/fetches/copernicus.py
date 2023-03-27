@@ -90,7 +90,11 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         surveys = []
         page = f_utils.Fetch(self.cop_10_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
-        with tqdm(total=len(rows), desc='scanning for COPERNICUS COP-10 datasets') as pbar:
+        with tqdm(
+                total=len(rows),
+                desc='scanning for COPERNICUS COP-10 datasets',
+                leave=self.verbose,
+        ) as pbar:
             for i, row in enumerate(rows):
                 pbar.update(1)
                 sid = row.split('.')[0]
@@ -125,7 +129,11 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         f = f_utils.Fetch(self.cop30_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
-        with tqdm(total=len(fns), desc='scanning for COPERNICUS COP-30 datasets') as pbar:
+        with tqdm(
+                total=len(fns),
+                desc='scanning for COPERNICUS COP-30 datasets',
+                leave=self.verbose,
+        ) as pbar:
             for i, fn in enumerate(fns):
                 pbar.update(1)
                 sid = fn.text.split('/')[-1].split('.')[0]
@@ -174,7 +182,11 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
             self.where.append("DataType = '{}'".format(self.datatype))
 
         _results = FRED._filter_FRED(self)
-        with tqdm(total=len(_results), desc='scanning COPERNICUS datasets') as pbar:
+        with tqdm(
+                total=len(_results),
+                desc='scanning COPERNICUS datasets',
+                leave=self.verbose,
+        ) as pbar:
             for surv in _results:
                 pbar.update(1)
                 for i in surv['DataLink'].split(','):

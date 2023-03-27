@@ -41,8 +41,6 @@ import math
 import numpy as np
 from scipy.spatial import ConvexHull
 
-from tqdm import tqdm
-
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
@@ -1369,7 +1367,6 @@ See GDAL for more information regarding supported formats.
 
             ## Sample/Warp
             tmp_warp = '_tmp_gdal.tif'
-            #t = tqdm('')
             warp_ = demfun.sample_warp(
                 tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                 src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,

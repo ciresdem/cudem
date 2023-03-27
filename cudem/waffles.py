@@ -394,7 +394,8 @@ class Waffle:
 
         with tqdm(
                 #bar_format="{l_bar}{bar}{r_bar}{bar}",
-                desc='{}: parsing ARRAY data'.format(utils._command_name)
+                desc='{}: parsing ARRAY data'.format(utils._command_name),
+                leave=self.verbose,
         ) as pbar:
             #with utils.CliProgress('parisng ARRAY data') as pbar:
             for xdl in self.data:
@@ -425,7 +426,10 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        with tqdm(desc='{}: parsing XYZ data'.format(utils._command_name)) as pbar:
+        with tqdm(
+                desc='{}: parsing XYZ data'.format(utils._command_name),
+                leave=self.verbose,
+        ) as pbar:
             for xdl in self.data:
                 if self.spat:
                     xyz_yield = metadata.SpatialMetadata(
@@ -2765,7 +2769,11 @@ polygonize=[True/False] - polygonize the output
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
-        with tqdm(total=len(this_osm.results), desc='processing OSM buildings') as pbar:
+        with tqdm(
+                total=len(this_osm.results),
+                desc='processing OSM buildings',
+                leave=self.verbose,
+        ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
                 if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
@@ -3111,7 +3119,11 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with tqdm(total=len(nfeatures), desc='applying labels...') as pbar:
+        with tqdm(
+                total=len(nfeatures),
+                desc='applying labels...',
+                leave=self.verbose,
+        ) as pbar:
             for n, x in enumerate(nfeatures):
                 pbar.update()
                 max_dist_arr[labels==x] = maxes[x-1]
@@ -3160,7 +3172,11 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
         
         lk_features = lk_layer.GetFeatureCount()
         lk_regions = self.p_region.copy()
-        with tqdm(total=len(lk_layer), desc='processing {} lakes'.format(lk_features)) as pbar:
+        with tqdm(
+                total=len(lk_layer),
+                desc='processing {} lakes'.format(lk_features),
+                leave=self.verbose,
+        ) as pbar:
             for lk_f in lk_layer:
                 pbar.update()
                 this_region = regions.Region()
@@ -3222,7 +3238,11 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            with tqdm(total=len(lk_ids), desc='Assigning Globathy Depths to rasterized lakes...') as pbar:
+            with tqdm(
+                    total=len(lk_ids),
+                    desc='Assigning Globathy Depths to rasterized lakes...',
+                    leave=self.verbose,
+            ) as pbar:
                 for n, this_id in enumerate(lk_ids):
                     depth = globd[this_id]
                     msk_arr[msk_arr == this_id] = depth
@@ -3319,7 +3339,11 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
 
         globd = self._fetch_globathy(ids=lk_ids)
 
-        with tqdm(total=len(lk_layer), desc='processing lakes') as pbar:
+        with tqdm(
+                total=len(lk_layer),
+                desc='processing lakes',
+                leave=self.verbose,
+        ) as pbar:
             for i, feat in enumerate(lk_layer):
                 pbar.update()
                 lk_id = feat.GetField('Hylak_id')
