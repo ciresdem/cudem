@@ -802,7 +802,7 @@ Generate a waffles config files with the `waffles` command.
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
-           dl_formats=dlim._datalist_fmts_short_desc(),
+           dl_formats=utils._cudem_module_name_short_desc(dlim.DatasetFactory.data_types),
            modules=_waffles_module_short_desc(),
            wf_version=cudem.__version__)
 
