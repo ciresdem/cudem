@@ -42,6 +42,7 @@ import bz2
 import re
 import curses
 import io
+import json
 from tqdm import tqdm
 
 import numpy as np
@@ -1176,24 +1177,34 @@ def config_check(chk_vdatum=False, verbose=False):
     Returns:
       dict: a dictionary of gathered results.
     """
-    
-    py_vers = str(sys.version_info[0]),
-    host_os = sys.platform
-    _waff_co = {}
-    _waff_co['platform'] = host_os
-    _waff_co['python'] = py_vers[0]
-    ae = '.exe' if host_os == 'win32' else ''
 
-    #if chk_vdatum: _waff_co['VDATUM'] = vdatum(verbose=verbose).vdatum_path
-    _waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal-config --version').decode()
-    _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
-    _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
-    _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
-    _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
-    _waff_co['CUDEM'] = str(cudem.__version__)
+    cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
 
-    for key in _waff_co.keys():
-        _waff_co[key] = None if _waff_co[key] == '0' else _waff_co[key]
+    if os.path.exists(cudem_cmd_config):
+        with open(cudem_cmd_config) as ccc:
+            _waff_co = json.load(ccc)
+    else:
+        py_vers = str(sys.version_info[0]),
+        host_os = sys.platform
+        _waff_co = {}
+        _waff_co['platform'] = host_os
+        _waff_co['python'] = py_vers[0]
+        ae = '.exe' if host_os == 'win32' else ''
+
+        #if chk_vdatum: _waff_co['VDATUM'] = vdatum(verbose=verbose).vdatum_path
+        _waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal-config --version').decode()
+        _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
+        _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
+        _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
+        _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
+        _waff_co['CUDEM'] = str(cudem.__version__)
+
+        for key in _waff_co.keys():
+            _waff_co[key] = None if _waff_co[key] == '0' else _waff_co[key]
+
+        echo_msg(json.dumps(_waff_co, indent=4, sort_keys=True))
+        with open(cudem_cmd_config, 'w') as ccc:
+            ccc.write(json.dumps(_waff_co, indent=4, sort_keys=True))
             
     return(_waff_co)
     

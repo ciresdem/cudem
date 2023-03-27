@@ -517,11 +517,11 @@ def sample_warp(
     if verbose:
         utils.echo_msg('------------------------------------------------ :warp')
         utils.echo_msg('dem:\t\t{}'.format(src_dem))
-        utils.echo_msg('region:\t{},{},{},{}'.format(*out_region))
+        utils.echo_msg('region:\t\t{},{},{},{}'.format(*out_region))
         utils.echo_msg('increments:\t{}/{}'.format(x_sample_inc, y_sample_inc))
         utils.echo_msg('sample alg:\t{}'.format(sample_alg))
-        utils.echo_msg('src srs:\t{}'.format(str(src_srs)))
-        utils.echo_msg('dst_srs:\t{}'.format(str(src_srs), str(dst_srs)))
+        utils.echo_msg('src srs:\t\t{}'.format(str(src_srs)))
+        utils.echo_msg('dst_srs:\t\t{}'.format(str(src_srs), str(dst_srs)))
         utils.echo_msg('------------------------------------------------ :/warp')
         # utils.echo_msg(
         #     'sampling DEM: {} \nto region: {} and increments: {}/{} using {} from: {} to {}'.format(
