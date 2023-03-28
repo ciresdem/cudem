@@ -1257,7 +1257,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg))
     sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
@@ -1275,7 +1275,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg))
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
