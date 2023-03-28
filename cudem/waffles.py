@@ -4201,14 +4201,14 @@ def waffles_cli(argv = sys.argv):
                     utils.echo_msg('------------------------------------------------ :/config')
                 this_waffle_module = this_waffle.acquire()
                 if this_waffle_module is not None:
-                    try:
-                        this_waffle_module.generate()
-                    except (KeyboardInterrupt, SystemExit):
-                        utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                        sys.exit(-1)
-                    except Exception as e:
-                        utils.echo_msg(e)
-                        sys.exit(-1)
+                    #try:
+                    this_waffle_module.generate()
+                    #except (KeyboardInterrupt, SystemExit):
+                    #    utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                    #    sys.exit(-1)
+                    #except Exception as e:
+                    #    utils.echo_error_msg(e)
+                    #    sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
