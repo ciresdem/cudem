@@ -526,7 +526,7 @@ def sample_warp(
     if verbose:
         utils.echo_msg(
             'warping DEM: {} :: R:{} E:{}/{} S{} P{} -> T{}'.format(
-                os.path.basename(src_dem), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
+                os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
             )
         )
     
