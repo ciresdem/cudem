@@ -929,6 +929,13 @@ def parse_cli_region(region_list, verbose=True):
     """parse a region list into region(s).
 
     for use in clis
+
+    region_list is a list of regions, where each region is either:
+    bbox str ( 'xmin/xmax/ymin/ymax' ),
+    tile_set (with options of 'in_region' and 'inc' to define the tiles)
+    path to an ogr dataset.
+
+    returns a list of region objects.
     """
     
     these_regions = []
