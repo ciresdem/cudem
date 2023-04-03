@@ -173,6 +173,7 @@ http://tnmaccess.nationalmap.gov/
         with utils.CliProgress(
                 total=len(datasets),
                 message='scanning TNM datasets',
+                verbose=self.verbose,
         ) as pbar:
             for i, ds in enumerate(datasets):
                 pbar.update(1)
@@ -206,7 +207,11 @@ http://tnmaccess.nationalmap.gov/
         f = self.formats.split(',') if self.formats is not None else None
         q = self.q
         _results = FRED._filter_FRED(self)
-        with utils.CliProgress(total=len(_results), message='scanning for TNM datasets') as pbar:
+        with utils.CliProgress(
+                total=len(_results),
+                message='scanning for TNM datasets',
+                verbose=self.verbose
+        ) as pbar:
             for surv in _results:
                 offset = 0
                 total = 0

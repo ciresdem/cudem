@@ -301,7 +301,7 @@ def has_nodata_p(src_gdal):
 ## ==============================================
 ## Operations
 ## ==============================================
-def mask_(src_dem, msk_dem, out_dem, msk_value = None):
+def mask_(src_dem, msk_dem, out_dem, msk_value = None, verbose=True):
     src_ds = gdal.Open(src_dem)
     if src_ds is not None:
         src_config = gather_infos(src_ds)
@@ -313,7 +313,7 @@ def mask_(src_dem, msk_dem, out_dem, msk_value = None):
         msk_ds = sample_warp(
             tmp_ds, None, src_config['geoT'][1], src_config['geoT'][5],
             src_region=tmp_region, sample_alg='bilinear',
-            verbose=True
+            verbose=verbose
         )[0] 
         tmp_ds = None
         

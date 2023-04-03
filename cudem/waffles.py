@@ -553,7 +553,7 @@ class Waffle:
                     verbose=self.verbose,
                 ).acquire().generate()
                 
-                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1)
+                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
                 os.rename('__tmp_clip__.tif', '{}'.format(fn))
                 
             else:
@@ -610,7 +610,7 @@ class Waffle:
             xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
             count = 0
             chunks = []
-            for srcwin in utils.yield_srcwin((ycount, xcount), self.chunk):
+            for srcwin in utils.yield_srcwin((ycount, xcount), self.chunk, verbose=self.verbose):
                 count += 1
                 #print(srcwin)
                 this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], dst_gt)
@@ -692,11 +692,15 @@ class Waffle:
                 band_data = src_band.ReadAsArray()
 
                 if upper_limit is not None:
-                    utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
+                    if self.verbose:
+                        utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
+                        
                     band_data[band_data > upper_limit] = upper_limit
 
                 if lower_limit is not None:
-                    utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
+                    if self.verbose:
+                        utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
+                        
                     band_data[band_data < lower_limit] = lower_limit
 
                 src_band.WriteArray(band_data)
@@ -1512,7 +1516,7 @@ chunk_size=[val] - size of chunks in pixels
             weight_values = None
 
         invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk):                
+        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose):                
             if len(point_indices[0]):
                 xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
                                   srcwin[1]:srcwin[1]+srcwin[3]]
@@ -2060,9 +2064,9 @@ supercede=[True/False]
                 n, '_tmp_fltr.tif', agg_level=self.filter_outliers, replace=True
             )
             os.rename('_tmp_fltr.tif', n)
-            demfun.mask_(w, n, '_tmp_w.tif')
+            demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
             os.rename('_tmp_w.tif', w)
-            demfun.mask_(c, n, '_tmp_c.tif')
+            demfun.mask_(c, n, '_tmp_c.tif', verbose=self.verbose)
             os.rename('_tmp_c.tif', c)
 
         if self.min_weight is None:
@@ -2114,10 +2118,11 @@ supercede=[True/False]
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 if pre_weight == 0: pre_weight = 1-e20
+                _pre_surface = utils.append_fn('_pre_surface', pre_region, pre+1)
                 pre_data = [
                     '{},200:weight_mask={}:sample=average,1'.format(n, w),
-                    '{}.tif,200,{}'.format(
-                        utils.append_fn('_pre_surface', pre_region, pre+1), pre_weight
+                    '{}.tif,200:check_path=True,{}'.format(
+                        _pre_surface, pre_weight
                     )
                 ]
                 pre_region.wmin = pre_weight
@@ -2157,10 +2162,11 @@ supercede=[True/False]
                 verbose=self.verbose,
             ).acquire().generate()
 
-            if self.coast is not None:
-                if pre !=0:
-                    demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1)
-                    os.rename('__tmp_coast_clip.tif', pre_surface.fn)
+            if pre_surface.valid_p():
+                if self.coast is not None:
+                    if pre !=0:
+                        demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1, verbose=self.verbose)
+                        os.rename('__tmp_coast_clip.tif', pre_surface.fn)
 
             pre -= 1
                     
@@ -3526,19 +3532,22 @@ Patch an existing DEM with data from the datalist.
         if self.xinc != dem_infos['geoT']:
             utils.echo_msg('resampling diff grid...')
             if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
-                             src_region=dem_region)[1] == 0:
+                                  src_region=dem_region, verbose=self.verbose)[1] == 0:
                 os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
             else:
                 utils.echo_warning_msg('failed to resample diff grid')
 
         #if self.xinc != dem_infos['geoT']:
-        utils.echo_msg('resampling diff grid...')
+        if self.verbose:
+            utils.echo_msg('resampling diff grid...')
+            
         diff_ds = demfun.sample_warp(
             '_diff.tif',
             None,
             dem_infos['geoT'][1],
             -1*dem_infos['geoT'][5],
-            src_region=dem_region
+            src_region=dem_region,
+            verbose=self.verbose
         )[0]
         
         #utils.remove_glob('{}.tif'.format(self.name))

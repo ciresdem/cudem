@@ -448,15 +448,12 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #s_dp = sub_dp = None
         s_dp = []
 
-        with utils.CliProgress(
-                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
-        ) as pbar:
+        with utils.CliProgress(message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)) as pbar:
             while True:
                 status = 0
                 sim += 1
                 #utils.echo_msg('sorting training tiles by distance...')
-                #trains = self._regions_sort(trainers, verbose=False)
-                trains = self._regions_sort(trainers, verbose = False)
+                trains = self._regions_sort(trainers, verbose=True)
                 tot_trains = len([x for s in trains for x in s])
                 #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
 
@@ -546,7 +543,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                     clip=self.dem.clip,
                                     dst_srs=self.dem.dst_srs,
                                     mask=True,
-                                    verbose=False,
+                                    verbose=True,
                                     clobber=True,
                                 )
                                 waff.mod_args = self.dem.mod_args
@@ -869,7 +866,7 @@ def uncertainties_cli(argv = sys.argv):
 
                     sys.exit(0)
             except Exception as e:
-                utils.echo_error_msg(e)
+                #utils.echo_error_msg(e)
                 sys.exit(-1)
         else:
             utils.echo_error_msg(

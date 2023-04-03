@@ -128,6 +128,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         with utils.CliProgress(
                 total=len(fns),
                 message='scanning for COPERNICUS COP-30 datasets',
+                verbose=self.verbose
         ) as pbar:
             for i, fn in enumerate(fns):
                 pbar.update()
@@ -180,6 +181,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         with utils.CliProgress(
                 total=len(_results),
                 message='scanning COPERNICUS datasets',
+                verbose=self.verbose,
         ) as pbar:
             for surv in _results:
                 pbar.update()

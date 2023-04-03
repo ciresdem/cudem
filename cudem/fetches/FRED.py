@@ -218,6 +218,7 @@ class FRED:
         with utils.CliProgress(
                 total=len(layers),
                 message='filtering {}'.format(self.FREDloc),
+                verbose=self._verbose
         ) as pbar:
             for i, layer in enumerate(layers):
                 pbar.update(1)
