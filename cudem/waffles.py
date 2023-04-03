@@ -391,19 +391,19 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        with utils.CliProgress('parisng ARRAY data') as pbar:
-            for xdl in self.data:
-                for array in xdl.yield_array():
-                    pbar.update()
-                    if self.mask:
-                        cnt_arr = array[0]['count']
-                        srcwin = array[1]
-                        gt = array[2]
-                        cnt_arr[np.isnan(cnt_arr)] = 0
-                        mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
-                        mask_array[mask_array > 0] = 1
+        #with utils.CliProgress('parisng ARRAY data') as pbar:
+        for xdl in self.data:
+            for array in xdl.yield_array():
+                #pbar.update()
+                if self.mask:
+                    cnt_arr = array[0]['count']
+                    srcwin = array[1]
+                    gt = array[2]
+                    cnt_arr[np.isnan(cnt_arr)] = 0
+                    mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
+                    mask_array[mask_array > 0] = 1
 
-                    yield(array)
+                yield(array)
                 
         if self.mask:
             utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
@@ -4165,40 +4165,46 @@ def waffles_cli(argv = sys.argv):
     wg['data'] = dls    
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
     name = wg['name']
-    for i, this_region in enumerate(these_regions):
-        wg['src_region'] = this_region
-        if want_prefix or len(these_regions) > 1:
-            wg['name'] = utils.append_fn(
-                name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
-            )
-        if want_config:
-            this_waffle = WaffleFactory(mod=module, **wg)
-            this_wg = this_waffle._export_config(parse_data=True)
-            utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
-            with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
-                utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
-                wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
-        else:
-            this_waffle = WaffleFactory(mod=module, **wg)
-            if this_waffle is not None:
-                if wg['verbose']:
-                    utils.echo_msg('------------------------------------------------ :config')
-                    this_wg = this_waffle._export_config(parse_data=False)
-                    utils.echo_msg(json.dumps(this_wg, sort_keys=True))
-                    utils.echo_msg('------------------------------------------------ :/config')
-                this_waffle_module = this_waffle.acquire()
-                if this_waffle_module is not None:
-                    #try:
-                    this_waffle_module.generate()
-                    #except (KeyboardInterrupt, SystemExit):
-                    #utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                    #    sys.exit(-1)
-                    #except Exception as e:
-                    #    utils.echo_error_msg(e)
-                    #    sys.exit(-1)
-                else:
+    with utils.CliProgress(
+            total=len(these_regions),
+            message='running waffles module {}'.format(module)
+    ) as pbar:
+        for i, this_region in enumerate(these_regions):
+            pbar.update()
+            wg['src_region'] = this_region
+            if want_prefix or len(these_regions) > 1:
+                wg['name'] = utils.append_fn(
+                    name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
+                )
+            if want_config:
+                this_waffle = WaffleFactory(mod=module, **wg)
+                this_wg = this_waffle._export_config(parse_data=True)
+                utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
+                with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
+                    utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
+                    wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
+            else:
+                this_waffle = WaffleFactory(mod=module, **wg)
+                if this_waffle is not None:
                     if wg['verbose']:
-                        utils.echo_error_msg('could not acquire waffles module {}'.format(module))
+                        utils.echo_msg('------------------------------------------------ :config')
+                        this_wg = this_waffle._export_config(parse_data=False)
+                        utils.echo_msg(json.dumps(this_wg, sort_keys=True))
+                        utils.echo_msg('------------------------------------------------ :/config')
+                    this_waffle_module = this_waffle.acquire()
+                    if this_waffle_module is not None:
+
+                        try:
+                            this_waffle_module.generate()
+                        except (KeyboardInterrupt, SystemExit):
+                            utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                            sys.exit(-1)
+                        except Exception as e:
+                            utils.echo_error_msg(e)
+                            sys.exit(-1)
+                    else:
+                        if wg['verbose']:
+                            utils.echo_error_msg('could not acquire waffles module {}'.format(module))
                         
             #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
         if not keep_cache:

@@ -1078,6 +1078,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     
     with CliProgress(
             message='cmd: `{}...`'.format(cmd.rstrip()[:14]),
+            verbose=verbose,
     ) as pbar:        
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
@@ -1111,6 +1112,9 @@ def run_cmd(cmd, data_fun=None, verbose=False):
         p.stdout.close()
         if verbose:
             echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
+
+        if p.returncode != 0:
+            raise Exception(p.returncode)
         
     return(out, p.returncode)
 
@@ -1357,13 +1361,14 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 class CliProgress():
     '''cudem minimal progress indicator'''
 
-    def __init__(self, message=None, total=0):
+    def __init__(self, message=None, total=0, verbose=True):
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
         self.count = 0
         self.pc = self.count % self.tw
         self.p = 0
+        self.verbose = verbose
 
         self.message = message
         self.total = total
@@ -1385,24 +1390,30 @@ class CliProgress():
         
         self.perc = lambda p: ((p[0]/p[1]) * 100.)
         
-        if self.opm is not None:
+        if self.opm is not None and self.verbose:
             self._clear_stderr()
             sys.stderr.write('\r {}  {}\n'.format(" " * (self.tw - 1), self.opm))
 
     def updates(self):
         while self.thread_is_alive:
             time.sleep(2)
-            self.update(p=0)
+            self.update(p=None)
 
     def __enter__(self):
-        self.thread_is_alive = True
-        self.thread.start()
-        return(self)
+        if self.verbose:
+            self.thread_is_alive = True
+            self.thread.start()
+            return(self)
+        else:
+            return(self)
 
-    def __exit__(self, *args):
-        self.thread_is_alive = False
-        self.thread.join()
-        self.end()
+    def __exit__(self, exc_type, exc_value, exc_traceback):
+        if self.verbose:
+            self.thread_is_alive = False
+            self.thread.join()
+            return(self.end(status=exc_value))
+        else:
+            return(True)
 
     def write(self, msg, nl=True, bold=False):
         sys.stderr.write('\x1b[2K\r')
@@ -1439,35 +1450,37 @@ class CliProgress():
         sys.stderr.flush()
         
     def update(self, p=1, msg=None):
-        self._init_opm()
-        self.pc = (self.count % self.tw)
-        self.sc = (self.count % (self.tw + 1))
-            
-        self._clear_stderr()
+        if self.verbose:
+            self._init_opm()
+            self.pc = (self.count % self.tw)
+            self.sc = (self.count % (self.tw + 1))
 
-        self.p += p
-        
-        if self.p < self.total:
-            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
-                ((self.p/self.total) * 100.), msg if msg is not None else self.opm
-            ))
-        else:
-            sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(
-                self.spinner[self.sc], msg if msg is not None else self.opm
-            ))
-        
-        if self.count == self.tw: self.spin_way = self.sub_one
-        if self.count == 0: self.spin_way = self.add_one
-        self.count = self.spin_way(self.count)
-        sys.stderr.flush()
+            self._clear_stderr()
+
+            if p is not None:
+                self.p += p
+
+            if p is not None and self.p < self.total:
+                sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
+                    ((self.p/self.total) * 100.), msg if msg is not None else self.opm
+                ))
+            else:
+                sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(
+                    self.spinner[self.sc], msg if msg is not None else self.opm
+                ))
+
+            if self.count == self.tw: self.spin_way = self.sub_one
+            if self.count == 0: self.spin_way = self.add_one
+            self.count = self.spin_way(self.count)
+            sys.stderr.flush()
     
-    def end(self, status=0, end_msg = None):
+    def end(self, status=0, end_msg=None):
         self._init_opm()
         self._clear_stderr()
         if end_msg is None:
             end_msg = self.message
             
-        if status != 0:
+        if status != 0 and status is not None:
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', end_msg)
             )
@@ -1476,6 +1489,8 @@ class CliProgress():
                 '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg)
             )
         sys.stderr.flush()
+
+        return(True)
 
 import multiprocessing as mp
 import numpy
