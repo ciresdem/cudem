@@ -310,8 +310,10 @@ A datalist is an extended MB-System style datalist.
                 dl_layer.SetSpatialFilter(_boundsGeom)
                 count = len(dl_layer)
                 with utils.CliProgress(
-                        message='parsing datalist json {}'.format(self.fn),
+                        message='parsing datalist json {} @ {}'.format(self.fn, self.weight),
                         total=len(dl_layer),
+                        verbose=self.verbose,
+                        sleep=10,
                 ) as pbar:
                     for l,feat in enumerate(dl_layer):
                         pbar.update()

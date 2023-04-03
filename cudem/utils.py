@@ -1077,7 +1077,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     """
     
     with CliProgress(
-            message='cmd: `{}...`'.format(cmd.rstrip()[:14]),
+            message='cmd: `{}...`'.format(cmd.rstrip()[:24]),
             verbose=verbose,
     ) as pbar:        
         if data_fun is not None:
@@ -1361,7 +1361,7 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 class CliProgress():
     '''cudem minimal progress indicator'''
 
-    def __init__(self, message=None, total=0, verbose=True):
+    def __init__(self, message=None, total=0, sleep=2, verbose=True):
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
@@ -1369,6 +1369,7 @@ class CliProgress():
         self.pc = self.count % self.tw
         self.p = 0
         self.verbose = verbose
+        self.sleep = int_or(sleep)
 
         self.message = message
         self.total = total
@@ -1396,8 +1397,9 @@ class CliProgress():
 
     def updates(self):
         while self.thread_is_alive:
-            time.sleep(2)
-            self.update(p=None)
+            if self.sleep is not None:
+                time.sleep(self.sleep)
+                self.update(p=None)
 
     def __enter__(self):
         if self.verbose:
