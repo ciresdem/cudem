@@ -139,13 +139,13 @@ class Perspecto:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
             self.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
         else:
-            if has_gmt:
-                self.makecpt(self.cpt, output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+            if has_pygmt:
+                self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
 
-    def makecpt(self, cmap='etopo1', output=None):
+    def makecpt(self, cmap='etopo1', color_model='r', output=None):
         pygmt.makecpt(
             cmap=cmap,
-            color_model='r',
+            color_model='{}'.format(color_model),
             output=output,
             series=[self.dem_infos['zr'][0], self.dem_infos['zr'][1]],
             no_bg=True,
@@ -540,6 +540,9 @@ class figure1(GMTImage):
             interval=100,
             azimuth=-130,
             elevation=30,
+            shade=True,
+            want_colorbar=True,
+            colorbar_text='Elevation',
             **kwargs
     ):
         super().__init__(**kwargs)
@@ -548,6 +551,9 @@ class figure1(GMTImage):
         self.interval = interval
         self.azimuth=azimuth
         self.elevation=elevation
+        self.shade=shade
+        self.want_colorbar=want_colorbar
+        self.colorbar_text=colorbar_text
         
     def figure1_perspective(self):
         dem_lll = lll(self.dem_region.ymin)
@@ -587,7 +593,7 @@ class figure1(GMTImage):
             grid=self.grid,
             #cmap=self.cpt,
             cmap=True,
-            shading=self.grad_grid,
+            shading=self.grad_grid if self.shade else None,
             #dpi=100,
         )
         fig.grdcontour(
@@ -597,8 +603,9 @@ class figure1(GMTImage):
             cut=60,
             pen="c0.1p",
         )
-        #fig.colorbar(frame=['a{}'.format(self.interval), 'x+lElevation', 'y+1m'])
-        fig.colorbar(frame=['x+lElevation', 'y+1m'])
+        if self.want_colorbar:
+            #fig.colorbar(frame=['a{}'.format(self.interval), 'x+lElevation', 'y+1m'])
+            fig.colorbar(frame=['x+l{}'.format(self.colorbar_text), 'y+1m'])
 
         fig.savefig('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))
         return('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))

@@ -402,7 +402,7 @@ gebcop15_n28x00_w079x50_2022v1_stack_c.tif - stacks \'count\' output
 gebcop15_n28x00_w079x50_2022v1_stack_s.tif - stacks data \'stacked\'
 output
 
-gebcop15_n28x00_w079x50_2022v1_stack_w.tif - stacks weight mask
+gebcop15_n28x00_w079x50_2022v1_w.tif - final/stacks weight mask
 
 gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
@@ -410,7 +410,7 @@ gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
 **Figure 1.** Final DEM generated from CUDEM code example.
 
-![](./media/gebcop15_n28x00_w079x50_2022v1_stack_w_hs.png)
+![](./media/gebcop15_n28x00_w079x50_2023v1_w_figure1.png)
 
 **Figure 2.** DEM data source mask.
 
