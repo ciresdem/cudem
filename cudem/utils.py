@@ -626,7 +626,7 @@ def p_untar(tar_file, exts=None, outdir='./'):
                             f.write(t.read())
     return(src_procs)
                             
-def p_unzip(src_file, exts=None, outdir='./'):
+def p_unzip(src_file, exts=None, outdir='./', verbose=True):
     """unzip/gunzip src_file based on `exts`
     
     Args:
@@ -647,7 +647,7 @@ def p_unzip(src_file, exts=None, outdir='./'):
                         ext_zf = os.path.join(outdir, zf)
                         src_procs.append(ext_zf)
                         if not os.path.exists(ext_zf):
-                            echo_msg('Extracting {}'.format(ext_zf))
+                            #echo_msg('Extracting {}'.format(ext_zf))
                             #pbar.update()
                             _dirname = os.path.dirname(ext_zf)
                             if not os.path.exists(_dirname):
@@ -655,12 +655,17 @@ def p_unzip(src_file, exts=None, outdir='./'):
 
                             with open(ext_zf, 'wb') as f:
                                 f.write(z.read(zf))
+
+                            if verbose:
+                                echo_msg('Extracted {}'.format(ext_zf))
                                 
     elif src_file.split('.')[-1] == 'gz':
         try:
             tmp_proc = gunzip(src_file)
         except:
-            echo_error_msg('unable to gunzip {}'.format(src_file))
+            if verbose:
+                echo_error_msg('unable to gunzip {}'.format(src_file))
+                
             tmp_proc = None
             
         if tmp_proc is not None:
