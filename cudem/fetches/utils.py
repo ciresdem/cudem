@@ -414,7 +414,7 @@ class Fetch:
                     curr_chunk = 0
                     with open(dst_fn, 'wb') as local_file:
                         with utils.CliProgress(
-                                message='{}: {}'.format(utils._command_name(), self.url),
+                                message='fetching: {}'.format(self.url),
                                 total=int(req.headers.get('content-length', 0)),
                         ) as pbar:
                             for chunk in req.iter_content(chunk_size = 8196):

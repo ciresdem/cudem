@@ -4104,23 +4104,29 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
-            try:
-                with open(wg_user, 'r') as wgj:
-                    wg = json.load(wgj)
-                    if wg['src_region'] is not None:
-                        wg['src_region'] = regions.Region().from_list(
-                            wg['src_region']
-                        )
+            #try:
+            with open(wg_user, 'r') as wgj:
+                wg = json.load(wgj)
+                if wg['src_region'] is not None:
+                    wg['src_region'] = regions.Region().from_list(
+                        wg['src_region']
+                    )
 
-                    this_waffle = WaffleFactory(**wg).acquire()
-                    this_waffle.generate()
-            except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('user breakage...please wait while waffles exits...')
-                sys.exit(-1)
-            except Exception as e:
-                utils.echo_error_msg(e)
-                traceback.print_exc()
-                sys.exit(-1)
+            this_waffle = WaffleFactory(**wg)
+            this_waffle_module = this_waffle.acquire()
+            this_wg = this_waffle._export_config(parse_data=False)
+            with utils.CliProgress(
+                    message='{}: {}'.format(this_waffle, json.dumps(this_wg, sort_keys=True)),
+                    verbose=wg['verbose'],
+            ) as pbar:
+                this_waffle_module.generate()
+            # except (KeyboardInterrupt, SystemExit):
+            #     utils.echo_error_msg('user breakage...please wait while waffles exits...')
+            #     sys.exit(-1)
+            # except Exception as e:
+            #     utils.echo_error_msg(e)
+            #     traceback.print_exc()
+            #     sys.exit(-1)
 
             sys.exit(0)
         else:
