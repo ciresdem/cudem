@@ -456,8 +456,6 @@ class Fetch:
                     status = -1
 
         except UnboundLocalError as e:
-            #utils.echo_warning_msg(e)
-            #status = 1
             pass
             
         except Exception as e:

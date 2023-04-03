@@ -3719,10 +3719,10 @@ class WaffleFactory():
         #self._set_config()
 
     def __str__(self):
-        return('<{} {}>'.format(self.name, self.mod))
+        return('<{}>'.format(json.dumps(self._export_config())))
     
     def __repr__(self):
-        return('<{} {}>'.format(self.name, self.mod))
+        return('<{}>'.format(json.dumps(self._export_config())))
         
     def _parse_mod(self, mod):
         opts = mod.split(':')
@@ -4104,29 +4104,29 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
-            #try:
-            with open(wg_user, 'r') as wgj:
-                wg = json.load(wgj)
-                if wg['src_region'] is not None:
-                    wg['src_region'] = regions.Region().from_list(
-                        wg['src_region']
-                    )
-
-            this_waffle = WaffleFactory(**wg)
-            this_waffle_module = this_waffle.acquire()
-            this_wg = this_waffle._export_config(parse_data=False)
-            with utils.CliProgress(
-                    message='{}: {}'.format(this_waffle, json.dumps(this_wg, sort_keys=True)),
-                    verbose=wg['verbose'],
-            ) as pbar:
-                this_waffle_module.generate()
-            # except (KeyboardInterrupt, SystemExit):
-            #     utils.echo_error_msg('user breakage...please wait while waffles exits...')
-            #     sys.exit(-1)
-            # except Exception as e:
-            #     utils.echo_error_msg(e)
-            #     traceback.print_exc()
-            #     sys.exit(-1)
+            try:
+                with open(wg_user, 'r') as wgj:
+                    wg = json.load(wgj)
+                    if wg['src_region'] is not None:
+                        wg['src_region'] = regions.Region().from_list(
+                            wg['src_region']
+                        )
+            
+                this_waffle = WaffleFactory(**wg)
+                this_waffle_module = this_waffle.acquire()
+                #this_wg = this_waffle._export_config(parse_data=False)
+                with utils.CliProgress(
+                        message='Generating: {}'.format(this_waffle),
+                        verbose=wg['verbose'],
+                ) as pbar:
+                    this_waffle_module.generate()
+            except (KeyboardInterrupt, SystemExit):
+                utils.echo_error_msg('user breakage...please wait while waffles exits...')
+                sys.exit(-1)
+            except Exception as e:
+                utils.echo_error_msg(e)
+                traceback.print_exc()
+                sys.exit(-1)
 
             sys.exit(0)
         else:
@@ -4200,30 +4200,25 @@ def waffles_cli(argv = sys.argv):
         else:
             this_waffle = WaffleFactory(mod=module, **wg)
             if this_waffle is not None:
-                this_wg = this_waffle._export_config(parse_data=False)
-                # if wg['verbose']:
-                #     utils.echo_msg('------------------------------------------------ :config')
-                #     utils.echo_msg(json.dumps(this_wg, sort_keys=True))
-                #     utils.echo_msg('------------------------------------------------ :/config')
+                #this_wg = this_waffle._export_config(parse_data=False)
                 this_waffle_module = this_waffle.acquire()
                 if this_waffle_module is not None:
                     with utils.CliProgress(
-                            message='{}: {}'.format(this_waffle, json.dumps(this_wg, sort_keys=True)),
+                            message='Generating: {}'.format(this_waffle),
                             verbose=wg['verbose'],
                     ) as pbar:
-                        #try:
-                        this_waffle_module.generate()
-                        #except (KeyboardInterrupt, SystemExit):
-                        #    utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                        #    sys.exit(-1)
-                        #except Exception as e:
-                        #    utils.echo_error_msg(e)
-                        #    sys.exit(-1)
+                        try:
+                            this_waffle_module.generate()
+                        except (KeyboardInterrupt, SystemExit):
+                            utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                            sys.exit(-1)
+                        except Exception as e:
+                            utils.echo_error_msg(e)
+                            sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
                         
-            #utils.echo_msg('generated DEM: {} @ {}/{}'.format(wf.fn, wf.))
         if not keep_cache:
             utils.remove_glob(wg['cache_dir'])
 ### End
