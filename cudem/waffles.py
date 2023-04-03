@@ -429,41 +429,41 @@ class Waffle:
         # with utils.CliProgress(
         #         message='{}: parsing XYZ data'.format(utils._command_name),
         # ) as pbar:            
-            for xdl in self.data:
-                if self.spat:
-                    xyz_yield = metadata.SpatialMetadata(
-                        data=[xdl.fn],
-                        src_region=self.p_region,
-                        inc=self.xinc,
-                        extend=self.extend,
-                        dst_srs=self.dst_srs if self.srs_transform else None,
-                        node=self.node,
-                        name=self.name,
-                        verbose=self.verbose,
-                        make_valid=True
-                    ).yield_xyz()
+        for xdl in self.data:
+            if self.spat:
+                xyz_yield = metadata.SpatialMetadata(
+                    data=[xdl.fn],
+                    src_region=self.p_region,
+                    inc=self.xinc,
+                    extend=self.extend,
+                    dst_srs=self.dst_srs if self.srs_transform else None,
+                    node=self.node,
+                    name=self.name,
+                    verbose=self.verbose,
+                    make_valid=True
+                ).yield_xyz()
 
-                elif self.archive:
-                    xyz_yield = xdl.archive_xyz()
-                else:
-                    xyz_yield = xdl.yield_xyz()
+            elif self.archive:
+                xyz_yield = xdl.archive_xyz()
+            else:
+                xyz_yield = xdl.yield_xyz()
 
-                if self.block:
-                    #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
-                    xyz_yield = xdl.block_xyz()
+            if self.block:
+                #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
+                xyz_yield = xdl.block_xyz()
 
-                for xyz in xyz_yield:
-                    #pbar.update()
-                    yield(xyz)
-                    if self.mask:
-                        if regions.xyz_in_region_p(xyz, self.region):
-                            xpos, ypos = utils._geo2pixel(
-                                xyz.x, xyz.y, dst_gt, 'pixel'
-                            )
-                            try:
-                                msk_array[ypos, xpos] = 1
-                            except:
-                                pass
+            for xyz in xyz_yield:
+                #pbar.update()
+                yield(xyz)
+                if self.mask:
+                    if regions.xyz_in_region_p(xyz, self.region):
+                        xpos, ypos = utils._geo2pixel(
+                            xyz.x, xyz.y, dst_gt, 'pixel'
+                        )
+                        try:
+                            msk_array[ypos, xpos] = 1
+                        except:
+                            pass
         if self.mask:
             out, status = utils.gdal_write(msk_array, self.mask_fn, ds_config)    
 
@@ -4205,14 +4205,14 @@ def waffles_cli(argv = sys.argv):
                             message='{}: {}'.format(this_waffle, json.dumps(this_wg, sort_keys=True)),
                             verbose=wg['verbose'],
                     ) as pbar:
-                        try:
-                            this_waffle_module.generate()
-                        except (KeyboardInterrupt, SystemExit):
-                            utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                            sys.exit(-1)
-                        except Exception as e:
-                            utils.echo_error_msg(e)
-                            sys.exit(-1)
+                        #try:
+                        this_waffle_module.generate()
+                        #except (KeyboardInterrupt, SystemExit):
+                        #    utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                        #    sys.exit(-1)
+                        #except Exception as e:
+                        #    utils.echo_error_msg(e)
+                        #    sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
