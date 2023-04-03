@@ -30,8 +30,6 @@
 import os
 import sys
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -82,10 +80,10 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
 
-        with tqdm(total=len(fns), desc='scanning NASADEM datasets') as pbar:        
+        with utils.CliProgress(total=len(fns), message='scanning NASADEM datasets') as pbar:        
             for i, fn in enumerate(fns):
                 sid = fn.text.split('/')[-1].split('.')[0]
-                pbar.update(1)
+                pbar.update()
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
                     spat = fn.text.split('_HGT_')[-1].split('.')[0]

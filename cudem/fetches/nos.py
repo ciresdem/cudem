@@ -79,8 +79,6 @@ import json
 from osgeo import osr
 from osgeo import gdal
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -153,12 +151,12 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                                 xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
                                 self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'xyz'])                
 
-    def yield_xyz(self, entry):
+    def yield_ds(self, entry):
         src_nos = os.path.basename(entry[1])
         if 'ellipsoid' not in src_nos.lower():
             if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_nos) == 0:
                 if entry[2] == 'xyz':
-                    nos_fns = utils.p_unzip(src_nos, ['xyz', 'dat'])
+                    nos_fns = utils.p_unzip(src_nos, exts=['xyz', 'dat'], outdir=self._outdir)
                     for src_xyz in nos_fns:
                         _ds = datasets.XYZFile(
                             fn=src_xyz,
@@ -176,13 +174,14 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                             verbose=self.verbose,
                             remote=True
                         )
-                        for xyz in _ds.yield_xyz():
-                            yield(xyz)
+                        yield(_ds)
+                        #for xyz in _ds.yield_xyz():
+                        #    yield(xyz)
 
                     utils.remove_glob(*nos_fns, *[x+'.inf' for x in nos_fns])
 
                 elif entry[2] == 'bag':
-                    src_bags = utils.p_unzip(src_nos, exts=['bag'])
+                    src_bags = utils.p_unzip(src_nos, exts=['bag'], outdir=self._outdir)
                     for src_bag in src_bags:
                         if 'ellipsoid' not in src_bag.lower() and 'vb' not in src_bag.lower():
                             bag_ds = gdal.Open(src_bag)
@@ -201,12 +200,24 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                                 y_inc=self.y_inc,
                                 verbose=self.verbose
                             )
-                            for xyz in _ds.yield_xyz():
-                                yield(xyz)
+                            yield(_ds)
+                            #for xyz in _ds.yield_xyz():
+                            #    yield(xyz)
 
                     utils.remove_glob(*src_bags)
             utils.remove_glob(src_nos)
-                        
+
+    def yield_xyz(self, entry):
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
+                yield(xyz)
+
+    def yield_array(self, entry):
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
+                yield(arr)
+
+            
 ## ==============================================
 ##
 ## the NOS class is the old NOS fetches module.
@@ -280,7 +291,7 @@ class NOS(f_utils.FetchModule):
                 break
             
             rows = page.xpath('//a[contains(@href, ".xml")]/@href')
-            with tqdm(total=len(rows), desc='scanning NOS datasets in {}'.format(nosdir)) as pbar:
+            with utils.CliProgress(total=len(rows), message='scanning NOS datasets in {}'.format(nosdir)) as pbar:
                 for i, survey in enumerate(rows):
                     if self.callback():
                         break

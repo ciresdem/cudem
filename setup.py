@@ -54,7 +54,6 @@ setuptools.setup(
         'laspy[laszip]',
         'h5py',
         'boto3',
-        'tqdm',
         'pygmt',
     ], 
     entry_points = {

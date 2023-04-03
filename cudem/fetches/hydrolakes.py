@@ -41,7 +41,6 @@ from osgeo import osr
 from osgeo import gdal
 
 import numpy as np
-from tqdm import tqdm
 
 from cudem import utils
 from cudem import regions
@@ -261,10 +260,9 @@ https://www.hydrosheds.org/products/hydrolakes
                 lk_layer.SetSpatialFilter(self.region.export_as_geom())
                 lk_features = lk_layer.GetFeatureCount()
 
-                with tqdm(
+                with utils.CliProgress(
                         total=len(lk_layer),
-                        desc='Processing {} HYDROLAKES'.format(lk_features),
-                        leave=self.verbose,
+                        message='Processing {} HYDROLAKES'.format(lk_features),
                 ) as pbar:
                     for i, feat in enumerate(lk_layer):
                         pbar.update(1)

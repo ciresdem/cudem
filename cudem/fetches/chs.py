@@ -33,8 +33,6 @@
 import os
 import lxml.etree
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -148,7 +146,7 @@ class CHS_FRED(f_utils.FetchModule):
         self.FRED._open_ds(1)
         chs_wcs = f_utils.WCS(self._chs_url)
         contents = chs_wcs._contents()
-        with tqdm(total=len(contents), desc='scanning for CHS datasets') as pbar:
+        with utils.CliProgress(total=len(contents), message='scanning for CHS datasets') as pbar:
             for i, layer in enumerate(contents):
                 pbar.update(1)
                 if 'Tiles' not in layer['CoverageId'][0]:
@@ -195,7 +193,7 @@ class CHS_FRED(f_utils.FetchModule):
     def run(self):        
         chs_wcs = f_utils.WCS(self._chs_url)
         _results = FRED._filter_FRED(self)
-        with tqdm(total=len(_results), desc='scanning CHS datasets') as pbar:
+        with utils.CliProgress(total=len(_results), message='scanning CHS datasets') as pbar:
             for surv in _results:
                 pbar.update(1)
                 d = chs_wcs._describe_coverage(surv['ID'])

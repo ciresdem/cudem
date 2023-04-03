@@ -88,8 +88,10 @@ https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
         utils.remove_glob(v_json)
 
     def yield_ds(self, entry):
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
-            src_fab_dems = utils.p_unzip(entry[1], ['tif'])
+        if f_utils.Fetch(
+                entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers
+        ).fetch_file(entry[1]) == 0:
+            src_fab_dems = utils.p_unzip(entry[1], ['tif'], self._outdir)
             for src_fab_dem in src_fab_dems:
                 demfun.set_nodata(src_fab_dem, 0, verbose=False)
                 _ds = datasets.RasterFile(

@@ -108,8 +108,6 @@ import json
 from osgeo import ogr
 from osgeo import gdal
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -361,7 +359,10 @@ class DigitalCoast(f_utils.FetchModule):
             tr = page.xpath('//table')[0].xpath('.//tr')
             if len(tr) <= 0: continue
             [cols.append(i.text_content()) for i in tr[0]]            
-            with tqdm(total=len(tr), desc='scanning for DIGITAL COAST datasets') as pbar:
+            with utils.CliProgress(
+                    total=len(tr),
+                    message='scanning for DIGITAL COAST datasets',
+            ) as pbar:
                 for i in range(1, len(tr)):
                     if self.callback():
                         break

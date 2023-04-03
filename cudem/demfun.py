@@ -25,8 +25,6 @@
 import os
 import shutil
 
-from tqdm import tqdm
-
 from osgeo import gdal
 from osgeo import osr
 from osgeo import ogr
@@ -530,14 +528,6 @@ def sample_warp(
             )
         )
     
-    # with tqdm(
-    #         #bar_format="{l_bar}{bar}{r_bar}{bar}",
-    #         desc='gdal: warping {} to E{}/{}, S{}, P{}, T{}'.format(
-    #             os.path.basename(src_dem), x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
-    #         ),
-    #         #position=-1,
-    #         leave=verbose,
-    # ) as pbar:
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
@@ -599,7 +589,7 @@ def yield_srcwin(src_dem, n_chunk=10, step=5, verbose=False):
     i_chunk = 0
     x_i_chunk = 0
     
-    with tqdm(total=ds_config['nb']/step, desc='chunking srcwin') as pbar:
+    with utils.CliProgress(total=ds_config['nb']/step, message='chunking srcwin') as pbar:
         while True:
             y_chunk = n_chunk
             while True:

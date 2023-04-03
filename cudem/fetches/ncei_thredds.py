@@ -41,8 +41,6 @@ import os
 from osgeo import ogr
 from osgeo import gdal
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -108,10 +106,9 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         surveys = []
-        with tqdm(
+        with utils.CliProgress(
                 total=len(this_ds),
-                desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
-                leave=self.verbose,
+                message='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
         ) as pbar:
             for i, node in enumerate(this_ds):
                 this_title = node.attrib['name']
@@ -195,16 +192,21 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
                              surv['DataType']]
                         )
 
-    def yield_xyz(self, entry):
+    def yield_ds(self, entry):
         src_ncei = os.path.basename(entry[1])
-        f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_ncei)
-        try:
-            src_ds = gdal.Open(src_ncei)
-        except Exception as e:
-            utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
-            src_ds = None
+        status = f_utils.Fetch(
+            entry[0], callback=self.callback, verbose=self.verbose
+        ).fetch_file(src_ncei)
+        #try:
+        #    src_ds = gdal.Open(src_ncei)
+        #except Exception as e:
+        #    utils.echo_error_msg(
+        #        'could not read ncei raster file: {}, {}'.format(entry[0], e)
+        #    )
+        #    src_ds = None
             
-        if src_ds is not None:
+        #if src_ds is not None:
+        if status == 0:
             _ds = datasets.RasterFile(
                 fn=src_ncei,
                 data_format=200,
@@ -216,12 +218,58 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
                 weight=self.weight,
                 verbose=self.verbose
             )
-            _ds.src_ds = src_ds
-            _ds.ds_open_p = True
-            for xyz in _ds.yield_xyz():
-                yield(xyz)
+            yield(_ds)
+        else:
+            utils.echo_error_msg('failed to fetch remote file, {}...'.format(src_ncei))
+
+            #_ds.src_ds = src_ds
+            #_ds.ds_open_p = True
+            #for xyz in _ds.yield_xyz():
+            #    yield(xyz)
                 
-        src_ds = None
-        utils.remove_glob(src_ncei)    
+        #src_ds = None
+        #utils.remove_glob(src_ncei)    
+
+    def yield_xyz(self, entry):
+        for ds in self.yield_ds(entry):
+            for xyz in ds.yield_xyz():
+                yield(xyz)
+
+    def yield_array(self, entry):
+        for ds in self.yield_ds(entry):
+            for arr in ds.yield_array():
+                yield(arr)
+        
+    # def yield_array(self, entry):
+    #     pass
+    
+    # def yield_xyz(self, entry):
+    #     src_ncei = os.path.basename(entry[1])
+    #     f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose).fetch_file(src_ncei)
+    #     try:
+    #         src_ds = gdal.Open(src_ncei)
+    #     except Exception as e:
+    #         utils.echo_error_msg('could not read ncei raster file: {}, {}'.format(entry[0], e))
+    #         src_ds = None
+            
+    #     if src_ds is not None:
+    #         _ds = datasets.RasterFile(
+    #             fn=src_ncei,
+    #             data_format=200,
+    #             src_srs='epsg:4326',
+    #             dst_srs=self.dst_srs,
+    #             src_region=self.region,
+    #             x_inc=self.x_inc,
+    #             y_inc=self.y_inc,
+    #             weight=self.weight,
+    #             verbose=self.verbose
+    #         )
+    #         _ds.src_ds = src_ds
+    #         _ds.ds_open_p = True
+    #         for xyz in _ds.yield_xyz():
+    #             yield(xyz)
+                
+    #     src_ds = None
+    #     utils.remove_glob(src_ncei)    
                     
 ### End

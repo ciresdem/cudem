@@ -32,8 +32,6 @@ import json
 
 from osgeo import ogr
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -128,7 +126,10 @@ https://www.charts.noaa.gov/
             surveys = []
             this_xml = f_utils.iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
-            with tqdm(total=len(charts), desc='scanning for CHARTS ({}) datasets'.format(dt)) as pbar:
+            with utils.CliProgress(
+                    total=len(charts),
+                    message='scanning for CHARTS ({}) datasets'.format(dt)
+            ) as pbar:
                 for i, chart in enumerate(charts):
                     pbar.update(1)
                     this_xml.xml_doc = chart
@@ -172,7 +173,10 @@ https://www.charts.noaa.gov/
             self.where.append("DataType = '{}'".format(self.datatype))
 
         _results = FRED._filter_FRED(self)
-        with tqdm(total=len(_results), desc='scanning CHARTS datasets') as pbar:
+        with utils.CliProgress(
+                total=len(_results),
+                message='scanning CHARTS datasets'
+        ) as pbar:
             for surv in _results:
                 pbar.update(1)
                 for i in surv['DataLink'].split(','):

@@ -937,7 +937,7 @@ def parse_cli_region(region_list, verbose=True):
 
     returns a list of region objects.
     """
-    
+
     these_regions = []
     for i_region in region_list:
         if i_region is None:
@@ -965,7 +965,9 @@ def parse_cli_region(region_list, verbose=True):
                         these_regions.append(i)
 
     if verbose:
-        if len(these_regions) > 0:
+        if len(these_regions) > 4:
+            utils.echo_msg('parsed {} region(s): {}...{}'.format(len(these_regions), these_regions[:2], these_regions[-2:]))
+        elif len(these_regions) > 0:
             utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
         else:
             utils.echo_error_msg('failed to parse region(s), {}'.format(region_list))

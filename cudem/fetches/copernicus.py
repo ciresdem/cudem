@@ -37,8 +37,6 @@ import sys
 
 from osgeo import gdal
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -90,13 +88,11 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         surveys = []
         page = f_utils.Fetch(self.cop_10_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
-        with tqdm(
-                total=len(rows),
-                desc='scanning for COPERNICUS COP-10 datasets',
-                leave=self.verbose,
-        ) as pbar:
+        with utils.CliProgress(
+                message='scanning for COPERNICUS COP-10 datasets',
+        ) as pbar:            
             for i, row in enumerate(rows):
-                pbar.update(1)
+                pbar.update()
                 sid = row.split('.')[0]
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
@@ -129,13 +125,12 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         f = f_utils.Fetch(self.cop30_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
-        with tqdm(
+        with utils.CliProgress(
                 total=len(fns),
-                desc='scanning for COPERNICUS COP-30 datasets',
-                leave=self.verbose,
+                message='scanning for COPERNICUS COP-30 datasets',
         ) as pbar:
             for i, fn in enumerate(fns):
-                pbar.update(1)
+                pbar.update()
                 sid = fn.text.split('/')[-1].split('.')[0]
                 self.FRED._attribute_filter(["ID = '{}'".format(sid)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:            
@@ -182,13 +177,12 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
             self.where.append("DataType = '{}'".format(self.datatype))
 
         _results = FRED._filter_FRED(self)
-        with tqdm(
+        with utils.CliProgress(
                 total=len(_results),
-                desc='scanning COPERNICUS datasets',
-                leave=self.verbose,
+                message='scanning COPERNICUS datasets',
         ) as pbar:
             for surv in _results:
-                pbar.update(1)
+                pbar.update()
                 for i in surv['DataLink'].split(','):
                     self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
                     #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])

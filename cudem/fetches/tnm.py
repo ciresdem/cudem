@@ -35,8 +35,6 @@
 import os
 import sys
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -172,10 +170,9 @@ http://tnmaccess.nationalmap.gov/
         
         datasets = self._datasets()
         self.FRED._open_ds(1)
-        with tqdm(
+        with utils.CliProgress(
                 total=len(datasets),
-                desc='scanning TNM datasets',
-                leave=self.verbose,
+                message='scanning TNM datasets',
         ) as pbar:
             for i, ds in enumerate(datasets):
                 pbar.update(1)
@@ -209,7 +206,7 @@ http://tnmaccess.nationalmap.gov/
         f = self.formats.split(',') if self.formats is not None else None
         q = self.q
         _results = FRED._filter_FRED(self)
-        with tqdm(total=len(_results), desc='scanning for TNM datasets') as pbar:
+        with utils.CliProgress(total=len(_results), message='scanning for TNM datasets') as pbar:
             for surv in _results:
                 offset = 0
                 total = 0

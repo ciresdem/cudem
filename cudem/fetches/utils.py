@@ -42,7 +42,6 @@ import threading
 try:
     import Queue as queue
 except: import queue as queue
-from tqdm import tqdm
 
 from cudem import utils
 from cudem import fetches
@@ -414,17 +413,10 @@ class Fetch:
                 elif req.status_code == 200:
                     curr_chunk = 0
                     with open(dst_fn, 'wb') as local_file:
-                        with tqdm(
-                                unit='B',
-                                unit_scale=True,
-                                unit_divisor=1024,
-                                miniters=1,
-                                #bar_format="{l_bar}{bar}{r_bar}{bar}",
-                                desc='{}: {}'.format(utils._command_name(), self.url),
+                        with utils.CliProgress(
+                                message='{}: {}'.format(utils._command_name(), self.url),
                                 total=int(req.headers.get('content-length', 0)),
-                                leave=self.verbose
                         ) as pbar:
-                        
                             for chunk in req.iter_content(chunk_size = 8196):
                                 if self.callback():
                                     break

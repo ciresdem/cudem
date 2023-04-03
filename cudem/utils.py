@@ -43,7 +43,11 @@ import re
 import curses
 import io
 import json
-from tqdm import tqdm
+
+import threading
+try:
+    import Queue as queue
+except: import queue as queue
 
 import numpy as np
 from osgeo import gdal
@@ -638,7 +642,6 @@ def p_unzip(src_file, exts=None, outdir='./'):
         with zipfile.ZipFile(src_file) as z:
             zfs = z.namelist()
             for ext in exts:
-                #with tqdm(total=len(zfs), desc='{}: unzipping {}...'.format(_command_name(), src_file[:14])) as pbar:
                 for zf in zfs:
                     if ext == zf.split('.')[-1]:
                         ext_zf = os.path.join(outdir, zf)
@@ -735,10 +738,9 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     i_chunk = 0
     x_i_chunk = 0
 
-    with tqdm(
+    with CliProgress(
             total=(n_size[0]*n_size[1])/step,
-            desc='{}: chunking srcwin'.format(_command_name),
-            leave=verbose,
+            message='{}: chunking srcwin'.format(_command_name),
     ) as pbar:
         while True:
             y_chunk = n_chunk
@@ -1074,10 +1076,9 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     
-    with tqdm(
-            desc='cmd: `{}...`'.format(cmd.rstrip()[:14]),
-            leave=verbose
-    ) as pbar:
+    with CliProgress(
+            message='cmd: `{}...`'.format(cmd.rstrip()[:14]),
+    ) as pbar:        
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
         else:
@@ -1253,11 +1254,10 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
       prefix (str): a prefix for the message
     """
 
-    #msg = _init_msg(msg, len(prefix) + 9)
+    msg = _init_msg(msg, len(prefix) + 9)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg))
+    sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
@@ -1271,11 +1271,10 @@ def echo_error_msg2(msg, prefix = 'waffles'):
       prefix (str): a prefix for the message
     """
 
-    #msg = _init_msg(msg, len(prefix) + 7)
+    msg = _init_msg(msg, len(prefix) + 7)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg))
+    sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
@@ -1290,15 +1289,13 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
       nl (bool): append a newline to the message
     """
 
-    #msg = _init_msg(msg, len(prefix))
+    msg = _init_msg(msg, len(prefix))
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     if bold:
-        #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg))
+        sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
     else:
-        #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: {}'.format(prefix, msg))
+        sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
     sys.stderr.flush()
     
 ## ==============================================
@@ -1353,19 +1350,23 @@ def echo_modules(module_dict, key):
 _command_name = lambda: os.path.basename(sys.argv[0])
     
 ## ==============================================
+##
 ## Progress indicator...
 ##
-## just use tqdm!
 ## ==============================================
-class CliProgress:
+class CliProgress():
     '''cudem minimal progress indicator'''
 
-    def __init__(self, message = None):
+    def __init__(self, message=None, total=0):
+        self.thread = threading.Thread(target=self.updates)
+        self.thread_is_alive = False
         self.tw = 7
         self.count = 0
         self.pc = self.count % self.tw
+        self.p = 0
 
         self.message = message
+        self.total = total
         self._init_opm()
         
         self.add_one = lambda x: x + 1
@@ -1388,12 +1389,29 @@ class CliProgress:
             self._clear_stderr()
             sys.stderr.write('\r {}  {}\n'.format(" " * (self.tw - 1), self.opm))
 
+    def updates(self):
+        while self.thread_is_alive:
+            time.sleep(2)
+            self.update(p=0)
+
     def __enter__(self):
+        self.thread_is_alive = True
+        self.thread.start()
         return(self)
 
     def __exit__(self, *args):
+        self.thread_is_alive = False
+        self.thread.join()
         self.end()
-            
+
+    def write(self, msg, nl=True, bold=False):
+        sys.stderr.write('\x1b[2K\r')
+        if bold:
+            sys.stderr.write('\033[1m{}\033[m{}'.format(msg, '\n' if nl else ''))
+        else:
+            sys.stderr.write('{}{}'.format(msg, '\n' if nl else ''))
+        sys.stderr.flush()
+                    
     def _init_opm(self):
         self.width = int(self._terminal_width()) - (self.tw+6)
         if len(self.message) > self.width:
@@ -1402,7 +1420,6 @@ class CliProgress:
             self.opm = '{}'.format(self.message)
             
     def _terminal_width(self):
-
         cols = 40
         try:
             cols = shutil.get_terminal_size().columns
@@ -1420,28 +1437,24 @@ class CliProgress:
     def _clear_stderr(self, slen = 79):
         sys.stderr.write('\x1b[2K\r')
         sys.stderr.flush()
-
-    def update_perc(self, p, msg = None):
-        if len(p) == 2 and p[0] <= p[1]:
-            self._init_opm()
-            self._clear_stderr()
-            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
-                self.perc(p), msg if msg is not None else self.opm
-            ))
-        else:
-            self.update()
-            
-        sys.stderr.flush()
         
-    def update(self, msg = None):
+    def update(self, p=1, msg=None):
         self._init_opm()
         self.pc = (self.count % self.tw)
         self.sc = (self.count % (self.tw + 1))
             
         self._clear_stderr()
-        sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(
-            self.spinner[self.sc], msg if msg is not None else self.opm
-        ))
+
+        self.p += p
+        
+        if self.p < self.total:
+            sys.stderr.write('\r[\033[36m{:^5.2f}%\033[m] {}\r'.format(
+                ((self.p/self.total) * 100.), msg if msg is not None else self.opm
+            ))
+        else:
+            sys.stderr.write('\r[\033[36m{:6}\033[m] {}\r'.format(
+                self.spinner[self.sc], msg if msg is not None else self.opm
+            ))
         
         if self.count == self.tw: self.spin_way = self.sub_one
         if self.count == 0: self.spin_way = self.add_one

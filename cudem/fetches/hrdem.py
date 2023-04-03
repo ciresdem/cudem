@@ -32,8 +32,6 @@ import os
 
 from osgeo import ogr
 
-from tqdm import tqdm
-
 from cudem import utils
 from cudem import regions
 from cudem import datasets
@@ -223,7 +221,7 @@ class HRDEM_FRED(f_utils.FetchModule):
         if v_ds is not None:
             layer = v_ds.GetLayer()
             fcount = layer.GetFeatureCount()
-            with tqdm(total=len(fcount), desc='scanning HRDEM datasets') as pbar:
+            with utils.CliProgress(total=len(fcount), message='scanning HRDEM datasets') as pbar:
                 for f in range(0, fcount):
                     pbar.update(1)
                     feature = layer[f]

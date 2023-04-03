@@ -32,7 +32,6 @@ import os
 import sys
 
 from osgeo import gdal
-from tqdm import tqdm
 
 from cudem import utils
 from cudem import regions
@@ -76,10 +75,9 @@ World Settlement Footprint (WSF) 2019
         surveys = []
         page = f_utils.Fetch(self._wsf_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".tif")]/@href')
-        with tqdm(
+        with utils.CliProgress(
                 total=len(rows),
-                desc='scanning WSF datasets',
-                leave=self.verbose,
+                message='scanning WSF datasets',
         ) as pbar:
             for i, row in enumerate(rows):
                 pbar.update(1)

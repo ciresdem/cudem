@@ -39,8 +39,6 @@ import numpy as np
 import math
 import json
 
-from tqdm import tqdm
-
 from osgeo import gdal
 
 import cudem
@@ -385,7 +383,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         msk_ds = gdal.Open(self.dem.mask_fn)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with tqdm(total=len(sub_regions), desc='analyzing {} sub-regions'.format(len(sub_regions))) as pbar:
+        with utils.CliProgress(total=len(sub_regions), message='analyzing {} sub-regions'.format(len(sub_regions))) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
                 s_sum, s_g_max, s_perc = self._mask_analysis(msk_ds, region=sub_region)
@@ -450,7 +448,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #s_dp = sub_dp = None
         s_dp = []
 
-        with tqdm(desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)) as pbar:
+        with utils.CliProgress(
+                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        ) as pbar:
             while True:
                 status = 0
                 sim += 1

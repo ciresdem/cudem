@@ -41,7 +41,6 @@ import os
 import math
 import json
 import time
-from tqdm import tqdm
 import traceback
 
 import numpy as np
@@ -392,12 +391,7 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        with tqdm(
-                #bar_format="{l_bar}{bar}{r_bar}{bar}",
-                desc='{}: parsing ARRAY data'.format(utils._command_name),
-                leave=self.verbose,
-        ) as pbar:
-            #with utils.CliProgress('parisng ARRAY data') as pbar:
+        with utils.CliProgress('parisng ARRAY data') as pbar:
             for xdl in self.data:
                 for array in xdl.yield_array():
                     pbar.update()
@@ -426,10 +420,9 @@ class Waffle:
                 gdal.GDT_Float32, self.ndv, 'GTiff'
         )
 
-        with tqdm(
-                desc='{}: parsing XYZ data'.format(utils._command_name),
-                leave=self.verbose,
-        ) as pbar:
+        with utils.CliProgress(
+                message='{}: parsing XYZ data'.format(utils._command_name),
+        ) as pbar:            
             for xdl in self.data:
                 if self.spat:
                     xyz_yield = metadata.SpatialMetadata(
@@ -486,9 +479,7 @@ class Waffle:
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the xyz data to dst_port"""
 
-        #with tqdm(desc='dumping xyz data...') as pbar:
         for xyz in self.yield_xyz(**kwargs):
-            #pbar.update()
             xyz.dump(
                 include_w = True if self.weights is not None else False,
                 dst_port=dst_port,
@@ -2770,10 +2761,9 @@ polygonize=[True/False] - polygonize the output
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
 
-        with tqdm(
+        with utils.CliProgress(
                 total=len(this_osm.results),
-                desc='processing OSM buildings',
-                leave=self.verbose,
+                message='processing OSM buildings',
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
@@ -3120,10 +3110,9 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with tqdm(
+        with utils.CliProgress(
                 total=len(nfeatures),
-                desc='applying labels...',
-                leave=self.verbose,
+                message='applying labels...',
         ) as pbar:
             for n, x in enumerate(nfeatures):
                 pbar.update()
@@ -3173,10 +3162,9 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
         
         lk_features = lk_layer.GetFeatureCount()
         lk_regions = self.p_region.copy()
-        with tqdm(
+        with utils.CliProgress(
                 total=len(lk_layer),
-                desc='processing {} lakes'.format(lk_features),
-                leave=self.verbose,
+                message='processing {} lakes'.format(lk_features),
         ) as pbar:
             for lk_f in lk_layer:
                 pbar.update()
@@ -3239,10 +3227,9 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            with tqdm(
+            with utils.CliProgress(
                     total=len(lk_ids),
-                    desc='Assigning Globathy Depths to rasterized lakes...',
-                    leave=self.verbose,
+                    message='Assigning Globathy Depths to rasterized lakes...',
             ) as pbar:
                 for n, this_id in enumerate(lk_ids):
                     depth = globd[this_id]
@@ -3340,11 +3327,10 @@ depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLak
 
         globd = self._fetch_globathy(ids=lk_ids)
 
-        with tqdm(
+        with utils.CliProgress(
                 total=len(lk_layer),
-                desc='processing lakes',
-                leave=self.verbose,
-        ) as pbar:
+                message='processing lakes',
+        ) as pbar:            
             for i, feat in enumerate(lk_layer):
                 pbar.update()
                 lk_id = feat.GetField('Hylak_id')
@@ -4202,14 +4188,14 @@ def waffles_cli(argv = sys.argv):
                     utils.echo_msg('------------------------------------------------ :/config')
                 this_waffle_module = this_waffle.acquire()
                 if this_waffle_module is not None:
-                    try:
-                        this_waffle_module.generate()
-                    except (KeyboardInterrupt, SystemExit):
-                        utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                        sys.exit(-1)
-                    except Exception as e:
-                        utils.echo_error_msg(e)
-                        sys.exit(-1)
+                    #try:
+                    this_waffle_module.generate()
+                    #except (KeyboardInterrupt, SystemExit):
+                    #utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                    #    sys.exit(-1)
+                    #except Exception as e:
+                    #    utils.echo_error_msg(e)
+                    #    sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))

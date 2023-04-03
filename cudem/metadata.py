@@ -28,8 +28,6 @@
 import os
 import sys
 
-from tqdm import tqdm
-
 from osgeo import ogr
 from osgeo import gdal
 
@@ -55,7 +53,7 @@ def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
     feats = len(src_layer)
     
     if feats > 0:
-        with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
+        with utils.CliProgress(total=len(src_layer), message='unioning {} features...'.format(feats)) as pbar:
             for n, f in enumerate(src_layer):
                 pbar.update()
                 f_geom = f.geometry()
