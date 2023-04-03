@@ -616,21 +616,35 @@ class figure1(GMTImage):
 ## PERSPECTO Module Parser
 ## ==============================================
 class PerspectoFactory:
+
+    if has_pygmt:
+        mods = {
+            'hillshade': {
+                'class': Hillshade,
+            },
+            'perspective': {
+                'class': perspective,
+            },
+            'sphere': {
+                'class': sphere,
+            },
+            'figure1': {
+                'class': figure1,
+            },        
+        }
+    else:
+        mods = {
+            'hillshade': {
+                'class': Hillshade,
+            },
+            'perspective': {
+                'class': perspective,
+            },
+            'sphere': {
+                'class': sphere,
+            },
+        }
     
-    mods = {
-        'hillshade': {
-            'class': Hillshade,
-        },
-        'perspective': {
-            'class': perspective,
-        },
-        'sphere': {
-            'class': sphere,
-        },
-        'figure1': {
-            'class': figure1,
-        },        
-    }
 
     def __init__(
             self,
