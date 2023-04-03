@@ -1361,10 +1361,33 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 ## ==============================================
 ##
 ## Progress indicator...
+## CMPI
 ##
 ## ==============================================
 class CliProgress():
-    '''cudem minimal progress indicator'''
+    """Cudem Minimal Progress Indicator
+
+    Minimal progress indication to use with CLI.
+
+    e.g.
+    import time
+    >>> with CliProgress(message='running thing 1', total=10) as pbar:
+    ...     for i in range(10):
+    ...         time.sleep(2)
+    ...         pbar.update()
+
+             running thing 1
+    [  ok  ] running thing 1
+
+
+    or manually:
+
+    >>> pbar = CliProgress(message='running thing 2', total=10)
+    >>> for i in range(10):
+    ...     time.sleep(2)
+    ...     pbar.update()
+    >>> pbar.end()
+    """
 
     def __init__(self, message=None, total=0, sleep=2, verbose=True):
         self.thread = threading.Thread(target=self.updates)
