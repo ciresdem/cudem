@@ -1386,7 +1386,7 @@ class CliProgress():
     >>> for i in range(10):
     ...     time.sleep(2)
     ...     pbar.update()
-    >>> pbar.end()
+    >>> pbar.end(message='ran thing 2')
     """
 
     def __init__(self, message=None, total=0, sleep=2, verbose=True):
