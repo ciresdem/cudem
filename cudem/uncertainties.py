@@ -448,12 +448,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #s_dp = sub_dp = None
         s_dp = []
 
-        with utils.CliProgress(message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)) as pbar:
+        with utils.CliProgress(
+                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        ) as pbar:
             while True:
                 status = 0
                 sim += 1
                 #utils.echo_msg('sorting training tiles by distance...')
-                trains = self._regions_sort(trainers, verbose=True)
+                trains = self._regions_sort(trainers, verbose=False)
                 tot_trains = len([x for s in trains for x in s])
                 #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
 
@@ -519,7 +521,6 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                 #print('sx_cnt', sx_cnt)
                                 #print('ss_len', ss_len)
                                 #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
-                                #_prog.update('performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors: {} {} {} {} {}'.format(self.sims, self.max_sample, sub_region[5], ss_samp, sx_cnt, ss_len, len(sub_xyz[sx_cnt:])))
                                 sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
                                 np.random.shuffle(sub_xyz)
                                 np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
@@ -543,7 +544,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                     clip=self.dem.clip,
                                     dst_srs=self.dem.dst_srs,
                                     mask=True,
-                                    verbose=True,
+                                    verbose=False,
                                     clobber=True,
                                 )
                                 waff.mod_args = self.dem.mod_args
@@ -672,7 +673,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #print(self.region_info[self.dem.name])
         #print(num_sum, g_max, num_perc)
         chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        chnk_inc = chnk_inc if chnk_inc > 10 else 10
         #chnk_inc = 24
+        utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
         sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 

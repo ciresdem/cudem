@@ -686,7 +686,9 @@ class Waffle:
         lower_limit = utils.float_or(lower_limit)
         
         if upper_limit is not None or lower_limit is not None:
-            src_ds = gdal.Open(self.fn, 1)
+            try:
+                src_ds = gdal.Open(self.fn, 1)
+            except: src_ds = None
             if src_ds is not None:
                 src_band = src_ds.GetRasterBand(1)
                 band_data = src_band.ReadAsArray()
@@ -2167,6 +2169,8 @@ supercede=[True/False]
                     if pre !=0:
                         demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1, verbose=self.verbose)
                         os.rename('__tmp_coast_clip.tif', pre_surface.fn)
+            else:
+                return(None)        
 
             pre -= 1
                     

@@ -1362,11 +1362,11 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 ## ==============================================
 ##
 ## Progress indicator...
-## CMPI
+## CAMPO
 ##
 ## ==============================================
 class CliProgress():
-    """Cudem Minimal Progress Indicator
+    """Cudem Absolute Minimum Progress Indicator
 
     Minimal progress indication to use with CLI.
 
