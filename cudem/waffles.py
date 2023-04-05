@@ -684,7 +684,6 @@ class Waffle:
     def set_limits(self, upper_limit=None, lower_limit=None):
         upper_limit = utils.float_or(upper_limit)
         lower_limit = utils.float_or(lower_limit)
-        
         if upper_limit is not None or lower_limit is not None:
             try:
                 src_ds = gdal.Open(self.fn, 1)
@@ -707,7 +706,9 @@ class Waffle:
 
                 src_band.WriteArray(band_data)
                 src_ds = None
-                
+            else:
+                return(None)
+                    
         return(self)
             
     def valid_p(self):
@@ -870,9 +871,11 @@ geographic=[True/Faslse] - data/grid are geographic
                 dst_port=p, encode=True
             )
         )
-
-        return(self.set_limits(self.upper_limit, self.lower_limit))
-               #return(self)
+        if self.valid_p():
+            return(self.set_limits(self.upper_limit, self.lower_limit))
+        else:
+            return(self)
+    #return(self)
 
 ## ==============================================
 ## GMT Triangulate
@@ -1990,19 +1993,21 @@ landmask=[path] - path to coastline vector mask or set as `coastline` to auto-ge
 min_weight=[val] - the minumum weight to include in the final DEM
 smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
 pre_count=[val] - number of pre-surface iterations to perform
+pre_upper_limit=[val] - the upper elevation limit of the pre-surfaces (used with landmask)
 poly_count=[True/False]
 keep_auxiliary=[True/False]
 mode=surface
 filter_outliers=[val]
 supercede=[True/False]
 
-< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:mode=surface:supercede=True >
+< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:pre_upper_limit=-0.1:mode=surface:supercede=True >
     """
     
     def __init__(
             self,
             min_weight=None,
             pre_count=1,
+            pre_upper_limit=-0.1,
             smoothing=None,
             landmask=False,
             poly_count=True,
@@ -2016,6 +2021,7 @@ supercede=[True/False]
         self.mod_args = {
             'min_weight':min_weight,
             'pre_count':pre_count,
+            'pre_upper_limit':pre_upper_limit,
             'smoothing':smoothing,
             'landmask':landmask,
             'poly_count':poly_count,
@@ -2032,6 +2038,7 @@ supercede=[True/False]
 
         self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
+        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1)
         self.smoothing = utils.int_or(smoothing)
         self.landmask = landmask
         self.poly_count = poly_count
@@ -2082,7 +2089,7 @@ supercede=[True/False]
         ## Generate Coastline
         self.coast = None
         if self.landmask:
-            upper_limit = -0.1
+            upper_limit = self.pre_upper_limit
             if not os.path.exists(utils.str_or(self.landmask)):
                if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
@@ -2601,7 +2608,11 @@ polygonize=[True/False] - polygonize the output
         """copernicus"""
 
         this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, datatype='1', outdir=self.cache_dir
+            src_region=self.wgs_region,
+            weight=self.weights,
+            verbose=self.verbose,
+            datatype='1',
+            outdir=self.cache_dir
         )
         #this_cop._outdir = self.cache_dir
         this_cop.run()

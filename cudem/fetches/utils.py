@@ -416,6 +416,7 @@ class Fetch:
                         with utils.CliProgress(
                                 message='fetching: {}'.format(self.url),
                                 total=int(req.headers.get('content-length', 0)),
+                                verbose=self.verbose
                         ) as pbar:
                             for chunk in req.iter_content(chunk_size = 8196):
                                 if self.callback():
@@ -435,7 +436,9 @@ class Fetch:
                         ## pause a bit and retry...
                         ## ==============================================
                         if self.verbose:
-                            utils.echo_warning_msg('server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries))
+                            utils.echo_warning_msg(
+                                'server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries)
+                            )
                             
                         time.sleep(10)
                         Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(

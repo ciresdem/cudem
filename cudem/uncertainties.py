@@ -383,7 +383,10 @@ class InterpolationUncertainty: #(waffles.Waffle):
         msk_ds = gdal.Open(self.dem.mask_fn)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with utils.CliProgress(total=len(sub_regions), message='analyzing {} sub-regions'.format(len(sub_regions))) as pbar:
+        with utils.CliProgress(
+                total=len(sub_regions),
+                message='analyzing {} sub-regions'.format(len(sub_regions)),
+        ) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
                 s_sum, s_g_max, s_perc = self._mask_analysis(msk_ds, region=sub_region)
@@ -406,8 +409,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
                     elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
                         zone = self._zones[7]
                     else:
-                        zone = None
-                        #    zone = self._zones[8]
+                        #zone = None
+                        zone = self._zones[8]
 
                 elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
                     if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
@@ -415,16 +418,16 @@ class InterpolationUncertainty: #(waffles.Waffle):
                     elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
                         zone = self._zones[4]
                     else:
-                        zone = None
-                        #    zone = self._zones[5]
+                        #zone = None
+                        zone = self._zones[5]
                 else:
                     if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
                         zone = self._zones[0]
                     elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
                         zone = self._zones[1]
                     else:
-                        zone = None
-                        #    zone = self._zones[2]
+                        #zone = None
+                        zone = self._zones[2]
 
                 if zone is not None:
                     sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]

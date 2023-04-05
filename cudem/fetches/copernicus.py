@@ -192,7 +192,12 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         return(self)
 
     def yield_ds(self, entry):
-        if f_utils.Fetch(entry[0], callback=self.callback, verbose=self.verbose, headers=self.headers).fetch_file(entry[1]) == 0:
+        if f_utils.Fetch(
+                entry[0],
+                callback=self.callback,
+                verbose=self.verbose,
+                headers=self.headers
+        ).fetch_file(entry[1]) == 0:
             src_cop_dems = utils.p_unzip(entry[1], ['tif'])
             for src_cop_dem in src_cop_dems:
                 demfun.set_nodata(src_cop_dem, 0, verbose=False)

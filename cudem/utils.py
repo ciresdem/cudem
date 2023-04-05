@@ -1384,9 +1384,11 @@ class CliProgress():
     or manually:
 
     >>> pbar = CliProgress(message='running thing 2', total=10)
+             running thing 2
     >>> for i in range(10):
     ...     time.sleep(2)
     ...     pbar.update()
+    [ ***] running thing 2
     >>> pbar.end(message='ran thing 2')
     """
 
@@ -1505,19 +1507,19 @@ class CliProgress():
             self.count = self.spin_way(self.count)
             sys.stderr.flush()
     
-    def end(self, status=0, end_msg=None):
+    def end(self, status=0, message=None):
         self._init_opm()
         self._clear_stderr()
-        if end_msg is None:
-            end_msg = self.message
+        if message is None:
+            message = self.message
             
         if status != 0 and status is not None:
             sys.stderr.write(
-                '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', end_msg)
+                '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
             )
         else:
             sys.stderr.write(
-                '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', end_msg)
+                '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', message)
             )
         sys.stderr.flush()
 
