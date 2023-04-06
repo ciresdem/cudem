@@ -1694,6 +1694,10 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
 
 class WafflesCUBE(Waffle):
     """
+    BathyCUBE - doesn't seem to work as expected, likely doing something wrong here...
+
+    https://github.com/noaa-ocs-hydrography/bathygrid
+    
     """
     
     def __init__(
@@ -1720,7 +1724,12 @@ class WafflesCUBE(Waffle):
         self.chunk_buffer = chunk_buffer
 
     def run(self):
-        import bathycube.cube as cube
+
+        try:
+            import bathycube.cube as cube
+        except:
+            utils.echo_error_msg('could not import bathycube, it may not be installed')
+            return(self)
         
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
@@ -1773,21 +1782,42 @@ class WafflesCUBE(Waffle):
         _x, _y = np.mgrid[0:ds_config['nx'], 0:ds_config['ny']]
         _x = _x.flatten()
         _y = _y.flatten()
+
+        # _x = np.linspace(self.region.xmin, self.region.xmax, ds_config['nx'])
+        # _y = np.linspace(self.region.ymin, self.region.ymax, ds_config['ny'])
+        # _x, _y = np.meshgrid(_x, _y)
+        # _x = _x.flatten()
+        # _y = _y.flatten() 
+        
         _z = points_band.ReadAsArray()
         _z = _z.flatten()
+        
         #_z  = np.linspace(10, 20, g_i['nb'])
         point_indices = np.nonzero(_z != ds_config['ndv'])
         point_values = _z[point_indices]
-
+        
+        xi = _x[point_indices]
+        yi = _y[point_indices]
+        
         print(len(_z))
         print(len(point_values))
 
-        tvu = np.linspace(0.1, 1, ds_config['nb'])
-        thu = np.linspace(0.3, 1.3, ds_config['nb'])
+        tvu = np.random.uniform(low=.1, high=.2, size=ds_config['nb'])
+        thu = np.random.uniform(low=.9, high=1, size=ds_config['nb'])
 
+        print(tvu)
+        print(thu)
+        #tvu = np.linspace(0.1, 1, ds_config['nb'])
+        #thu = np.linspace(0.8, 1.5, ds_config['nb'])
+        #tvu = np.ones(ds_config['nb'])
+        #thu = np.ones(ds_config['nb'])
+        #thu[:] = .25
+        tvui = tvu[point_indices]
+        thui = thu[point_indices]
+        
         numrows, numcols = (ds_config['nx'], ds_config['ny'])
         #numrows, numcols = (3, 3)
-        res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]
+        res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
         #res_x, res_y = (30, 30)                                                                                                                                                                                                 
 
         print(_x)
@@ -1797,78 +1827,29 @@ class WafflesCUBE(Waffle):
         print(numrows, numcols)
         print(res_x, res_y)
 
-        depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(_z, thu, tvu, _x, _y, ds_config['nx'], ds_config['ny'], min(_x), max(_y), 'local', 'order1a', 1,1)
+        print(self.region)
+        print(min(_x), max(_y))
+        depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
+            point_values,
+            thui,
+            tvui,
+            xi,
+            yi,
+            ds_config['nx'],
+            ds_config['ny'],
+            min(_x),
+            max(_y),
+            'local',
+            'order1a',
+            1,
+            1,
+        )
         print(depth_grid)
         print(len(depth_grid))
         #depth_grid.T
         print(depth_grid.shape)
         
         interp_band.WriteArray(depth_grid)
-        
-        # for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose):
-        #     srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
-        #     points_array = points_band.ReadAsArray(*srcwin_buff)
-        #     point_indices = np.nonzero(points_array != points_no_data)
-        #     if len(point_indices[0]):
-        #         #point_values = points_array[point_indices]
-        #         points_array = points_array.flatten()
-        #         xi, yi = np.mgrid[0:srcwin_buff[2],
-        #                           0:srcwin_buff[3]]
-        #         xi = xi.flatten()
-        #         yi = yi.flatten()
-        #         #xi = xi[point_indices]
-        #         #yi = yi[point_indices]
-                
-        #         tvu = np.linspace(0.1, 1, len(xi))
-        #         thu = np.linspace(0.3, 1.3, len(xi))
-
-        #         #tvu = tvu[point_indices]
-        #         #thu = tvu[point_indices]
-                
-        #         res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
-
-        #         #print(len(xi))
-        #         #print(len(yi))
-        #         #print(len(points_array))
-        #         #print(len(tvu))
-        #         #print(len(thu))
-        #         #try:
-
-        #         depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
-        #             points_array,
-        #             thu,
-        #             tvu,
-        #             xi,
-        #             yi,
-        #             xcount,
-        #             ycount,
-        #             min(xi),
-        #             max(yi),
-        #             'local',
-        #             'order1a',
-        #             res_x,
-        #             res_y
-        #         )
-                    
-        #         y_origin = srcwin[1]-srcwin_buff[1]
-        #         x_origin = srcwin[0]-srcwin_buff[0]
-        #         y_size = y_origin + srcwin[3]
-        #         x_size = x_origin + srcwin[2]
-        #         interp_data = depth_grid[y_origin:y_size,x_origin:x_size]
-        #         interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
-        #         #except Exception as e:
-        #         #    continue
-                
-        # interp_ds = points_ds = point_values = weight_values = None
-        # if not self.keep_auxiliary:
-        #     utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
-        # else:
-        #     os.rename(w, '{}_w.tif'.format(self.name))
-        #     os.rename(c, '{}_c.tif'.format(self.name))
-        #     os.rename(n, '{}_n.tif'.format(self.name))
-        #     self.aux_dems.append('{}_w.tif'.format(self.name))
-        #     self.aux_dems.append('{}_c.tif'.format(self.name))
-        #     self.aux_dems.append('{}_n.tif'.format(self.name))
             
         return(self)
     
@@ -3854,11 +3835,11 @@ class WaffleFactory():
             'datalist-p': True,
             'class': WafflesSciPy,
         },
-        # 'cube': {
-        #     'name': 'cube',
-        #     'datalist-p': True,
-        #     'class': WafflesCUBE,
-        # },
+        'cube': {
+            'name': 'cube',
+            'datalist-p': True,
+            'class': WafflesCUBE,
+        },
         
     }
 

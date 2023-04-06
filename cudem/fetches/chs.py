@@ -87,7 +87,7 @@ https://open.canada.ca
             _wcs_data = {
                 'request': 'GetCoverage',
                 'version': '2.0.1',
-                'CoverageID': 'nonna__NONNA 10 Coverage',
+                'CoverageID': 'nonna:NONNA 10 Coverage',
                 'service': 'WCS',
                 'crs': '4326',
                 'bbox': self.region.format('bbox'),
