@@ -78,7 +78,8 @@ to include multibeam bathymetry data from the Southern Ocean, and now includes b
 the global and coastal oceans.
 
 layers: 'topo' or 'topo-mask'
-
+fmt: 'geotiff', 'netcdf'
+    
 Data is assumed instantaneous MSL (5773?)
 
 https://www.gmrt.org
@@ -177,11 +178,14 @@ https://www.gmrt.org
                 entry[0], callback=self.callback, verbose=self.verbose
         ).fetch_file(src_data, timeout=10, read_timeout=120) == 0:
 
-            ds = gdal.Open(src_data, gdal.GA_Update)
-            md = ds.GetMetadata()
-            md['AREA_OR_POINT'] = 'Point'
-            ds.SetMetadata(md)
-            ds = None
+            try:
+                ds = gdal.Open(src_data, gdal.GA_Update)
+                md = ds.GetMetadata()
+                md['AREA_OR_POINT'] = 'Point'
+                ds.SetMetadata(md)
+                ds = None
+            except:
+                pass
             
             gmrt_ds = datasets.RasterFile(
                 fn=src_data,

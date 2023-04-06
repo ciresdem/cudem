@@ -759,18 +759,18 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
                 this_y_size = int(this_y_chunk - this_y_origin)
                 if this_x_size == 0 or this_y_size == 0:
                     break
-                
+
                 srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
                 yield(srcwin)
-                
+
                 if y_chunk > n_size[0]:
                     break
                 else:
                     y_chunk += step
                     i_chunk += 1
-                    
+
                 pbar.update(step)
-                
+
             if x_chunk > n_size[1]:
                 break
             else:
@@ -1248,9 +1248,12 @@ def _terminal_width():
 
 def _init_msg(msg, prefix_len):
     width = int(_terminal_width()) - (prefix_len+6)
-    if len(msg) > width:
-        return('{}...'.format(msg[:width]))
-    else:
+    try:
+        if len(msg) > width:
+            return('{}...'.format(msg[:width]))
+        else:
+            return('{}'.format(msg))
+    except:
         return('{}'.format(msg))
 
 def echo_warning_msg2(msg, prefix = 'waffles'):
@@ -1388,8 +1391,10 @@ class CliProgress():
     >>> for i in range(10):
     ...     time.sleep(2)
     ...     pbar.update()
-    [ ***] running thing 2
+    [   ***] running thing 2
     >>> pbar.end(message='ran thing 2')
+    [  ok  ] ran thing 2
+    True
     """
 
     def __init__(self, message=None, total=0, sleep=2, verbose=True):

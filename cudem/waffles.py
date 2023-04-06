@@ -1691,6 +1691,186 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
             self.aux_dems.append('{}_n.tif'.format(self.name))
             
         return(self)
+
+class WafflesCUBE(Waffle):
+    """
+    """
+    
+    def __init__(
+            self,
+            supercede=False,
+            chunk_size=None,
+            chunk_buffer=40,
+            keep_auxiliary=False,
+            **kwargs):
+        """generate a `CUBE` dem"""
+        
+        self.mod = 'cube'
+        self.mod_args = {
+            'supercede':supercede,
+            'keep_auxiliary':keep_auxiliary,
+            'chunk_size':chunk_size,
+            'chunk_buffer':chunk_buffer,
+        }
+        super().__init__(**kwargs)
+        self.supercede = supercede
+        self.keep_auxiliary = keep_auxiliary
+        self.chunk_size = utils.int_or(chunk_size)
+        self.chunk_step = None
+        self.chunk_buffer = chunk_buffer
+
+    def run(self):
+        import bathycube.cube as cube
+        
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            utils.sr_wkt(self.dst_srs),
+            gdal.GDT_Float32,
+            self.ndv,
+            self.fmt
+        )
+
+        self._stacks_array(
+            out_name='{}_cube_stack'.format(self.name),
+            supercede=self.supercede
+        )
+        n = '{}_cube_stack_s.tif'.format(self.name)
+        w = '{}_cube_stack_w.tif'.format(self.name)
+        c = '{}_cube_stack_c.tif'.format(self.name)
+
+        if self.chunk_size is None:
+            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = 10 if n_chunk < 10 else n_chunk
+        else: n_chunk = self.chunk_size
+        if self.chunk_step is None:
+            n_step = int(n_chunk/2)
+        else: n_step = self.chunk_step
+
+        points_ds = gdal.Open(n)
+        points_band = points_ds.GetRasterBand(1)
+        points_no_data = points_band.GetNoDataValue()
+        
+        try:
+            interp_ds = points_ds.GetDriver().Create(
+                self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+            )
+            interp_ds.SetProjection(points_ds.GetProjection())
+            interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
+            interp_band = interp_ds.GetRasterBand(1)
+            interp_band.SetNoDataValue(np.nan)
+        except:
+            return(self)
+        
+        if self.verbose:
+            utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
+        print(ycount, xcount)
+
+        _x, _y = np.mgrid[0:ds_config['nx'], 0:ds_config['ny']]
+        _x = _x.flatten()
+        _y = _y.flatten()
+        _z = points_band.ReadAsArray()
+        _z = _z.flatten()
+        #_z  = np.linspace(10, 20, g_i['nb'])
+        point_indices = np.nonzero(_z != ds_config['ndv'])
+        point_values = _z[point_indices]
+
+        print(len(_z))
+        print(len(point_values))
+
+        tvu = np.linspace(0.1, 1, ds_config['nb'])
+        thu = np.linspace(0.3, 1.3, ds_config['nb'])
+
+        numrows, numcols = (ds_config['nx'], ds_config['ny'])
+        #numrows, numcols = (3, 3)
+        res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]
+        #res_x, res_y = (30, 30)                                                                                                                                                                                                 
+
+        print(_x)
+        print(_y)
+        print(_z)
+
+        print(numrows, numcols)
+        print(res_x, res_y)
+
+        depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(_z, thu, tvu, _x, _y, ds_config['nx'], ds_config['ny'], min(_x), max(_y), 'local', 'order1a', 1,1)
+        print(depth_grid)
+        print(len(depth_grid))
+        #depth_grid.T
+        print(depth_grid.shape)
+        
+        interp_band.WriteArray(depth_grid)
+        
+        # for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose):
+        #     srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
+        #     points_array = points_band.ReadAsArray(*srcwin_buff)
+        #     point_indices = np.nonzero(points_array != points_no_data)
+        #     if len(point_indices[0]):
+        #         #point_values = points_array[point_indices]
+        #         points_array = points_array.flatten()
+        #         xi, yi = np.mgrid[0:srcwin_buff[2],
+        #                           0:srcwin_buff[3]]
+        #         xi = xi.flatten()
+        #         yi = yi.flatten()
+        #         #xi = xi[point_indices]
+        #         #yi = yi[point_indices]
+                
+        #         tvu = np.linspace(0.1, 1, len(xi))
+        #         thu = np.linspace(0.3, 1.3, len(xi))
+
+        #         #tvu = tvu[point_indices]
+        #         #thu = tvu[point_indices]
+                
+        #         res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
+
+        #         #print(len(xi))
+        #         #print(len(yi))
+        #         #print(len(points_array))
+        #         #print(len(tvu))
+        #         #print(len(thu))
+        #         #try:
+
+        #         depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
+        #             points_array,
+        #             thu,
+        #             tvu,
+        #             xi,
+        #             yi,
+        #             xcount,
+        #             ycount,
+        #             min(xi),
+        #             max(yi),
+        #             'local',
+        #             'order1a',
+        #             res_x,
+        #             res_y
+        #         )
+                    
+        #         y_origin = srcwin[1]-srcwin_buff[1]
+        #         x_origin = srcwin[0]-srcwin_buff[0]
+        #         y_size = y_origin + srcwin[3]
+        #         x_size = x_origin + srcwin[2]
+        #         interp_data = depth_grid[y_origin:y_size,x_origin:x_size]
+        #         interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
+        #         #except Exception as e:
+        #         #    continue
+                
+        # interp_ds = points_ds = point_values = weight_values = None
+        # if not self.keep_auxiliary:
+        #     utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+        # else:
+        #     os.rename(w, '{}_w.tif'.format(self.name))
+        #     os.rename(c, '{}_c.tif'.format(self.name))
+        #     os.rename(n, '{}_n.tif'.format(self.name))
+        #     self.aux_dems.append('{}_w.tif'.format(self.name))
+        #     self.aux_dems.append('{}_c.tif'.format(self.name))
+        #     self.aux_dems.append('{}_n.tif'.format(self.name))
+            
+        return(self)
     
 ## ==============================================
 ## Waffles VDatum
@@ -3674,6 +3854,12 @@ class WaffleFactory():
             'datalist-p': True,
             'class': WafflesSciPy,
         },
+        # 'cube': {
+        #     'name': 'cube',
+        #     'datalist-p': True,
+        #     'class': WafflesCUBE,
+        # },
+        
     }
 
     def __init__(

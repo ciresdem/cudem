@@ -68,6 +68,7 @@ https://open.canada.ca
         _req = f_utils.Fetch(self._chs_url).fetch_req(params=_data)
         _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
         print(lxml.etree.tostring(_results))
+        
         g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=f_utils.namespaces)[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
 
@@ -82,11 +83,25 @@ https://open.canada.ca
         resy = (uc[0] - lc[0]) / hl[1]
 
         if regions.regions_intersect_ogr_p(self.region, ds_region):
+
+            _wcs_data = {
+                'request': 'GetCoverage',
+                'version': '2.0.1',
+                'CoverageID': 'nonna__NONNA 10 Coverage',
+                'service': 'WCS',
+                'crs': '4326',
+                'bbox': self.region.format('bbox'),
+                'resx': resx,
+                'resy': resy
+            }
+
+            _wcs_req = f_utils.Fetch(self._chs_url).fetch_req(params=_wcs_data)
+
             #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&format=BAG&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
             chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
                                   .format(self._chs_url, self.region.format('bbox'), resx, resy)
             outf = 'chs_{}.tif'.format(self.region.format('fn'))
-            self.results.append([chs_wcs, os.path.join(self._outdir, outf), 'chs'])
+            self.results.append([_wcs_req.url, os.path.join(self._outdir, outf), 'chs'])
         return(self)
 
     def yield_xyz(self, entry):
