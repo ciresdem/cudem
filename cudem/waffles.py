@@ -1722,7 +1722,7 @@ class WafflesCUBE(Waffle):
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = None
         self.chunk_buffer = chunk_buffer
-
+        
     def run(self):
 
         try:
@@ -1730,6 +1730,8 @@ class WafflesCUBE(Waffle):
         except:
             utils.echo_error_msg('could not import bathycube, it may not be installed')
             return(self)
+
+        from scipy import optimize
         
         xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         ds_config = demfun.set_infos(
@@ -1772,63 +1774,54 @@ class WafflesCUBE(Waffle):
             interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
             interp_band = interp_ds.GetRasterBand(1)
             interp_band.SetNoDataValue(np.nan)
+
+            uncert_ds = points_ds.GetDriver().Create(
+                '{}_unc.tif'.format(self.name), points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+            )
+            uncert_ds.SetProjection(points_ds.GetProjection())
+            uncert_ds.SetGeoTransform(points_ds.GetGeoTransform())
+            uncert_band = uncert_ds.GetRasterBand(1)
+            uncert_band.SetNoDataValue(np.nan)
+            
         except:
             return(self)
         
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
-        print(ycount, xcount)
 
         _x, _y = np.mgrid[0:ds_config['nx'], 0:ds_config['ny']]
         _x = _x.flatten()
         _y = _y.flatten()
 
-        # _x = np.linspace(self.region.xmin, self.region.xmax, ds_config['nx'])
-        # _y = np.linspace(self.region.ymin, self.region.ymax, ds_config['ny'])
-        # _x, _y = np.meshgrid(_x, _y)
-        # _x = _x.flatten()
-        # _y = _y.flatten() 
-        
         _z = points_band.ReadAsArray()
-        _z = _z.flatten()
-        
-        #_z  = np.linspace(10, 20, g_i['nb'])
+        _z = _z.T
+        _z = _z.ravel()
         point_indices = np.nonzero(_z != ds_config['ndv'])
-        point_values = _z[point_indices]
-        
+        point_values = _z[point_indices]        
         xi = _x[point_indices]
         yi = _y[point_indices]
+
+        tvu = np.random.uniform(low=.1, high=.3, size=ds_config['nb'])
+        thu = np.random.uniform(low=.3, high=1.3, size=ds_config['nb'])
         
-        print(len(_z))
-        print(len(point_values))
+        #tvu = (np.random.uniform(low=.1, high=np.std(point_values), size=ds_config['nb']))
+        #print(tvu)
 
-        tvu = np.random.uniform(low=.1, high=.2, size=ds_config['nb'])
-        thu = np.random.uniform(low=.9, high=1, size=ds_config['nb'])
+        #print(np.std(point_values, axis=0))
+        #print([point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std()])
 
-        print(tvu)
-        print(thu)
-        #tvu = np.linspace(0.1, 1, ds_config['nb'])
-        #thu = np.linspace(0.8, 1.5, ds_config['nb'])
+        #thu = np.linspace(point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std(), ds_config['nb'])
+        
+        #tvu = np.linspace(0.2, .3, ds_config['nb'])
+        #thu = np.linspace(0.2, .3, ds_config['nb'])
         #tvu = np.ones(ds_config['nb'])
         #thu = np.ones(ds_config['nb'])
-        #thu[:] = .25
         tvui = tvu[point_indices]
         thui = thu[point_indices]
         
         numrows, numcols = (ds_config['nx'], ds_config['ny'])
-        #numrows, numcols = (3, 3)
         res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
-        #res_x, res_y = (30, 30)                                                                                                                                                                                                 
-
-        print(_x)
-        print(_y)
-        print(_z)
-
-        print(numrows, numcols)
-        print(res_x, res_y)
-
-        print(self.region)
-        print(min(_x), max(_y))
         depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
             point_values,
             thui,
@@ -1843,13 +1836,13 @@ class WafflesCUBE(Waffle):
             'order1a',
             1,
             1,
-        )
-        print(depth_grid)
-        print(len(depth_grid))
-        #depth_grid.T
-        print(depth_grid.shape)
-        
+        )        
+        depth_grid = np.flip(depth_grid)
+        depth_grid = np.fliplr(depth_grid)
         interp_band.WriteArray(depth_grid)
+        uncertainty_grid = np.flip(uncertainty_grid)
+        uncertainty_grid = np.fliplr(uncertainty_grid)
+        uncert_band.WriteArray(uncertainty_grid)
             
         return(self)
     
