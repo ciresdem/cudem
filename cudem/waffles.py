@@ -275,6 +275,16 @@ class Waffle:
 
         method is either 'weighted_mean' or 'supercede'
         """
+
+        def sum_nan_arrays(a, b):
+            ma = np.isnan(a)
+            mb = np.isnan(b)
+            m_keep_a = ~ma & mb
+            m_keep_b = ma & ~mb
+            out = a + b
+            out[m_keep_a] = a[m_keep_a]
+            out[m_keep_b] = b[m_keep_b]
+            return out
         
         if not self.weights:
             self.weights = 1
@@ -287,6 +297,7 @@ class Waffle:
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(self.fmt)
 
+        ## Z Grid
         z_ds = driver.Create(
             '{}_s.tif'.format(out_name), xcount, ycount, 1, gdt,
             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
@@ -294,7 +305,8 @@ class Waffle:
         z_ds.SetGeoTransform(dst_gt)
         z_band = z_ds.GetRasterBand(1)
         z_band.SetNoDataValue(self.ndv)
-        
+
+        ## Weight Grid
         w_ds = driver.Create(
             '{}_w.tif'.format(out_name), xcount, ycount, 1, gdt,
             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
@@ -302,13 +314,23 @@ class Waffle:
         w_ds.SetGeoTransform(dst_gt)
         w_band = w_ds.GetRasterBand(1)
         w_band.SetNoDataValue(self.ndv)
-                
+
+        ## Count Grid
         c_ds = driver.Create(
             '{}_c.tif'.format(out_name), xcount, ycount, 1, gdt
         )
         c_ds.SetGeoTransform(dst_gt)
         c_band = c_ds.GetRasterBand(1)
         c_band.SetNoDataValue(self.ndv)
+
+        ## Variance Grid
+        v_ds = driver.Create(
+            '{}_v.tif'.format(out_name), xcount, ycount, 1, gdt,
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        )
+        v_ds.SetGeoTransform(dst_gt)
+        v_band = v_ds.GetRasterBand(1)
+        v_band.SetNoDataValue(self.ndv)
 
         if self.verbose:
             utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
@@ -323,31 +345,48 @@ class Waffle:
             c_arr[np.isnan(arr)] = 0
             w_arr[np.isnan(arr)] = 0
             arr[np.isnan(arr)] = 0
+
             z_array = z_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-
             z_array[z_array == self.ndv] = 0
+            
+            w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             w_array[w_array == self.ndv] = 0
+            
+            c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             c_array[c_array == self.ndv] = 0
+            
+            v_array = v_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            v_array[v_array == self.ndv] = 0
 
+            ## add the count
             c_array += c_arr
+            #c_array = np.where(np.isnan(c_array)&np.isnan(c_arr), np.nan, np.where(np.isnan(c_array), 0, c_array) + np.where(np.isnan(c_arr), 0, c_arr)
+            #c_array = sum_nan_arrays(c_array, c_arr)
+
+            ## supercede based on weights, else do weighted mean
             if supercede:
                 z_array[w_arr > w_array] = arr[w_arr > w_array]
                 w_array[w_arr > w_array] = w_arr[w_arr > w_array]
+                z_array[z_array == 0] = np.nan
+                w_array[w_array == 0] = np.nan
             else:
                 z_array += (arr * w_arr)
                 w_array += w_arr
-
+                w_array[w_array == 0] = np.nan
+                v_array += w_arr * ((arr - (z_array / w_array))**2)
+                
             c_array[c_array == 0] = self.ndv
-            w_array[w_array == 0] = self.ndv
+            w_array[np.isnan(w_array)] = self.ndv
             z_array[np.isnan(w_array)] = self.ndv
             z_array[w_array == self.ndv] = self.ndv
+            v_array[v_array == 0] = self.ndv
+            v_array[w_array == self.ndv] = self.ndv
             
             # write out results
             z_band.WriteArray(z_array, srcwin[0], srcwin[1])
             w_band.WriteArray(w_array, srcwin[0], srcwin[1])
             c_band.WriteArray(c_array, srcwin[0], srcwin[1])
+            v_band.WriteArray(v_array, srcwin[0], srcwin[1])
             arr = w_arr = c_arr = z_array = w_array = c_array = None
 
         ## Finalize and close datasets
@@ -359,32 +398,39 @@ class Waffle:
                 z_data = z_band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
-                c_data = c_band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                )
+                z_data[z_data == self.ndv] = np.nan
+                
                 w_data = w_band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
-
-                z_data[z_data == self.ndv] = np.nan
                 w_data[w_data == self.ndv] = np.nan
-                c_data[c_data == self.ndv] = np.nan
-                z_data[np.isnan(w_data)] = np.nan
-                
-                w_data = w_data / c_data
-                z_data = (z_data/w_data)/c_data
 
+                c_data = c_band.ReadAsArray(
+                    srcwin[0], y, srcwin[2], 1
+                )
+                c_data[c_data == self.ndv] = np.nan
+                
+                v_data = v_band.ReadAsArray(
+                    srcwin[0], y, srcwin[2], 1
+                )
+                v_data[v_data == self.ndv] = np.nan
+                z_data[np.isnan(w_data)] = np.nan
+
+                w_data = w_data / c_data
+                v_data = (v_data/w_data) / c_data
+                z_data = (z_data/w_data) / c_data
+                
                 z_data[np.isnan(z_data)] = self.ndv
                 c_data[np.isnan(c_data)] = self.ndv
                 w_data[np.isnan(w_data)] = self.ndv
+                v_data[np.isnan(v_data)] = self.ndv
                 
                 z_band.WriteArray(z_data, srcwin[0], y)
                 c_band.WriteArray(c_data, srcwin[0], y)
                 w_band.WriteArray(w_data, srcwin[0], y)
+                v_band.WriteArray(v_data, srcwin[0], y)
 
-        #utils.echo_msg('maximum stacked value: {}'.format(z_data.max()))
-        #utils.echo_msg('minimum stacked value: {}'.format(z_data.min()))
-        z_ds = c_ds = w_ds = None
+        z_ds = c_ds = w_ds = v_ds = None
     
     def yield_array(self, **kwargs):
         """yield the arrays from the datalist for use in gridding"""
@@ -1745,6 +1791,7 @@ class WafflesCUBE(Waffle):
             self.fmt
         )
 
+        print(ds_config)
         self._stacks_array(
             out_name='{}_cube_stack'.format(self.name),
             supercede=self.supercede
@@ -1752,7 +1799,22 @@ class WafflesCUBE(Waffle):
         n = '{}_cube_stack_s.tif'.format(self.name)
         w = '{}_cube_stack_w.tif'.format(self.name)
         c = '{}_cube_stack_c.tif'.format(self.name)
+        # _x = []
+        # _y = []
+        # _z = []
+        # for this_xyz in self.yield_xyz():
+        #     _x.append(this_xyz.x)
+        #     _y.append(this_xyz.y)
+        #     _z.append(this_xyz.z)
 
+        # _x = np.array(_x)
+        # _y = np.array(_y)
+        # _z = np.array(_z)
+
+        # print(_z.size)
+        # print(_z.shape)
+        # print(len(_z))
+        
         if self.chunk_size is None:
             n_chunk = int(ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
@@ -1765,34 +1827,47 @@ class WafflesCUBE(Waffle):
         points_band = points_ds.GetRasterBand(1)
         points_no_data = points_band.GetNoDataValue()
         
-        try:
-            interp_ds = points_ds.GetDriver().Create(
-                self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
-                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
-            )
-            interp_ds.SetProjection(points_ds.GetProjection())
-            interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
-            interp_band = interp_ds.GetRasterBand(1)
-            interp_band.SetNoDataValue(np.nan)
+        #try:
+        interp_ds = points_ds.GetDriver().Create(
+            self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+            options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        )
+        # driver = gdal.GetDriverByName('GTiff')
+        # interp_ds = driver.Create(
+        #     self.fn, ds_config['nx'], ds_config['ny'], bands=1, eType=ds_config['dt'],
+        #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # )
 
-            uncert_ds = points_ds.GetDriver().Create(
-                '{}_unc.tif'.format(self.name), points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
-                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
-            )
-            uncert_ds.SetProjection(points_ds.GetProjection())
-            uncert_ds.SetGeoTransform(points_ds.GetGeoTransform())
-            uncert_band = uncert_ds.GetRasterBand(1)
-            uncert_band.SetNoDataValue(np.nan)
+        interp_ds.SetProjection(points_ds.GetProjection())
+        interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
+        #interp_ds.SetGeoTransform(ds_config['geoT'])
+        interp_band = interp_ds.GetRasterBand(1)
+        interp_band.SetNoDataValue(np.nan)
+
+        uncert_ds = points_ds.GetDriver().Create(
+            '{}_unc.tif'.format(self.name), points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+            options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        )
+
+        # uncert_ds = driver.Create(
+        #     self.fn, ds_config['nx'], ds_config['ny'], bands=1, eType=ds_config['dt'],
+        #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # )
+        uncert_ds.SetProjection(points_ds.GetProjection())
+        uncert_ds.SetGeoTransform(points_ds.GetGeoTransform())
+        #uncert_ds.SetGeoTransform(ds_config['geoT'])
+        uncert_band = uncert_ds.GetRasterBand(1)
+        uncert_band.SetNoDataValue(np.nan)
             
-        except:
-            return(self)
+        # except:
+        #     return(self)
         
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
 
         _x, _y = np.mgrid[0:ds_config['nx'], 0:ds_config['ny']]
-        _x = _x.flatten()
-        _y = _y.flatten()
+        _x = _x.ravel()
+        _y = _y.ravel()
 
         _z = points_band.ReadAsArray()
         _z = _z.T
@@ -1802,8 +1877,15 @@ class WafflesCUBE(Waffle):
         xi = _x[point_indices]
         yi = _y[point_indices]
 
-        tvu = np.random.uniform(low=.1, high=.3, size=ds_config['nb'])
-        thu = np.random.uniform(low=.3, high=1.3, size=ds_config['nb'])
+        thu = np.ones(len(point_values))
+        thu[:] = 2
+        #thu = thu[point_indices]
+        a = .25
+        b = .0075
+        tvu = np.sqrt((a**2 + (b * abs(point_values))**2))
+        
+        #tvu = np.random.uniform(low=.1, high=.3, size=ds_config['nb'])
+        #thu = np.random.uniform(low=.3, high=1.3, size=ds_config['nb'])
         
         #tvu = (np.random.uniform(low=.1, high=np.std(point_values), size=ds_config['nb']))
         #print(tvu)
@@ -1817,15 +1899,20 @@ class WafflesCUBE(Waffle):
         #thu = np.linspace(0.2, .3, ds_config['nb'])
         #tvu = np.ones(ds_config['nb'])
         #thu = np.ones(ds_config['nb'])
-        tvui = tvu[point_indices]
-        thui = thu[point_indices]
-        
+        #tvui = tvu[point_indices]
+        #thui = thu[point_indices]
+        #_z[:] = _z*-1
+        # print(_x)
+        # print(_y)
+        # print(_z)
+        # print(thu)
+        # print(tvu)
         numrows, numcols = (ds_config['nx'], ds_config['ny'])
         res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
         depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
             point_values,
-            thui,
-            tvui,
+            thu,
+            tvu,
             xi,
             yi,
             ds_config['nx'],
@@ -1836,13 +1923,245 @@ class WafflesCUBE(Waffle):
             'order1a',
             1,
             1,
-        )        
+        )
+        print(depth_grid)
         depth_grid = np.flip(depth_grid)
         depth_grid = np.fliplr(depth_grid)
         interp_band.WriteArray(depth_grid)
         uncertainty_grid = np.flip(uncertainty_grid)
         uncertainty_grid = np.fliplr(uncertainty_grid)
         uncert_band.WriteArray(uncertainty_grid)
+            
+        return(self)
+
+class WafflesBGrid(Waffle):
+    """
+    BathyCUBE - doesn't seem to work as expected, likely doing something wrong here...
+
+    https://github.com/noaa-ocs-hydrography/bathygrid
+    
+    """
+    
+    def __init__(
+            self,
+            supercede=False,
+            chunk_size=None,
+            chunk_buffer=40,
+            keep_auxiliary=False,
+            **kwargs):
+        """generate a `CUBE` dem"""
+        
+        self.mod = 'cube'
+        self.mod_args = {
+            'supercede':supercede,
+            'keep_auxiliary':keep_auxiliary,
+            'chunk_size':chunk_size,
+            'chunk_buffer':chunk_buffer,
+        }
+        super().__init__(**kwargs)
+        self.supercede = supercede
+        self.keep_auxiliary = keep_auxiliary
+        self.chunk_size = utils.int_or(chunk_size)
+        self.chunk_step = None
+        self.chunk_buffer = chunk_buffer
+        
+    def run(self):
+
+        try:
+            import bathycube.cube as cube
+        except:
+            utils.echo_error_msg('could not import bathycube, it may not be installed')
+            return(self)
+
+        from scipy import optimize
+        
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            utils.sr_wkt(self.dst_srs),
+            gdal.GDT_Float32,
+            self.ndv,
+            self.fmt
+        )
+
+        print(ds_config)
+        # self._stacks_array(
+        #     out_name='{}_cube_stack'.format(self.name),
+        #     supercede=self.supercede
+        # )
+        # n = '{}_cube_stack_s.tif'.format(self.name)
+        # w = '{}_cube_stack_w.tif'.format(self.name)
+        # c = '{}_cube_stack_c.tif'.format(self.name)
+        _x = []
+        _y = []
+        _z = []
+        for this_xyz in self.yield_xyz():
+            _x.append(this_xyz.x)
+            _y.append(this_xyz.y)
+            _z.append(this_xyz.z)
+
+        _x = np.array(_x)
+        _y = np.array(_y)
+        _z = np.array(_z)
+
+        dtyp = [('x', np.float64), ('y', np.float64), ('z', np.float32), ('tvu', np.float32), ('thu', np.float32)]
+        data = np.empty(len(_x), dtype=dtyp)
+        data['x'] = _x
+        data['y'] = _y
+        data['z'] = _z
+        
+        # print(_z.size)
+        # print(_z.shape)
+        # print(len(_z))
+        
+        if self.chunk_size is None:
+            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = 10 if n_chunk < 10 else n_chunk
+        else: n_chunk = self.chunk_size
+        if self.chunk_step is None:
+            n_step = int(n_chunk/2)
+        else: n_step = self.chunk_step
+
+        # points_ds = gdal.Open(n)
+        # points_band = points_ds.GetRasterBand(1)
+        # points_no_data = points_band.GetNoDataValue()
+        
+        #try:
+        # interp_ds = points_ds.GetDriver().Create(
+        #     self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+        #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # )
+        # driver = gdal.GetDriverByName('GTiff')
+        # interp_ds = driver.Create(
+        #     self.fn, ds_config['nx'], ds_config['ny'], bands=1, eType=ds_config['dt'],
+        #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # )
+
+        # #interp_ds.SetProjection(points_ds.GetProjection())
+        # #interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
+        # #interp_ds.SetGeoTransform(ds_config['geoT'])
+        # interp_band = interp_ds.GetRasterBand(1)
+        # interp_band.SetNoDataValue(np.nan)
+
+        # # uncert_ds = points_ds.GetDriver().Create(
+        # #     '{}_unc.tif'.format(self.name), points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+        # #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # # )
+
+        # uncert_ds = driver.Create(
+        #     self.fn, ds_config['nx'], ds_config['ny'], bands=1, eType=ds_config['dt'],
+        #     options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        # )
+        # #uncert_ds.SetProjection(points_ds.GetProjection())
+        # #uncert_ds.SetGeoTransform(points_ds.GetGeoTransform())
+        # #uncert_ds.SetGeoTransform(ds_config['geoT'])
+        # uncert_band = uncert_ds.GetRasterBand(1)
+        # uncert_band.SetNoDataValue(np.nan)
+            
+        # except:
+        #     return(self)
+        
+        if self.verbose:
+            utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
+
+        # _x, _y = np.mgrid[0:ds_config['nx'], 0:ds_config['ny']]
+        # _x = _x.flatten()
+        # _y = _y.flatten()
+
+        # _z = points_band.ReadAsArray()
+        # _z = _z.T
+        # _z = _z.ravel()
+        # point_indices = np.nonzero(_z != ds_config['ndv'])
+        # point_values = _z[point_indices]        
+        # xi = _x[point_indices]
+        # yi = _y[point_indices]
+
+        thu = np.ones(len(_z))
+        thu[:] = 2
+        #thu = thu[point_indices]
+        a = .25
+        b = .0075
+        tvu = np.sqrt((a**2 + (b * abs(_z))**2))
+
+        data['tvu'] = tvu
+        data['thu'] = thu
+        #tvu = np.random.uniform(low=.1, high=.3, size=ds_config['nb'])
+        #thu = np.random.uniform(low=.3, high=1.3, size=ds_config['nb'])
+        
+        #tvu = (np.random.uniform(low=.1, high=np.std(point_values), size=ds_config['nb']))
+        #print(tvu)
+
+        #print(np.std(point_values, axis=0))
+        #print([point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std()])
+
+        #thu = np.linspace(point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std(), ds_config['nb'])
+        
+        #tvu = np.linspace(0.2, .3, ds_config['nb'])
+        #thu = np.linspace(0.2, .3, ds_config['nb'])
+        #tvu = np.ones(ds_config['nb'])
+        #thu = np.ones(ds_config['nb'])
+        #tvui = tvu[point_indices]
+        #thui = thu[point_indices]
+        #_z[:] = _z*-1
+        # print(_x)
+        # print(_y)
+        # print(_z)
+        # print(thu)
+        # print(tvu)
+        numrows, numcols = (ds_config['nx'], ds_config['ny'])
+        res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
+
+
+        from bathygrid.convenience import create_grid
+        # a single resolution grid that is entirely within computer memory
+        bg = create_grid(folder_path='./', grid_type='single_resolution')
+        # add points from two multibeam lines, EPSG:26917 with vertical reference 'waterline'
+        bg.add_points(data, 'test1', ['line1', 'line2'], 26965, 'waterline')
+        print(bg.points_count)
+        assert not bg.is_empty
+
+        # grid by looking up the mean depth of each tile to determine resolution
+        bg.grid()
+
+        print(bg.resolutions)
+        out_tif = os.path.join(bg.output_folder, self.fn)
+        bg.export(out_tif, export_format='geotiff')
+        
+        # # check to see if the new bags are written
+        # new_bag = os.path.join(bg.output_folder, 'outtiff_0.5.bag')
+        # new_bag_two = os.path.join(bg.output_folder, 'outtiff_1.0.bag')
+        # assert os.path.exists(new_bag)
+        # assert os.path.exists(new_bag_two)
+
+        # # Get the total number of cells in the variable resolution grid for each resolution
+        # bg.cell_count
+        # bg.coverage_area
+        
+        # depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
+        #     point_values,
+        #     thu,
+        #     tvu,
+        #     xi,
+        #     yi,
+        #     ds_config['nx'],
+        #     ds_config['ny'],
+        #     min(_x),
+        #     max(_y),
+        #     'local',
+        #     'order1a',
+        #     1,
+        #     1,
+        # )
+        # print(depth_grid)
+        # depth_grid = np.flip(depth_grid)
+        # depth_grid = np.fliplr(depth_grid)
+        # interp_band.WriteArray(depth_grid)
+        # uncertainty_grid = np.flip(uncertainty_grid)
+        # uncertainty_grid = np.fliplr(uncertainty_grid)
+        # uncert_band.WriteArray(uncertainty_grid)
             
         return(self)
     
@@ -2249,7 +2568,7 @@ supercede=[True/False]
                    coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
                else:
                    self.coast = WaffleFactory(
-                       mod='coastline:polygonize=False',
+                       mod='coastline:polygonize={}'.format(self.poly_count),
                        data=pre_data,
                        src_region=self.p_region,
                        xinc=self.xinc,
@@ -2323,6 +2642,7 @@ supercede=[True/False]
                 srs_transform=self.srs_transform,
                 clobber=True,
                 verbose=self.verbose,
+                clip=pre_clip if pre !=0 else None,
             ).acquire().generate()
 
             if pre_surface.valid_p():
@@ -3833,6 +4153,12 @@ class WaffleFactory():
             'datalist-p': True,
             'class': WafflesCUBE,
         },
+        'bgrid': {
+            'name': 'bgrid',
+            'datalist-p': True,
+            'class': WafflesBGrid,
+        },
+        
         
     }
 

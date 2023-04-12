@@ -831,14 +831,14 @@ class DatasetFactory:
             entry.append(1)
         elif entry[2] is None:
             entry[2] = 1
-
+            
         if self.parent is not None:
             if self.weight is not None:
                 self.weight *= entry[2]
         else:
             if self.weight is not None:
                 self.weight = entry[2]
-
+                
         ## ==============================================
         ## title
         ## ==============================================

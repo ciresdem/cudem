@@ -34,6 +34,48 @@ from cudem import utils
 from cudem import regions
 from cudem import xyzfun
 
+class GDAlGrid:
+    def __init__(self, region, x_res, y_res, ndv, fmt, node):
+        self.region = region
+        self.x_res = x_res
+        self.y_res = y_res
+        self.ndv = ndv
+        self.fmt = fmt
+        self.node = node
+
+    def initialize(self):
+        self.xcount, self.ycount, self.geotransform = self.region.geo_transform(
+            x_inc=self.x_res, y_inc=self.y_res, node=self.node
+        )
+        
+        self.gdt = gdal.GDT_Float32
+        self.driver = gdal.GetDriverByName(self.fmt)
+
+    def create_empty(self, out_name):
+
+        self.ds = driver.Create(
+            '{}.tif'.format(out_name), self.xcount, self.ycount, 1, self.gdt,
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        )
+        self.ds.SetGeoTransform(self.geotransform)
+        self.band = z_ds.GetRasterBand(1)
+        self.band.SetNoDataValue(self.ndv)
+
+    def get_array(self, srcwin = None):
+        if srcwin is None:
+            self.ds_array = self.band.ReadAsArray()
+        else:
+            self.ds_array = self.band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+
+    def write_array(self, arr, srcwin = None):
+        if srcwin is not None:
+            self.band.WriteArray(arr, srcwin[0], srcwin[1])
+        else:
+            self.band.WriteArray(arr)
+
+    def close_ds(self):
+        self.ds = None
+        
 ## ==============================================
 ##
 ## DEM/GDAL/GMT functions, etc
@@ -217,7 +259,9 @@ def set_metadata(src_dem, node='pixel', cudem=False, verbose=True): #, vdatum='N
 
     try:
         ds = gdal.Open(src_dem, gdal.GA_Update)
-    except: ds = None
+    except:
+        ds = None
+        
     if ds is not None:
         md = ds.GetMetadata()
         if node == 'pixel':
@@ -228,6 +272,7 @@ def set_metadata(src_dem, node='pixel', cudem=False, verbose=True): #, vdatum='N
             md['AREA_OR_POINT'] = 'Point'
             md['NC_GLOBAL#node_offset'] = '0'
             md['tos#node_offset'] = '0'
+            
         md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
         if cudem:
             md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
