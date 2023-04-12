@@ -2581,7 +2581,7 @@ supercede=[True/False]
                        clobber=True,
                        verbose=self.verbose
                    ).acquire().generate()
-                   coastline = '{}.shp'.format(self.coast.name)
+                   coastline = '{}.shp:invert=True'.format(self.coast.name)
             else:
                coastline = self.landmask
             pre_clip = '{}'.format(coastline)
