@@ -792,7 +792,7 @@ class DatasetFactory:
         ## data path file-name
         ## ==============================================
         try:
-            entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
+            entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.str_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
         except Exception as e:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
@@ -828,10 +828,17 @@ class DatasetFactory:
         ## inherit weight of parent
         ## ==============================================
         if len(entry) < 3:
-            entry.append(1)
+            entry.append('1')
         elif entry[2] is None:
-            entry[2] = 1
-            
+            entry[2] = '1'
+
+        opts = entry[2].split(':')
+        if len(opts) > 1:
+            entry[2] = utils.float_or(opts[0])
+            self.uncertainty = opts[1]
+        else:
+            self.uncertainty = 0
+        
         if self.parent is not None:
             if self.weight is not None:
                 self.weight *= entry[2]

@@ -2873,7 +2873,12 @@ min_count=[val] - only retain data cells if they contain `min_count` overlapping
             self.aux_dems.append('{}_w.tif'.format(self.name))
         else:
             utils.remove_glob('{}_w.tif'.format(self.name))
-        
+
+        if self.valid_p():
+            return(self.set_limits(self.upper_limit, self.lower_limit))
+        else:
+            return(self)
+            
         return(self)
 
 ## ==============================================

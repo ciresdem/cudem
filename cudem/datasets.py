@@ -86,6 +86,7 @@ class ElevationDataset():
             fn=None,
             data_format=None,
             weight=1,
+            uncertainty=0,
             src_srs=None,
             dst_srs='epsg:4326',
             x_inc=None,
@@ -113,6 +114,7 @@ class ElevationDataset():
         self._fn = None
         self.data_format = data_format
         self.weight = weight
+        self.uncertainty = uncertainty
         self.src_srs = src_srs
         self.dst_srs = dst_srs
         self.dst_trans = None
