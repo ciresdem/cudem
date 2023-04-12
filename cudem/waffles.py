@@ -2603,7 +2603,7 @@ supercede=[True/False]
                 _pre_surface = utils.append_fn('_pre_surface', pre_region, pre+1)
                 pre_data = [
                     '{},200:weight_mask={}:sample=average,1'.format(n, w),
-                    '{}.tif,200:check_path=True,{}'.format(
+                    '{}.tif,200:sample=cubicspline:check_path=True,{}'.format(
                         _pre_surface, pre_weight
                     )
                 ]
