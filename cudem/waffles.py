@@ -2645,13 +2645,13 @@ supercede=[True/False]
                 clip=pre_clip if pre !=0 else None,
             ).acquire().generate()
 
-            if pre_surface.valid_p():
-                if self.coast is not None:
-                    if pre !=0:
-                        demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1, verbose=self.verbose)
-                        os.rename('__tmp_coast_clip.tif', pre_surface.fn)
-            else:
-                return(None)        
+            # if pre_surface.valid_p():
+            #     if self.coast is not None:
+            #         if pre !=0:
+            #             demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1, verbose=self.verbose)
+            #             os.rename('__tmp_coast_clip.tif', pre_surface.fn)
+            # else:
+            #     return(None)        
 
             pre -= 1
                     
@@ -3388,11 +3388,16 @@ polygonize=[True/False] - polygonize the output
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
             
+        # utils.run_cmd(
+        #     'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
+        #         self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+        #     verbose=self.verbose
+        # )
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
                 self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
             verbose=self.verbose
-        )
+        )        
         utils.remove_glob('tmp_c_{}.*'.format(self.name))
         utils.run_cmd(
             'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
