@@ -329,7 +329,7 @@ class Waffle:
             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
         )
         u_ds.SetGeoTransform(dst_gt)
-        u_band = v_ds.GetRasterBand(1)
+        u_band = u_ds.GetRasterBand(1)
         u_band.SetNoDataValue(self.ndv)
 
         if self.verbose:
