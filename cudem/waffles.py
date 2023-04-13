@@ -323,14 +323,14 @@ class Waffle:
         c_band = c_ds.GetRasterBand(1)
         c_band.SetNoDataValue(self.ndv)
 
-        ## Variance Grid
-        v_ds = driver.Create(
-            '{}_v.tif'.format(out_name), xcount, ycount, 1, gdt,
+        ## Uncertainty/Std-Err Grid
+        u_ds = driver.Create(
+            '{}_u.tif'.format(out_name), xcount, ycount, 1, gdt,
             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
         )
-        v_ds.SetGeoTransform(dst_gt)
-        v_band = v_ds.GetRasterBand(1)
-        v_band.SetNoDataValue(self.ndv)
+        u_ds.SetGeoTransform(dst_gt)
+        u_band = v_ds.GetRasterBand(1)
+        u_band.SetNoDataValue(self.ndv)
 
         if self.verbose:
             utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
@@ -342,6 +342,7 @@ class Waffle:
             arr = arrs['z']
             w_arr = arrs['weight']
             c_arr = arrs['count']
+            
             c_arr[np.isnan(arr)] = 0
             w_arr[np.isnan(arr)] = 0
             arr[np.isnan(arr)] = 0
@@ -355,39 +356,51 @@ class Waffle:
             c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             c_array[c_array == self.ndv] = 0
             
-            v_array = v_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            v_array[v_array == self.ndv] = 0
+            u_array = v_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            u_array[v_array == self.ndv] = 0
 
             ## add the count
             c_array += c_arr
-            #c_array = np.where(np.isnan(c_array)&np.isnan(c_arr), np.nan, np.where(np.isnan(c_array), 0, c_array) + np.where(np.isnan(c_arr), 0, c_arr)
-            #c_array = sum_nan_arrays(c_array, c_arr)
 
             ## supercede based on weights, else do weighted mean
+            ## todo: do (weighted) mean on cells with same weight
             if supercede:
                 z_array[w_arr > w_array] = arr[w_arr > w_array]
                 w_array[w_arr > w_array] = w_arr[w_arr > w_array]
                 z_array[z_array == 0] = np.nan
                 w_array[w_array == 0] = np.nan
+                
+                #u_array += w_arr * np.power((arr - (z_array / w_array)), 2)
             else:
                 z_array += (arr * w_arr)
                 w_array += w_arr
                 w_array[w_array == 0] = np.nan
-                v_array += w_arr * ((arr - (z_array / w_array))**2)
+                #v_array += w_arr * ((arr - (z_array / w_array))**2)
+                u_array += w_arr * np.power((arr - (z_array / w_array)), 2)
+
+                ## testing
+                #u_arr = 1/w_arr
+                #w_arr[w_arr == 0] = 1e-24
+                #v_array += (w_arr * ((1 / w_arr)**2)) / w_array + (w_arr * ((arr - z_array)**2) / w_array)
+                #v_array = ((w_arr * (1/w_array)**2) / w_array) + (w_arr * ((arr - (z_array / w_array))**2))
+                #v_array += (w_arr * (1 / (w_array**2)) / w_array))**2)) / w_array
+                #+ (w_arr * ((arr - (z_array / w_array))**2))
+                #print(v_array)
+                #print(w_array)
                 
             c_array[c_array == 0] = self.ndv
             w_array[np.isnan(w_array)] = self.ndv
             z_array[np.isnan(w_array)] = self.ndv
             z_array[w_array == self.ndv] = self.ndv
-            v_array[v_array == 0] = self.ndv
-            v_array[w_array == self.ndv] = self.ndv
+            u_array[v_array == 0] = self.ndv
+            u_array[w_array == self.ndv] = self.ndv
             
             # write out results
             z_band.WriteArray(z_array, srcwin[0], srcwin[1])
             w_band.WriteArray(w_array, srcwin[0], srcwin[1])
             c_band.WriteArray(c_array, srcwin[0], srcwin[1])
-            v_band.WriteArray(v_array, srcwin[0], srcwin[1])
-            arr = w_arr = c_arr = z_array = w_array = c_array = None
+            u_band.WriteArray(v_array, srcwin[0], srcwin[1])
+            arr = w_arr = c_arr = u_array = w_array = c_array = None
 
         ## Finalize and close datasets
         if not supercede:
@@ -410,27 +423,28 @@ class Waffle:
                 )
                 c_data[c_data == self.ndv] = np.nan
                 
-                v_data = v_band.ReadAsArray(
+                u_data = v_band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
-                v_data[v_data == self.ndv] = np.nan
+                u_data[v_data == self.ndv] = np.nan
                 z_data[np.isnan(w_data)] = np.nan
 
                 w_data = w_data / c_data
-                v_data = (v_data/w_data) / c_data
+                u_data = np.sqrt((v_data/w_data) / c_data)
+                #v_data = np.sqrt((v_data/w_data)**2 / c_data)
                 z_data = (z_data/w_data) / c_data
                 
                 z_data[np.isnan(z_data)] = self.ndv
                 c_data[np.isnan(c_data)] = self.ndv
                 w_data[np.isnan(w_data)] = self.ndv
-                v_data[np.isnan(v_data)] = self.ndv
+                u_data[np.isnan(v_data)] = self.ndv
                 
                 z_band.WriteArray(z_data, srcwin[0], y)
                 c_band.WriteArray(c_data, srcwin[0], y)
                 w_band.WriteArray(w_data, srcwin[0], y)
-                v_band.WriteArray(v_data, srcwin[0], y)
+                u_band.WriteArray(v_data, srcwin[0], y)
 
-        z_ds = c_ds = w_ds = v_ds = None
+        z_ds = c_ds = w_ds = u_ds = None
     
     def yield_array(self, **kwargs):
         """yield the arrays from the datalist for use in gridding"""
@@ -2624,7 +2638,8 @@ supercede=[True/False]
                 waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
                 waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
             else:
-                waffles_mod_surface = 'IDW'
+                #waffles_mod_surface = 'IDW:min_points=24:supercede=True'
+                waffles_mod_surface = 'scipy:supercede=True'
                 waffles_mod_surfstack = 'stacks:supercede=True'
             
             waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
@@ -3434,7 +3449,7 @@ min_id=[val] - minimum lake ID to consider
 max_id=[val] - maximum lake ID to consider
 depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
 
-< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy >
+< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy:elevations=copernicus >
     """
     
     def __init__(

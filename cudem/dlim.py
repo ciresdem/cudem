@@ -755,6 +755,7 @@ class DatasetFactory:
             src_region=None,
             invert_region=False,
             cache_dir=None,
+            weights_are_uncertainties=False,
             verbose=False,
             remote=False
     ):
@@ -774,6 +775,7 @@ class DatasetFactory:
         self.sample_alg = sample_alg
         self.remote = remote
         self.cache_dir = utils.cudem_cache() if cache_dir is None else cache_dir
+        self.weights_are_uncertainties = weights_are_uncertainties
         
         self.parse_fn()
             
@@ -792,7 +794,7 @@ class DatasetFactory:
         ## data path file-name
         ## ==============================================
         try:
-            entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.str_or(x) if n < 3 else utils.str_or(x) \
+            entry = [utils.str_or(x) if n == 0 else utils.int_or(x) if n < 2 else utils.float_or(x) if n < 3 else utils.str_or(x) \
                      for n, x in enumerate(this_entry)]
         except Exception as e:
             utils.echo_error_msg('could not parse entry {}'.format(self.fn))
@@ -828,23 +830,29 @@ class DatasetFactory:
         ## inherit weight of parent
         ## ==============================================
         if len(entry) < 3:
-            entry.append('1')
+            entry.append(self.set_default_weight())
         elif entry[2] is None:
-            entry[2] = '1'
+            entry[2] = self.set_default_weight()
 
-        opts = entry[2].split(':')
-        if len(opts) > 1:
-            entry[2] = utils.float_or(opts[0])
-            self.uncertainty = opts[1]
+        if self.weights_are_uncertainties:
+            entry[2] = 1/entry[2]
+            self.weight = entry[2]
+            
         else:
-            self.uncertainty = 0
+            if self.parent is not None:
+                if self.weight is not None:
+                    self.weight *= entry[2]
+            else:
+                if self.weight is not None:
+                    self.weight = entry[2]
+            
+        # opts = entry[2].split(':')
+        # if len(opts) > 1:
+        #     entry[2] = utils.float_or(opts[0])
+        #     self.uncertainty = opts[1]
+        # else:
+        #     self.uncertainty = 0
         
-        if self.parent is not None:
-            if self.weight is not None:
-                self.weight *= entry[2]
-        else:
-            if self.weight is not None:
-                self.weight = entry[2]
                 
         ## ==============================================
         ## title
@@ -924,6 +932,9 @@ class DatasetFactory:
         self.guess_data_format()
         return(self)
 
+    def set_default_weight(self):
+        return(1)
+    
     def guess_data_format(self):
         """guess a data format based on the file-name"""
 

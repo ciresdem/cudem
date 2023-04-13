@@ -116,32 +116,94 @@ def generate_etopo_cpt(gmin, gmax):
     return('tmp.cpt')
 
 ## ==============================================
+## PERSPECTO Module Parser and parameters
+## ==============================================
+class PerspectoFactory:
+
+    mods = {}
+
+    def __init__(self, mod=None, src_dem=None, cpt=None, callback=lambda: False,
+                 outdir=None, verbose=True):
+        self.mod = mod
+        self.mod_args = {}
+        self.src_dem = src_dem
+        self.cpt = cpt
+        self.outdir = outdir
+        self.callback = callback
+        self.verbose = verbose
+        self._init_mods()
+        
+    def _init_mods(self):
+        if has_pygmt:
+            self.mods = {
+                'hillshade': {'class': Hillshade},
+                'perspective': {'class': perspective},
+                'sphere': {'class': sphere},
+                'figure1': {'class': figure1},        
+            }
+        else:
+            self.mods = {
+                'hillshade': {'class': Hillshade},
+                'perspective': {'class': perspective},
+                'sphere': {'class': sphere},
+            }    
+        
+    def initialize(self):        
+        if self.mod is not None:
+            this_mod = self.parse_mod()
+        
+        return(self)
+        
+    def parse_mod(self):
+        opts = self.mod.split(':')
+        if opts[0] in self.mods.keys():
+            if len(opts) > 1:
+                self.mod_args = utils.args2dict(list(opts[1:]), {})
+            self.mod = opts[0]
+        else:
+            utils.echo_error_msg('could not parse perspecto module `{}`'.format(opts[0]))
+            return(None)
+        
+        return(self)
+
+    def add_module(self, type_def={}):
+        for key in type_def.keys():
+            self.mods[key] = type_def[key]
+
+    def acquire(self):
+        """Acquire the perspecto module self.mod"""
+
+        if self.mod in self.mods.keys():
+            return(self.mods[self.mod]['class'](**self.mod_args, params=self))
+        else:
+            return(None)
+
+## ==============================================
 ## PERSPECTO!!
 ## ==============================================
 class Perspecto:
-    def __init__(
-            self,
-            src_dem=None,
-            cpt='etopo1',
-            verbose=True
-    ):
-        self.src_dem = src_dem
-        self.verbose = verbose
+    def __init__(self, params: PerspectoFactory):
+        if isinstance(params, PerspectoFactory):
+            self.params = params
+        else:
+            raise ValueError('Perspecto: {} is not a PerspectoFactory Object'.format(params))
 
-        self.dem_infos = demfun.infos(self.src_dem, scan=True)
+        self.dem_infos = demfun.infos(self.params.src_dem, scan=True)
         self.dem_region = regions.Region().from_geo_transform(
             self.dem_infos['geoT'], self.dem_infos['nx'], self.dem_infos['ny']
         )
-
-        self.cpt = cpt
-            
-        if self.cpt is None:
+        
+        if self.params.cpt is None:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
-            self.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
+            self.params.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
         else:
             if has_pygmt:
-                self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+                self.makecpt(cmap=self.params.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.params.src_dem)))
 
+        
+    def __call__(self):
+        return(self.run())
+        
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
         pygmt.makecpt(
             cmap=cmap,
@@ -150,10 +212,10 @@ class Perspecto:
             series=[self.dem_infos['zr'][0], self.dem_infos['zr'][1]],
             no_bg=True,
         )
-        self.cpt = output
+        self.params.cpt = output
 
     def cpt_no_slash(self):
-        utils.run_cmd("sed -i 's/\// /g' {}".format(self.cpt), verbose=True)
+        utils.run_cmd("sed -i 's/\// /g' {}".format(self.params.cpt), verbose=True)
         #utils.run_cmd("sed -i 's/L/ /g' {}".format(self.cpt), verbose=True)
         #utils.run_cmd("sed -i 's/B/ /g' {}".format(self.cpt), verbose=True)
         
@@ -170,23 +232,23 @@ class Perspecto:
         if dem:
             utils.run_cmd(
                 'gdal_translate -ot UInt16 -of PNG -scale {} {} 0 65535 {} _dem_temp.png'.format(
-                    self.dem_infos['zr'][0], self.dem_infos['zr'][1], self.src_dem
+                    self.dem_infos['zr'][0], self.dem_infos['zr'][1], self.params.src_dem
                 ),
                 verbose=True
             )
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _dem_temp.png {}_16bit.png'.format(
-                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.src_dem)
+                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.params.src_dem)
                 ),
                 verbose=True
             )
             utils.remove_glob('_dem_temp*')
             
         if rgb:
-            utils.run_cmd('gdaldem color-relief {} {} _rgb_temp.tif'.format(self.src_dem, self.cpt), verbose=True)
+            utils.run_cmd('gdaldem color-relief {} {} _rgb_temp.tif'.format(self.params.src_dem, self.params.cpt), verbose=True)
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _rgb_temp.tif {}_rgb.png'.format(
-                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.src_dem)
+                    self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.params.src_dem)
                 ),
                 verbose=True
             )
@@ -218,32 +280,31 @@ class Hillshade(Perspecto):
         self.projection = projection
         self.azimuth = azimuth
         self.altitude = altitude
-
         self.cpt_no_slash()
         
     def run(self):
         utils.run_cmd(
             'gdaldem hillshade -compute_edges -s 111120 -z {} -az {} -alt {} {} hillshade.tif'.format(
-                self.vertical_exaggeration, self.azimuth, self.altitude, self.src_dem
-            ), verbose=self.verbose
+                self.vertical_exaggeration, self.azimuth, self.altitude, self.params.src_dem
+            ), verbose=self.params.verbose
         )
         # Generate the color-releif
-        utils.run_cmd('gdaldem color-relief {} {} colors.tif'.format(self.src_dem, self.cpt), verbose=self.verbose)
+        utils.run_cmd('gdaldem color-relief {} {} colors.tif'.format(self.params.src_dem, self.params.cpt), verbose=self.params.verbose)
         # Composite the hillshade and the color-releif
-        utils.run_cmd('composite -compose multiply -depth 8 colors.tif hillshade.tif output.tif', verbose=self.verbose)
-        utils.run_cmd('mogrify -modulate 115 -depth 8 output.tif', verbose=self.verbose)
+        utils.run_cmd('composite -compose multiply -depth 8 colors.tif hillshade.tif output.tif', verbose=self.params.verbose)
+        utils.run_cmd('mogrify -modulate 115 -depth 8 output.tif', verbose=self.params.verbose)
         # Generate the combined georeferenced tif
-        utils.run_cmd('gdal_translate -co "TFW=YES" {} temp.tif'.format(self.src_dem), verbose=self.verbose)
+        utils.run_cmd('gdal_translate -co "TFW=YES" {} temp.tif'.format(self.params.src_dem), verbose=self.params.verbose)
         utils.run_cmd('mv temp.tfw output.tfw')
         utils.run_cmd('gdal_translate -a_srs epsg:{} output.tif temp2.tif'.format(self.projection))
         # Cleanup
         utils.remove_glob('output.tif*', 'temp.tif*', 'hillshade.tif*', 'colors.tif*', 'output.tfw*')
         #subtract 2 cells from rows and columns 
         #gdal_translate -srcwin 1 1 $(gdal_rowcol.py $ingrd t) temp2.tif $outgrd
-        utils.run_cmd('gdal_translate temp2.tif {}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
+        utils.run_cmd('gdal_translate temp2.tif {}_hs.tif'.format(utils.fn_basename2(self.params.src_dem)))
         utils.remove_glob('temp2.tif')
 
-        return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
+        return('{}_hs.tif'.format(utils.fn_basename2(self.params.src_dem)))
 
 ## ==============================================
 ## POV-Ray
@@ -253,13 +314,13 @@ class POVRay(Perspecto):
         super().__init__(**kwargs)
         self.cpt_no_slash()
         
-        self.rgb_image = '{}_rgb.png'.format(utils.fn_basename2(self.src_dem))
-        self.dem_image = '{}_16bit.png'.format(utils.fn_basename2(self.src_dem))
+        self.rgb_image = '{}_rgb.png'.format(utils.fn_basename2(self.params.src_dem))
+        self.dem_image = '{}_16bit.png'.format(utils.fn_basename2(self.params.src_dem))
 
         #if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
         self.export_as_png()
             
-        self.output_pov = '{}.pov'.format(utils.fn_basename2(self.src_dem))
+        self.output_pov = '{}.pov'.format(utils.fn_basename2(self.params.src_dem))
 
         
     def run_povray(self, src_pov_template, pov_width=800, pov_height=800):
@@ -290,8 +351,8 @@ class perspective(POVRay):
         self.light_elevation = light_elevation
         self.light_distance = light_distance
         self.vertical_exaggeration = vertical_exaggeration
-        self.dem_lll = lll(self.dem_region.ymin)
-        self.output_pov = '{}_perspective.pov'.format(utils.fn_basename2(self.src_dem))
+        self.dem_lll = lll(self.dem_region.params.ymin)
+        self.output_pov = '{}_perspective.pov'.format(utils.fn_basename2(self.params.src_dem))
         
         self.template = """
 // DEM
@@ -428,7 +489,7 @@ class sphere(POVRay):
             self.center_long = center_long
             self.center_lat = center_lat
 
-        self.output_pov = '{}_sphere.pov'.format(utils.fn_basename2(self.src_dem))
+        self.output_pov = '{}_sphere.pov'.format(utils.fn_basename2(self.params.src_dem))
             
         self.template = """
 //Generates a hillshade color image on a sphere 
@@ -503,7 +564,6 @@ camera {{
     cam_elevation = self.cam_elevation,
     cam_distance = self.cam_distance,
     cam_view_angle = self.cam_view_angle,
-
 )
 
     def run(self):
@@ -521,11 +581,11 @@ class GMTImage(Perspecto):
         super().__init__(**kwargs)
 
         if self.dem_infos['fmt'] != 'NetCDF':
-            utils.run_cmd('gmt grdconvert {} {}.nc'.format(self.src_dem, utils.fn_basename2(self.src_dem)))
-            self.src_dem = '{}.nc'.format(utils.fn_basename2(self.src_dem))
+            utils.run_cmd('gmt grdconvert {} {}.nc'.format(self.params.src_dem, utils.fn_basename2(self.params.src_dem)))
+            self.params.src_dem = '{}.nc'.format(utils.fn_basename2(self.params.src_dem))
         
-        self.grid = pygmt.load_dataarray(self.src_dem)
-        self.makecpt(self.cpt, output=None)
+        self.grid = pygmt.load_dataarray(self.params.src_dem)
+        self.makecpt(self.params.cpt, output=None)
         
 class figure1(GMTImage):
     """Generate Figure 1
@@ -589,7 +649,7 @@ class figure1(GMTImage):
         # )
 
         fig.grdimage(
-            frame=['af', '+t{}'.format(utils.fn_basename2(self.src_dem))],
+            frame=['af', '+t{}'.format(utils.fn_basename2(self.params.src_dem))],
             grid=self.grid,
             #cmap=self.cpt,
             cmap=True,
@@ -607,8 +667,8 @@ class figure1(GMTImage):
             #fig.colorbar(frame=['a{}'.format(self.interval), 'x+lElevation', 'y+1m'])
             fig.colorbar(frame=['x+l{}'.format(self.colorbar_text), 'y+1m'])
 
-        fig.savefig('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))
-        return('{}_figure1.png'.format(utils.fn_basename2(self.src_dem)))
+        fig.savefig('{}_figure1.png'.format(utils.fn_basename2(self.params.src_dem)))
+        return('{}_figure1.png'.format(utils.fn_basename2(self.params.src_dem)))
         
     def run(self):
         if self.perspective:
@@ -617,95 +677,8 @@ class figure1(GMTImage):
             return(self.figure1())
 
         ## this is removing the netcdf, self.src_dem is redefined in __init__
-        utils.remove_glob(self.src_dem)
+        utils.remove_glob(self.params.src_dem)
         
-## ==============================================
-## PERSPECTO Module Parser
-## ==============================================
-class PerspectoFactory:
-
-    if has_pygmt:
-        mods = {
-            'hillshade': {
-                'class': Hillshade,
-            },
-            'perspective': {
-                'class': perspective,
-            },
-            'sphere': {
-                'class': sphere,
-            },
-            'figure1': {
-                'class': figure1,
-            },        
-        }
-    else:
-        mods = {
-            'hillshade': {
-                'class': Hillshade,
-            },
-            'perspective': {
-                'class': perspective,
-            },
-            'sphere': {
-                'class': sphere,
-            },
-        }
-    
-
-    def __init__(
-            self,
-            mod=None,
-            src_dem=None,
-            cpt=None,
-            callback=lambda: False,
-            outdir=None,
-            verbose=True
-    ):
-        self.mod = mod
-        self.mod_args = {}
-        self.src_dem = src_dem
-        self.cpt = cpt
-        self.outdir = outdir
-        self.callback = callback
-        self.verbose = verbose
-        
-        if self.mod is not None:
-            this_mod = self.parse_mod()
-
-    def parse_mod(self):
-        opts = self.mod.split(':')
-        if opts[0] in PerspectoFactory.mods.keys():
-            if len(opts) > 1:
-                self.mod_args = utils.args2dict(list(opts[1:]), {})
-            self.mod = opts[0]
-        else:
-            utils.echo_error_msg('could not parse perspecto module `{}`'.format(opts[0]))
-            return(None)
-        
-        return(self)
-
-    def add_module(self, type_def={}):
-        for key in type_def.keys():
-            self.mods[key] = type_def[key]
-
-    def acquire(self, **kwargs):
-        """Acquire the perspecto module self.mod"""
-
-        if self.mod in self.mods.keys():
-            return(
-                self.mods[self.mod]['class'](
-                    #callback=self.callback,
-                    src_dem=self.src_dem,
-                    cpt=self.cpt,
-                    verbose=self.verbose,
-                    #outdir=self.outdir,
-                    **kwargs,
-                    **self.mod_args
-                )
-            )
-        else:
-            return(None)
 
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -782,7 +755,7 @@ def perspecto_cli(argv = sys.argv):
     if module.split(':')[0] not in PerspectoFactory().mods.keys():
         utils.echo_error_msg(
             '''{} is not a valid perspecto module, available modules are: {}'''.format(
-                module.split(':')[0], _perspecto_module_short_desc()
+                module.split(':')[0], utils._cudem_module_short_desc(PerspectoFactory.mods)
             )
         )
         sys.exit(-1)
@@ -824,10 +797,13 @@ def perspecto_cli(argv = sys.argv):
         sys.exit(-1)
 
     this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt)
+    this_perspecto.initialize()
     if this_perspecto is not None:
         this_perspecto_module = this_perspecto.acquire()
         if this_perspecto_module is not None:
-            this_perspecto_module.run()
+            out_fig = this_perspecto_module()
+            utils.echo_msg('generated {}'.format(out_fig))
+            #this_perspecto_module.run()
         else:
             utils.echo_error_msg('could not acquire perspecto module {}'.format(module))
 
