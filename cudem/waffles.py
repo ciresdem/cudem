@@ -356,8 +356,8 @@ class Waffle:
             c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
             c_array[c_array == self.ndv] = 0
             
-            u_array = v_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            u_array[v_array == self.ndv] = 0
+            u_array = u_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            u_array[u_array == self.ndv] = 0
 
             ## add the count
             c_array += c_arr
@@ -392,14 +392,14 @@ class Waffle:
             w_array[np.isnan(w_array)] = self.ndv
             z_array[np.isnan(w_array)] = self.ndv
             z_array[w_array == self.ndv] = self.ndv
-            u_array[v_array == 0] = self.ndv
+            u_array[u_array == 0] = self.ndv
             u_array[w_array == self.ndv] = self.ndv
             
             # write out results
             z_band.WriteArray(z_array, srcwin[0], srcwin[1])
             w_band.WriteArray(w_array, srcwin[0], srcwin[1])
             c_band.WriteArray(c_array, srcwin[0], srcwin[1])
-            u_band.WriteArray(v_array, srcwin[0], srcwin[1])
+            u_band.WriteArray(u_array, srcwin[0], srcwin[1])
             arr = w_arr = c_arr = u_array = w_array = c_array = None
 
         ## Finalize and close datasets
@@ -426,7 +426,7 @@ class Waffle:
                 u_data = v_band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
-                u_data[v_data == self.ndv] = np.nan
+                u_data[u_data == self.ndv] = np.nan
                 z_data[np.isnan(w_data)] = np.nan
 
                 w_data = w_data / c_data
@@ -437,12 +437,12 @@ class Waffle:
                 z_data[np.isnan(z_data)] = self.ndv
                 c_data[np.isnan(c_data)] = self.ndv
                 w_data[np.isnan(w_data)] = self.ndv
-                u_data[np.isnan(v_data)] = self.ndv
+                u_data[np.isnan(u_data)] = self.ndv
                 
                 z_band.WriteArray(z_data, srcwin[0], y)
                 c_band.WriteArray(c_data, srcwin[0], y)
                 w_band.WriteArray(w_data, srcwin[0], y)
-                u_band.WriteArray(v_data, srcwin[0], y)
+                u_band.WriteArray(u_data, srcwin[0], y)
 
         z_ds = c_ds = w_ds = u_ds = None
     
