@@ -423,7 +423,7 @@ class Waffle:
                 )
                 c_data[c_data == self.ndv] = np.nan
                 
-                u_data = v_band.ReadAsArray(
+                u_data = u_band.ReadAsArray(
                     srcwin[0], y, srcwin[2], 1
                 )
                 u_data[u_data == self.ndv] = np.nan
