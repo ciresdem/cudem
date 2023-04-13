@@ -431,7 +431,7 @@ class Waffle:
 
                 w_data = w_data / c_data
                 u_data = np.sqrt((u_data/w_data) / c_data)
-                #v_data = np.sqrt((v_data/w_data)**2 / c_data)
+                #u_data = np.sqrt((u_data/w_data)**2 / c_data)
                 z_data = (z_data/w_data) / c_data
                 
                 z_data[np.isnan(z_data)] = self.ndv
