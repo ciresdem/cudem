@@ -36,8 +36,6 @@ from osgeo import ogr
 from cudem import utils
 from cudem import regions
 
-import cudem.fetches.utils as f_utils
-
 this_dir, this_filename = os.path.split(__file__)
 fetchdata = os.path.join(this_dir, 'data')
 
@@ -256,7 +254,7 @@ class FRED:
 ## ==============================================
 ## lambdas for the FRED using the module object `mod`
 ## ==============================================
-_filter_FRED = lambda mod: mod.FRED._filter(region=mod.wgs_region, where=mod.where, layers=[mod.name])
+_filter_FRED = lambda mod: mod.FRED._filter(region=mod.region, where=mod.where, layers=[mod.name])
 _update_FRED = lambda mod, s: mod.FRED._add_surveys(s)
 _filter_FRED_index = lambda mod: [utils.echo_msg(json.dumps(f, indent = 2)) for f in _filter_FRED(mod)]
 

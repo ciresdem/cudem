@@ -98,7 +98,7 @@ def infos(src_dem, region=None, scan=False):
     else: return(None)
     #else: return(None)
     
-def gather_infos(src_ds, region=None, scan=False, node='pixel'):
+def gather_infos(src_ds, region=None, scan=False, node='pixel', band=1):
     """gather information from `src_ds` GDAL dataset
 
     returns gdal_config dict.
@@ -108,7 +108,7 @@ def gather_infos(src_ds, region=None, scan=False, node='pixel'):
     if region is not None:
         srcwin = region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
     else: srcwin = (0, 0, src_ds.RasterXSize, src_ds.RasterYSize)
-    src_band = src_ds.GetRasterBand(1)
+    src_band = src_ds.GetRasterBand(band)
     dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
     mt = src_ds.GetMetadata()
     
@@ -298,11 +298,23 @@ def set_metadata(src_dem, node='pixel', cudem=False, verbose=True): #, vdatum='N
             
         return(None)
 
-def get_array(src_dem):
+def get_array(src_dem, band = 1):
     ds = gdal.Open(src_dem)
     if ds is not None:
-        band = ds.GetRasterBand(1)
+        band = ds.GetRasterBand(band)
         _array = band.ReadAsArray()
+        offset = band.GetOffset()
+        scale = band.GetScale()
+
+        if offset is not None or scale is not None:
+            _array = np.ndarray.astype(_array, dtype=np.float32)
+        
+            if offset is not None:
+                _array += offset
+
+            if scale is not None:
+                _array *= scale
+            
         infos = gather_infos(ds)
         ds = None
         return(_array, infos)
@@ -543,7 +555,6 @@ def sample_warp(
         ndv=-9999, tap=False, size=False, verbose=False
 ):
 
-
     if size:
         xcount, ycount, dst_gt = src_region.geo_transform(
             x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
@@ -572,14 +583,13 @@ def sample_warp(
                 os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
             )
         )
+        #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
     
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32,
                        callback=None)
-
-    #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
 
     if dst_dem is None:
         return(dst_ds, 0)
@@ -819,6 +829,8 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbo
 def blur(src_dem, dst_dem, sf = 1):
     """gaussian blur on src_dem using a smooth-factor of `sf`
     runs np_gaussian_blur(ds.Array, sf)
+
+    generates edges with nodata...
     """
 
     def np_gaussian_blur(in_array, size):
@@ -828,14 +840,14 @@ def blur(src_dem, dst_dem, sf = 1):
         returns the blurred array
         """
 
-        from scipy.signal import fftconvolve
-        from scipy.signal import convolve
+        #from scipy.signal import fftconvolve
+        #from scipy.signal import convolve
         padded_array = np.pad(in_array, size, 'symmetric')
         x, y = np.mgrid[-size:size + 1, -size:size + 1]
         g = np.exp(-(x**2 / float(size) + y**2 / float(size)))
         g = (g / g.sum()).astype(in_array.dtype)
         in_array = None
-        out_array = fftconvolve(padded_array, g, mode = 'valid')
+        out_array = np.convolve(padded_array, g, mode = 'valid')
         return(out_array)
     
     try:
@@ -844,15 +856,18 @@ def blur(src_dem, dst_dem, sf = 1):
     
     if ds is not None:
         ds_config = gather_infos(ds)
+        ## original array
         ds_array = ds.GetRasterBand(1).ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
         ds = None
+        ## copy original array as data mask
         msk_array = np.array(ds_array)
+        ## set mask to 1/0
         msk_array[msk_array == ds_config['ndv']] = np.nan
         msk_array[~np.isnan(msk_array)] = 1
         #msk_array[np.isnan(msk_array)] = 0
         #msk_array[msk_array != ds_config['ndv']] = 1
         ds_array[np.isnan(msk_array)] = 0
-        ds_array[ds_array == ds_config['ndv']] = 0
+        #ds_array[ds_array == ds_config['ndv']] = 0
         smooth_array = np_gaussian_blur(ds_array, int(sf))
         smooth_array = smooth_array * msk_array
         mask_array = ds_array = None

@@ -29,7 +29,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '1.10.5',
+    version = '2.0.0',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -37,38 +37,32 @@ setuptools.setup(
     author = 'CIRES Coastal DEM Team',
     author_email = 'matthew.love@colorado.edu',
     url = 'http://ciresgroups.colorado.edu/coastalDEM',
-    #packages = setuptools.find_packages(),#['cudem'],  #same as name
-    packages = ['cudem', 'cudem/fetches'],
-    package_data = {'cudem': ['fetches/data/*.geojson']},
+    packages = ['cudem'],
+    package_data = {'cudem': ['data/*.geojson']},
     classifiers = [
         'Programming Language :: Python :: 3',
         'License :: OSI APPROVED :: MIT License',
         'Operating System :: OS Independent',
     ],
     install_requires = [
-        'numpy',
-        'scipy',
-        'requests[security]',
-        'lxml',
-        'matplotlib',
-        'laspy[laszip]',
-        'h5py',
-        'boto3',
-        'pygmt',
+        'numpy', # all
+        'scipy', # waffles/convex hulls
+        'requests[security]', # fetches/nsidc
+        'lxml', # fetches xml parsing
+        'matplotlib', # uncertainty plots
+        'laspy[laszip]', # dlim/lasfile support
+        'h5py', # nsidc
+        'boto3', # for amazon/bluetopo
     ], 
     entry_points = {
         'console_scripts': [
-            'cudem = cudem.cudem_cli:cudem_cli',
-            'dlim = cudem.dlim:datalists_cli',
             'regions = cudem.regions:regions_cli',
-            'regions3 = cudem.regions:regions_cli',
+            'dlim = cudem.dlim:datalists_cli',
             'waffles = cudem.waffles:waffles_cli',
-            'waffles3 = cudem.waffles:waffles_cli',
-            'fetches = cudem.fetches.fetches:fetches_cli',
-            'fetches3 = cudem.fetches.fetches:fetches_cli',
-            'spatial_metadata = cudem.metadata:spat_meta_cli',
-            'uncertainties = cudem.uncertainties:uncertainties_cli',
+            'fetches = cudem.fetches:fetches_cli',
             'perspecto = cudem.perspecto:perspecto_cli',
+            'vdatums = cudem.vdatums:vdatums_cli',
+            'cudem = cudem.cudem_cli:cudem_cli',
         ],
     },
     scripts = [
@@ -121,7 +115,6 @@ setuptools.setup(
         'scripts/vrbag2tif2chunks2xyz.sh',
         'scripts/VR_to_image.py',
         'scripts/explode_bags.sh',
-        'scripts/vertical_datum_convert.py',
         'scripts/dem_smooth.py',
         'scripts/dem_combine_split.py',
         'scripts/dem_update.sh',

@@ -32,20 +32,13 @@ from cudem.utils import str_or
 class XYZPoint:
     """represnting an xyz data point"""
     
-    def __init__(
-            self,
-            x=None,
-            y=None,
-            z=None,
-            w=1,
-            src_srs='epsg:4326',
-            z_units='m',
-            z_datum='msl'
-    ):
+    def __init__(self, x = None, y = None, z = None, w = 1, u = 0,
+                 src_srs='epsg:4326', z_units = 'm', z_datum = 'msl'):
         self.x = float_or(x)
         self.y = float_or(y)
         self.z = float_or(z)
         self.w = float_or(w, 1)
+        self.u = float_or(u, 0)
         self.src_srs = str_or(src_srs, 'epsg:4326')
         self.z_units = z_units
         self.z_datum = z_datum
@@ -57,21 +50,13 @@ class XYZPoint:
         return('<XYZPoint x: {} y: {} z: {}>'.format(self.x, self.y, self.z))
         
     def copy(self):
-        return(
-            XYZPoint(
-                x=self.x,
-                y=self.y,
-                z=self.z,
-                w=self.w,
-                src_srs=self.src_srs,
-                z_units=self.z_units,
-                z_datum=self.z_datum
-            )
-        )
+        return(XYZPoint(x = self.x, y = self.y, z = self.z, w = self.w, u = self.u,
+                        src_srs = self.src_srs, z_units=self.z_units, z_datum=self.z_datum))
 
     def reset(self):
         self.x = self.y = self.z = None
         self.w = 1
+        self.u = 0
         self.src_srs = 'epsg:4326'
         self.z_units = 'm'
         self.z_datum = 'msl'
@@ -88,14 +73,7 @@ class XYZPoint:
         
         return(True)
     
-    def from_list(
-            self,
-            xyz_list,
-            x_pos=0,
-            y_pos=1,
-            z_pos=2,
-            w_pos=3
-    ):
+    def from_list(self, xyz_list, x_pos = 0, y_pos = 1, z_pos = 2, w_pos = 3, u_pos = 4):
         """load xyz data from a list
 
         Args:
@@ -119,15 +97,8 @@ class XYZPoint:
             
         return(self)
     
-    def from_string(
-            self,
-            xyz_str,
-            x_pos=0,
-            y_pos=1,
-            z_pos=2,
-            w_pos=3,
-            delim=" "
-    ):
+    def from_string(self, xyz_str, x_pos = 0, y_pos = 1, z_pos = 2, w_pos = 3,
+                    u_pos = 4, delim = " "):
         """load xyz data from a string
 
         Args:
@@ -144,7 +115,7 @@ class XYZPoint:
             )
         )
         
-    def export_as_list(self, include_z=False, include_w=False):
+    def export_as_list(self, include_z = False, include_w = False, include_u = False):
         """export xyz as a list
 
         Args:
@@ -154,7 +125,7 @@ class XYZPoint:
         Returns:
           list: the region values in a list
         """
-        
+
         xyz_list = [self.x, self.y]
         if include_z:
             xyz_list.append(self.z)
@@ -162,9 +133,12 @@ class XYZPoint:
         if include_w:
             xyz_list.append(self.w)
             
+        if include_u:
+            xyz_list.append(self.u)
+            
         return(xyz_list)
 
-    def export_as_string(self, delim, include_z=False, include_w=False):
+    def export_as_string(self, delim, include_z = False, include_w = False, include_u = False):
         """export xyz data as string
 
         Args:
@@ -172,7 +146,7 @@ class XYZPoint:
         """
 
         l = self.export_as_list(
-            include_z=include_z, include_w=include_w
+            include_z=include_z, include_w=include_w, include_u=include_u
         )
         
         return('{}\n'.format(delim.join([str(x) for x in l])))
@@ -183,19 +157,14 @@ class XYZPoint:
         else:
             return('POINT ({} {})'.format(self.x, self.y))
     
-    def dump(
-            self,
-            delim=' ',
-            include_z=True,
-            include_w=False,
-            encode=False,
-            dst_port=sys.stdout
-    ):
+    def dump(self, delim=' ', include_z = True, include_w = False, include_u = False,
+             encode = False, dst_port = sys.stdout):
         """dump xyz as a string to dst_port
 
         Args:
-          include_z: include the z-region in the output
-          include_w: include the w-region in the output
+          include_z: include the z-value in the output
+          include_w: include the w-value in the output
+          include_u: include the u-value in the output
           dst_port (port): an open destination port
           encode (bool): encode the output
             sys.stdout, etc prefer encoded data, while
@@ -203,7 +172,7 @@ class XYZPoint:
         """
     
         l = self.export_as_string(
-            delim, include_z=include_z, include_w=include_w
+            delim, include_z=include_z, include_w=include_w, include_u=include_u
         )
         
         dst_port.write(l.encode('utf-8') if encode else l)
@@ -227,7 +196,7 @@ class XYZPoint:
             sys.stderr.write('transform error: {}\n'.format(str(e)))
         return(self)
         
-    def warp(self, dst_srs=None):
+    def warp(self, dst_srs = None):
         """transform the x/y using dst_srs"""
 
         from osgeo import osr
@@ -252,24 +221,14 @@ class XYZPoint:
         return(self)
 
 ## ==============================================
-## xyz processing (datalists fmt:168)
+##
+## xyz processing (dlim fmt:168)
+##
 ## ==============================================
-_xyz_config = {
-    'delim': None,
-    'xpos': 0,
-    'ypos': 1,
-    'zpos': 2,
-    'skip': 0,
-    'z-scale': 1,
-    'x-off': 0,
-    'y-off': 0,
-    'name': '<xyz-data-stream>',
-    'upper_limit': None,
-    'lower_limit': None,
-    'epsg': 4326,
-    'warp': None,
-    'verbose': False,
-}
+_xyz_config = {'delim': None, 'xpos': 0, 'ypos': 1, 'zpos': 2, 'wpos': 3, 'upos': 4,
+               'skip': 0, 'z-scale': 1, 'x-off': 0, 'y-off': 0, 'name': '<xyz-data-stream>',
+               'upper_limit': None, 'lower_limit': None, 'epsg': 4326, 'warp': None,
+               'verbose': False,}
 
 #_known_delims = [',', ' ', '\t', '/', ':']
 _known_delims = [',', '/', ':']
@@ -326,8 +285,10 @@ def xyz_parse_line(xyz_line, xyz_c = _xyz_config):
     except Exception as e:
         utils.echo_error_msg(e)
         return(None)
+    
     if xyz_c['delim'] is None:
         xyz_c['delim'] = xyz_line_delim(this_line)
+        
     this_xyz = this_line.split(xyz_c['delim'])
     try:
         o_xyz = [float(this_xyz[xyz_c['xpos']]) + float(xyz_c['x-off']),
@@ -339,6 +300,7 @@ def xyz_parse_line(xyz_line, xyz_c = _xyz_config):
     except Exception as e:
         if xyz_c['verbose']: utils.echo_error_msg(e)
         return(None)
+    
     return(o_xyz)
    
 def xyz_parse(src_xyz, xyz_c = _xyz_config, region = None, verbose = False):
@@ -377,8 +339,7 @@ def xyz_parse(src_xyz, xyz_c = _xyz_config, region = None, verbose = False):
     else: src_srs = dst_srs = dst_trans = None
     
     for xyz in src_xyz:
-        pass_d = True
-        
+        pass_d = True        
         if ln >= skip:
             this_xyz = xyz_parse_line(xyz, xyz_c)
             

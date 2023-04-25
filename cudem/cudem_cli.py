@@ -37,8 +37,7 @@ from cudem import uncertainties
 import cudem.fetches.fetches as fetches
 
 class CUDEMFactory:
-
-    mods = {
+    _modules = {
         'dlim': {
             'description': 'process data'
         },
@@ -56,6 +55,12 @@ class CUDEMFactory:
         },
         'uncertainties': {
             'description': 'calculate DEM uncertainties'
+        },
+        'perspecto.sh': {
+            'description': 'generate a hillshade from a DEM'
+        },
+        'vdatums': {
+            'description': 'transform the vertical datum of a DEM.'
         },
         'bag2tif2chunks2xyz.sh': {
             'description': 'convert a BAG to chunked XYZ'
@@ -135,9 +140,6 @@ class CUDEMFactory:
         'has_nulls.py': {
             'description': 'check if a grid has nodata values'
         },
-        'hillshade.sh': {
-            'description': 'generate a hillshade from a DEM'
-        },
         'nsidc_download.py': {
             'description': 'downlaod nsidc data'
         },
@@ -177,9 +179,6 @@ class CUDEMFactory:
         'xyztindex.py': {
             'description': 'generate a tile index of xyz files.'
         },
-        'vertical_datum_convert.py': {
-            'description': 'transform the vertical datum of a DEM.'
-        }
     }
     
     def __init__(self, mod=None, mod_args=None):

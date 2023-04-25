@@ -56,22 +56,15 @@ class Region:
       src_srs (str): the regions projection
     """
 
-    full_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax, x.zmin, x.zmax, x.wmin, x.wmax]
+    full_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax, x.zmin, x.zmax, x.wmin, x.wmax, x.umin, x.umax]
     xy_region = lambda x: [x.xmin, x.xmax, x.ymin, x.ymax]
     z_region = lambda x: [x.zmin, x.zmax]
     w_region = lambda x: [x.wmin, x.wmax]
+    u_region = lambda x: [x.umin, x.umax]
     
-    def __init__(self,
-                 xmin=None,
-                 xmax=None,
-                 ymin=None,
-                 ymax=None,
-                 zmin=None,
-                 zmax=None,
-                 wmin=None,
-                 wmax=None,
-                 src_srs='epsg:4326',
-                 wkt=None):        
+    def __init__(self, xmin = None, xmax = None, ymin = None, ymax = None,
+                 zmin = None, zmax = None, wmin = None, wmax = None,
+                 umin = None, umax = None, src_srs='epsg:4326', wkt=None):        
         self.xmin = utils.float_or(xmin)
         self.xmax = utils.float_or(xmax)
         self.ymin = utils.float_or(ymin)
@@ -80,6 +73,8 @@ class Region:
         self.zmax = utils.float_or(zmax)
         self.wmin = utils.float_or(wmin)
         self.wmax = utils.float_or(wmax)
+        self.umin = utils.float_or(umin)
+        self.umax = utils.float_or(umax)
         self.src_srs = utils.str_or(src_srs, 'epsg:4326')
         self.wkt = wkt
 
@@ -110,6 +105,8 @@ class Region:
             if self.zmin > self.zmax: return(False)
         if self.wmin is not None and self.wmax is not None:
             if self.wmin > self.wmax: return(False)
+        if self.umin is not None and self.umax is not None:
+            if self.umin > self.umax: return(False)            
 
         if not any(self.full_region()): return(False)
         return(True)
@@ -117,16 +114,12 @@ class Region:
     def copy(self):
         """return a copy of the region."""
         
-        return(Region(xmin = self.xmin,
-                      xmax = self.xmax,
-                      ymin = self.ymin,
-                      ymax = self.ymax,
-                      zmin = self.zmin,
-                      zmax = self.zmax,
-                      wmin = self.wmin,
-                      wmax = self.wmax,
-                      src_srs = self.src_srs,
-                      wkt = self.wkt))
+        return(Region(xmin = self.xmin, xmax = self.xmax,
+                      ymin = self.ymin, ymax = self.ymax,
+                      zmin = self.zmin, zmax = self.zmax,
+                      wmin = self.wmin, wmax = self.wmax,
+                      umin = self.umin, umax = self.umax,
+                      src_srs = self.src_srs, wkt = self.wkt))
 
     def _wgs_extremes(self, just_below=False):
         """adjust the region to make sure it is within WGS extremes..."""
@@ -162,6 +155,9 @@ class Region:
                 if len(region_list) >= 8:
                     self.wmin = utils.float_or(region_list[6])
                     self.wmax = utils.float_or(region_list[7])
+                    if len(region_list) >= 10:
+                        self.umin = utils.float_or(region_list[8])
+                        self.umax = utils.float_or(region_list[9])
             if self.wkt is None:
                 if self.valid_p(check_xy = True):
                     self.wkt = self.export_as_wkt()
@@ -222,10 +218,10 @@ class Region:
         Args:
           t (str): output mode
             t = 'str': xmin/xmax/ymin/ymax
-            t = 'fstr': xmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax
+            t = 'fstr': xmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax/umin/umax
             t = 'sstr': xmin xmax ymin ymax
             t = 'gmt': -Rxmin/xmax/ymin/ymax
-            t = 'waffles': -Rxmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax
+            t = 'waffles': -Rxmin/xmax/ymin/ymax/zmin/zmax/wmin/wmax/umin/umax
             t = 'bbox': xmin,ymin,xmax,ymax
             t = 'osm_bbox': ymin,xmin,ymax,xmax
             t = 'te': xmin ymin xmax ymax
@@ -249,7 +245,8 @@ class Region:
                     ' '.join([str(self.xmin), str(self.xmax),
                               str(self.ymin), str(self.ymax),
                               str(self.zmin), str(self.zmax),
-                              str(self.wmin), str(self.wmax)])
+                              str(self.wmin), str(self.wmax),
+                              str(self.umin), str(self.umax),])
             )
             elif t == 'gmt': return(
                     '-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
@@ -321,7 +318,7 @@ class Region:
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
-    def export_as_list(self, include_z=False, include_w=False):
+    def export_as_list(self, include_z = False, include_w = False, include_u = False):
         """export region as a list
 
         Args:
@@ -336,17 +333,19 @@ class Region:
         if include_z:
             region_list.append(self.zmin)
             region_list.append(self.zmax)
+            
         if include_w:
             region_list.append(self.wmin)
             region_list.append(self.wmax)
+            
+        if include_u:
+            region_list.append(self.umin)
+            region_list.append(self.umax)
+            
         return(region_list)
 
-    def export_as_gdal_extent(self, include_z=False, include_w=False):
+    def export_as_gdal_extent(self):
         """export region as a list
-
-        Args:
-          include_z: include the z-region in the output
-          include_w: include the w-region in the output
 
         Returns:
           tuple: the region values in a list
@@ -384,7 +383,7 @@ class Region:
             return(ogr.CreateGeometryFromWkt(self.wkt))
         else: return(None)
 
-    def export_as_ogr(self, dst_ogr, dst_fmt='ESRI Shapefile', append=False):
+    def export_as_ogr(self, dst_ogr, dst_fmt = 'ESRI Shapefile', append = False):
         """convert a region string to an OGR vector
 
         Args:
@@ -414,7 +413,7 @@ class Region:
         y_inc = float((self.ymax - self.ymin) / y_count)
         return(x_inc, y_inc)
         
-    def srcwin(self, geo_transform, x_count, y_count, node='grid'):
+    def srcwin(self, geo_transform, x_count, y_count, node = 'grid'):
         """output the appropriate gdal srcwin for the region 
         based on the geo_transform and x/y count.
 
@@ -444,7 +443,7 @@ class Region:
             
         return(this_origin[0], this_origin[1], this_size[0], this_size[1])
 
-    def cut(self, cut_region=None, x_inc=None, y_inc=None):
+    def cut(self, cut_region = None, x_inc = None, y_inc = None):
         """ cut the region based on `cut_region` while accounting for
         x_inc and y_inc so as to align to a potential grid
 
@@ -476,7 +475,7 @@ class Region:
                 return(self)
         return(self)
                 
-    def buffer(self, x_bv=0, y_bv=0, pct=None, x_inc=None, y_inc=None):
+    def buffer(self, x_bv = 0, y_bv = 0, pct = None, x_inc = None, y_inc = None):
         """return the region buffered by buffer-value `bv`
 
         Args:
@@ -526,7 +525,7 @@ class Region:
                     self.ymax + (self.ymax-self.ymin/2)])
         else: return(None)        
         
-    def chunk(self, inc, n_chunk=10):
+    def chunk(self, inc, n_chunk = 10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 
         n_chunk by n_chunk cell regions, given inc.
 
@@ -579,7 +578,7 @@ class Region:
 
         return(o_chunks)
 
-    def warp(self, dst_srs='epsg:4326'):
+    def warp(self, dst_srs = 'epsg:4326'):
         """warp the region from self.epsg to dst_epsg"""
 
         dst_srs = utils.str_or(dst_srs)
@@ -606,7 +605,7 @@ class Region:
         src_srs = dst_srs_ = None
         return(self.transform(dst_trans))
 
-    def transform(self, dst_trans=None):
+    def transform(self, dst_trans = None):
         """transform the region using dst_trans transformation."""
 
         if dst_trans is None:
@@ -706,6 +705,24 @@ def regions_reduce(region_a, region_b):
                 
             if region_b.wmax is not None:
                 region_c.wmax = region_b.wmax
+
+        if region_a.umin is not None and region_b.umin is not None:
+            region_c.umin = region_a.umin if region_a.umin > region_b.umin else region_b.umin
+        else:
+            if region_a.umin is not None:
+                region_c.umin = region_a.umin
+                
+            if region_b.umin is not None:
+                region_c.umin = region_b.umin
+                
+        if region_a.umax is not None and region_b.umax is not None:
+            region_c.umax = region_a.umax if region_a.umax < region_b.umax else region_b.umax
+        else:
+            if region_a.umax is not None:
+                region_c.umax = region_a.umax
+                
+            if region_b.umax is not None:
+                region_c.umax = region_b.umax
                 
     return(region_c)
 
@@ -731,6 +748,7 @@ def regions_merge(region_a, region_b):
             
         if region_a.zmax is not None and region_b.zmax is not None:
             region_c.zmax = region_a.zmax if region_a.zmax > region_b.zmax else region_b.zmax
+    ## add w and u
             
     return(region_c)
 
@@ -792,7 +810,7 @@ def regions_within_ogr_p(region_a, region_b):
             return(True)
     return(False)
 
-def z_region_pass(region, upper_limit=None, lower_limit=None):
+def z_region_pass(region, upper_limit = None, lower_limit = None):
     """return True if extended region [xmin, xmax, ymin, ymax, zmin, zmax] is 
     within upper and lower z limits
     
@@ -814,6 +832,8 @@ def z_region_pass(region, upper_limit=None, lower_limit=None):
             if lower_limit is not None:
                 if z_region[1] <= lower_limit:
                     return(False)
+
+    # add w and u
     return(True)
 
 def xyz_in_region_p(xyz, this_region):
@@ -840,16 +860,29 @@ def xyz_in_region_p(xyz, this_region):
             if xyz.z < this_region.zmin:
                 pass_d = False
                 return(pass_d)
+            
         if this_region.zmax is not None:
             if xyz.z > this_region.zmax:
                 pass_d = False
                 return(pass_d)
+            
         if this_region.wmin is not None:
             if xyz.w < this_region.wmin:
                 pass_d = False
                 return(pass_d)
+            
         if this_region.wmax is not None:
             if xyz.w > this_region.wmax:
+                pass_d = False
+                return(pass_d)
+            
+        if this_region.umin is not None:
+            if xyz.u < this_region.umin:
+                pass_d = False
+                return(pass_d)
+            
+        if this_region.umax is not None:
+            if xyz.u > this_region.umax:
                 pass_d = False
                 return(pass_d)
 
@@ -925,7 +958,7 @@ def ogr_wkts(src_ds):
         poly = None
     return(these_regions)
 
-def parse_cli_region(region_list, verbose=True):
+def parse_cli_region(region_list, verbose = True):
     """parse a region list into region(s).
 
     for use in clis
@@ -974,7 +1007,7 @@ def parse_cli_region(region_list, verbose=True):
             
     return(these_regions)
 
-def generate_tile_set(in_region=None, inc=.25):
+def generate_tile_set(in_region = None, inc = .25):
     """Generate a tile-set based on `in_region` and `inc`.
 
     returns a list of regions
@@ -1007,7 +1040,7 @@ def generate_tile_set(in_region=None, inc=.25):
             
     return(tile_regions)
 
-def region_list_to_ogr(region_list, dst_ogr, dst_fmt='ESRI Shapefile'):
+def region_list_to_ogr(region_list, dst_ogr, dst_fmt = 'ESRI Shapefile'):
     """convert a region list to an OGR vector
     """
 
@@ -1047,10 +1080,10 @@ usage: {cmd} [ -hqJPRT [ args ] ]...
 
 Options:
   -R, --region\t\tThe desired REGION 
-\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
-\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### dem_smooth.py
 ##
-## Copyright (c) 2012 - 2022 CIRES Coastal DEM Team
+## Copyright (c) 2012 - 2023 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -23,8 +23,9 @@
 import os
 import sys
 from cudem import demfun
+from cudem import utils
 
-_version = '0.1.0'
+_version = '0.1.1'
 _usage = '''dem_smooth.py ({}): smooth a DEM
 dem_smooth.py: Smooth a DEM with a Gaussian filter.
 
@@ -57,28 +58,28 @@ if __name__ == '__main__':
             in_list = sys.argv[i+1]
             i = i + 1
         elif arg == '-help' or arg == '--help' or arg == '-h':
-            print(_usage)
+            sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
-            print('smooth_dem_bathy.py v.%s' %(_version))
-            print(_license)
+            sys.stderr.write('dem_smooth.py v.%s' %(_version))
+            sys.stderr.write(_license)
             sys.exit(1)
         elif elev is None:
             elev = arg
         else:
-            print(_usage)
+            sys.stderr.write(_usage)
             sys.exit(1)
         i = i + 1
 
     if elev is None and in_list is None:
-        print(_usage)
+        sys.stderr.write(_usage)
         sys.exit(1)
 
     try: smooth_factor = int(smooth_factor)
     except:
-        print("Error: %s is not a valid smooth-factor" %(smooth_factor))
-        print(_usage)
+        utils.echo_error_msg('{} is not a valid smooth-factor'.format(smooth_factor))
+        sys.stderr.write(_usage)
         sys.exit(1)
 
-    demfun.blur(elev, elev[:-4] + '_smooth{}.tif'.format(smooth_factor), smooth_factor)
+    demfun.blur(elev, '{}_smooth{}.tif'.format(utils.fn_basename2(elev), smooth_factor), smooth_factor)
 ### End

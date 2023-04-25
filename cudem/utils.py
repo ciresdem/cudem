@@ -101,6 +101,10 @@ FIPS_TO_EPSG = {
     "5103": "26963", "5104": "26964", "5105": "26965", "5200": "32161"
 }
 
+def set_cache(cache_dir: str):
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
 def append_fn(fn, src_region, inc, version=None, year=None, res=None, high_res=False):
     """append the src_region, inc and version to a string filename"""
     
@@ -893,6 +897,52 @@ def gdal_fext(src_drv_name):
         
         return(fext)
 
+def osr_parse_srs(src_srs):
+    if src_srs is not None:
+        if src_srs.IsLocal() == 1:
+            return(src_srs.ExportToWkt())
+        if src_srs.IsGeographic() == 1:
+            cstype = 'GEOGCS'
+        else:
+            cstype = 'PROJCS'
+            
+        src_srs.AutoIdentifyEPSG()
+        an = src_srs.GetAuthorityName(cstype)
+        ac = src_srs.GetAuthorityCode(cstype)
+
+        if src_srs.IsVertical() == 1:
+            csvtype = 'VERT_CS'
+            vn = src_srs.GetAuthorityName(csvtype)
+            vc = src_srs.GetAuthorityCode(csvtype)
+        else:
+            csvtype = vc = vn = None
+
+        if an is not None and ac is not None:
+            if vn is not None and vc is not None:
+                return('{}:{}+{}'.format(an, ac, vc))
+            else:
+                return('{}:{}'.format(an, ac))
+        else:
+            dst_srs = src_srs.ExportToProj4()
+            if dst_srs:
+                    return(dst_srs)
+            else:
+                return(None)
+    else:
+        return(None)
+
+def gdal_get_srs(src_gdal):
+    src_ds = gdal.Open(src_gdal)
+    src_srs = src_ds.GetSpatialRef()
+    src_ds = None
+    return(osr_parse_srs(src_srs))
+    
+def ogr_get_srs(src_ogr):
+    src_ds = ogr.Open(src_ogr, 0)
+    src_srs = src_ds.GetLayer().GetSpatialRef()
+    src_ds = None
+    return(osr_parse_srs(src_srs))
+    
 def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
 
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
@@ -932,7 +982,23 @@ def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
         
     return(dst_ogr_fn)
 
+def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
+    driver = ogr.GetDriverByName(dn)
+    ds = driver.Open(src_ogr, 0)
+    layer = ds.GetLayer()
+
+    clip_region.export_as_ogr('tmp_clip.{}'.format(ogr_fext(dn)))
+    c_ds = driver.Open('tmp_clip.{}'.format(ogr_fext(dn)), 0)
+    c_layer = c_ds.GetLayer()
     
+    dst_ds = driver.CreateDataSource(dst_ogr)
+    dst_layer = dst_ds.CreateLayer(
+        dst_ogr.split('.')[0], geom_type=ogr.wkbMultiPolygon
+    )
+
+    layer.Clip(c_layer, dst_layer)
+    ds = c_ds = dst_ds = None
+
 def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
     older versions of gdal can't do this, so fallback to known standards.
@@ -961,14 +1027,373 @@ def ogr_fext(src_drv_name):
         
         return(fext)
 
-def gdal_write(
-        src_arr,
-        dst_gdal,
-        ds_config,
-        dst_fmt='GTiff',
-        max_cache=False,
-        verbose=False
-):
+def gdal_ogr_mask_union(src_layer, src_field, dst_defn=None):
+    '''`union` a `src_layer`'s features based on `src_field` where
+    `src_field` holds a value of 0 or 1. optionally, specify
+    an output layer defn for the unioned feature.
+
+    returns the output feature class'''
+    
+    if dst_defn is None:
+        dst_defn = src_layer.GetLayerDefn()
+        
+    multi = ogr.Geometry(ogr.wkbMultiPolygon)
+    src_layer.SetAttributeFilter("{} = 1".format(src_field))
+    feats = len(src_layer)
+    
+    if feats > 0:
+        with CliProgress(total=len(src_layer), message='unioning {} features...'.format(feats)) as pbar:
+            for n, f in enumerate(src_layer):
+                pbar.update()
+                f_geom = f.geometry()
+                #f_geom.CloseRings()
+                #try:
+                #    f_geom_valid = f_geom.MakeValid()
+                #except:
+                f_geom_valid = f_geom
+
+                #wkt = f_geom_valid.ExportToWkt()
+                #wkt_geom = ogr.CreateGeometryFromWkt(wkt)
+                #multi.AddGeometryDirectly(wkt_geom)
+                multi.AddGeometry(f_geom_valid)
+            
+    #union = multi.UnionCascaded() ## slow on large multi...
+    echo_msg('setting geometry to unioned feature...')
+    out_feat = ogr.Feature(dst_defn)
+    #out_feat.SetGeometryDirectly(multi)
+    out_feat.SetGeometry(multi)
+    union = multi = None
+    
+    return(out_feat)
+
+def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
+    driver = ogr.GetDriverByName(dn)
+    ds = driver.Open(src_ogr, 0)
+
+    if ds is not None:
+        layer = ds.GetLayer()
+        fc = layer.GetFeatureCount()
+        if fc == 0:
+            return(True)
+        else: return(False)
+        
+    else: return(True)
+
+def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Shapefile', verbose=True):
+    dst_layer = '{}_sm'.format(fn_basename2(src_ds.GetDescription()))
+    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    remove_glob('{}.*'.format(dst_layer))
+    gdal_prj_file('{}.prj'.format(dst_layer), dst_srs)
+    ds = ogr.GetDriverByName(ogr_format).CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+            '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    #defn = None if layer is None else layer.GetLayerDefn()
+    defn = None
+
+    for b in range(1, src_ds.RasterCount+1):
+        this_band = src_ds.GetRasterBand(b)
+        this_band_md = this_band.GetMetadata()
+        b_infos = gdal_gather_infos(src_ds, scan=True, band=b)
+        #print(b_infos)
+        
+        field_names = [field.name for field in layer.schema]
+        for k in this_band_md.keys():
+            if k[:9] not in field_names:
+                layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+        
+        if b_infos['zr'][1] == 1:
+            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
+                '{}_poly'.format(this_band.GetDescription())
+            )
+                    
+            if tmp_ds is not None:
+                tmp_layer = tmp_ds.CreateLayer(
+                    '{}_poly'.format(this_band.GetDescription()), None, ogr.wkbMultiPolygon
+                )
+                tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                for k in this_band_md.keys():
+                    tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                
+                if verbose:
+                    echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
+                            
+                status = gdal.Polygonize(
+                    this_band,
+                    None,
+                    tmp_layer,
+                    tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
+                    [],
+                    callback = gdal.TermProgress if verbose else None
+                )
+
+                if len(tmp_layer) > 0:
+                    if defn is None:
+                        defn = tmp_layer.GetLayerDefn()
+
+                    out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
+                    echo_msg('creating feature {}...'.format(this_band.GetDescription()))
+                    for k in this_band_md.keys():
+                        out_feat.SetField(k[:9], this_band_md[k])
+                    
+                    layer.CreateFeature(out_feat)
+
+            if verbose:
+                echo_msg('polygonized {}'.format(this_band.GetDescription()))
+            tmp_ds = tmp_layer = None
+    ds = None
+
+def gdal_infos(src_gdal, region=None, scan=False):
+    """scan gdal file src_fn and gather region info.
+
+    returns region dict.
+    """
+    
+    #if os.path.exists(src_gdal):
+    try:
+        ds = gdal.Open(src_gdal)
+    except: ds = None
+    if ds is not None:
+        dsc = gather_infos(ds, region = region, scan = scan)
+        ds = None
+        return(dsc)
+    else: return(None)
+    #else: return(None)
+    
+def gdal_gather_infos(src_ds, region=None, scan=False, band=1):
+    """gather information from `src_ds` GDAL dataset
+
+    returns gdal_config dict.
+    """
+
+    if region is not None:
+        srcwin = region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
+    else:
+        srcwin = (0, 0, src_ds.RasterXSize, src_ds.RasterYSize)
+        
+    gt = src_ds.GetGeoTransform()        
+    dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+    src_band = src_ds.GetRasterBand(band)
+    ds_config = {
+        'nx': srcwin[2],
+        'ny': srcwin[3],
+        'nb': srcwin[2] * srcwin[3],
+        'geoT': dst_gt,
+        'proj': src_ds.GetProjectionRef(),
+        'dt': src_band.DataType,
+        'dtn': gdal.GetDataTypeName(src_band.DataType),
+        'ndv': src_band.GetNoDataValue(),
+        'fmt': src_ds.GetDriver().ShortName,
+        'metadata': src_ds.GetMetadata(),
+        'raster_count': src_ds.RasterCount,
+        'zr': None,
+    }
+    if ds_config['ndv'] is None:
+        ds_config['ndv'] = -9999
+        
+    if scan:
+        src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+        #ds_config['zr'] = (np.amin(src_arr), np.amax(src_arr))
+        ds_config['zr'] = src_band.ComputeRasterMinMax()
+        src_arr = None
+        
+    return(ds_config)
+
+def gdal_set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt):
+    '''set a datasource config dictionary
+
+    returns gdal_config dict.'''
+    return({'nx': nx, 'ny': ny, 'nb': nb, 'geoT': geoT, 'proj': proj, 'dt': dt, 'ndv': ndv, 'fmt': fmt})
+
+def gdal_ds_set_srs(src_ds, src_srs = 'epsg:4326', verbose=True):
+    """set the projection of gdal ds src_ds to src_srs"""
+
+    if src_ds is not None:
+        try:
+            src_ds.SetProjection(sr_wkt(src_srs))
+        except Exception as e:
+            #ds.SetProjection(utils.sr_wkt('epsg:4326')) ## set to default if user input is no good
+            if verbose:
+                echo_warning_msg('could not set projection {}'.format(src_srs))
+        return(0)
+    else:
+        return(None)
+
+def gdal_set_srs(src_gdal, src_srs = 'epsg:4326', verbose=True):
+    """set the projection of gdal file src_fn to src_srs"""
+
+    ds = gdal.Open(src_gdal, gdal.GA_Update)
+    out = gdal_ds_set_srs(ds, src_srs=src_srs, verbose=verbose)
+    ds = None
+    return(out)
+
+def gdal_get_nodata(src_gdal):
+    """get the nodata valiue of src_gdal
+
+    return nodata value
+    """
+    
+    src_ds = gdal.Open(src_gdal)
+    if src_ds is not None:
+        band = src_ds.GetRasterBand(1)
+        ndv = band.GetNoDataValue()
+        src_ds = None
+        return(ndv)
+    else:
+        return(None)
+
+def gdal_ds_set_nodata(src_ds, nodata=-9999, convert_array=False, verbose=True):
+    """set the nodata value of gdal datasource
+
+    returns 0
+    """
+    
+    if src_ds is not None:
+        ds_config = gdal_gather_infos(src_ds)
+        curr_nodata = ds_config['ndv']
+
+        for band in range(1, src_ds.RasterCount+1):
+            this_band = src_ds.GetRasterBand(band)
+            this_band.DeleteNoDataValue()
+            
+        for band in range(1, src_ds.RasterCount+1):
+            this_band = src_ds.GetRasterBand(band)
+            this_band.SetNoDataValue(nodata)
+        
+        if convert_array:
+            for band in range(1, src_ds.RasterCount+1):
+                this_band = src_ds.GetRasterBand(band)
+                arr = this_band.ReadAsArray()
+                if np.isnan(curr_nodata):
+                    arr[np.isnan(arr)]=nodata
+                else:
+                    arr[arr == curr_nodata] = nodata
+                
+                this_band.WriteArray(arr)            
+        return(0)
+    
+    else:
+        return(None)
+    
+def gdal_set_nodata(src_gdal, nodata=-9999, convert_array=False, verbose=True):
+    """set the nodata value of gdal file src_dem
+
+    returns 0
+    """
+
+    if verbose:
+        echo_msg('setting nodata value of {} to {}'.format(src_gdal, nodata))
+        
+    ds = gdal.Open(src_gdal, gdal.GA_Update)
+    out = gdal_ds_set_nodata(ds, nodata=nodata, convert_array=convert_array, verbose=verbose)
+    ds = None
+    return(out)
+
+def gdal_generate_mem_ds(ds_config, name='MEM', bands=1):
+    """Create temporary gdal mem dataset"""
+        
+    mem_driver = gdal.GetDriverByName('MEM')
+    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'])
+    if mem_ds is not None:
+        mem_ds.SetGeoTransform(ds_config['geoT'])
+        if ds_config['proj'] is not None:
+            mem_ds.SetProjection(ds_config['proj'])
+
+        for band in range(1, bands+1):
+            mem_band = mem_ds.GetRasterBand(band)
+            mem_band.SetNoDataValue(ds_config['ndv'])
+        
+    return(mem_ds)
+
+def gdal_ds_cut(src_ds, src_region, dst_gdal, node='pixel', verbose=True):
+    """cut src_ds datasource to src_region and output dst_gdal file
+
+    returns [output-dem, status-code]
+    """
+
+    if src_ds is not None:
+        ds_config = gdal_gather_infos(src_ds)
+        gt = ds_config['geoT']
+        srcwin = src_region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize, node=node)
+        dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+        out_ds_config = gdal_set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt,
+                                       ds_config['proj'], ds_config['dt'], ds_config['ndv'],
+                                       ds_config['fmt'])
+
+        in_bands = src_ds.RasterCount
+        mem_ds = gdal_generate_mem_ds(out_ds_config, bands=in_bands)
+        for band in range(1, in_bands+1):
+            this_band = mem_ds.GetRasterBand(band)
+            this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
+            mem_ds.FlushCache()
+
+        dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)                
+        dst_ds = None
+        return(dst_gdal, 0)
+    else:
+        return(None, -1)
+
+def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', mode=None, verbose=True):
+    """cut src_gdal file to src_region and output dst_gdal file
+
+    returns [output-dem, status-code]
+    """
+
+    if mode == 'translate':
+        src_infos = gdal_infos(src_gdal)
+        this_srcwin = src_region.srcwin(
+            geo_transform=src_infos['geoT'],
+            x_count=src_infos['nx'],
+            y_count=src_infos['ny']
+        )
+        return(run_cmd('gdal_translate {} {} -srcwin {} {} {} {}'.format(
+            src_gdal, dst_gdal, this_srcwin[0], this_srcwin[1], this_srcwin[2], this_srcwin[3]
+        ), verbose=verbose))
+    else:
+        ds = gdal.Open(src_gdal)
+        out = gdal_ds_cut(ds, src_region, dst_gdal, node=node, verbose=verbose)
+        ds = None
+        return(out)
+
+def gdal_ds_percentile(src_ds, perc = 95, band = 1):
+    """calculate the `perc` percentile of src_fn gdal file.
+
+    return the calculated percentile
+    """
+    
+    if src_ds is not None:
+        ds_array = np.array(src_ds.GetRasterBand(band).ReadAsArray())
+        ds_array[ds_array == src_ds.GetRasterBand(band).GetNoDataValue()] = np.nan
+        x_dim = ds_array.shape[0]
+        ds_array_flat = ds_array.flatten()
+        ds_array = ds_array_flat[ds_array_flat != 0]
+        if len(ds_array) > 0:
+            p = np.nanpercentile(ds_array, perc)
+            #percentile = 2 if p < 2 else p
+        else: p = 2
+        return(p)
+    else:
+        return(None)
+
+    
+def gdal_percentile(src_gdal, perc = 95, band = 1):
+    """calculate the `perc` percentile of src_fn gdal file.
+
+    return the calculated percentile
+    """
+    
+    ds = gdal.Open(src_gdal)
+    out = gdal_ds_percentile(ds, perc=perc, band=band)
+    ds = None
+    return(out)
+    
+def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):
     """write src_arr to gdal file dst_gdal using src_config
 
     returns [output-gdal, status-code]
@@ -1016,7 +1441,8 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
     
     if os.path.exists(src_dem):
         if dst_dem is None:
-            dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
+            #dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
+            dst_dem = '{}.{}'.format(fn_basename2(src_dem), gdal_fext(dst_fmt))
             
         if dst_fmt != 'GTiff':
             co = False
@@ -1081,11 +1507,12 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     Returns:
       list: [command-output, command-return-code]
     """
-    
+    out = None
     with CliProgress(
             message='cmd: `{}...`'.format(cmd.rstrip()[:24]),
             verbose=verbose,
-    ) as pbar:        
+    ) as pbar:
+        
         if data_fun is not None:
             pipe_stdin = subprocess.PIPE
         else:
@@ -1110,17 +1537,17 @@ def run_cmd(cmd, data_fun=None, verbose=False):
                 if err_line:
                     pbar.write(err_line.rstrip())
                     sys.stderr.flush()
-                
+
             pbar.update()
 
-        out = p.stdout.read()
-        p.stderr.close()
-        p.stdout.close()
-        if verbose:
-            echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
+    out = p.stdout.read()
+    p.stderr.close()
+    p.stdout.close()
+    if verbose:
+        echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
 
-        if p.returncode != 0:
-            raise Exception(p.returncode)
+    if p.returncode != 0:
+        raise Exception(p.returncode)
         
     return(out, p.returncode)
 
@@ -1342,7 +1769,7 @@ _cudem_module_short_desc = lambda m: ', '.join(
 _cudem_module_name_short_desc = lambda m: ',  '.join(
     ['{} ({})'.format(m[key]['name'], key) for key in m])
 _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
-    ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['class'].__doc__) for key in m]) + '\n'
+    ['\033[1m{:14}\033[0m{}\n'.format(str(key), m[key]['call'].__doc__) for key in m]) + '\n'
 
 def echo_modules(module_dict, key):
     if key is None:
@@ -1590,5 +2017,5 @@ dtypes_dict = {numpy.int8:    'b',
                numpy.dtype('uint64'):  'Q',
                numpy.dtype('float32'): 'f',
                numpy.dtype('float64'): 'd'}
-            
+
 ### End

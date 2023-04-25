@@ -25,14 +25,24 @@
 ## Use CLI command 'waffles'
 ##
 ## Supported input datatypes include:
-## datalist, las/laz, gdal, bag, xyz, mbs, fetches
+## datalist, las/laz, gdal, bag, ogr, xyz, mbs, fetches
+## see cudem.dlim for more information on supported datasets
 ##
 ## Supported gridding modules include:
-## surface (GMT), triangulate (GMT), nearneighbor (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
-## coastline (CUDEM), cudem (CUDEM), stacks (CUDEM), inv-dst (GDAL), linear (GDAL), average (GDAL),
-## nearest (GDAL), scipy (SCIPY)
+## gmt-surface (GMT), gmt-triangulate (GMT), gmt-nearneighbor (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
+## coastline (CUDEM), cudem (CUDEM), stacks (CUDEM), gdal-inv-dst (GDAL), gdal-linear (GDAL), gdal-average (GDAL),
+## gdal-nearest (GDAL), scipy (SCIPY)
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
+##
+## Process all input data through cudem.dlim first, minimally, using cudem.dlim.init_data(list-of-data).
+##
+## Data will be processed through cudem.dlim._stacks prior to any interpolation. This will produce a weighted-mean (or weight-superceded)
+## grid of the data to use for interpolation. See cudem.dlim for more information.
+##
+## The interpolated DEM will be post-processed through Waffle._process() where it will be filtered, resampled, clipped, set limits,
+## cut to final output size, filled with metadata. Optionally, if want_uncertainty is set, _process() will also calculate the
+## interpolation uncertainty.
 ##
 ### Code:
 
@@ -53,28 +63,113 @@ from osgeo import ogr
 from osgeo import osr
 
 import cudem
-
 from cudem import dlim
-from cudem import datasets
 from cudem import regions
 from cudem import utils
 from cudem import xyzfun
 from cudem import demfun
 from cudem import metadata
+from cudem import vdatums
 from cudem import vdatumfun
-
-## Data cache directory
-## mostly stores fetches related data here
+from cudem import factory
+from cudem import fetches
+        
+## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
 
+class WaffleParameters:
+    def __init__(self, data: list = [], src_region: regions.Region = None, inc: str = None, xinc: str = None, yinc: str = None,
+                 xsize: int = None, ysize: int = None, name: str = 'waffles_dem', node: str = 'pixel', fmt: str = 'GTiff',
+                 extend: int = 0, extend_proc: float = 0, want_weight: bool = False, want_uncertainty: bool = False, fltr: list = [],
+                 sample: str = 'bilinear', xsample: str = None, ysample: str = None, clip: str = None, chunk: int = None,
+                 dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
+                 keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
+                 cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
+                 want_stack: bool = True):
+        self.data = data # list of data paths/fetches modules to grid
+        self.datalist = None # the datalist which holds the processed datasets
+        self.region = src_region # the region to grid
+        self.inc = inc # the gridding increments [xinc, yinc]
+        self.xinc = xinc # the x/lon gridding increment
+        self.yinc = yinc # the y/lat gridding increment
+        self.sample = sample # the gdal sample algorithm to use when needed
+        self.xsample = xsample # the x/lon increment to sample the output dem
+        self.ysample = ysample # the y/lat increment to sample the output dem
+        self.name = name # the output dem basename
+        self.node = node # the grid node method, either 'grid' or 'pixel'
+        self.fmt = fmt # the gdal-compatible output dem file format
+        self.extend = extend # extend the dem region by this many pixels
+        self.extend_proc = extend_proc # extend the dem processing region by this percentage
+        self.want_weight = want_weight # use weights, either None or 1
+        self.want_uncertainty = want_uncertainty # apply/calculate uncertainty
+        self.fltr = fltr # a list of filters (see demfun._filter for options)
+        self.clip = clip # ogr compatible vector file or keyword module to clip output dem
+        self.chunk = chunk # process the dem in this many chunks
+        self.dst_srs = dst_srs # the output dem projection
+        self.srs_transform = srs_transform # transform data to the dst_srs
+        self.archive = archive # archive the data used in this dem
+        self.want_mask = want_mask # mask the incoming datalist
+        self.supercede = supercede # higher weighted data supercedes lower weighted data
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)
+        self.keep_auxiliary = keep_auxiliary
+        self.clobber = clobber # clobber the output dem file
+        self.verbose = verbose # increase verbosity
+        self.cache_dir = cache_dir # directory path to store cahced data
+        self.ndv = ndv # no data value for the dem
+        self.block = block # block the data (defunct)
+        self.block_t = None # block the data (defunct)
+        self.ogr_ds = None # datasets as an ogr object
+        self.data_ = data # store data paths here, self.data gets processed to dlim datasets
+        self.fn = '{}.tif'.format(self.name) # output dem filename
+        self.want_sm = want_sm # generate spatial metadata
+        self.aux_dems = [] # list of auxiliary dems fns
+        self.want_stack = want_stack # generate the stacked rasters
+        self.stack = None # multi-banded stacked raster from cudem.dlim
+        self.stack_ds = None # the stacked raster as a dlim dataset object    
+
+    def write_parameter_file(self, param_file: str):
+        try:
+            with open(param_file, 'w') as outfile:
+                json.dump(self.__dict__, outfile)
+                utils.echo_msg('New WaffleParameters file written to {}'.format(param_file))
+                
+        except:
+            raise ValueError('WaffleParameters: Unable to write new parameter file to {}'.format(param_file))
+        
+    def open_parameter_file(self, param_file: str):
+        valid_data = False
+        with open(param_file, 'r') as infile:
+            try:
+                data = json.load(infile)
+            except:
+                raise ValueError('WaffleParameters: Unable to read data from {} as json'.format(param_file))
+            
+            for ky, val in data.items():
+                #if ky in self.__dict__:
+                self.__setattr__(ky, val)
+                valid_data = True
+                    
+            if valid_data:
+                utils.echo_msg('WaffleParameters read successfully from {}'.format(param_file))
+            else:
+                utils.echo_warning_msg('Unable to find any valid data in {}'.format(param_file))
+        
+## ==============================================
+##
+## WAFFLES
+##
 ## TODO
 ## add upper/lower limits to waffle class and
 ## remove from individual waffle modules.
+##
+## ==============================================
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
     See WaffleFactory for module specifications and generation.
 
+    -----------
     Procedures:
       yield_xyz() - yield the xyz data from self.data
       dump_xyz() - dump the xyz data from self.data to port
@@ -82,89 +177,90 @@ class Waffle:
       generate() - run and process the WAFFLES module
     """
     
-    def __init__(
-            self,
-            data=[],
-            src_region=None,
-            inc=None,
-            xinc=None,
-            yinc=None,
-            xsize=None,
-            ysize=None,
-            name='waffles_dem',
-            node='pixel',
-            fmt='GTiff',
-            extend=0,
-            extend_proc=0,
-            weights=None,
-            fltr=[],
-            sample='bilinear',
-            xsample=None,
-            ysample=None,
-            clip=None,
-            chunk=None,
-            dst_srs=None,
-            srs_transform=False,
-            verbose=False,
-            archive=False,
-            mask=False,
-            spat=False,
-            clobber=True,
-            ndv=-9999,
-            block=False,
-            cache_dir=waffles_cache
-    ):
-
-        self.data = data
-        self.datalist = None
-        self.region = src_region
-        self.inc = inc
-        self.xinc = xinc
-        self.yinc = yinc
-        self.sample = sample
-        self.xsample = xsample
-        self.ysample = ysample
-        self.name = name
-        self.node = node
-        self.fmt = fmt
-        self.extend = extend
-        self.extend_proc = extend_proc
-        self.weights = weights
-        self.fltr = fltr
-        self.clip = clip
-        self.chunk = chunk
-        self.dst_srs = dst_srs
-        self.srs_transform = srs_transform
-        self.archive = archive
-        self.mask = mask
-        self.clobber = clobber
-        self.verbose = verbose
-        self.cache_dir = cache_dir
-        self.gc = utils.config_check()
-        self.spat = spat
-        self.ndv = ndv
-        self.block = block
-        self.block_t = None
-        self.ogr_ds = None
-        self._init_regions()
-        self.data_ = data
-        self.fn = '{}.tif'.format(self.name)
-        self.mask_fn = '{}_m.tif'.format(self.name)
-        self.waffled = False
-        self.aux_dems = []
-
-        ## setting set_incs to True will force dlim to process the data to the set increments (raster mainly)
-        self._init_data(set_incs=True)
-        #self._init_data()
+    def __init__(self, data: list = [], src_region: regions.Region = None, inc: str = None, xinc: str = None, yinc: str = None,
+                 xsize: int = None, ysize: int = None, name: str = 'waffles_dem', node: str = 'pixel', fmt: str = 'GTiff',
+                 extend: int = 0, extend_proc: float = 0, want_weight: bool = False, want_uncertainty: bool = False, fltr: list = [],
+                 sample: str = 'bilinear', xsample: str = None, ysample: str = None, clip: str = None, chunk: int = None,
+                 dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
+                 keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
+                 cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
+                 want_stack: bool = True, params: dict = {}):
+        self.params = params # the factory parameters
+        self.data = data # list of data paths/fetches modules to grid
+        self.datalist = None # the datalist which holds the processed datasets
+        self.region = src_region # the region to grid
+        self.inc = inc # the gridding increments [xinc, yinc]
+        self.xinc = xinc # the x/lon gridding increment
+        self.yinc = yinc # the y/lat gridding increment
+        self.sample = sample # the gdal sample algorithm to use when needed
+        self.xsample = xsample # the x/lon increment to sample the output dem
+        self.ysample = ysample # the y/lat increment to sample the output dem
+        self.name = name # the output dem basename
+        self.node = node # the grid node method, either 'grid' or 'pixel'
+        self.fmt = fmt # the gdal-compatible output dem file format
+        self.extend = extend # extend the dem region by this many pixels
+        self.extend_proc = extend_proc # extend the dem processing region by this percentage
+        self.want_weight = want_weight # use weights, either None or 1
+        self.want_uncertainty = want_uncertainty # apply/calculate uncertainty
+        self.fltr = fltr # a list of filters (see demfun._filter for options)
+        self.clip = clip # ogr compatible vector file or keyword module to clip output dem
+        self.chunk = chunk # process the dem in this many chunks
+        self.dst_srs = dst_srs # the output dem projection
+        self.srs_transform = srs_transform # transform data to the dst_srs
+        self.archive = archive # archive the data used in this dem
+        self.want_mask = want_mask # mask the incoming datalist
+        self.supercede = supercede # higher weighted data supercedes lower weighted data
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)
+        self.keep_auxiliary = keep_auxiliary
+        self.clobber = clobber # clobber the output dem file
+        self.verbose = verbose # increase verbosity
+        self.cache_dir = cache_dir # directory path to store cahced data
+        self.ndv = ndv # no data value for the dem
+        self.block = block # block the data (defunct)
+        self.block_t = None # block the data (defunct)
+        self.ogr_ds = None # datasets as an ogr object
+        self.data_ = data # store data paths here, self.data gets processed to dlim datasets
+        self.fn = '{}.tif'.format(self.name) # output dem filename
+        self.want_sm = want_sm # generate spatial metadata
+        self.aux_dems = [] # list of auxiliary dems fns
+        self.want_stack = want_stack # generate the stacked rasters
+        self.stack = None # multi-banded stacked raster from cudem.dlim
+        self.stack_ds = None # the stacked raster as a dlim dataset object
 
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
     
     def __repr__(self):
         return('<Waffles: {}>'.format(self.name))
-        
-    def _init_regions(self):
 
+    def initialize(self):
+        utils.echo_msg('initializing waffles module < {} >'.format(self.params['mod']))
+        self.fn = '{}.{}'.format(self.name, utils.gdal_fext(self.fmt)) # output dem filename
+        self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
+        self._init_regions() # initialize regions
+        self._init_incs() # initialize increments
+        if self.want_stack:
+            self._init_data(set_incs=True) # initialize data, setting set_incs to True will force dlim to process the data to the set increments
+            
+        self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+        self.ds_config = demfun.set_infos(
+            self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, utils.sr_wkt(self.dst_srs),
+            gdal.GDT_Float32, self.ndv, self.fmt
+        )
+    
+    def __call__(self):
+        self.initialize()
+        return(self.generate())
+    
+    def _init_regions(self):
+        """Initialize and set regions"""
+        
+        if isinstance(self.region, list):
+            self.region = regions.Region().from_list(self.region)
+        elif not isinstance(self.region, regions.Region):
+            raise ValueError('could not parse region')
+        
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
             
@@ -187,20 +283,24 @@ class Waffle:
         set `set_incs` to True to block/sample datasets to given increment
         this function sets `self.data` to a list of dataset objects.
         """
+        
+        self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
+                                   xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
+                                   want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
+                                   want_sm=self.want_sm, invert_region=False, cache_dir=self.cache_dir)
+        self.data.initialize()
+        if not self.want_weight:
+            self.data.weight = None
+            
+        if not self.want_uncertainty:
+            self.data.uncertainty = None
 
-        self.data = [dlim.DatasetFactory(
-            fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-            src_region=self.p_region,
-            verbose=self.verbose,
-            dst_srs=self.dst_srs if self.srs_transform else None,
-            weight=self.weights,
-            x_inc=self.xinc if set_incs else None,
-            y_inc=self.yinc if set_incs else None,
-            sample_alg=self.sample,
-            cache_dir=self.cache_dir
-        ).acquire() for dl in self.data_]
-        self.data = [d for d in self.data if d is not None]
-
+    def _init_incs(self):
+        self.xinc = utils.str2inc(self.xinc)
+        self.yinc = utils.str2inc(self.yinc)
+        self.xsample = utils.str2inc(self.xsample)
+        self.ysample = utils.str2inc(self.ysample)
+        
     def _coast_region(self):
         """processing region (extended by self.extend_proc)"""
 
@@ -216,7 +316,6 @@ class Waffle:
     def _dist_region(self):
         """distribution region (extended by self.extend)."""
         
-        #dr = regions.Region().from_region(self.region)
         dr = self.region.copy()
         if self.xsample is None and self.ysample is None:
             return(
@@ -232,419 +331,20 @@ class Waffle:
                     y_bv=(self.ysample*self.extend)
                 )
             )
-    def copy(self):
-        """return a copy of the waffle object"""
-        
-        return(Waffle(
-            data=self.data_,
-            src_region=self.region,
-            inc=self.inc,
-            xinc=self.xinc,
-            yinc=self.yinc,
-            name=self.name,
-            node=self.node,
-            fmt=self.fmt,
-            extend=self.extend,
-            extend_proc=self.extend_proc,
-            weights=self.weights,
-            fltr=self.fltr,
-            sample=self.sample,
-            xsample=self.xsample,
-            ysample=self.ysample,
-            clip=self.clip,
-            chunk=self.chunk,
-            dst_srs=self.dst_srs,
-            srs_transform=self.srs_transform,
-            verbose=self.verbose,
-            archive=self.archive,
-            mask=self.mask,
-            spat=self.spat,
-            clobber=self.clobber,
-            ndv=self.ndv,
-            block=self.block
-        ))
+            
+    def dump_xyz(self, dst_port=sys.stdout, encode=False):
+        """dump the stacked xyz data to dst_port
 
-    ## todo: add blend option
-    def _stacks_array(
-            self,
-            supercede=False,
-            out_name=None,
-            method='weighted_mean'
-    ):
-        """stack incoming arrays together
-
-        method is either 'weighted_mean' or 'supercede'
+        use this to dump data into a foreign cli program, such as GMT.
         """
 
-        def sum_nan_arrays(a, b):
-            ma = np.isnan(a)
-            mb = np.isnan(b)
-            m_keep_a = ~ma & mb
-            m_keep_b = ma & ~mb
-            out = a + b
-            out[m_keep_a] = a[m_keep_a]
-            out[m_keep_b] = b[m_keep_b]
-            return out
-        
-        if not self.weights:
-            self.weights = 1
-
-        xcount, ycount, dst_gt = self.p_region.geo_transform(
-            x_inc=self.xinc, y_inc=self.yinc, node='grid'
-        )
-
-        gdt = gdal.GDT_Float32
-        c_gdt = gdal.GDT_Int32
-        driver = gdal.GetDriverByName(self.fmt)
-
-        ## Z Grid
-        z_ds = driver.Create(
-            '{}_s.tif'.format(out_name), xcount, ycount, 1, gdt,
-            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
-        )
-        z_ds.SetGeoTransform(dst_gt)
-        z_band = z_ds.GetRasterBand(1)
-        z_band.SetNoDataValue(self.ndv)
-
-        ## Weight Grid
-        w_ds = driver.Create(
-            '{}_w.tif'.format(out_name), xcount, ycount, 1, gdt,
-            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
-        )
-        w_ds.SetGeoTransform(dst_gt)
-        w_band = w_ds.GetRasterBand(1)
-        w_band.SetNoDataValue(self.ndv)
-
-        ## Count Grid
-        c_ds = driver.Create(
-            '{}_c.tif'.format(out_name), xcount, ycount, 1, gdt
-        )
-        c_ds.SetGeoTransform(dst_gt)
-        c_band = c_ds.GetRasterBand(1)
-        c_band.SetNoDataValue(self.ndv)
-
-        ## Uncertainty/Std-Err Grid
-        u_ds = driver.Create(
-            '{}_u.tif'.format(out_name), xcount, ycount, 1, gdt,
-            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
-        )
-        u_ds.SetGeoTransform(dst_gt)
-        u_band = u_ds.GetRasterBand(1)
-        u_band.SetNoDataValue(self.ndv)
-
-        if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
-                ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-            ))
-
-        ## incoming arrays can be quite large...perhaps chunks these
-        for arrs, srcwin, gt in self.yield_array():
-            arr = arrs['z']
-            w_arr = arrs['weight']
-            c_arr = arrs['count']
-            
-            c_arr[np.isnan(arr)] = 0
-            w_arr[np.isnan(arr)] = 0
-            arr[np.isnan(arr)] = 0
-
-            z_array = z_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            z_array[z_array == self.ndv] = 0
-            
-            w_array = w_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            w_array[w_array == self.ndv] = 0
-            
-            c_array = c_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            c_array[c_array == self.ndv] = 0
-            
-            u_array = u_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-            u_array[u_array == self.ndv] = 0
-
-            ## add the count
-            c_array += c_arr
-
-            ## supercede based on weights, else do weighted mean
-            ## todo: do (weighted) mean on cells with same weight
-            if supercede:
-                z_array[w_arr > w_array] = arr[w_arr > w_array]
-                w_array[w_arr > w_array] = w_arr[w_arr > w_array]
-                z_array[z_array == 0] = np.nan
-                w_array[w_array == 0] = np.nan
-                
-                #u_array += w_arr * np.power((arr - (z_array / w_array)), 2)
-            else:
-                z_array += (arr * w_arr)
-                w_array += w_arr
-                w_array[w_array == 0] = np.nan
-                #v_array += w_arr * ((arr - (z_array / w_array))**2)
-                u_array += w_arr * np.power((arr - (z_array / w_array)), 2)
-
-                ## testing
-                #u_arr = 1/w_arr
-                #w_arr[w_arr == 0] = 1e-24
-                #v_array += (w_arr * ((1 / w_arr)**2)) / w_array + (w_arr * ((arr - z_array)**2) / w_array)
-                #v_array = ((w_arr * (1/w_array)**2) / w_array) + (w_arr * ((arr - (z_array / w_array))**2))
-                #v_array += (w_arr * (1 / (w_array**2)) / w_array))**2)) / w_array
-                #+ (w_arr * ((arr - (z_array / w_array))**2))
-                #print(v_array)
-                #print(w_array)
-                
-            c_array[c_array == 0] = self.ndv
-            w_array[np.isnan(w_array)] = self.ndv
-            z_array[np.isnan(w_array)] = self.ndv
-            z_array[w_array == self.ndv] = self.ndv
-            u_array[u_array == 0] = self.ndv
-            u_array[w_array == self.ndv] = self.ndv
-            
-            # write out results
-            z_band.WriteArray(z_array, srcwin[0], srcwin[1])
-            w_band.WriteArray(w_array, srcwin[0], srcwin[1])
-            c_band.WriteArray(c_array, srcwin[0], srcwin[1])
-            u_band.WriteArray(u_array, srcwin[0], srcwin[1])
-            arr = w_arr = c_arr = u_array = w_array = c_array = None
-
-        ## Finalize and close datasets
-        if not supercede:
-            srcwin = (0, 0, z_ds.RasterXSize, z_ds.RasterYSize)
-            for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
-            ):
-                z_data = z_band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                )
-                z_data[z_data == self.ndv] = np.nan
-                
-                w_data = w_band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                )
-                w_data[w_data == self.ndv] = np.nan
-
-                c_data = c_band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                )
-                c_data[c_data == self.ndv] = np.nan
-                
-                u_data = u_band.ReadAsArray(
-                    srcwin[0], y, srcwin[2], 1
-                )
-                u_data[u_data == self.ndv] = np.nan
-                z_data[np.isnan(w_data)] = np.nan
-
-                w_data = w_data / c_data
-                u_data = np.sqrt((u_data/w_data) / c_data)
-                #u_data = np.sqrt((u_data/w_data)**2 / c_data)
-                z_data = (z_data/w_data) / c_data
-                
-                z_data[np.isnan(z_data)] = self.ndv
-                c_data[np.isnan(c_data)] = self.ndv
-                w_data[np.isnan(w_data)] = self.ndv
-                u_data[np.isnan(u_data)] = self.ndv
-                
-                z_band.WriteArray(z_data, srcwin[0], y)
-                c_band.WriteArray(c_data, srcwin[0], y)
-                w_band.WriteArray(w_data, srcwin[0], y)
-                u_band.WriteArray(u_data, srcwin[0], y)
-
-        z_ds = c_ds = w_ds = u_ds = None
-    
-    def yield_array(self, **kwargs):
-        """yield the arrays from the datalist for use in gridding"""
-        
-        if self.mask:
-            xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-            mask_array = np.zeros((ycount, xcount))
-            ds_config = demfun.set_infos(
-                xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
-                gdal.GDT_Float32, self.ndv, 'GTiff'
-        )
-
-        #with utils.CliProgress('parisng ARRAY data') as pbar:
-        for xdl in self.data:
-            for array in xdl.yield_array():
-                #pbar.update()
-                if self.mask:
-                    cnt_arr = array[0]['count']
-                    srcwin = array[1]
-                    gt = array[2]
-                    cnt_arr[np.isnan(cnt_arr)] = 0
-                    mask_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += cnt_arr
-                    mask_array[mask_array > 0] = 1
-
-                yield(array)
-                
-        if self.mask:
-            utils.gdal_write(mask_array, self.mask_fn, ds_config, verbose=self.verbose)
-            mask_array = None
-                    
-    def yield_xyz(self, region=None, **kwargs):
-        """yields the xyz data"""
-
-        if self.mask:
-            xcount, ycount, dst_gt = self.region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-            msk_array = np.zeros((ycount, xcount))
-            ds_config = demfun.set_infos(
-                xcount, ycount, (xcount*ycount), dst_gt, utils.sr_wkt(self.dst_srs),
-                gdal.GDT_Float32, self.ndv, 'GTiff'
-        )
-
-        # with utils.CliProgress(
-        #         message='{}: parsing XYZ data'.format(utils._command_name),
-        # ) as pbar:            
-        for xdl in self.data:
-            if self.spat:
-                xyz_yield = metadata.SpatialMetadata(
-                    data=[xdl.fn],
-                    src_region=self.p_region,
-                    inc=self.xinc,
-                    extend=self.extend,
-                    dst_srs=self.dst_srs if self.srs_transform else None,
-                    node=self.node,
-                    name=self.name,
-                    verbose=self.verbose,
-                    make_valid=True
-                ).yield_xyz()
-
-            elif self.archive:
-                xyz_yield = xdl.archive_xyz()
-            else:
-                xyz_yield = xdl.yield_xyz()
-
-            if self.block:
-                #xyz_yield = self._xyz_block(xyz_yield, out_name=self.block) if utils.str_or(self.block) != 'False' else self._xyz_block(xyz_yield)
-                xyz_yield = xdl.block_xyz()
-
-            for xyz in xyz_yield:
-                #pbar.update()
-                yield(xyz)
-                if self.mask:
-                    if regions.xyz_in_region_p(xyz, self.region):
-                        xpos, ypos = utils._geo2pixel(
-                            xyz.x, xyz.y, dst_gt, 'pixel'
-                        )
-                        try:
-                            msk_array[ypos, xpos] = 1
-                        except:
-                            pass
-        if self.mask:
-            out, status = utils.gdal_write(msk_array, self.mask_fn, ds_config)    
-
-        if self.spat:
-            dst_layer = '{}_sm'.format(self.name)
-            dst_vector = dst_layer + '.shp'
-            utils.run_cmd(
-                'ogr2ogr -clipsrc {} __tmp_clip.shp {} -overwrite -nlt POLYGON -skipfailures'.format(
-                    self.d_region.format('ul_lr'), dst_vector
-                ),
-                verbose=True
-            )
-            utils.run_cmd(
-                'ogr2ogr {} __tmp_clip.shp -overwrite'.format(dst_vector),
-                verbose=True
-            )
-            utils.remove_glob('__tmp_clip.*')
-
-    def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
-        """dump the xyz data to dst_port"""
-
-        for xyz in self.yield_xyz(**kwargs):
+        for xyz in self.stack_ds.yield_xyz():
             xyz.dump(
-                include_w = True if self.weights is not None else False,
+                include_w = self.want_weight,
+                include_u = self.want_uncertainty,
                 dst_port=dst_port,
                 encode=encode,
-                **kwargs
             )
-
-    def _process(self, fn=None, filter_=False):
-        """process the outpt WAFFLES DEM (filter, clip, cut, set)."""
-        
-        if fn is None:
-            fn = self.fn
-
-        ## SET NODATA
-        demfun.set_nodata(fn, nodata=self.ndv, convert_array=True, verbose=self.verbose)
-
-        ## FILTER
-        if filter_:
-            if len(self.fltr) > 0:
-                for f in self.fltr:
-                    fltr_val = None
-                    split_val = None
-                    fltr_opts = f.split(':')
-                    fltr = fltr_opts[0]
-                    if len(fltr_opts) > 1:
-                        fltr_val = fltr_opts[1]
-                        
-                    if len(fltr_opts) > 2:
-                        split_val= fltr_opts[2]
-
-                    # fails if fltr_val in float
-                    if demfun.filter_(
-                            fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
-                    ) == 0:
-                        os.rename('__tmp_fltr.tif', fn)
-
-        ## SAMPLE
-        if self.xsample is not None or self.ysample is not None:
-            if demfun.sample_warp(fn, '__tmp_sample.tif', self.xsample, self.ysample,
-                             src_region=self.p_region, sample_alg=self.sample,
-                             ndv=self.ndv, verbose=self.verbose)[1] == 0:
-                os.rename('__tmp_sample.tif', fn)
-
-
-        ## CLIP
-        if self.clip is not None:
-            clip_args = {}
-            cp = self.clip.split(':')
-            clip_args['src_ply'] = cp[0]
-            clip_args['verbose'] = self.verbose
-            clip_args = utils.args2dict(cp[1:], clip_args)
-            if clip_args['src_ply'] == 'coastline':
-                self.coast = WaffleFactory(
-                    mod='coastline:polygonize=False',
-                    data=self.data_,
-                    src_region=self.p_region,
-                    xinc=self.xsample if self.xsample is not None else self.xinc,
-                    yinc=self.ysample if self.ysample is not None else self.yinc,
-                    name='tmp_coast',
-                    node=self.node,
-                    weights=self.weights,
-                    dst_srs=self.dst_srs,
-                    srs_transform=self.srs_transform,
-                    clobber=True,
-                    verbose=self.verbose,
-                ).acquire().generate()
-                
-                demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
-                os.rename('__tmp_clip__.tif', '{}'.format(fn))
-                
-            else:
-                ## if clip vector is empty, will return surface with all upper_value :(
-                ## maybe have it remove all data in such cases (if invert is true)
-                if demfun.clip(fn, '__tmp_clip__.tif', **clip_args)[1] == 0:
-                    os.rename('__tmp_clip__.tif', '{}'.format(fn))
-
-        ## CUT
-        #if demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)[1] == 0:
-        _tmp_cut, cut_status = demfun.cut(fn, self.d_region, '__tmp_cut__.tif', node='grid', mode=None)
-        if cut_status == 0:
-            try:
-                os.rename(_tmp_cut, fn)
-            except Exception as e:
-                utils.echo_error_msg('could not cut {}; {}'.format(fn, e))
-        else:
-            utils.echo_error_msg('could not cut {}'.format(fn))
-
-        ## SET SRS/METADATA
-        ## if set_srs fails, set_metadata will skip first entry...
-        demfun.set_srs(fn, self.dst_srs, verbose=self.verbose)
-        demfun.set_metadata(fn, node=self.node, cudem=True, verbose=self.verbose)
-
-        ## REFORMAT
-        if self.fmt != 'GTiff':
-            out_dem = utils.gdal2gdal(fn, dst_fmt=self.fmt)
-            if out_dem is not None:
-                utils.remove_glob(fn)
-                
-        return(self)
     
     def generate(self):
         """run and process the WAFFLES module"""
@@ -654,10 +354,6 @@ class Waffle:
                 utils.echo_warning_msg(
                     'DEM {} already exists, skipping...'.format(self.fn)
                 )
-                if self.mask:
-                    if not os.path.exists(self.mask_fn):
-                        [x for x in self.yield_xyz()]
-                        self._process(fn=self.mask_fn, filter_=False)
                 return(self)
         else:
             if not os.path.exists(os.path.dirname(self.fn)):
@@ -667,687 +363,118 @@ class Waffle:
             
         ## Generate in Chunks of self.chunk by self.chunk
         if self.chunk is not None:
-            xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
-            count = 0
+            #xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
             chunks = []
-            for srcwin in utils.yield_srcwin((ycount, xcount), self.chunk, verbose=self.verbose):
-                count += 1
-                #print(srcwin)
-                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], dst_gt)
-                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], dst_gt)
-                this_gt = [this_geo_x_origin, float(dst_gt[1]), 0.0, this_geo_y_origin, 0.0, float(dst_gt[5])]
+            for srcwin in utils.yield_srcwin((self.ycount, self.xcount), self.chunk, verbose=self.verbose):
+                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], self.dst_gt)
+                this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt)
+                this_gt = [this_geo_x_origin, float(self.dst_gt[1]), 0.0, this_geo_y_origin, 0.0, float(self.dst_gt[5])]
                 #this_region = self.region.copy()
                 this_region = regions.Region()
                 this_region.from_geo_transform(geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3])
                 this_region.buffer(pct=10, x_inc = self.xinc, y_inc = self.yinc)
-                this_waffle = WaffleFactory()._modules[self.mod]['class'](
-                    data=self.data_,
-                    src_region=this_region,
-                    inc=self.inc,
-                    xinc=self.xinc,
-                    yinc=self.yinc,
-                    name='{}_{}'.format(self.name, count),
-                    node=self.node,
-                    fmt=self.fmt,
-                    extend=self.extend,
-                    extend_proc=self.extend_proc+1,
-                    weights=self.weights,
-                    fltr=self.fltr,
-                    sample=self.sample,
-                    xsample=self.xsample,
-                    ysample=self.ysample,
-                    clip=self.clip,
-                    chunk=None,
-                    dst_srs=self.dst_srs,
-                    srs_transform=self.srs_transform,
-                    verbose=self.verbose,
-                    archive=self.archive,
-                    mask=self.mask,
-                    spat=self.spat,
-                    clobber=self.clobber,
-                    block=self.block,
-                    ndv=self.ndv,
-                    cache_dir=self.cache_dir,
-                    **self.mod_args
-                )
-                
-                this_waffle.run()
-                if this_waffle.valid_p():
-                    this_waffle._process(filter_=True)
-                    chunks.append(this_waffle.fn)
-                
+                ## update for **mod_args
+                this_params = self.params.copy()
+                this_params['kwargs']['src_region'] = this_region
+                this_params['kwargs']['chunk'] = None
+                this_params['kwargs']['name'] = utils.append_fn('_chunk', this_region, self.xinc, high_res=True)
+                #this_params['kwargs']['name'] = os.path.join(self.cache_dir, utils.append_fn('_chunk', this_region, self.xinc, high_res=True))
+                this_waffle = WaffleFactory().load_parameter_dict(this_params)
+                this_waffle_module = this_waffle._acquire_module()
+                this_waffle_module.initialize()
+                this_waffle_module.generate()
+                if this_waffle_module.valid_p():
+                    chunks.append(this_waffle_module.fn)
+
+            ## todo combine aux_dems
             if len(chunks) > 0:
-                ## todo: use demfun.sample_warp
                 g = gdal.Warp(self.fn, chunks, format='GTiff', resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
                 
             utils.remove_glob(*chunks)
-            # if self.valid_p():
-            #     return(self._process(filter_=True))
-            # else:
-            #     return(self)
         else:
+            ## stack the data and run the waffles module
+            if self.want_stack:
+                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, '{}_stack'.format(self.name)), supercede=self.supercede)
+                self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
+                                              data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
+                                              y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
             self.run()
-            if self.mask:
-                if os.path.exists(self.mask_fn):
-                    self._process(fn=self.mask_fn, filter_=False)
+            ## post-process the DEM(s)
+            waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+            if waffle_dem.valid_p():
+                waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                   node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
+                                   dst_fmt=self.fmt)
+ 
+            if self.keep_auxiliary:
+                if self.want_stack:
+                    self.aux_dems.append(self.stack)
 
-        if self.valid_p():
-            self.waffled = True
-            #utils.echo_msg(self.aux_dems)
-            [self._process(fn=x, filter_=False) for x in self.aux_dems]
-            return(self._process(filter_=True))
-        else:
+            for aux_dem in self.aux_dems:
+                aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+                if aux_dem.valid_p():
+                    aux_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
+                                    dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn))
+            
             return(self)
-
-    def set_limits(self, upper_limit=None, lower_limit=None):
-        upper_limit = utils.float_or(upper_limit)
-        lower_limit = utils.float_or(lower_limit)
-        if upper_limit is not None or lower_limit is not None:
-            try:
-                src_ds = gdal.Open(self.fn, 1)
-            except: src_ds = None
-            if src_ds is not None:
-                src_band = src_ds.GetRasterBand(1)
-                band_data = src_band.ReadAsArray()
-
-                if upper_limit is not None:
-                    if self.verbose:
-                        utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
-                        
-                    band_data[band_data > upper_limit] = upper_limit
-
-                if lower_limit is not None:
-                    if self.verbose:
-                        utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
-                        
-                    band_data[band_data < lower_limit] = lower_limit
-
-                src_band.WriteArray(band_data)
-                src_ds = None
-            else:
-                return(None)
-                    
-        return(self)
-            
-    def valid_p(self):
-        """check if the output WAFFLES DEM is valid"""
-
-        if not os.path.exists(self.fn):
-            return(False)
-        
-        if self.mask:
-            if not os.path.exists(self.mask_fn):
-                return(False)
-            
-        gdi = demfun.infos(self.fn, scan=True)        
-        if gdi is not None:
-            if np.isnan(gdi['zr'][0]):
-                return(False)
-        else:
-            return(False)
-        
-        return(True)            
 
     def run(self):
         """run the WAFFLES module (set via sub-module class)."""
         
         raise(NotImplementedError)
-    
+
 ## ==============================================
-## GMT Surface
 ##
-## TODO: update to use pygmt
+## Waffles Raster Stacking
+##
 ## ==============================================
-class GMTSurface(Waffle):
-    """SPLINE DEM via GMT surface
+class WafflesStacks(Waffle):
+    """STACK data into a DEM. 
     
-Generate a DEM using GMT's surface command
-see gmt surface --help for more info.
+    Generate a DEM using a raster STACKing method. 
+    By default, will calculate the [weighted]-mean where overlapping cells occur. 
+    Set supercede to True to overwrite overlapping cells with higher weighted data.
 
----
-Parameters:
-   
-tension=[0-1] - spline tension.
-relaxation=[val] - spline relaxation factor.
-lower_limit=[val] - constrain interpolation to lower limit.
-upper_limit=[val] - constrain interpolation to upper limit.
-aspect=[val/None] - gridding aspect
-breakline=[path/None] - use xyz dataset at `path` as a breakline
-convergence=[val/None] - gridding convergence
-blockmean=[True/False] - pipe the data through gmt blockmean before gridding
-geographic=[True/Faslse] - data/grid are geographic
-
-< surface:tension=.35:relaxation=1:max_radius=None:lower_limit=None:upper_limit=None:aspect=None:breakline=None:convergence=None:blockmean=True:geographic=True >
+    stack data to generate DEM. No interpolation
+    occurs with this module. To guarantee a full DEM,
+    use a background DEM with a low weight, such as GMRT or GEBCO,
+    which will be stacked upon to create the final DEM.
+    
+    -----------
+    Parameters:
+    
+    min_count=[val] - only retain data cells if they contain `min_count` overlapping data
+    
+    < stacks:min_count=None >
     """
-    
-    def __init__(self, tension=.35, relaxation=1, max_radius=None,
-                 lower_limit=None, upper_limit=None, aspect=None,
-                 breakline=None, convergence=None, blockmean=True,
-                 geographic=True, **kwargs):
-        """generate a DEM with GMT surface"""
 
-        self.mod = 'surface'
-        self.mod_args = {
-            'tension':tension,
-            'relaxation':relaxation,
-            'aspect':aspect,
-            'max_radius':max_radius,
-            'lower_limit':lower_limit,
-            'upper_limit':upper_limit,
-            'breakline':breakline,
-            'convergence':convergence,
-            'blockmean':blockmean,
-            'geographic':geographic
-        }
+    ## todo: add parameters for specifying outputs...
+    def __init__(self, min_count = None, **kwargs):
         super().__init__(**kwargs)
-        if self.gc['GMT'] is None:
-            utils.echo_error_msg(
-                'GMT must be installed to use the SURFACE module'
-            )
-            return(None, -1)
-        
-        self.tension = tension
-        self.convergence = utils.float_or(convergence)
-        self.relaxation = relaxation
-        #self.lower_limit = utils.float_or(lower_limit, 'd')
-        #self.upper_limit = utils.float_or(upper_limit, 'd')
-        self.upper_limit = upper_limit
-        self.lower_limit = lower_limit
-        self.breakline = breakline
-        self.max_radius = max_radius
-        self.aspect = aspect
-        self.blockmean = blockmean
-        self.geographic = geographic
-        out, status = utils.run_cmd(
-            'gmt gmtset IO_COL_SEPARATOR = SPACE',
-            verbose = False
-        )        
-        
-    def run(self):
-
-        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
-        #print(self.ps_region.xmax-self.ps_region.xmin)
-        #print(self.xinc * xsize)
-        
-        dem_surf_cmd = ('')
-        if self.blockmean:
-            dem_surf_cmd = (
-                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{} -V |'.format(
-                    self.ps_region.format('gmt'),
-                    self.xinc,
-                    self.yinc,
-                    ' -W' if self.weights else '',
-                    ' -fg' if self.geographic else '',
-                )
-            )
-
-        dem_surf_cmd += (
-            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
-                self.ps_region.format('gmt'),
-                self.xinc,
-                self.yinc,
-                self.name,
-                self.ndv,
-                self.tension,
-                self.relaxation,
-                ' -D{}'.format(self.breakline) if self.breakline is not None else '',
-                ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
-                ' -C{}'.format(self.convergence) if self.convergence is not None else '',
-                ' -A{}'.format(self.aspect) if self.aspect is not None else '',
-                ' -fg' if self.geographic else '',
-            )
-        )
-        
-        # dem_surf_cmd = (
-        #     'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt surface -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}'.format(
-        #         self.ps_region.format('gmt'),
-        #         self.xinc,
-        #         self.yinc,
-        #         ' -W' if self.weights else '',
-        #         self.ps_region.format('gmt'),
-        #         self.xinc,
-        #         self.yinc,
-        #         self.name,
-        #         self.ndv,
-        #         self.tension,
-        #         self.relaxation,
-        #         ' -D{}'.format(self.breakline) if self.breakline is not None else '',
-        #         ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
-        #         ' -C{}'.format(self.convergence) if self.convergence is not None else '',
-        #         ' -A{}'.format(self.aspect) if self.aspect is not None else ''
-        #     )
-        # )
-
-        ## -L* messes up the output solution! use self.set_limits()
-        #' -Ll{}'.format(self.lower_limit) if self.lower_limit is not None else '',
-        #' -Lu{}'.format(self.upper_limit) if self.upper_limit is not None else '',
-        
-        out, status = utils.run_cmd(
-            dem_surf_cmd,
-            verbose=self.verbose,
-            data_fun=lambda p: self.dump_xyz(
-                dst_port=p, encode=True
-            )
-        )
-        if self.valid_p():
-            return(self.set_limits(self.upper_limit, self.lower_limit))
-        else:
-            return(self)
-    #return(self)
-
-## ==============================================
-## GMT Triangulate
-##
-## TODO: update to use pygmt
-## ==============================================
-class GMTTriangulate(Waffle):
-    """TRIANGULATION DEM via GMT triangulate
-    
-Generate a DEM using GMT's triangulate command.
-see gmt triangulate --help for more info.
-
-< triangulate >
-    """
-    
-    def __init__(self, **kwargs):
-        """generate a DEM with GMT triangulate"""
-
-        self.mod = 'triangulate'
-        self.mod_args = {}
-        super().__init__(**kwargs)        
-        if self.gc['GMT'] is None:
-            utils.echo_error_msg(
-                'GMT must be installed to use the TRIANGULATE module'
-            )
-            return(None, -1)
-
-        out, status = utils.run_cmd(
-            'gmt gmtset IO_COL_SEPARATOR = SPACE',
-            verbose = False
-        )        
-        
-    def run(self):
-        dem_tri_cmd = 'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt triangulate -V {} -I{:.14f}/{:.14f} -G{}.tif=gd:GTiff'.format(
-            self.ps_region.format('gmt'),
-            self.xinc,
-            self.yinc,
-            ' -W' if self.weights else '',
-            self.ps_region.format('gmt'),
-            self.xinc,
-            self.yinc,
-            self.name
-        )
-        out, status = utils.run_cmd(
-            dem_tri_cmd,
-            verbose = self.verbose,
-            data_fun = lambda p: self.dump_xyz(
-                dst_port=p, encode=True
-            )
-        )        
-        return(self)
-
-## ==============================================
-## GMT Near Neighbor
-##
-## TODO: update to use pygmt
-## ==============================================
-class GMTNearNeighbor(Waffle):
-    """NEARNEIGHBOR DEM via GMT nearneighbor
-    
-Generate a DEM using GMT's nearneighbor command.
-see gmt nearneighbor --help for more info.
-
----
-Parameters:
-    
-radius=[val] - search radius
-sectors=[val] - sector information
-
-< nearneighbor:radius=None:sectors=None >
-    """
-    
-    def __init__(self, radius=None, sectors=None, **kwargs):
-        """generate a DEM with GMT nearneighbor"""
-
-        self.mod = 'nearneighbor'
-        self.mod_args = {
-            'radius':radius,
-            'sectors':sectors
-        }
-        super().__init__(**kwargs) 
-        if self.gc['GMT'] is None:
-            utils.echo_error_msg(
-                'GMT must be installed to use the NEARNEIGHBOR module'
-            )
-            return(None, -1)
-
-        out, status = utils.run_cmd(
-            'gmt gmtset IO_COL_SEPARATOR = SPACE',
-            verbose = False
-        )        
-        self.radius = radius
-        self.sectors = sectors
-        
-    def run(self):
-        dem_nn_cmd = 'gmt blockmean {} -I{:.14f}/{:.14f}{} -V | gmt nearneighbor -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff{}{}{}'.format(
-            self.ps_region.format('gmt'),
-            self.xinc,
-            self.yinc,
-            ' -W' if self.weights else '',
-            self.ps_region.format('gmt'),
-            self.xinc,
-            self.yinc,
-            self.name,
-            self.ndv,
-            ' -W' if self.weights else '',
-            ' -N{}'.format(self.sectors) if self.sectors is not None else '',
-            ' -S{}'.format(self.radius) if self.radius is not None else ' -S{}'.format(self.xinc),
-        )
-        out, status = utils.run_cmd(
-            dem_nn_cmd,
-            verbose = self.verbose,
-            data_fun = lambda p: self.dump_xyz(
-                dst_port=p, encode=True
-            )
-        )        
-        return(self)
-
-## ==============================================
-## MB-System mbgrid
-## ==============================================
-class WafflesMBGrid(Waffle):
-    """SPLINE DEM via MB-System's mbgrid.
-    
-Generate a DEM using MB-System's mbgrid command.
-By default, will use MB-Systems datalist processes.
-set `use_datalist=True` to use CUDEM's dlim instead.
-see mbgrid --help for more info
-
----
-Parameters:
-    
-dist=[val] - the dist variable to use in mbgrid
-tension=[val] - the spline tension value (0-inf)
-use_datalist=[True/False] - use built-in datalists rather than mbdatalist
-
-< mbgrid:dist='10/3':tension=35:use_datalists=False >
-    """
-    
-    def __init__(self, dist='10/3', tension=35, use_datalists=False, nc=False, **kwargs):
-        self.mod = 'mbgrid'
-        self.mod_args = {
-            'dist':dist,
-            'tension':tension,
-            'use_datalists':use_datalists,
-            'nc':nc
-        }
-        super().__init__(**kwargs)
-        if self.gc['MBGRID'] is None:
-            utils.echo_error_msg(
-                'MB-System must be installed to use the MBGRID module'
-            )
-            return(None, -1)
-
-        if self.gc['GMT'] is None:
-            utils.echo_error_msg(
-                'GMT must be installed to use the MBGRID module'
-            )
-            return(None, -1)
-
-        self.nc = nc
-        self.dist = dist
-        self.tension = tension
-        self.use_datalists = use_datalists
-        self.mod = 'mbgrid'
-                
-    def _gmt_num_msk(self, num_grd, dst_msk):
-        """generate a num-msk from a NUM grid using GMT grdmath
-
-        Args:
-          num_grd (str): pathname to a source `num` grid file
-          dst_msk (str): pathname to a destination `msk` grid file
-
-        Returns:
-          list: [cmd-output, cmd-return-code]
-        """
-
-        num_msk_cmd = 'gmt grdmath -V {} 0 MUL 1 ADD 0 AND = {}'.format(
-            num_grd, dst_msk
-        )
-        return(
-            utils.run_cmd(
-                num_msk_cmd, verbose=self.verbose
-            )
-        )
-
-    def _gmt_grd2gdal(self, src_grd, dst_fmt='GTiff'):
-        """convert the grd file to tif using GMT
-
-        Args:
-          src_grd (str): a pathname to a grid file
-          dst_fmt (str): the output GDAL format string
-
-        Returns:
-          str: the gdal file name or None
-        """
-
-        dst_gdal = '{}.{}'.format(
-            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
-        )        
-        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
-            src_grd, dst_gdal, self.ndv, dst_fmt
-        )
-        out, status = utils.run_cmd(
-            grd2gdal_cmd, verbose=self.verbose
-        )
-        if status == 0:
-            return(dst_gdal)
-        else:
-            return(None)
-        
-    def _gmt_grdsample(self, src_grd, dst_fmt='GTiff'):
-        """convert the grd file to tif using GMT
-
-        Args:
-          src_grd (str): a pathname to a grid file
-          dst_fmt (str): the output GDAL format string
-
-        Returns:
-          str: the gdal file name or None
-        """
-
-        dst_gdal = '{}.{}'.format(
-            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
-        )
-        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
-            src_grd, dst_gdal, self.ndv, dst_fmt
-        )        
-        out, status = utils.run_cmd(
-            grdsample_cmd, verbose=self.verbose
-        )        
-        if status == 0:
-            return(dst_gdal)        
-        else:
-            return(None)
-    
-    def run(self):
-        if self.use_datalists:
-            archive = self.archive
-            self.archive = True
-            [x for x in self.yield_xyz()]
-            self.archive = archive
-
-        mb_region = self.p_region.copy()
-        mb_region = mb_region.buffer(x_bv=self.xinc*-.5, y_bv=self.yinc*-.5)
-        xsize, ysize, gt = self.p_region.geo_transform(x_inc=self.xinc, node='grid')
-        print(self.data[0].archive_datalist)
-        if self.data[0].archive_datalist is not None:
-            dl_name = self.data[0].archive_datalist
-        else:
-            dl_name = self.data[0].fn
-            
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{} {}'.format(
-            dl_name,
-            mb_region.format('gmt'),
-            xsize,
-            ysize,
-            self.name,
-            self.dist,
-            self.tension,
-            '-M' if self.mask else ''
-        )
-        for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
-            sys.stderr.write('{}'.format(out))
-            
-        utils.gdal2gdal('{}.grd'.format(self.name))
-        utils.remove_glob('*.cmd', '*.mb-1', '{}.grd'.format(self.name))
-        if self.use_datalists and not self.archive:
-            utils.remove_glob('archive')
-
-        if self.mask:
-            num_grd = '{}_num.grd'.format(self.name)
-            dst_msk = '{}_m.tif=gd+n{}:GTiff'.format(self.name, self.ndv)
-            self.mask_fn = dst_msk
-            out, status = self._gmt_num_msk(
-                num_grd, dst_msk, verbose=self.verbose
-            )
-            utils.remove_glob(num_grd, '*_sd.grd')
-            if not self.use_datalists:
-                if self.spat or self.archive:
-                    [x for x in self.yield_xyz()]
-                    
-        return(self)
-
-## ==============================================
-## Waffles 'num' - no interpolation
-##
-## just use stacks...
-## ==============================================
-class WafflesNum(Waffle):
-    """Uninterpolated DEM populated by <mode>.
-    
-Generate an uninterpolated DEM using <mode> option.
-Using mode of 'A<mode>' uses GMT's xyz2grd command, 
-see gmt xyz2grd --help for more info.
-
-mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
-
----
-Parameters:
-    
-mode=[key] - specify mode of grid population
-min_count=[val] - minimum number of points per cell
-
-< num:mode=n:min_count=None >
-    """
-    
-    def __init__(self, mode='n', min_count=None, **kwargs):
-        """generate an uninterpolated Grid
-        `mode` of `n` generates a num grid
-        `mode` of `m` generates a mean grid
-        `mode` of `k` generates a mask grid
-        `mode` of `w` generates a wet/dry mask grid
-        `mode` of `A` generates via GMT 'xyz2grd'
-        """
-        
-        self.mod = 'num'
-        self.mod_args = {
-            'mode':mode,
-            'min_count':min_count
-        }
-        super().__init__(**kwargs)        
-        self.mode = mode
         self.min_count = min_count
         
-    def _xyz_num(self):
-        """Create a GDAL supported grid from xyz data """
-
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        if self.verbose:
-            utils.echo_msg(
-                'generating uninterpolated NUM grid `{}` @ {}/{}'.format(
-                    self.mode, ycount, xcount
-                )
-            )          
-            
-        if self.mode == 'm' or self.mode == 'w':
-            sum_array = np.zeros((ycount, xcount))
-            
-        count_array = np.zeros((ycount, xcount))
-        gdt = gdal.GDT_Float32
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdt,
-            self.ndv,
-            'GTiff'
-        )
-        
-        for this_xyz in self.yield_xyz():
-            if regions.xyz_in_region_p(this_xyz, self.p_region):
-                xpos, ypos = utils._geo2pixel(
-                    this_xyz.x, this_xyz.y, dst_gt, 'pixel'
-                )
-                
-                try:
-                    if self.mode == 'm' or self.mode == 'w':
-                        sum_array[ypos, xpos] += this_xyz.z
-                    if self.mode == 'n' or self.mode == 'm' or self.mode == 'w':
-                        count_array[ypos, xpos] += 1
-                    else:
-                        count_array[ypos, xpos] = 1
-                        
-                except Exception as e:
-                    pass
-                
-        if self.mode == 'm' or self.mode == 'w':
-            count_array[count_array == 0] = np.nan
-            out_array = (sum_array/count_array)
-            if self.mode == 'w':
-                out_array[out_array >= 0] = 1
-                out_array[out_array < 0] = 0
-        else:
-            out_array = count_array
-
-        out_array[np.isnan(out_array)] = self.ndv            
-        utils.gdal_write(out_array, self.fn, ds_config)
-        
     def run(self):
-        if self.mode.startswith('A'):
-            if self.gc['GMT'] is None:
-                utils.echo_error_msg(
-                    'GMT must be installed to use the Mode `A` with the NUM module'
-                )
-                return(None, -1)
-
-            out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)            
-            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.14f}/{:.14f}+e -G{}.tif=gd:GTiff'.format(
-                self.mode,
-                self.ps_region.format('gmt'),
-                self.xinc,
-                self.yinc,
-                self.name
-            )
+        z_ds = gdal.GetDriverByName(self.fmt).Create(
+            '{}.{}'.format(self.name, utils.gdal_fext(self.fmt)), self.xcount, self.ycount, 1, self.ds_config['dt'],
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
+        )
+        z_ds.SetGeoTransform(self.dst_gt)
+        z_band = z_ds.GetRasterBand(1)
+        z_band.SetNoDataValue(self.ndv)
+        for arrs, srcwin, gt in self.stack_ds.yield_array():
+            arrs['z'][np.isnan(arrs['z'])] = self.ndv
+            z_band.WriteArray(arrs['z'], srcwin[0], srcwin[1])
             
-            out, status = utils.run_cmd(
-                dem_xyz2grd_cmd,
-                verbose=self.verbose,
-                data_fun=lambda p: self.dump_xyz(
-                    dst_port=p, encode=True
-                )
-            )
-        else:
-            self._xyz_num()
-                        
+        z_ds = None            
         return(self)
 
 ## ==============================================
+##
 ## Waffles IDW
+##
 ## ==============================================
 class Invdisttree():
     """ inverse-distance-weighted interpolation using KDTree:
@@ -1452,136 +579,93 @@ quite heavy on memory when large grid-size...
 class WafflesIDW(Waffle):
     """INVERSE DISTANCE WEIGHTED DEM
     
-Generate a DEM using an Inverse Distance Weighted algorithm.
-If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
-as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
-and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
+    Generate a DEM using an Inverse Distance Weighted algorithm.
+    If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty,
+    as described here: https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932
+    and here: https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
 
----
-Parameters:
+    -----------
+    Parameters:
     
-power=[val] - weight**power
-min_points=[val] - minimum neighbor points for IDW
-radius=[val] - search radius (in cells), only fill data cells within radius from data
-upper_limit=[val] - Restrict output DEM to values below val
-lower_limit=[val] - Restrict output DEM to values above val
-supercede=[True/False] - supercede higher weighted data,
-keep_auxiliary=[True/False] - retain auxiliary files
-chunk_size=[val] - size of chunks in pixels
+    power=[val] - weight**power
+    min_points=[val] - minimum neighbor points for IDW
+    radius=[val] - search radius (in cells), only fill data cells within radius from data
+    chunk_size=[val] - size of chunks in pixels
 
-< IDW:min_points=8:radius=inf:power=1:upper_limit=None:lower_limit=None:supercede=False:keep_auxiliary=False:chunk_size=None >
+    < IDW:min_points=8:radius=inf:power=1:chunk_size=None >
     """
     
     def __init__(
             self,
             power=1,
             min_points=8,
-            upper_limit=None,
-            lower_limit=None,
             radius=None,
-            supercede=False,
-            keep_auxiliary=False,
             chunk_size=None,
             **kwargs
     ):
-        self.mod = 'IDW'
-        self.mod_args = {
-            'power':power,
-            'min_points':min_points,
-            'upper_limit':upper_limit,
-            'lower_limit':lower_limit,
-            'radius':radius,
-            'supercede':supercede,
-            'keep_auxiliary':keep_auxiliary,
-            'chunk_size':chunk_size,
-        }
         super().__init__(**kwargs)
         self.power = utils.float_or(power)
         self.min_points = utils.int_or(min_points)
         self.radius = np.inf if radius is None else utils.str2inc(radius) 
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self.supercede = supercede
-        self.keep_auxiliary = keep_auxiliary
         self.chunk_size = chunk_size
         self.chunk_step = None
         
     def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-
         if self.verbose:
             if self.min_points:
                 utils.echo_msg(
                     'generating IDW grid @ {}/{} looking for at least {} neighbors within {} pixels'.format(
-                        ycount, xcount, self.min_points, self.radius
+                        self.ycount, self.xcount, self.min_points, self.radius
                     )
                 )
             else:
                 utils.echo_msg(
-                    'generating IDW grid @ {}/{}'.format(ycount, xcount)
+                    'generating IDW grid @ {}/{}'.format(self.ycount, self.xcount)
                 )
             i=0
 
-        self._stacks_array(
-            out_name='{}_idw_stack'.format(self.name),
-            supercede=self.supercede
-        )
-        n = '{}_idw_stack_s.tif'.format(self.name)
-        w = '{}_idw_stack_w.tif'.format(self.name)
-        c = '{}_idw_stack_c.tif'.format(self.name)
-
         if self.chunk_size is None:
-            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = int(self.ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
         else: n_chunk = self.chunk_size
         if self.chunk_step is None:
             n_step = int(n_chunk/2)
         else: n_step = self.chunk_step
 
-        points_ds = gdal.Open(n)
-        points_band = points_ds.GetRasterBand(1)
-        points_no_data = points_band.GetNoDataValue()
+        stack_ds = gdal.Open(self.stack)
         
-        weights_ds = gdal.Open(w)
-        weights_band = weights_ds.GetRasterBand(1)
+        points_band = stack_ds.GetRasterBand(1)
+        points_no_data = points_band.GetNoDataValue()
+        weights_band = stack_ds.GetRasterBand(3)
         weights_no_data = weights_band.GetNoDataValue()
 
-        try:
-            interp_ds = points_ds.GetDriver().Create(
-                self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
-                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
-            )
-            interp_ds.SetProjection(points_ds.GetProjection())
-            interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
-            interp_band = interp_ds.GetRasterBand(1)
-            interp_band.SetNoDataValue(np.nan)
-        except:
-            return(self)
+        #try:
+        interp_ds = stack_ds.GetDriver().Create(
+            self.fn, stack_ds.RasterXSize, stack_ds.RasterYSize, bands=1, eType=points_band.DataType,
+            options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        )
+        interp_ds.SetProjection(stack_ds.GetProjection())
+        interp_ds.SetGeoTransform(stack_ds.GetGeoTransform())
+        interp_band = interp_ds.GetRasterBand(1)
+        interp_band.SetNoDataValue(np.nan)
+        #except:
+        #    return(self)
 
         points_array = points_band.ReadAsArray()
         point_indices = np.nonzero(points_array != points_no_data)
         point_values = points_array[point_indices]
-        points_ds = points_array = None
+        points_array = None
 
-        if self.weights:
+        if self.want_weight:
             weights_array = weights_band.ReadAsArray()
             weight_values = weights_array[point_indices]
-            weights_ds = weights_array = None
+            weights_array = None
         else:
             weight_values = None
 
+        stack_ds = None
         invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose):                
+        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose):                
             if len(point_indices[0]):
                 xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
                                   srcwin[1]:srcwin[1]+srcwin[3]]
@@ -1594,70 +678,45 @@ chunk_size=[val] - size of chunks in pixels
                     weights=weight_values
                 )
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
-                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])                    
-        interp_ds = point_values = weight_values = None
-        if not self.keep_auxiliary:
-            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
-        else:
-            os.rename(w, '{}_w.tif'.format(self.name))
-            os.rename(c, '{}_c.tif'.format(self.name))
-            os.rename(n, '{}_n.tif'.format(self.name))
-            self.aux_dems.append('{}_w.tif'.format(self.name))
-            self.aux_dems.append('{}_c.tif'.format(self.name))
-            self.aux_dems.append('{}_n.tif'.format(self.name))
-        
+                interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])
+                
+        interp_ds = point_values = weight_values = None        
         return(self)    
-    
+
 ## ==============================================
+##
 ## Scipy gridding (linear, cubic, nearest)
 ##
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## TODO: rename this in some way
+##
 ## ==============================================
 class WafflesSciPy(Waffle):
     """Generate DEM using Scipy gridding interpolation
     
-Generate a DEM using Scipy's gridding interpolation
-Optional gridding methods are 'linear', 'cubic' and 'nearest'
-https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+    Generate a DEM using Scipy's gridding interpolation
+    Optional gridding methods are 'linear', 'cubic' and 'nearest'
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 
----
-Parameters:
+    -----------
+    Parameters:
     
-method=[linear/cubic/nearest] - interpolation method to use
-supercede=[True/False] - supercede higher weighted data,
-keep_auxiliary=[True/False] - retain auxiliary files
-chunk_size=[val] - size of chunks in pixels
-chunk_buffer=[val] - size of the chunk buffer in pixels
+    method=[linear/cubic/nearest] - interpolation method to use
+    chunk_size=[val] - size of chunks in pixels
+    chunk_buffer=[val] - size of the chunk buffer in pixels
 
-< scipy:method=<method>:supercede=False:keep_auxiliary=False:chunk_size=None:chunk_buffer=40 >
+    < scipy:method=<method>:chunk_size=None:chunk_buffer=40 >
     """
     
-    def __init__(
-            self,
-            method='linear',
-            supercede=False,
-            keep_auxiliary=False,
-            chunk_size=None,
-            chunk_buffer=40,
-            **kwargs):
+    def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 40,
+                 chunk_step = None, **kwargs):
         """generate a `scipy` dem"""
         
-        self.mod = 'scipy'
-        self.mod_args = {
-            'method':method,
-            'supercede':supercede,
-            'keep_auxiliary':keep_auxiliary,
-            'chunk_size':chunk_size,
-            'chunk_buffer':chunk_buffer,
-        }
         super().__init__(**kwargs)
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
-        self.supercede = supercede
-        self.keep_auxiliary = keep_auxiliary
         self.chunk_size = utils.int_or(chunk_size)
-        self.chunk_step = None
+        self.chunk_step = chunk_step
         self.chunk_buffer = utils.int_or(chunk_buffer)
 
     def run(self):
@@ -1669,45 +728,28 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
             )
             return(self)
         
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-
-        self._stacks_array(
-            out_name='{}_scipy_stack'.format(self.name),
-            supercede=self.supercede
-        )
-        n = '{}_scipy_stack_s.tif'.format(self.name)
-        w = '{}_scipy_stack_w.tif'.format(self.name)
-        c = '{}_scipy_stack_c.tif'.format(self.name)
-
         if self.chunk_size is None:
-            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = int(self.ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
-        else: n_chunk = self.chunk_size
+        else:
+            n_chunk = self.chunk_size
+            
         if self.chunk_step is None:
             n_step = int(n_chunk/2)
-        else: n_step = self.chunk_step
+        else:
+            n_step = self.chunk_step
 
-        points_ds = gdal.Open(n)
-        points_band = points_ds.GetRasterBand(1)
+        stack_ds = gdal.Open(self.stack)
+        points_band = stack_ds.GetRasterBand(1)
         points_no_data = points_band.GetNoDataValue()
         
         try:
-            interp_ds = points_ds.GetDriver().Create(
-                self.fn, points_ds.RasterXSize, points_ds.RasterYSize, bands=1, eType=points_band.DataType,
+            interp_ds = stack_ds.GetDriver().Create(
+                self.fn, stack_ds.RasterXSize, stack_ds.RasterYSize, bands=1, eType=points_band.DataType,
                 options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
             )
-            interp_ds.SetProjection(points_ds.GetProjection())
-            interp_ds.SetGeoTransform(points_ds.GetGeoTransform())
+            interp_ds.SetProjection(stack_ds.GetProjection())
+            interp_ds.SetGeoTransform(stack_ds.GetGeoTransform())
             interp_band = interp_ds.GetRasterBand(1)
             interp_band.SetNoDataValue(np.nan)
         except:
@@ -1716,8 +758,8 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
        
-        for srcwin in utils.yield_srcwin((ycount, xcount), n_chunk=n_chunk, verbose=self.verbose): #, step=n_step):                
-            srcwin_buff = utils.buffer_srcwin(srcwin, (ycount, xcount), self.chunk_buffer)
+        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose, step=n_step):                
+            srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             point_indices = np.nonzero(points_array != points_no_data)
             if len(point_indices[0]):
@@ -1737,21 +779,1627 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
-                    #print(e)
                     continue
-        interp_ds = points_ds = point_values = weight_values = None
-        if not self.keep_auxiliary:
-            utils.remove_glob('{}*'.format(n), '{}*'.format(w), '{}*'.format(c))
+                
+        interp_ds = stack_ds = point_values = weight_values = None            
+        return(self)
+
+class WafflesLinear(WafflesSciPy):
+    """LINEAR (triangulated) DEM
+    
+    -----------
+    Parameters:
+    
+    chunk_size=[val] - size of chunks in pixels
+    chunk_buffer=[val] - size of the chunk buffer in pixels
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.method = 'linear'
+        
+class WafflesCubic(WafflesSciPy):
+    """CUBIC (triangulated) DEM
+    
+    -----------
+    Parameters:
+    
+    chunk_size=[val] - size of chunks in pixels
+    chunk_buffer=[val] - size of the chunk buffer in pixels
+    """
+        
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.method = 'cubic'
+
+class WafflesNearest(WafflesSciPy):
+    """NEAREST neighbor DEM
+    
+-----------
+Parameters:
+    
+chunk_size=[val] - size of chunks in pixels
+chunk_buffer=[val] - size of the chunk buffer in pixels
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.method = 'nearest'
+        
+## ==============================================
+##
+## GMT Surface
+##
+## TODO: update to use pygmt
+##
+## ==============================================
+class GMTSurface(Waffle):
+    """SPLINE DEM via GMT surface
+    
+    Generate a DEM using GMT's surface command
+    see gmt surface --help for more info.
+
+    -----------
+    Parameters:
+   
+    tension=[0-1] - spline tension.
+    relaxation=[val] - spline relaxation factor.
+    aspect=[val/None] - gridding aspect
+    breakline=[path/None] - use xyz dataset at `path` as a breakline
+    convergence=[val/None] - gridding convergence
+    blockmean=[True/False] - pipe the data through gmt blockmean before gridding
+    geographic=[True/Faslse] - data/grid are geographic
+
+    < gmt-surface:tension=.35:relaxation=1:max_radius=None:aspect=None:breakline=None:convergence=None:blockmean=False:geographic=True >
+    """
+    
+    def __init__(self, tension=.35, relaxation=1, max_radius=None,
+                 aspect=None, breakline=None, convergence=None, blockmean=False,
+                 geographic=True, **kwargs):
+        super().__init__(**kwargs)
+        self.tension = tension
+        self.convergence = utils.float_or(convergence)
+        self.relaxation = relaxation
+        self.breakline = breakline
+        self.max_radius = max_radius
+        self.aspect = aspect
+        self.blockmean = blockmean
+        self.geographic = geographic
+        
+    def run(self):
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg(
+                'GMT must be installed to use the SURFACE module'
+            )
+            return(None, -1)
+
+        out, status = utils.run_cmd(
+            'gmt gmtset IO_COL_SEPARATOR = SPACE',
+            verbose = False
+        )        
+                
+        dem_surf_cmd = ('')
+        if self.blockmean:
+            dem_surf_cmd = (
+                'gmt blockmean {} -I{:.16f}/{:.16f}+e{}{} -V |'.format(
+                    self.ps_region.format('gmt'), self.xinc, self.yinc,
+                    ' -W' if self.want_weight else '', ' -fg' if self.geographic else ''
+                )
+            )
+
+        dem_surf_cmd += (
+            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
+                self.ps_region.format('gmt'), self.xinc, self.yinc,
+                self.name, self.ndv, self.tension, self.relaxation,
+                ' -D{}'.format(self.breakline) if self.breakline is not None else '',
+                ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
+                ' -C{}'.format(self.convergence) if self.convergence is not None else '',
+                ' -A{}'.format(self.aspect) if self.aspect is not None else '',
+                ' -fg' if self.geographic else '',
+            )
+        )
+        
+        out, status = utils.run_cmd(
+            dem_surf_cmd,
+            verbose=self.verbose,
+            data_fun=lambda p: self.dump_xyz(
+                dst_port=p, encode=True
+            )
+        )
+        return(self)
+
+## ==============================================
+##
+## GMT Triangulate
+##
+## TODO: update to use pygmt
+##
+## ==============================================
+class GMTTriangulate(Waffle):
+    """TRIANGULATION DEM via GMT triangulate
+    
+    Generate a DEM using GMT's triangulate command.
+    see gmt triangulate --help for more info.
+
+    < gmt-triangulate >
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)        
+        
+    def run(self):
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg(
+                'GMT must be installed to use the TRIANGULATE module'
+            )
+            return(None, -1)
+
+        out, status = utils.run_cmd(
+            'gmt gmtset IO_COL_SEPARATOR = SPACE',
+            verbose = False
+        )        
+        
+        dem_tri_cmd = 'gmt triangulate -V {} -I{:.14f}/{:.14f} -G{}.tif=gd:GTiff'.format(
+            self.ps_region.format('gmt'), self.xinc, self.yinc, self.name
+        )
+        out, status = utils.run_cmd(
+            dem_tri_cmd,
+            verbose = self.verbose,
+            data_fun = lambda p: self.dump_xyz(
+                dst_port=p, encode=True
+            )
+        )        
+        return(self)
+
+## ==============================================
+##
+## GMT Near Neighbor
+##
+## TODO: update to use pygmt
+##
+## ==============================================
+class GMTNearNeighbor(Waffle):
+    """NEARNEIGHBOR DEM via GMT nearneighbor
+    
+    Generate a DEM using GMT's nearneighbor command.
+    see gmt nearneighbor --help for more info.
+    
+    -----------
+    Parameters:
+    
+    radius=[val] - search radius
+    sectors=[val] - sector information
+    
+    < gmt-nearneighbor:radius=None:sectors=None >
+    """
+    
+    def __init__(self, radius=None, sectors=None, **kwargs):
+        super().__init__(**kwargs) 
+        self.radius = radius
+        self.sectors = sectors
+        
+    def run(self):
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg(
+                'GMT must be installed to use the NEARNEIGHBOR module'
+            )
+            return(None, -1)
+
+        out, status = utils.run_cmd(
+            'gmt gmtset IO_COL_SEPARATOR = SPACE',
+            verbose = False
+        )        
+
+        dem_nn_cmd = 'gmt nearneighbor -V {} -I{:.14f}/{:.14f} -G{}.tif=gd+n{}:GTiff{}{}{}'.format(
+            self.ps_region.format('gmt'), self.xinc, self.yinc, self.name, self.ndv,
+            ' -W' if self.want_weight else '', ' -N{}'.format(self.sectors) if self.sectors is not None else '',
+            ' -S{}'.format(self.radius) if self.radius is not None else ' -S{}'.format(self.xinc),
+        )
+        out, status = utils.run_cmd(
+            dem_nn_cmd,
+            verbose = self.verbose,
+            data_fun = lambda p: self.dump_xyz(
+                dst_port=p, encode=True
+            )
+        )        
+        return(self)
+
+## ==============================================
+##
+## MB-System mbgrid
+##
+## ==============================================
+class WafflesMBGrid(Waffle):
+    """SPLINE DEM via MB-System's mbgrid.
+    
+    Generate a DEM using MB-System's mbgrid command.
+    By default, will use MB-Systems datalist processes.
+    set `use_datalist=True` to use CUDEM's dlim instead.
+    see mbgrid --help for more info
+
+    -----------
+    Parameters:
+    
+    dist=[val] - the dist variable to use in mbgrid
+    tension=[val] - the spline tension value (0-inf)
+    use_stack=[True/False] - use built-in datalists rather than mbdatalist
+    
+    < mbgrid:dist='10/3':tension=35:use_datalists=False >
+    """
+    
+    def __init__(self, dist='10/3', tension=35, use_stack=True, nc=False, **kwargs):
+        super().__init__(**kwargs)
+        self.nc = nc
+        self.dist = dist
+        self.tension = tension
+        self.use_stack = use_stack
+                
+    def _gmt_num_msk(self, num_grd, dst_msk):
+        """generate a num-msk from a NUM grid using GMT grdmath
+
+        Args:
+          num_grd (str): pathname to a source `num` grid file
+          dst_msk (str): pathname to a destination `msk` grid file
+
+        Returns:
+          list: [cmd-output, cmd-return-code]
+        """
+
+        if self.gc['MBGRID'] is None:
+            utils.echo_error_msg(
+                'MB-System must be installed to use the MBGRID module'
+            )
+            return(None, -1)
+
+        if self.gc['GMT'] is None:
+            utils.echo_error_msg(
+                'GMT must be installed to use the MBGRID module'
+            )
+            return(None, -1)
+
+        num_msk_cmd = 'gmt grdmath -V {} 0 MUL 1 ADD 0 AND = {}'.format(
+            num_grd, dst_msk
+        )
+        return(
+            utils.run_cmd(
+                num_msk_cmd, verbose=self.verbose
+            )
+        )
+
+    def _gmt_grd2gdal(self, src_grd, dst_fmt='GTiff'):
+        """convert the grd file to tif using GMT
+
+        Args:
+          src_grd (str): a pathname to a grid file
+          dst_fmt (str): the output GDAL format string
+
+        Returns:
+          str: the gdal file name or None
+        """
+
+        dst_gdal = '{}.{}'.format(
+            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
+        )        
+        grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
+            src_grd, dst_gdal, self.ndv, dst_fmt
+        )
+        out, status = utils.run_cmd(
+            grd2gdal_cmd, verbose=self.verbose
+        )
+        if status == 0:
+            return(dst_gdal)
         else:
-            os.rename(w, '{}_w.tif'.format(self.name))
-            os.rename(c, '{}_c.tif'.format(self.name))
-            os.rename(n, '{}_n.tif'.format(self.name))
-            self.aux_dems.append('{}_w.tif'.format(self.name))
-            self.aux_dems.append('{}_c.tif'.format(self.name))
-            self.aux_dems.append('{}_n.tif'.format(self.name))
+            return(None)
+        
+    def _gmt_grdsample(self, src_grd, dst_fmt='GTiff'):
+        """convert the grd file to tif using GMT
+
+        Args:
+          src_grd (str): a pathname to a grid file
+          dst_fmt (str): the output GDAL format string
+
+        Returns:
+          str: the gdal file name or None
+        """
+
+        dst_gdal = '{}.{}'.format(
+            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
+        )
+        grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
+            src_grd, dst_gdal, self.ndv, dst_fmt
+        )        
+        out, status = utils.run_cmd(
+            grdsample_cmd, verbose=self.verbose
+        )        
+        if status == 0:
+            return(dst_gdal)        
+        else:
+            return(None)
+
+    def stack2mbdatalist(self):
+        mb_datalist_fn = os.path.join(self.cache_dir, '_tmp_mb.datalist')
+        mb_stack_xyz = os.path.join(self.cache_dir, '{}.xyz'.format(utils.fn_basename2(self.stack)))
+        with open(mb_datalist_fn, 'w') as dl:
+            dl.write('{} 168 1'.format(mb_stack_xyz))
+                
+        with open(mb_stack_xyz, 'w') as stack_xyz:
+            self.dump_xyz(stack_xyz)
+
+        return(mb_datalist_fn)
+        
+    def run(self):
+        mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
+        out_name = os.path.join(self.cache_dir, self.name)
+        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{}'.format(
+            mb_datalist, self.p_region.format('gmt'), self.xcount, self.ycount, out_name, self.dist, self.tension
+        )
+
+        out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
+        if status == 0:
+            gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
+            '.format('{}.grd'.format(out_name), self.fn, self.fmt))            
+            out, status = utils.run_cmd(gdal2gdal_cmd, verbose=self.verbose)
+            
+            
+        # for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
+        #     sys.stderr.write('{}'.format(out))
+                    
+        return(self)
+
+## ==============================================
+##
+## GDAL gridding (invdst, linear, nearest, average)
+##
+## ==============================================
+class WafflesGDALGrid(Waffle):
+    """Waffles GDAL_GRID module.
+
+    see gdal_grid for more info and gridding algorithms
+    """
+    
+    def __init__(self, **kwargs):
+        """run gdal grid using alg_str
+
+        parse the data through xyzfun.xyz_block to get weighted mean before
+        building the GDAL dataset to pass into gdal_grid
+        
+        Args: 
+          alg_str (str): the gdal_grid algorithm string
+        """
+        
+        super().__init__(**kwargs)
+        self.alg_str = 'linear:radius=-1'
+        self.mod = self.alg_str.split(':')[0]
+
+    def _vectorize_stack(self):
+        """Make a point vector OGR DataSet Object from src_xyz
+
+        for use in gdal gridding functions.
+        """
+
+        dst_ogr = '{}'.format(self.name)
+        ogr_ds = gdal.GetDriverByName('Memory').Create(
+            '', 0, 0, 0, gdal.GDT_Unknown
+        )
+        layer = ogr_ds.CreateLayer(
+            dst_ogr, geom_type=ogr.wkbPoint25D
+        )
+        for x in ['long', 'lat', 'elev', 'weight']:
+            fd = ogr.FieldDefn(x, ogr.OFTReal)
+            fd.SetWidth(12)
+            fd.SetPrecision(8)
+            layer.CreateField(fd)
+            
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        with utils.CliProgress(message='vectorizing stack', verbose=self.verbose) as pbar:
+            for this_xyz in self.stack_ds.yield_xyz():
+                pbar.update()
+                f.SetField(0, this_xyz.x)
+                f.SetField(1, this_xyz.y)
+                f.SetField(2, float(this_xyz.z))
+                if self.want_weight:
+                    f.SetField(3, this_xyz.w)
+
+                wkt = this_xyz.export_as_wkt(include_z=True)
+                g = ogr.CreateGeometryFromWkt(wkt)
+                f.SetGeometryDirectly(g)
+                layer.CreateFeature(f)
+            
+        return(ogr_ds)
+        
+    def run(self):
+        utils.echo_msg(
+            'running GDAL GRID {} algorithm @ {} and {}/{}...'.format(
+                self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
+            )
+        )
+        _prog = utils.CliProgress(message='running GDAL GRID {} algorithm'.format(self.alg_str))
+        _prog_update = lambda x, y, z: _prog.update()
+        ogr_ds = self._vectorize_stack()
+        if ogr_ds.GetLayer().GetFeatureCount() == 0:
+            utils.echo_error_msg('no input data')
+            
+        gd_opts = gdal.GridOptions(
+            outputType = gdal.GDT_Float32,
+            noData = self.ndv,
+            format = 'GTiff',
+            width = self.xcount,
+            height = self.ycount,
+            algorithm = self.alg_str,
+            callback = _prog_update if self.verbose else None,
+            outputBounds = [
+                self.p_region.xmin, self.p_region.ymax,
+                self.p_region.xmax, self.p_region.ymin
+            ]
+        )
+        gdal.Grid('{}.tif'.format(self.name), ogr_ds, options=gd_opts)
+        demfun.set_nodata('{}.tif'.format(self.name, nodata=self.ndv, convert_array=False))
+        ogr_ds = None
+        return(self)
+
+class GDALLinear(WafflesGDALGrid):
+    """LINEAR DEM via gdal_grid
+    Generate a DEM using GDAL's gdal_grid command.
+    see gdal_grid --help for more info
+
+    -----------
+    Parameters:
+    
+    radius=[val] - search radius
+    
+    < gdal-linear:radius=-1 >
+    """
+    
+    def __init__(self, radius=None, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)        
+        radius = self.xinc * 4 if radius is None else utils.str2inc(radius)
+        self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
+        
+class GDALInvDst(WafflesGDALGrid):
+    """INVERSE DISTANCE DEM via gdal_grid
+    
+    Generate a DEM using GDAL's gdal_grid command.
+    see gdal_grid --help for more info
+
+    -----------
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    power=[val] - weight**power
+    min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
+
+    < gdal-invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
+    """
+    
+    def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
+                   max_points = 0, min_points = 0, nodata = -9999, **kwargs):
+        super().__init__(**kwargs)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'invdist:power={}:smoothing={}:radius1={}:radius2={}:angle={}:max_points={}:min_points={}:nodata={}'\
+            .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
+                
+class GDALMovingAverage(WafflesGDALGrid):
+    """Moving AVERAGE DEM via gdal_grid
+    
+    Generate a DEM using GDAL's gdal_grid command.
+    see gdal_grid --help for more info
+    
+    -----------
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    min_points=[val] - minimum points per bucket (use to fill entire DEM)
+
+    < gdal-average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
+    """
+    
+    def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'average:radius1={}:radius2={}:angle={}:min_points={}:nodata={}'\
+            .format(radius1, radius2, angle, min_points, nodata)
+                
+class GDALNearest(WafflesGDALGrid):
+    """NEAREST DEM via gdal_grid
+    
+    Generate a DEM using GDAL's gdal_grid command.
+    see gdal_grid --help for more info
+
+    -----------
+    Parameters:
+    
+    radius1=[val] - search radius 1
+    radius2=[val] - search radius 2
+    angle=[val] - angle
+    nodata=[val] - nodata
+
+    < gdal-nearest:radius1=0:radius2=0:angle=0:nodata=0 >
+    """
+    
+    def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
+        super().__init__(**kwargs)
+        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
+        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
+        self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
+            .format(radius1, radius2, angle, nodata)
+    
+## ==============================================
+##
+## Waffles 'num' - no interpolation
+##
+## just use stacks...
+##
+## ==============================================
+class WafflesNum(Waffle):
+    """Uninterpolated DEM populated by <mode>.
+    
+    Generate an uninterpolated DEM using <mode> option.
+    Using mode of 'A<mode>' uses GMT's xyz2grd command, 
+    see gmt xyz2grd --help for more info.
+    
+    mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
+    
+    -----------
+    Parameters:
+    
+    mode=[key] - specify mode of grid population
+    min_count=[val] - minimum number of points per cell
+
+    < num:mode=n:min_count=None >
+    """
+    
+    def __init__(self, mode='n', min_count=None, **kwargs):
+        """generate an uninterpolated Grid
+        `mode` of `n` generates a num grid
+        `mode` of `m` generates a mean grid
+        `mode` of `k` generates a mask grid
+        `mode` of `w` generates a wet/dry mask grid
+        `mode` of `A` generates via GMT 'xyz2grd'
+        """
+        
+        super().__init__(**kwargs)        
+        self.mode = mode
+        self.min_count = min_count
+        
+    def _xyz_num(self):
+        """Create a GDAL supported grid from xyz data """
+
+        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        if self.verbose:
+            utils.echo_msg(
+                'generating uninterpolated NUM grid `{}` @ {}/{}'.format(
+                    self.mode, ycount, xcount
+                )
+            )          
+            
+        if self.mode == 'm' or self.mode == 'w':
+            sum_array = np.zeros((ycount, xcount))
+            
+        count_array = np.zeros((ycount, xcount))
+        gdt = gdal.GDT_Float32
+        ds_config = demfun.set_infos(
+            xcount,
+            ycount,
+            xcount * ycount,
+            dst_gt,
+            utils.sr_wkt(self.dst_srs),
+            gdt,
+            self.ndv,
+            'GTiff'
+        )
+        
+        for this_xyz in self.yield_xyz():
+            if regions.xyz_in_region_p(this_xyz, self.p_region):
+                xpos, ypos = utils._geo2pixel(
+                    this_xyz.x, this_xyz.y, dst_gt, 'pixel'
+                )
+                
+                try:
+                    if self.mode == 'm' or self.mode == 'w':
+                        sum_array[ypos, xpos] += this_xyz.z
+                    if self.mode == 'n' or self.mode == 'm' or self.mode == 'w':
+                        count_array[ypos, xpos] += 1
+                    else:
+                        count_array[ypos, xpos] = 1
+                        
+                except Exception as e:
+                    pass
+                
+        if self.mode == 'm' or self.mode == 'w':
+            count_array[count_array == 0] = np.nan
+            out_array = (sum_array/count_array)
+            if self.mode == 'w':
+                out_array[out_array >= 0] = 1
+                out_array[out_array < 0] = 0
+        else:
+            out_array = count_array
+
+        out_array[np.isnan(out_array)] = self.ndv            
+        utils.gdal_write(out_array, self.fn, ds_config)
+        
+    def run(self):
+        if self.mode.startswith('A'):
+            if self.gc['GMT'] is None:
+                utils.echo_error_msg(
+                    'GMT must be installed to use the Mode `A` with the NUM module'
+                )
+                return(None, -1)
+
+            out, status = utils.run_cmd('gmt gmtset IO_COL_SEPARATOR = SPACE', verbose = False)            
+            dem_xyz2grd_cmd = 'gmt xyz2grd -{} -V {} -I{:.14f}/{:.14f}+e -G{}.tif=gd:GTiff'.format(
+                self.mode,
+                self.ps_region.format('gmt'),
+                self.xinc,
+                self.yinc,
+                self.name
+            )
+            
+            out, status = utils.run_cmd(
+                dem_xyz2grd_cmd,
+                verbose=self.verbose,
+                data_fun=lambda p: self.dump_xyz(
+                    dst_port=p, encode=True
+                )
+            )
+        else:
+            self._xyz_num()
+                        
+        return(self)
+    
+## ==============================================
+##
+## Waffles VDatum
+##
+## ==============================================
+class WafflesVDatum(Waffle):
+    """VDATUM transformation grid.
+    Generate a Vertical DATUM transformation grid.
+
+    -----------
+    Parameters:
+    
+    vdatum_in=[vdatum] - input vertical datum
+    vdatum_out=[vdatum] - output vertical datum
+    
+    < vdatum:vdatum_in=None:vdatum_out=None >
+    """
+
+    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
+        super().__init__(**kwargs)
+        self.vdatum_in = vdatum_in
+        self.vdatum_out = vdatum_out        
+
+    def run(self):
+        vdatums.VerticalTransform(
+            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out,
+            cache_dir=waffles_cache
+        ).run(outfile='{}.tif'.format(self.name))
+        return(self)
+    
+## ==============================================
+##
+## Waffles Coastline/Landmask
+##
+## ==============================================
+class WafflesCoastline(Waffle):
+    """COASTLINE (land/etc-mask) generation
+    
+    Generate a coastline (land/etc-mask) using a variety of sources. 
+    User data can be provided to provide source for further land masking. 
+    Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
+    Output vector will polygonize land-areas.
+    
+    -----------
+    Parameters:
+    
+    want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
+    want_copernicus=[True/False] - use COPERNICUS to fill background
+    want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
+    want_lakes=[True/False] - mask LAKES using HYDROLAKES
+    want_buildings=[True/False] - mask BUILDINGS using OSM
+    osm_tries=[val] - OSM max server attempts
+    min_building_length=[val] - only use buildings larger than val
+    want_wsf=[True/False] - mask BUILDINGS using WSF
+    invert=[True/False] - invert the output results
+    polygonize=[True/False] - polygonize the output
+
+    < coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
+    """
+    
+    def __init__(
+            self,
+            want_nhd=True,
+            want_copernicus=True,
+            want_gmrt=False,
+            want_lakes=False,
+            want_buildings=False,
+            min_building_length=None,
+            want_osm_planet=False,
+            invert=False,
+            polygonize=True,
+            osm_tries=5,
+            want_wsf=False,
+            **kwargs
+    ):
+        """Generate a landmask from various sources.
+
+        sources include:
+        GMRT
+        Copernicus
+        NHD
+        HydroLakes
+        OSM Buildings
+        *user-data*
+        
+        set polyginize to False to skip polyginizing the landmask, set
+        polygonize to an integer to control how many output polygons will
+        be generated.
+
+        output raster mask will have 0 over water and 1 over land.
+        """
+
+        super().__init__(**kwargs)
+        self.want_nhd = want_nhd
+        self.want_gmrt = want_gmrt
+        self.want_copernicus = want_copernicus
+        self.want_lakes = want_lakes
+        self.want_buildings = want_buildings
+        self.want_wsf = want_wsf
+        self.min_building_length = min_building_length
+        self.want_osm_planet = want_osm_planet
+        self.invert = invert
+        self.polygonize = polygonize
+        self.osm_tries = utils.int_or(osm_tries, 5)
+        self.coast_array = None
+        self.ds_config = None
+            
+    def run(self):
+        self.f_region = self.p_region.copy()
+        self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
+        self.f_region.src_srs = self.dst_srs
+        self.wgs_region = self.f_region.copy()
+        if self.dst_srs is not None:
+            self.wgs_region.warp('epsg:4326')
+        else:
+            self.dst_srs = 'epsg:4326'            
+
+        horz_epsg, vert_epsg = utils.epsg_from_input(self.dst_srs)
+        self.cst_srs = osr.SpatialReference()
+        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
+        
+        self._load_coast_mask()
+
+        if self.want_gmrt:
+            self._load_gmrt()
+            
+        if self.want_copernicus:
+            self._load_copernicus()
+
+        if self.want_nhd:
+            self._load_nhd()
+
+        if self.want_lakes:
+            self._load_lakes()
+
+        if self.want_buildings:
+            self._load_bldgs()
+
+        if self.want_wsf:
+            self._load_wsf()
+            
+        #if len(self.data) > 0:
+        if self.want_stack:
+            self._load_data()
+
+        if self.verbose:
+            utils.echo_msg(
+                'finanlizing array for region {} at {} {}...'.format(
+                    self.p_region.format('gmt'), self.ds_config['nx'], self.ds_config['ny']
+                )
+            )
+        self._finalize_array()
+        self._write_coast_array()
+        if self.polygonize:
+            if utils.int_or(self.polygonize) is not None:
+                self._write_coast_poly(poly_count=self.polygonize)
+            else:
+                self._write_coast_poly()
             
         return(self)
 
+    def _finalize_array(self):
+        self.coast_array[self.coast_array > 0] = 1
+        self.coast_array[self.coast_array <= 0] = 0
+        if self.invert:
+            self.coast_array[self.coast_array == 0] = 2
+            self.coast_array[self.coast_array == 1] = 0
+            self.coast_array[self.coast_array == 2] = 1
+            
+    def _load_coast_mask(self):
+        """create a nodata grid"""
+        
+        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
+        self.ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt,
+                                          utils.sr_wkt(self.cst_srs), gdal.GDT_Float32,
+                                          self.ndv, 'GTiff')        
+        self.coast_array = np.zeros( (ycount, xcount) )
+
+    def _load_gmrt(self):
+        """GMRT - Global low-res.
+
+        Used to fill un-set cells.
+        """
+        
+        this_gmrt = fetches.GMRT(
+            src_region=self.wgs_region, verbose=self.verbose, layer='topo', outdir=self.cache_dir
+        )
+        this_gmrt.run()
+        fr = fetches.fetch_results(this_gmrt)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        gmrt_tif = this_gmrt.results[0]
+        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
+        gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
+        gmrt_ds_arr[gmrt_ds_arr > 0] = 1
+        gmrt_ds_arr[gmrt_ds_arr < 0] = 0
+        self.coast_array += gmrt_ds_arr
+        gmrt_ds = gmrt_ds_arr = None
+        
+    def _load_copernicus(self):
+        """copernicus"""
+
+        this_cop = fetches.CopernicusDEM(
+            src_region=self.wgs_region, verbose=self.verbose, datatype='1', outdir=self.cache_dir
+        )
+        this_cop.run()
+        fr = fetches.fetch_results(this_cop, check_size=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+        
+        for i, cop_tif in enumerate(this_cop.results):
+            demfun.set_nodata(cop_tif[1], 0, verbose=False)
+            cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+            gdal.Warp(
+                cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
+                callback=False, srcNodata=0
+            )
+            cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
+            cop_ds_arr[cop_ds_arr != 0] = 1
+            self.coast_array += cop_ds_arr
+            cop_ds = cop_ds_arr = None
+
+    def _load_wsf(self):
+        """wsf"""
+
+        this_wsf = fetches.WSF(
+            src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
+        )
+        this_wsf.run()
+
+        fr = fetches.fetch_results(this_wsf, check_size=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+       
+        for i, wsf_tif in enumerate(this_wsf.results):
+            demfun.set_nodata(wsf_tif[1], 0, verbose=False)
+            wsf_ds = demfun.generate_mem_ds(self.ds_config, name='wsf')
+
+            gdal.Warp(
+                wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
+                callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
+            )
+            wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
+            wsf_ds_arr[wsf_ds_arr != 0 ] = -1
+            self.coast_array += wsf_ds_arr
+            wsf_ds = wsf_ds_arr = None
+            
+    def _load_nhd(self):
+        """USGS NHD (HIGH-RES U.S. Only)
+        Fetch NHD (NHD High/Plus) data from TNM to fill in near-shore areas. 
+        High resoultion data varies by location...
+        """
+
+        this_tnm = fetches.TheNationalMap(
+            src_region=self.wgs_region, verbose=self.verbose, where="Name LIKE '%Hydro%'",
+            extents='HU-8 Subbasin,HU-4 Subregion', outdir=self.cache_dir
+        )
+        this_tnm.run()
+        fr = fetches.fetch_results(this_tnm)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
+        if len(this_tnm.results) > 0:
+            for i, tnm_zip in enumerate(this_tnm.results):
+                tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
+                gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=self.verbose
+                )
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=self.verbose
+                )
+                utils.run_cmd(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
+                        gdb, self.p_region.format('ul_lr')
+                    ),
+                    verbose=self.verbose
+                )
+
+            utils.run_cmd(
+                'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                    self.p_region.format('te'),
+                    self.ds_config['nx'],
+                    self.ds_config['ny'],
+                ),
+                verbose=self.verbose
+            )
+
+            try:
+                gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
+            except:
+                tnm_ds = None
+                
+            if tnm_ds is not None:
+                tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
+                tnm_ds_arr[tnm_ds_arr < 1] = 0
+                self.coast_array -= tnm_ds_arr
+                tnm_ds = tnm_ds_arr = None
+                
+            utils.remove_glob('nhdArea_merge.*')
+
+    def _load_lakes(self):
+        """HydroLakes -- Global Lakes"""
+        
+        this_lakes = fetchesHydroLakes(
+            src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
+        )
+        this_lakes.run()        
+        fr = fetches.fetch_results(this_lakes)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+        
+        lakes_shp = None
+        lakes_zip = this_lakes.results[0][1]
+        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
+        for i in lakes_shps:
+            if i.split('.')[-1] == 'shp':
+                lakes_shp = i
+
+        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
+        lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
+        lk_ds = ogr.Open(lakes_shp)
+        if lk_ds is not None:
+            lk_layer = lk_ds.GetLayer()
+            lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
+            gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
+            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+            lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
+            self.coast_array[lakes_ds_arr == -1] = 0
+            lakes_ds = lk_ds = lakes_warp_ds = None
+        else:
+            utils.echo_error_msg('could not open {}'.format(lakes_shp))
+
+    def _load_bldgs(self):
+        """load buildings from OSM
+        
+        OSM has a size limit, so will chunk the region and
+        do multiple osm calls
+        """
+
+        this_osm = fetches.OpenStreetMap(
+            src_region=self.wgs_region, verbose=self.verbose,
+            planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm',
+            min_length=self.min_building_length, outdir=self.cache_dir
+        )
+        this_osm.run()
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with utils.CliProgress(
+                total=len(this_osm.results),
+                message='processing OSM buildings',
+        ) as pbar:
+            for n, osm_result in enumerate(this_osm.results):
+                pbar.update()
+                if fetches.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
+                    #if True:
+                    if osm_result[-1] == 'bz2':
+                        osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
+                        osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
+                        _clipped = True
+                    elif osm_result[-1] == 'pbf':
+                        osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
+                        _clipped = True
+                    else:
+                        osm_file = osm_result[1]
+                        _clipped = False
+
+                    if os.path.getsize(osm_file) == 366:
+                        continue
+
+                    out, status = utils.run_cmd(
+                        'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
+                            osm_file,
+                            self.p_region.format('te'),
+                            self.ds_config['nx'],
+                            self.ds_config['ny'],
+                        ),
+                        verbose=False
+                    )
+
+                    if status == 0:
+                        bldg_ds = gdal.Open('bldg_osm.tif')
+                        if bldg_ds is not None:
+                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                            self.coast_array[bldg_ds_arr == -1] = 0
+                            bldg_ds = bldg_ds_arr = None
+
+                        bldg_ds = None
+
+                    utils.remove_glob('bldg_osm.tif*')
+
+        bldg_ds = bldg_warp_ds = None
+        
+    def _load_data(self):
+        """load data from user datalist and amend coast_array"""
+
+        for this_arr in self.stack_ds.yield_array():
+            data_arr = this_arr[0]['z']
+            srcwin = this_arr[1]
+            data_arr[np.isnan(data_arr)] = 0
+            data_arr[data_arr > 0] = 1
+            data_arr[data_arr < 0] = -1
+            self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
+                             srcwin[0]:srcwin[0]+srcwin[2]] += data_arr
+
+    def _write_coast_array(self):
+        """write coast_array to file"""
+
+        if self.verbose:
+            utils.echo_msg('writing array to {}.tif...'.format(self.name))
+            
+        utils.gdal_write(
+            self.coast_array, '{}.tif'.format(self.name), self.ds_config,
+        )
+
+    def _write_coast_poly(self, poly_count=None):
+        """convert to coast_array vector"""
+
+        if self.verbose:
+            utils.echo_msg('polygonizing array to {}.shp...'.format(self.name))
+        
+        poly_count = utils.int_or(poly_count)
+        tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
+            'tmp_c_{}.shp'.format(self.name)
+        )
+        
+        if tmp_ds is not None:
+            tmp_layer = tmp_ds.CreateLayer('tmp_c_{}'.format(self.name), None, ogr.wkbMultiPolygon)
+            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+            demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
+            tmp_ds = None
+            
+        utils.run_cmd(
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
+                self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+            verbose=self.verbose
+        )        
+        utils.remove_glob('tmp_c_{}.*'.format(self.name))
+        utils.run_cmd(
+            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
+                self.name, self.name),
+            verbose=self.verbose
+        )        
+        print(self.dst_srs)
+        print(self.cst_srs.ExportToProj4())
+        utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
+
+## ==============================================
+##
+## Waffles Lakes Bathymetry
+##
+## ==============================================
+class WafflesLakes(Waffle):
+    """Estimate lake bathymetry.
+    
+    By default, will return lake bathymetry as depth values (positive down), 
+    to get elevations (positive up), set apply_elevations=True.
+
+    -----------
+    Parameters:
+    
+    apply_elevations=[True/False] - use COPERNICUS to apply lake level elevations to output
+    min_area=[val] - minimum lake area to consider
+    max_area=[val] - maximum lake area to consider
+    min_id=[val] - minimum lake ID to consider
+    max_id=[val] - maximum lake ID to consider
+    depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
+    
+    < lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy:elevations=copernicus >
+    """
+    
+    def __init__(
+            self,
+            apply_elevations=False,
+            min_area=None,
+            max_area=None,
+            min_id=None,
+            max_id=None,
+            depth='globathy',
+            elevations='copernicus',
+            **kwargs
+    ):
+        super().__init__(**kwargs)
+        self._mask = None
+        self.apply_elevations = apply_elevations
+        self.min_area = min_area
+        self.max_area = max_area
+        self.min_id = min_id
+        self.max_id = max_id
+        self.depth = depth
+        self.elevations = elevations
+        self.ds_config = None
+            
+    def _fetch_lakes(self):
+        """fetch hydrolakes polygons"""
+
+        this_lakes = fetches.HydroLakes(
+            src_region=self.p_region, verbose=self.verbose, outdir=self.cache_dir
+        )
+        this_lakes.run()
+        fr = fetches.fetch_results(this_lakes, check_size=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        lakes_shp = None
+        lakes_zip = this_lakes.results[0][1]
+        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
+        for i in lakes_shps:
+            if i.split('.')[-1] == 'shp':
+                lakes_shp = i
+
+        return(lakes_shp)
+
+    def _fetch_globathy(self, ids=[]):
+        """fetch globathy csv data and process into dict"""
+        
+        import csv
+        
+        _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
+        globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
+        fetches.Fetch(_globathy_url, verbose=self.verbose).fetch_file(globathy_zip, check_size=False)
+        globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
+        globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
+        with open(globathy_csv, mode='r') as globc:
+            reader = csv.reader(globc)
+            next(reader)
+            if len(ids) > 0:
+                globd = {}
+                for row in reader:
+                    if int(row[0]) in ids:
+                        globd[int(row[0])] = float(row[-1])
+                        ids.remove(int(row[0]))
+                        
+                    if len(ids) == 0:
+                        break
+            else:
+                globd = {int(row[0]):float(row[-1]) for row in reader}
+
+        return(globd)
+
+    def _fetch_gmrt(self, gmrt_region=None):
+        """GMRT - Global low-res.
+        """
+
+        if gmrt_region is None:
+            gmrt_region = self.p_region
+        
+        this_gmrt = fetches.GMRT(
+            src_region=gmrt_region, verbose=self.verbose, layer='topo', outdir=self.cache_dir
+        )
+        this_gmrt.run()
+
+        fr = fetches.fetch_results(this_gmrt)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        
+        gmrt_tif = this_gmrt.results[0]
+        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        return(gmrt_ds)
+    
+    def _fetch_copernicus(self, cop_region=None):
+        """copernicus"""
+
+        if cop_region is None:
+            cop_region = self.p_region
+            
+        this_cop = fetches.CopernicusDEM(
+            src_region=cop_region, verbose=self.verbose, datatype='1', outdir=self.cache_dir
+        )
+        #this_cop._outdir = self.cache_dir
+        this_cop.run()
+
+        fr = fetches.fetch_results(this_cop, check_size=False)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        dst_srs = osr.SpatialReference()
+        dst_srs.SetFromUserInput(self.dst_srs)
+        cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+        [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
+        
+        return(cop_ds)
+    
+    def generate_mem_ogr(self, geom, srs):
+        """Create temporary polygon vector layer from feature geometry 
+        so that we can rasterize it (Rasterize needs a layer)
+        """
+        
+        ds = ogr.GetDriverByName('MEMORY').CreateDataSource('')
+        Layer = ds.CreateLayer('', geom_type=ogr.wkbPolygon, srs=srs)
+        outfeature = ogr.Feature(Layer.GetLayerDefn())
+        outfeature.SetGeometry(geom)
+        Layer.SetFeature(outfeature)
+
+        return(ds)
+
+    ##
+    ## Adapted from GLOBathy
+    def apply_calculation(self, shore_distance_arr, lake_depths_arr, shore_arr=None):
+        """
+        Apply distance calculation, which is each pixel's distance to shore, multiplied
+        by the maximum depth, all divided by the maximum distance to shore. This provides
+        a smooth slope from shore to lake max depth.
+
+        shore_distance - Input numpy array containing array of distances to shoreline.
+            Must contain positive values for distance away from shore and 0 elsewhere.
+        max_depth - Input value with maximum lake depth.
+        NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
+        """
+
+        labels, nfeatures = ndimage.label(shore_distance_arr)
+        nfeatures = np.arange(1, nfeatures +1)
+        maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
+        max_dist_arr = np.zeros(np.shape(shore_distance_arr))
+        with utils.CliProgress(
+                total=len(nfeatures),
+                message='applying labels...',
+        ) as pbar:
+            for n, x in enumerate(nfeatures):
+                pbar.update()
+                max_dist_arr[labels==x] = maxes[x-1]
+        
+        max_dist_arr[max_dist_arr == 0] = np.nan
+        bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
+        bathy_arr[bathy_arr == 0] = np.nan
+
+        if shore_arr is None \
+           or shore_arr.size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].size == 0 \
+           or shore_arr[~np.isnan(bathy_arr)].max() == 0:
+            utils.echo_warning_msg('invalid shore array, using default shore value of zero')
+            bathy_arr = 0 - bathy_arr
+        else:
+            bathy_arr = shore_arr - bathy_arr
+
+        utils.echo_msg('applied shore elevations to lake depths')
+        bathy_arr[np.isnan(bathy_arr)] = 0
+        return(bathy_arr)    
+    
+    def run(self):
+        self.wgs_region = self.p_region.copy()
+        if self.dst_srs is not None:
+            self.wgs_region.warp('epsg:4326')            
+        else:
+            self.dst_srs = 'epsg:4326'
+        
+        #self.p_region.buffer(pct=2)
+        
+        lakes_shp = self._fetch_lakes()
+        lk_ds = ogr.Open(lakes_shp, 1)
+        lk_layer = lk_ds.GetLayer()
+
+        ## filter layer to region
+        filter_region = self.p_region.copy()
+        lk_layer.SetSpatialFilter(filter_region.export_as_geom())
+
+        ## filter by ID
+        if self.max_id is not None:
+            lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
+            
+        if self.min_id is not None:
+            lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
+
+        ## filter by Area
+        if self.max_area is not None:
+            lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
+            
+        if self.min_area is not None:
+            lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
+            
+        lk_features = lk_layer.GetFeatureCount()
+        if lk_features == 0:
+            utils.echo_error_msg('no lakes found in region')
+            return(self)
+        
+        ## get lake ids and globathy depths
+        lk_ids = []
+        [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
+        utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
+        
+        lk_regions = self.p_region.copy()
+        with utils.CliProgress(
+                total=len(lk_layer),
+                message='processing {} lakes'.format(lk_features),
+        ) as pbar:
+            for lk_f in lk_layer:
+                pbar.update()
+                this_region = regions.Region()
+                lk_geom = lk_f.GetGeometryRef()
+                lk_wkt = lk_geom.ExportToWkt()
+                this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
+                lk_regions = regions.regions_merge(lk_regions, this_region)
+
+        while not regions.regions_within_ogr_p(self.p_region, lk_regions):
+            utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
+            self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
+
+        ## fetch and initialize the copernicus data
+        if self.elevations == 'copernicus':
+            cop_ds = self._fetch_copernicus(cop_region=self.p_region)
+            cop_band = cop_ds.GetRasterBand(1)
+        elif self.elevations == 'gmrt':
+            cop_ds = self._fetch_gmrt(gmrt_region=self.p_region)
+            cop_band = cop_ds.GetRasterBand(1)
+        elif utils.float_or(self.elevations) is not None:
+            cop_band = None
+            cop_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
+            cop_arr[:] = self.elevations
+        elif self.elevations == 'self':
+            elev_ds = self.stacked_rasters['z']
+            if elev_ds is not None:
+                dst_srs = osr.SpatialReference()
+                dst_srs.SetFromUserInput(self.dst_srs)
+                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
+                gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                cop_band = cop_ds.GetRasterBand(1)
+            else:
+                cop_band = None
+                cop_arr = None
+        elif os.path.exists(self.elevations):
+            elev_ds = gdal.Open(self.elevations)
+            if elev_ds is not None:
+                dst_srs = osr.SpatialReference()
+                dst_srs.SetFromUserInput(self.dst_srs)
+                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
+                gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
+                cop_band = cop_ds.GetRasterBand(1)
+            else:
+                cop_band = None
+                cop_arr = None
+        else:
+            cop_band = None
+            cop_arr = None
+        
+        ## initialize the tmp datasources
+        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
+        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
+        msk_band = None
+        globd = None
+        
+        if len(lk_ids) == 0:
+            return(self)
+        
+        if self.depth == 'globathy':
+            globd = self._fetch_globathy(ids=lk_ids[:])
+            ## rasterize hydrolakes using id
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+
+            ## assign max depth from globathy
+            msk_arr = msk_band.ReadAsArray()
+            with utils.CliProgress(
+                    total=len(lk_ids),
+                    message='Assigning Globathy Depths to rasterized lakes...',
+            ) as pbar:
+                for n, this_id in enumerate(lk_ids):
+                    depth = globd[this_id]
+                    msk_arr[msk_arr == this_id] = depth
+                    pbar.update()
+            
+        elif self.depth == 'hydrolakes':
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            msk_arr = msk_band.ReadAsArray()
+            
+        elif utils.float_or(self.depth) is not None:
+            msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
+            msk_arr[:] = self.depth
+            
+        else:            
+            msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
+            
+        ## calculate proximity of lake cells to shore
+        if msk_band is None:
+            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
+            msk_ds.FlushCache()
+            msk_band = msk_ds.GetRasterBand(1)
+            msk_band.SetNoDataValue(self.ds_config['ndv'])
+            
+        lk_ds = None
+        prox_band = prox_ds.GetRasterBand(1)
+        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
+        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)        
+        prox_arr = prox_band.ReadAsArray()
+        if cop_band is not None:
+            cop_arr = cop_band.ReadAsArray()
+
+        utils.echo_msg('Calculating simulated lake depths...')
+        ## apply calculation from globathy
+        bathy_arr = self.apply_calculation(
+            prox_arr,
+            msk_arr,
+            shore_arr=cop_arr,
+        )
+
+        bathy_arr[bathy_arr == 0] = self.ndv        
+        utils.gdal_write(
+            bathy_arr, '{}.tif'.format(self.name), self.ds_config,
+        )            
+
+        prox_ds = msk_ds = cop_ds = None
+        return(self)
+
+## ==============================================
+##
+## Waffles 'CUDEM' gridding
+##
+## combined gridding method (stacks/surface/coastline/IDW)
+##
+## ==============================================
+class WafflesCUDEM(Waffle):
+    """CUDEM integrated DEM generation.
+    
+    Generate an topo/bathy integrated DEM using a variety of data sources.
+    Will iterate <pre_count> pre-surfaces at lower-resolutions.
+    Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
+    Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
+
+    generate a DEM with `pre_surface`s which are generated
+    at lower resolution and with various weight threshholds.
+
+    To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
+    Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
+    DEM generation. 
+
+    -----------
+    Parameters:
+    
+    landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
+    min_weight=[val] - the minumum weight to include in the final DEM
+    smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
+    pre_count=[val] - number of pre-surface iterations to perform
+    pre_upper_limit=[val] - the upper elevation limit of the pre-surfaces (used with landmask)
+    poly_count=[True/False]
+    mode=surface
+    filter_outliers=[val]
+
+    < cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:pre_upper_limit=-0.1:mode=surface >
+    """
+    
+    def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
+                 poly_count = True, **kwargs):
+        super().__init__(**kwargs)
+        self.min_weight = utils.float_or(min_weight)
+        self.pre_count = utils.int_or(pre_count, 1)
+        self.landmask = landmask
+        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
+        self.poly_count = poly_count
+
+    def generate_coastline(self, pre_data=None):
+        coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=self.p_region,
+                                  xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
+                                  srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
+        coastline.initialize()        
+        coastline.generate()
+        return('{}.shp:invert=True'.format(coastline.name))
+            
+    def run(self):
+        pre = self.pre_count
+        pre_weight = 0
+        final_region = self.d_region.copy()
+        pre_region = self.p_region.copy()
+        pre_region.wmin = None
+        if self.min_weight is None:
+            self.min_weight = utils.gdal_percentile(self.stack, perc=75, band=3)
+        
+        if self.verbose:
+            utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
+
+        ## initial data to pass through surface (stack)
+        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
+        pre_data = [stack_data_entry]
+        ## generate coastline
+        pre_clip = self.generate_coastline(pre_data=pre_data) if self.landmask else None
+
+        ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
+        while pre >= 0:
+            pre_xinc = float(self.xinc * (3**pre))
+            pre_yinc = float(self.yinc * (3**pre))
+            xsample = self.xinc * (3**(pre - 1))
+            ysample = self.yinc * (3**(pre - 1))
+            if xsample == 0:
+                xsample = self.xinc
+                
+            if ysample == 0:
+                ysample = self.yinc
+                
+            ## if not final output, setup the configuration for the pre-surface
+            if pre != self.pre_count:
+                pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
+                if pre_weight == 0:
+                    pre_weight = 1-e20
+                    
+                _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
+                pre_data_entry = '{}.tif,200:sample=cubicspline:check_path=True,{}'.format(_pre_name_plus, pre_weight)
+                pre_data = [stack_data_entry, pre_data_entry]
+                pre_region.wmin = pre_weight
+
+            ## reset pre_region for final grid
+            if pre == 0:
+                pre_region = self.p_region.copy()
+
+            _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
+            if self.verbose:
+                utils.echo_msg('pre region: {}'.format(pre_region))
+                
+                
+            waffles_mod = 'gmt-surface' if pre==self.pre_count else 'stacks' if pre != 0 else 'linear'
+            pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
+                                        yinc=pre_yinc if pre !=0 else self.yinc, name=_pre_name, node=self.node, want_weight=True,
+                                        want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs, srs_transform=self.srs_transform,
+                                        clobber=True, verbose=self.verbose, clip=pre_clip if pre !=0 else None, supercede=True if pre == 0 else self.supercede,
+                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False)._acquire_module()
+            pre_surface.initialize()
+            pre_surface.generate()
+            pre -= 1
+
+        os.rename(pre_surface.fn, self.fn)
+        return(self)
+
+## ==============================================
+##
+## Waffles TESTING
+##
+## ==============================================
 class WafflesCUBE(Waffle):
     """
     BathyCUBE - doesn't seem to work as expected, likely doing something wrong here...
@@ -1762,23 +2410,12 @@ class WafflesCUBE(Waffle):
     
     def __init__(
             self,
-            supercede=False,
             chunk_size=None,
             chunk_buffer=40,
-            keep_auxiliary=False,
             **kwargs):
         """generate a `CUBE` dem"""
         
-        self.mod = 'cube'
-        self.mod_args = {
-            'supercede':supercede,
-            'keep_auxiliary':keep_auxiliary,
-            'chunk_size':chunk_size,
-            'chunk_buffer':chunk_buffer,
-        }
         super().__init__(**kwargs)
-        self.supercede = supercede
-        self.keep_auxiliary = keep_auxiliary
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = None
         self.chunk_buffer = chunk_buffer
@@ -1793,26 +2430,6 @@ class WafflesCUBE(Waffle):
 
         from scipy import optimize
         
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-
-        print(ds_config)
-        self._stacks_array(
-            out_name='{}_cube_stack'.format(self.name),
-            supercede=self.supercede
-        )
-        n = '{}_cube_stack_s.tif'.format(self.name)
-        w = '{}_cube_stack_w.tif'.format(self.name)
-        c = '{}_cube_stack_c.tif'.format(self.name)
         # _x = []
         # _y = []
         # _z = []
@@ -1830,14 +2447,14 @@ class WafflesCUBE(Waffle):
         # print(len(_z))
         
         if self.chunk_size is None:
-            n_chunk = int(ds_config['nx'] * .1)
+            n_chunk = int(self.ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
         else: n_chunk = self.chunk_size
         if self.chunk_step is None:
             n_step = int(n_chunk/2)
         else: n_step = self.chunk_step
 
-        points_ds = gdal.Open(n)
+        points_ds = gdal.Open(self.stacked_rasters['z'])
         points_band = points_ds.GetRasterBand(1)
         points_no_data = points_band.GetNoDataValue()
         
@@ -1924,20 +2541,8 @@ class WafflesCUBE(Waffle):
         numrows, numcols = (ds_config['nx'], ds_config['ny'])
         res_x, res_y = ds_config['geoT'][1], ds_config['geoT'][5]*-1
         depth_grid, uncertainty_grid, ratio_grid, numhyp_grid = cube.run_cube_gridding(
-            point_values,
-            thu,
-            tvu,
-            xi,
-            yi,
-            ds_config['nx'],
-            ds_config['ny'],
-            min(_x),
-            max(_y),
-            'local',
-            'order1a',
-            1,
-            1,
-        )
+            point_values, thu, tvu, xi, yi, self.ds_config['nx'], self.ds_config['ny'],
+            min(_x), max(_y), 'local', 'order1a', 1, 1)
         print(depth_grid)
         depth_grid = np.flip(depth_grid)
         depth_grid = np.fliplr(depth_grid)
@@ -1958,23 +2563,12 @@ class WafflesBGrid(Waffle):
     
     def __init__(
             self,
-            supercede=False,
             chunk_size=None,
             chunk_buffer=40,
-            keep_auxiliary=False,
             **kwargs):
         """generate a `CUBE` dem"""
         
-        self.mod = 'cube'
-        self.mod_args = {
-            'supercede':supercede,
-            'keep_auxiliary':keep_auxiliary,
-            'chunk_size':chunk_size,
-            'chunk_buffer':chunk_buffer,
-        }
         super().__init__(**kwargs)
-        self.supercede = supercede
-        self.keep_auxiliary = keep_auxiliary
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = None
         self.chunk_buffer = chunk_buffer
@@ -1989,19 +2583,6 @@ class WafflesBGrid(Waffle):
 
         from scipy import optimize
         
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            self.fmt
-        )
-
-        print(ds_config)
         # self._stacks_array(
         #     out_name='{}_cube_stack'.format(self.name),
         #     supercede=self.supercede
@@ -2178,1745 +2759,13 @@ class WafflesBGrid(Waffle):
         # uncert_band.WriteArray(uncertainty_grid)
             
         return(self)
-    
-## ==============================================
-## Waffles VDatum
-## ==============================================
-class WafflesVDatum(Waffle):
-    """VDATUM transformation grid.
-Generate a Vertical DATUM transformation grid.
 
----
-Parameters:
-    
-vdatum_in=[vdatum] - input vertical datum
-vdatum_out=[vdatum] - output vertical datum
-
-< vdatum:vdatum_in=None:vdatum_out=None >
-    """
-
-    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
-        self.mod = 'vdatum'
-        self.mod_args = {
-            'vdatum_in':vdatum_in,
-            'vdatum_out':vdatum_out
-        }
-        super().__init__(**kwargs)
-        self.vdatum_in = vdatum_in
-        self.vdatum_out = vdatum_out
-        
-        import cudem.vdatums
-
-    def run(self):
-        cudem.vdatums.VerticalTransform(
-            self.p_region,
-            self.xinc,
-            self.yinc,
-            self.vdatum_in,
-            self.vdatum_out,
-            cache_dir=waffles_cache
-        ).run(outfile='{}.tif'.format(self.name))
-        
-        return(self)
-    
-## ==============================================
-## GDAL gridding (invdst, linear, nearest, average)
-## ==============================================
-class WafflesGDALGrid(Waffle):
-    """Waffles GDAL_GRID module.
-
-    see gdal_grid for more info and gridding algorithms
-    """
-    
-    def __init__(self, **kwargs):
-        """run gdal grid using alg_str
-
-        parse the data through xyzfun.xyz_block to get weighted mean before
-        building the GDAL dataset to pass into gdal_grid
-        
-        Args: 
-          alg_str (str): the gdal_grid algorithm string
-        """
-        
-        super().__init__(**kwargs)
-        self.alg_str = 'linear:radius=-1'
-        self.mod = self.alg_str.split(':')[0]
-
-    def _xyz_ds(self):
-        """Make a point vector OGR DataSet Object from src_xyz
-
-        for use in gdal gridding functions.
-        """
-
-        dst_ogr = '{}'.format(self.name)
-        self.ogr_ds = gdal.GetDriverByName('Memory').Create(
-            '', 0, 0, 0, gdal.GDT_Unknown
-        )
-        layer = self.ogr_ds.CreateLayer(
-            dst_ogr,
-            geom_type=ogr.wkbPoint25D
-        )
-        fd = ogr.FieldDefn('long', ogr.OFTReal)
-        fd.SetWidth(10)
-        fd.SetPrecision(8)
-        layer.CreateField(fd)
-        fd = ogr.FieldDefn('lat', ogr.OFTReal)
-        fd.SetWidth(10)
-        fd.SetPrecision(8)
-        layer.CreateField(fd)
-        fd = ogr.FieldDefn('elev', ogr.OFTReal)
-        fd.SetWidth(12)
-        fd.SetPrecision(12)
-        layer.CreateField(fd)
-        
-        if self.weights:
-            fd = ogr.FieldDefn('weight', ogr.OFTReal)
-            fd.SetWidth(6)
-            fd.SetPrecision(6)
-            layer.CreateField(fd)
-            
-        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        for this_xyz in self.yield_xyz():
-            f.SetField(0, this_xyz.x)
-            f.SetField(1, this_xyz.y)
-            f.SetField(2, float(this_xyz.z))
-            if self.weights:
-                f.SetField(3, this_xyz.w)
-                
-            wkt = this_xyz.export_as_wkt(include_z=True)
-            g = ogr.CreateGeometryFromWkt(wkt)
-            f.SetGeometryDirectly(g)
-            layer.CreateFeature(f)
-            
-        return(self.ogr_ds)
-        
-    def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        utils.echo_msg(
-            'running GDAL GRID {} algorithm @ {} and {}/{}...'.format(
-                self.alg_str.split(':')[0], self.p_region.format('fn'), xcount, ycount
-            )
-        )
-        #_prog_update = lambda x, y, z: _prog.update()
-        ds = self._xyz_ds()
-        if ds.GetLayer().GetFeatureCount() == 0:
-            utils.echo_error_msg('no input data')
-            
-        gd_opts = gdal.GridOptions(
-            outputType = gdal.GDT_Float32,
-            noData = self.ndv,
-            format = 'GTiff',
-            width = xcount,
-            height = ycount,
-            algorithm = self.alg_str,
-            #callback = _prog_update if self.verbose else None,
-            outputBounds = [
-                self.p_region.xmin,
-                self.p_region.ymax,
-                self.p_region.xmax,
-                self.p_region.ymin
-            ]
-        )
-        gdal.Grid(
-            '{}.tif'.format(self.name), ds, options = gd_opts
-        )
-        demfun.set_nodata(
-            '{}.tif'.format(self.name, nodata=self.ndv, convert_array=False)
-        )
-        # _prog.end(
-        #     0,
-        #     'ran GDAL GRID {} algorithm @ {}.'.format(
-        #         self.alg_str.split(':')[0], self.p_region.format('fn')
-        #     )
-        # )        
-        ds = None
-        return(self)
-
-class WafflesLinear(WafflesGDALGrid):
-    """LINEAR DEM via gdal_grid
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
----
-Parameters:
-    
-radius=[val] - search radius
-
-< linear:radius=-1 >
-    """
-    
-    def __init__(self, radius=None, nodata=-9999, **kwargs):
-        self.mod = 'linear'
-        self.mod_args = {
-            'radius':radius,
-            'nodata':nodata
-        }
-        super().__init__(**kwargs)        
-        radius = self.xinc * 4 if radius is None else utils.str2inc(radius)
-        self.alg_str = 'linear:radius={}:nodata={}'.format(radius, nodata)
-        
-class WafflesInvDst(WafflesGDALGrid):
-    """INVERSE DISTANCE DEM via gdal_grid
-    
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
----
-Parameters:
-    
-radius1=[val] - search radius 1
-radius2=[val] - search radius 2
-power=[val] - weight**power
-min_points=[val] - minimum points per IDW bucket (use to fill entire DEM)
-
-< invdst:power=2.0:smoothing=0.0:radius1=0:radius2=0:angle=0:max_points=0:min_points=0:nodata=0 >
-    """
-    
-    def __init__(self, power = 2.0, smoothing = 0.0, radius1 = None, radius2 = None, angle = 0.0,
-                   max_points = 0, min_points = 0, nodata = -9999, **kwargs):
-        self.mod = 'invdst'
-        self.mod_args = {
-            'power':power,
-            'smoothing':smoothing,
-            'radius1':radius1,
-            'radius2':radius2,
-            'angle':angle,
-            'max_points':max_points,
-            'min_points':min_points,
-            'nodata':nodata
-        }
-        super().__init__(**kwargs)
-        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
-        self.alg_str = 'invdist:power={}:smoothing={}:radius1={}:radius2={}:angle={}:max_points={}:min_points={}:nodata={}'\
-            .format(power, smoothing, radius1, radius2, angle, max_points, min_points, nodata)
-                
-class WafflesMovingAverage(WafflesGDALGrid):
-    """Moving AVERAGE DEM via gdal_grid
-    
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
----
-Parameters:
-    
-radius1=[val] - search radius 1
-radius2=[val] - search radius 2
-min_points=[val] - minimum points per bucket (use to fill entire DEM)
-
-< average:radius1=0:radius2=0:angle=0:min_points=0:nodata=0 >
-    """
-    
-    def __init__(self, radius1=None, radius2=None, angle=0.0, min_points=0, nodata=-9999, **kwargs):
-        self.mod = 'average'
-        self.mod_args = {
-            'radius1':radius1,
-            'radius2':radius2,
-            'angle':angle,
-            'min_points':min_points,
-            'nodata':nodata
-        }
-        super().__init__(**kwargs)
-        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
-        self.alg_str = 'average:radius1={}:radius2={}:angle={}:min_points={}:nodata={}'\
-            .format(radius1, radius2, angle, min_points, nodata)
-                
-class WafflesNearest(WafflesGDALGrid):
-    """NEAREST DEM via gdal_grid
-    
-Generate a DEM using GDAL's gdal_grid command.
-see gdal_grid --help for more info
-
----
-Parameters:
-    
-radius1=[val] - search radius 1
-radius2=[val] - search radius 2
-angle=[val] - angle
-nodata=[val] - nodata
-
-< nearest:radius1=0:radius2=0:angle=0:nodata=0 >
-    """
-    
-    def __init__(self, radius1=None, radius2=None, angle=0.0, nodata=-9999, **kwargs):
-        self.mod = 'nearest'
-        self.mod_args = {
-            'radius1':radius1,
-            'radius2':radius2,
-            'angle':angle,
-            'nodata':nodata
-        }
-        super().__init__(**kwargs)
-        radius1 = self.xinc * 2 if radius1 is None else utils.str2inc(radius1)
-        radius2 = self.yinc * 2 if radius2 is None else utils.str2inc(radius2)
-        self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
-            .format(radius1, radius2, angle, nodata)
-
-## ==============================================
-## Waffles 'CUDEM' gridding
-##
-## combined gridding method (stacks/surface/coastline/IDW)
-## ==============================================
-class WafflesCUDEM(Waffle):
-    """CUDEM integrated DEM generation.
-    
-Generate an topo/bathy integrated DEM using a variety of data sources.
-Will iterate <pre_count> pre-surfaces at lower-resolutions.
-Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
-Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
-
-generate a DEM with `pre_surface`s which are generated
-at lower resolution and with various weight threshholds.
-
-To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
-Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
-DEM generation. 
-
----
-Parameters:
-    
-landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
-min_weight=[val] - the minumum weight to include in the final DEM
-smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
-pre_count=[val] - number of pre-surface iterations to perform
-pre_upper_limit=[val] - the upper elevation limit of the pre-surfaces (used with landmask)
-poly_count=[True/False]
-keep_auxiliary=[True/False]
-mode=surface
-filter_outliers=[val]
-supercede=[True/False]
-
-< cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:pre_upper_limit=-0.1:mode=surface:supercede=True >
-    """
-    
-    def __init__(
-            self,
-            min_weight=None,
-            pre_count=1,
-            pre_upper_limit=-0.1,
-            smoothing=None,
-            landmask=False,
-            poly_count=True,
-            keep_auxiliary=False,
-            mode='surface',
-            filter_outliers=None,
-            supercede=True,
-            **kwargs
-    ):
-        self.mod = 'cudem'
-        self.mod_args = {
-            'min_weight':min_weight,
-            'pre_count':pre_count,
-            'pre_upper_limit':pre_upper_limit,
-            'smoothing':smoothing,
-            'landmask':landmask,
-            'poly_count':poly_count,
-            'keep_auxiliary':keep_auxiliary,
-            'mode':mode,
-            'supercede':supercede,
-            'filter_outliers':filter_outliers,
-        }
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            utils.echo_error_msg(e)
-            sys.exit()
-
-        self.min_weight = utils.float_or(min_weight)
-        self.pre_count = utils.int_or(pre_count, 1)
-        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1)
-        self.smoothing = utils.int_or(smoothing)
-        self.landmask = landmask
-        self.poly_count = poly_count
-        self.keep_auxiliary = keep_auxiliary
-        self.mode = mode
-        self.supercede = supercede
-        self.filter_outliers = utils.int_or(filter_outliers)
-        if self.filter_outliers is not None:
-            self.filter_outliers = 1 if self.filter_outliers > 9 or self.filter_outliers < 1 else self.filter_outliers
-        
-    def run(self):
-        pre = self.pre_count
-        pre_weight = 0
-        final_region = self.d_region.copy()
-        pre_region = self.p_region.copy()
-        pre_region.wmin = None
-        pre_clip = None 
-        upper_limit = None
-        coast = '{}_cst'.format(self.name)
-        
-        ## Block/Stack the data with weights
-        self._stacks_array(
-            out_name='{}_stack'.format(self.name), supercede=self.supercede
-        )
-        n = '{}_stack_s.tif'.format(self.name)
-        w = '{}_stack_w.tif'.format(self.name)
-        c = '{}_stack_c.tif'.format(self.name)
-        
-        ## Remove outliers from the stacked data
-        if self.filter_outliers is not None:
-            demfun.filter_outliers_slp(
-                n, '_tmp_fltr.tif', agg_level=self.filter_outliers, replace=True
-            )
-            os.rename('_tmp_fltr.tif', n)
-            demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
-            os.rename('_tmp_w.tif', w)
-            demfun.mask_(c, n, '_tmp_c.tif', verbose=self.verbose)
-            os.rename('_tmp_c.tif', c)
-
-        if self.min_weight is None:
-            self.min_weight = demfun.percentile(w, 75)
-        
-        if self.verbose:
-            utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
-            
-        pre_data = ['{},200:weight_mask={}:sample=average,1'.format(n, w)]
-
-        ## Generate Coastline
-        self.coast = None
-        if self.landmask:
-            upper_limit = self.pre_upper_limit
-            if not os.path.exists(utils.str_or(self.landmask)):
-               if os.path.exists('{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))):
-                   coastline = '{}.shp'.format(utils.append_fn(self.landmask, self.region, self.xinc))
-               else:
-                   self.coast = WaffleFactory(
-                       mod='coastline:polygonize={}'.format(self.poly_count),
-                       data=pre_data,
-                       src_region=self.p_region,
-                       xinc=self.xinc,
-                       yinc=self.yinc,
-                       name=coast,
-                       node=self.node,
-                       weights=self.weights,
-                       dst_srs=self.dst_srs,
-                       srs_transform=self.srs_transform,
-                       clobber=True,
-                       verbose=self.verbose
-                   ).acquire().generate()
-                   coastline = '{}.shp:invert=True'.format(self.coast.name)
-            else:
-               coastline = self.landmask
-            pre_clip = '{}'.format(coastline)
-
-        ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
-        while pre >= 0:
-            pre_xinc = float(self.xinc * (3**pre))
-            pre_yinc = float(self.yinc * (3**pre))
-            xsample = self.xinc * (3**(pre - 1))
-            ysample = self.yinc * (3**(pre - 1))
-            if xsample == 0: xsample = self.xinc
-            if ysample == 0: ysample = self.yinc
-            pre_filter=['1:{}'.format(self.smoothing)] if self.smoothing is not None else []
-            
-            ## if not final output, setup the configuration for the pre-surface
-            if pre != self.pre_count:
-                pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
-                if pre_weight == 0: pre_weight = 1-e20
-                _pre_surface = utils.append_fn('_pre_surface', pre_region, pre+1)
-                pre_data = [
-                    '{},200:weight_mask={}:sample=average,1'.format(n, w),
-                    '{}.tif,200:sample=cubicspline:check_path=True,{}'.format(
-                        _pre_surface, pre_weight
-                    )
-                ]
-                pre_region.wmin = pre_weight
-
-            if pre == 0:
-                pre_region.zmax = None
-
-            pre_name = utils.append_fn('_pre_surface', pre_region, pre)
-            if self.verbose:
-                utils.echo_msg('pre region: {}'.format(pre_region))
-
-            ## Grid/Stack the iteration
-            if pre == self.pre_count:
-                waffles_mod_surface = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
-                waffles_mod_surfstack = 'surface:tension=.65:upper_limit={}:blockmean=False:geographic=True:aspect=m'.format(upper_limit)
-            elif pre != 0:
-                waffles_mod_surface = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-                waffles_mod_surfstack = 'stacks:supercede=True:upper_limit={}'.format(upper_limit if upper_limit is not None else None)
-            else:
-                #waffles_mod_surface = 'IDW:min_points=24:supercede=True'
-                waffles_mod_surface = 'scipy:supercede=True'
-                waffles_mod_surfstack = 'stacks:supercede=True'
-            
-            waffles_mod = waffles_mod_surface if self.landmask else waffles_mod_surfstack
-            pre_surface = WaffleFactory(
-                mod=waffles_mod,
-                data=pre_data,
-                src_region=pre_region if pre !=0 else final_region,
-                xinc=pre_xinc if pre !=0 else self.xinc,
-                yinc=pre_yinc if pre !=0 else self.yinc,
-                name=pre_name if pre !=0 else self.name,
-                node=self.node,
-                fltr=pre_filter if pre !=0 else [],
-                weights=1,
-                dst_srs=self.dst_srs,
-                srs_transform=self.srs_transform,
-                clobber=True,
-                verbose=self.verbose,
-                clip=pre_clip if pre !=0 else None,
-            ).acquire().generate()
-
-            # if pre_surface.valid_p():
-            #     if self.coast is not None:
-            #         if pre !=0:
-            #             demfun.mask_(pre_surface.fn, self.coast.fn, '__tmp_coast_clip.tif', msk_value=1, verbose=self.verbose)
-            #             os.rename('__tmp_coast_clip.tif', pre_surface.fn)
-            # else:
-            #     return(None)        
-
-            pre -= 1
-                    
-        if not self.keep_auxiliary:
-            utils.remove_glob('*_pre_surface*')
-            utils.remove_glob('{}*'.format(n), '{}*'.format(c), '{}.*'.format(coast))
-
-        os.rename(w, '{}_w.tif'.format(self.name))
-        self.aux_dems.append('{}_w.tif'.format(self.name))
-            
-        return(self)
-        
-## ==============================================
-## Waffles Raster Stacking
-## ==============================================
-class WafflesStacks_ETOPO(Waffle):
-    """Waffles STACKS gridding module.
-
-Stack data to generate DEM. No interpolation
-occurs with this module. To guarantee a full DEM,
-use a background DEM with a low weight, such as GMRT or GEBCO,
-which will be stacked upon to create the final DEM.
-
-XYZ input data is converted to raster; currently uses `mbgrid` to
-grid the XYZ data before stacking.
-
-set `supercede` to True to have higher weighted data overwrite 
-lower weighted data in overlapping cells. Default performs a weighted
-mean of overlapping data.
-
-note: this class was used for ETOPO2022, updated function is _stacks_array()
-    """
-    def __init__(
-            self,
-            supercede=False,
-            keep_weights=False,
-            keep_count=False,
-            min_count=None,
-            upper_limit=None,
-            lower_limit=None,
-            **kwargs
-    ):
-        self.mod = 'stacks'
-        self.mod_args = {
-            'supercede':supercede,
-            'keep_weights':keep_weights,
-            'keep_count':keep_count,
-            'min_count':min_count,
-            'upper_limit':upper_limit,
-            'lower_limit':lower_limit
-        }
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            utils.echo_error_msg(e)
-            sys.exit()
-        self.supercede = supercede
-        self.keep_weights = keep_weights
-        self.keep_count = keep_count
-        self.min_count = min_count
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self._init_data(set_incs=True)
-        if self.weights is None:
-            self.weights = 1
-        
-    def run(self):
-        xcount, ycount, dst_gt = self.p_region.geo_transform(
-            x_inc=self.xinc, y_inc=self.yinc
-        )
-        gdt = gdal.GDT_Float32
-        z_array = np.zeros((ycount, xcount))
-        count_array = np.zeros((ycount, xcount))
-        weight_array = np.zeros((ycount, xcount))
-
-        if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid using {} method'.format(
-                ycount, xcount, 'supercede' if self.supercede else 'weighted mean'
-            ))
-            
-        for arr, srcwin, gt, w in self.yield_array():
-            if utils.float_or(w) is not None:
-                w_arr = np.zeros((srcwin[3], srcwin[2]))
-                w_arr[~np.isnan(arr)] = w if self.weights else 1
-            else:
-                w_arr = w
-
-            w_arr[np.isnan(arr)] = 0
-            w_arr[np.isnan(w_arr)] = 0
-            c_arr = np.zeros((srcwin[3], srcwin[2]))
-            c_arr[~np.isnan(arr)] = 1
-            count_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += c_arr
-            arr[np.isnan(arr)] = 0
-            if not self.supercede:
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += (arr * w_arr)
-                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] += w_arr
-            else:
-                tmp_z = z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-                tmp_w = weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]]
-                tmp_z[w_arr > tmp_w] = arr[w_arr > tmp_w]
-                tmp_w[w_arr > tmp_w] = w_arr[w_arr > tmp_w]
-                z_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_z
-                weight_array[srcwin[1]:srcwin[1]+srcwin[3],srcwin[0]:srcwin[0]+srcwin[2]] = tmp_w
-            
-        count_array[count_array == 0] = np.nan
-        weight_array[weight_array == 0] = np.nan
-        z_array[np.isnan(weight_array)] = np.nan
-        if not self.supercede:
-            weight_array = weight_array/count_array
-            z_array = (z_array/weight_array)/count_array
-
-        if self.min_count is not None:
-            z_array[count_array < min_count] = np.nan
-            weight_array[count_array < min_count] = np.nan
-
-        if self.upper_limit is not None:
-            z_array[z_array > self.upper_limit] = self.upper_limit
-            
-        if self.lower_limit is not None:
-            z_array[z_array < self.lower_limit] = self.lower_limit
-            
-        z_array[np.isnan(z_array)] = self.ndv
-        weight_array[np.isnan(weight_array)] = self.ndv
-        count_array[np.isnan(count_array)] = self.ndv
-        ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            dst_gt,
-            self.dst_srs,
-            gdal.GDT_Float32,
-            self.ndv,
-            'GTiff'
-        )
-        utils.gdal_write(z_array, '{}.tif'.format(self.name), ds_config, verbose=True)
-        if self.keep_weights:
-            utils.gdal_write(weight_array, '{}_w.tif'.format(self.name), ds_config, verbose=True)
-            self.aux_dems.append('{}_w.tif'.format(self.name))
-            
-        if self.keep_count:
-            utils.gdal_write(count_array, '{}_c.tif'.format(self.name), ds_config, verbose=True)
-            self.aux_dems.append('{}_c.tif'.format(self.name))
-
-        if self.verbose:
-            utils.echo_msg('stacked data to {}/{} grid using {} method'.format(
-                ycount, xcount, 'supercede' if self.supercede else 'weighted mean'
-            ))
-            
-        return(self)
-
-class WafflesStacks(Waffle):
-    """STACK data into a DEM.
-    
-Generate a DEM using a raster STACKing method. 
-By default, will calculate the [weighted]-mean where overlapping cells occur. 
-Set supercede to True to overwrite overlapping cells with higher weighted data.
-
-stack data to generate DEM. No interpolation
-occurs with this module. To guarantee a full DEM,
-use a background DEM with a low weight, such as GMRT or GEBCO,
-which will be stacked upon to create the final DEM.
-
----
-Parameters:
-    
-supercede=[True/False] - superced data cells with higher weighted data
-keep_weights=[True/False] - retain weight raster
-keep_count=[True/False] - retain count raster
-min_count=[val] - only retain data cells if they contain `min_count` overlapping data
-
-< stacks:supercede=False:keep_weights=False:keep_count=False:min_count=None >
-    """
-    
-    def __init__(
-            self,
-            supercede=False,
-            keep_weights=False,
-            keep_count=False,
-            min_count=None,
-            upper_limit=None,
-            lower_limit=None,
-            **kwargs
-    ):
-        self.mod = 'stacks'
-        self.mod_args = {
-            'supercede':supercede,
-            'keep_weights':keep_weights,
-            'keep_count':keep_count,
-            'min_count':min_count,
-            'upper_limit':upper_limit,
-            'lower_limit':lower_limit
-        }
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            utils.echo_error_msg(e)
-            sys.exit()
-        self.supercede = supercede
-        self.keep_weights = keep_weights
-        self.keep_count = keep_count
-        self.min_count = min_count
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self._init_data(set_incs=True)
-        
-    def run(self):
-        self._stacks_array(
-            out_name=self.name,
-            supercede=self.supercede,
-        )
-        os.rename('{}_s.tif'.format(self.name), '{}.tif'.format(self.name))
-        
-        if self.keep_count:
-            self.aux_dems.append('{}_c.tif'.format(self.name))
-        else:
-            utils.remove_glob('{}_c.tif'.format(self.name))
-            
-        if self.keep_weights:
-            self.aux_dems.append('{}_w.tif'.format(self.name))
-        else:
-            utils.remove_glob('{}_w.tif'.format(self.name))
-
-        if self.valid_p():
-            return(self.set_limits(self.upper_limit, self.lower_limit))
-        else:
-            return(self)
-            
-        return(self)
-
-## ==============================================
-## Waffles Coastline/Landmask
-## ==============================================
-class WafflesCoastline(Waffle):
-    """COASTLINE (land/etc-mask) generation
-    
-Generate a coastline (land/etc-mask) using a variety of sources. 
-User data can be provided to provide source for further land masking. 
-Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
-Output vector will polygonize land-areas.
-
-    ---
-    Parameters:
-    
-want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
-want_copernicus=[True/False] - use COPERNICUS to fill background
-want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
-want_lakes=[True/False] - mask LAKES using HYDROLAKES
-want_buildings=[True/False] - mask BUILDINGS using OSM
-osm_tries=[val] - OSM max server attempts
-min_building_length=[val] - only use buildings larger than val
-want_wsf=[True/False] - mask BUILDINGS using WSF
-invert=[True/False] - invert the output results
-polygonize=[True/False] - polygonize the output
-
-< coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
-    """
-    
-    def __init__(
-            self,
-            want_nhd=True,
-            want_copernicus=True,
-            want_gmrt=False,
-            want_lakes=False,
-            want_buildings=False,
-            min_building_length=None,
-            want_osm_planet=False,
-            invert=False,
-            polygonize=True,
-            osm_tries=5,
-            want_wsf=False,
-            **kwargs
-    ):
-        """Generate a landmask from various sources.
-
-        sources include:
-        GMRT
-        Copernicus
-        NHD
-        HydroLakes
-        OSM Buildings
-        *user-data*
-        
-        set polyginize to False to skip polyginizing the landmask, set
-        polygonize to an integer to control how many output polygons will
-        be generated.
-
-        output raster mask will have 0 over water and 1 over land.
-        """
-
-        self.mod = 'coastline'
-        self.mod_args = {
-            'want_nhd':want_nhd,
-            'want_copernicus':want_copernicus,
-            'want_gmrt':want_gmrt,
-            'want_lakes':want_lakes,
-            'want_buildings':want_buildings,
-            'want_wsf':want_wsf,
-            'min_building_length':min_building_length,
-            'want_osm_planet':want_osm_planet,
-            'osm_tries':osm_tries,
-            'invert':invert,
-            'polygonize':polygonize
-        }
-        super().__init__(**kwargs)
-
-        self.want_nhd = want_nhd
-        self.want_gmrt = want_gmrt
-        self.want_copernicus = want_copernicus
-        self.want_lakes = want_lakes
-        self.want_buildings = want_buildings
-        self.want_wsf = want_wsf
-        self.min_building_length = min_building_length
-        self.want_osm_planet = want_osm_planet
-        self.invert = invert
-        self.polygonize = polygonize
-        self.osm_tries = utils.int_or(osm_tries, 5)
-
-        self.coast_array = None
-        self.ds_config = None
-
-        import cudem.fetches.copernicus
-        import cudem.fetches.tnm
-        import cudem.fetches.gmrt
-        import cudem.fetches.hydrolakes
-        import cudem.fetches.osm
-        import cudem.fetches.wsf
-        import cudem.fetches.utils
-
-        self.f_region = self.p_region.copy()
-        self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
-        self.f_region.src_srs = self.dst_srs
-        self.wgs_region = self.f_region.copy()
-        if self.dst_srs is not None:
-            self.wgs_region.warp('epsg:4326')
-        else:
-            self.dst_srs = 'epsg:4326'            
-
-        horz_epsg, vert_epsg = utils.epsg_from_input(self.dst_srs)
-        self.cst_srs = osr.SpatialReference()
-        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
-            
-    def run(self):
-        self._load_coast_mask()
-
-        if self.want_gmrt:
-            self._load_gmrt()
-            
-        if self.want_copernicus:
-            self._load_copernicus()
-
-        if self.want_nhd:
-            self._load_nhd()
-
-        if self.want_lakes:
-            self._load_lakes()
-
-        if self.want_buildings:
-            self._load_bldgs()
-
-        if self.want_wsf:
-            self._load_wsf()
-            
-        if len(self.data) > 0:
-            self._load_data()
-
-        if self.verbose:
-            utils.echo_msg(
-                'finanlizing array for region {} at {} {}...'.format(
-                    self.p_region.format('gmt'), self.ds_config['nx'], self.ds_config['ny']
-                )
-            )
-        self._finalize_array()
-        self._write_coast_array()
-        if self.polygonize:
-            if utils.int_or(self.polygonize) is not None:
-                self._write_coast_poly(poly_count=self.polygonize)
-            else:
-                self._write_coast_poly()
-            
-        return(self)
-
-    def _finalize_array(self):
-        self.coast_array[self.coast_array > 0] = 1
-        self.coast_array[self.coast_array <= 0] = 0
-        if self.invert:
-            self.coast_array[self.coast_array == 0] = 2
-            self.coast_array[self.coast_array == 1] = 0
-            self.coast_array[self.coast_array == 2] = 1
-            
-    def _load_coast_mask(self):
-        """create a nodata grid"""
-        
-        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        self.ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            gt,
-            utils.sr_wkt(self.cst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            'GTiff'
-        )        
-        self.coast_array = np.zeros( (ycount, xcount) )
-
-    def _load_gmrt(self):
-        """GMRT - Global low-res.
-
-        Used to fill un-set cells.
-        """
-        
-        this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, layer='topo', outdir=self.cache_dir
-        )
-        #this_gmrt._outdir = self.cache_dir
-        this_gmrt.run()
-
-        fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        gmrt_tif = this_gmrt.results[0]
-        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
-        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
-        gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
-        gmrt_ds_arr[gmrt_ds_arr > 0] = 1
-        gmrt_ds_arr[gmrt_ds_arr < 0] = 0
-        self.coast_array += gmrt_ds_arr
-        gmrt_ds = gmrt_ds_arr = None
-        
-    def _load_copernicus(self):
-        """copernicus"""
-
-        this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=self.wgs_region,
-            weight=self.weights,
-            verbose=self.verbose,
-            datatype='1',
-            outdir=self.cache_dir
-        )
-        #this_cop._outdir = self.cache_dir
-        this_cop.run()
-
-        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-        
-        for i, cop_tif in enumerate(this_cop.results):
-            demfun.set_nodata(cop_tif[1], 0, verbose=False)
-            cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-            gdal.Warp(
-                cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
-                callback=False, srcNodata=0
-            )
-            cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
-            cop_ds_arr[cop_ds_arr != 0] = 1
-            self.coast_array += cop_ds_arr
-            cop_ds = cop_ds_arr = None
-
-    def _load_wsf(self):
-        """wsf"""
-
-        this_wsf = cudem.fetches.wsf.WSF(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
-        )
-        #this_wsf._outdir = self.cache_dir
-        this_wsf.run()
-
-        fr = cudem.fetches.utils.fetch_results(this_wsf, want_proc=False, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-       
-        for i, wsf_tif in enumerate(this_wsf.results):
-            demfun.set_nodata(wsf_tif[1], 0, verbose=False)
-            wsf_ds = demfun.generate_mem_ds(self.ds_config, name='wsf')
-
-            gdal.Warp(
-                wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
-                callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
-            )
-            wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
-            wsf_ds_arr[wsf_ds_arr != 0 ] = -1
-            self.coast_array += wsf_ds_arr
-            wsf_ds = wsf_ds_arr = None
-            
-    def _load_nhd(self):
-        """USGS NHD (HIGH-RES U.S. Only)
-        Fetch NHD (NHD High/Plus) data from TNM to fill in near-shore areas. 
-        High resoultion data varies by location...
-        """
-
-        this_tnm = cudem.fetches.tnm.TheNationalMap(
-            src_region=self.wgs_region,
-            weight=self.weights,
-            verbose=self.verbose,
-            where="Name LIKE '%Hydro%'",
-            extents='HU-8 Subbasin,HU-4 Subregion',
-            outdir=self.cache_dir
-        )
-        this_tnm.run()
-        fr = cudem.fetches.utils.fetch_results(this_tnm, want_proc=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
-        if len(this_tnm.results) > 0:
-            for i, tnm_zip in enumerate(this_tnm.results):
-                tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
-                gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
-
-            utils.run_cmd(
-                'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
-                    self.p_region.format('te'),
-                    self.ds_config['nx'],
-                    self.ds_config['ny'],
-                ),
-                verbose=self.verbose
-            )
-
-            try:
-                gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
-            except:
-                tnm_ds = None
-                
-            #tnm_ds = gdal.Open('nhdArea_merge.tif')
-            if tnm_ds is not None:
-                tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-                tnm_ds_arr[tnm_ds_arr < 1] = 0
-                self.coast_array -= tnm_ds_arr
-                tnm_ds = tnm_ds_arr = None
-                
-            utils.remove_glob('nhdArea_merge.*')
-
-    def _load_lakes(self):
-        """HydroLakes -- Global Lakes"""
-        
-        this_lakes = cudem.fetches.hydrolakes.HydroLakes(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
-        )
-        #this_lakes._outdir = self.cache_dir
-        this_lakes.run()
-        
-        fr = cudem.fetches.utils.fetch_results(this_lakes, want_proc=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-        
-        lakes_shp = None
-        lakes_zip = this_lakes.results[0][1]
-        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
-        for i in lakes_shps:
-            if i.split('.')[-1] == 'shp':
-                lakes_shp = i
-
-        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
-        lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
-        lk_ds = ogr.Open(lakes_shp)
-        if lk_ds is not None:
-            lk_layer = lk_ds.GetLayer()
-            lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
-            gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
-            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
-            lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[lakes_ds_arr == -1] = 0
-            lakes_ds = lk_ds = lakes_warp_ds = None
-        else:
-            utils.echo_error_msg('could not open {}'.format(lakes_shp))
-
-    def _load_bldgs(self):
-        """load buildings from OSM
-        
-        OSM has a size limit, so will chunk the region and
-        do multiple osm calls
-        """
-
-        # bldg_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
-        # bldg_warp_ds = demfun.generate_mem_ds(self.ds_config, name='bldg')
-        this_osm = cudem.fetches.osm.OpenStreetMap(
-            src_region=self.wgs_region, weight=self.weights, verbose=self.verbose,
-            planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm',
-            min_length=self.min_building_length, outdir=self.cache_dir
-        )
-        #this_osm._outdir = self.cache_dir
-        this_osm.run()
-
-        # fr = cudem.fetches.utils.fetch_results(this_osm, want_proc=False, check_size=False)
-        # fr.daemon = True
-        # fr.start()
-        # fr.join()
-        
-        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
-        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-
-        with utils.CliProgress(
-                total=len(this_osm.results),
-                message='processing OSM buildings',
-        ) as pbar:
-            for n, osm_result in enumerate(this_osm.results):
-                pbar.update()
-                if cudem.fetches.utils.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
-                    #if True:
-                    if osm_result[-1] == 'bz2':
-                        osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
-                        osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
-                        _clipped = True
-                    elif osm_result[-1] == 'pbf':
-                        osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
-                        #osm_file = utils.ogr_clip(osm_result[1], self.wgs_region)
-                        _clipped = True
-                    else:
-                        osm_file = osm_result[1]
-                        _clipped = False
-
-                    # utils.run_cmd(
-                    #     'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -where "building!=\'\'" -te {} -ts {} {} -ot Int32'.format(
-                    #         osm_file,
-                    #         self.p_region.format('te'),
-                    #         self.ds_config['nx'],
-                    #         self.ds_config['ny'],
-                    #     ),
-                    #     verbose=True
-                    # )
-
-                    # osm_ds = ogr.Open(osm_file)
-                    # osm_layer = osm_ds.GetLayer('multipolygons')
-                    # #print(osm_layer.GetFeatureCount())
-                    # osm_layer_dfn = osm_layer.GetLayerDefn()
-                    # print(osm_layer_dfn)
-                    # #osm_fi = osm_layer_dfn.GetFieldIndex()
-                    # #print(osm_fi)
-                    # osm_fi = osm_layer_dfn.GetFieldIndex('building')
-                    # print(osm_fi)
-                    # osm_ds = None
-
-                    if os.path.getsize(osm_file) == 366:
-                        continue
-
-                    out, status = utils.run_cmd(
-                        'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
-                            osm_file,
-                            self.p_region.format('te'),
-                            self.ds_config['nx'],
-                            self.ds_config['ny'],
-                        ),
-                        verbose=False
-                    )
-
-                    if status == 0:
-                        bldg_ds = gdal.Open('bldg_osm.tif')
-                        #bldg_ds = gdal.Warp('', 'bldg_osm.tif', format='MEM', dstSRS=self.cst_srs, resampleAlg=self.sample, callback=gdal.TermProgress)
-                        if bldg_ds is not None:
-                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                            self.coast_array[bldg_ds_arr == -1] = 0
-                            bldg_ds = bldg_ds_arr = None
-
-                        bldg_ds = None
-
-                    utils.remove_glob('bldg_osm.tif*')
-
-                    # osm_ds = ogr.Open(osm_file)
-                    # if osm_ds is not None:
-                    #     osm_layer = osm_ds.GetLayer('multipolygons')
-                    #     #osm_layer.SetSpatialFilter(self.wgs_region.export_as_geom())
-                    #     osm_layer.SetAttributeFilter("building!=''")
-                    #     gdal.RasterizeLayer(bldg_ds, [1], osm_layer, burn_values=[-1])
-                    #     gdal.Warp(bldg_warp_ds, bldg_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
-                    #     bldg_arr = bldg_warp_ds.GetRasterBand(1).ReadAsArray()
-                    #     self.coast_array[bldg_arr == -1] = 0
-                    # else:
-                    #     utils.echo_error_msg('could not open ogr dataset {}'.format(osm_file))
-                    # osm_ds = None
-                    #if _clipped:
-                    #    utils.remove_glob(osm_file)
-                #else:
-                #/    utils.echo_error_msg('failed to fetch {}'.format(osm_result[0]))
-
-        bldg_ds = bldg_warp_ds = None
-        
-    def _load_data(self):
-        """load data from user datalist and amend coast_array"""
-
-        for this_data in self.data:
-            #print(this_data)
-            for this_arr in this_data.yield_array():
-                data_arr = this_arr[0]['z']
-                srcwin = this_arr[1]
-                data_arr[np.isnan(data_arr)] = 0
-                data_arr[data_arr > 0] = 1
-                data_arr[data_arr < 0] = -1
-                self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
-                                 srcwin[0]:srcwin[0]+srcwin[2]] += data_arr
-
-    def _write_coast_array(self):
-        """write coast_array to file"""
-
-        if self.verbose:
-            utils.echo_msg('writing array to {}.tif...'.format(self.name))
-            
-        utils.gdal_write(
-            self.coast_array, '{}.tif'.format(self.name), self.ds_config,
-        )
-
-    def _write_coast_poly(self, poly_count=None):
-        """convert to coast_array vector"""
-
-        if self.verbose:
-            utils.echo_msg('polygonizing array to {}.shp...'.format(self.name))
-        
-        poly_count = utils.int_or(poly_count)
-        tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
-            'tmp_c_{}.shp'.format(self.name)
-        )
-        
-        if tmp_ds is not None:
-            tmp_layer = tmp_ds.CreateLayer('tmp_c_{}'.format(self.name), None, ogr.wkbMultiPolygon)
-            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-            demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
-            tmp_ds = None
-            
-        # utils.run_cmd(
-        #     'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
-        #         self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
-        #     verbose=self.verbose
-        # )
-        utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM tmp_c_{} WHERE DN=0 {}" {}.shp tmp_c_{}.shp'.format(
-                self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
-            verbose=self.verbose
-        )        
-        utils.remove_glob('tmp_c_{}.*'.format(self.name))
-        utils.run_cmd(
-            'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
-                self.name, self.name),
-            verbose=self.verbose
-        )
-        
-        #utils.gdal_prj_file(self.name + '.prj', self.cst_srs)
-        print(self.dst_srs)
-        print(self.cst_srs.ExportToProj4())
-        utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
-
-## ==============================================
-## Waffles Lakes Bathymetry
-## ==============================================
-class WafflesLakes(Waffle):
-    """Estimate lake bathymetry.
-    
-By default, will return lake bathymetry as depth values (positive down), 
-to get elevations (positive up), set apply_elevations=True.
-
----
-Parameters:
-    
-apply_elevations=[True/False] - use COPERNICUS to apply lake level elevations to output
-min_area=[val] - minimum lake area to consider
-max_area=[val] - maximum lake area to consider
-min_id=[val] - minimum lake ID to consider
-max_id=[val] - maximum lake ID to consider
-depth=[globathy/hydrolakes/val] - obtain the depth value from GloBathy, HydroLakes or constant value
-
-< lakes:apply_elevations=False:min_area=None:max_area=None:min_id=None:max_id=None:depth=globathy:elevations=copernicus >
-    """
-    
-    def __init__(
-            self,
-            apply_elevations=False,
-            min_area=None,
-            max_area=None,
-            min_id=None,
-            max_id=None,
-            depth='globathy',
-            elevations='copernicus',
-            **kwargs
-    ):
-        self.mod = 'lakes'
-        self.mod_args = {}
-
-        super().__init__(**kwargs)
-        self._mask = None
-        self.apply_elevations = apply_elevations
-        self.min_area = min_area
-        self.max_area = max_area
-        self.min_id = min_id
-        self.max_id = max_id
-        self.depth = depth
-        self.elevations = elevations
-        self.ds_config = None
-            
-        self.wgs_region = self.p_region.copy()
-        if self.dst_srs is not None:
-            self.wgs_region.warp('epsg:4326')            
-        else:
-            self.dst_srs = 'epsg:4326'
-
-    def _init_bathy(self):
-        """create a nodata grid"""
-        
-        xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        self.ds_config = demfun.set_infos(
-            xcount,
-            ycount,
-            xcount * ycount,
-            gt,
-            utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32,
-            self.ndv,
-            'GTiff'
-        )
-            
-    def _fetch_lakes(self):
-        """fetch hydrolakes polygons"""
-
-        this_lakes = cudem.fetches.hydrolakes.HydroLakes(
-            src_region=self.p_region, weight=self.weights, verbose=self.verbose, outdir=self.cache_dir
-        )
-        #this_lakes._outdir = self.cache_dir
-        this_lakes.run()
-
-        fr = cudem.fetches.utils.fetch_results(
-            this_lakes, want_proc=False, check_size=False
-        )
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        lakes_shp = None
-        lakes_zip = this_lakes.results[0][1]
-        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
-        for i in lakes_shps:
-            if i.split('.')[-1] == 'shp':
-                lakes_shp = i
-
-        return(lakes_shp)
-
-    def _fetch_globathy(self, ids=[]):
-        """fetch globathy csv data and process into dict"""
-        
-        import csv
-        import cudem.fetches.utils
-        
-        _globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
-        globathy_zip = os.path.join(self.cache_dir, 'globathy_parameters.zip')
-        cudem.fetches.utils.Fetch(
-            _globathy_url, verbose=self.verbose
-        ).fetch_file(
-            globathy_zip, check_size=False
-        )
-        globathy_csvs = utils.unzip(globathy_zip, self.cache_dir)        
-        globathy_csv = os.path.join(self.cache_dir, 'GLOBathy_basic_parameters/GLOBathy_basic_parameters(ALL_LAKES).csv')
-        with open(globathy_csv, mode='r') as globc:
-            reader = csv.reader(globc)
-            next(reader)
-            if len(ids) > 0:
-                globd = {}
-                for row in reader:
-                    if int(row[0]) in ids:
-                        globd[int(row[0])] = float(row[-1])
-                        ids.remove(int(row[0]))
-                        
-                    if len(ids) == 0:
-                        break
-            else:
-                globd = {int(row[0]):float(row[-1]) for row in reader}
-
-        return(globd)
-
-    def _fetch_gmrt(self, gmrt_region=None):
-        """GMRT - Global low-res.
-        """
-
-        if gmrt_region is None:
-            gmrt_region = self.p_region
-        
-        this_gmrt = cudem.fetches.gmrt.GMRT(
-            src_region=gmrt_region, weight=self.weights, verbose=self.verbose, layer='topo', outdir=self.cache_dir
-        )
-        #this_gmrt._outdir = self.cache_dir
-        this_gmrt.run()
-
-        fr = cudem.fetches.utils.fetch_results(this_gmrt, want_proc=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        
-        gmrt_tif = this_gmrt.results[0]
-        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
-        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
-        return(gmrt_ds)
-    
-    def _fetch_copernicus(self, cop_region=None):
-        """copernicus"""
-
-        if cop_region is None:
-            cop_region = self.p_region
-            
-        this_cop = cudem.fetches.copernicus.CopernicusDEM(
-            src_region=cop_region, weight=self.weights, verbose=self.verbose, datatype='1', outdir=self.cache_dir
-        )
-        #this_cop._outdir = self.cache_dir
-        this_cop.run()
-
-        fr = cudem.fetches.utils.fetch_results(this_cop, want_proc=False, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
-        dst_srs = osr.SpatialReference()
-        dst_srs.SetFromUserInput(self.dst_srs)
-        cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
-        [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
-        
-        return(cop_ds)
-    
-    def generate_mem_ogr(self, geom, srs):
-        """Create temporary polygon vector layer from feature geometry 
-        so that we can rasterize it (Rasterize needs a layer)
-        """
-        
-        ds = ogr.GetDriverByName('MEMORY').CreateDataSource('')
-        Layer = ds.CreateLayer('', geom_type=ogr.wkbPolygon, srs=srs)
-        outfeature = ogr.Feature(Layer.GetLayerDefn())
-        outfeature.SetGeometry(geom)
-        Layer.SetFeature(outfeature)
-
-        return(ds)
-
-    ##
-    ## Adapted from GLOBathy
-    def apply_calculation(self, shore_distance_arr, lake_depths_arr, shore_arr=None):
-        """
-        Apply distance calculation, which is each pixel's distance to shore, multiplied
-        by the maximum depth, all divided by the maximum distance to shore. This provides
-        a smooth slope from shore to lake max depth.
-
-        shore_distance - Input numpy array containing array of distances to shoreline.
-            Must contain positive values for distance away from shore and 0 elsewhere.
-        max_depth - Input value with maximum lake depth.
-        NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
-        """
-
-        labels, nfeatures = ndimage.label(shore_distance_arr)
-        nfeatures = np.arange(1, nfeatures +1)
-        maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
-        max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with utils.CliProgress(
-                total=len(nfeatures),
-                message='applying labels...',
-        ) as pbar:
-            for n, x in enumerate(nfeatures):
-                pbar.update()
-                max_dist_arr[labels==x] = maxes[x-1]
-        
-        max_dist_arr[max_dist_arr == 0] = np.nan
-        bathy_arr = (shore_distance_arr * lake_depths_arr) / max_dist_arr
-        bathy_arr[bathy_arr == 0] = np.nan
-
-        if shore_arr is None \
-           or shore_arr.size == 0 \
-           or shore_arr[~np.isnan(bathy_arr)].size == 0 \
-           or shore_arr[~np.isnan(bathy_arr)].max() == 0:
-            utils.echo_warning_msg('invalid shore array, using default shore value of zero')
-            bathy_arr = 0 - bathy_arr
-        else:
-            bathy_arr = shore_arr - bathy_arr
-
-        utils.echo_msg('applied shore elevations to lake depths')
-        bathy_arr[np.isnan(bathy_arr)] = 0
-        return(bathy_arr)    
-    
-    def run(self):
-        #self.p_region.buffer(pct=2)
-        
-        lakes_shp = self._fetch_lakes()
-        lk_ds = ogr.Open(lakes_shp, 1)
-        lk_layer = lk_ds.GetLayer()
-
-        ## filter layer to region
-        filter_region = self.p_region.copy()
-        lk_layer.SetSpatialFilter(filter_region.export_as_geom())
-
-        ## filter by ID
-        if self.max_id is not None:
-            lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
-            
-        if self.min_id is not None:
-            lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
-
-        ## filter by Area
-        if self.max_area is not None:
-            lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
-            
-        if self.min_area is not None:
-            lk_layer.SetAttributeFilter('Lake_area > {}'.format(self.min_area))
-        
-        lk_features = lk_layer.GetFeatureCount()
-        lk_regions = self.p_region.copy()
-        with utils.CliProgress(
-                total=len(lk_layer),
-                message='processing {} lakes'.format(lk_features),
-        ) as pbar:
-            for lk_f in lk_layer:
-                pbar.update()
-                this_region = regions.Region()
-                lk_geom = lk_f.GetGeometryRef()
-                lk_wkt = lk_geom.ExportToWkt()
-                this_region.from_list(ogr.CreateGeometryFromWkt(lk_wkt).GetEnvelope())
-                lk_regions = regions.regions_merge(lk_regions, this_region)
-
-        while not regions.regions_within_ogr_p(self.p_region, lk_regions):
-            utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
-            self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
-
-        self._init_bathy()
-            
-        ## fetch and initialize the copernicus data
-        if self.elevations == 'copernicus':
-            cop_ds = self._fetch_copernicus(cop_region=self.p_region)
-            cop_band = cop_ds.GetRasterBand(1)
-        elif self.elevations == 'gmrt':
-            cop_ds = self._fetch_gmrt(gmrt_region=self.p_region)
-            cop_band = cop_ds.GetRasterBand(1)
-        elif utils.float_or(self.elevations) is not None:
-            cop_band = None
-            cop_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
-            cop_arr[:] = self.elevations
-        elif os.path.exists(self.elevations):
-            elev_ds = gdal.Open(self.elevations)
-            if elev_ds is not None:
-                dst_srs = osr.SpatialReference()
-                dst_srs.SetFromUserInput(self.dst_srs)
-                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
-                gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
-                cop_band = cop_ds.GetRasterBand(1)
-            else:
-                cop_band = None
-                cop_arr = None
-        else:
-            cop_band = None
-            cop_arr = None
-        
-        ## initialize the tmp datasources
-        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
-        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
-        msk_band = None
-        globd = None
-        
-        ## get lake ids and globathy depths
-        lk_ids = []
-        [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
-
-        utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
-        if self.depth == 'globathy':
-            globd = self._fetch_globathy(ids=lk_ids[:])
-            ## rasterize hydrolakes using id
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
-            msk_ds.FlushCache()
-            msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
-
-            ## assign max depth from globathy
-            msk_arr = msk_band.ReadAsArray()
-            with utils.CliProgress(
-                    total=len(lk_ids),
-                    message='Assigning Globathy Depths to rasterized lakes...',
-            ) as pbar:
-                for n, this_id in enumerate(lk_ids):
-                    depth = globd[this_id]
-                    msk_arr[msk_arr == this_id] = depth
-                    pbar.update()
-            
-        elif self.depth == 'hydrolakes':
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Depth_avg"], callback=gdal.TermProgress)
-            msk_ds.FlushCache()
-            msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
-            msk_arr = msk_band.ReadAsArray()
-            
-        elif utils.float_or(self.depth) is not None:
-            msk_arr = np.zeros((self.ds_config['nx'], self.ds_config['ny']))
-            msk_arr[:] = self.depth
-            
-        else:            
-            msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
-            
-        ## calculate proximity of lake cells to shore
-        if msk_band is None:
-            gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
-            msk_ds.FlushCache()
-            msk_band = msk_ds.GetRasterBand(1)
-            msk_band.SetNoDataValue(self.ds_config['ndv'])
-            
-        lk_ds = None
-        prox_band = prox_ds.GetRasterBand(1)
-        proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-        gdal.ComputeProximity(msk_band, prox_band, options=proximity_options, callback=gdal.TermProgress)        
-        prox_arr = prox_band.ReadAsArray()
-        if cop_band is not None:
-            cop_arr = cop_band.ReadAsArray()
-
-        utils.echo_msg('Calculating simulated lake depths...')
-        ## apply calculation from globathy
-        bathy_arr = self.apply_calculation(
-            prox_arr,
-            msk_arr,
-            shore_arr=cop_arr,
-        )
-
-        bathy_arr[bathy_arr == 0] = self.ndv        
-        utils.gdal_write(
-            bathy_arr, '{}.tif'.format(self.name), self.ds_config,
-        )            
-
-        prox_ds = msk_ds = cop_ds = None
-        return(self)
-
-    def apply_calculation2(self, shore_distance_arr, max_depth=0, shore_arr=None, shore_elev=0):
-        """
-        Apply distance calculation, which is each pixel's distance to shore, multiplied
-        by the maximum depth, all divided by the maximum distance to shore. This provides
-        a smooth slope from shore to lake max depth.
-
-        shore_distance - Input numpy array containing array of distances to shoreline.
-            Must contain positive values for distance away from shore and 0 elsewhere.
-        max_depth - Input value with maximum lake depth.
-        NoDataVal - value to assign to all non-lake pixels (zero distance to shore).
-        """
-
-        max_dist = float(1e-7) if shore_distance_arr.max() <= 0 else shore_distance_arr.max()
-        bathy_arr = (shore_distance_arr * max_depth) / float(max_dist)
-        bathy_arr[bathy_arr == 0] = np.nan
-
-        if shore_arr is None \
-           or shore_arr.size == 0 \
-           or shore_arr[~np.isnan(bathy_arr)].size == 0 \
-           or shore_arr[~np.isnan(bathy_arr)].max() == 0:
-            bathy_arr = shore_elev - bathy_arr
-        else:
-            bathy_arr = shore_arr - bathy_arr
-            
-        bathy_arr[np.isnan(bathy_arr)] = 0
-        return(bathy_arr)
-    
-    def run2(self):        
-        self._load_bathy()        
-        lakes_shp = self._fetch_lakes()
-        cop_ds = self._fetch_copernicus()
-        cop_band = cop_ds.GetRasterBand(1)
-        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
-        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
-
-        lk_ds = ogr.Open(lakes_shp)
-        lk_layer = lk_ds.GetLayer()
-        lk_layer.SetSpatialFilter(self.p_region.export_as_geom())
-        lk_features = lk_layer.GetFeatureCount()
-
-        lk_ids = []
-        for i, feat in enumerate(lk_layer):
-            lk_ids.append(feat.GetField('Hylak_id'))
-
-        globd = self._fetch_globathy(ids=lk_ids)
-
-        with utils.CliProgress(
-                total=len(lk_layer),
-                message='processing lakes',
-        ) as pbar:            
-            for i, feat in enumerate(lk_layer):
-                pbar.update()
-                lk_id = feat.GetField('Hylak_id')
-                lk_elevation = feat.GetField('Elevation')
-                lk_depth_glb = globd[lk_id]
-
-                lk_name = feat.GetField('Lake_name')
-                lk_depth = feat.GetField('Depth_avg')
-                lk_area = feat.GetField('Lake_area')
-                utils.echo_msg('lake: {}'.format(lk_name))
-                utils.echo_msg('lake elevation: {}'.format(lk_elevation))
-                utils.echo_msg('lake_depth: {}'.format(lk_depth))
-                utils.echo_msg('lake_area: {}'.format(lk_area))
-                utils.echo_msg('cell_area: {}'.format(self.xinc*self.yinc))
-                utils.echo_msg('lake_depth (globathy): {}'.format(lk_depth_glb))
-
-                tmp_ds = self.generate_mem_ogr(feat.GetGeometryRef(), lk_layer.GetSpatialRef())
-                tmp_layer = tmp_ds.GetLayer()            
-                gdal.RasterizeLayer(msk_ds, [1], tmp_layer, burn_values=[1])            
-                msk_band = msk_ds.GetRasterBand(1)
-                msk_band.SetNoDataValue(self.ds_config['ndv'])
-
-                prox_band = prox_ds.GetRasterBand(1)
-                proximity_options = ["VALUES=0", "DISTUNITS=PIXEL"]
-                gdal.ComputeProximity(msk_band, prox_band, options=proximity_options)
-
-                prox_arr = prox_band.ReadAsArray()
-                msk_arr = msk_band.ReadAsArray()
-
-                self.bathy_arr += self.apply_calculation(
-                    prox_band.ReadAsArray(),
-                    max_depth=lk_depth_glb,
-                    shore_arr=cop_band.ReadAsArray(),
-                    shore_elev=lk_elevation
-                )
-
-                prox_arr[msk_arr == 1] = 0
-                prox_ds.GetRasterBand(1).WriteArray(prox_arr)
-                msk_arr[msk_arr == 1] = 0
-                msk_ds.GetRasterBand(1).WriteArray(msk_arr)
-                tmp_ds = None
-            
-        self.bathy_arr[self.bathy_arr == 0] = self.ndv        
-        utils.gdal_write(
-            self.bathy_arr, '{}.tif'.format(self.name), self.ds_config,
-        )            
-        prox_ds = msk_ds = None
-        return(self)    
-    
-## ==============================================
-## Waffles DEM update - testing
-## ==============================================
 class WafflesPatch(Waffle):
     """PATCH an existing DEM with new data.
     
-Patch an existing DEM with data from the datalist.
+    Patch an existing DEM with data from the datalist.
 
-< patch:min_weight=.5:dem=None >
-
-    ---
+    -----------
     Parameters:
     
     dem=[path] - the path the the DEM to update
@@ -3931,32 +2780,11 @@ Patch an existing DEM with data from the datalist.
             dem=None,
             **kwargs
     ):
-        self.mod = 'update'
-        self.mod_args = {
-            'radius':radius,
-            'min_weight':min_weight,
-            'max_diff':max_diff,
-            'dem':dem
-        }
-        try:
-            super().__init__(**kwargs)
-        except Exception as e:
-            utils.echo_error_msg(e)
-            sys.exit()
-
+        super().__init__(**kwargs)
         self.radius = utils.str2inc(radius)
         self.min_weight = utils.float_or(min_weight)
         self.max_diff = utils.float_or(max_diff)
-
-        if dem is not None:
-            if os.path.exists(dem):
-                self.dem = dem
-        elif os.path.exists('{}.tif'.format(self.name)):
-            self.dem = '{}.tif'.format(self.name)
-            self.name = '{}_update'.format(self.name)
-        else:
-            utils.echo_error_msg('must specify DEM to patch (:dem=fn) to run the patch module.')
-            return(None)
+        self.dem = dem
 
     def yield_diff(self, src_dem, max_diff=.25):
         '''query a gdal-compatible grid file with xyz data.
@@ -4004,13 +2832,24 @@ Patch an existing DEM with data from the datalist.
     def query_dump(self, dst_port=sys.stdout, encode=False,  max_diff=.25, **kwargs):
         for xyz in self.yield_diff(self.dem, max_diff):
             xyz.dump(
-                include_w = True if self.weights is not None else False,
+                include_w = self.want_weight,
+                include_u = self.want_uncertainty,
                 dst_port=dst_port,
                 encode=encode,
                 **kwargs
             )
         
     def run(self):
+        if dem is not None:
+            if os.path.exists(dem):
+                self.dem = dem
+        elif os.path.exists('{}.tif'.format(self.name)):
+            self.dem = '{}.tif'.format(self.name)
+            self.name = '{}_update'.format(self.name)
+        else:
+            utils.echo_error_msg('must specify DEM to patch (:dem=fn) to run the patch module.')
+            return(None)
+
         dem_infos = demfun.infos(self.dem)
         dem_region = regions.Region().from_geo_transform(geo_transform=dem_infos['geoT'], x_count=dem_infos['nx'], y_count=dem_infos['ny'])
 
@@ -4083,301 +2922,254 @@ Patch an existing DEM with data from the datalist.
         diff_ds = dem_ds = None
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
+
+## ==============================================
+## WaffleDEM which holds a gdal DEM to process
+## WaffleDEM(fn='module_output.tif')
+## ==============================================
+class WaffleDEM:
+    def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {}, cache_dir: str = waffles_cache, verbose: bool = True, waffle: Waffle = None):
+        self.fn = fn # the dem filename
+        self.ds_config = ds_config # a dem config dictionary (see utils.gdal_gather_infos)
+        self.cache_dir = cache_dir
+        self.verbose = verbose # verbosity
+        #self.dem_ds = None # the dem as a gdal datasource
+        self.dem_region = None # the dem regions.Region()
+        self.waffle = waffle
+
+    def initialize(self):
+        if os.path.exists(self.fn):
+            dem_ds = gdal.Open(self.fn, 1)
+
+            if dem_ds is not None:
+                self.ds_config = utils.gdal_gather_infos(dem_ds, scan=True)
+                self.dem_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
+
+                dem_ds = None
+            
+        return(self)
+
+    def valid_p(self):
+        """check if the WAFFLES DEM appears to be valid"""
+
+        if not os.path.exists(self.fn):
+            return(False)
+        
+        self.initialize()
+        if self.ds_config is not None:
+            if np.isnan(self.ds_config['zr'][0]):
+                return(False)
+        else:
+            return(False)
+        
+        return(True)
+        
+    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
+                clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None):
+        if self.ds_config is None:
+            self.initialize()
+
+        if ndv is not None:
+            self.set_nodata(ndv)
+
+        ## filtering the DEM will change the weights/uncertainty
+        if filter_ is not None:
+            self.filter_(filter_)
+
+        ## resamples all bands
+        self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
+        self.clip(clip_str=clip_str)
+        if region is not None:
+            self.cut(region=region)
+
+        ## setting limits will change the weights/uncertainty for flattened data
+        self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
+        if dst_srs is not None:
+            self.set_srs(dst_srs=dst_srs)
+            
+        self.set_metadata(node=node)
+        self.reformat(out_fmt=dst_fmt)
+        self.move(out_dir=dst_dir)
+            
+    def set_nodata(self, ndv):
+        if self.ds_config['ndv'] != ndv:
+            utils.gdal_set_nodata(self.fn, nodata=ndv, convert_array=True, verbose=self.verbose)
+            self.ds_config['ndv'] = ndv
+
+    def filter_(self, fltr = []):
+        if len(fltr) > 0:
+            for f in fltr:
+                fltr_val = None
+                split_val = None
+                fltr_opts = f.split(':')
+                fltr = fltr_opts[0]
+                if len(fltr_opts) > 1:
+                    fltr_val = fltr_opts[1]
+
+                if len(fltr_opts) > 2:
+                    split_val= fltr_opts[2]
+
+                # fails if fltr_val in float
+                if demfun.filter_(
+                        fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
+                ) == 0:
+                    os.rename('__tmp_fltr.tif', fn)
+            
+    def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
+        if xsample is not None or ysample is not None:
+            warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
+            if demfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
+                                  sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
+                os.rename(warp_fn, fn)
+                self.initialize()
+
+    def clip(self, clip_str = None):
+        ## todo: update for multi-band
+        ## todo: add coastline option
+        if clip_str is not None:
+            clip_args = {}
+            cp = clip_str.split(':')
+            clip_args['src_ply'] = cp[0]
+            clip_args['verbose'] = self.verbose
+            clip_args = factory.args2dict(cp[1:], clip_args)
+
+            #         if clip_args['src_ply'] == 'coastline':
+            #             self.coast = WaffleFactory(mod='coastline:polygonize=False', data=self.data_, src_region=self.p_region,
+            #                                        xinc=self.xsample if self.xsample is not None else self.xinc, yinc=self.ysample if self.ysample is not None else self.yinc,
+            #                                        name='tmp_coast', node=self.node, want_weight=self.want_weight, want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs,
+            #                                        srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
+            #             self.coast.initialize()
+            #             self.coast.generate()
+            #             demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
+            #             os.rename('__tmp_clip__.tif', '{}'.format(fn))
+            
+            tmp_clip = os.path.join(self.cache_dir, '__tmp_clip__.tif')
+            ## update to utils
+            if demfun.clip(self.fn, tmp_clip, **clip_args)[1] == 0:
+                os.rename(tmp_clip, self.fn)
+                self.initialize()
+                
+    def cut(self, region = None):
+        _tmp_cut, cut_status = utils.gdal_cut(self.fn, region, os.path.join(self.cache_dir, '__tmp_cut__.tif'), node='grid')        
+        if cut_status == 0:
+            os.rename(_tmp_cut, self.fn)
+            self.initialize()
+
+    def set_limits(self, upper_limit = None, lower_limit = None, band = 1):
+        ## limit in other bands?? or chose band to limit??
+        upper_limit = utils.float_or(upper_limit)
+        lower_limit = utils.float_or(lower_limit)
+        if upper_limit is not None or lower_limit is not None:
+            dem_ds = gdal.Open(self.fn, 1)
+            if dem_ds is not None:
+                src_band = dem_ds.GetRasterBand(band)
+                band_data = src_band.ReadAsArray()
+
+                if upper_limit is not None:
+                    if self.verbose:
+                        utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
+
+                    band_data[band_data > upper_limit] = upper_limit
+
+                if lower_limit is not None:
+                    if self.verbose:
+                        utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
+
+                    band_data[band_data < lower_limit] = lower_limit
+
+                src_band.WriteArray(band_data)
+                
+                dem_ds = None
+                self.initialize()
+
+    def set_srs(self, dst_srs = None):
+        utils.gdal_set_srs(self.fn, src_srs=dst_srs, verbose=self.verbose)
+        self.initialize()
+
+    def reformat(self, out_fmt = None):
+        if out_fmt is not None:
+            if out_fmt != self.ds_config['fmt']:
+                out_fn = '{}.{}'.format(utils.fn_basename2(self.fn), utils.gdal_fext(out_fmt))
+                out_ds = gdal.GetDriverByName(out_fmt).CreateCopy(out_fn, 0)
+                if out_ds is not None:
+                    utils.remove_glob(self.fn)
+                    self.fn = out_fn
+                    self.initialize()
+
+    def move(self, out_dir = None):
+        if out_dir is not None:
+            out_fn = os.path.join(out_dir, os.path.basename(self.fn))
+            os.rename(self.fn, out_fn)
+            self.fn = out_fn
+            self.initialize()
+                    
+    def set_metadata(self, cudem = False, node = 'pixel'):
+        """add metadata to the waffled raster
+
+        Args: 
+          cudem (bool): add CUDEM metadata
+        """
+        
+        dem_ds = gdal.Open(self.fn, 1)
+        if dem_ds is not None:        
+            md = self.ds_config['metadata']
+            md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
+            if node == 'pixel':
+                md['AREA_OR_POINT'] = 'Area'
+                md['NC_GLOBAL#node_offset'] = '1'
+                md['tos#node_offset'] = '1'
+            else:
+                md['AREA_OR_POINT'] = 'Point'
+                md['NC_GLOBAL#node_offset'] = '0'
+                md['tos#node_offset'] = '0'
+
+            if cudem:
+                md['TIFFTAG_COPYRIGHT'] = 'DOC/NOAA/NESDIS/NCEI > National Centers for Environmental Information, NESDIS, NOAA, U.S. Department of Commerce'
+                if self.ds_config['zr'][1] < 0:
+                    tb = 'Bathymetry'
+                elif self.ds_config['zr'][0] > 0:
+                    tb = 'Topography'
+                else:
+                    tb = 'Topography-Bathymetry'
+
+                srs=osr.SpatialReference(wkt=self.ds_config['proj'])
+                vdatum=srs.GetAttrValue('vert_cs')
+                md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, '' if vdatum is None else vdatum)
+
+            dem_ds.SetMetadata(md)
+            dem_ds = None
     
-class WaffleFactory():
-    """Find and generate a WAFFLE object for DEM generation."""
-    
+class WaffleFactory(factory.CUDEMFactory):
     _modules = {
-        'surface': {
-            'name': 'surface',
-            'datalist-p': True,
-            'class':GMTSurface,
-        },
-        'triangulate': {
-            'name': 'triangulate',
-            'datalist-p': True,
-            'class': GMTTriangulate,
-        },
-        'nearneighbor': {
-            'name': 'nearneihbor',
-            'datalist-p': True,
-            'class': GMTNearNeighbor,
-        },
-        'num': {
-            'name': 'num',
-            'datalist-p': True,
-            'class': WafflesNum,
-        },
-        'linear': {
-            'name': 'linear',
-            'datalist-p': True,
-            'class': WafflesLinear,
-        },
-        'nearest': {
-            'name': 'nearest',
-            'datalist-p': True,
-            'class': WafflesNearest,
-        },
-        'average': {
-            'name': 'average',
-            'datalist-p': True,
-            'class': WafflesMovingAverage,
-        },
-        'invdst': {
-            'name': 'invdst',
-            'datalist-p': True,
-            'class': WafflesInvDst,
-        },
-        'IDW': {
-            'name': 'IDW',
-            'datalist-p': True,
-            'class': WafflesIDW,
-        },
-        'vdatum': {
-            'name': 'vdatum',
-            'datalist-p': False,
-            'class': WafflesVDatum,
-        },
-        'mbgrid': {
-            'name': 'mbgrid',
-            'datalist-p': True,
-            'class': WafflesMBGrid,
-        },
-        'coastline': {
-            'name': 'coastline',
-            'datalist-p': False,
-            'class': WafflesCoastline,
-        },
-        'cudem': {
-            'name': 'cudem',
-            'datalist-p': True,
-            'class': WafflesCUDEM,
-        },
-        'patch': {
-            'name': 'patch',
-            'datalist-p': True,
-            'class': WafflesPatch,
-        },
-        'lakes': {
-            'name': 'lakes',
-            'datalist-p': False,
-            'class': WafflesLakes,
-        },
-        'stacks': {
-            'name': 'stacks',
-            'datalist-p': True,
-            'class': WafflesStacks,
-        },
-        'scipy': {
-            'name': 'scipy',
-            'datalist-p': True,
-            'class': WafflesSciPy,
-        },
-        'cube': {
-            'name': 'cube',
-            'datalist-p': True,
-            'class': WafflesCUBE,
-        },
-        'bgrid': {
-            'name': 'bgrid',
-            'datalist-p': True,
-            'class': WafflesBGrid,
-        },
-        
-        
+        'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
+        'IDW': {'name': 'IDW', 'stack': True, 'call': WafflesIDW},
+        #'scipy': {'name': 'scipy', 'stack': True, 'call': WafflesSciPy},
+        'linear': {'name': 'linear', 'stack': True, 'call': WafflesLinear},
+        'cubic': {'name': 'cubic', 'stack': True, 'call': WafflesCubic},
+        'nearest': {'name': 'nearest', 'stack': True, 'call': WafflesNearest},
+        'gmt-surface': {'name': 'surface', 'stack': True, 'call':GMTSurface},
+        'gmt-triangulate': {'name': 'triangulate','stack': True, 'call': GMTTriangulate},
+        'gmt-nearneighbor': {'name': 'nearneihbor', 'stack': True, 'call': GMTNearNeighbor},
+        'mbgrid': {'name': 'mbgrid', 'stack': True, 'call': WafflesMBGrid},
+        'gdal-linear': {'name': 'linear', 'stack': True, 'call': GDALLinear},
+        'gdal-nearest': {'name': 'nearest', 'stack': True, 'call': GDALNearest},
+        'gdal-average': {'name': 'average', 'stack': True, 'call': GDALMovingAverage},
+        'gdal-invdst': {'name': 'invdst', 'stack': True, 'call': GDALInvDst},
+        'vdatum': {'name': 'vdatum', 'stack': False, 'call': WafflesVDatum},
+        'coastline': {'name': 'coastline', 'stack': False, 'call': WafflesCoastline},
+        'lakes': {'name': 'lakes', 'stack': False, 'call': WafflesLakes},
+        'cudem': {'name': 'cudem', 'stack': True, 'call': WafflesCUDEM},
+        #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
+        #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch},
+        #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE},
+        #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid},                
     }
 
-    def __init__(
-            self,
-            mod=None,
-            data=[],
-            src_region=None,
-            inc=None,
-            xinc=None,
-            yinc=None,
-            name='waffles_dem',
-            node='pixel',
-            fmt='GTiff',
-            extend=0,
-            extend_proc=0,
-            weights=None,
-            fltr=[],
-            sample='bilinear',
-            xsample=None,
-            ysample=None,
-            clip=None,
-            chunk=None,
-            dst_srs=None,
-            srs_transform=False,
-            verbose=False,
-            archive=False,
-            mask=False,
-            spat=False,
-            clobber=True,
-            ndv=-9999,
-            block=False,
-            cache_dir=waffles_cache
-    ):
-        self.mod = mod
-        self.mod_args = {}
-        self.data = data
-        self.region = src_region
-        self.inc = inc
-        self.xinc = xinc
-        self.yinc = yinc
-        self.sample = sample
-        self.xsample = xsample
-        self.ysample = ysample
-        self.name = name
-        self.node = node
-        self.fmt = fmt
-        self.extend = extend
-        self.extend_proc = extend_proc
-        self.weights = weights
-        self.fltr = fltr
-        self.clip = clip
-        self.chunk = chunk
-        self.dst_srs = dst_srs
-        self.srs_transform = srs_transform
-        self.archive = archive
-        self.mask = mask
-        self.spat = spat
-        self.clobber = clobber
-        self.verbose = verbose
-        self.ndv = ndv
-        self.block = block
-        self.cache_dir = cache_dir
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        if self.mod is not None:
-            self._parse_mod(self.mod)
-
-        #self._set_config()
-
-    def __str__(self):
-        return('<{}>'.format(json.dumps(self._export_config())))
-    
-    def __repr__(self):
-        return('<{}>'.format(json.dumps(self._export_config())))
-        
-    def _parse_mod(self, mod):
-        opts = mod.split(':')
-        if opts[0] in self._modules.keys():
-            if len(opts) > 1:
-                self.mod_args = utils.args2dict(list(opts[1:]), {})
-            self.mod_name = opts[0]
-        else:
-            utils.echo_error_msg(
-                'invalid module name `{}`'.format(opts[0])
-            )
-            return(None)
-        return(self.mod_name, self.mod_args)
-        
-    def _export_config(self, parse_data=False):
-        """export the waffles config info as a dictionary"""
-
-        def _init_data():
-            data = [dlim.DatasetFactory(
-                fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-                src_region=self.region.copy().buffer(pct=.25),
-                verbose=self.verbose,
-                dst_srs=self.dst_srs,
-                weight=self.weights,
-                cache_dir=self.cache_dir
-            ).acquire() for dl in self.data]
-            
-            return([d for d in data if d is not None])
-        
-        if parse_data:
-            _data = _init_data()
-            _data = ["{},{},{}".format(
-                os.path.abspath(i.fn) if not i.remote else i.fn, i.data_format, i.weight
-            ) for s in [[x for x in d.parse()] for d in _data] for i in s]
-        else:
-            _data = self.data
-
-        self._config = {
-            'mod': self.mod,
-            'data': _data,
-            'src_region': self.region.export_as_list(
-                include_z=True, include_w=True
-            ) if self.region is not None else None,
-            'xinc': self.xinc,
-            'yinc': self.yinc,
-            'sample': self.sample,
-            'xsample': self.xsample,
-            'ysample': self.ysample,
-            'name': self.name,
-            'node': self.node,
-            'fmt': self.fmt,
-            'extend': self.extend,
-            'extend_proc': self.extend_proc,
-            'weights': self.weights,
-            'fltr': self.fltr,
-            'clip': self.clip,
-            'chunk': self.chunk,
-            'dst_srs': self.dst_srs,
-            'srs_transform': self.srs_transform,
-            'verbose': self.verbose,
-            'archive': self.archive,
-            'mask': self.mask,
-            'spat': self.spat,
-            'clobber': self.clobber,
-            'ndv': self.ndv,
-            'block': self.block,
-            'cache_dir': self.cache_dir
-        }
-        return(self._config)
-
-    def acquire(self):
-        try:
-            return(
-                self._modules[self.mod_name]['class'](
-                    data=self.data,
-                    src_region=self.region,
-                    inc=self.inc,
-                    xinc=self.xinc,
-                    yinc=self.yinc,
-                    xsample=self.xsample,
-                    ysample=self.ysample,
-                    name=self.name,
-                    node=self.node,
-                    fmt=self.fmt,
-                    extend=self.extend,
-                    extend_proc=self.extend_proc,
-                    weights=self.weights,
-                    fltr=self.fltr,
-                    sample=self.sample,
-                    clip=self.clip,
-                    chunk=self.chunk,
-                    dst_srs=self.dst_srs,
-                    srs_transform=self.srs_transform,
-                    archive=self.archive,
-                    mask=self.mask,
-                    spat=self.spat,
-                    clobber=self.clobber,
-                    verbose=self.verbose,
-                    cache_dir=self.cache_dir,
-                    ndv=self.ndv,
-                    block=self.block,
-                    **self.mod_args
-                )
-            )
-        except Exception as e:
-           utils.echo_error_msg(e)
-           return(None)
-    
-    def acquire_from_config(self, config):
-        def waffles_config(wc):
-            print(wc)
-            if wc['src_region'] is not None:
-                wc['src_region'] = regions.Region().from_list(
-                    wc['src_region']
-                )
-            return(wc)
-        
-        mod_name = list(config.keys())[0]
-        args = waffles_config(config[mod_name])
-        return(self._modules[mod_name]['class'](args))
+    def _set_modules(self):
+        pass
     
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -4390,64 +3182,66 @@ waffles_cli_usage = """{cmd} ({wf_version}): Generate DEMs and derivatives.
 usage: {cmd} [OPTIONS] DATALIST
 
 Options:
-  -R, --region\t\tSpecifies the desired REGION;
-\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
-\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
-\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
-\t\t\tIf a vector file is supplied, will use each region found therein.
-  -E, --increment\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
-\t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
-  -S, --sample_alg\tReSAMPLE algorithm to use (from gdalwarp)
-\t\t\tSet as 'auto' to use 'average' when down-sampling and 'bilinear' when up-sampling
-\t\t\tThis switch controls resampling of input raster datasets as well as resampling
-\t\t\tthe final DEM if RESAMPLE-INCREMENT is set in -E
-  -F, --format\t\tOutput grid FORMAT. [GTiff]
-  -M, --module\t\tDesired Waffles MODULE and options. (see available Modules below)
-\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
-  -O, --output-name\tBASENAME for all outputs.
-  -P, --t_srs\t\tProjection of REGION and output DEM.
-  -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
-\t\t\tpercentage to extend the processing REGION.
-\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-\t\t\tpercent of the input REGION.
-  -T, --filter\t\tFILTER the output DEM using one or multiple filters. 
-\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
-\t\t\tAvailable FILTERS:
-\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
-\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-\t\t\t3: perform an Outlier Filter at -T3:<aggression>.
-\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
-\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
-  -C, --clip\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
-  -K, --chunk\t\tGenerate the DEM in CHUNKs
-  -G, --wg-config\tA waffles config JSON file. If supplied, will overwrite all other options.
-\t\t\tGenerate a waffles_config JSON file using the --config flag.
-  -D, --cache-dir\tCACHE Directory for storing temp data.
-\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
-\t\t\tto retain the data, use the --keep-cache flag
-  -N, --nodata\t\tNODATA value of output DEM
+  -R, --region\t\t\tSpecifies the desired REGION;
+\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+\t\t\t\tIf a vector file is supplied, will use each region found therein.
+  -E, --increment\t\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
+\t\t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
+  -S, --sample_alg\t\tReSAMPLE algorithm to use (from gdalwarp)
+\t\t\t\tSet as 'auto' to use 'average' when down-sampling and 'bilinear' when up-sampling
+\t\t\t\tThis switch controls resampling of input raster datasets as well as resampling
+\t\t\t\tthe final DEM if RESAMPLE-INCREMENT is set in -E
+  -F, --format\t\t\tOutput grid FORMAT. [GTiff]
+  -M, --module\t\t\tDesired Waffles MODULE and options. (see available Modules below)
+\t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+  -O, --output-name\t\tBASENAME for all outputs.
+  -P, --t_srs\t\t\tProjection of REGION and output DEM.
+  -X, --extend\t\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
+\t\t\t\tpercentage to extend the processing REGION.
+\t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
+\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\t\tpercent of the input REGION.
+  -T, --filter\t\t\tFILTER the output DEM using one or multiple filters. 
+\t\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
+\t\t\t\tAvailable FILTERS:
+\t\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
+\t\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
+\t\t\t\t3: perform an Outlier Filter at -T3:<aggression<1-9>>.
+\t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
+\t\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
+\t\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
+  -C, --clip\t\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
+  -K, --chunk\t\t\tGenerate the DEM in CHUNKs
+  -G, --wg-config\t\tA waffles config JSON file. If supplied, will overwrite all other options.
+\t\t\t\tGenerate a waffles_config JSON file using the --config flag.
+  -D, --cache-dir\t\tCACHE Directory for storing temp data.
+\t\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
+\t\t\t\tto retain the data, use the --keep-cache flag
+  -N, --nodata\t\t\tNODATA value of output DEM
 
-  -f, --transform\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
-  -p, --prefix\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
-\t\t\tnote: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
-\t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
-  -r, --grid-node\tUse grid-node registration, default is pixel-node
-  -w, --weights\t\tUse weights provided in the datalist to weight overlapping data.
+  -f, --transform\t\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
+  -p, --prefix\t\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
+\t\t\t\tnote: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
+\t\t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
+  -r, --grid-node\t\tUse grid-node registration, default is pixel-node
+  -w, --want-weight\t\tUse weights provided in the datalist to weight overlapping data.
+  -u, --want-uncertainty\tGenerate/Use uncertainty either calculated or provided in the datalist.
+  -m, --want-mask\t\tMask the processed datalist.
+  -a, --archive\t\t\tARCHIVE the datalist to the given region.
+  -k, --keep-cache\t\tKEEP the cache data intact after run
+  -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count)
+  -d, --supercede\t\thigher weighted data supercedes lower weighted data
+  -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
+  -c, --continue\t\tDon't clobber existing files.
+  -q, --quiet\t\t\tLower verbosity to a quiet.
 
-  -a, --archive\t\tARCHIVE the datalist to the given region.
-  -k, --keep-cache\tKEEP the cache data intact after run
-  -m, --mask\t\tGenerate a data MASK raster.
-  -s, --spat\t\tGenerate SPATIAL-METADATA.
-  -c, --continue\tDon't clobber existing files.
-  -q, --quiet\t\tLower verbosity to a quiet.
-
-  --help\t\tPrint the usage text
-  --config\t\tSave the waffles config JSON and major datalist
-  --modules\t\tDisplay the module descriptions and usage
-  --version\t\tPrint the version information
+  --help\t\t\tPrint the usage text
+  --config\t\t\tSave the waffles config JSON and major datalist
+  --modules\t\t\tDisplay the module descriptions and usage
+  --version\t\t\tPrint the version information
 
 Datalists and data formats:
   A datalist is a file that contains a number of datalist entries, 
@@ -4462,10 +3256,11 @@ Modules (see waffles --modules <module-name> for more info):
 
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
-           dl_formats=utils._cudem_module_name_short_desc(dlim.DatasetFactory.data_types),
-           modules=utils._cudem_module_short_desc(WaffleFactory._modules),
+           dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
+           modules=factory._cudem_module_short_desc(WaffleFactory._modules),
            wf_version=cudem.__version__)
 
+## add upper/lower limit to cli (use same syntax as GMT, e.g. -Lu0 -Ll0
 def waffles_cli(argv = sys.argv):
     """run waffles from command-line
 
@@ -4593,33 +3388,37 @@ def waffles_cli(argv = sys.argv):
             wg['srs_transform'] = True
             if wg['dst_srs'] is None:
                 wg['dst_srs'] = 'epsg:4326'
-        elif arg == '-w' or arg == '--weights':
-            if 'weights' not in wg.keys():
-                wg['weights'] = 1
-            else:
-                wg['weights'] += 1
+                
+        elif arg == '-w' or arg == '--want-weight':
+            wg['want_weight'] = True
+            
+        elif arg == '-u' or arg == '--want-uncertainty':
+            wg['want_uncertainty'] = True
+            
         elif arg == '-p' or arg == '--prefix':
             want_prefix = True
             try:
                 prefix_opts = argv[i + 1].split(':')
-                prefix_args = utils.args2dict(prefix_opts, prefix_args)
+                prefix_args = factory.args2dict(prefix_opts, prefix_args)
                 if len(prefix_args) > 0:
                     i += 1
             except:
                 pass
 
+        elif arg == '--mask' or arg == '-m': wg['want_mask'] = True
         elif arg == '-k' or arg == '--keep-cache': keep_cache = True
+        elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
         elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
-        elif arg == '-m' or arg == '--mask': wg['mask'] = True
-        elif arg == '-s' or arg == '--spat': wg['spat'] = True
+        elif arg == '-d' or arg == '--supercede': wg['supercede'] = True
+        elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
 
         elif arg == '--quiet' or arg == '-q': wg['verbose'] = False
         elif arg == '--config': want_config = True
-        elif arg == '--modules' or arg == '-m':
-            utils.echo_modules(WaffleFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
+        elif arg == '--modules':
+            factory.echo_modules(WaffleFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
             sys.exit(0)
         elif arg == '--help' or arg == '-h':
             sys.stderr.write(waffles_cli_usage)
@@ -4685,16 +3484,18 @@ def waffles_cli(argv = sys.argv):
     if module.split(':')[0] not in WaffleFactory()._modules.keys():
         utils.echo_error_msg(
             '''{} is not a valid waffles module, available modules are: {}'''.format(
-                module.split(':')[0], _waffles_module_short_desc()
+                module.split(':')[0], factory._cudem_module_short_desc(WaffleFactory._modules)
             )
         )
         sys.exit(-1)
         
-    if WaffleFactory()._modules[module.split(':')[0]]['datalist-p']:
+    if WaffleFactory()._modules[module.split(':')[0]]['stack']:
         if len(dls) == 0:
             sys.stderr.write(waffles_cli_usage)
             utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
             sys.exit(-1)
+    else:
+        wg['want_stack'] = True if len(dls) > 0 else False
 
     ## ==============================================
     ## check the increment
@@ -4734,22 +3535,27 @@ def waffles_cli(argv = sys.argv):
                 wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
             this_waffle = WaffleFactory(mod=module, **wg)
+            print(this_waffle)
             if this_waffle is not None:
                 #this_wg = this_waffle._export_config(parse_data=False)
-                this_waffle_module = this_waffle.acquire()
+                this_waffle_module = this_waffle._acquire_module()
+                print(this_waffle_module)
                 if this_waffle_module is not None:
-                    with utils.CliProgress(
-                            message='Generating: {}'.format(this_waffle),
-                            verbose=wg['verbose'],
-                    ) as pbar:
-                        try:
-                            this_waffle_module.generate()
-                        except (KeyboardInterrupt, SystemExit):
-                            utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                            sys.exit(-1)
-                        except Exception as e:
-                            utils.echo_error_msg(e)
-                            sys.exit(-1)
+                    #this_waffle_module()
+                    # with utils.CliProgress(
+                    #         message='Generating: {}'.format(this_waffle),
+                    #         verbose=wg['verbose'],
+                    # ) as pbar:
+                    # try:
+                    this_waffle_module.initialize()
+                    this_waffle_module.generate()
+                    #this_waffle_module()
+                    # except (KeyboardInterrupt, SystemExit):
+                    #     utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                    #     sys.exit(-1)
+                    # except Exception as e:
+                    #     utils.echo_error_msg(e)
+                    #     sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
