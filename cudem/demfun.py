@@ -298,18 +298,30 @@ def set_metadata(src_dem, node='pixel', cudem=False, verbose=True): #, vdatum='N
             
         return(None)
 
-def get_array(src_dem):
+def get_array(src_dem, band = 1):
     ds = gdal.Open(src_dem)
     if ds is not None:
-        band = ds.GetRasterBand(1)
+        band = ds.GetRasterBand(band)
         _array = band.ReadAsArray()
+        offset = band.GetOffset()
+        scale = band.GetScale()
+
+        if offset is not None or scale is not None:
+            _array = np.ndarray.astype(_array, dtype=np.float32)
+        
+            if offset is not None:
+                _array += offset
+
+            if scale is not None:
+                _array *= scale
+            
         infos = gather_infos(ds)
         ds = None
         return(_array, infos)
     else:
         utils.echo_error_msg('could not open {}'.format(src_dem))
         return(None, None)
-
+    
 def extract_band(data_set, output_data_set, band=1, exclude=[], inverse=False):
     _ds = gdal.Open(data_set)
     _ds_config = gather_infos(_ds)
