@@ -77,84 +77,6 @@ from cudem import fetches
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
 
-class WaffleParameters:
-    def __init__(self, data: list = [], src_region: regions.Region = None, inc: str = None, xinc: str = None, yinc: str = None,
-                 xsize: int = None, ysize: int = None, name: str = 'waffles_dem', node: str = 'pixel', fmt: str = 'GTiff',
-                 extend: int = 0, extend_proc: float = 0, want_weight: bool = False, want_uncertainty: bool = False, fltr: list = [],
-                 sample: str = 'bilinear', xsample: str = None, ysample: str = None, clip: str = None, chunk: int = None,
-                 dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
-                 keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
-                 cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
-                 want_stack: bool = True):
-        self.data = data # list of data paths/fetches modules to grid
-        self.datalist = None # the datalist which holds the processed datasets
-        self.region = src_region # the region to grid
-        self.inc = inc # the gridding increments [xinc, yinc]
-        self.xinc = xinc # the x/lon gridding increment
-        self.yinc = yinc # the y/lat gridding increment
-        self.sample = sample # the gdal sample algorithm to use when needed
-        self.xsample = xsample # the x/lon increment to sample the output dem
-        self.ysample = ysample # the y/lat increment to sample the output dem
-        self.name = name # the output dem basename
-        self.node = node # the grid node method, either 'grid' or 'pixel'
-        self.fmt = fmt # the gdal-compatible output dem file format
-        self.extend = extend # extend the dem region by this many pixels
-        self.extend_proc = extend_proc # extend the dem processing region by this percentage
-        self.want_weight = want_weight # use weights, either None or 1
-        self.want_uncertainty = want_uncertainty # apply/calculate uncertainty
-        self.fltr = fltr # a list of filters (see demfun._filter for options)
-        self.clip = clip # ogr compatible vector file or keyword module to clip output dem
-        self.chunk = chunk # process the dem in this many chunks
-        self.dst_srs = dst_srs # the output dem projection
-        self.srs_transform = srs_transform # transform data to the dst_srs
-        self.archive = archive # archive the data used in this dem
-        self.want_mask = want_mask # mask the incoming datalist
-        self.supercede = supercede # higher weighted data supercedes lower weighted data
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self.keep_auxiliary = keep_auxiliary
-        self.clobber = clobber # clobber the output dem file
-        self.verbose = verbose # increase verbosity
-        self.cache_dir = cache_dir # directory path to store cahced data
-        self.ndv = ndv # no data value for the dem
-        self.block = block # block the data (defunct)
-        self.block_t = None # block the data (defunct)
-        self.ogr_ds = None # datasets as an ogr object
-        self.data_ = data # store data paths here, self.data gets processed to dlim datasets
-        self.fn = '{}.tif'.format(self.name) # output dem filename
-        self.want_sm = want_sm # generate spatial metadata
-        self.aux_dems = [] # list of auxiliary dems fns
-        self.want_stack = want_stack # generate the stacked rasters
-        self.stack = None # multi-banded stacked raster from cudem.dlim
-        self.stack_ds = None # the stacked raster as a dlim dataset object    
-
-    def write_parameter_file(self, param_file: str):
-        try:
-            with open(param_file, 'w') as outfile:
-                json.dump(self.__dict__, outfile)
-                utils.echo_msg('New WaffleParameters file written to {}'.format(param_file))
-                
-        except:
-            raise ValueError('WaffleParameters: Unable to write new parameter file to {}'.format(param_file))
-        
-    def open_parameter_file(self, param_file: str):
-        valid_data = False
-        with open(param_file, 'r') as infile:
-            try:
-                data = json.load(infile)
-            except:
-                raise ValueError('WaffleParameters: Unable to read data from {} as json'.format(param_file))
-            
-            for ky, val in data.items():
-                #if ky in self.__dict__:
-                self.__setattr__(ky, val)
-                valid_data = True
-                    
-            if valid_data:
-                utils.echo_msg('WaffleParameters read successfully from {}'.format(param_file))
-            else:
-                utils.echo_warning_msg('Unable to find any valid data in {}'.format(param_file))
-        
 ## ==============================================
 ##
 ## WAFFLES
@@ -248,6 +170,8 @@ class Waffle:
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, utils.sr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt
         )
+
+        self.cache_dir = os.path.join(os.path.dirname(self.name), '.cudem')
     
     def __call__(self):
         self.initialize()
@@ -1891,14 +1815,14 @@ class WafflesCoastline(Waffle):
         )
         
         if tmp_ds is not None:
-            tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(self.name), None, ogr.wkbMultiPolygon)
+            tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(os.path.basename(self.name)), None, ogr.wkbMultiPolygon)
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
             
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0 {}" {}.shp {}_tmp_c.shp'.format(
-                self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+                os.path.basename(self.name), 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
             verbose=self.verbose
         )        
         utils.remove_glob('{}_tmp_c.*'.format(self.name))
