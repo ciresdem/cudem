@@ -348,6 +348,9 @@ def float_or(val, or_val=None):
 
 def str_or(instr, or_val=None):
     """return instr if instr is a string, else or_val"""
+
+    if instr is None:
+        return(or_val)
     
     try:
         return(str(instr).replace('"', ''))
