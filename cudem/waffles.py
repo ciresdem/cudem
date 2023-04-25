@@ -3403,7 +3403,7 @@ polygonize=[True/False] - polygonize the output
         )
         
         if tmp_ds is not None:
-            tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(self.name), None, ogr.wkbMultiPolygon)
+            tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(os.path.basename(self.name)), None, ogr.wkbMultiPolygon)
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
             demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
@@ -3415,13 +3415,13 @@ polygonize=[True/False] - polygonize the output
         # )
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0 {}" {}.shp {}_tmp_c.shp'.format(
-                self.name, 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+                os.path.basename(self.name), 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
             verbose=self.verbose
         )        
         utils.remove_glob('{}_tmp_c.*'.format(self.name))
         utils.run_cmd(
             'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
-                self.name, self.name),
+                os.path.basename(self.name), self.name),
             verbose=self.verbose
         )
         
