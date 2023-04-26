@@ -1324,7 +1324,7 @@ class ElevationDataset:
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
-Parse data from an xyz file/stdin
+    Parse data from an xyz file/stdin
 
     generate_inf - generate an inf file for the xyz data
     yield_xyz - yield the xyz data as xyz
@@ -1522,7 +1522,7 @@ Parse data from an xyz file/stdin
 class LASFile(ElevationDataset):
     """representing an LAS/LAZ dataset.
 
-Process LAS/LAZ lidar files using pylas.
+    Process LAS/LAZ lidar files using pylas.
     
     get_epsg - attempt to parse the EPSG from the LAS file header
     generate_inf - generate an inf file for the LAS data
@@ -1698,8 +1698,8 @@ Process LAS/LAZ lidar files using pylas.
 class GDALFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
 
-Process/Parse GDAL supported raster files.
-See GDAL for more information regarding supported formats.
+    Process/Parse GDAL supported raster files.
+    See GDAL for more information regarding supported formats.
     
     generate_inf - generate an inf file for the RASTER data
     yield_xyz - yield the RASTER data as xyz
@@ -2179,8 +2179,8 @@ See GDAL for more information regarding supported formats.
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
-Process supergrids at native resolution if they
-exist, otherwise process as normal grid.
+    Process supergrids at native resolution if they
+    exist, otherwise process as normal grid.
 
     generate_inf - generate an inf file for the BAG data
     yield_xyz - yield the BAG data as xyz
@@ -2304,9 +2304,9 @@ exist, otherwise process as normal grid.
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
-Process MB-System supported multibeam data files.
-See MB-System for more information regarding supported
-file formats, etc.
+    Process MB-System supported multibeam data files.
+    See MB-System for more information regarding supported
+    file formats, etc.
     
     generate_inf - generate an inf file for the MBS data
     yield_xyz - yield the MBS data as xyz
@@ -2626,13 +2626,13 @@ class OGRFile(ElevationDataset):
 class Datalist(ElevationDataset):
     """representing a datalist parser
     
-A datalist is an extended MB-System style datalist.
+    A datalist is an extended MB-System style datalist.
     
-Each datalist consists of datalist-entries, where a datalist entry has the following columns:
+    Each datalist consists of datalist-entries, where a datalist entry has the following columns:
     path format weight uncertainty title source date data_type resolution hdatum vdatum url
 
-the datalist can contain datalist-entries to other datalist files, distributed across a
-file-system.
+    the datalist can contain datalist-entries to other datalist files, distributed across a
+    file-system.
     """
 
     _datalist_json_cols = ['path', 'format', 'weight', 'uncertainty', 'name', 'title', 'source',
@@ -2972,7 +2972,7 @@ file-system.
 class ZIPlist(ElevationDataset):
     """Zip file parser.
 
-Parse supported datasets from a zipfile.
+    Parse supported datasets from a zipfile.
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -3090,10 +3090,10 @@ Parse supported datasets from a zipfile.
 class Fetcher(ElevationDataset):
     """The fetches dataset type.
 
-This is used in waffles/dlim for on-the-fly remote data
-parsing and processing.
-
-See `fetches` for more information.
+    This is used in waffles/dlim for on-the-fly remote data
+    parsing and processing.
+    
+    See `fetches` for more information.
 """
     
     def __init__(self, **kwargs):
