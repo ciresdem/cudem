@@ -67,15 +67,78 @@ from cudem import dlim
 from cudem import regions
 from cudem import utils
 from cudem import xyzfun
-from cudem import demfun
-from cudem import metadata
+from cudem import gdalfun
 from cudem import vdatums
-from cudem import vdatumfun
 from cudem import factory
 from cudem import fetches
         
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
+
+def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel'):
+    """filter raster using smoothing factor `fltr`; optionally
+    only smooth bathymetry (sub-zero) using a split_val of 0.
+
+    -----------
+    Parameters:
+    fltr (int): the filter to use, 1, 2 or 3
+    flt_val (varies): the filter value, varies by filter.
+    split_val (float): an elevation value (only filter below this value)
+    """
+
+    def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
+        """filter `src_dem` using GMT grdfilter"""
+
+        ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp' if node == 'pixel' else ''))
+        return(utils.run_cmd(ft_cmd1, verbose=verbose))
+    
+    utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
+    if os.path.exists(src_dem):
+        ## Filter the DEM (1=blur, 2=grdfilter, 3=outliers)
+        if int(fltr) == 1:
+            out, status = gdalfun.gdal_blur(
+                src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
+        elif int(fltr) == 2:
+            out, status = grdfilter(
+                src_dem, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
+                node = node, verbose = True)
+        elif int(fltr) == 3:
+            out, status = gdalfun.filter_outliers(
+                src_dem, 'tmp_fltr.tif', agg_level=fltr_val if fltr_val is not None else 5, replace=True)
+        else:
+            utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
+            out, status = gdalfun.gdal_blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
+            
+        if status != 0:
+            return(status)
+
+        ## Split the filtered DEM by z-value
+        split_val = utils.float_or(split_val)
+        if split_val is not None:
+            with gdalfun.gdal_datasource(src_dem) as src_ds:
+                if src_ds is not None:
+                    ds_config = gdalfun.gdal_infos(src_ds)
+                    elev_array = src_ds.GetRasterBand(1).ReadAsArray()
+                    mask_array = np.zeros((ds_config['ny'], ds_config['nx']))                
+                    mask_array[elev_array == ds_config['ndv']] = 0
+                    mask_array[elev_array < split_val] = 1
+                    elev_array[elev_array < split_val] = 0
+
+                    with gdalfun.gdal_datasource('tmp_fltr.tif') as s_ds:
+                        if s_ds is not None:
+                            s_array = s_ds.GetRasterBand(1).ReadAsArray()
+                            s_array = s_array * mask_array
+                            smoothed_array = s_array + elev_array
+                            elev_array = None
+                            gdalfun.gdal_write(smoothed_array, dst_dem, ds_config)
+
+                    utils.remove_glob('tmp_fltr.tif')
+        else:
+            os.rename('tmp_fltr.tif', dst_dem)
+        return(0)
+    
+    else:
+        return(-1)
 
 ## ==============================================
 ##
@@ -124,7 +187,7 @@ class Waffle:
         self.extend_proc = extend_proc # extend the dem processing region by this percentage
         self.want_weight = want_weight # use weights, either None or 1
         self.want_uncertainty = want_uncertainty # apply/calculate uncertainty
-        self.fltr = fltr # a list of filters (see demfun._filter for options)
+        self.fltr = fltr # a list of filters (see waffles_filter for options)
         self.clip = clip # ogr compatible vector file or keyword module to clip output dem
         self.chunk = chunk # process the dem in this many chunks
         self.dst_srs = dst_srs # the output dem projection
@@ -158,7 +221,7 @@ class Waffle:
 
     def initialize(self):
         utils.echo_msg('initializing waffles module < {} >'.format(self.params['mod']))
-        self.fn = '{}.{}'.format(self.name, utils.gdal_fext(self.fmt)) # output dem filename
+        self.fn = '{}.{}'.format(self.name, gdalfun.gdal_fext(self.fmt)) # output dem filename
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
         self._init_regions() # initialize regions
         self._init_incs() # initialize increments
@@ -166,12 +229,12 @@ class Waffle:
             self._init_data(set_incs=True) # initialize data, setting set_incs to True will force dlim to process the data to the set increments
             
         self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
-        self.ds_config = demfun.set_infos(
-            self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, utils.sr_wkt(self.dst_srs),
-            gdal.GDT_Float32, self.ndv, self.fmt
+        self.ds_config = gdalfun.gdal_set_infos(
+            self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
+            gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
 
-        self.cache_dir = os.path.join(os.path.dirname(self.name), '.cudem')
+        #self.cache_dir = os.path.join(os.path.dirname(self.name), '.cudem')
     
     def __call__(self):
         self.initialize()
@@ -382,7 +445,7 @@ class WafflesStacks(Waffle):
         
     def run(self):
         z_ds = gdal.GetDriverByName(self.fmt).Create(
-            '{}.{}'.format(self.name, utils.gdal_fext(self.fmt)), self.xcount, self.ycount, 1, self.ds_config['dt'],
+            '{}.{}'.format(self.name, gdalfun.gdal_fext(self.fmt)), self.xcount, self.ycount, 1, self.ds_config['dt'],
             options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES']
         )
         z_ds.SetGeoTransform(self.dst_gt)
@@ -1002,7 +1065,7 @@ class WafflesMBGrid(Waffle):
         """
 
         dst_gdal = '{}.{}'.format(
-            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
+            os.path.basename(src_grd).split('.')[0], galfun.gdal_fext(dst_fmt)
         )        
         grd2gdal_cmd = 'gmt grdconvert {} {}=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
@@ -1027,7 +1090,7 @@ class WafflesMBGrid(Waffle):
         """
 
         dst_gdal = '{}.{}'.format(
-            os.path.basename(src_grd).split('.')[0], utils.gdal_fext(dst_fmt)
+            os.path.basename(src_grd).split('.')[0], galfun.gdal_fext(dst_fmt)
         )
         grdsample_cmd = 'gmt grdsample {} -T -G{}=gd+n{}:{} -V'.format(
             src_grd, dst_gdal, self.ndv, dst_fmt
@@ -1157,7 +1220,7 @@ class WafflesGDALGrid(Waffle):
             ]
         )
         gdal.Grid('{}.tif'.format(self.name), ogr_ds, options=gd_opts)
-        demfun.set_nodata('{}.tif'.format(self.name, nodata=self.ndv, convert_array=False))
+        gdalfun.gdal_set_ndv('{}.tif'.format(self.name, ndv=self.ndv, convert_array=False))
         ogr_ds = None
         return(self)
 
@@ -1305,15 +1368,17 @@ class WafflesNum(Waffle):
             
         count_array = np.zeros((ycount, xcount))
         gdt = gdal.GDT_Float32
-        ds_config = demfun.set_infos(
+        ds_config = gdalfun.gdal_set_infos(
             xcount,
             ycount,
             xcount * ycount,
             dst_gt,
-            utils.sr_wkt(self.dst_srs),
+            gdalfun.osr_wkt(self.dst_srs),
             gdt,
             self.ndv,
-            'GTiff'
+            'GTiff',
+            None,
+            None
         )
         
         for this_xyz in self.yield_xyz():
@@ -1343,7 +1408,7 @@ class WafflesNum(Waffle):
             out_array = count_array
 
         out_array[np.isnan(out_array)] = self.ndv            
-        utils.gdal_write(out_array, self.fn, ds_config)
+        gdalfun.gdal_write(out_array, self.fn, ds_config)
         
     def run(self):
         if self.mode.startswith('A'):
@@ -1491,7 +1556,7 @@ class WafflesCoastline(Waffle):
         else:
             self.dst_srs = 'epsg:4326'            
 
-        horz_epsg, vert_epsg = utils.epsg_from_input(self.dst_srs)
+        horz_epsg, vert_epsg = gdalfun.epsg_from_input(self.dst_srs)
         self.cst_srs = osr.SpatialReference()
         self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
         
@@ -1547,9 +1612,9 @@ class WafflesCoastline(Waffle):
         """create a nodata grid"""
         
         xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
-        self.ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt,
-                                          utils.sr_wkt(self.cst_srs), gdal.GDT_Float32,
-                                          self.ndv, 'GTiff')        
+        self.ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, gt,
+                                                gdalfun.osr_wkt(self.cst_srs), gdal.GDT_Float32,
+                                                self.ndv, 'GTiff', None, None)        
         self.coast_array = np.zeros( (ycount, xcount) )
 
     def _load_gmrt(self):
@@ -1568,7 +1633,7 @@ class WafflesCoastline(Waffle):
         fr.join()
 
         gmrt_tif = this_gmrt.results[0]
-        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt')
         gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
         gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
@@ -1589,8 +1654,8 @@ class WafflesCoastline(Waffle):
         fr.join()
         
         for i, cop_tif in enumerate(this_cop.results):
-            demfun.set_nodata(cop_tif[1], 0, verbose=False)
-            cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+            gdalfun.gdal_set_ndv(cop_tif[1], 0, verbose=False)
+            cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus')
             gdal.Warp(
                 cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
                 callback=False, srcNodata=0
@@ -1614,9 +1679,8 @@ class WafflesCoastline(Waffle):
         fr.join()
        
         for i, wsf_tif in enumerate(this_wsf.results):
-            demfun.set_nodata(wsf_tif[1], 0, verbose=False)
-            wsf_ds = demfun.generate_mem_ds(self.ds_config, name='wsf')
-
+            gdalfun.gdal_set_ndv(wsf_tif[1], 0, verbose=False)
+            wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf')
             gdal.Warp(
                 wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
                 callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
@@ -1642,7 +1706,7 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        tnm_ds = demfun.generate_mem_ds(self.ds_config, name='nhd')
+        tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd')
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
@@ -1707,8 +1771,8 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        lakes_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
-        lakes_warp_ds = demfun.generate_mem_ds(self.ds_config, name='lakes')
+        lakes_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes')
+        lakes_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes')
         lk_ds = ogr.Open(lakes_shp)
         if lk_ds is not None:
             lk_layer = lk_ds.GetLayer()
@@ -1799,7 +1863,7 @@ class WafflesCoastline(Waffle):
         if self.verbose:
             utils.echo_msg('writing array to {}.tif...'.format(self.name))
             
-        utils.gdal_write(
+        gdalfun.gdal_write(
             self.coast_array, '{}.tif'.format(self.name), self.ds_config,
         )
 
@@ -1817,7 +1881,7 @@ class WafflesCoastline(Waffle):
         if tmp_ds is not None:
             tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(os.path.basename(self.name)), None, ogr.wkbMultiPolygon)
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-            demfun.polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
+            gdalfun.gdal_polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
             
         utils.run_cmd(
@@ -1831,9 +1895,9 @@ class WafflesCoastline(Waffle):
                 self.name, self.name),
             verbose=self.verbose
         )        
-        print(self.dst_srs)
-        print(self.cst_srs.ExportToProj4())
-        utils.gdal_prj_file(self.name + '.prj', self.dst_srs)
+        #print(self.dst_srs)
+        #print(self.cst_srs.ExportToProj4())
+        gdalfun.osr_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
 ##
@@ -1950,7 +2014,7 @@ class WafflesLakes(Waffle):
         dst_srs.SetFromUserInput(self.dst_srs)
         
         gmrt_tif = this_gmrt.results[0]
-        gmrt_ds = demfun.generate_mem_ds(self.ds_config, name='gmrt')
+        gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt')
         gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
         return(gmrt_ds)
     
@@ -1973,7 +2037,7 @@ class WafflesLakes(Waffle):
 
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
-        cop_ds = demfun.generate_mem_ds(self.ds_config, name='copernicus')
+        cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus')
         [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
         
         return(cop_ds)
@@ -2108,7 +2172,7 @@ class WafflesLakes(Waffle):
             if elev_ds is not None:
                 dst_srs = osr.SpatialReference()
                 dst_srs.SetFromUserInput(self.dst_srs)
-                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
+                cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='cop')
                 gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
                 cop_band = cop_ds.GetRasterBand(1)
             else:
@@ -2119,7 +2183,7 @@ class WafflesLakes(Waffle):
             if elev_ds is not None:
                 dst_srs = osr.SpatialReference()
                 dst_srs.SetFromUserInput(self.dst_srs)
-                cop_ds = demfun.generate_mem_ds(self.ds_config, name='cop')
+                cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='cop')
                 gdal.Warp(cop_ds, elev_ds, dstSRS=dst_srs, resampleAlg=self.sample)
                 cop_band = cop_ds.GetRasterBand(1)
             else:
@@ -2130,8 +2194,8 @@ class WafflesLakes(Waffle):
             cop_arr = None
         
         ## initialize the tmp datasources
-        prox_ds = demfun.generate_mem_ds(self.ds_config, name='prox')
-        msk_ds = demfun.generate_mem_ds(self.ds_config, name='msk')
+        prox_ds = gdalfun.gdal_mem_ds(self.ds_config, name='prox')
+        msk_ds = gdalfun.gdal_mem_ds(self.ds_config, name='msk')
         msk_band = None
         globd = None
         
@@ -2195,7 +2259,7 @@ class WafflesLakes(Waffle):
         )
 
         bathy_arr[bathy_arr == 0] = self.ndv        
-        utils.gdal_write(
+        gdalfun.gdal_write(
             bathy_arr, '{}.tif'.format(self.name), self.ds_config,
         )            
 
@@ -2263,7 +2327,7 @@ class WafflesCUDEM(Waffle):
         pre_region = self.p_region.copy()
         pre_region.wmin = None
         if self.min_weight is None:
-            self.min_weight = utils.gdal_percentile(self.stack, perc=75, band=3)
+            self.min_weight = gdalfun.gdal_percentile(self.stack, perc=75, band=3)
         
         if self.verbose:
             utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
@@ -2444,7 +2508,7 @@ class WafflesCUBE(Waffle):
         
         #tvu = (np.random.uniform(low=.1, high=np.std(point_values), size=ds_config['nb']))
         #print(tvu)
-
+'
         #print(np.std(point_values, axis=0))
         #print([point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std()])
 
@@ -2730,7 +2794,7 @@ class WafflesPatch(Waffle):
             ds = gdal.Open(src_dem)
         except: ds = None
         if ds is not None:
-            ds_config = demfun.gather_infos(ds)
+            ds_config = gdalfun.gdal_infos(ds)
             ds_band = ds.GetRasterBand(1)
             ds_gt = ds_config['geoT']
             ds_nd = ds_config['ndv']
@@ -2774,7 +2838,7 @@ class WafflesPatch(Waffle):
             utils.echo_error_msg('must specify DEM to patch (:dem=fn) to run the patch module.')
             return(None)
 
-        dem_infos = demfun.infos(self.dem)
+        dem_infos = gdalfun.gdal_infos(self.dem)
         dem_region = regions.Region().from_geo_transform(geo_transform=dem_infos['geoT'], x_count=dem_infos['nx'], y_count=dem_infos['ny'])
 
         if not regions.regions_intersect_p(self.region, dem_region):
@@ -2803,13 +2867,12 @@ class WafflesPatch(Waffle):
         )
 
         utils.echo_msg('smoothing diff grid...')
-        smooth_dem, status = demfun.blur('_diff.tif', '_tmp_smooth.tif', 5)
-        #out, status = demfun.grdfilter('_diff.tif', '_tmp_smooth.tif', dist=self.radius, node='pixel', verbose=self.verbose)
+        smooth_dem, status = gdalfun.gdal_blur('_diff.tif', '_tmp_smooth.tif', 5)
 
         if self.xinc != dem_infos['geoT']:
             utils.echo_msg('resampling diff grid...')
-            if demfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
-                                  src_region=dem_region, verbose=self.verbose)[1] == 0:
+            if gdalfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
+                                   src_region=dem_region, verbose=self.verbose)[1] == 0:
                 os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
             else:
                 utils.echo_warning_msg('failed to resample diff grid')
@@ -2818,7 +2881,7 @@ class WafflesPatch(Waffle):
         if self.verbose:
             utils.echo_msg('resampling diff grid...')
             
-        diff_ds = demfun.sample_warp(
+        diff_ds = gdalfun.sample_warp(
             '_diff.tif',
             None,
             dem_infos['geoT'][1],
@@ -2841,7 +2904,7 @@ class WafflesPatch(Waffle):
         dem_arr = dem_band.ReadAsArray()
 
         update_dem_arr = diff_arr + dem_arr
-        utils.gdal_write(update_dem_arr, '{}.tif'.format(self.name), dem_infos)
+        gdalfun.gdal_write(update_dem_arr, '{}.tif'.format(self.name), dem_infos)
         
         diff_ds = dem_ds = None
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
@@ -2854,7 +2917,7 @@ class WafflesPatch(Waffle):
 class WaffleDEM:
     def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {}, cache_dir: str = waffles_cache, verbose: bool = True, waffle: Waffle = None):
         self.fn = fn # the dem filename
-        self.ds_config = ds_config # a dem config dictionary (see utils.gdal_gather_infos)
+        self.ds_config = ds_config # a dem config dictionary (see gdalfun.gdal_infos)
         self.cache_dir = cache_dir
         self.verbose = verbose # verbosity
         #self.dem_ds = None # the dem as a gdal datasource
@@ -2866,7 +2929,7 @@ class WaffleDEM:
             dem_ds = gdal.Open(self.fn, 1)
 
             if dem_ds is not None:
-                self.ds_config = utils.gdal_gather_infos(dem_ds, scan=True)
+                self.ds_config = gdalfun.gdal_infos(dem_ds, scan=True)
                 self.dem_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
 
                 dem_ds = None
@@ -2917,7 +2980,7 @@ class WaffleDEM:
             
     def set_nodata(self, ndv):
         if self.ds_config['ndv'] != ndv:
-            utils.gdal_set_nodata(self.fn, nodata=ndv, convert_array=True, verbose=self.verbose)
+            gdalfun.gdal_set_ndv(self.fn, ndv=ndv, convert_array=True, verbose=self.verbose)
             self.ds_config['ndv'] = ndv
 
     def filter_(self, fltr = []):
@@ -2934,7 +2997,7 @@ class WaffleDEM:
                     split_val= fltr_opts[2]
 
                 # fails if fltr_val in float
-                if demfun.filter_(
+                if waffles_filter(
                         fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                 ) == 0:
                     os.rename('__tmp_fltr.tif', fn)
@@ -2942,8 +3005,8 @@ class WaffleDEM:
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
             warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
-            if demfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
-                                  sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
+            if gdalfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
+                                   sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
                 os.rename(warp_fn, fn)
                 self.initialize()
 
@@ -2964,17 +3027,17 @@ class WaffleDEM:
             #                                        srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
             #             self.coast.initialize()
             #             self.coast.generate()
-            #             demfun.mask_(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
+            #             gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
             #             os.rename('__tmp_clip__.tif', '{}'.format(fn))
             
             tmp_clip = os.path.join(self.cache_dir, '__tmp_clip__.tif')
             ## update to utils
-            if demfun.clip(self.fn, tmp_clip, **clip_args)[1] == 0:
+            if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                 os.rename(tmp_clip, self.fn)
                 self.initialize()
                 
     def cut(self, region = None):
-        _tmp_cut, cut_status = utils.gdal_cut(self.fn, region, os.path.join(self.cache_dir, '__tmp_cut__.tif'), node='grid')        
+        _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, os.path.join(self.cache_dir, '__tmp_cut__.tif'), node='grid')        
         if cut_status == 0:
             os.rename(_tmp_cut, self.fn)
             self.initialize()
@@ -3007,13 +3070,13 @@ class WaffleDEM:
                 self.initialize()
 
     def set_srs(self, dst_srs = None):
-        utils.gdal_set_srs(self.fn, src_srs=dst_srs, verbose=self.verbose)
+        gdalfun.gdal_set_srs(self.fn, src_srs=dst_srs, verbose=self.verbose)
         self.initialize()
 
     def reformat(self, out_fmt = None):
         if out_fmt is not None:
             if out_fmt != self.ds_config['fmt']:
-                out_fn = '{}.{}'.format(utils.fn_basename2(self.fn), utils.gdal_fext(out_fmt))
+                out_fn = '{}.{}'.format(utils.fn_basename2(self.fn), gdalfun.gdal_fext(out_fmt))
                 out_ds = gdal.GetDriverByName(out_fmt).CreateCopy(out_fn, 0)
                 if out_ds is not None:
                     utils.remove_glob(self.fn)
@@ -3459,11 +3522,11 @@ def waffles_cli(argv = sys.argv):
                 wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
             this_waffle = WaffleFactory(mod=module, **wg)
-            print(this_waffle)
+            #print(this_waffle)
             if this_waffle is not None:
                 #this_wg = this_waffle._export_config(parse_data=False)
                 this_waffle_module = this_waffle._acquire_module()
-                print(this_waffle_module)
+                #print(this_waffle_module)
                 if this_waffle_module is not None:
                     #this_waffle_module()
                     # with utils.CliProgress(

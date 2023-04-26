@@ -85,7 +85,7 @@ import cudem
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
-from cudem import demfun
+from cudem import gdalfun
 from cudem import factory
 from cudem import fetches
 
@@ -566,8 +566,8 @@ class ElevationDataset:
            and self.src_srs is not None \
            and self.src_srs != self.dst_srs:
             ## parse out the horizontal and vertical epsgs if they exist
-            src_horz_epsg, src_vert_epsg = utils.epsg_from_input(self.src_srs)
-            dst_horz_epsg, dst_vert_epsg = utils.epsg_from_input(self.dst_srs)
+            src_horz_epsg, src_vert_epsg = gdalfun.epsg_from_input(self.src_srs)
+            dst_horz_epsg, dst_vert_epsg = gdalfun.epsg_from_input(self.dst_srs)
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput('epsg:{}'.format(src_horz_epsg))
@@ -855,7 +855,7 @@ class ElevationDataset:
         gdt = gdal.GDT_Int32
         if method == 'single':
             driver = gdal.GetDriverByName(fmt)
-            m_ds = driver.Create('{}.{}'.format(out_name, utils.gdal_fext(fmt)), xcount, ycount, 0, gdt)
+            m_ds = driver.Create('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), xcount, ycount, 0, gdt)
             m_ds.SetGeoTransform(dst_gt)
             m_band = m_ds.GetRasterBand(1)
             m_band.SetNoDataValue(ndv)
@@ -891,7 +891,7 @@ class ElevationDataset:
                     m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                     yield((arrs, srcwin, gt))
 
-            dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, utils.gdal_fext(fmt)), m_ds, 0)
+            dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
             
         ## create a vector of the masks (spatial-metadata)
         if self.want_sm:
@@ -1135,7 +1135,8 @@ class ElevationDataset:
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
             ))
             
-        out_file = '{}.{}'.format(out_name, utils.gdal_fext(fmt))
+        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        print(out_file)
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
@@ -1753,18 +1754,18 @@ See GDAL for more information regarding supported formats.
             self.open_options = None
 
         if self.valid_p() and self.src_srs is None:
-            self.src_srs = utils.gdal_get_srs(self.fn)
+            self.src_srs = gdalfun.gdal_get_srs(self.fn)
 
         ## set up any transformations and other options
         self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
-        self.dem_infos = demfun.infos(self.fn)
+        self.dem_infos = gdalfun.gdal_infos(self.fn)
         if self.x_inc is not None and self.y_inc is not None and self.resample:
             self.resample_and_warp = True
         else:
             self.resample_and_warp = False
 
-        ndv = utils.float_or(demfun.get_nodata(self.fn), -9999)
+        ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
             self.warp_region = self.region.copy()
         else:
@@ -1804,25 +1805,25 @@ See GDAL for more information regarding supported formats.
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
             ## doing this in MEM has a bug, fix if able
             tmp_warp = os.path.join(self.cache_dir, '_tmp_gdal.tif')
-            warp_ = demfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
-                                       src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                       src_region=self.warp_region, sample_alg=self.sample_alg,
-                                       ndv=ndv, verbose=self.verbose)[0] 
+            warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
+                                        src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                        src_region=self.warp_region, sample_alg=self.sample_alg,
+                                        ndv=ndv, verbose=self.verbose)[0] 
             tmp_ds = None
             ## the following seems to be redundant...
             warp_ds = gdal.Open(tmp_warp)
             if warp_ds is not None:
                 ## clip wapred ds to warped srcwin
-                warp_ds_config = demfun.gather_infos(warp_ds)
+                warp_ds_config = gdalfun.gdal_infos(warp_ds)
                 gt = warp_ds_config['geoT']                
                 srcwin = self.warp_region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
                 #warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-                out_ds_config = demfun.set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, warp_ds_config['proj'],
-                                                 warp_ds_config['dt'], warp_ds_config['ndv'], warp_ds_config['fmt'])
+                out_ds_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, warp_ds_config['proj'],
+                                                  warp_ds_config['dt'], warp_ds_config['ndv'], warp_ds_config['fmt'], None, None)
 
                 in_bands = warp_ds.RasterCount
-                self.src_ds = utils.gdal_generate_mem_ds(out_ds_config, bands=in_bands)
+                self.src_ds = gdalfun.gdal_mem_ds(out_ds_config, bands=in_bands)
                 if self.src_ds is not None:
                     for band in range(1, in_bands+1):
                         this_band = self.src_ds.GetRasterBand(band)
@@ -1843,7 +1844,7 @@ See GDAL for more information regarding supported formats.
                 self.src_ds = gdal.Open(self.fn)
 
         if self.invert_region:
-            src_ds_config = demfun.gather_infos(self.src_ds)
+            src_ds_config = gdalfun.gdal_infos(self.src_ds)
             srcwin = self.warp_region.srcwin(src_ds_config['geoT'], src_ds_config['nx'], src_ds_config['ny'], node='grid')
             
             driver = gdal.GetDriverByName('MEM')
@@ -1869,7 +1870,7 @@ See GDAL for more information regarding supported formats.
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else utils.gdal_get_srs(self.fn)
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.gdal_get_srs(self.fn)
         self.infos['format'] = self.data_format
         #src_ds = gdal.Open(self.fn)
 
@@ -1962,10 +1963,10 @@ See GDAL for more information regarding supported formats.
                     weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_weight = demfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
-                                                        src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                                        src_region=self.warp_region, sample_alg=self.sample_alg,
-                                                        ndv=ndv, verbose=self.verbose)[0]
+                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
+                                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                                         src_region=self.warp_region, sample_alg=self.sample_alg,
+                                                         ndv=ndv, verbose=self.verbose)[0]
                     else:
                         src_weight = gdal.Open(self.weight_mask)
 
@@ -1983,10 +1984,10 @@ See GDAL for more information regarding supported formats.
                     uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
                 elif os.path.exists(self.uncertainty_mask):
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_uncertainty = demfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
-                                                             src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                                             src_region=self.warp_region, sample_alg=self.sample_alg,
-                                                             ndv=ndv, verbose=self.verbose)[0]
+                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
+                                                              src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                                              src_region=self.warp_region, sample_alg=self.sample_alg,
+                                                              ndv=ndv, verbose=self.verbose)[0]
                     else:
                         src_uncertainty = gdal.Open(self.uncertainty_mask)
 
@@ -2006,7 +2007,7 @@ See GDAL for more information regarding supported formats.
                     mask_band = self.mask.GetRasterBand(1)
                 elif os.path.exists(self.mask):
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_mask = demfun.sample_warp(
+                        src_mask = gdalfun.sample_warp(
                             self.mask, None, self.x_inc, self.y_inc,
                             src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                             src_region=self.warp_region, sample_alg=self.sample_alg,
@@ -2139,8 +2140,8 @@ See GDAL for more information regarding supported formats.
                 #count_data[count_data == 0] = np.nan
                 out_arrays = {'z':band_data, 'count':count_data, 'weight':weight_data,
                               'mask':mask_data, 'uncertainty':uncertainty_data}
-                ds_config = demfun.set_infos(1, y, y, this_gt, self.dst_srs, gdal.GDT_Float32,
-                                             np.nan, 'GTiff')
+                ds_config = gdalfun.gdal_set_infos(1, y, y, this_gt, self.dst_srs, gdal.GDT_Float32,
+                                              np.nan, 'GTiff', None, None)
                 this_srcwin = (srcwin[0], y, srcwin[2], 1)
                 yield(out_arrays, this_srcwin, this_gt)
                                             
@@ -2203,7 +2204,7 @@ exist, otherwise process as normal grid.
 
     def init_ds(self):
         if self.src_srs is None:
-            self.src_srs = utils.gdal_get_srs(self.fn)
+            self.src_srs = gdalfun.gdal_get_srs(self.fn)
             self.set_transform()
         
     def generate_inf(self, callback=lambda: False):
@@ -2211,7 +2212,7 @@ exist, otherwise process as normal grid.
             
         self.infos['name'] = self.fn
         self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else utils.gdal_get_srs(self.fn)
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.gdal_get_srs(self.fn)
         self.infos['format'] = self.data_format
         src_ds = gdal.Open(self.fn)
         if src_ds is not None:
@@ -2384,7 +2385,7 @@ file formats, etc.
                 x_inc=xinc, y_inc=yinc
             )
             ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
-                         'geoT': dst_gt, 'proj': utils.sr_wkt(self.src_srs),
+                         'geoT': dst_gt, 'proj': gdalfun.osr_wkt(self.src_srs),
                          'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
             driver = gdal.GetDriverByName('MEM')
             ds = driver.Create(
@@ -2426,7 +2427,7 @@ file formats, etc.
                     mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
-            utils.gdal2gdal('{}.grd'.format(ofn))
+            gdalfun.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
             mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
@@ -2473,9 +2474,9 @@ file formats, etc.
                     mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
-            utils.gdal2gdal('{}.grd'.format(ofn))
+            gdalfun.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-            #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
+            #gdalfun.set_ndv('{}.tif'.format(ofn), ndv=-99999, convert_array=True, verbose=False)
             xyz_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
                               src_region=self.region, verbose=self.verbose)
@@ -2499,9 +2500,9 @@ file formats, etc.
                     mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
-            utils.gdal2gdal('{}.grd'.format(ofn))
+            gdalfun.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-            #demfun.set_nodata('{}.tif'.format(ofn), nodata=-99999, convert_array=True, verbose=False)
+            #gdalfun.set_ndv('{}.tif'.format(ofn), ndv=-99999, convert_array=True, verbose=False)
             xyz_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
                               src_region=self.region, verbose=self.verbose)
@@ -2656,7 +2657,7 @@ file-system.
 
         utils.remove_glob('{}.json'.format(self.dst_layer))
         if self.src_srs is not None:
-            utils.gdal_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
+            gdalfun.osr_prj_file('{}.prj'.format(self.dst_layer), self.src_srs)
             
         self.ds = ogr.GetDriverByName('GeoJSON').CreateDataSource(self.dst_vector)
         if self.ds is not None: 

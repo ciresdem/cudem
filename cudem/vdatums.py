@@ -33,7 +33,7 @@ from osgeo import gdal
 from osgeo import ogr
 
 from cudem import regions
-from cudem import demfun
+from cudem import gdalfun
 from cudem import utils
 from cudem import htdpfun
 from cudem import fetches
@@ -307,7 +307,7 @@ class VerticalTransform:
                 ).acquire().generate()
 
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
-                _trans_in_array, _trans_in_infos = demfun.get_array(_trans_in.fn)
+                _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
                 if _trans_in_array is None:
                     _trans_in = None
                 else:
@@ -337,7 +337,7 @@ class VerticalTransform:
                     verbose = True
                 ).generate()
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
-                _trans_out_array, _trans_out_infos = demfun.get_array(_trans_out.fn)
+                _trans_out_array, _trans_out_infos = gdalfun.gdal_get_array(_trans_out.fn)
                 if _trans_out_array is None:
                     _trans_out = None
                 else:
@@ -392,7 +392,7 @@ class VerticalTransform:
                         if fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
-                            tmp_infos = demfun.infos(_trans_grid)
+                            tmp_infos = gdalfun.gdal_infos(_trans_grid)
                             tmp_region = regions.Region().from_geo_transform(
                                 tmp_infos['geoT'], tmp_infos['nx'], tmp_infos['ny']
                             )
@@ -408,7 +408,7 @@ class VerticalTransform:
                                 ), verbose=True
                             )
                             
-                            _tmp_array, _tmp_infos = demfun.get_array(
+                            _tmp_array, _tmp_infos = gdalfun.gdal_get_array(
                                 '_{}'.format(os.path.basename(_trans_grid))
                             )
                             utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
@@ -503,12 +503,12 @@ class VerticalTransform:
             return(None)
         else:
             trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)
-            trans_infos = demfun.set_infos(
-                self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff'
+            trans_infos = gdalfun.gdal_set_infos(
+                self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff', None, None
             )
 
             if outfile is not None:
-                utils.gdal_write(trans_array, outfile, trans_infos)
+                gdalfun.gdal_write(trans_array, outfile, trans_infos)
                 trans_array = None
                 return(outfile)
             else:
@@ -769,10 +769,10 @@ def vdatums_cli(argv = sys.argv):
     if not os.path.exists(src_grid):
         utils.echo_error_msg('Error: {} is not a valid file'.format(src_grid))
     else:
-        src_infos = demfun.infos(src_grid)
+        src_infos = gdalfun.gdal_infos(src_grid)
         
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
-        src_region.src_srs = demfun.get_srs(src_grid)
+        src_region.src_srs = gdalfun.gdal_get_srs(src_grid)
 
         trans_region = src_region.copy()
         trans_region.warp()
@@ -795,7 +795,7 @@ def vdatums_cli(argv = sys.argv):
         
         if _trans_grid is not None:
 
-            out_h, out_v = utils.epsg_from_input(demfun.get_srs(src_grid))
+            out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
             utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs epsg:{}'.format(
                 _trans_grid, '_{}'.format(_trans_grid),
@@ -810,7 +810,7 @@ def vdatums_cli(argv = sys.argv):
             #         '_{}'.format(_trans_grid),
             #         src_region.format('te'),
             #         x_inc, y_inc,
-            #         demfun.get_srs(src_grid)
+            #         gdalfun.gdal_get_srs(src_grid)
             #     ), verbose=True
             # )
 
