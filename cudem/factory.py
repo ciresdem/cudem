@@ -77,7 +77,6 @@ _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:k
 def echo_modules(module_dict, key):
     if key is None:
         sys.stderr.write(_cudem_module_long_desc(module_dict))
-
     else:
         if key in module_dict.keys():
             sys.stderr.write(
@@ -94,8 +93,7 @@ def echo_modules(module_dict, key):
 ##
 ## Factories
 ##
-## ==============================================
-    
+## ==============================================    
 class CUDEMModule:
     def __init__(self, params = {}, **kwargs):
         self.params = params
