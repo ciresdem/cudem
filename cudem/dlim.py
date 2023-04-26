@@ -93,9 +93,8 @@ from cudem import fetches
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
 ## ==============================================
-def make_datalist(
-        data_list, want_weight, want_uncertainty, region, src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose
-):
+def make_datalist(data_list, want_weight, want_uncertainty, region,
+                  src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
     """Make a datalist object from a list of supported datasets"""
 
     ## Make the datalist object
@@ -128,8 +127,7 @@ def write_datalist(data_list, outname=None):
 
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, None), sample_alg='bilinear',
               want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False, want_sm=False,
-              invert_region=False, cache_dir=None
-):
+              invert_region=False, cache_dir=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
     #try:
