@@ -1242,6 +1242,7 @@ class ElevationDataset:
                 stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
                 stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
                 ## apply the source uncertainty with the sub-cell variance uncertainty
+                ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
                 stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                 stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 

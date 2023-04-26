@@ -368,11 +368,14 @@ class gdal_datasource:
 
         elif utils.str_or(self.src_gdal) is not None and os.path.exists(self.src_gdal):
             self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
-            
+
         return(self.src_ds)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self.src_ds = None
+        ## don't close src_ds if incoming was already open
+        print(exc_type, exc_value, exc_traceback)
+        if not isinstance(self.src_gdal, gdal.Dataset):
+            self.src_ds = None
             
 def gdal_fext(src_drv_name):
     """find the common file extention given a GDAL driver name
