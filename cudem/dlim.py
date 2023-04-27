@@ -363,12 +363,15 @@ class ElevationDataset:
                 encode=encode
             )
 
-    def export_xyz_as_list(self, **kwargs):
+    def export_xyz_as_list(self, z_only = False, **kwargs):
         """return the XYZ data from the dataset as python list"""
         
         xyz_l = []
         for this_xyz in self.xyz_yield:
-            xyz_l.append(this_xyz.copy())
+            if z_only:
+                xyz_l.append(this_xyz.z)
+            else:
+                xyz_l.append(this_xyz.copy())
             
         return(xyz_l)
             
@@ -2946,10 +2949,10 @@ class Fetcher(ElevationDataset):
                     yield(this_ds)
     
     def set_ds(self, result):
-        return([DatasetFactory(mod = result[1], data_format=self.fetch_module.data_format, weight = self.weight, parent = self, src_region = self.region,
-                               invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), uncertainty = self.uncertainty,
-                               src_srs = self.fetch_module.src_srs, dst_srs = self.dst_srs, verbose = self.verbose,
-                               cache_dir = self.fetch_module.outdir, remote = True)._acquire_module()])
+        return([DatasetFactory(mod=result[1], data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
+                               invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), uncertainty=self.uncertainty,
+                               src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
+                               cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()])
     
     # def yield_ds(self):
     #     self.fetch_module.run()
@@ -3094,10 +3097,10 @@ class eHydroFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
-        out_ds = []
+    def find_src_region(self, result):
+        """attempt to grab the src_region from the xml metadata"""
+        
         src_region = None
-        src_epsg = None
         src_xmls = utils.p_unzip(result[1], ['xml', 'XML'], outdir=self.fetch_module._outdir)
         for src_xml in src_xmls:
             if src_region is None:
@@ -3112,45 +3115,61 @@ class eHydroFetcher(Fetcher):
                             [float(w), float(e), float(s), float(n)]
                         )
                     except:
-                        utils.echo_error_msg('could not parse region')
+                        utils.echo_warning_msg('could not parse region')
                         src_region = self.region
 
             utils.remove_glob(src_xml)
+        return(src_region)
+        
+    def find_epsg(self, src_region):
+        """search the stateplane vector for a match
+        keep buffering the src region until a match is found...
+        """
+        
+        tmp_region = src_region.copy()
+        utils.echo_msg(tmp_region)
+        sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
+        sp = ogr.Open(sp_fn)
+        layer = sp.GetLayer()
+        this_geom = tmp_region.export_as_geom()
+        layer.SetSpatialFilter(this_geom)
+        cnt = 0
+        while len(layer) == 0:
+            cnt+=1
+            tmp_region.buffer(pct=10)
+            utils.echo_msg('buffering region ({}): {}'.format(cnt, tmp_region))
+            this_geom = tmp_region.export_as_geom()
+            layer.SetSpatialFilter(None)
+            layer.SetSpatialFilter(this_geom)
 
+        for feature in layer:
+            src_epsg = feature.GetField('EPSG')
+            break
+
+        utils.echo_msg('ehydro epsg is: {}'.format(src_epsg))
+        sp = None
+        return(src_epsg)
+        
+    def set_ds(self, result):
+        out_ds = []        
+        src_region = self.find_src_region(result)
         if src_region is not None and src_region.valid_p():
-            if src_epsg is None:
-                ## search the stateplane vector for a match
-                ## keep buffering the src region until a match is found...
-                tmp_region = src_region.copy()
-                utils.echo_msg(tmp_region)
-                sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
-                sp = ogr.Open(sp_fn)
-                layer = sp.GetLayer()
-                this_geom = tmp_region.export_as_geom()
-                layer.SetSpatialFilter(this_geom)
-                cnt = 0
-                while len(layer) == 0:
-                    cnt+=1
-                    tmp_region.buffer(pct=10)
-                    utils.echo_msg('buffering region ({}): {}'.format(cnt, tmp_region))
-                    this_geom = tmp_region.export_as_geom()
-                    layer.SetSpatialFilter(None)
-                    layer.SetSpatialFilter(this_geom)
-
-                for feature in layer:
-                    src_epsg = feature.GetField('EPSG')
-                    break
-
-                utils.echo_msg('ehydro epsg is: {}'.format(src_epsg))
-                sp = None
-
-            src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'])
+            src_epsg = self.find_epsg(src_region)
+            src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
-                out_ds.append(XYZFile(fn=src_usace, data_format=168, x_scale=.3048, y_scale=.3048, z_scale=-.3048,
-                                      src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose))
+                usace_ds = XYZFile(fn=src_usace, data_format=168, x_scale=.3048, y_scale=.3048,
+                                   src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                   x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                   parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                   cache_dir = self.fetch_module._outdir, verbose=self.verbose)
+
+                ## check for median z value to see if they are using depth or height
+                ## most data should be negative...
+                usace_ds.initialize()
+                usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
+                z_med = np.percentile(usace_xyz, 50)
+                usace_ds.z_scale = .3048 if z_med < 0 else -.3048
+                out_ds.append(usace_ds)
         return(out_ds)
 
 class BlueTopoFetcher(Fetcher):
