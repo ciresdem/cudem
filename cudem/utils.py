@@ -678,7 +678,7 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
         if tmp_proc is not None:
             for ext in exts:
                 if ext == tmp_proc.split('.')[-1]:
-                    src_procs.append(os.path.basename(tmp_proc))
+                    src_procs.append(tmp_proc)
                     break
                 
                 else:

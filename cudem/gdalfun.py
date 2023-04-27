@@ -88,18 +88,23 @@ def epsg_from_input(in_srs):
 
     src_srs.AutoIdentifyEPSG()
     an = src_srs.GetAuthorityName(cstype)
-    src_horz_epsg = src_srs.GetAuthorityCode(cstype)
+    src_horz = src_srs.GetAuthorityCode(cstype)
 
+    if src_horz is None:
+        src_horz = src_srs.ExportToProj4()
+    else:
+        src_horz = '{}:{}'.format(an, src_horz)
+        
     ## VERT
     if src_srs.IsVertical() == 1:
         csvtype = 'VERT_CS'
-        src_vert_epsg = src_srs.GetAuthorityCode(csvtype)
+        src_vert = src_srs.GetAuthorityCode(csvtype)
     else:
-        src_vert_epsg = None
+        src_vert = None
 
-    return(src_horz_epsg, src_vert_epsg)
+    return(src_horz, src_vert)
     
-def osr_parse_srs(src_srs):
+def osr_parse_srs(src_srs, return_vertcs = True):
     if src_srs is not None:
         if src_srs.IsLocal() == 1:
             return(src_srs.ExportToWkt())
@@ -112,6 +117,7 @@ def osr_parse_srs(src_srs):
         an = src_srs.GetAuthorityName(cstype)
         ac = src_srs.GetAuthorityCode(cstype)
 
+        #if return_vertcs:
         if src_srs.IsVertical() == 1:
             csvtype = 'VERT_CS'
             vn = src_srs.GetAuthorityName(csvtype)
