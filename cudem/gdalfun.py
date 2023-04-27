@@ -551,7 +551,7 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
     with gdal_datasource(src_gdal) as src_ds:        
         ds_config = gdal_infos(src_ds)
         ds_band = src_ds.GetRasterBand(band)
-        ds_array = src_ds_band.ReadAsArray()
+        ds_array = ds_band.ReadAsArray()
 
     if ds_config['ndv'] is None:
         ds_config['ndv'] = -9999

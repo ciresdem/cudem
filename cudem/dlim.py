@@ -1841,7 +1841,7 @@ class GDALFile(ElevationDataset):
                 if uncertainty_band is not None:
                     uncertainty_data = uncertainty_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
                     uncertainty_ndv = float(uncertainty_band.GetNoDataValue())
-                    if not np.isnan(weight_ndv):
+                    if not np.isnan(uncertainty_ndv):
                         uncertainty_data[uncertainty_data==uncertainty_ndv] = np.nan
                 else:
                     uncertainty_data = np.zeros(band_data.shape)
@@ -2327,9 +2327,10 @@ class OGRFile(ElevationDataset):
 
     _known_layer_names = ['SOUNDG', 'Elevation', 'elev', 'z', 'height', 'depth', 'topography']
     
-    def __init__(self, ogr_layer = None, weight_field = None, uncertainty_field = None, **kwargs):
+    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None, **kwargs):
         super().__init__(**kwargs)
         self.ogr_layer = ogr_layer
+        self.elev_field = elev_field
         self.weight_field = weight_field
         self.uncertainty_field = uncertainty_field
 
@@ -2875,13 +2876,25 @@ class ZIPlist(ElevationDataset):
                 yield(arr)
         
 ## ==============================================
+##
 ## dlim Fetcher dataset class
 ##
 ## see cudem.fetches for various fetches supported
 ## datasets
+##
+## If a fetch module needs special processing define a sub-class
+## of Fetcher and redefine the set_ds function which returns a
+## list of dlim dataset objects. Otherwise, this Fetcher class can be
+## used as default if the fetched data comes in a normal sort of way.
+## Generally, though not always, if the fetched data is a raster then
+## there is no need to redefine set_ds, though if the raster has insufficient
+## information, such as with Copernicus, whose nodata value is not
+## specified in the geotiff files, it may be best to create a simple
+## sub-class for it.
+##
 ## ==============================================
 class Fetcher(ElevationDataset):
-    """The fetches dataset type.
+    """The generic fetches dataset type.
 
     This is used in waffles/dlim for on-the-fly remote data
     parsing and processing.
@@ -2913,16 +2926,19 @@ class Fetcher(ElevationDataset):
         self.infos['format'] = self.data_format
         return(self.infos)
 
+    def set_ds(self, result):
+        return([DatasetFactory(mod = result[1], data_format=self.fetch_module.data_format, weight = self.weight, parent = self, src_region = self.region,
+                               invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), uncertainty = self.uncertainty,
+                               src_srs = self.fetch_module.src_srs, dst_srs = self.dst_srs, verbose = self.verbose,
+                               cache_dir = self.fetch_module.outdir, remote = True)._acquire_module()])
+    
     def yield_ds(self):
         self.fetch_module.run()
         for result in self.fetch_module.results:
             if self.fetch_module.fetch(result) == 0:
-                ds = DatasetFactory(mod = result[1], data_format=self.fetch_module.data_format, weight = self.weight, parent = self, src_region = self.region,
-                                    invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), uncertainty = self.uncertainty,
-                                    src_srs = self.src_srs, dst_srs = self.dst_srs, verbose = self.verbose,
-                                    cache_dir = self.fetch_module.outdir, remote = True)._acquire_module()
-                ds.initialize()
-                yield(ds)
+                for this_ds in self.set_ds(result):
+                    this_ds.initialize()
+                    yield(this_ds)
 
     def yield_xyz(self):
         for ds in self.yield_ds():
@@ -2933,7 +2949,285 @@ class Fetcher(ElevationDataset):
         for ds in self.yield_ds():
             for arr in ds.yield_array():
                 yield(arr)
-                    
+
+class GMRTFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.__doc__ = self.fetch_module.__doc__
+
+    def set_ds(self, result):
+        with gdalfun.gdal_datasource(result[1], update = 1) as src_ds:
+            md = src_ds.GetMetadata()
+            md['AREA_OR_POINT'] = 'Point'
+            src_ds.SetMetadata(md)
+                        
+        return([GDALFile(fn=result[1], data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                         x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                         parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
+                         cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class GEBCOFetcher(Fetcher):
+    def __init__(self, exclude_tid=None, **kwargs):
+        super().__init__(**kwargs)
+        self.exclude_tid = []
+        if utils.str_or(exclude_tid) is not None:
+            for tid_key in exclude_tid.split('/'):
+                self.exclude_tid.append(utils.int_or(tid_key))
+        
+    def set_ds(self, result):
+        out_ds = []
+        gebco_fns = utils.p_unzip(result[1], ['tif'], self.fetch_module._outdir)
+        ## fetch the TID zip if needed
+        if self.exclude_tid:
+            if fetches.Fetch(
+                    self.fetches_module._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
+            ).fetch_file(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip')) == 0:
+                
+                ## only extract the file(s) needed for the region...
+                tid_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'), ['tif'], self.cache_dir)
+                for tid_fn in tid_fns:
+                    tmp_tid = os.path.join(self.fetch_module._outdir, 'tmp_tid.tif') # update output naming
+                    with gdalfun.gdal_datasource(tid_fn) as tid_ds:
+                        tid_config = demfun.gdal_infos(tid_ds)
+                        tid_band = tid_ds.GetRasterBand(1)
+                        tid_array = tid_band.ReadAsArray().astype(float)
+
+                    tid_config['ndv'] = -9999
+                    tid_config['dt'] = gdal.GDT_Float32                        
+                    for tid_key in self.exclude_tid:
+                        tid_array[tid_array == tid_key] = tid_config['ndv']
+                        
+                    for tid_key in self.tid_dic.keys():
+                        tid_array[tid_array == tid_key] = self.tid_dic[tid_key][1]
+                            
+                    gdalfun.gdal_write(tid_array, tmp_tid, tid_config)
+                    out_ds.append(GDALFile(fn=tid_fn.replace('tid_', ''), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                           x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                           parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                           cache_dir = self.fetch_module._outdir, verbose=self.verbose, mask=tmp_tid, weight_mask=tmp_tid))
+        else:
+            for gebco_fn in gebco_fns:
+                out_ds.append(GDALFile(fn=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.gebco_region,
+                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose))
+        return(out_ds)
+    
+class CopernicusFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        src_cop_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
+        for src_cop_dem in src_cop_dems:
+            gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
+            return([GDALFile(fn=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class FABDEMFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        src_fab_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
+        for src_fab_dem in src_fab_dems:
+            gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
+            return([GDALFile(fn=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)])        
+
+class HydroNOSFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        if result[2] == 'xyz':
+            nos_fns = utils.p_unzip(result[1], exts=['xyz', 'dat'], outdir=self.fetch_module._outdir)
+            for nos_fn in nos_fns:
+                return([XYZFile(fn=nos_fn, data_format=168, skip=1, xpos=2, ypos=1, zpos=3, z_scale=-1, src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
+                                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+        elif result[2] == 'bag':
+            bag_fns = utils.p_unzip(result[1], exts=['bag'], outdir=self.fetch_module._outdir)
+            for bag_fn in bag_fns:
+                if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
+                    with gdalfun.gdal_datasource(bag_fn) as bag_ds:
+                        bag_srs = bag_ds.GetSpatialRef()
+                        bag_srs.AutoIdentifyEPSG()
+                        bag_srs.SetAuthority('VERT_CS', 'EPSG', 5866)
+
+                return([BAGFile(fn=bag_fn, data_format=201, src_srs=bag_srs.ExportToWkt(), dst_srs=self.dst_srs,
+                                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                cache_dir = self.fetch_module._outdir, verbose=self.verbose)])   
+
+class eHydroFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        src_region = None
+        src_epsg = None
+        src_xmls = utils.p_unzip(src_zip, ['xml', 'XML'], outdir=self.fetch_module._outdir)
+        for src_xml in src_xmls:
+            if src_region is None:
+                this_xml = lxml.etree.parse(src_xml)
+                if this_xml is not None:
+                    try:
+                        w = this_xml.find('.//westbc').text
+                        e = this_xml.find('.//eastbc').text
+                        n = this_xml.find('.//northbc').text
+                        s = this_xml.find('.//southbc').text
+                        src_region = regions.Region().from_list(
+                            [float(w), float(e), float(s), float(n)]
+                        )
+                    except:
+                        utils.echo_error_msg('could not parse region')
+                        src_region = self.region
+
+            utils.remove_glob(src_xml)
+
+        if src_region is not None and src_region.valid_p():
+            if src_epsg is None:
+                ## search the stateplane vector for a match
+                ## keep buffering the src region until a match is found...
+                tmp_region = src_region.copy()
+                utils.echo_msg(tmp_region)
+                sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
+                sp = ogr.Open(sp_fn)
+                layer = sp.GetLayer()
+                this_geom = tmp_region.export_as_geom()
+                layer.SetSpatialFilter(this_geom)
+                cnt = 0
+                while len(layer) == 0:
+                    cnt+=1
+                    tmp_region.buffer(pct=10)
+                    utils.echo_msg('buffering region ({}): {}'.format(cnt, tmp_region))
+                    this_geom = tmp_region.export_as_geom()
+                    layer.SetSpatialFilter(None)
+                    layer.SetSpatialFilter(this_geom)
+
+                for feature in layer:
+                    src_epsg = feature.GetField('EPSG')
+                    break
+
+                utils.echo_msg('ehydro epsg is: {}'.format(src_epsg))
+                sp = None
+
+            src_usaces = utils.p_unzip(src_zip, ['XYZ', 'xyz', 'dat'])
+            for src_usace in src_usaces:
+                return([XYZFile(fn=src_usace, data_format=168, x_sacle=.3048, y_scale=.3048, z_scale=-.3048,
+                                src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class BlueTopoFetcher(Fetcher):
+    def __init__(self, want_interpolation=False, **kwargs):
+        super().__init__(**kwargs)
+        self.want_interpolation = want_interpolation
+
+    def set_ds(self, result):
+        #elev = gdalfun.gdal_extract_band(result[1], os.path.join(self.fetch_module._outdir, '_tmp_bt_elev.tif'), band=1)[0]
+        #sid = gdalfun.gdal_extract_band(result[1], os.path.join(self.fetch_module._outdir, '_tmp_bt_tid.tif'), band=3, exclude=[0] if self.want_interpolation else [])[0]
+        #unc = gdalfun.gdal_extract_band(result[1], os.path.join(self.fetch_module._outdir, '_tmp_bt_unc.tif'), band=2)[0]
+
+        sid = None
+        if not self.want_interpolation:
+            sid = gdalfun.gdal_extract_band(result[1], os.path.join(self.fetch_module._outdir, '_tmp_bt_tid.tif'), band=3, exclude=[0])[0]
+        
+        return([GDALFile(fn=result[1], data_format=200, band_no=1, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                         x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                         parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                         cache_dir = self.fetch_module._outdir, verbose=self.verbose, mask=sid, uncertainty_mask=2)])        
+
+class NGSFetcher(Fetcher):
+    def __init__(self, datum = 'geoidHt', **kwargs):
+        super().__init__(**kwargs)
+        self.datum = datum
+        if self.datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
+            utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
+            self.datum = 'geoidHt'
+
+    def set_ds(self, result):
+        with open(result[1], 'r') as json_file:
+            r = json.load(json_file)
+            if len(r) > 0:
+                with open(os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), 'w') as tmp_ngs:
+                    for row in r:
+                        z = utils.float_or(row[self.datum])
+                        if z is not None:
+                            xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list(
+                                [float(row['lon']), float(row['lat']), z]
+                            )
+                            xyz.dump(dst_port=tmp_ngs)
+
+        return([XYZFile(fn=os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
+                        x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                        parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                        cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class TidesFetcher(Fetcher):
+    def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
+        super().__init__(**kwargs)
+        self.s_datum = s_datum
+        self.t_datum = t_datum
+        self.units = units
+        
+    def set_ds(self, result):
+        with open(result[1], 'r') as json_file:
+            r = json.load(json_file)
+            if len(r) > 0:
+                with open(os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), 'w') as tmp_ngs:
+                    for feature in r['features']:
+                        if self.fetch_module.station_id is not None:
+                            if self.fetch_module.station_id != feature['attributes']['id']:
+                                continue
+                        lon = feature['attributes']['longitude']
+                        lat = feature['attributes']['latitude']
+                        if feature['attributes'][self.s_datum] != -99999.99 and feature['attributes'][self.t_datum] != -99999.99:
+                            z = feature['attributes'][self.s_datum] - feature['attributes'][self.t_datum]
+                            if self.units == 'm':
+                                z = z * 0.3048
+
+                            xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                            xyz.dump(dst_port=tmp_ngs)
+
+        return([XYZFile(fn=os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
+                        x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                        parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                        cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class CopernicusFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        src_cop_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
+        for src_cop_dem in src_cop_dems:
+            gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
+            return([GDALFile(fn=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
+
+class VDatumFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        v_gtx = utils.p_unzip(result[1], [result[2]], outdir=self.fetch_module._outdir)
+        src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
+        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(result[2], src_tif), verbose=True)
+        return([GDALFile(fn=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                         x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                         parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                         cache_dir = self.fetch_module._outdir, verbose=self.verbose)])        
+    
 ## ==============================================
 ## Dataset generator
 ##
@@ -2951,16 +3245,29 @@ class DatasetFactory(factory.CUDEMFactory):
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
         301: {'name': 'mbs', 'fmts': ['fbt'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg'], 'call': OGRFile},
-        -11: {'name': 'fetches', 'fmts': ['gmrt', 'srtm_plus', 'mar_grav', 'digital_coast',
-                                          'multibeam', 'gebco'], 'call': Fetcher}
-        # -100: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': Fetcher},
-        # -101: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': Fetcher},
-        # -102: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
-        # -11: {'name': 'fetches', 'fmts': ['gmrt', 'multibeam', 'ehydro', 'mar_grav', 'srtm_plus',
-        #                                   'ngs', 'nos', 'charts', 'digital_coast', 'ncei_thredds',
-        #                                   'tnm', 'emodnet', 'chs', 'hrdem', 'copernicus', 'nasadem',
-        #                                   'tides', 'vdatum', 'earthdata', 'bluetopo', 'hydrolakes',
-        #                                   'gebco', 'arcticdem', 'fabdem'], 'call': Fetcher},
+        ## fetches modules
+        -100: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': GMRTFetcher},
+        -101: {'name': 'gebco', 'fmts': ['gebco'], 'call': GEBCOFetcher},
+        -102: {'name': 'copernicus', 'fmts': ['copernicus'], 'call': CopernicusFetcher},
+        -102: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
+        -102: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
+        -103: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': Fetcher},
+        -104: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
+        -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
+        -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
+        -202: {'name': 'nos', 'fmts': ['multibeam'], 'call': HydroNOSFetcher},
+        -203: {'name': 'ehydro', 'fmts': ['ehydro'], 'call': eHydroFetcher},
+        -204: {'name': 'bluetopo', 'fmts': ['bluetopo'], 'call': BlueTopoFetcher},
+        -205: {'name': 'ngs', 'fmts': ['ngs'], 'call': NGSFetcher},
+        -206: {'name': 'tides', 'fmts': ['tides'], 'call': TidesFetcher},
+        -207: {'name': 'digital_coast', 'fmts': ['digital_coast'], 'call': Fetcher},
+        -208: {'name': 'ncei_thredds', 'fmts': ['ncei_thredds'], 'call': Fetcher},
+        -209: {'name': 'tnm', 'fmts': ['tnm'], 'call': Fetcher},
+        -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': Fetcher},
+        -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
+        -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
+        -303: {'name': 'arcticdem', 'fmts': ['arcticdem'], 'call': Fetcher},
+        -304: {'name': 'vdatum', 'fmts': ['vdatum'], 'call': VDatumFetcher},        
     }
     _datalist_cols = ['path', 'format', 'weight', 'uncertainty', 'title', 'source',
                       'date', 'type', 'resolution', 'horz', 'vert',
