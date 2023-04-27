@@ -2508,7 +2508,7 @@ class WafflesCUBE(Waffle):
         
         #tvu = (np.random.uniform(low=.1, high=np.std(point_values), size=ds_config['nb']))
         #print(tvu)
-'
+
         #print(np.std(point_values, axis=0))
         #print([point_values.mean() - 3 * point_values.std(), point_values.mean() + 3 * point_values.std()])
 

@@ -88,6 +88,7 @@ from cudem import regions
 from cudem import xyzfun
 from cudem import gdalfun
 from cudem import factory
+from cudem import vdatums
 from cudem import fetches
 from cudem import FRED
 
@@ -600,15 +601,22 @@ class ElevationDataset:
                     dst_vert,
                     vd_region.format('fn')
                 ))
-                waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
-                    vd_region.format('str'),
-                    src_vert,
-                    dst_vert,
-                    trans_fn,
-                    self.cache_dir
-                )
-                if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
-                    out_src_srs = '{} +geoidgrids={}.tif'.format(src_srs.ExportToProj4(), trans_fn)
+
+                trans_fn = vdatums.VerticalTransform(
+                    vd_region, '3s', '3s', src_vert, dst_vrt,
+                    cache_dir=waffles_cache
+                ).run(outfile='{}.tif'.format(trans_fn))
+                
+                # waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
+                #     vd_region.format('str'),
+                #     src_vert,
+                #     dst_vert,
+                #     trans_fn,
+                #     self.cache_dir
+                # )
+                #if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
+                if os.path.exists(trans_fn):
+                    out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
                     out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
                     if src_vert_epsg == '6360':
