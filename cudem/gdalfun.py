@@ -571,13 +571,13 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
             
     return(gdal_write(ds_array, dst_gdal, ds_config))
 
-def gdal_get_array(src_dem, band = 1):
+def gdal_get_array(src_gdal, band = 1):
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
             src_band = src_ds.GetRasterBand(band)
-            src_array = band.ReadAsArray()
-            src_offset = band.GetOffset()
-            src_scale = band.GetScale()
+            src_array = src_band.ReadAsArray()
+            src_offset = src_band.GetOffset()
+            src_scale = src_band.GetScale()
 
             if src_offset is not None or src_scale is not None:
                 src_array = np.ndarray.astype(src_array, dtype=np.float32)

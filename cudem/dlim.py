@@ -64,6 +64,8 @@
 ## my_processed_datalist.archive_xyz() # archive the data to the region/increments
 ## my_mask = my_processed_datalist._mask() # mask the data to the region/increments
 ##
+### TODO:
+## allow input http data (output of fetches -l should be able to be used as a datalist)
 ### Code:
 
 import os
@@ -583,6 +585,8 @@ class ElevationDataset:
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(dst_horz)
             ## generate the vertical transformation grids if called for
+            ## check if transformation grid already exists, so we don't
+            ## have to create a new one for every input file...!
             if dst_vert is not None \
                and src_vert is not None \
                and dst_vert != src_vert:
@@ -602,10 +606,11 @@ class ElevationDataset:
                     vd_region.format('fn')
                 ))
 
-                trans_fn = vdatums.VerticalTransform(
-                    vd_region, '3s', '3s', src_vert, dst_vrt,
-                    cache_dir=waffles_cache
-                ).run(outfile='{}.tif'.format(trans_fn))
+                if not os.path.exists('{}.tif'.format(trans_fn)):
+                    trans_fn = vdatums.VerticalTransform(
+                        vd_region, '3s', '3s', src_vert, dst_vert,
+                        cache_dir=self.cache_dir
+                    ).run(outfile='{}.tif'.format(trans_fn))
                 
                 # waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
                 #     vd_region.format('str'),
@@ -619,15 +624,15 @@ class ElevationDataset:
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
                     out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
-                    if src_vert_epsg == '6360':
+                    if src_vert == '6360':
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
 
-                    if dst_vert_epsg == '6360':
+                    if dst_vert == '6360':
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                 else:
                     utils.echo_error_msg(
                         'failed to generate vertical transformation grid between {} and {} for this region!'.format(
-                            src_vert_epsg, dst_vert_epsg
+                            src_vert, dst_vert
                         )
                     )
                     out_src_srs = src_srs.ExportToProj4()
@@ -1837,7 +1842,7 @@ class GDALFile(ElevationDataset):
             ## parse through the data
             srcwin = self.get_srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node='pixel')
             for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
-                band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
                 if ndv is not None and not np.isnan(ndv):
                     band_data[band_data == ndv] = np.nan
 
@@ -2946,6 +2951,7 @@ class Fetcher(ElevationDataset):
         self.infos['minmax'] = self.region.export_as_list()
         self.infos['wkt'] = self.region.export_as_wkt()
         self.infos['format'] = self.data_format
+        self.infos['src_srs'] = self.src_srs
         return(self.infos)
 
     def parse(self):
@@ -3013,7 +3019,7 @@ class GEBCOFetcher(Fetcher):
                     self.fetches_module._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
             ).fetch_file(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip')) == 0:
                 
-                ## only extract the file(s) needed for the region...
+                ## todo: only extract the file(s) needed for the region...
                 tid_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'), ['tif'], self.cache_dir)
                 for tid_fn in tid_fns:
                     tmp_tid = os.path.join(self.fetch_module._outdir, 'tmp_tid.tif') # update output naming
@@ -3038,7 +3044,7 @@ class GEBCOFetcher(Fetcher):
         else:
             for gebco_fn in gebco_fns:
                 out_ds.append(GDALFile(fn=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.gebco_region,
+                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region,
                                        parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                        cache_dir = self.fetch_module._outdir, verbose=self.verbose))
         return(out_ds)
@@ -3272,9 +3278,9 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        v_gtx = utils.p_unzip(result[1], [result[2]], outdir=self.fetch_module._outdir)
+        v_gtx = utils.p_f_unzip(result[1], [result[2]], outdir=self.fetch_module._outdir)
         src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
-        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(result[2], src_tif), verbose=True)
+        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=True)
         return([GDALFile(fn=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
@@ -3301,10 +3307,10 @@ class DatasetFactory(factory.CUDEMFactory):
         -100: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': GMRTFetcher},
         -101: {'name': 'gebco', 'fmts': ['gebco'], 'call': GEBCOFetcher},
         -102: {'name': 'copernicus', 'fmts': ['copernicus'], 'call': CopernicusFetcher},
-        -102: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
-        -102: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
-        -103: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': Fetcher},
-        -104: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
+        -103: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
+        -104: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
+        -105: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': Fetcher},
+        -106: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
         -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
         -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
         -202: {'name': 'nos', 'fmts': ['nos'], 'call': HydroNOSFetcher},
