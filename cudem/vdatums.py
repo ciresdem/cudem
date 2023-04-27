@@ -297,7 +297,8 @@ class VerticalTransform:
         else:
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
                 _trans_in = waffles.WaffleFactory(
-                    mod = 'gmt-surface',
+                    #mod = 'gmt-surface',
+                    mod = 'IDW',
                     data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
                     src_region = self.src_region,
                     xinc = self.src_x_inc,
@@ -332,7 +333,8 @@ class VerticalTransform:
             if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
 
                 _trans_out = waffles.WaffleFactory(
-                    mod = 'gmt-surface',
+                    #mod = 'gmt-surface',
+                    mod = 'IDW',
                     data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
                     src_region = self.src_region,
                     xinc = self.src_x_inc,
@@ -506,6 +508,10 @@ class VerticalTransform:
         #     utils.echo_msg(self.src_region)
         #     utils.echo_msg(self.src_x_inc, self.src_y_inc)
         #     utils.echo_msg(self.cache_dir)
+
+        if os.path.exists(outfile):
+            utils.echo_warning_msg('{} exists, skipping...'.format(outfile))
+            return(outfile)
         
         if self.epsg_in is None or self.epsg_out is None:
             utils.echo_error_msg('failed to parse vertical input or output, check inputs')

@@ -144,7 +144,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
     
     if len(xdls) > 1:
         dl_fn = write_datalist(xdls, 'dlim')
-        this_datalist = DatasetFactory(mod=dl_fn, data_format=None, weight=None if not want_weight else 1,
+        this_datalist = DatasetFactory(mod=dl_fn, data_format=-1, weight=None if not want_weight else 1,
                                        uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
                                        x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
                                        invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
@@ -606,11 +606,12 @@ class ElevationDataset:
                     vd_region.format('fn')
                 ))
 
-                if not os.path.exists('{}.tif'.format(trans_fn)):
-                    trans_fn = vdatums.VerticalTransform(
-                        vd_region, '3s', '3s', src_vert, dst_vert,
-                        cache_dir=self.cache_dir
-                    ).run(outfile='{}.tif'.format(trans_fn))
+                #if not os.path.exists('{}.tif'.format(trans_fn)):
+                trans_fn = vdatums.VerticalTransform(
+                    vd_region, '3s', '3s', src_vert, dst_vert,
+                    cache_dir=self.cache_dir
+                ).run(outfile='{}.tif'.format(trans_fn))
+                utils.echo_msg('generated {}'.format(trans_fn))
                 
                 # waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
                 #     vd_region.format('str'),
@@ -2989,7 +2990,7 @@ class Fetcher(ElevationDataset):
 class GMRTFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.__doc__ = self.fetch_module.__doc__
+        #self.__doc__ = self.fetch_module.__doc__
 
     def set_ds(self, result):
         with gdalfun.gdal_datasource(result[1], update = 1) as src_ds:
@@ -3003,7 +3004,7 @@ class GMRTFetcher(Fetcher):
                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)])
 
 class GEBCOFetcher(Fetcher):
-    def __init__(self, exclude_tid=None, **kwargs):
+    def __init__(self, exclude_tid = None, **kwargs):
         super().__init__(**kwargs)
         self.exclude_tid = []
         if utils.str_or(exclude_tid) is not None:
@@ -3012,16 +3013,29 @@ class GEBCOFetcher(Fetcher):
         
     def set_ds(self, result):
         out_ds = []
+        wanted_gebco_fns = []
         gebco_fns = utils.p_unzip(result[1], ['tif'], self.fetch_module._outdir)
+        
         ## fetch the TID zip if needed
         if self.exclude_tid:
             if fetches.Fetch(
-                    self.fetches_module._gebco_urls['gebco_tid']['geotiff'], callback=self.callback, verbose=self.verbose
+                    self.fetch_module._gebco_urls['gebco_tid']['geotiff'], verbose=self.verbose
             ).fetch_file(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip')) == 0:
                 
-                ## todo: only extract the file(s) needed for the region...
                 tid_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'), ['tif'], self.cache_dir)
+
                 for tid_fn in tid_fns:
+                    ds_config = gdalfun.gdal_infos(tid_fn)
+                    inf_region = regions.Region().from_geo_transform(ds_config['geoT'], ds_config['nx'], ds_config['ny'])            
+                    inf_region.wmin = self.weight
+                    inf_region.wmax = self.weight
+                    inf_region.umin = self.uncertainty
+                    inf_region.umax = self.uncertainty
+
+                    if regions.regions_intersect_p(inf_region, self.region):
+                        wanted_gebco_fns.append(tid_fn)
+
+                for tid_fn in wanted_gebco_fns:
                     tmp_tid = os.path.join(self.fetch_module._outdir, 'tmp_tid.tif') # update output naming
                     with gdalfun.gdal_datasource(tid_fn) as tid_ds:
                         tid_config = demfun.gdal_infos(tid_ds)
@@ -3043,10 +3057,23 @@ class GEBCOFetcher(Fetcher):
                                            cache_dir = self.fetch_module._outdir, verbose=self.verbose, mask=tmp_tid, weight_mask=tmp_tid))
         else:
             for gebco_fn in gebco_fns:
+                ds_config = gdalfun.gdal_infos(gebco_fn)
+                #print(ds_config)
+                inf_region = regions.Region().from_geo_transform(ds_config['geoT'], ds_config['nx'], ds_config['ny'])            
+                inf_region.wmin = self.weight
+                inf_region.wmax = self.weight
+                inf_region.umin = self.uncertainty
+                inf_region.umax = self.uncertainty
+
+                if regions.regions_intersect_p(inf_region, self.region):
+                    wanted_gebco_fns.append(gebco_fn)
+            
+            for gebco_fn in wanted_gebco_fns:
+                print(gebco_fn)
                 out_ds.append(GDALFile(fn=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                        x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region,
                                        parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose))
+                                       cache_dir=self.fetch_module._outdir, verbose=self.verbose))
         return(out_ds)
     
 class CopernicusFetcher(Fetcher):

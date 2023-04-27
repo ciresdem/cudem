@@ -574,25 +574,25 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
 def gdal_get_array(src_gdal, band = 1):
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
+            infos = gdal_infos(src_ds)
             src_band = src_ds.GetRasterBand(band)
             src_array = src_band.ReadAsArray()
             src_offset = src_band.GetOffset()
             src_scale = src_band.GetScale()
-
-            if src_offset is not None or src_scale is not None:
-                src_array = np.ndarray.astype(src_array, dtype=np.float32)
-
-                if src_offset is not None:
-                    src_array += offset
-
-                if src_scale is not None:
-                    src_array *= scale
-
-            infos = gdal_infos(src_ds)
-            return(src_array, infos)
         else:
             utils.echo_error_msg('could not open {}'.format(src_gdal))
             return(None, None)
+            
+    if src_offset is not None or src_scale is not None:
+        src_array = np.ndarray.astype(src_array, dtype=np.float32)
+
+        if src_offset is not None:
+            src_array += offset
+
+        if src_scale is not None:
+            src_array *= scale
+
+    return(src_array, infos)
 
 def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
     """cut src_ds datasource to src_region and output dst_gdal file
