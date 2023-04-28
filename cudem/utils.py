@@ -752,7 +752,7 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
 
     with CliProgress(
             total=(n_size[0]*n_size[1])/step,
-            message='{}: chunking srcwin'.format(_command_name),
+            message='{}: chunking srcwin @ {}/{}'.format(_command_name, n_chunk, step),
             verbose=verbose,
     ) as pbar:
         while True:

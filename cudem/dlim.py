@@ -3139,8 +3139,8 @@ class MarGravFetcher(Fetcher):
                 )
             )
             utils.run_cmd(
-                'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
-                    self.region.format('gmt'), self.x_inc, mar_grav_fn, result[1]
+                'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
+                    self.region.format('gmt'), mar_grav_fn, result[1]
                 ),
                 verbose=False
             )

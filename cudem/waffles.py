@@ -714,7 +714,7 @@ class WafflesSciPy(Waffle):
     < scipy:method=<method>:chunk_size=None:chunk_buffer=40 >
     """
     
-    def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 40,
+    def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 10,
                  chunk_step = None, **kwargs):
         """generate a `scipy` dem"""
         
