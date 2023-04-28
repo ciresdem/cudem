@@ -535,16 +535,19 @@ def gdal_has_ndv(src_gdal, band = 1):
                 return(True)
             
         return(False)
-        
-def gdal_mem_ds(ds_config, name = 'MEM', bands = 1):
+    
+def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
     """Create temporary gdal mem dataset"""
         
     mem_driver = gdal.GetDriverByName('MEM')
     mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'])
     if mem_ds is not None:
         mem_ds.SetGeoTransform(ds_config['geoT'])
-        if ds_config['proj'] is not None:
-            mem_ds.SetProjection(ds_config['proj'])
+        if src_srs is None:
+            if ds_config['proj'] is not None:
+                mem_ds.SetProjection(ds_config['proj'])
+        else:
+            mem_ds.SetProjection(src_srs)
 
         for band in range(1, bands+1):
             mem_band = mem_ds.GetRasterBand(band)
@@ -1051,22 +1054,6 @@ def sample_warp(
     else:
         dst_ds = None
         return(dst_dem, 0)    
-
-def gdal_mem_ds(ds_config, name = 'MEM', bands = 1):
-    """Create temporary gdal mem dataset"""
-        
-    mem_driver = gdal.GetDriverByName('MEM')
-    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'])
-    if mem_ds is not None:
-        mem_ds.SetGeoTransform(ds_config['geoT'])
-        if ds_config['proj'] is not None:
-            mem_ds.SetProjection(ds_config['proj'])
-
-        for b in range(1, bands+1):
-            mem_band = mem_ds.GetRasterBand(b)
-            mem_band.SetNoDataValue(ds_config['ndv'])
-        
-    return(mem_ds)
     
 def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):
     """write src_arr to gdal file dst_gdal using src_config

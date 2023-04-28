@@ -231,7 +231,7 @@ _xyz_config = {'delim': None, 'xpos': 0, 'ypos': 1, 'zpos': 2, 'wpos': 3, 'upos'
                'verbose': False,}
 
 #_known_delims = [',', ' ', '\t', '/', ':']
-_known_delims = [',', '/', ':']
+_known_delims = [None, ',', '/', ':']
 _known_xyz_fmts = ['xyz', 'csv', 'dat', 'ascii']
 
 def xyz_line_delim(xyz_line):

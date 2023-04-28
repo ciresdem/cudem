@@ -212,14 +212,22 @@ class Waffle:
         self.want_stack = want_stack # generate the stacked rasters
         self.stack = None # multi-banded stacked raster from cudem.dlim
         self.stack_ds = None # the stacked raster as a dlim dataset object
-
+        # if not self.params:
+        #     self.params['kwargs'] = self.__dict__.copy()
+        #     self.params['mod'] = 'Unkownn'
+        #     self.params['mod_name'] = 'Unknown'
+        #     self.params['mod_args'] = {}
+            
+        #factory._set_params(self) # set up the default factory parameters
+        
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
     
     def __repr__(self):
         return('<Waffles: {}>'.format(self.name))
-
+    
     def initialize(self):
+        #factory._set_mod_params(self, mf=WaffleFactory) # set the module arguments, if any
         utils.echo_msg('initializing waffles module < {} >'.format(self.params['mod']))
         self.fn = '{}.{}'.format(self.name, gdalfun.gdal_fext(self.fmt)) # output dem filename
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
@@ -233,8 +241,8 @@ class Waffle:
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-
         #self.cache_dir = os.path.join(os.path.dirname(self.name), '.cudem')
+        return(self)
     
     def __call__(self):
         self.initialize()
@@ -748,8 +756,19 @@ class WafflesSciPy(Waffle):
         for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose, step=n_step):                
             srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
-            point_indices = np.nonzero(points_array != points_no_data)
-            if len(point_indices[0]):
+            points_array[points_array == points_no_data] = np.nan
+            point_indices = np.nonzero(~np.isnan(points_array))
+            #point_indices = np.nonzero(points_array != points_no_data)
+            if np.count_nonzero(np.isnan(points_array)) == 0:
+                #if not np.all(~np.nan(points_array)):
+                y_origin = srcwin[1]-srcwin_buff[1]
+                x_origin = srcwin[0]-srcwin_buff[0]
+                y_size = y_origin + srcwin[3]
+                x_size = x_origin + srcwin[2]
+                points_array = points_array[y_origin:y_size,x_origin:x_size]
+                interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+                
+            elif len(point_indices[0]):
                 point_values = points_array[point_indices]
                 xi, yi = np.mgrid[0:srcwin_buff[2],
                                   0:srcwin_buff[3]]
@@ -875,8 +894,8 @@ class GMTSurface(Waffle):
             )
 
         dem_surf_cmd += (
-            'gmt surface -V {} -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
-                self.ps_region.format('gmt'), self.xinc, self.yinc,
+            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
+                self.p_region.format('gmt'), self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
@@ -1551,14 +1570,19 @@ class WafflesCoastline(Waffle):
         self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
         self.f_region.src_srs = self.dst_srs
         self.wgs_region = self.f_region.copy()
+        self.wgs_srs = 'epsg:4326'
         if self.dst_srs is not None:
-            self.wgs_region.warp('epsg:4326')
+            self.wgs_region.warp(self.wgs_srs)
         else:
-            self.dst_srs = 'epsg:4326'            
+            self.dst_srs = self.wgs_srs
+
+        #self.wgs_srs = osr.SpatialReference()
+        #self.wgs_srs.SetFromUserInput('epsg:4326')
 
         horz_epsg, vert_epsg = gdalfun.epsg_from_input(self.dst_srs)
-        self.cst_srs = osr.SpatialReference()
-        self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
+        self.cst_srs = horz_epsg
+        #self.cst_srs = osr.SpatialReference()
+        #self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
         
         self._load_coast_mask()
 
@@ -1613,7 +1637,7 @@ class WafflesCoastline(Waffle):
         
         xcount, ycount, gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc)
         self.ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, gt,
-                                                gdalfun.osr_wkt(self.cst_srs), gdal.GDT_Float32,
+                                                self.cst_srs, gdal.GDT_Float32,
                                                 self.ndv, 'GTiff', None, None)        
         self.coast_array = np.zeros( (ycount, xcount) )
 
@@ -1633,7 +1657,7 @@ class WafflesCoastline(Waffle):
         fr.join()
 
         gmrt_tif = this_gmrt.results[0]
-        gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt')
+        gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', src_srs=self.wgs_srs)
         gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
         gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
@@ -1655,7 +1679,7 @@ class WafflesCoastline(Waffle):
         
         for i, cop_tif in enumerate(this_cop.results):
             gdalfun.gdal_set_ndv(cop_tif[1], 0, verbose=False)
-            cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus')
+            cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', src_srs=self.wgs_srs)
             gdal.Warp(
                 cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
                 callback=False, srcNodata=0
@@ -1680,7 +1704,7 @@ class WafflesCoastline(Waffle):
        
         for i, wsf_tif in enumerate(this_wsf.results):
             gdalfun.gdal_set_ndv(wsf_tif[1], 0, verbose=False)
-            wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf')
+            wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs)
             gdal.Warp(
                 wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
                 callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
@@ -1706,7 +1730,7 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd')
+        tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs)
         if len(this_tnm.results) > 0:
             for i, tnm_zip in enumerate(this_tnm.results):
                 tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
@@ -1771,8 +1795,8 @@ class WafflesCoastline(Waffle):
             if i.split('.')[-1] == 'shp':
                 lakes_shp = i
 
-        lakes_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes')
-        lakes_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes')
+        lakes_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs)
+        lakes_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs)
         lk_ds = ogr.Open(lakes_shp)
         if lk_ds is not None:
             lk_layer = lk_ds.GetLayer()
@@ -3125,7 +3149,7 @@ class WaffleDEM:
 
             dem_ds.SetMetadata(md)
             dem_ds = None
-    
+            
 class WaffleFactory(factory.CUDEMFactory):
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
@@ -3276,7 +3300,8 @@ def waffles_cli(argv = sys.argv):
     wg['name'] = 'waffles'
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
-    
+
+    ## todo: gather multiple -R options (do for all)
     while i < len(argv):
         arg = argv[i]
         if arg == '--region' or arg == '-R':

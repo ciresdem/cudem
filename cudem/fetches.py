@@ -619,17 +619,20 @@ class FetchModule:
         ## for dlim support
         self.data_format = None
         self.src_srs = None
+
+        if self.region is None or not self.region.valid_p():
+            self.region = regions.Region().from_list([-180,180,-90,90])
         
     def run(self):
         raise(NotImplementedError)
 
-    def fetch(self, entry):
+    def fetch(self, entry, check_size = True):
         return(Fetch(
             entry[0],
             callback=self.callback,
             verbose=self.verbose,
-            headers=self.headers
-        ).fetch_file(entry[1], timeout=5, read_timeout=5))
+            headers=self.headers,
+        ).fetch_file(entry[1], timeout=5, read_timeout=5, check_size=check_size))
 
     def fetch_results(self):
         for entry in self.results:
