@@ -143,13 +143,19 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
                            want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
     
     if len(xdls) > 1:
-        utils.remove_glob('{}.datalist*'.format('dlim'))
-        dl_fn = write_datalist(xdls, 'dlim')
-        this_datalist = DatasetFactory(mod=dl_fn, data_format=-1, weight=None if not want_weight else 1,
-                                       uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                       x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                       invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                       verbose=want_verbose)._acquire_module()
+        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                 verbose=want_verbose)
+
+        # utils.remove_glob('{}.datalist*'.format('dlim'))
+        # dl_fn = write_datalist(xdls, 'dlim')
+        # this_datalist = DatasetFactory(mod=dl_fn, data_format=-1, weight=None if not want_weight else 1,
+        #                                uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+        #                                x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+        #                                invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+        #                                verbose=want_verbose)._acquire_module()
     else:
         this_datalist = xdls[0]
 
@@ -407,7 +413,7 @@ class ElevationDataset:
 
     def valid_p(self, fmts=['scratch']):
         """check if self appears to be a valid dataset entry"""
-        
+
         if self.fn is None:
             return(False)
         
@@ -416,13 +422,14 @@ class ElevationDataset:
         
         if self.fn is not None:
             if self.fn not in fmts:
-                if not utils.fn_url_p(self.fn):
-                    if self.data_format > -10:
-                        if not os.path.exists(self.fn):
-                            return (False)
-                        
-                        if os.stat(self.fn).st_size == 0:
-                            return(False)
+                if not isinstance(self.fn, list):
+                    if not utils.fn_url_p(self.fn):
+                        if self.data_format > -10:
+                            if not os.path.exists(self.fn):
+                                return (False)
+
+                            if os.stat(self.fn).st_size == 0:
+                                return(False)
                         
         return(True)
         
@@ -2451,7 +2458,115 @@ class OGRFile(ElevationDataset):
         for arrs in self.yield_block_array():
             yield(arrs)
 
-#class data_list(ElevationDataset)
+class DataList(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def generate_inf(self, callback=lambda: False):
+        """generate and return the infos blob of the datalist.
+        """
+        
+        _region = self.region
+        out_region = None
+        out_regions = []
+        out_srs = []
+        self.region = None
+        self.infos['name'] = self.fn
+        self.infos['numpts'] = 0
+        self.infos['hash'] = self.hash()#dl_hash(self.fn)
+        ## attempt to generate a datalist-vector geojson and
+        ## if successful, fill it wil the datalist entries, using `parse`
+        #json_status = self._init_datalist_vector()
+        #if json_status == 0:        
+        dst_srs_ = self.dst_srs
+        if self.dst_srs is not None:
+            self.dst_srs = self.dst_srs.split('+')[0]
+
+        for entry in self.parse():
+            if self.verbose:
+                callback()
+
+            if entry.src_srs is not None:
+                out_srs.append(entry.src_srs)
+
+                if self.dst_srs is not None:
+                    #self.infos['src_srs'] = self.dst_srs
+                    e_region = regions.Region().from_list(entry.infos['minmax'])
+                    e_region.src_srs = entry.src_srs
+                    e_region.warp(self.dst_srs)
+                    entry_region = e_region.export_as_list(include_z=True)
+                else:
+                    entry_region = entry.infos['minmax']
+
+            else:
+                out_srs.append(None)
+                entry_region = entry.infos['minmax']
+
+            if regions.Region().from_list(entry_region).valid_p():
+                out_regions.append(entry_region)
+                if 'numpts' in self.infos.keys():
+                    self.infos['numpts'] += entry.infos['numpts']
+                    
+        self.ds = self.layer = None
+        count = 0
+        ## merge all the gathered regions
+        for this_region in out_regions:
+            tmp_region = regions.Region().from_list(this_region)
+            if tmp_region.valid_p():
+                if count == 0:
+                    out_region = tmp_region
+                    count += 1
+                else:
+                    out_region = regions.regions_merge(out_region, tmp_region)
+                    
+        if out_region is not None:
+            self.infos['minmax'] = out_region.export_as_list(include_z=True)
+            self.infos['wkt'] = out_region.export_as_wkt()
+        else:
+            self.infos['minmax'] = None
+            
+        self.region = _region
+        self.dst_srs = dst_srs_
+
+        ## set the epsg for the datalist
+        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+            if self.src_srs is not None:
+                self.infos['src_srs'] = self.src_srs
+            else:
+                if all(x == out_srs[0] for x in out_srs):
+                    self.infos['src_srs'] = out_srs[0]
+        else:
+            self.src_srs = self.infos['src_srs']
+        
+        return(self.infos)            
+        
+    def parse(self):
+        if isinstance(self.fn, list):
+            for this_ds in self.fn:
+                this_ds.initialize()
+
+                if this_ds is not None and this_ds.valid_p(
+                        fmts=DatasetFactory._modules[this_ds.data_format]['fmts']
+                ):
+                    data_set.initialize()
+                    for ds in this_ds.parse_json():
+                        self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                        yield(ds)
+
+    def yield_xyz(self):
+        """parse the data from the data-list and yield as xyz"""
+        
+        for this_entry in self.parse_json():
+            for xyz in this_entry.yield_xyz():
+                yield(xyz)
+
+    def yield_array(self):
+        """parse the data from the data-list and yield as array-set"""
+        
+        for this_entry in self.parse_json():
+            for arr in this_entry.yield_array():
+                yield(arr)
+                        
 ## ==============================================
 ## Datalist Class - Recursive data structure (-1)
 ##
@@ -3381,6 +3496,7 @@ class DatasetFactory(factory.CUDEMFactory):
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip'], 'call': ZIPlist},
+        -3: {'name': 'data_list', 'fmts': [''], 'call': DataList},
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},

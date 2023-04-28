@@ -3569,16 +3569,16 @@ def waffles_cli(argv = sys.argv):
                             message='Generating: {}'.format(this_waffle),
                             verbose=wg['verbose'],
                     ) as pbar:
-                    try:
-                        this_waffle_module.initialize()
-                        this_waffle_module.generate()
-                        #this_waffle_module()
-                    except (KeyboardInterrupt, SystemExit):
-                        utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                        sys.exit(-1)
-                    except Exception as e:
-                        utils.echo_error_msg(e)
-                        sys.exit(-1)
+                        try:
+                            this_waffle_module.initialize()
+                            this_waffle_module.generate()
+                            #this_waffle_module()
+                        except (KeyboardInterrupt, SystemExit):
+                            utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                            sys.exit(-1)
+                        except Exception as e:
+                            utils.echo_error_msg(e)
+                            sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
