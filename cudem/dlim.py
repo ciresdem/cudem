@@ -1326,13 +1326,15 @@ class XYZFile(ElevationDataset):
                 if this_xyz.valid_p():
                     if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
                        or self.x_offset != 0 or self.y_offset != 0:
-                        this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
+                        
+                        if self.x_offset == 'REM':
+                            self.x_offset = 0
+                            this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
+                        else:
+                            this_xyz.x = (this_xyz.x+float(self.x_offset)) * self.x_scale
+                            
                         this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                         this_xyz.z *= self.z_scale
-
-                    if self.x_offset == 'REM':
-                        self.x_offset = 0
-                        this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
@@ -3081,6 +3083,7 @@ class Fetcher(ElevationDataset):
     
     def __init__(self, **kwargs):
         super().__init__(remote=True, **kwargs)
+        #print(self.fn)
         self.metadata['name'] = self.fn
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.cache_dir
@@ -3267,17 +3270,19 @@ class MarGravFetcher(Fetcher):
                     'mar_grav', self.region, self.x_inc
                 )
             )
+            #utils.echo_msg(result)
             utils.run_cmd(
-                'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
+                'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
                     self.region.format('gmt'), mar_grav_fn, result[1]
                 ),
-                verbose=False
+                verbose=True
             )
             yield(DatasetFactory(mod=mar_grav_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         else:
+            #utils.echo_msg(result)
             yield(DatasetFactory(mod=result[1], data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),

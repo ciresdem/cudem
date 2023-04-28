@@ -1228,8 +1228,6 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
             self.results.append([_req.url, os.path.join(self._outdir, outf), 'mar_grav'])
             
-        return(self)
-
 ## ==============================================
 ## SRTM Plus
 ## ==============================================
@@ -1264,8 +1262,6 @@ https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
             self.results.append([_req.url, os.path.join(self._outdir, outf), 'srtm'])
             
-        return(self)
-
 ## ==============================================
 ## Charts - ENC/RNC
 ## ==============================================
