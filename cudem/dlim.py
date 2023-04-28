@@ -531,7 +531,7 @@ class ElevationDataset:
             gen_inf = False
 
         ## generate a new inf file if it was deemed necessary.
-        if gen_inf:# and not self.remote:
+        if gen_inf and not self.remote:
             #self.infos = self.generate_inf(None if not self.verbose else _prog.update)
             self.infos = self.generate_inf()
             if self.infos is not None:
@@ -3854,18 +3854,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    #try:
-                    #    if want_separate: # process and dump each dataset independently
-                    #        for this_entry in this_datalist.parse():
-                    #            this_entry.dump_xyz()
-                    #    else: # process and dump the datalist as a whole
-                    this_datalist.dump_xyz()
-                    #except KeyboardInterrupt:
-                    #    utils.echo_error_msg('Killed by user')
-                    #    break
-                    #except BrokenPipeError:
-                    #    utils.echo_error_msg('Pipe Broken')
-                    #    break
-                    #except Exception as e:
-                    #    utils.echo_error_msg(e)
+                    try:
+                       if want_separate: # process and dump each dataset independently
+                           for this_entry in this_datalist.parse():
+                               this_entry.dump_xyz()
+                       else: # process and dump the datalist as a whole
+                           this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                       utils.echo_error_msg('Killed by user')
+                       break
+                    except BrokenPipeError:
+                       utils.echo_error_msg('Pipe Broken')
+                       break
+                    except Exception as e:
+                       utils.echo_error_msg(e)
 ### End
