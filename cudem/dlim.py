@@ -338,7 +338,6 @@ class ElevationDataset:
         self.xyz_yield = self.yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
-            
         if self.region is not None and self.x_inc is not None:
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
@@ -987,6 +986,11 @@ class ElevationDataset:
         driver = gdal.GetDriverByName(fmt)
         dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if fmt != 'MEM' else [])
+
+        if dst_ds is None:
+            utils.echo_error_msg('failed to create stack grid...')
+            sys.exit(-1)
+            
         dst_ds.SetGeoTransform(dst_gt)
         stacked_bands = {'z': dst_ds.GetRasterBand(1), 'count': dst_ds.GetRasterBand(2),
                          'weights': dst_ds.GetRasterBand(3), 'uncertainty': dst_ds.GetRasterBand(4),
