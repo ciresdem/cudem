@@ -741,7 +741,8 @@ class WafflesSciPy(Waffle):
             n_chunk = self.chunk_size
             
         if self.chunk_step is None:
-            n_step = int(n_chunk/2)
+            #n_step = int(n_chunk/2)
+            n_step = n_chunk
         else:
             n_step = self.chunk_step
 
@@ -764,7 +765,7 @@ class WafflesSciPy(Waffle):
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
        
-        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose, step=n_step):                
+        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose, step=n_step):
             srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             points_array[points_array == points_no_data] = np.nan
@@ -2404,8 +2405,7 @@ class WafflesCUDEM(Waffle):
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
                 
-                
-            waffles_mod = 'gmt-surface' if pre==self.pre_count else 'stacks' if pre != 0 else 'linear'
+            waffles_mod = 'gmt-surface' if pre==self.pre_count else 'stacks' if pre != 0 else 'linear:chunk_step=None:chunk_buffer=10'
             pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, name=_pre_name, node=self.node, want_weight=True,
                                         want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs, srs_transform=self.srs_transform,
@@ -3564,21 +3564,21 @@ def waffles_cli(argv = sys.argv):
                 this_waffle_module = this_waffle._acquire_module()
                 #print(this_waffle_module)
                 if this_waffle_module is not None:
-                    #this_waffle_module()
-                    # with utils.CliProgress(
-                    #         message='Generating: {}'.format(this_waffle),
-                    #         verbose=wg['verbose'],
-                    # ) as pbar:
-                    # try:
-                    this_waffle_module.initialize()
-                    this_waffle_module.generate()
-                    #this_waffle_module()
-                    # except (KeyboardInterrupt, SystemExit):
-                    #     utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                    #     sys.exit(-1)
-                    # except Exception as e:
-                    #     utils.echo_error_msg(e)
-                    #     sys.exit(-1)
+                    this_waffle_module()
+                    with utils.CliProgress(
+                            message='Generating: {}'.format(this_waffle),
+                            verbose=wg['verbose'],
+                    ) as pbar:
+                    try:
+                        this_waffle_module.initialize()
+                        this_waffle_module.generate()
+                        #this_waffle_module()
+                    except (KeyboardInterrupt, SystemExit):
+                        utils.echo_error_msg('user breakage...please wait while waffles exits....')
+                        sys.exit(-1)
+                    except Exception as e:
+                        utils.echo_error_msg(e)
+                        sys.exit(-1)
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
