@@ -1224,12 +1224,12 @@ class XYZFile(ElevationDataset):
         if self.delim is not None:
             xyzfun._known_delims.insert(0, self.delim)
             
-        # if self.x_offset == 'REM':
-        #     self.x_offset = 0
-        #     self.rem = True
+        if self.x_offset == 'REM':
+            self.x_offset = 0
+            self.rem = True
             
-        #self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
-        #    or self.x_offset != 0 or self.y_offset != 0 else False
+        self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
+           or self.x_offset != 0 or self.y_offset != 0 else False
 
         #if self.src_srs is not None:
         #    self.set_transform()        
@@ -1324,14 +1324,24 @@ class XYZFile(ElevationDataset):
                     this_xyz = xyzfun.XYZPoint()
 
                 if this_xyz.valid_p():
-                    if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
-                       or self.x_offset != 0 or self.y_offset != 0:
+
+                    if self.scoff:
+                        this_xyz.x = (this_xyz.x+self.x_offset) * self.x_scale
+                        this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
+                        this_xyz.z *= self.z_scale
+
+                    if self.rem:
+                        this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
+
+                    ## no work!
+                    # if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
+                    #    or self.x_offset != 0 or self.y_offset != 0:
                         
-                        if self.x_offset == 'REM':
-                            self.x_offset = 0
-                            this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
-                        else:
-                            this_xyz.x = (this_xyz.x+float(self.x_offset)) * self.x_scale
+                    #     if self.x_offset == 'REM':
+                    #         self.x_offset = 0
+                    #         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
+                    #     else:
+                    #         this_xyz.x = (this_xyz.x+float(self.x_offset)) * self.x_scale
                             
                         this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
                         this_xyz.z *= self.z_scale
@@ -2481,7 +2491,10 @@ class DataList(ElevationDataset):
     def generate_inf(self, callback=lambda: False):
         """generate and return the infos blob of the datalist.
         """
-        
+
+        ## set self.region to None while generating
+        ## the inf files, otherwise all the inf files
+        ## will reflect the input region...
         _region = self.region
         out_region = None
         out_regions = []
