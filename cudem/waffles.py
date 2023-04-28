@@ -647,9 +647,9 @@ class WafflesIDW(Waffle):
         #    return(self)
 
         points_array = points_band.ReadAsArray()
-        points_array[points_array == points_no_data] = np.nan
-        point_indices = np.nonzero(~np.isnan(points_array))
-        #point_indices = np.nonzero(points_array != points_no_data)
+        #points_array[points_array == points_no_data] = np.nan
+        #point_indices = np.nonzero(~np.isnan(points_array))
+        point_indices = np.nonzero(points_array != points_no_data)
         point_values = points_array[point_indices]
         points_array = None
 
@@ -663,14 +663,14 @@ class WafflesIDW(Waffle):
         stack_ds = None
         invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
         for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose):
-            if np.count_nonzero(np.isnan(points_array)) == 0:
-                #if not np.all(~np.nan(points_array)):
-                # y_origin = srcwin[1]-srcwin_buff[1]
-                # x_origin = srcwin[0]-srcwin_buff[0]
-                # y_size = y_origin + srcwin[3]
-                # x_size = x_origin + srcwin[2]
-                # points_array = points_array[y_origin:y_size,x_origin:x_size]
-                interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            # if np.count_nonzero(np.isnan(points_array)) == 0:
+            #     #if not np.all(~np.nan(points_array)):
+            #     # y_origin = srcwin[1]-srcwin_buff[1]
+            #     # x_origin = srcwin[0]-srcwin_buff[0]
+            #     # y_size = y_origin + srcwin[3]
+            #     # x_size = x_origin + srcwin[2]
+            #     # points_array = points_array[y_origin:y_size,x_origin:x_size]
+            #     interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
 
             if len(point_indices[0]):
                 xi, yi = np.mgrid[srcwin[0]:srcwin[0]+srcwin[2],
