@@ -3125,6 +3125,36 @@ class FABDEMFetcher(Fetcher):
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+class MarGravFetcher(Fetcher):
+    def __init__(self, rasterize=False, **kwargs):
+        super().__init__(**kwargs)
+        self.rasterize = rasterize
+
+    def yield_ds(self, result):
+        if self.rasterize:
+            mar_grav_fn = os.path.join(
+                self.cache_dir,
+                utils.append_fn(
+                    'mar_grav', self.region, self.x_inc
+                )
+            )
+            utils.run_cmd(
+                'waffles {} -E {} -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2 --keep-cache'.format(
+                    self.region.format('gmt'), self.x_inc, mar_grav_fn, result[1]
+                ),
+                verbose=False
+            )
+            yield(DatasetFactory(mod=mar_grav_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                 parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        else:
+            yield(DatasetFactory(mod=result[1], data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                 parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
+            
 class HydroNOSFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -3363,7 +3393,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -102: {'name': 'copernicus', 'fmts': ['copernicus'], 'call': CopernicusFetcher},
         -103: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
         -104: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
-        -105: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': Fetcher},
+        -105: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': MarGravFetcher},
         -106: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
         -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
         -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},

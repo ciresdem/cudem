@@ -434,8 +434,8 @@ class Fetch:
                                 # if chunk:
                                 #     local_file.write(chunk)
 
-                #elif req.status_code == 429 or req.status_code == 504:
-                elif tries > 0:
+                elif req.status_code == 429 or req.status_code == 504:
+                    #elif tries > 0:
                     # if self.verbose:
                     #     utils.echo_warning_msg('max tries exhausted...')
                     #     status = -1
