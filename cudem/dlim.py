@@ -2975,7 +2975,7 @@ class Fetcher(ElevationDataset):
         self.infos['wkt'] = tmp_region.export_as_wkt()
         self.infos['format'] = self.data_format
         self.infos['src_srs'] = self.fetch_module.src_srs
-        print(self.infos)
+        #print(self.infos)
         return(self.infos)
 
     def parse(self):

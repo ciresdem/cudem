@@ -462,10 +462,10 @@ class VerticalTransform:
         ## failure can cause endless loop
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            print(ref_in, ref_out, epsg_in, epsg_out)
+            #print(ref_in, ref_out, epsg_in, epsg_out)
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
-                    print(_tidal_frames)
+                    #print(_tidal_frames)
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
                 else:
