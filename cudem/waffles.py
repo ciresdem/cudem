@@ -414,7 +414,7 @@ class Waffle:
                                     node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                     dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn))
             
-            return(self)
+        return(self)
 
     def run(self):
         """run the WAFFLES module (set via sub-module class)."""
