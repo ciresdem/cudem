@@ -3283,14 +3283,14 @@ class MarGravFetcher(Fetcher):
                     'mar_grav', self.region, self.x_inc
                 )
             )
-            #utils.echo_msg(result)
+
             utils.run_cmd(
                 'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
                     self.region.format('gmt'), mar_grav_fn, result[1]
                 ),
                 verbose=True
             )
-            yield(DatasetFactory(mod=mar_grav_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            yield(DatasetFactory(mod='{}.tif'.format(mar_grav_fn), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
