@@ -2548,7 +2548,7 @@ class DataList(ElevationDataset):
                 if this_ds is not None and this_ds.valid_p(
                         fmts=DatasetFactory._modules[this_ds.data_format]['fmts']
                 ):
-                    data_set.initialize()
+                    this_ds.initialize()
                     for ds in this_ds.parse_json():
                         self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
                         yield(ds)
