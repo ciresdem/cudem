@@ -3583,6 +3583,6 @@ def waffles_cli(argv = sys.argv):
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
                         
-        if not keep_cache:
-            utils.remove_glob(wg['cache_dir'])
+        #if not keep_cache:
+        #    utils.remove_glob(wg['cache_dir'])
 ### End

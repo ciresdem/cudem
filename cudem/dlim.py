@@ -3277,19 +3277,33 @@ class MarGravFetcher(Fetcher):
 
     def yield_ds(self, result):
         if self.rasterize:
+            from cudem import waffles
             mar_grav_fn = os.path.join(
                 self.cache_dir,
                 utils.append_fn(
                     'mar_grav', self.region, self.x_inc
                 )
             )
-
-            utils.run_cmd(
-                'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
-                    self.region.format('gmt'), mar_grav_fn, result[1]
-                ),
-                verbose=True
-            )
+            _raster = waffles.WaffleFactory(
+                #mod = 'gmt-surface',
+                mod = 'IDW:min_points=16',
+                data = ['{},168:x_offset=REM,1'.format(result[1])],
+                src_region = self.region,
+                xinc = utils.str2inc('15s'),
+                yinc = utils.str2inc('15s'),
+                name = mar_grav_fn,
+                node = 'pixel',
+                verbose = True
+            )._acquire_module()
+            _raster.initialize()
+            _raster.generate()
+            
+            # utils.run_cmd(
+            #     'waffles {} -E15s -M IDW:min_points=16 -O {} {},168:x_offset=REM,1 -T 1:2'.format(
+            #         self.region.format('gmt'), mar_grav_fn, result[1]
+            #     ),
+            #     verbose=True
+            # )
             yield(DatasetFactory(mod='{}.tif'.format(mar_grav_fn), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
