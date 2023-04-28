@@ -531,7 +531,7 @@ class ElevationDataset:
             gen_inf = False
 
         ## generate a new inf file if it was deemed necessary.
-        if gen_inf and not self.remote:
+        if gen_inf: # and not self.remote:
             #self.infos = self.generate_inf(None if not self.verbose else _prog.update)
             self.infos = self.generate_inf()
             if self.infos is not None:
