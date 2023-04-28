@@ -974,6 +974,14 @@ class ElevationDataset:
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
+        if xcount <= 0 or ycount <=0:
+            utils.echo_error_msg(
+                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                    xcount, ycount, self.x_inc, self.y_inc, self.region
+                )
+            )
+            sys.exit(-1)
+            
         gdt = gdal.GDT_Float32
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(fmt)
@@ -2127,12 +2135,14 @@ class BAGFile(ElevationDataset):
     def yield_xyz(self):
         self.init_ds()
         for ds in self.parse_():
+            ds.initialize()
             for xyz in ds.yield_xyz():
                 yield(xyz)
 
     def yield_array(self):
         self.init_ds()
         for ds in self.parse_():
+            ds.initialize()
             for arr in ds.yield_array():
                 yield(arr)
                 
@@ -3102,7 +3112,7 @@ class Fetcher(ElevationDataset):
                         this_ds.initialize()
                         yield(this_ds)
         else:
-            yield(self)            
+            yield(self)
     
     def yield_ds(self, result):
         yield(DatasetFactory(mod=result[1], data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
@@ -4000,18 +4010,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    try:
-                       if want_separate: # process and dump each dataset independently
-                           for this_entry in this_datalist.parse():
-                               this_entry.dump_xyz()
-                       else: # process and dump the datalist as a whole
-                           this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                       utils.echo_error_msg('Killed by user')
-                       break
-                    except BrokenPipeError:
-                       utils.echo_error_msg('Pipe Broken')
-                       break
-                    except Exception as e:
-                       utils.echo_error_msg(e)
+                    # try:
+                    #    if want_separate: # process and dump each dataset independently
+                    #        for this_entry in this_datalist.parse():
+                    #            this_entry.dump_xyz()
+                    #    else: # process and dump the datalist as a whole
+                    this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #    utils.echo_error_msg('Killed by user')
+                    #    break
+                    # except BrokenPipeError:
+                    #    utils.echo_error_msg('Pipe Broken')
+                    #    break
+                    # except Exception as e:
+                    #    utils.echo_error_msg(e)
 ### End
