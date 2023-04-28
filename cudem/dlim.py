@@ -3284,24 +3284,14 @@ class MarGravFetcher(Fetcher):
                     'mar_grav', self.region, self.x_inc
                 )
             )
-            _raster = waffles.WaffleFactory(
-                #mod = 'gmt-surface',
-                mod = 'IDW:min_points=16',
-                data = ['{},168:x_offset=REM,1'.format(result[1])],
-                src_region = self.region,
-                xinc = utils.str2inc('15s'),
-                yinc = utils.str2inc('15s'),
-                name = mar_grav_fn,
-                node = 'pixel',
-                verbose = True
-            )._acquire_module().initialize().generate()
-
-            yield(DatasetFactory(mod='{}.tif'.format(mar_grav_fn), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(result[1])],
+                                            src_region=self.region, xinc=utils.str2inc('15s'), yinc=utils.str2inc('15s'),
+                                            name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()
+            yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         else:
-            #utils.echo_msg(result)
             yield(DatasetFactory(mod=result[1], data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
