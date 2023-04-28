@@ -2969,7 +2969,7 @@ class Fetcher(ElevationDataset):
         if self.region is None:
             tmp_region = self.fetch_module.region
         else:
-            tmp_region = self.reigon.copy()
+            tmp_region = self.region.copy()
             
         self.infos['minmax'] = tmp_region.export_as_list()    
         self.infos['wkt'] = tmp_region.export_as_wkt()
