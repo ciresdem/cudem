@@ -1130,7 +1130,7 @@ def echo_modules(module_dict, key):
 
     sys.stderr.flush()
 
-_command_name = lambda: os.path.basename(sys.argv[0])
+_command_name = os.path.basename(sys.argv[0])
     
 ## ==============================================
 ##
