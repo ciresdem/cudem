@@ -346,7 +346,7 @@ class ElevationDataset:
                 self.y_inc = utils.str2inc(self.y_inc)
 
             out_name = os.path.join(self.cache_dir, '{}_{}'.format(
-                utils.fn_basename2(os.path.basename(self.fn)),
+                utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
                 utils.append_fn('dlim_stacks', self.region, self.x_inc)))
                 
             if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
@@ -1013,96 +1013,102 @@ class ElevationDataset:
         ## gt is the geotransform of the incoming arrays
         ## `self.array_yield` is set in `self.set_array`
         #for arrs, srcwin, gt in self.yield_array():
-        for arrs, srcwin, gt in self.array_yield:
-            ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
-            for key in stacked_bands.keys():
-                stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                #stacked_data[key][stacked_data[key] == ndv] = 0
-                stacked_data[key][np.isnan(stacked_data[key])] = 0
-                
-            ## set incoming np.nans to zero and mask to non-nan count
-            arrs['weight'][np.isnan(arrs['z'])] = 0
-            arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-            arrs['z'][np.isnan(arrs['z'])] = 0
-            for arr_key in arrs:
-                if arrs[arr_key] is not None:
-                    arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+        with utils.CliProgress(
+                message='stacking data to {}/{} grid using {} method to {}'.format(
+                    ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
+                )
+        ) as pbar:
+            for arrs, srcwin, gt in self.array_yield:
+                pbar.update()
+                ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+                for key in stacked_bands.keys():
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    #stacked_data[key][stacked_data[key] == ndv] = 0
+                    stacked_data[key][np.isnan(stacked_data[key])] = 0
 
-            ## add the count to the accumulated rasters
-            stacked_data['count'] += arrs['count']
-            
-            ## supercede based on weights, else do weighted mean
-            ## todo: do (weighted) mean on cells with same weight
-            if supercede:
-                ## higher weight supercedes lower weight (first come first served atm)
-                stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
-                stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
-                stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
-                #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                ## uncertainty is src_uncertainty, as only one point goes into a cell
-                stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
-                
-                # ## reset all data where weights are zero to nan
-                # for key in stacked_bands.keys():
-                #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
-                
-            else:
-                ## accumulate incoming z*weight and uu*weight                
-                stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+                ## set incoming np.nans to zero and mask to non-nan count
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                arrs['z'][np.isnan(arrs['z'])] = 0
+                for arr_key in arrs:
+                    if arrs[arr_key] is not None:
+                        arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-                ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
-                stacked_data['weights'] += arrs['weight']
-                stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                ## accumulate variance * weight
-                stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+                ## add the count to the accumulated rasters
+                stacked_data['count'] += arrs['count']
 
-            ## write out results to accumulated rasters
-            #stacked_data['count'][stacked_data['count'] == 0] = ndv
-            stacked_data['count'][stacked_data['count'] == 0] = np.nan
-            
-            for key in stacked_bands.keys():
-                #stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                #stacked_data[key][stacked_data['count'] == ndv] = ndv
-                stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                ## supercede based on weights, else do weighted mean
+                ## todo: do (weighted) mean on cells with same weight
                 if supercede:
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                        
-                stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
-                
-        ## Finalize weighted mean rasters and close datasets
-        ## incoming arrays have all been processed, if weighted mean the
-        ## "z" is the sum of z*weight, "weights" is the sum of weights
-        ## "uncertainty" is the sum of variance*weight
-        if not supercede:
-            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-            for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
-            ):
-                for key in stacked_bands.keys():
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    #stacked_data[key][stacked_data[key] == ndv] = np.nan
-                    
-                ## average the accumulated arrays for finalization
-                ## z and u are weighted sums, so divide by weights
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
-                stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
-                ## apply the source uncertainty with the sub-cell variance uncertainty
-                ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
-                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+                    ## higher weight supercedes lower weight (first come first served atm)
+                    stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
+                    #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    ## uncertainty is src_uncertainty, as only one point goes into a cell
+                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
 
-                ## write out final rasters
-                for key in stacked_bands.keys():
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+                    # ## reset all data where weights are zero to nan
+                    # for key in stacked_bands.keys():
+                    #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
-        ## set the final output nodatavalue
-        for key in stacked_bands.keys():
-            stacked_bands[key].DeleteNoDataValue()
-        for key in stacked_bands.keys():
-            stacked_bands[key].SetNoDataValue(ndv)
+                else:
+                    ## accumulate incoming z*weight and uu*weight                
+                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+
+                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                    stacked_data['weights'] += arrs['weight']
+                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+
+                ## write out results to accumulated rasters
+                #stacked_data['count'][stacked_data['count'] == 0] = ndv
+                stacked_data['count'][stacked_data['count'] == 0] = np.nan
+
+                for key in stacked_bands.keys():
+                    #stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    #stacked_data[key][stacked_data['count'] == ndv] = ndv
+                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                    if supercede:
+                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+
+            ## Finalize weighted mean rasters and close datasets
+            ## incoming arrays have all been processed, if weighted mean the
+            ## "z" is the sum of z*weight, "weights" is the sum of weights
+            ## "uncertainty" is the sum of variance*weight
+            if not supercede:
+                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    for key in stacked_bands.keys():
+                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                        #stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+                    ## average the accumulated arrays for finalization
+                    ## z and u are weighted sums, so divide by weights
+                    stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                    stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+                    ## apply the source uncertainty with the sub-cell variance uncertainty
+                    ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                    stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                    stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+
+                    ## write out final rasters
+                    for key in stacked_bands.keys():
+                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+
+            ## set the final output nodatavalue
+            for key in stacked_bands.keys():
+                stacked_bands[key].DeleteNoDataValue()
+            for key in stacked_bands.keys():
+                stacked_bands[key].SetNoDataValue(ndv)
             
         dst_ds = None
         return(out_file)
