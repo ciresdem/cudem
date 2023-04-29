@@ -752,7 +752,7 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
 
     with CliProgress(
             total=(n_size[0]*n_size[1])/step,
-            message='{}: chunking srcwin @ chunk:{}/step:{}'.format(_command_name, n_chunk, step),
+            message='{}: chunking srcwin @ chunk:{}/step:{}'.format(_command_name(), n_chunk, step),
             verbose=verbose,
     ) as pbar:
         while True:
@@ -1130,7 +1130,7 @@ def echo_modules(module_dict, key):
 
     sys.stderr.flush()
 
-_command_name = os.path.basename(sys.argv[0])
+_command_name = lambda: os.path.basename(sys.argv[0])
     
 ## ==============================================
 ##

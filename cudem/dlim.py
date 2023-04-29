@@ -1002,10 +1002,10 @@ class ElevationDataset:
             #stacked_bands[key].SetNoDataValue(ndv)
             stacked_bands[key].SetDescription(key)
         
-        if self.verbose:
-            utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
-                ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-            ))
+        # if self.verbose:
+        #     utils.echo_msg('stacking data to {}/{} grid using {} method to {}'.format(
+        #         ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
+        #     ))
 
         ## incoming arrays can be quite large...perhaps chunks these
         ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
@@ -1016,7 +1016,8 @@ class ElevationDataset:
         with utils.CliProgress(
                 message='stacking data to {}/{} grid using {} method to {}'.format(
                     ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-                )
+                ),
+                verbose=self.verbose
         ) as pbar:
             for arrs, srcwin, gt in self.array_yield:
                 pbar.update()

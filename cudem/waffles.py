@@ -228,7 +228,9 @@ class Waffle:
     
     def initialize(self):
         #factory._set_mod_params(self, mf=WaffleFactory) # set the module arguments, if any
-        utils.echo_msg('initializing waffles module < {} >'.format(self.params['mod']))
+        if self.verbose:
+            utils.echo_msg('initializing waffles module < {} >'.format(self.params['mod']))
+            
         self.fn = '{}.{}'.format(self.name, gdalfun.gdal_fext(self.fmt)) # output dem filename
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
         self._init_regions() # initialize regions
