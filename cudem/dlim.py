@@ -767,6 +767,11 @@ class ElevationDataset:
             this_dir = []
             while True:
                 if xdl.parent is None:
+                    out_dir = xdl.metadata['name']
+                    if xdl.remote:
+                        out_dir = out_dir.split(':')[0]
+
+                    this_dir.append(out_dir)
                     break
                 
                 out_dir = xdl.parent.metadata['name']
@@ -903,46 +908,53 @@ class ElevationDataset:
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
 
-        gdt = gdal.GDT_Int32
-        if method == 'single':
-            driver = gdal.GetDriverByName(fmt)
-            m_ds = driver.Create('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), xcount, ycount, 0, gdt)
-            m_ds.SetGeoTransform(dst_gt)
-            m_band = m_ds.GetRasterBand(1)
-            m_band.SetNoDataValue(ndv)
-            for arrs, srcwin, gt in self.yield_array():
-                m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                m_array[arrs['count'] != 0] = 1
-                m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                yield((arrs, srcwin, gt))
-        else:
-            driver = gdal.GetDriverByName('MEM')
-            m_ds = driver.Create(out_name, xcount, ycount, 0, gdt)
-            m_ds.SetGeoTransform(dst_gt)
-            for this_entry in self.parse_json():
-                bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
-                if not this_entry.metadata['name'] in bands.keys():
-                    m_ds.AddBand()
-                    m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-                    m_band.SetNoDataValue(0)
-                    m_band.SetDescription(this_entry.metadata['name'])
-                    band_md = m_band.GetMetadata()
-                    for k in this_entry.metadata.keys():
-                        band_md[k] = this_entry.metadata[k]
-
-                    band_md['weight'] = this_entry.weight
-                    band_md['uncertainty'] = this_entry.uncertainty
-                    m_band.SetMetadata(band_md)
-                else:
-                    m_band = m_ds.GetRasterBand(bands[this_entry.metadata['name']])
-
-                for arrs, srcwin, gt in this_entry.yield_array():
+        with utils.CliProgress(
+                message='masking data to {}/{} grid to {} {}'.format(ycount, xcount, self.region, out_name),
+                verbose=self.verbose
+        ) as pbar:
+        
+            gdt = gdal.GDT_Int32
+            if method == 'single':
+                driver = gdal.GetDriverByName(fmt)
+                m_ds = driver.Create('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), xcount, ycount, 0, gdt)
+                m_ds.SetGeoTransform(dst_gt)
+                m_band = m_ds.GetRasterBand(1)
+                m_band.SetNoDataValue(ndv)
+                for arrs, srcwin, gt in self.yield_array():
+                    pbar.update()
                     m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     m_array[arrs['count'] != 0] = 1
                     m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                     yield((arrs, srcwin, gt))
+            else:
+                driver = gdal.GetDriverByName('MEM')
+                m_ds = driver.Create(out_name, xcount, ycount, 0, gdt)
+                m_ds.SetGeoTransform(dst_gt)
+                for this_entry in self.parse_json():
+                    pbar.update()
+                    bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
+                    if not this_entry.metadata['name'] in bands.keys():
+                        m_ds.AddBand()
+                        m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+                        m_band.SetNoDataValue(0)
+                        m_band.SetDescription(this_entry.metadata['name'])
+                        band_md = m_band.GetMetadata()
+                        for k in this_entry.metadata.keys():
+                            band_md[k] = this_entry.metadata[k]
 
-            dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
+                        band_md['weight'] = this_entry.weight
+                        band_md['uncertainty'] = this_entry.uncertainty
+                        m_band.SetMetadata(band_md)
+                    else:
+                        m_band = m_ds.GetRasterBand(bands[this_entry.metadata['name']])
+
+                    for arrs, srcwin, gt in this_entry.yield_array():
+                        m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                        m_array[arrs['count'] != 0] = 1
+                        m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                        yield((arrs, srcwin, gt))
+
+                dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
             
         ## create a vector of the masks (spatial-metadata)
         if self.want_sm:

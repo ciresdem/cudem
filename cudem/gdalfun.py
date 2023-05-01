@@ -1194,7 +1194,8 @@ def gdal_chunks(src_gdal, n_chunk, band = 1):
                     c_n += 1                
         return(o_chunks)
 
-def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
+def parse(src_ds, dump_nodata = False, srcwin = None, mask = None, dst_srs = None,
+          verbose = False, z_region = None, step = 1):
     """parse the data from gdal dataset src_ds (first band only)
     optionally mask the output with `mask` or transform the coordinates to `dst_srs`
 
@@ -1204,11 +1205,13 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbo
     #if verbose: sys.stderr.write('waffles: parsing gdal file {}...'.format(src_ds.GetDescription()))
     ln = 0
     band = src_ds.GetRasterBand(1)
-    ds_config = gather_infos(src_ds)
+    ds_config = gdal_infos(src_ds)
     src_srs = osr.SpatialReference()
     try:
         src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-    except: pass
+    except:
+        pass
+    
     src_srs.ImportFromWkt(ds_config['proj'])
     src_srs.AutoIdentifyEPSG()
     srs_auth = src_srs.GetAuthorityCode(None)
@@ -1234,20 +1237,29 @@ def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbo
     if mask is not None:
         src_mask = gdal.Open(mask)
         msk_band = src_mask.GetRasterBand(1)
-    if srcwin is None: srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+    if srcwin is None:
+        srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+        
     nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-    if band.GetNoDataValue() is not None: nodata.append('{:g}'.format(band.GetNoDataValue()))
-    if dump_nodata: nodata = []
+    if band.GetNoDataValue() is not None:
+        nodata.append('{:g}'.format(band.GetNoDataValue()))
+        
+    if dump_nodata:
+        nodata = []
+        
     for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
         band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
         if z_region is not None:
             if z_region[0] is not None:
                 band_data[band_data < z_region[0]] = -9999
+                
             if z_region[1] is not None:
                 band_data[band_data > z_region[1]] = -9999
+                
         if msk_band is not None:
             msk_data = msk_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             band_data[msk_data==0]=-9999
+            
         band_data = np.reshape(band_data, (srcwin[2], ))
         for x_i in range(0, srcwin[2], 1):
             x = x_i + srcwin[0]

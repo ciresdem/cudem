@@ -404,7 +404,14 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt)
- 
+
+                ## calculate estimated uncertainty of the interpolation
+                if self.want_uncertainty:
+                    iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
+                    unc_out, unc_status = iu.run()
+                    if unc_status == 0:
+                        self.aux_dems.append(unc_out['prox_unc'])
+    
             if self.keep_auxiliary:
                 if self.want_stack:
                     self.aux_dems.append(self.stack)
@@ -415,10 +422,7 @@ class Waffle:
                     aux_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                     dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn))
-
-            ## calculate estimated uncertainty of the interpolation
-            
-            
+                        
         return(self)
 
     def run(self):
@@ -2978,6 +2982,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #self._zones = ['low-dens','mid-dens','high-dens']
         self.prox = None
         self.slope = None
+        self.mask_fn = '{}_m.{}'.format(self.dem.name, gdalfun.gdal_fext(self.dem.fmt))
 
     def _mask_analysis(self, src_gdal, region = None):
         ds_config = gdalfun.gdal_infos(src_gdal)
@@ -3008,14 +3013,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
         return(prox_perc)
 
     def _gen_prox(self):
-        self.prox = '{}_prox.tif'.format(self.dem.mod)
+        self.prox = '{}_prox.tif'.format(self.dem.params['mod'])
         utils.echo_msg('generating proximity grid {}...'.format(self.prox))
-        gdalfun.gdal_proximity(self.dem.mask_fn, self.prox)
+        gdalfun.gdal_proximity(self.mask_fn, self.prox)
         if self.dem.dst_srs is not None:
             gdalfun.gdal_set_srs(self.prox, self.dem.dst_srs)
 
     def _gen_slope(self):
-        self.slope = '{}_slope.tif'.format(self.dem.mod)
+        self.slope = '{}_slope.tif'.format(self.dem.params['mod'])
         utils.echo_msg('generating slope grid {}...'.format(self.slope))
         gdalfun.gdal_slope(self.dem.fn, self.slope)
         if self.dem.dst_srs is not None:
@@ -3283,7 +3288,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         
         sub_zones = {}
         dem_ds = gdal.Open(self.dem.fn)
-        msk_ds = gdal.Open(self.dem.mask_fn)
+        msk_ds = gdal.Open(self.mask_fn)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
         with utils.CliProgress(
@@ -3397,7 +3402,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ## TODO: extract weights here as well...
                         ## FIX FOR NEW VERSION!
                         with open(o_xyz, 'w') as o_fh:
-                            for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin, mask=self.dem.mask_fn):
+                            for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin, mask=self.mask_fn):
                                 #cnt+=1
                                 xyz.dump(dst_port=o_fh)
 
@@ -3436,27 +3441,19 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                 ## ==============================================
                                 ## generate the random-sample DEM
                                 ## ==============================================
-                                waff = waffles.WaffleFactory(
-                                    mod=self.dem.mod, # mod should be params now
-                                    data=[s_outer, sub_xyz_head],
-                                    src_region=b_region,
-                                    xinc=self.dem.xinc,
-                                    yinc=self.dem.yinc,
-                                    name='sub_{}'.format(n),
-                                    node=self.dem.node,
-                                    fmt=self.dem.fmt,
-                                    extend=self.dem.extend,
-                                    extend_proc=self.dem.extend_proc,
-                                    weights=self.dem.weights,
-                                    sample=self.dem.sample,
-                                    clip=self.dem.clip,
-                                    dst_srs=self.dem.dst_srs,
-                                    mask=True,
-                                    verbose=False,
-                                    clobber=True,
-                                )
-                                waff.mod_args = self.dem.mod_args
-                                wf = waff.acquire().generate()
+                                mod = self.dem.params['mod']
+                                mod_args = self.dem.params['mod_args']
+                                this_mod = '{}:{}'.format(mod, factory.dict2args(mod_args))
+                                kwargs = self.dem.params['kwargs']
+                                kwargs['name'] = 'sub_{}'.format(n)
+                                kwargs['data'] = [s_outer, sub_xyz_head]
+                                kwargs['src_region'] = b_region.format('gmt')
+                                kwargs['want_mask'] = True
+                                kwargs['verbose'] = False
+                                kwargs['clobber'] = True
+                                this_waffle = WaffleFactory(**this_mod, **kwargs)._acquire_module()
+                                this_waffle.initialize()
+                                wf = this_waffle.generate()
 
                                 if wf.valid_p():
                                     ## ==============================================
@@ -3544,7 +3541,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         zones = ['low-dens-low-slp','low-dens-mid-slp','low-dens-high-slp','mid-dens-low-slp','mid-dens-mid-slp','mid-dens-high-slp','high-dens-low-slp', 'high-dens-mid-slp', 'high-dens-low-slp']
         #zones = ['low-dens','mid-dens','high-dens','low-slp','mid-slp','high-slp']
         #zones = ['low-dens','mid-dens','high-dens']
-        utils.echo_msg('running INTERPOLATION uncertainty module using {}...'.format(self.dem.mod))
+        utils.echo_msg('running INTERPOLATION uncertainty module using {}...'.format(self.dem.params['mod']))
         
         if self.prox is None:
             self._gen_prox()
@@ -3556,7 +3553,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         ## region and der. analysis
         ## ==============================================
         self.region_info = {}
-        msk_ds = gdal.Open(self.dem.mask_fn)
+        msk_ds = gdal.Open(self.mask_fn)
         num_sum, g_max, num_perc = self._mask_analysis(msk_ds)
         msk_ds = None
 
@@ -4157,6 +4154,7 @@ def waffles_cli(argv = sys.argv):
             
         elif arg == '-u' or arg == '--want-uncertainty':
             wg['want_uncertainty'] = True
+            wg['want_mask'] = True
             
         elif arg == '-p' or arg == '--prefix':
             want_prefix = True
