@@ -768,7 +768,12 @@ class ElevationDataset:
             while True:
                 if xdl.parent is None:
                     break
-                this_dir.append(xdl.parent.metadata['name'])
+                
+                out_dir = xdl.parent.metadata['name']
+                if xdl.parent.remote:
+                    out_dir = utils.fn_bansename2(out_dir)
+                    
+                this_dir.append(out_dir)
                 xdl = xdl.parent
                 
             this_dir.reverse()
@@ -780,16 +785,21 @@ class ElevationDataset:
         else:
             a_name = '{}_{}_{}'.format(
                 self.metadata['name'], self.region.format('fn'), utils.this_year())
+
+        if self.remote:
+            a_name = a_name.split(':')[0]
             
         self.parse_data_lists() # parse the datalist into a dictionary
         self.archive_datalist = '{}.datalist'.format(a_name)
         with open('{}.datalist'.format(a_name), 'w') as dlf:
             for x in self.data_lists.keys():
                 utils.echo_msg(self.data_lists[x])
+
+                x_name = utils.fn_basename2(os.path.basename(x.split(':')[0])) if self.data_lists[x]['parent'].remote else os.path.basename(x)
                 if self.region is None:
-                    a_dir = '{}_{}'.format(x, utils.this_year())
+                    a_dir = '{}_{}'.format(x_name, utils.this_year())
                 else:
-                    a_dir = '{}_{}_{}'.format(x, self.region.format('fn'), utils.this_year())
+                    a_dir = '{}_{}_{}'.format(x_name, self.region.format('fn'), utils.this_year())
                     
                 this_dir = xdl2dir(self.data_lists[x]['parent'])
                 this_dir.append(a_dir)
@@ -813,6 +823,7 @@ class ElevationDataset:
                             this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
                 ) as sub_dlf:
                     for xyz_dataset in self.data_lists[x]['data']:
+                        xyz_dataset.verbose=self.verbose
                         if xyz_dataset.remote == True:
                             ## we will want to split remote datasets into individual files if needed...
                             sub_xyz_path = '{}_{}.xyz'.format(utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn'))
@@ -3153,7 +3164,6 @@ class Fetcher(ElevationDataset):
         if self.fetch_module is None:
             pass
         self.check_size=True
-        self.remote=True
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
