@@ -1311,7 +1311,7 @@ https://www.charts.noaa.gov/
 
 < charts >"""
 
-    def __init__(self, where='', datatype=None, **kwargs):
+    def __init__(self, where='', want_rnc = False, **kwargs):
         super().__init__(**kwargs)
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
@@ -1322,7 +1322,8 @@ https://www.charts.noaa.gov/
         self._outdir = os.path.join(os.getcwd(), 'charts')
         self._dt_xml = {'ENC':self._enc_data_catalog, 'RNC':self._rnc_data_catalog}
         self.where = [where] if len(where) > 0 else []
-        self.datatype = datatype # 'enc' or 'rnc'
+        #self.datatype = datatype # 'enc' or 'rnc'
+        self.want_rnc = want_rnc
         self.name = 'charts'
         self.v_datum = 'mllw'
         #self.data_format = 302
@@ -1391,8 +1392,11 @@ https://www.charts.noaa.gov/
     def run(self):
         """Search for data in the reference vector file"""
 
-        if self.datatype is not None:
-            self.where.append("DataType = '{}'".format(self.datatype))
+        #if self.datatype is not None:
+        if self.want_rnc:
+            self.where.append("DataType = 'RNC'")
+        else:
+            self.where.append("DataType = 'ENC'")
 
         _results = FRED._filter_FRED(self)
         with utils.CliProgress(
