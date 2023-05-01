@@ -2458,6 +2458,7 @@ class OGRFile(ElevationDataset):
             test_layer = ds_ogr.GetLayerByName(l)
             if test_layer is not None:
                 return((l, test_layer))
+        return(None, None)
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the ogr dataset"""
@@ -2494,7 +2495,7 @@ class OGRFile(ElevationDataset):
             self.infos['wkt'] = this_region.export_as_wkt()
                 
         self.region = region_
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else utils.ogr_get_srs(self.fn)
+        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.ogr_get_srs(self.fn)
         
         return(self.infos)
 

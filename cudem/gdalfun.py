@@ -1194,6 +1194,81 @@ def gdal_chunks(src_gdal, n_chunk, band = 1):
                     c_n += 1                
         return(o_chunks)
 
+def parse(src_ds, dump_nodata=False, srcwin=None, mask=None, dst_srs=None, verbose=False, z_region=None, step=1):
+    """parse the data from gdal dataset src_ds (first band only)
+    optionally mask the output with `mask` or transform the coordinates to `dst_srs`
+
+    yields the parsed xyz data
+    """
+
+    #if verbose: sys.stderr.write('waffles: parsing gdal file {}...'.format(src_ds.GetDescription()))
+    ln = 0
+    band = src_ds.GetRasterBand(1)
+    ds_config = gather_infos(src_ds)
+    src_srs = osr.SpatialReference()
+    try:
+        src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+    except: pass
+    src_srs.ImportFromWkt(ds_config['proj'])
+    src_srs.AutoIdentifyEPSG()
+    srs_auth = src_srs.GetAuthorityCode(None)
+
+    if srs_auth is None:
+        src_srs.ImportFromEPSG(4326)
+        src_srs.AutoIdentifyEPSG()
+        srs_auth = src_srs.GetAuthorityCode(None)
+
+    #if srs_auth == warp: dst_srs = None
+
+    if dst_srs is not None:
+        dst_srs_ = osr.SpatialReference()
+        dst_srs_.SetFromUserInput(dst_srs)
+        ## GDAL 3+
+        try:
+            dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+        except: pass
+        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
+
+    gt = ds_config['geoT']
+    msk_band = None
+    if mask is not None:
+        src_mask = gdal.Open(mask)
+        msk_band = src_mask.GetRasterBand(1)
+    if srcwin is None: srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+    nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
+    if band.GetNoDataValue() is not None: nodata.append('{:g}'.format(band.GetNoDataValue()))
+    if dump_nodata: nodata = []
+    for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+        band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+        if z_region is not None:
+            if z_region[0] is not None:
+                band_data[band_data < z_region[0]] = -9999
+            if z_region[1] is not None:
+                band_data[band_data > z_region[1]] = -9999
+        if msk_band is not None:
+            msk_data = msk_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            band_data[msk_data==0]=-9999
+        band_data = np.reshape(band_data, (srcwin[2], ))
+        for x_i in range(0, srcwin[2], 1):
+            x = x_i + srcwin[0]
+            z = band_data[x_i]
+            if '{:g}'.format(z) not in nodata:
+                ln += 1
+                geo_x,geo_y = utils._pixel2geo(x, y, gt)
+                # if warp is not None:
+                #     #point = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z, epsg=4326)
+                #     point = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(geo_x, geo_y))
+                #     point.Transform(dst_trans)
+                #     pnt = point.GetPoint()
+                #     xyz = xyzfun.XYZPoint(x=point.GetX(), y=point.GetY(), z=z)#from_list([pnt[0], pnt[1], z])
+                # else:
+                xyz = xyzfun.XYZPoint(x=geo_x, y=geo_y, z=z)#line = [geo_x, geo_y, z]
+                yield(xyz)
+    band = None
+    src_mask = None
+    msk_band = None
+    if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+    
 def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
     """query a gdal-compatible grid file with xyz data.
     out_form dictates return values

@@ -1273,11 +1273,12 @@ https://www.charts.noaa.gov/
 
 < charts >"""
     
-    def __init__(self, where='1=1', **kwargs):
+    def __init__(self, where = '1=1', want_rnc = False, **kwargs):
         super().__init__(name='charts', **kwargs)
         self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer'
         self._charts_query_url = '{0}/queryDatasets?'.format(self._charts_url)
         self.where = where
+        self.want_rnc = want_rnc
         
     def run(self):
         if self.region is None:
