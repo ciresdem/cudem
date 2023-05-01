@@ -2329,26 +2329,25 @@ class WafflesCUDEM(Waffle):
     -----------
     Parameters:
     
-    landmask=[path] - path to coastline vector mask or set as `coastline` to auto-generate
-    min_weight=[val] - the minumum weight to include in the final DEM
-    smoothing=[val] - the Gaussian smoothing value to apply to pre-surface(s)
-    pre_count=[val] - number of pre-surface iterations to perform
-    pre_upper_limit=[val] - the upper elevation limit of the pre-surfaces (used with landmask)
-    poly_count=[True/False]
-    mode=surface
-    filter_outliers=[val]
-
-    < cudem:landmask=None:min_weight=[75th percentile]:smoothing=None:pre_count=1:pre_upper_limit=-0.1:mode=surface >
+    landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
+    min_weight (float): the minumum weight to include in the final DEM
+    pre_count (int): number of pre-surface iterations to perform
+    pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
+    poly_count (int) - the number of polygons (from largest to smallest) to extract from the landmask
+    mode (str) - the waffles module to perform the initial pre-surface
     """
     
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 poly_count = True, **kwargs):
+                 poly_count = True, mode = 'gmt-surface', **kwargs):
         super().__init__(**kwargs)
         self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
         self.landmask = landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
         self.poly_count = poly_count
+        self.mode = mode
+        if self.mode not in ['gmt-surface', 'IDW']:
+            self.mode = 'IDW'
 
     def generate_coastline(self, pre_data=None):
         coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=self.p_region,
@@ -2407,7 +2406,7 @@ class WafflesCUDEM(Waffle):
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
                 
-            waffles_mod = 'gmt-surface' if pre==self.pre_count else 'stacks' if pre != 0 else 'linear:chunk_step=None:chunk_buffer=10'
+            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'linear:chunk_step=None:chunk_buffer=10'
             pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, name=_pre_name, node=self.node, want_weight=True,
                                         want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs, srs_transform=self.srs_transform,

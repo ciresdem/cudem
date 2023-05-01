@@ -1324,7 +1324,7 @@ https://www.charts.noaa.gov/
         self.datatype = datatype # 'enc' or 'rnc'
         self.name = 'charts'
         self.v_datum = 'mllw'
-        self.data_format = 302
+        #self.data_format = 302
         self.src_srs='epsg:4326+5866'
         
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
