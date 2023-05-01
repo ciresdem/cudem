@@ -70,7 +70,7 @@
 ## mask to stacks for supercede
 ## inf class
 ## fetch results class
-## speed up xyz/las parsing, esp in yield_array
+## speed up xyz parsing, esp in yield_array
 ## do something about inf files (esp w/ fetches data)
 ### Code:
 
@@ -141,35 +141,27 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
               invert_region=False, cache_dir=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
-    #try:
-    xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
-                           weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                           src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
-                           parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
-                           want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
-    
-    if len(xdls) > 1:
-        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                 verbose=want_verbose)
+    try:
+        xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
+                               weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
+                               src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
+                               parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
+                               want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
 
-        # utils.remove_glob('{}.datalist*'.format('dlim'))
-        # dl_fn = write_datalist(xdls, 'dlim')
-        # this_datalist = DatasetFactory(mod=dl_fn, data_format=-1, weight=None if not want_weight else 1,
-        #                                uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-        #                                x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-        #                                invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-        #                                verbose=want_verbose)._acquire_module()
-    else:
-        this_datalist = xdls[0]
+        if len(xdls) > 1:
+            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                     verbose=want_verbose)
+        else:
+            this_datalist = xdls[0]
 
-    return(this_datalist)
+        return(this_datalist)
     
-    # except Exception as e:
-    #     utils.echo_error_msg('could not initialize data, {}'.format(e))
-    #     return(None)
+    except Exception as e:
+        utils.echo_error_msg('could not initialize data, {}'.format(e))
+        return(None)
  
 ## ==============================================
 ## Elevation Dataset class
@@ -782,11 +774,13 @@ class ElevationDataset:
             this_dir.reverse()
             return(this_dir)
         
+        aa_name = self.metadata['name'].split(':')[0]
+        
         if self.region is None:
-            a_name = '{}_{}'.format(self.metadata['name'], utils.this_year())
+            a_name = '{}_{}'.format(aa, utils.this_year())
         else:
             a_name = '{}_{}_{}'.format(
-                self.metadata['name'], self.region.format('fn'), utils.this_year())
+                aa_name, self.region.format('fn'), utils.this_year())
             
         self.parse_data_lists() # parse the datalist into a dictionary
         self.archive_datalist = '{}.datalist'.format(a_name)
@@ -1345,19 +1339,6 @@ class XYZFile(ElevationDataset):
 
                     if self.rem:
                         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
-
-                    ## no work!
-                    # if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
-                    #    or self.x_offset != 0 or self.y_offset != 0:
-                        
-                    #     if self.x_offset == 'REM':
-                    #         self.x_offset = 0
-                    #         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
-                    #     else:
-                    #         this_xyz.x = (this_xyz.x+float(self.x_offset)) * self.x_scale
-                            
-                        this_xyz.y = (this_xyz.y+self.y_offset) * self.y_scale
-                        this_xyz.z *= self.z_scale
 
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
