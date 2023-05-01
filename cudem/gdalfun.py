@@ -281,7 +281,7 @@ def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
         else: return(False)
         
     else: return(True)
-
+    
 def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Shapefile', verbose=True):
     dst_layer = '{}_sm'.format(fn_basename2(src_ds.GetDescription()))
     dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
@@ -385,7 +385,29 @@ class gdal_datasource:
         #print(exc_type, exc_value, exc_traceback)
         if not isinstance(self.src_gdal, gdal.Dataset):
             self.src_ds = None
+
+def gdal_multi_mask2single_mask(src_gdal):
+    gdt = gdal.GDT_Int32
+    out_mask = None
+    
+    with gdal_datasource(src_gdal) as src_ds:
+        ds_config = gdal_infos(src_gdal)
+        out_mask = '{}_single.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdal_fext(ds_config['fmt']))
+        driver = gdal.GetDriverByName(ds_config['fmt'])
+        m_ds = driver.Create(out_mask, ds_config['nx'], ds_config['ny'], 1, gdt)
+        m_ds.SetGeoTransform(ds_config['geoT'])
+        m_band = m_ds.GetRasterBand(1)
+        m_band.SetNoDataValue(ds_config['ndv'])
+        
+        for b in range(1, src_ds.RasterCount+1):
+            this_band = src_ds.GetRasterBand(b)
+            this_arr = this_band.ReadAsArray()
+            m_band.WriteArray(this_arr)
             
+        m_ds = None
+
+    return(out_mask)
+
 def gdal_fext(src_drv_name):
     """find the common file extention given a GDAL driver name
     older versions of gdal can't do this, so fallback to known standards.
@@ -428,12 +450,12 @@ def gdal_set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt, md, rc):
 def gdal_infos(src_gdal, region = None, scan = False, band = 1):
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
+            gt = src_ds.GetGeoTransform()
             if region is not None:
                 srcwin = region.srcwin(gt, src_ds.RasterXSize, src_ds.RasterYSize)
             else:
                 srcwin = (0, 0, src_ds.RasterXSize, src_ds.RasterYSize)
 
-            gt = src_ds.GetGeoTransform()        
             dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
             src_band = src_ds.GetRasterBand(band)
             ds_config = {
@@ -723,14 +745,14 @@ def gdal_split(src_gdal, split_value = 0, band = 1):
             return(None)
         
 def gdal_percentile(src_gdal, perc = 95, band = 1):
-    """calculate the `perc` percentile of src_fn gdal file.
+    """calculate the `perc` percentile of src_gdal file.
 
     return the calculated percentile
     """
 
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
-            ds_array = np.array(src_ds.GetRasterBand(band).ReadAsArray())
+            ds_array = src_ds.GetRasterBand(band).ReadAsArray().astype(float)
             ds_array[ds_array == src_ds.GetRasterBand(band).GetNoDataValue()] = np.nan
             x_dim = ds_array.shape[0]
             ds_array_flat = ds_array.flatten()
@@ -764,7 +786,7 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             src_band = src_ds.GetRasterBand(band)
             ds_config = gdal_infos(src_ds)
             drv = gdal.GetDriverByName('GTiff')
-            dst_ds = drv.Create(dst_fn, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])                
+            dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])                
             dst_ds.SetGeoTransform(ds_config['geoT'])
             dst_ds.SetProjection(ds_config['proj'])
             dst_band = dst_ds.GetRasterBand(1)
@@ -1194,7 +1216,7 @@ def gdal_chunks(src_gdal, n_chunk, band = 1):
                     c_n += 1                
         return(o_chunks)
 
-def parse(src_ds, dump_nodata = False, srcwin = None, mask = None, dst_srs = None,
+def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, dst_srs = None,
           verbose = False, z_region = None, step = 1):
     """parse the data from gdal dataset src_ds (first band only)
     optionally mask the output with `mask` or transform the coordinates to `dst_srs`
@@ -1296,29 +1318,29 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
             ds_nd = ds_config['ndv']
             tgrid = ds_band.ReadAsArray()
             
-    for xyz in src_xyz:
-        x = xyz[0]
-        y = xyz[1]
-        try: 
-            z = xyz[2]
-        except:
-            z = ds_nd
+            for xyz in src_xyz:
+                x = xyz[0]
+                y = xyz[1]
+                try: 
+                    z = xyz[2]
+                except:
+                    z = ds_nd
 
-        if x > ds_gt[0] and y < float(ds_gt[3]):
-            xpos, ypos = utils._geo2pixel(x, y, ds_gt, node='pixel')
-            try: 
-                g = tgrid[ypos, xpos]
-            except: g = ds_nd
-            d = c = m = s = ds_nd
-            if g != ds_nd:
-                d = z - g
-                m = z + g
-                outs = []
-                for i in out_form:
-                    outs.append(vars()[i])
-                yield(outs)
+                if x > ds_gt[0] and y < float(ds_gt[3]):
+                    xpos, ypos = utils._geo2pixel(x, y, ds_gt, node='pixel')
+                    try: 
+                        g = tgrid[ypos, xpos]
+                    except: g = ds_nd
+                    d = c = m = s = ds_nd
+                    if g != ds_nd:
+                        d = z - g
+                        m = z + g
+                        outs = []
+                        for i in out_form:
+                            outs.append(vars()[i])
+                        yield(outs)
 
-def query(src_xyz, src_gdal, out_form, band = 1):
+def gdal_query(src_xyz, src_gdal, out_form, band = 1):
     """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
 

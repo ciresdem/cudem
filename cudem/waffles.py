@@ -393,7 +393,10 @@ class Waffle:
         else:
             ## stack the data and run the waffles module
             if self.want_stack:
-                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, '{}_stack'.format(self.name)), supercede=self.supercede)
+                stack_name = '{}_stack'.format(self.name)
+                mask_name = '{}_stack_m'.format(self.name)
+                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                                               supercede=self.supercede, want_mask=self.want_mask)
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
@@ -404,24 +407,28 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt)
-
-                ## calculate estimated uncertainty of the interpolation
-                if self.want_uncertainty:
-                    iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
-                    unc_out, unc_status = iu.run()
-                    if unc_status == 0:
-                        self.aux_dems.append(unc_out['prox_unc'])
     
             if self.keep_auxiliary:
                 if self.want_stack:
                     self.aux_dems.append(self.stack)
-
+                    
+                if self.want_mask:
+                    self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
+                    
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
                 if aux_dem.valid_p():
                     aux_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                     dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn))
+
+            ## calculate estimated uncertainty of the interpolation
+            if self.want_uncertainty:
+                iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
+                unc_out, unc_status = iu.run()
+                if unc_status == 0:
+                    self.aux_dems.append(unc_out['prox_unc'])
+                    
                         
         return(self)
 
@@ -2982,7 +2989,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #self._zones = ['low-dens','mid-dens','high-dens']
         self.prox = None
         self.slope = None
-        self.mask_fn = '{}_m.{}'.format(self.dem.name, gdalfun.gdal_fext(self.dem.fmt))
+
+        multi_mask_fn = '{}_stack_m.{}'.format(self.dem.name, gdalfun.gdal_fext(self.dem.fmt))
+        self.mask_fn = gdalfun.gdal_multi_mask2single_mask(multi_mask_fn)
 
     def _mask_analysis(self, src_gdal, region = None):
         ds_config = gdalfun.gdal_infos(src_gdal)
@@ -3099,6 +3108,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
             
         return([out_inner, out_outer])
 
+    def _select_split(self, o_xyz, sub_region, sub_bn, verbose = False):
+        pass
+    
     def _err_fit_plot(self, xdata, ydata, out, fitfunc, bins_final, std_final, sampling_den, max_int_dist,
                       dst_name = 'unc', xa = 'distance'):
         """plot a best fit plot with matplotlib
@@ -3350,186 +3362,184 @@ class InterpolationUncertainty: #(waffles.Waffle):
         sims = max-simulations
         """
             
-        #utils.echo_msg('simulation\terrors\tproximity-coeff\tp_diff\tslp-coeff\tslp_diff')
-        #utils.echo_msg('simulation\terrors\tmin-error\tmax-error\tmean-error\tproximity-coeff\tp_diff')
         utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
         sim = 0
-        status = 0
+        #status = 0
         last_ec_d = None
-        #s_dp = sub_dp = None
         s_dp = []
 
-        with utils.CliProgress(
-                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
-        ) as pbar:
-            while True:
-                status = 0
-                sim += 1
-                #utils.echo_msg('sorting training tiles by distance...')
-                trains = self._regions_sort(trainers, verbose=False)
-                tot_trains = len([x for s in trains for x in s])
-                #utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
+        # with utils.CliProgress(
+        #         message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        # ) as pbar:
+        while True:
+            status = 0
+            sim += 1
+            #utils.echo_msg('sorting training tiles by distance...')
+            trains = self._regions_sort(trainers, verbose=True)
+            tot_trains = len([x for s in trains for x in s])
+            utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
 
-                for z, train in enumerate(trains):
-                    train_h = train[:25]
+            for z, train in enumerate(trains):
+                train_h = train[:12] # 25
+                ss_samp = perc
+
+                ## ==============================================
+                ## perform split-sample analysis on each training region.
+                ## ==============================================
+                for n, sub_region in enumerate(train_h):
+                    #print(sub_region)
+                    #_prog.update()
+                    #pbar.update()
                     ss_samp = perc
+                    this_region = sub_region[0].copy()
+                    #if sub_region[3] < ss_samp:
+                    #   ss_samp = sub_region[3]
+                    ss_samp = sub_region[3]
 
                     ## ==============================================
-                    ## perform split-sample analysis on each training region.
+                    ## extract the xyz data for the region from the DEM
                     ## ==============================================
-                    for n, sub_region in enumerate(train_h):
-                        #print(sub_region)
-                        #_prog.update()
-                        pbar.update()
-                        ss_samp = perc
-                        this_region = sub_region[0].copy()
-                        #if sub_region[3] < ss_samp:
-                        #   ss_samp = sub_region[3]
-                        ss_samp = sub_region[3]
+                    o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
+                    ds = gdal.Open(self.dem.fn)
+                    ds_config = gdalfun.gdal_infos(self.dem.fn)
+                    b_region = this_region.copy()
+                    b_region.buffer(pct=20, x_inc=self.dem.xinc, y_inc=self.dem.yinc)
+                    srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+                    #cnt = 0
 
+                    #dd = dlim.DatasetFactory(fn=self.dem.fn, data_format=)
+                    ## TODO: extract weights here as well...
+                    ## FIX FOR NEW VERSION!
+                    with open(o_xyz, 'w') as o_fh:
+                        for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin, mask=self.mask_fn):
+                            #cnt+=1
+                            xyz.dump(dst_port=o_fh)
+
+                    ds = None
+
+                    if os.stat(o_xyz).st_size != 0:
                         ## ==============================================
-                        ## extract the xyz data for the region from the DEM
+                        ## split the xyz data to inner/outer; outer is
+                        ## the data buffer, inner will be randomly sampled
                         ## ==============================================
-                        o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
-                        #ds = gdal.Open(self.dem.fn)
-                        ds_config = gdalfun.gdal_infos(self.dem.fn)
-                        b_region = this_region.copy()
-                        b_region.buffer(pct=20, x_inc=self.dem.xinc, y_inc=self.dem.yinc)
-                        srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
-                        #cnt = 0
+                        ## FIX FOR NEW VERSION
+                        s_inner, s_outer = self._gmt_select_split(
+                            o_xyz, this_region, 'sub_{}'.format(n), verbose=False
+                        )
+                        if os.stat(s_inner).st_size != 0:
+                            sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
+                            ss_len = len(sub_xyz)
+                            #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
+                            #if ss_samp is not None:
+                            #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                            sx_cnt = int(ss_len * (ss_samp / 100.))
+                            #else:
+                            #    #sx_cnt = ss_len-1
+                            #    sx_cnt = 1
 
-                        #dd = dlim.DatasetFactory(fn=self.dem.fn, data_format=)
-                        ## TODO: extract weights here as well...
-                        ## FIX FOR NEW VERSION!
-                        with open(o_xyz, 'w') as o_fh:
-                            for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin, mask=self.mask_fn):
-                                #cnt+=1
-                                xyz.dump(dst_port=o_fh)
+                            #if sx_cnt >= ss_len: sx_cnt = ss_len=-1
+                            sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
 
-                        ds = None
+                            #print('sx_cnt', sx_cnt)
+                            #print('ss_len', ss_len)
+                            #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
+                            sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
+                            np.random.shuffle(sub_xyz)
+                            np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
 
-                        if os.stat(o_xyz).st_size != 0:
                             ## ==============================================
-                            ## split the xyz data to inner/outer; outer is
-                            ## the data buffer, inner will be randomly sampled
+                            ## generate the random-sample DEM
                             ## ==============================================
-                            ## FIX FOR NEW VERSION
-                            s_inner, s_outer = self._gmt_select_split(
-                                o_xyz, this_region, 'sub_{}'.format(n), verbose=False
-                            )
-                            if os.stat(s_inner).st_size != 0:
-                                sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
-                                ss_len = len(sub_xyz)
-                                #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                                #if ss_samp is not None:
-                                #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                                sx_cnt = int(ss_len * (ss_samp / 100.))
-                                #else:
-                                #    #sx_cnt = ss_len-1
-                                #    sx_cnt = 1
-
-                                #if sx_cnt >= ss_len: sx_cnt = ss_len=-1
-                                sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
-
-                                #print('sx_cnt', sx_cnt)
-                                #print('ss_len', ss_len)
-                                #print('sub_xyz_head', len(sub_xyz[sx_cnt:]))
-                                sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
-                                np.random.shuffle(sub_xyz)
-                                np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
+                            mod = self.dem.params['mod']
+                            mod_args = self.dem.params['mod_args']
+                            this_mod = '{}:{}'.format(mod, factory.dict2args(mod_args))
+                            kwargs = self.dem.params['kwargs']
+                            kwargs['name'] = 'sub_{}'.format(n)
+                            kwargs['data'] = [s_outer, sub_xyz_head]
+                            kwargs['src_region'] = b_region
+                            kwargs['want_mask'] = True
+                            kwargs['want_uncertainty'] = False
+                            kwargs['verbose'] = False
+                            kwargs['clobber'] = True
+                            this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
+                            this_waffle.initialize()
+                            wf = this_waffle.generate()
+                            wf_dem = WaffleDEM(wf.fn, cache_dir=wf.cache_dir, verbose=wf.verbose).initialize()
+                            if wf_dem.valid_p():
+                                ## ==============================================
+                                ## generate the random-sample data PROX and SLOPE
+                                ## ==============================================
+                                sub_prox = '{}_prox.tif'.format(wf.name)
+                                gdalfun.gdal_proximity('{}_m.tif'.format(wf.name), sub_prox)
+                                #sub_slp = '{}_slp.tif'.format(wf.name)
+                                #demfun.slope(wf.fn, sub_slp)
 
                                 ## ==============================================
-                                ## generate the random-sample DEM
+                                ## Calculate the random-sample errors
                                 ## ==============================================
-                                mod = self.dem.params['mod']
-                                mod_args = self.dem.params['mod_args']
-                                this_mod = '{}:{}'.format(mod, factory.dict2args(mod_args))
-                                kwargs = self.dem.params['kwargs']
-                                kwargs['name'] = 'sub_{}'.format(n)
-                                kwargs['data'] = [s_outer, sub_xyz_head]
-                                kwargs['src_region'] = b_region.format('gmt')
-                                kwargs['want_mask'] = True
-                                kwargs['verbose'] = False
-                                kwargs['clobber'] = True
-                                this_waffle = WaffleFactory(**this_mod, **kwargs)._acquire_module()
-                                this_waffle.initialize()
-                                wf = this_waffle.generate()
+                                sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
+                                sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
+                                #sub_ds = demfun.query(sub_dp, self.slope, 'g')
+                                #if len(sub_dp) > 0:
+                                #   if sub_dp.shape[0] == sub_ds.shape[0]:
+                                #       sub_dp = np.append(sub_dp, sub_ds, 1)
+                                #   else: sub_dp = []
+                            else:
+                                sub_dp = None
 
-                                if wf.valid_p():
-                                    ## ==============================================
-                                    ## generate the random-sample data PROX and SLOPE
-                                    ## ==============================================
-                                    sub_prox = '{}_prox.tif'.format(wf.name)
-                                    gdalfun.gdal_proximity('{}_m.tif'.format(wf.name), sub_prox)
-                                    #sub_slp = '{}_slp.tif'.format(wf.name)
-                                    #demfun.slope(wf.fn, sub_slp)
+                            utils.remove_glob(sub_xyz_head)
+                            if sub_dp is not None and len(sub_dp) > 0:
+                                try:
+                                    s_dp = np.vstack((s_dp, sub_dp))
+                                except:
+                                    s_dp = sub_dp
 
-                                    ## ==============================================
-                                    ## Calculate the random-sample errors
-                                    ## ==============================================
-                                    sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
-                                    sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
-                                    #sub_ds = demfun.query(sub_dp, self.slope, 'g')
-                                    #if len(sub_dp) > 0:
-                                    #   if sub_dp.shape[0] == sub_ds.shape[0]:
-                                    #       sub_dp = np.append(sub_dp, sub_ds, 1)
-                                    #   else: sub_dp = []
-                                else:
-                                    sub_dp = None
+                    utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
 
-                                utils.remove_glob(sub_xyz_head)
-                                if sub_dp is not None and len(sub_dp) > 0:
-                                    try:
-                                        s_dp = np.vstack((s_dp, sub_dp))
-                                    except:
-                                        s_dp = sub_dp
+            if s_dp is not None and len(s_dp) > 0:
+                d_max = self.region_info[self.dem.name][4]
+                #s_max = self.region_info[self.dem.name][5]
+                s_dp = s_dp[s_dp[:,3] < max_dist,:]
+                s_dp = s_dp[s_dp[:,3] >= 1,:]
+                prox_err = s_dp[:,[2,3]]
 
-                        utils.remove_glob(o_xyz, 'sub_{}*'.format(n))
-
-                if s_dp is not None and len(s_dp) > 0:
-                    d_max = self.region_info[self.dem.name][4]
-                    #s_max = self.region_info[self.dem.name][5]
-                    s_dp = s_dp[s_dp[:,3] < max_dist,:]
-                    s_dp = s_dp[s_dp[:,3] >= 1,:]
-                    prox_err = s_dp[:,[2,3]]
-
-                    if last_ec_d is None:
-                        last_ec_d = [0, 0.1, 0.2]
-                        last_ec_diff = 10
-                    else:
-                        last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
-
-                    ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
-                    #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
-                    ec_diff = abs(ec_d[2] - ec_d[1])
-                    ec_l_diff = abs(last_ec_diff - ec_diff)
-                    #s_dp = s_dp[s_dp[:,4] < s_max,:]
-                    #slp_err = s_dp[:,[2,4]]
-                    #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
-                    # ec_s = [0, 1, 2]
-                    #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
-                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
-
-                    if len(s_dp) < self.max_sample:
-                        last_ec_d = ec_d
-                        continue
-
-                    if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
-                        last_ec_d = ec_d
-                        continue
-
-                    if sim >= int(self.sims):
-                        break
-
-                    if abs(last_ec_diff - ec_diff) < 0.01:
-                        break
-
-                    # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
-                    #     break
-
-                    last_ec_d = ec_d
+                if last_ec_d is None:
+                    last_ec_d = [0, 0.1, 0.2]
+                    last_ec_diff = 10
                 else:
-                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
+                    last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
+
+                ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d, dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
+                #ec_d = self._err2coeff(prox_err[:50000000], coeff_guess=[0, .1, .2], dst_name=self.dem.name + '_prox', xa='distance')
+                ec_diff = abs(ec_d[2] - ec_d[1])
+                ec_l_diff = abs(last_ec_diff - ec_diff)
+                #s_dp = s_dp[s_dp[:,4] < s_max,:]
+                #slp_err = s_dp[:,[2,4]]
+                #ec_s = self._err2coeff(slp_err[:50000000], coeff_guess=[0, 0.1, 0.2], dst_name = self.dem.name + '_slp', xa = 'slope')
+                # ec_s = [0, 1, 2]
+                #utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), ec_d, ec_d[2] - ec_d[1], ec_s, ec_s[2] - ec_s[1]))
+                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+
+                if len(s_dp) < self.max_sample:
+                    last_ec_d = ec_d
+                    continue
+
+                if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
+                    last_ec_d = ec_d
+                    continue
+
+                if sim >= int(self.sims):
+                    break
+
+                if abs(last_ec_diff - ec_diff) < 0.01:
+                    break
+
+                # if len(s_dp) >= int(self.region_info[self.dem.name][1] / 10):
+                #     break
+
+                last_ec_d = ec_d
+            else:
+                utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
 
         np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
         #_prog.end(status, 'performed {} SPLIT-SAMPLE simulations'.format(sim))
@@ -3638,11 +3648,16 @@ class InterpolationUncertainty: #(waffles.Waffle):
             self.sims = 12
 
         if self.max_sample is None:
+            print(self.region_info[self.dem.name][1])
+            print(self.region_info[self.dem.name][2])
             self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .25)
             #self.max_sample = 1
-            
+
+        utils.echo_msg('max sample is {}'.format(self.max_sample))
+        
         #ec_d, ec_s = self._split_sample(trains, s_5perc)
         #ec_d = self._split_sample(trains, s_5perc)[0]
+        if num_perc == 100: num_perc = 90
         ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
 
         ## ==============================================
@@ -4155,6 +4170,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '-u' or arg == '--want-uncertainty':
             wg['want_uncertainty'] = True
             wg['want_mask'] = True
+            wg['keep_auxiliary'] = True
             
         elif arg == '-p' or arg == '--prefix':
             want_prefix = True

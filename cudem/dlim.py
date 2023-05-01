@@ -332,7 +332,7 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        self.array_yield = self.yield_array()
+        #self.array_yield = self.yield_array()
         self.xyz_yield = self.yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
@@ -347,10 +347,10 @@ class ElevationDataset:
                 utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
                 utils.append_fn('dlim_stacks', self.region, self.x_inc)))
                 
-            if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
-                self.array_yield = self._mask(out_name='{}_m'.format(out_name), fmt='GTiff')
+            # if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
+            #     self.array_yield = self._mask(out_name='{}_m'.format(out_name), fmt='GTiff')
 
-            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')
+            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff', want_mask=self.want_mask)
 
     def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
         """dump the XYZ data from the dataset.
@@ -962,7 +962,7 @@ class ElevationDataset:
             
         m_ds = dst_ds =None
 
-    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):
+    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
         """stack incoming arrays (from `array_yield`) together
 
         -----------
@@ -972,6 +972,7 @@ class ElevationDataset:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
+        want_mask (bool): generate a data mask
 
         --------
         Returns:
@@ -1030,13 +1031,18 @@ class ElevationDataset:
         ## gt is the geotransform of the incoming arrays
         ## `self.array_yield` is set in `self.set_array`
         #for arrs, srcwin, gt in self.yield_array():
+        if want_mask:
+            array_yield = self._mask(out_name='{}_m'.format(out_name), method='multi', fmt=fmt)
+        else:
+            array_yield = self.yield_array()
+            
         with utils.CliProgress(
                 message='stacking data to {}/{} grid using {} method to {}'.format(
                     ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
                 ),
                 verbose=self.verbose
         ) as pbar:
-            for arrs, srcwin, gt in self.array_yield:
+            for arrs, srcwin, gt in array_yield:
                 pbar.update()
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 #print('stacks:', srcwin)
@@ -1136,10 +1142,10 @@ class ElevationDataset:
         dst_ds = None
         return(out_file)
 
-    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):
+    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
         """yield the result of `_stacks` as xyz"""
         
-        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt)
+        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt, want_mask=want_mask)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
@@ -1608,7 +1614,7 @@ class LASFile(ElevationDataset):
             out_z[unq[:,0], unq[:,1]] = zz
             out_z[out_z == 0] = np.nan
             out_arrays['z'] = out_z
-            out_arrays['count'] = np.ones((this_srcwin[3], this_srcwin[2]))
+            out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
