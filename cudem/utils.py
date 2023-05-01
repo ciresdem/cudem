@@ -128,7 +128,8 @@ def fn_basename(fn, ext):
 
 def fn_basename2(fn):
     """return the basename of fn based on ext"""
-
+    
+    #return('.'.join(os.path.basename(fn).split('.')[:-1]))
     return('.'.join(fn.split('.')[:-1]))
 
     

@@ -774,13 +774,12 @@ class ElevationDataset:
             this_dir.reverse()
             return(this_dir)
         
-        aa_name = self.metadata['name'].split(':')[0]
-        
+        #aa_name = self.metadata['name'].split(':')[0]
         if self.region is None:
-            a_name = '{}_{}'.format(aa, utils.this_year())
+            a_name = '{}_{}'.format(self.metadata['name'], utils.this_year())
         else:
             a_name = '{}_{}_{}'.format(
-                aa_name, self.region.format('fn'), utils.this_year())
+                self.metadata['name'], self.region.format('fn'), utils.this_year())
             
         self.parse_data_lists() # parse the datalist into a dictionary
         self.archive_datalist = '{}.datalist'.format(a_name)
@@ -816,7 +815,7 @@ class ElevationDataset:
                     for xyz_dataset in self.data_lists[x]['data']:
                         if xyz_dataset.remote == True:
                             ## we will want to split remote datasets into individual files if needed...
-                            sub_xyz_path = '{}_{}.xyz'.format(xyz_dataset.fn.split(':')[0], self.region.format('fn'))
+                            sub_xyz_path = '{}_{}.xyz'.format(utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn'))
                         elif len(xyz_dataset.fn.split('.')) > 1:
                             xyz_ext = xyz_dataset.fn.split('.')[-1]
                             sub_xyz_path = '.'.join(
@@ -828,10 +827,10 @@ class ElevationDataset:
                                  'xyz']
                             )
                         else:
-                            sub_xyz_path = '.'.join([xyz_dataset.fn, 'xyz'])
+                            sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(xyz_dataset.fn)), 'xyz'])
 
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
-                        sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))                        
+                        sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))            
                         with open(this_xyz_path, 'w') as xp:
                             for this_xyz in xyz_dataset.xyz_yield: # data will be processed independently of each other
                                 #yield(this_xyz) # don't need to yield data here.
@@ -3154,6 +3153,7 @@ class Fetcher(ElevationDataset):
         if self.fetch_module is None:
             pass
         self.check_size=True
+        self.remote=True
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
