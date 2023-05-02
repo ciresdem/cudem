@@ -786,7 +786,7 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             src_band = src_ds.GetRasterBand(band)
             ds_config = gdal_infos(src_ds)
             drv = gdal.GetDriverByName('GTiff')
-            dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, ds_config['dt'], [])                
+            dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Float32, [])                
             dst_ds.SetGeoTransform(ds_config['geoT'])
             dst_ds.SetProjection(ds_config['proj'])
             dst_band = dst_ds.GetRasterBand(1)
@@ -796,6 +796,7 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             return(0)
         
         else:
+            print('fail')
             return(None)
         
 def gdal_polygonize(src_gdal, dst_layer, verbose = False):
@@ -1310,35 +1311,41 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
     yields out_form results
     """
 
+    tgrid = None
+    #print(src_gdal)
     with gdal_datasource(src_gdal) as src_ds:
+        #print(src_ds)
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             ds_band = src_ds.GetRasterBand(band)
             ds_gt = ds_config['geoT']
             ds_nd = ds_config['ndv']
             tgrid = ds_band.ReadAsArray()
-            
-            for xyz in src_xyz:
-                x = xyz[0]
-                y = xyz[1]
-                try: 
-                    z = xyz[2]
-                except:
-                    z = ds_nd
 
-                if x > ds_gt[0] and y < float(ds_gt[3]):
-                    xpos, ypos = utils._geo2pixel(x, y, ds_gt, node='pixel')
-                    try: 
-                        g = tgrid[ypos, xpos]
-                    except: g = ds_nd
-                    d = c = m = s = ds_nd
-                    if g != ds_nd:
-                        d = z - g
-                        m = z + g
-                        outs = []
-                        for i in out_form:
-                            outs.append(vars()[i])
-                        yield(outs)
+    #print(src_xyz)
+    #print(tgrid)
+    if tgrid is not None:
+        for xyz in src_xyz:
+            x = xyz[0]
+            y = xyz[1]
+            try: 
+                z = xyz[2]
+            except:
+                z = ds_nd
+
+            if x > ds_gt[0] and y < float(ds_gt[3]):
+                xpos, ypos = utils._geo2pixel(x, y, ds_gt, node='pixel')
+                try: 
+                    g = tgrid[ypos, xpos]
+                except: g = ds_nd
+                d = c = m = s = ds_nd
+                if g != ds_nd:
+                    d = z - g
+                    m = z + g
+                    outs = []
+                    for i in out_form:
+                        outs.append(vars()[i])
+                    yield(outs)
 
 def gdal_query(src_xyz, src_gdal, out_form, band = 1):
     """query a gdal-compatible grid file with xyz data.

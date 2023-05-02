@@ -282,8 +282,7 @@ class ElevationDataset:
             
         if utils.fn_url_p(self.fn):
             self.remote = True
-            
-            
+                        
         if self.valid_p():
             self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
