@@ -3416,6 +3416,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                             kwargs['data'] = [s_outer, sub_xyz_head]
                             kwargs['src_region'] = b_region
                             kwargs['want_mask'] = True
+                            kwargs['keep_auxiliary'] = True # to keep mask
                             kwargs['want_uncertainty'] = False
                             kwargs['verbose'] = False
                             kwargs['clobber'] = True
@@ -3581,7 +3582,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
             #self.sims = 12
 
         if self.max_sample is None:
-            self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .25)
+            self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .1)
 
         utils.echo_msg('max sample is {}'.format(self.max_sample))
         ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]

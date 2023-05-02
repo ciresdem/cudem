@@ -796,7 +796,6 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             return(0)
         
         else:
-            print('fail')
             return(None)
         
 def gdal_polygonize(src_gdal, dst_layer, verbose = False):
