@@ -1066,8 +1066,9 @@ def sample_warp(
         )
         #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
 
-    if not os.path.exists(os.path.dirname(dst_dem)):
-        os.makedirs(os.path.dirname(dst_dem))
+    if dst_dem is not None:
+        if not os.path.exists(os.path.dirname(dst_dem)):
+            os.makedirs(os.path.dirname(dst_dem))
         
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,

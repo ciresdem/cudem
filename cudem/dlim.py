@@ -72,6 +72,7 @@
 ## fetch results class
 ## speed up xyz parsing, esp in yield_array
 ## do something about inf files (esp w/ fetches data)
+## temp files
 ### Code:
 
 import os
@@ -81,6 +82,7 @@ import copy
 import json
 import laspy as lp
 import math
+from datetime import datetime
 
 import numpy as np
 from scipy.spatial import ConvexHull
@@ -910,8 +912,7 @@ class ElevationDataset:
         with utils.CliProgress(
                 message='masking data to {}/{} grid to {} {}'.format(ycount, xcount, self.region, out_name),
                 verbose=self.verbose
-        ) as pbar:
-        
+        ) as pbar:        
             gdt = gdal.GDT_Int32
             if method == 'single':
                 driver = gdal.GetDriverByName(fmt)
@@ -953,11 +954,11 @@ class ElevationDataset:
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                         yield((arrs, srcwin, gt))
 
-                dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
-            
-        ## create a vector of the masks (spatial-metadata)
-        if self.want_sm:
-            gdalfun.ogr_polygonize_multibands(dst_ds)
+            dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
+
+            ## create a vector of the masks (spatial-metadata)
+            if self.want_sm:
+                gdalfun.ogr_polygonize_multibands(dst_ds)
             
         m_ds = dst_ds =None
 
@@ -1035,108 +1036,108 @@ class ElevationDataset:
         else:
             array_yield = self.yield_array()
             
-        # with utils.CliProgress(
-        #         message='stacking data to {}/{} grid using {} method to {}'.format(
-        #             ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-        #         ),
-        #         verbose=self.verbose
-        # ) as pbar:
-        for arrs, srcwin, gt in array_yield:
-            #pbar.update()
-            ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
-            #print('stacks:', srcwin)
-            for key in stacked_bands.keys():
-                stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                #print(stacked_data[key].shape)
-                #stacked_data[key][stacked_data[key] == ndv] = 0
-                stacked_data[key][np.isnan(stacked_data[key])] = 0
+        with utils.CliProgress(
+                message='stacking data to {}/{} grid using {} method to {}'.format(
+                    ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
+                ),
+                verbose=self.verbose
+        ) as pbar:
+            for arrs, srcwin, gt in array_yield:
+                pbar.update()
+                ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+                #print('stacks:', srcwin)
+                for key in stacked_bands.keys():
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    #print(stacked_data[key].shape)
+                    #stacked_data[key][stacked_data[key] == ndv] = 0
+                    stacked_data[key][np.isnan(stacked_data[key])] = 0
 
-            ## set incoming np.nans to zero and mask to non-nan count
-            arrs['weight'][np.isnan(arrs['z'])] = 0
-            arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-            arrs['z'][np.isnan(arrs['z'])] = 0
-            for arr_key in arrs:
-                if arrs[arr_key] is not None:
-                    arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+                ## set incoming np.nans to zero and mask to non-nan count
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                arrs['z'][np.isnan(arrs['z'])] = 0
+                for arr_key in arrs:
+                    if arrs[arr_key] is not None:
+                        arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-            ## add the count to the accumulated rasters
-            #print(stacked_data['count'].shape)
-            #print(arrs['count'].shape)
-            stacked_data['count'] += arrs['count']
+                ## add the count to the accumulated rasters
+                #print(stacked_data['count'].shape)
+                #print(arrs['count'].shape)
+                stacked_data['count'] += arrs['count']
 
-            ## supercede based on weights, else do weighted mean
-            ## todo: do (weighted) mean on cells with same weight
-            if supercede:
-                ## higher weight supercedes lower weight (first come first served atm)
-                stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
-                stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
-                stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
-                #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                ## uncertainty is src_uncertainty, as only one point goes into a cell
-                stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
-
-                # ## reset all data where weights are zero to nan
-                # for key in stacked_bands.keys():
-                #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
-
-            else:
-                ## accumulate incoming z*weight and uu*weight                
-                stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
-
-                ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
-                stacked_data['weights'] += arrs['weight']
-                stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                ## accumulate variance * weight
-                stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
-
-            ## write out results to accumulated rasters
-            #stacked_data['count'][stacked_data['count'] == 0] = ndv
-            stacked_data['count'][stacked_data['count'] == 0] = np.nan
-
-            for key in stacked_bands.keys():
-                #stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                #stacked_data[key][stacked_data['count'] == ndv] = ndv
-                stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                ## supercede based on weights, else do weighted mean
+                ## todo: do (weighted) mean on cells with same weight
                 if supercede:
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    ## higher weight supercedes lower weight (first come first served atm)
+                    stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
+                    #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    ## uncertainty is src_uncertainty, as only one point goes into a cell
+                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
 
-                stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+                    # ## reset all data where weights are zero to nan
+                    # for key in stacked_bands.keys():
+                    #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
-        ## Finalize weighted mean rasters and close datasets
-        ## incoming arrays have all been processed, if weighted mean the
-        ## "z" is the sum of z*weight, "weights" is the sum of weights
-        ## "uncertainty" is the sum of variance*weight
-        if not supercede:
-            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-            for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
-            ):
+                else:
+                    ## accumulate incoming z*weight and uu*weight                
+                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+
+                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                    stacked_data['weights'] += arrs['weight']
+                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+
+                ## write out results to accumulated rasters
+                #stacked_data['count'][stacked_data['count'] == 0] = ndv
+                stacked_data['count'][stacked_data['count'] == 0] = np.nan
+
                 for key in stacked_bands.keys():
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    #stacked_data[key][stacked_data[key] == ndv] = np.nan
+                    #stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    #stacked_data[key][stacked_data['count'] == ndv] = ndv
+                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                    if supercede:
+                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
 
-                ## average the accumulated arrays for finalization
-                ## z and u are weighted sums, so divide by weights
-                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
-                stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
-                ## apply the source uncertainty with the sub-cell variance uncertainty
-                ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
-                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+            ## Finalize weighted mean rasters and close datasets
+            ## incoming arrays have all been processed, if weighted mean the
+            ## "z" is the sum of z*weight, "weights" is the sum of weights
+            ## "uncertainty" is the sum of variance*weight
+            if not supercede:
+                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    for key in stacked_bands.keys():
+                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                        #stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                ## write out final rasters
-                for key in stacked_bands.keys():
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+                    ## average the accumulated arrays for finalization
+                    ## z and u are weighted sums, so divide by weights
+                    stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                    stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
-        ## set the final output nodatavalue
-        for key in stacked_bands.keys():
-            stacked_bands[key].DeleteNoDataValue()
-        for key in stacked_bands.keys():
-            stacked_bands[key].SetNoDataValue(ndv)
+                    ## apply the source uncertainty with the sub-cell variance uncertainty
+                    ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                    stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                    stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+
+                    ## write out final rasters
+                    for key in stacked_bands.keys():
+                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+
+            ## set the final output nodatavalue
+            for key in stacked_bands.keys():
+                stacked_bands[key].DeleteNoDataValue()
+            for key in stacked_bands.keys():
+                stacked_bands[key].SetNoDataValue(ndv)
             
         dst_ds = None
         return(out_file)
@@ -1739,7 +1740,8 @@ class GDALFile(ElevationDataset):
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
             ## doing this in MEM has a bug, fix if able
-            tmp_warp = os.path.join(self.cache_dir, '_tmp_gdal.tif')
+            #tmp_warp = os.path.join(self.cache_dir, '_tmp_gdal.tif')
+            tmp_warp = utils.make_temp_fn('{}'.format(tmp_ds), temp_dir=self.cache_dir)
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region, sample_alg=self.sample_alg,
@@ -3242,7 +3244,7 @@ class GMRTFetcher(Fetcher):
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
-
+        
 class GEBCOFetcher(Fetcher):
     def __init__(self, exclude_tid = None, **kwargs):
         super().__init__(**kwargs)
@@ -3278,7 +3280,7 @@ class GEBCOFetcher(Fetcher):
                         wanted_gebco_fns.append(tid_fn)
 
                 for tid_fn in wanted_gebco_fns:
-                    tmp_tid = os.path.join(self.fetch_module._outdir, 'tmp_tid.tif') # update output naming
+                    tmp_tid = utils.make_temp_fn('tmp_tid.tif', temp_dir=self.fetch_module._outdir)
                     with gdalfun.gdal_datasource(tid_fn) as tid_ds:
                         tid_config = gdalfun.gdal_infos(tid_ds)
                         tid_band = tid_ds.GetRasterBand(1)
@@ -3298,6 +3300,8 @@ class GEBCOFetcher(Fetcher):
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                    
+                    utils.remove_glob(tmp_tid)
         else:
             for gebco_fn in gebco_fns:
                 ds_config = gdalfun.gdal_infos(gebco_fn)
@@ -3360,12 +3364,13 @@ class MarGravFetcher(Fetcher):
             
         if self.rasterize:
             from cudem import waffles
-            mar_grav_fn = os.path.join(
-                self.cache_dir,
-                utils.append_fn(
-                    'mar_grav', self.region, self.x_inc
-                )
-            )
+            mar_grav_fn = utils.make_temp_fn('mar_grav')
+            # mar_grav_fn = os.path.join(
+            #     self.cache_dir,
+            #     utils.append_fn(
+            #         'mar_grav', self.region, self.x_inc
+            #     )
+            # )
             _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(result[1])],
                                             src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'),
                                             name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()

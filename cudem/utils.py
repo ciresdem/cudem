@@ -127,12 +127,30 @@ def fn_basename(fn, ext):
         return(fn[:-(len(ext)+1)])
 
 def fn_basename2(fn):
-    """return the basename of fn based on ext"""
+    """return the basename of fn"""
     
     #return('.'.join(os.path.basename(fn).split('.')[:-1]))
-    return('.'.join(fn.split('.')[:-1]))
+    t = fn.split('.')
+    if len(t) > 1:
+        return('.'.join(fn.split('.')[:-1]))
+    else:
+        return(fn)
 
-    
+def fn_ext(fn):
+    """return the extension of fn"""
+
+    ext = None
+    t = fn.split('.')
+    if len(t) > 1:
+        ext = t[-1]
+
+    return(ext)
+
+def make_temp_fn(fn, temp_dir = cudem_cache()):
+    fn_bn = fn_basename2(os.path.basename(fn))
+    fn_et = fn_ext(fn)
+    return(os.path.join(temp_dir, '_{}_{}{}'.format(fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S'), '.{}'.format(fn_et) if fn_et is not None else '')))
+
 def fn_url_p(fn):
     """check if fn is a url"""
     
