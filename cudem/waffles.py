@@ -3750,14 +3750,15 @@ class WaffleDEM:
             #             gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
             #             os.rename('__tmp_clip__.tif', '{}'.format(fn))
             
-            tmp_clip = os.path.join(self.cache_dir, '__tmp_clip__.tif')
+            #tmp_clip = os.path.join(self.cache_dir, '__tmp_clip__.tif')
+            tmp_clip = utils.make_temp_fn('__tmp_clip__.tif', temp_dir=self.cache_dir)
             ## update to utils
             if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                 os.rename(tmp_clip, self.fn)
                 self.initialize()
                 
     def cut(self, region = None):
-        _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, os.path.join(self.cache_dir, '__tmp_cut__.tif'), node='grid')        
+        _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        
         if cut_status == 0:
             os.rename(_tmp_cut, self.fn)
             self.initialize()

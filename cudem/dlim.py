@@ -1548,10 +1548,12 @@ class LASFile(ElevationDataset):
                                         ((points.y < tmp_region.ymax) & (points.y > tmp_region.ymin))]
                         if self.region.zmin is not None:
                             points =  points[(points.z > tmp_region.zmin)]
+                            
                         if self.region.zmax is not None:
                             points =  points[(points.z < tmp_region.zmax)]
-
-                    yield(points)
+                            
+                    if len(points) > 0:
+                        yield(points)
     
     def yield_xyz(self):
         """LAS file parsing generator"""
@@ -3352,15 +3354,20 @@ class FABDEMFetcher(Fetcher):
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class MarGravFetcher(Fetcher):
-    def __init__(self, rasterize=False, bathy_only=False, **kwargs):
+    def __init__(self, rasterize=False, bathy_only=False, upper_limit=None, lower_limit=None, **kwargs):
         super().__init__(**kwargs)
         self.rasterize = rasterize
         self.bathy_only = bathy_only
+        self.upper_limit = utils.float_or(upper_limit)
+        self.lower_limit = utils.float_or(lower_limit)
 
+        if self.bathy_only:
+            self.upper_limit = 0
+        
     def yield_ds(self, result):
         mg_region = self.region.copy()
-        if self.bathy_only:
-            mg_region.zmax = 0
+        mg_region.zmax = self.upper_limit
+        mg_region.zmin = self.lower_limit
             
         if self.rasterize:
             from cudem import waffles
