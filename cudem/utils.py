@@ -884,14 +884,14 @@ def run_cmd(cmd, data_fun=None, verbose=False):
 
             pbar.update()
 
-    out = p.stdout.read()
-    p.stderr.close()
-    p.stdout.close()
-    if verbose:
-        echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
+        out = p.stdout.read()
+        p.stderr.close()
+        p.stdout.close()
+        if verbose:
+            echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
 
-    if p.returncode != 0:
-        raise Exception(p.returncode)
+        if p.returncode != 0:
+            raise Exception(p.returncode)
         
     return(out, p.returncode)
 

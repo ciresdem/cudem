@@ -283,9 +283,9 @@ def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
     else: return(True)
     
 def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Shapefile', verbose=True):
-    dst_layer = '{}_sm'.format(fn_basename2(src_ds.GetDescription()))
+    dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
     dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
-    remove_glob('{}.*'.format(dst_layer))
+    utils.remove_glob('{}.*'.format(dst_layer))
     osr_prj_file('{}.prj'.format(dst_layer), dst_srs)
     ds = ogr.GetDriverByName(ogr_format).CreateDataSource(dst_vector)
     if ds is not None: 
@@ -322,7 +322,7 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Sh
                     tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
                 
                 if verbose:
-                    echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
+                    utils.echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
                             
                 status = gdal.Polygonize(
                     this_band,
@@ -337,15 +337,16 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Sh
                     if defn is None:
                         defn = tmp_layer.GetLayerDefn()
 
-                    out_feat = gdal_ogr_mask_union(tmp_layer, 'DN', defn)
-                    echo_msg('creating feature {}...'.format(this_band.GetDescription()))
+                    out_feat = ogr_mask_union(tmp_layer, 'DN', defn)
+                    utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
                     for k in this_band_md.keys():
                         out_feat.SetField(k[:9], this_band_md[k])
                     
                     layer.CreateFeature(out_feat)
 
             if verbose:
-                echo_msg('polygonized {}'.format(this_band.GetDescription()))
+                utils.echo_msg('polygonized {}'.format(this_band.GetDescription()))
+                
             tmp_ds = tmp_layer = None
     ds = None
 
@@ -1064,7 +1065,10 @@ def sample_warp(
             )
         )
         #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
-    
+
+    if not os.path.exists(os.path.dirname(dst_dem)):
+        os.makedirs(os.path.dirname(dst_dem))
+        
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,

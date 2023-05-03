@@ -4509,6 +4509,11 @@ https://springernature.figshare.com/collections/GLOBathy_the_Global_Lakes_Bathym
 
     #             return('{}.tif'.format(self.name))
 
+class ShallowBathyEverywhere(FetchModule):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.sbe_dem_url - 'https://shallowbathymetryeverywhere.com/data/dem/'
+    
 ## ==============================================
 ## Fetches Module Parser
 ## ==============================================

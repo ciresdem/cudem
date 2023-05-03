@@ -2370,7 +2370,9 @@ class WafflesCUDEM(Waffle):
 
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
-        coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=self.p_region,
+        cst_region = self.p_region.copy()
+        cst_region.wmin = self.min_weight
+        coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=cst_region,
                                   xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
         coastline.initialize()        
@@ -2428,9 +2430,10 @@ class WafflesCUDEM(Waffle):
                 
             waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'linear:chunk_step=None:chunk_buffer=10'
             pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
-                                        yinc=pre_yinc if pre !=0 else self.yinc, name=_pre_name, node=self.node, want_weight=True,
-                                        want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs, srs_transform=self.srs_transform,
-                                        clobber=True, verbose=self.verbose, clip=pre_clip if pre !=0 else None, supercede=True if pre == 0 else self.supercede,
+                                        yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
+                                        name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
+                                        dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
+                                        clip=pre_clip if pre !=0 else None, supercede=True if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False)._acquire_module()
             pre_surface.initialize()
             pre_surface.generate()
@@ -3680,6 +3683,8 @@ class WaffleDEM:
 
         ## resamples all bands
         self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
+
+        ## clip/cut
         self.clip(clip_str=clip_str)
         if region is not None:
             self.cut(region=region)
@@ -3722,7 +3727,7 @@ class WaffleDEM:
             warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
             if gdalfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
                                    sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
-                os.rename(warp_fn, fn)
+                os.rename(warp_fn, self.fn)
                 self.initialize()
 
     def clip(self, clip_str = None):
