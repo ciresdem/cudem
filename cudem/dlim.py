@@ -914,9 +914,13 @@ class ElevationDataset:
                 verbose=self.verbose
         ) as pbar:        
             gdt = gdal.GDT_Int32
+            mask_fn = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
             if method == 'single':
                 driver = gdal.GetDriverByName(fmt)
-                m_ds = driver.Create('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), xcount, ycount, 0, gdt)
+                if os.path.exists(mask_fn):
+                    driver.Delete(mask_fn)
+                    
+                m_ds = driver.Create(mask_fn, xcount, ycount, 0, gdt)
                 m_ds.SetGeoTransform(dst_gt)
                 m_band = m_ds.GetRasterBand(1)
                 m_band.SetNoDataValue(ndv)
@@ -928,7 +932,7 @@ class ElevationDataset:
                     yield((arrs, srcwin, gt))
             else:
                 driver = gdal.GetDriverByName('MEM')
-                m_ds = driver.Create(out_name, xcount, ycount, 0, gdt)
+                m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
                 m_ds.SetGeoTransform(dst_gt)
                 for this_entry in self.parse_json():
                     pbar.update()
@@ -954,7 +958,7 @@ class ElevationDataset:
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                         yield((arrs, srcwin, gt))
 
-            dst_ds = gdal.GetDriverByName(fmt).CreateCopy('{}.{}'.format(out_name, gdalfun.gdal_fext(fmt)), m_ds, 0)
+            dst_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
 
             ## create a vector of the masks (spatial-metadata)
             if self.want_sm:
@@ -1007,6 +1011,9 @@ class ElevationDataset:
         gdt = gdal.GDT_Float32
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(fmt)
+        if os.path.exists(out_file):
+            driver.Delete(out_file)
+        
         dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if fmt != 'MEM' else [])
 
@@ -1036,108 +1043,108 @@ class ElevationDataset:
         else:
             array_yield = self.yield_array()
             
-        with utils.CliProgress(
-                message='stacking data to {}/{} grid using {} method to {}'.format(
-                    ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-                ),
-                verbose=self.verbose
-        ) as pbar:
-            for arrs, srcwin, gt in array_yield:
-                pbar.update()
-                ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
-                #print('stacks:', srcwin)
-                for key in stacked_bands.keys():
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                    #print(stacked_data[key].shape)
-                    #stacked_data[key][stacked_data[key] == ndv] = 0
-                    stacked_data[key][np.isnan(stacked_data[key])] = 0
+        # with utils.CliProgress(
+        #         message='stacking data to {}/{} grid using {} method to {}'.format(
+        #             ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
+        #         ),
+        #         verbose=self.verbose
+        # ) as pbar:
+        for arrs, srcwin, gt in array_yield:
+            #pbar.update()
+            ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+            #print('stacks:', srcwin)
+            for key in stacked_bands.keys():
+                stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                #print(stacked_data[key].shape)
+                #stacked_data[key][stacked_data[key] == ndv] = 0
+                stacked_data[key][np.isnan(stacked_data[key])] = 0
 
-                ## set incoming np.nans to zero and mask to non-nan count
-                arrs['weight'][np.isnan(arrs['z'])] = 0
-                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                arrs['z'][np.isnan(arrs['z'])] = 0
-                for arr_key in arrs:
-                    if arrs[arr_key] is not None:
-                        arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+            ## set incoming np.nans to zero and mask to non-nan count
+            arrs['weight'][np.isnan(arrs['z'])] = 0
+            arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+            arrs['z'][np.isnan(arrs['z'])] = 0
+            for arr_key in arrs:
+                if arrs[arr_key] is not None:
+                    arrs[arr_key][np.isnan(arrs[arr_key])] = 0
 
-                ## add the count to the accumulated rasters
-                #print(stacked_data['count'].shape)
-                #print(arrs['count'].shape)
-                stacked_data['count'] += arrs['count']
+            ## add the count to the accumulated rasters
+            #print(stacked_data['count'].shape)
+            #print(arrs['count'].shape)
+            stacked_data['count'] += arrs['count']
 
-                ## supercede based on weights, else do weighted mean
-                ## todo: do (weighted) mean on cells with same weight
+            ## supercede based on weights, else do weighted mean
+            ## todo: do (weighted) mean on cells with same weight
+            if supercede:
+                ## higher weight supercedes lower weight (first come first served atm)
+                stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
+                stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
+                stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
+                #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                ## uncertainty is src_uncertainty, as only one point goes into a cell
+                stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
+
+                # ## reset all data where weights are zero to nan
+                # for key in stacked_bands.keys():
+                #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
+
+            else:
+                ## accumulate incoming z*weight and uu*weight                
+                stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+
+                ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                stacked_data['weights'] += arrs['weight']
+                stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                ## accumulate variance * weight
+                stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+
+            ## write out results to accumulated rasters
+            #stacked_data['count'][stacked_data['count'] == 0] = ndv
+            stacked_data['count'][stacked_data['count'] == 0] = np.nan
+
+            for key in stacked_bands.keys():
+                #stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                #stacked_data[key][stacked_data['count'] == ndv] = ndv
+                stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
                 if supercede:
-                    ## higher weight supercedes lower weight (first come first served atm)
-                    stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
-                    stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
-                    #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                    ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
+                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
 
-                    # ## reset all data where weights are zero to nan
-                    # for key in stacked_bands.keys():
-                    #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
+                stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
-                else:
-                    ## accumulate incoming z*weight and uu*weight                
-                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
-
-                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
-                    stacked_data['weights'] += arrs['weight']
-                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                    ## accumulate variance * weight
-                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
-
-                ## write out results to accumulated rasters
-                #stacked_data['count'][stacked_data['count'] == 0] = ndv
-                stacked_data['count'][stacked_data['count'] == 0] = np.nan
-
+        ## Finalize weighted mean rasters and close datasets
+        ## incoming arrays have all been processed, if weighted mean the
+        ## "z" is the sum of z*weight, "weights" is the sum of weights
+        ## "uncertainty" is the sum of variance*weight
+        if not supercede:
+            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+            for y in range(
+                    srcwin[1], srcwin[1] + srcwin[3], 1
+            ):
                 for key in stacked_bands.keys():
-                    #stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    #stacked_data[key][stacked_data['count'] == ndv] = ndv
-                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
-                    if supercede:
-                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                    #stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+                ## average the accumulated arrays for finalization
+                ## z and u are weighted sums, so divide by weights
+                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
-            ## Finalize weighted mean rasters and close datasets
-            ## incoming arrays have all been processed, if weighted mean the
-            ## "z" is the sum of z*weight, "weights" is the sum of weights
-            ## "uncertainty" is the sum of variance*weight
-            if not supercede:
-                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
-                ):
-                    for key in stacked_bands.keys():
-                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                        #stacked_data[key][stacked_data[key] == ndv] = np.nan
+                ## apply the source uncertainty with the sub-cell variance uncertainty
+                ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
-                    ## average the accumulated arrays for finalization
-                    ## z and u are weighted sums, so divide by weights
-                    stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                    stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
-                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+                ## write out final rasters
+                for key in stacked_bands.keys():
+                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
 
-                    ## apply the source uncertainty with the sub-cell variance uncertainty
-                    ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
-                    stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                    stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
-
-                    ## write out final rasters
-                    for key in stacked_bands.keys():
-                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
-
-            ## set the final output nodatavalue
-            for key in stacked_bands.keys():
-                stacked_bands[key].DeleteNoDataValue()
-            for key in stacked_bands.keys():
-                stacked_bands[key].SetNoDataValue(ndv)
+        ## set the final output nodatavalue
+        for key in stacked_bands.keys():
+            stacked_bands[key].DeleteNoDataValue()
+        for key in stacked_bands.keys():
+            stacked_bands[key].SetNoDataValue(ndv)
             
         dst_ds = None
         return(out_file)
@@ -1433,6 +1440,22 @@ class LASFile(ElevationDataset):
                 self.src_srs = self.infos['src_srs']
             
             self.set_transform()
+            
+        # self.las_region = None
+        # if self.region is not None  and self.region.valid_p():
+        #     self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+
+        # ## todo: fix this for dst_trans!
+        # self.las_x_inc = self.x_inc
+        # self.las_y_inc = self.y_inc
+        # if self.las_x_inc is not None and self.las_y_inc is not None:
+        #     if self.dst_trans is not None:
+        #         self.las_x_inc, self.las_y_inc = self.las_region.increments(self.xcount, self.ycount)
+        #         self.las_dst_gt = self.dst_gt
+        #     else:
+        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+        #             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        #         )
 
     def get_epsg(self):
         with lp.open(self.fn) as lasf:
@@ -1533,24 +1556,25 @@ class LASFile(ElevationDataset):
         self.init_ds()
         with lp.open(self.fn) as lasf:
             for points in lasf.chunk_iterator(2_000_000):
+                #for points in lasf.read_points:
                 points = points[(np.isin(points.classification, self.classes))]
                 if self.region is not None  and self.region.valid_p():
-                    tmp_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                    las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
                     if self.invert_region:
-                        points = points[((points.x > tmp_region.xmax) | (points.x < tmp_region.xmin)) | \
-                                        ((points.y > tmp_region.ymax) | (points.y < tmp_region.ymin))]
-                        if self.region.zmin is not None:
-                            points =  points[(points.z < tmp_region.zmin)]
-                            if self.region.zmax is not None:
-                                points =  points[(points.z > tmp_region.zmax)]
+                        points = points[((points.x > las_region.xmax) | (points.x < las_region.xmin)) | \
+                                        ((points.y > las_region.ymax) | (points.y < las_region.ymin))]
+                        if las_region.zmin is not None:
+                            points =  points[(points.z < las_region.zmin)]
+                            if las_region.zmax is not None:
+                                points =  points[(points.z > las_region.zmax)]
                     else:
-                        points = points[((points.x < tmp_region.xmax) & (points.x > tmp_region.xmin)) & \
-                                        ((points.y < tmp_region.ymax) & (points.y > tmp_region.ymin))]
-                        if self.region.zmin is not None:
-                            points =  points[(points.z > tmp_region.zmin)]
+                        points = points[((points.x < las_region.xmax) & (points.x > las_region.xmin)) & \
+                                        ((points.y < las_region.ymax) & (points.y > las_region.ymin))]
+                        if las_region.zmin is not None:
+                            points =  points[(points.z > las_region.zmin)]
                             
-                        if self.region.zmax is not None:
-                            points =  points[(points.z < tmp_region.zmax)]
+                        if las_region.zmax is not None:
+                            points =  points[(points.z < las_region.zmax)]
                             
                     if len(points) > 0:
                         yield(points)
@@ -1580,15 +1604,41 @@ class LASFile(ElevationDataset):
     def yield_array(self):
         out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
         count = 0
-        for points in self.yield_points():
+        for points in self.yield_points():            
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
+
             pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
             pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
-            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), (int(max(pixel_x) - min(pixel_x)) + 1), (int(max(pixel_y) - min(pixel_y)) + 1))
-            count += len(pixel_x)
+            # pixel_x = ((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
+            # pixel_y = ((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
             
+            # pixel_upper_mask = pixel_x < self.las_xcount | pixel_y < self.las_ycount
+            # pixel_lower_mask = pixel_x > 0 | pixel_y > 0
+            # pixel_x = pixel_x[pixel_mask]
+            # pixel_y = pixel_y[pixel_mask]
+
+            pixel_z = points.z
+
+            pixel_z = pixel_z[pixel_x < xcount]            
+            pixel_y = pixel_y[pixel_x < xcount]            
+            pixel_x = pixel_x[pixel_x < xcount]
+
+            pixel_z = pixel_z[pixel_y < ycount]
+            pixel_x = pixel_x[pixel_y < ycount]
+            pixel_y = pixel_y[pixel_y < ycount]
+
+
+            
+            # pixel_y = pixel_y[pixel_x > 0]
+            # pixel_x = pixel_x[pixel_x > 0]
+            # pixel_x = pixel_x[pixel_y > 0]
+            # pixel_y = pixel_y[pixel_y > 0]
+            
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+            count += len(pixel_x)
+
             ## adjust pixels to srcwin and stack together
             pixel_x = pixel_x - this_srcwin[0]
             pixel_y = pixel_y - this_srcwin[1]
@@ -1604,7 +1654,8 @@ class LASFile(ElevationDataset):
             idx_idx, = np.nonzero(idx_msk)
             srt_idx = np.argsort(unq_inv[idx_msk])
             dup_idx = np.split(idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1])
-            zz = points.z[unq_idx]
+            #zz = points.z[unq_idx]
+            zz = pixel_z[unq_idx]
             u = np.zeros(zz.shape)
             dup_means = [np.mean(points.z[dup]) for dup in dup_idx]
             dup_stds = [np.std(points.z[dup]) for dup in dup_idx]
@@ -2870,60 +2921,60 @@ class Datalist(ElevationDataset):
 
             dl_layer.SetSpatialFilter(_boundsGeom)
             count = len(dl_layer)
-            with utils.CliProgress(
-                    message='parsing datalist json {} @ {}'.format(self.fn, self.weight),
-                    total=len(dl_layer),
-                    verbose=self.verbose,
-                    sleep=10,
-            ) as pbar:
-                for l,feat in enumerate(dl_layer):
-                    pbar.update()
-                    ## filter by input source region extras (weight/uncertainty)
-                    if self.region is not None:
-                        w_region = self.region.w_region()
-                        if w_region[0] is not None:
-                            if float(feat.GetField('weight')) < w_region[0]:
-                                continue
-                        if w_region[1] is not None:
-                            if float(feat.GetField('weight')) > w_region[1]:
-                                continue
+            # with utils.CliProgress(
+            #         message='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
+            #         total=len(dl_layer),
+            #         verbose=self.verbose,
+            #         sleep=10,
+            # ) as pbar:
+            for l,feat in enumerate(dl_layer):
+                #pbar.update()
+                ## filter by input source region extras (weight/uncertainty)
+                if self.region is not None:
+                    w_region = self.region.w_region()
+                    if w_region[0] is not None:
+                        if float(feat.GetField('weight')) < w_region[0]:
+                            continue
+                    if w_region[1] is not None:
+                        if float(feat.GetField('weight')) > w_region[1]:
+                            continue
 
-                        u_region = self.region.u_region()
-                        if u_region[0] is not None:
-                            if float(feat.GetField('uncertainty')) < u_region[0]:
-                                continue
-                        if u_region[1] is not None:
-                            if float(feat.GetField('uncertainty')) > u_region[1]:
-                                continue
+                    u_region = self.region.u_region()
+                    if u_region[0] is not None:
+                        if float(feat.GetField('uncertainty')) < u_region[0]:
+                            continue
+                    if u_region[1] is not None:
+                        if float(feat.GetField('uncertainty')) > u_region[1]:
+                            continue
 
-                    ## extract the module arguments from the datalist-vector
-                    try:
-                        ds_args = feat.GetField('mod_args')
-                        data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                    except:
-                        data_set_args = {}
+                ## extract the module arguments from the datalist-vector
+                try:
+                    ds_args = feat.GetField('mod_args')
+                    data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                except:
+                    data_set_args = {}
 
-                    ## update existing metadata
-                    md = copy.deepcopy(self.metadata)
-                    for key in self.metadata.keys():
-                        md[key] = feat.GetField(key)
+                ## update existing metadata
+                md = copy.deepcopy(self.metadata)
+                for key in self.metadata.keys():
+                    md[key] = feat.GetField(key)
 
-                    ## generate the dataset object to yield
-                    data_set = DatasetFactory(mod = '{} {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
-                                                                         feat.GetField('weight'), feat.GetField('uncertainty')),
-                                              weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                                              invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
-                                              verbose=self.verbose, **data_set_args)._acquire_module()
-                    if data_set is not None and data_set.valid_p(
-                            fmts=DatasetFactory._modules[data_set.data_format]['fmts']
-                    ):
-                        data_set.initialize()
-                        for ds in data_set.parse_json():
-                            self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
-                            yield(ds)
+                ## generate the dataset object to yield
+                data_set = DatasetFactory(mod = '{} {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
+                                                                     feat.GetField('weight'), feat.GetField('uncertainty')),
+                                          weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                                          invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                          x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                                          verbose=self.verbose, **data_set_args)._acquire_module()
+                if data_set is not None and data_set.valid_p(
+                        fmts=DatasetFactory._modules[data_set.data_format]['fmts']
+                ):
+                    data_set.initialize()
+                    for ds in data_set.parse_json():
+                        self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                        yield(ds)
 
-                dl_ds = dl_layer = None
+            dl_ds = dl_layer = None
                 
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and

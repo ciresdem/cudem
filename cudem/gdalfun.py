@@ -392,20 +392,21 @@ def gdal_multi_mask2single_mask(src_gdal):
     out_mask = None
     
     with gdal_datasource(src_gdal) as src_ds:
-        ds_config = gdal_infos(src_gdal)
-        out_mask = '{}_single.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdal_fext(ds_config['fmt']))
-        driver = gdal.GetDriverByName(ds_config['fmt'])
-        m_ds = driver.Create(out_mask, ds_config['nx'], ds_config['ny'], 1, gdt)
-        m_ds.SetGeoTransform(ds_config['geoT'])
-        m_band = m_ds.GetRasterBand(1)
-        m_band.SetNoDataValue(ds_config['ndv'])
-        
-        for b in range(1, src_ds.RasterCount+1):
-            this_band = src_ds.GetRasterBand(b)
-            this_arr = this_band.ReadAsArray()
-            m_band.WriteArray(this_arr)
-            
-        m_ds = None
+        if src_ds is not None:
+            ds_config = gdal_infos(src_ds)
+            out_mask = '{}_single.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdal_fext(ds_config['fmt']))
+            driver = gdal.GetDriverByName(ds_config['fmt'])
+            m_ds = driver.Create(out_mask, ds_config['nx'], ds_config['ny'], 1, gdt)
+            m_ds.SetGeoTransform(ds_config['geoT'])
+            m_band = m_ds.GetRasterBand(1)
+            m_band.SetNoDataValue(ds_config['ndv'])
+
+            for b in range(1, src_ds.RasterCount+1):
+                this_band = src_ds.GetRasterBand(b)
+                this_arr = this_band.ReadAsArray()
+                m_band.WriteArray(this_arr)
+
+            m_ds = None
 
     return(out_mask)
 

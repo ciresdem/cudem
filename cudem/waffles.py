@@ -829,8 +829,9 @@ class WafflesLinear(WafflesSciPy):
     -----------
     Parameters:
     
-    chunk_size=[val] - size of chunks in pixels
-    chunk_buffer=[val] - size of the chunk buffer in pixels
+    chunk_size (int): size of chunks in pixels
+    chunk_step (iint):  size of chunks in pixels
+    chunk_buffer (int):  size of the chunk buffer in pixels
     """
     
     def __init__(self, **kwargs):
@@ -3465,14 +3466,6 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 ec_l_diff = abs(last_ec_diff - ec_diff)
                 utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
 
-                ## break if we gathered enough simulation errors
-                if sim >= int(self.sims): 
-                    break
-
-                ## break if the err coeff doesn't change much
-                if abs(last_ec_diff - ec_diff) < 0.01:
-                    break
-
                 ## continue if we haven't reached max_sample
                 if len(s_dp) < self.max_sample:
                     last_ec_d = ec_d
@@ -3482,6 +3475,14 @@ class InterpolationUncertainty: #(waffles.Waffle):
                 if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
                     last_ec_d = ec_d
                     continue
+                
+                ## break if we gathered enough simulation errors
+                if sim >= int(self.sims): 
+                    break
+
+                ## break if the err coeff doesn't change much
+                if abs(last_ec_diff - ec_diff) < 0.01:
+                    break
 
                 last_ec_d = ec_d
             else:

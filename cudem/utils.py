@@ -429,6 +429,20 @@ def hav_dst(pnt0, pnt1):
     
     return(rad_m*c)
 
+def wgs_inc2meter(src_inc):
+    gds_equator = 111321.543
+    degree_to_radian = lambda d: math.pi * (d / 180)
+    return(math.cos(degree_to_radian(src_inc)) * (gds_equator * src_inc))
+
+def lll(src_lat):
+    gds_equator = 111321.543
+    gds_pi = 3.14159265358979323846
+    degree_to_radian = lambda d: gds_pi * (d / 180)
+    lonl_ = math.cos(degree_to_radian(src_lat)) * gds_equator
+    latl_ = gds_equator
+
+    return(lonl_, latl_)
+
 ## ==============================================
 ##
 ## Geotransform functions
@@ -758,6 +772,19 @@ def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
 ## srcwin functions
 ##
 ## ==============================================
+
+def fix_srcwin(srcwin, xcount, ycount):
+    ## geo_transform is considered in grid-node to properly capture the region
+
+    out_srcwin = [x for x in srcwin]
+    if srcwin[0] + srcwin[2] > xcount:
+        out_srcwin[2] = xcount - srcwin[0]
+
+    if srcwin[1] + srcwin[3] > ycount:
+        out_srcwin[3] = ycount - srcwin[1]
+
+    return(tuple(out_srcwin))
+    
 
 def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     """yield source windows in n_chunks at step"""
@@ -1238,7 +1265,7 @@ class CliProgress():
         if self.verbose:
             self.thread_is_alive = False
             self.thread.join()
-            return(self.end(status=exc_value))
+            return(self.end(status=exc_value, exc_type=exc_type, exc_value=exc_value, exc_traceback=exc_traceback))
         else:
             return(True)
 
@@ -1301,13 +1328,16 @@ class CliProgress():
             self.count = self.spin_way(self.count)
             sys.stderr.flush()
     
-    def end(self, status=0, message=None):
+    def end(self, status=0, message = None, exc_type = None, exc_value = None, exc_traceback = None):
         self._init_opm()
         self._clear_stderr()
         if message is None:
             message = self.message
             
         if status != 0 and status is not None:
+            #print(exc_type)
+            #print(exc_value)
+            #print(exc_traceback)
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
             )
