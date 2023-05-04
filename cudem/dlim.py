@@ -583,7 +583,7 @@ class ElevationDataset:
 
         return(self.echo_())
 
-   def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
+    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
 
         If the inf file is not found, will attempt to generate one.
