@@ -2310,7 +2310,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                                 if 'vertical' in ept_infos['srs'].keys():
                                                     vertical_epsg = ept_infos['srs']['vertical']
                                                     horizontal_epsg = ept_infos['srs']['horizontal']
-                                                    this_epsg = 'epsg:{}+{}'.format(horizontal_epgs, vertical_epsg)
+                                                    this_epsg = 'epsg:{}+{}'.format(horizontal_epsg, vertical_epsg)
                                                     #this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
                                                 else:
                                                     # try to extract the vertical datum from the wkt

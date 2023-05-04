@@ -164,7 +164,106 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
     except Exception as e:
         utils.echo_error_msg('could not initialize data, {}'.format(e))
         return(None)
- 
+
+## ==============================================
+## INF Files
+##
+## containing information about datasets
+## {"name": "ehydro", "hash": null, "numpts": 0, "minmax": [-74.2548607, -74.2544522, 40.4681632, 40.4685116], "wkt": "POLYGON ((-74.2548607 40.4681632 0,-74.2544522 40.4681632 0,-74.2544522 40.4685116 0,-74.2548607 40.4685116 0,-74.2548607 40.4681632 0))", "format": -203}
+## ==============================================
+
+class INF:
+    def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
+                 fmt = None, srs = None):
+        self.name = name
+        self.file_hash = file_hash
+        self.numpts = numpts
+        self.minmax = minmax
+        self.wkt = wkt
+        self.fmt = fmt
+        self.srs = srs
+
+    def __str__(self):
+        return('<Dataset Info: {}>'.format(self.__dict__))
+    
+    def __repr__(self):
+        return('<Dataset Info: {}>'.format(self.__dict__))
+
+    def hash(self, fn = None, sha1 = False):
+        """generate a hash of the xyz-dataset source file"""
+
+        import hashlib
+        fn = self.name if fn is None else fn
+        BUF_SIZE = 65536
+        if sha1:
+            this_hash = hashlib.sha1()
+        else:
+            this_hash = hashlib.md5()
+            
+        try:
+            with open(fn, 'rb') as f:
+                while True:
+                    data = f.read(BUF_SIZE)
+                    if not data:
+                        break
+                    
+                    this_hash.update(data)
+
+            self.file_hash = this_has.hexdigest()
+        
+        except:
+            self.file_hash = '0'
+
+        return(self)
+        
+    def generate(self):
+        if self.name is None:
+            return(self)
+
+        this_ds = DatasetFactory(mod=self.name)
+        this_ds_mod = this_ds._acquire_module()        
+        self.fmt = this_ds.mod_name
+            
+        
+    def load_inf_file(self, inf_fn = None):
+        valid_data = False
+        data = {}
+        if inf_fn is None:
+            return(self)
+        
+        if os.path.exists(inf_fn):
+            try:
+                with open(inf_fn, 'r') as inf_ob:
+                    data = json.load(inf_ob)
+            except ValueError:
+                try:
+                    data = MBSParser(fn=inf_fn).inf_parse().infos
+                    #self.check_hash = False
+                    mb_inf = True
+                except:
+                    raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
+            except:
+                raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
+
+        
+        for ky, val in data.items():
+            if ky in self.__dict__:
+                self.__setattr__(ky, val)
+                valid_data = True
+
+        return(self)
+            
+    def write_inf_file(self, inf_fn = None):
+        if inf_fn is None:
+            if self.name is not None:
+                inf_fn = '{}.inf'.format(self.name)
+        try:
+            with open(inf_fn, 'w') as outfile:
+                json.dump(self.__dict__, outfile)
+        except:
+            raise ValueError('CUDEMFactory: Unable to write new parameter file to {}'.format(inf_fn))
+
+    
 ## ==============================================
 ## Elevation Dataset class
 ## ==============================================
@@ -483,8 +582,8 @@ class ElevationDataset:
         """format metadata from self, for use as a datalist entry."""
 
         return(self.echo_())
-    
-    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
+
+   def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
 
         If the inf file is not found, will attempt to generate one.
@@ -572,6 +671,62 @@ class ElevationDataset:
             self.infos['format'] = self.data_format
 
         return(self.infos)
+    
+    def inf_new(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
+        """read/write an inf file
+
+        If the inf file is not found, will attempt to generate one.
+        The function `generate_inf` should be defined for each specific
+        dataset sub-class.
+        """
+
+        inf_path = '{}.inf'.format(self.fn)
+        generate_inf = False
+        self.infos = INF()
+
+        ## try to parse the existing inf file as either a native inf json
+        ## or as an MB-System inf file.
+        if os.path.exists(inf_path):
+            try:
+                self.infos.load_inf_file(inf_path)
+                
+            except ValueError:
+                generate_inf = True
+                if self.verbose:
+                    utils.echo_error_msg(
+                        'failed to parse inf {}'.format(inf_path)
+                    )
+
+        ## check hash from inf file vs generated hash,
+        ## if hashes are different, then generate a new
+        ## inf file...only do this if check_hash is set
+        ## to True, as this can be time consuming and not
+        ## always necessary...
+        if check_hash:
+            generate_inf = self.infos.hash() != self.infos.file_hash
+
+        if generate_inf:
+            self.infos = self.generate_inf()
+
+        if write_inf:
+            self.infos.write_inf_file()
+
+        if recursive_check and self.parent is not None:
+            self.parent.inf(check_hash=True)
+
+        if self.infos.srs is None:
+            self.infos.srs = self.src_srs
+
+        else:
+            if self.src_srs is None:
+                self.src_srs = self.infos.srs
+
+            if self.dst_trans is not None and self.trans_region is None:
+                self.trans_region = regions.Region().from_list(self.infos.minmax)
+                self.trans_region.src_srs = self.infos.src_srs
+                self.trans_region.warp(self.dst_srs)
+
+        return(self.infos)
 
     ## todo: clean up this function, it's messy and buggy
     def set_transform(self):
@@ -587,10 +742,6 @@ class ElevationDataset:
         if self.dst_srs is not None \
            and self.src_srs is not None \
            and self.src_srs != self.dst_srs:
-            #print(self.src_srs)
-            #tmp_srs = osr.SpatialReference()
-            #tmp_srs.SetFromUserInput(self.src_srs)
-            #print(gdalfun.osr_parse_srs(tmp_srs))
             ## parse out the horizontal and vertical epsgs if they exist
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
@@ -628,15 +779,7 @@ class ElevationDataset:
                     cache_dir=self.cache_dir
                 ).run(outfile='{}.tif'.format(trans_fn))
                 utils.echo_msg('generated {}'.format(trans_fn))
-                
-                # waffles_cmd = 'waffles -R {} -E 3s -M vdatum:vdatum_in={}:vdatum_out={} -O {} -c -k -D {}'.format(
-                #     vd_region.format('str'),
-                #     src_vert,
-                #     dst_vert,
-                #     trans_fn,
-                #     self.cache_dir
-                # )
-                #if utils.run_cmd(waffles_cmd, verbose=True)[1] == 0:
+
                 if os.path.exists(trans_fn):
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
                     out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
@@ -1482,6 +1625,22 @@ class LASFile(ElevationDataset):
                         return(proj4)
                     break
             return(None)
+
+    def generate_inf_new(self, callback=lambda: False):
+        """generate an inf file for a lidar dataset."""
+        
+        this_inf = INF(name=self.fn, file_hash=self.hash(), numpts=0, fmt=self.data_format,
+                       srs=self.src_srs if self.src_srs is not None else self.get_epsg())
+
+        with lp.open(self.fn) as lasf:
+            this_inf.numpts = lasf.header.point_count
+            this_region = regions.Region(xmin=lasf.header.x_min, xmax=lasf.header.x_max,
+                                         ymin=lasf.header.y_min, ymax=lasf.header.y_max,
+                                         zmin=lasf.header.z_min, zmax=lasf.header.z_max)
+            this_inf.minmax = this_region.export_as_list(include_z=True)
+            this_inf.wkt = this_region.export_as_wkt()
+            
+        return(this_inf)
         
     def generate_inf(self, callback=lambda: False):
         """generate an inf file for a lidar dataset."""
