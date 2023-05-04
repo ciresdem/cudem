@@ -1621,15 +1621,13 @@ class LASFile(ElevationDataset):
 
             pixel_z = points.z
 
-            pixel_z = pixel_z[pixel_x < xcount]            
-            pixel_y = pixel_y[pixel_x < xcount]            
-            pixel_x = pixel_x[pixel_x < xcount]
+            # pixel_z = pixel_z[pixel_x < xcount]            
+            # pixel_y = pixel_y[pixel_x < xcount]            
+            # pixel_x = pixel_x[pixel_x < xcount]
 
-            pixel_z = pixel_z[pixel_y < ycount]
-            pixel_x = pixel_x[pixel_y < ycount]
-            pixel_y = pixel_y[pixel_y < ycount]
-
-
+            # pixel_z = pixel_z[pixel_y < ycount]
+            # pixel_x = pixel_x[pixel_y < ycount]
+            # pixel_y = pixel_y[pixel_y < ycount]
             
             # pixel_y = pixel_y[pixel_x > 0]
             # pixel_x = pixel_x[pixel_x > 0]

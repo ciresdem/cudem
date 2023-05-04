@@ -49,6 +49,7 @@ from cudem import regions
 from cudem import factory
 from cudem import FRED
 from cudem import vdatums
+from cudem import gdalfun
 
 #r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 r_headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
@@ -2303,9 +2304,20 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                             if ept_infos is None:
                                                 this_epsg = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])
                                             else:
+                                                #print(ept_infos['srs'])
                                                 ## horizontal datum is wrong in ept, most seem to be nad83
                                                 #this_epsg = 'epsg:{}+{}'.format(ept_infos['srs']['horizontal'], ept_infos['srs']['vertical'])
-                                                this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                                if 'vertical' in ept_infos['srs'].keys():
+                                                    vertical_epsg = ept_infos['srs']['vertical']
+                                                    horizontal_epsg = ept_infos['srs']['horizontal']
+                                                    this_epsg = 'epsg:{}+{}'.format(horizontal_epgs, vertical_epsg)
+                                                    #this_epsg = 'epsg:4269+{}'.format(ept_infos['srs']['vertical'])
+                                                else:
+                                                    # try to extract the vertical datum from the wkt
+                                                    #horizontal_epsg = ept_infos['srs']['horizontal']
+                                                    this_wkt = ept_infos['srs']['wkt']
+                                                    dst_horz, dst_vert = gdalfun.epsg_from_input(this_wkt)
+                                                    this_epsg = 'epsg:{}+{}'.format(dst_horz, dst_vert)
 
                                             self.results.append(
                                                 [tile_url,
