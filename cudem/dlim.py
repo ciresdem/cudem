@@ -48,7 +48,7 @@
 ##
 ## Transform data between horizontal/vertical projections/datums by setting src_srs and dst_srs as 'EPSG:<>'
 ## if src_srs is not set, but dst_srs is, dlim will attempt to obtain the source srs from the data file itself
-## or its respective inf file.
+## or its respective inf file; otherwise, it will be assumed the source data file is in the same srs as dst_srs
 ##
 ### Examples:
 ##
@@ -167,7 +167,6 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
 ## INF Files
 ##
 ## containing information about datasets
-## {"name": "ehydro", "hash": null, "numpts": 0, "minmax": [-74.2548607, -74.2544522, 40.4681632, 40.4685116], "wkt": "POLYGON ((-74.2548607 40.4681632 0,-74.2544522 40.4681632 0,-74.2544522 40.4685116 0,-74.2548607 40.4685116 0,-74.2548607 40.4681632 0))", "format": -203}
 ## ==============================================
 
 class INF:
@@ -574,27 +573,6 @@ class ElevationDataset:
                         
         return(True)
         
-    def hash(self, sha1=False):
-        """generate a hash of the xyz-dataset source file"""
-
-        import hashlib
-        BUF_SIZE = 65536
-        if sha1:
-            this_hash = hashlib.sha1()
-        else:
-            this_hash = hashlib.md5()
-            
-        try:
-            with open(self.fn, 'rb') as f:
-                while True:
-                    data = f.read(BUF_SIZE)
-                    if not data:
-                        break
-                    
-                    this_hash.update(data)
-            return(this_hash.hexdigest())
-        except: return('0')
-
     def format_entry(self, sep=' '):
         dl_entry = sep.join([str(x) for x in [self.fn, '{}:{}'.format(self.data_format, factory.dict2args(self.params['mod_args'])), self.weight, self.uncertainty]])
         metadata = self.echo_()
@@ -626,95 +604,6 @@ class ElevationDataset:
         """format metadata from self, for use as a datalist entry."""
 
         return(self.echo_())
-
-    def inf_old(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
-        """read/write an inf file
-
-        If the inf file is not found, will attempt to generate one.
-        The function `generate_inf` should be defined for each specific
-        dataset sub-class.
-        """
-
-        inf_path = '{}.inf'.format(self.fn)
-        mb_inf = False
-        self.infos = {}
-
-        ## try to parse the existing inf file as either a native inf json
-        ## or as an MB-System inf file.
-        if os.path.exists(inf_path):
-            try:
-                with open(inf_path) as i_ob:
-                    self.infos = json.load(i_ob)
-            except ValueError:
-                try:
-                    self.infos = MBSParser(
-                        fn=self.fn, src_srs=self.src_srs).inf_parse().infos
-                    self.check_hash = False
-                    mb_inf = True
-                except:
-                    if self.verbose:
-                        utils.echo_error_msg(
-                            'failed to parse inf {}'.format(inf_path)
-                        )
-            except:
-                if self.verbose:
-                    utils.echo_error_msg(
-                        'failed to parse inf {}'.format(inf_path)
-                    )
-
-        ## check has from inf file vs generated hash,
-        ## if hashes are different, then generate a new
-        ## inf file...only do this if check_hash is set
-        ## to True, as this can be time consuming and not
-        ## always necessary...
-        if check_hash:
-            if 'hash' in self.infos.keys():
-                gen_inf = self.hash() != self.infos['hash']
-            else:
-                gen_inf = True
-                
-        elif not mb_inf:
-            gen_inf = 'hash' not in self.infos.keys() or 'wkt' not in self.infos.keys()
-        else:
-            gen_inf = False
-
-        ## generate a new inf file if it was deemed necessary.
-        if gen_inf: # and not self.remote:
-            #self.infos = self.generate_inf(None if not self.verbose else _prog.update)
-            self.infos = self.generate_inf()
-            if self.infos is not None:
-                if 'minmax' in self.infos:
-                    if self.infos['minmax'] is not None:
-                        if write_inf:
-                            try:
-                                with open('{}.inf'.format(self.fn), 'w') as inf:
-                                    inf.write(json.dumps(self.infos))
-                            except:
-                                pass
-
-                if recursive_check and self.parent is not None:
-                    self.parent.inf(check_hash=True)
-
-            else:
-                sys.exit(-1)    
-
-        ## set the srs information
-        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
-            self.infos['src_srs'] = self.src_srs
-        else:
-            if self.src_srs is None:
-                self.src_srs = self.infos['src_srs']
-                
-            if self.dst_trans is not None:
-                if self.trans_region is None:
-                    self.trans_region = regions.Region().from_list(self.infos['minmax'])
-                    self.trans_region.src_srs = self.infos['src_srs']
-                    self.trans_region.warp(self.dst_srs)
-                    
-        if 'format' not in self.infos.keys():
-            self.infos['format'] = self.data_format
-
-        return(self.infos)
     
     def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
