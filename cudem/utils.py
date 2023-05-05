@@ -65,6 +65,7 @@ import cudem
 #cudem_cache = os.path.join(os.path.expanduser('~'), '.cudem_cache')
 #cudem_cache = os.path.abspath('./.cudem_cache')
 cudem_cache = lambda: os.path.abspath('./.cudem_cache')
+os.system("")
 
 ## heaps of thanks to https://github.com/fitnr/stateplane
 FIPS_TO_EPSG = {
