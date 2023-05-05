@@ -2317,7 +2317,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                                     #horizontal_epsg = ept_infos['srs']['horizontal']
                                                     this_wkt = ept_infos['srs']['wkt']
                                                     dst_horz, dst_vert = gdalfun.epsg_from_input(this_wkt)
-                                                    this_epsg = 'epsg:{}+{}'.format(dst_horz, dst_vert)
+                                                    this_epsg = '{}+{}'.format(dst_horz, dst_vert)
 
                                             self.results.append(
                                                 [tile_url,

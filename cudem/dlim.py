@@ -896,8 +896,8 @@ class ElevationDataset:
                     dlf.write(
                         '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
                             name=os.path.join(*(this_dir + [this_dir[-1]])),
-                            weight = self.data_lists[x]['parent'].weight,
-                            uncertainty = self.data_lists[x]['parent'].uncertainty,
+                            weight = utils.float_or(self.data_lists[x]['parent'].weight, 1),
+                            uncertainty = utils.float_or(self.data_lists[x]['parent'].uncertainty, 0),
                             #weight = 1 if self.weight is None else self.weight,
                             #uncertainty = 0 if self.uncertainty is None else self.uncertainty,
                             metadata = self.data_lists[x]['parent'].format_metadata()
@@ -3102,6 +3102,13 @@ class Fetcher(ElevationDataset):
         
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
+
+        src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
+
+        self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
+                         'data_type':self.fetch_module.data_format, 'resolution':None, 'hdatum':src_horz,
+                         'vdatum':src_vert, 'url':None}
+        
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
