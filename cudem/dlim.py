@@ -710,7 +710,7 @@ class ElevationDataset:
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(trans_fn):
                     with utils.CliProgress(
-                            message='generating vertical transformation grid from {} to {} for {}'.format(src_vert, dst_vert, self.region)
+                            message='generating vertical transformation grid {} from {} to {}'.format(trans_fn, src_vert, dst_vert)
                     ) as pbar:
                         trans_fn = vdatums.VerticalTransform(
                             vd_region, '3s', '3s', src_vert, dst_vert,
@@ -3103,8 +3103,9 @@ class Fetcher(ElevationDataset):
         )._acquire_module()
         if self.fetch_module is None:
             pass
+        
         self.check_size=True
-        cache_dir=self.fetch_module._outdir
+        self.cache_dir=self.fetch_module._outdir
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
