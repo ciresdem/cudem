@@ -1246,7 +1246,8 @@ class ElevationDataset:
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)            
+            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            ## remove the nans before looping!
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
@@ -3102,10 +3103,11 @@ class Fetcher(ElevationDataset):
         
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
-        src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
-        self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
-                         'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
-                         'vdatum':src_vert, 'url':None}
+        ## breaks when things not set...
+        # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
+        # self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
+        #                  'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
+        #                  'vdatum':src_vert, 'url':None}
         
         
     def generate_inf(self, callback=lambda: False):
