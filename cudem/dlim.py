@@ -715,9 +715,9 @@ class ElevationDataset:
                         trans_fn = vdatums.VerticalTransform(
                             vd_region, '3s', '3s', src_vert, dst_vert,
                             cache_dir=self.cache_dir,
-                            verbose=False
+                            verbose=True
                         ).run(outfile=trans_fn)
-                        assert os.path.exists(tans_fn)
+                        assert os.path.exists(trans_fn)
 
                 if os.path.exists(trans_fn):
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
