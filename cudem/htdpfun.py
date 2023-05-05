@@ -100,8 +100,9 @@ class HTDP:
         fd = open(filename)
         grid = np.zeros(shape)
 
-        for i in range(5):
-          utils.echo_msg(fd.readline().rstrip())
+        if self.verbose:
+            for i in range(5):
+                utils.echo_msg(fd.readline().rstrip())
 
         points_found = 0
         ptuple = self._next_point(fd)

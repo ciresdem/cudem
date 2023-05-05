@@ -2994,7 +2994,7 @@ https://www.pgc.umn.edu/data/arcticdem/
                 v_shp = v
                 break
 
-        utils.run_cmd('ogr2ogr arctic_tmp.shp {} -t_srs epsg:4326'.format(v_shp), verbose=True)
+        utils.run_cmd('ogr2ogr arctic_tmp.shp {} -t_srs epsg:4326'.format(v_shp), verbose=self.verbose)
         utils.remove_glob(v_zip, *v_shps)
         v_shp = 'arctic_tmp.shp'
         v_shps = ['arctic_tmp.shp','arctic_tmp.dbf','arctic_tmp.shx','arctic_tmp.prj']

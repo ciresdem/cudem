@@ -278,8 +278,8 @@ class VerticalTransform:
 
         from cudem import waffles
 
-        v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in)
-        v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out)
+        v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
+        v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
         v_out._outdir = self.cache_dir
@@ -296,18 +296,9 @@ class VerticalTransform:
             #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
-                _trans_in = waffles.WaffleFactory(
-                    #mod = 'gmt-surface',
-                    mod = 'IDW',
-                    data = ['vdatum:datatype={}'.format(vdatum_tidal_in)],
-                    src_region = self.src_region,
-                    xinc = self.src_x_inc,
-                    yinc = self.src_y_inc,
-                    name = '{}'.format(vdatum_tidal_in),
-                    dst_srs='epsg:4326',
-                    node = 'pixel',
-                    verbose = True
-                )._acquire_module()
+                _trans_in = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
+                                                  xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
+                                                  dst_srs='epsg:4326', node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
 
@@ -332,18 +323,9 @@ class VerticalTransform:
         else:
             if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
 
-                _trans_out = waffles.WaffleFactory(
-                    #mod = 'gmt-surface',
-                    mod = 'IDW',
-                    data = ['vdatum:datatype={}'.format(vdatum_tidal_out)],
-                    src_region = self.src_region,
-                    xinc = self.src_x_inc,
-                    yinc = self.src_y_inc,
-                    name = '{}'.format(vdatum_tidal_out),
-                    dst_srs='epsg:4326',
-                    node = 'pixel',
-                    verbose = True
-                )._acquire_module()
+                _trans_out = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
+                                                   xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
+                                                   node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_out.initialize()
                 _trans_out.generate()
 
@@ -378,11 +360,11 @@ class VerticalTransform:
         
         if epsg is not None:
             cdn_results = fetches.search_proj_cdn(
-                self.src_region, epsg=epsg, cache_dir=self.cache_dir
+                self.src_region, epsg=epsg, cache_dir=self.cache_dir, verbose=self.verbose
             )
         else:
             cdn_results = fetches.search_proj_cdn(
-                self.src_region, cache_dir=self.cache_dir
+                self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
         for _result in cdn_results:
@@ -416,7 +398,7 @@ class VerticalTransform:
                                     self.src_region.format('te'),
                                     self.xcount,
                                     self.ycount,
-                                ), verbose=True
+                                ), verbose=self.verbose
                             )
                             
                             _tmp_array, _tmp_infos = gdalfun.gdal_get_array(
@@ -432,13 +414,15 @@ class VerticalTransform:
                             return(_tmp_array, src_code)
 
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
+            
         return(np.zeros( (self.ycount, self.xcount) ), epsg)
             
     def _htdp_transform(self, epsg_in, epsg_out):
         """create an htdp transformation grid"""
 
-        htdp = htdpfun.HTDP()
-        utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
+        htdp = htdpfun.HTDP(verbose=self.verbose)
+        if self.verbose:
+            utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
 
         griddef = (self.src_region.xmax, self.src_region.ymax,
                    self.src_region.xmin, self.src_region.ymin,
@@ -494,6 +478,7 @@ class VerticalTransform:
                     epsg_in = cv
             else:
                 utils.echo_error_msg('failed to locate transformation between {} and {}'.format(epsg_in, epsg_out))
+                    
                 tmp_trans = np.zeros( (self.ycount, self.xcount) )
                 epsg_in = epsg_out
 
@@ -503,18 +488,16 @@ class VerticalTransform:
         return(trans_array)
     
     def run(self, outfile='trans_grid.tif'):
-        # if self.verbose:
-        #     utils.echo_msg(self.xcount, self.ycount)
-        #     utils.echo_msg(self.src_region)
-        #     utils.echo_msg(self.src_x_inc, self.src_y_inc)
-        #     utils.echo_msg(self.cache_dir)
-
+        
         if os.path.exists(outfile):
-            utils.echo_warning_msg('{} exists, skipping...'.format(outfile))
+            if self.verbose:
+                utils.echo_warning_msg('{} exists, skipping...'.format(outfile))
+                
             return(outfile)
         
         if self.epsg_in is None or self.epsg_out is None:
             utils.echo_error_msg('failed to parse vertical input or output, check inputs')
+                
             return(None)
         else:
             trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)
@@ -817,7 +800,7 @@ def vdatums_cli(argv = sys.argv):
                 src_region.format('te'),
                 src_infos['nx'],
                 src_infos['ny'],
-                out_h), verbose=True)
+                out_h), verbose=self.verbose)
             
             # utils.run_cmd(
             #     'gdalwarp {} {} -te {} -tr {} {} -s_srs epsg:4326 -t_srs {} -co COMPRESS=LZW -co TILED=YES -co PREDICTOR=3'.format(

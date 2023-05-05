@@ -174,10 +174,12 @@ class INF:
                  fmt = None, src_srs = None):
         self.name = name
         self.file_hash = file_hash
+        self.hash = hash
         self.numpts = numpts
         self.minmax = minmax
         self.wkt = wkt
         self.fmt = fmt
+        self.format = fmt
         self.src_srs = src_srs
 
     def __str__(self):
@@ -186,7 +188,7 @@ class INF:
     def __repr__(self):
         return('<Dataset Info: {}>'.format(self.__dict__))
 
-    def hash(self, fn = None, sha1 = False):
+    def generate_hash(self, fn = None, sha1 = False):
         """generate a hash of the xyz-dataset source file"""
 
         import hashlib
@@ -636,7 +638,7 @@ class ElevationDataset:
         ## to True, as this can be time consuming and not
         ## always necessary...
         if check_hash:
-            generate_inf = self.infos.hash() != self.infos.file_hash
+            generate_inf = self.infos.generate_hash() != self.infos.file_hash
 
         if self.remote:
             generate_inf = False
@@ -672,49 +674,50 @@ class ElevationDataset:
         transforming all the data in this dataset...including vertical
         transformations.
         """
-        
+
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
-        if self.dst_srs is not None \
-           and self.src_srs is not None \
-           and self.src_srs != self.dst_srs:
+        if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             ## parse out the horizontal and vertical epsgs if they exist
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
-            #print(src_horz_epsg, src_vert_epsg)
+
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(src_horz)
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(dst_horz)
+            
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
-            if dst_vert is not None \
-               and src_vert is not None \
-               and dst_vert != src_vert:
+            if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
                 vd_region = regions.Region(
                     src_srs=src_srs.ExportToProj4()
                 ).from_list(
-                    self.infos['minmax']
+                    self.infos.minmax
                 ).warp(
                     dst_srs.ExportToProj4()
                 ) if self.region is None else self.region.copy()
 
-                ## use cudem.vdatums instead!
                 vd_region.buffer(pct=2)
-                trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}'.format(
+                trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
                     dst_vert,
                     vd_region.format('fn')
                 ))
-
-                #if not os.path.exists('{}.tif'.format(trans_fn)):
-                trans_fn = vdatums.VerticalTransform(
-                    vd_region, '3s', '3s', src_vert, dst_vert,
-                    cache_dir=self.cache_dir
-                ).run(outfile='{}.tif'.format(trans_fn))
-                utils.echo_msg('generated {}'.format(trans_fn))
+                
+                ## vertical transformation grid is generated in WGS84
+                if not os.path.exists(trans_fn):
+                    with utils.CliProgress(
+                            message='generating vertical transformation grid from {} to {} for {}'.format(src_vert, dst_vert, self.region)
+                    ) as pbar:
+                        trans_fn = vdatums.VerticalTransform(
+                            vd_region, '3s', '3s', src_vert, dst_vert,
+                            cache_dir=self.cache_dir,
+                            verbose=False
+                        ).run(outfile=trans_fn)
+                        #utils.echo_msg('generated {}'.format(trans_fn))
 
                 if os.path.exists(trans_fn):
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
@@ -753,17 +756,16 @@ class ElevationDataset:
             self.src_trans_srs = out_src_srs
             self.dst_trans_srs = out_dst_srs
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
-            #print(self.src_srs, self.dst_srs)
-            #print(out_src_srs, out_dst_srs)
             if self.region is not None: # and self.region.src_srs != self.src_srs:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
                 self.trans_region.warp(out_src_srs)
                 self.trans_region.src_srs = out_src_srs
             else:
-                self.trans_region = regions.Region().from_string(self.infos['wkt'])
+                self.trans_region = regions.Region().from_string(self.infos.wkt)
                 self.trans_region.src_srs = self.src_srs
                 self.trans_region.warp(self.dst_srs)
+                
             src_osr_srs = dst_osr_srs = None
             
     def parse_json(self):
@@ -1355,9 +1357,6 @@ class XYZFile(ElevationDataset):
         self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
            or self.x_offset != 0 or self.y_offset != 0 else False
 
-        #if self.src_srs is not None:
-        #    self.set_transform()        
-
     def line_delim(self, xyz_line):
         """guess a line delimiter"""
 
@@ -1734,20 +1733,10 @@ class GDALFile(ElevationDataset):
         if self.region is not None:
             self.warp_region = self.region.copy()
         else:
-            self.warp_region = regions.Region().from_list(self.infos['minmax'])
+            self.warp_region = regions.Region().from_list(self.infos.minmax)
             if self.dst_trans is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
-
-        # if self.region.src_srs != self.src_srs:
-        #     #if not regions.regions_within_ogr_p(self.warp_region, self.region) or self.invert_region:
-        #     #    self.warp_region = self.region.copy()
-        #     #else:
-        #     if regions.regions_within_ogr_p(self.warp_region, self.region):
-        #         self.warp_region.cut(self.region, self.x_inc, self.y_inc)
-                
-        #     if self.dst_trans is not None:
-        #         self.dst_trans = None
 
         ## resample/warp src gdal file to specified x/y inc/dst_trans respectively
         if self.resample_and_warp:
@@ -2180,17 +2169,17 @@ class BAGFile(ElevationDataset):
 
         if self.region is not None and self.region.valid_p():
             bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-            inf_region = regions.Region().from_list(self.infos['minmax'])
+            inf_region = regions.Region().from_list(self.infos.minmax)
             bag_region = regions.regions_reduce(bag_region, inf_region)
-            bag_region.src_srs = self.infos['src_srs']
+            bag_region.src_srs = self.infos.src_srs
             
             oo.append('MINX={}'.format(bag_region.xmin))
             oo.append('MAXX={}'.format(bag_region.xmax))
             oo.append('MINY={}'.format(bag_region.ymin))
             oo.append('MAXY={}'.format(bag_region.ymax))
         else:
-            bag_region = regions.Region().from_list(self.infos['minmax'])
-            bag_region.src_srs = self.infos['src_srs']
+            bag_region = regions.Region().from_list(self.infos.minmax)
+            bag_region.src_srs = self.infos.src_srs
 
         if self.dst_trans is not None:
             bag_region.warp(self.dst_srs)
@@ -2268,7 +2257,7 @@ class MBSParser(ElevationDataset):
         self.mb_exclude = mb_exclude
              
     def inf_parse(self):
-        self.infos['minmax'] = [0,0,0,0,0,0]
+        self.infos.minmax = [0,0,0,0,0,0]
         this_row = 0
         dims = []
         with open('{}.inf'.format(self.fn)) as iob:
@@ -2693,7 +2682,7 @@ class Datalist(ElevationDataset):
         self.region = None
         out_regions = []
         out_srs = []
-        self.infos.file_hash = self.infos.hash()
+        self.infos.file_hash = self.infos.generate_hash()
         
         ## attempt to generate a datalist-vector geojson and
         ## if successful, fill it wil the datalist entries, using `parse`
@@ -2801,6 +2790,7 @@ class Datalist(ElevationDataset):
                     if w_region[0] is not None:
                         if float(feat.GetField('weight')) < w_region[0]:
                             continue
+                        
                     if w_region[1] is not None:
                         if float(feat.GetField('weight')) > w_region[1]:
                             continue
@@ -2809,6 +2799,7 @@ class Datalist(ElevationDataset):
                     if u_region[0] is not None:
                         if float(feat.GetField('uncertainty')) < u_region[0]:
                             continue
+                        
                     if u_region[1] is not None:
                         if float(feat.GetField('uncertainty')) > u_region[1]:
                             continue
@@ -2845,7 +2836,6 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            #status = -1
             utils.echo_warning_msg('could not load datalist-vector json, falling back to parse')
             for ds in self.parse():
                 yield(ds)
@@ -2967,7 +2957,7 @@ class ZIPlist(ElevationDataset):
         self.region = None
         out_regions = []
         out_srs = []
-        self.infos.file_hash = self.infos.hash()
+        self.infos.file_hash = self.infos.generate_hash()
         for entry in self.parse():
             if self.verbose:
                 callback()
@@ -3041,12 +3031,12 @@ class ZIPlist(ElevationDataset):
                 if self.region is not None and self.region.valid_p(check_xy=True):
                     try:
                         inf_region = regions.Region().from_string(
-                            data_set.infos['wkt']
+                            data_set.infos.wkt
                         )
                     except:
                         try:
                             inf_region = regions.Region().from_list(
-                                data_set.infos['minmax']
+                                data_set.infos.minmax
                             )
                         except:
                             inf_region = self.region.copy()
@@ -3107,7 +3097,6 @@ class Fetcher(ElevationDataset):
     
     def __init__(self, **kwargs):
         super().__init__(remote=True, **kwargs)
-        #print(self.fn)
         self.metadata['name'] = self.fn
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.cache_dir
@@ -3115,6 +3104,7 @@ class Fetcher(ElevationDataset):
         if self.fetch_module is None:
             pass
         self.check_size=True
+        cache_dir=self.fetch_module._outdir
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
@@ -3156,7 +3146,6 @@ class Fetcher(ElevationDataset):
 class GMRTFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        #self.__doc__ = self.fetch_module.__doc__
 
     def set_ds(self, result):
         with gdalfun.gdal_datasource(result[1], update = 1) as src_ds:
@@ -3294,12 +3283,6 @@ class MarGravFetcher(Fetcher):
         if self.rasterize:
             from cudem import waffles
             mar_grav_fn = utils.make_temp_fn('mar_grav')
-            # mar_grav_fn = os.path.join(
-            #     self.cache_dir,
-            #     utils.append_fn(
-            #         'mar_grav', self.region, self.x_inc
-            #     )
-            # )
             _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(result[1])],
                                             src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'),
                                             name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()
@@ -3330,11 +3313,6 @@ class HydroNOSFetcher(Fetcher):
             bag_fns = utils.p_unzip(result[1], exts=['bag'], outdir=self.fetch_module._outdir)
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
-                    # with gdalfun.gdal_datasource(bag_fn) as bag_ds:
-                    #     bag_srs = bag_ds.GetSpatialRef()
-                    #     bag_srs.AutoIdentifyEPSG()
-                    #     bag_srs.SetAuthority('VERT_CS', 'EPSG', 5866)
-                    
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
@@ -3403,11 +3381,6 @@ class eHydroFetcher(Fetcher):
             src_epsg = self.find_epsg(src_region)
             src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
-                # usace_ds = XYZFile(fn=src_usace, data_format=168, x_scale=.3048, y_scale=.3048,
-                #                    src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                #                    x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                #                    parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                #                    cache_dir = self.fetch_module._outdir, verbose=self.verbose)
                 usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048',
                                           src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
                                           x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
@@ -3508,7 +3481,7 @@ class VDatumFetcher(Fetcher):
     def yield_ds(self, result):
         v_gtx = utils.p_f_unzip(result[1], [result[2]], outdir=self.fetch_module._outdir)
         src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
-        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=True)
+        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=self.verbose)
         yield(DatasetFactory(mod=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
@@ -3600,8 +3573,6 @@ class DatasetFactory(factory.CUDEMFactory):
                     
                 self.kwargs['data_format'] = self.mod_name
 
-            #self.kwargs['weight'] = self.set_default_weight()
-            #self.kwargs['uncertainty'] = self.set_default_uncertainty()
             # inherit metadata from parent if available
             self.kwargs['metadata'] = {}
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
@@ -3782,9 +3753,6 @@ class DatasetFactory(factory.CUDEMFactory):
         else:
             self.kwargs['metadata']['url'] = entry[11]
         
-        #self.kwargs['data_format'] = entry[1]
-        #self.guess_data_format()
-        #return(self)
         return(self.mod_name, self.mod_args)
 
     def set_default_weight(self):
@@ -3795,11 +3763,7 @@ class DatasetFactory(factory.CUDEMFactory):
     
     def guess_data_format(self, fn):
         """guess a data format based on the file-name"""
-
-        # if self.data_format is not None:
-        #     return
         
-        #if self.fn is not None:
         for key in self._modules.keys():
             if fn.split('.')[-1] in self._modules[key]['fmts']:
                 return(key)
@@ -3807,17 +3771,6 @@ class DatasetFactory(factory.CUDEMFactory):
     def write_parameter_file(self, param_file: str):
         try:
             with open(param_file, 'w') as outfile:
-                # params = self.__dict__.copy()
-                # t = self
-                # while True:
-                #     if t.__dict__['parent'] is not None:
-                #         t = t.__dict__['parent']
-
-                #     else:
-                #         ...
-                        
-                    
-                # params['parent'] = self.__dict__['parent'].params()                    
                 json.dump(self.__dict__, outfile)
                 utils.echo_msg('New DatasetFactory file written to {}'.format(param_file))
                 
