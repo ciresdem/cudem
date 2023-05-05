@@ -174,14 +174,14 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
 
 class INF:
     def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
-                 fmt = None, srs = None):
+                 fmt = None, src_srs = None):
         self.name = name
         self.file_hash = file_hash
         self.numpts = numpts
         self.minmax = minmax
         self.wkt = wkt
         self.fmt = fmt
-        self.srs = srs
+        self.src_srs = src_srs
 
     def __str__(self):
         return('<Dataset Info: {}>'.format(self.__dict__))
@@ -206,15 +206,15 @@ class INF:
                     data = f.read(BUF_SIZE)
                     if not data:
                         break
-                    
+
                     this_hash.update(data)
 
-            self.file_hash = this_has.hexdigest()
+            self.file_hash = this_hash.hexdigest()
         
         except:
             self.file_hash = '0'
 
-        return(self)
+        return(self.file_hash)
         
     def generate(self):
         if self.name is None:
@@ -261,8 +261,7 @@ class INF:
             with open(inf_fn, 'w') as outfile:
                 json.dump(self.__dict__, outfile)
         except:
-            raise ValueError('CUDEMFactory: Unable to write new parameter file to {}'.format(inf_fn))
-
+            pass
     
 ## ==============================================
 ## Elevation Dataset class
@@ -343,13 +342,14 @@ class ElevationDataset:
         self.cache_dir = cache_dir # cache_directory
         self.verbose = verbose # be verbose
         self.remote = remote # dataset is remote
+        self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
         self.params = params # the factory parameters
         if not self.params:
             self.params['kwargs'] = self.__dict__.copy()
             self.params['mod'] = self.fn
             self.params['mod_name'] = self.data_format
             self.params['mod_args'] = {}
-            
+
         #factory._set_params(self, mod=self.fn, mod_name=self.data_format) # set up the default factory parameters
         
     def __str__(self):
@@ -372,7 +372,7 @@ class ElevationDataset:
         self.data_entries = [] # 
         self.data_lists = {} #
         self.cache_dir = utils.cudem_cache() if self.cache_dir is None else self.cache_dir # cache directory
-
+        
         if self.sample_alg not in self.gdal_sample_methods: 
             utils.echo_warning_msg(
                 '{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(
@@ -385,7 +385,7 @@ class ElevationDataset:
             self.remote = True
                         
         if self.valid_p():
-            self.inf(check_hash=True if self.data_format == -1 else False)
+            self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
             self.set_transform()
 
@@ -393,8 +393,57 @@ class ElevationDataset:
     
     def generate_inf(self, callback=lambda: False):
         """set in dataset"""
-        
-        raise(NotImplementedError)
+
+    def generate_inf(self, callback=lambda: False):
+        """generate an inf file for the data source. this is generic and
+        will parse through all the data via yield_xyz to get point count
+        and region. if the datasource has a better way to do this, such as
+        with las/gdal files, re-define this function in its respective
+        dataset sub-class.
+
+        todo: hull for wkt
+        ## todo: put qhull in a yield and perform while scanning for min/max
+        # try:
+        #     out_hull = [pts[i] for i in ConvexHull(
+        #         pts, qhull_options='Qt'
+        #     ).vertices]
+        #     out_hull.append(out_hull[0])
+        #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
+        # except:
+        #     ...
+        """
+
+        _region = self.region
+        self.region = None
+        this_region = regions.Region()
+        point_count = 0
+        for point_count, point in enumerate(self.yield_xyz()):
+            if point_count == 0:
+                this_region.from_list([point.x, point.x, point.y, point.y, point.z, point.z])
+            else:
+                if point.x < this_region.xmin:
+                    this_region.xmin = point.x
+                elif point.x > this_region.xmax:
+                    this_region.xmax = point.x
+                    
+                if point.y < this_region.ymin:
+                    this_region.ymin = point.y
+                elif point.y > this_region.ymax:
+                    this_region.ymax = point.y
+                    
+                if point.z < this_region.zmin:
+                    this_region.zmin = point.z
+                elif point.z > this_region.zmax:
+                    this_region.zmax = point.z
+                
+        self.infos.numpts = point_count
+        if point_count > 0:
+            self.infos.minmax = this_region.export_as_list(include_z=True)
+            self.infos.wkt = this_region.export_as_wkt()
+            
+        self.infos.src_srs = self.src_srs
+        self.region = _region
+        return(self.infos)
     
     def yield_xyz(self):
         """set in dataset"""
@@ -583,7 +632,7 @@ class ElevationDataset:
 
         return(self.echo_())
 
-    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
+    def inf_old(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
 
         If the inf file is not found, will attempt to generate one.
@@ -672,7 +721,7 @@ class ElevationDataset:
 
         return(self.infos)
     
-    def inf_new(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
+    def inf(self, check_hash=False, recursive_check=False, write_inf=True, **kwargs):
         """read/write an inf file
 
         If the inf file is not found, will attempt to generate one.
@@ -682,10 +731,8 @@ class ElevationDataset:
 
         inf_path = '{}.inf'.format(self.fn)
         generate_inf = False
-        self.infos = INF()
 
-        ## try to parse the existing inf file as either a native inf json
-        ## or as an MB-System inf file.
+        ## try to parse the existing inf file as either a native inf json file
         if os.path.exists(inf_path):
             try:
                 self.infos.load_inf_file(inf_path)
@@ -696,6 +743,8 @@ class ElevationDataset:
                     utils.echo_error_msg(
                         'failed to parse inf {}'.format(inf_path)
                     )
+        else:
+            generate_inf = True        
 
         ## check hash from inf file vs generated hash,
         ## if hashes are different, then generate a new
@@ -705,21 +754,24 @@ class ElevationDataset:
         if check_hash:
             generate_inf = self.infos.hash() != self.infos.file_hash
 
+        if self.remote:
+            generate_inf = False
+            
         if generate_inf:
             self.infos = self.generate_inf()
 
-        if write_inf:
-            self.infos.write_inf_file()
+            if write_inf:
+                self.infos.write_inf_file()
 
         if recursive_check and self.parent is not None:
             self.parent.inf(check_hash=True)
 
-        if self.infos.srs is None:
-            self.infos.srs = self.src_srs
+        if self.infos.src_srs is None:
+            self.infos.src_srs = self.src_srs
 
         else:
             if self.src_srs is None:
-                self.src_srs = self.infos.srs
+                self.src_srs = self.infos.src_srs
 
             if self.dst_trans is not None and self.trans_region is None:
                 self.trans_region = regions.Region().from_list(self.infos.minmax)
@@ -865,10 +917,10 @@ class ElevationDataset:
         
         if self.region is not None:
             try:
-                inf_region = regions.Region().from_string(self.infos['wkt'])
+                inf_region = regions.Region().from_string(self.infos.wkt)
             except:
                 try:
-                    inf_region = regions.Region().from_list(self.infos['minmax'])
+                    inf_region = regions.Region().from_list(self.infos.minmax)
                 except:
                     inf_region = self.region.copy()
                 
@@ -940,63 +992,70 @@ class ElevationDataset:
             
         self.parse_data_lists() # parse the datalist into a dictionary
         self.archive_datalist = '{}.datalist'.format(a_name)
-        with open('{}.datalist'.format(a_name), 'w') as dlf:
-            for x in self.data_lists.keys():
-                utils.echo_msg(self.data_lists[x])
+        with utils.CliProgress(message='archiving {} datasets'.format(len(self.data_lists.keys())), total=len(self.data_lists.keys())) as pbar:
+            with open('{}.datalist'.format(a_name), 'w') as dlf:
+                for x in self.data_lists.keys():
+                    pbar.update()
+                    #utils.echo_msg(self.data_lists[x])
 
-                x_name = utils.fn_basename2(os.path.basename(x.split(':')[0])) if self.data_lists[x]['parent'].remote else os.path.basename(x)
-                if self.region is None:
-                    a_dir = '{}_{}'.format(x_name, utils.this_year())
-                else:
-                    a_dir = '{}_{}_{}'.format(x_name, self.region.format('fn'), utils.this_year())
-                    
-                this_dir = xdl2dir(self.data_lists[x]['parent'])
-                this_dir.append(a_dir)
-                tmp_dir = this_dir
-                dlf.write(
-                    '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
-                        name=os.path.join(*(this_dir + [this_dir[-1]])),
-                        weight = self.data_lists[x]['parent'].weight,
-                        uncertainty = self.data_lists[x]['parent'].uncertainty,
-                        #weight = 1 if self.weight is None else self.weight,
-                        #uncertainty = 0 if self.uncertainty is None else self.uncertainty,
-                        metadata = self.data_lists[x]['parent'].format_metadata()
+                    x_name = utils.fn_basename2(os.path.basename(x.split(':')[0])) if self.data_lists[x]['parent'].remote else os.path.basename(x)
+                    if self.region is None:
+                        a_dir = '{}_{}'.format(x_name, utils.this_year())
+                    else:
+                        a_dir = '{}_{}_{}'.format(x_name, self.region.format('fn'), utils.this_year())
+
+                    this_dir = xdl2dir(self.data_lists[x]['parent'])
+                    this_dir.append(a_dir)
+                    tmp_dir = this_dir
+                    dlf.write(
+                        '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+                            name=os.path.join(*(this_dir + [this_dir[-1]])),
+                            weight = self.data_lists[x]['parent'].weight,
+                            uncertainty = self.data_lists[x]['parent'].uncertainty,
+                            #weight = 1 if self.weight is None else self.weight,
+                            #uncertainty = 0 if self.uncertainty is None else self.uncertainty,
+                            metadata = self.data_lists[x]['parent'].format_metadata()
+                        )
                     )
-                )
-                this_dir = os.path.join(os.getcwd(), *this_dir)
-                if not os.path.exists(this_dir):
-                    os.makedirs(this_dir)
-                    
-                with open(
-                        os.path.join(
-                            this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
-                ) as sub_dlf:
-                    for xyz_dataset in self.data_lists[x]['data']:
-                        xyz_dataset.verbose=self.verbose
-                        if xyz_dataset.remote == True:
-                            ## we will want to split remote datasets into individual files if needed...
-                            sub_xyz_path = '{}_{}.xyz'.format(utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn'))
-                        elif len(xyz_dataset.fn.split('.')) > 1:
-                            xyz_ext = xyz_dataset.fn.split('.')[-1]
-                            sub_xyz_path = '.'.join(
-                                [utils.fn_basename(
-                                    utils.slugify(
-                                        os.path.basename(xyz_dataset.fn)
-                                    ),
-                                    xyz_dataset.fn.split('.')[-1]),
-                                 'xyz']
-                            )
-                        else:
-                            sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(xyz_dataset.fn)), 'xyz'])
+                    this_dir = os.path.join(os.getcwd(), *this_dir)
+                    if not os.path.exists(this_dir):
+                        os.makedirs(this_dir)
 
-                        this_xyz_path = os.path.join(this_dir, sub_xyz_path)
-                        sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))            
-                        with open(this_xyz_path, 'w') as xp:
-                            for this_xyz in xyz_dataset.xyz_yield: # data will be processed independently of each other
-                                #yield(this_xyz) # don't need to yield data here.
-                                this_xyz.dump(include_w=True if self.weight is not None else False,
-                                              include_u=True if self.uncertainty is not None else False,
-                                              dst_port=xp, encode=False)
+
+                    with open(
+                            os.path.join(
+                                this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
+                    ) as sub_dlf:
+                        for xyz_dataset in self.data_lists[x]['data']:
+                            pbar.update()
+                            xyz_dataset.verbose=self.verbose
+                            if xyz_dataset.remote == True:
+                                sub_xyz_path = '{}_{}.xyz'.format(utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn'))
+                            elif len(xyz_dataset.fn.split('.')) > 1:
+                                xyz_ext = xyz_dataset.fn.split('.')[-1]
+                                sub_xyz_path = '.'.join(
+                                    [utils.fn_basename(
+                                        utils.slugify(
+                                            os.path.basename(xyz_dataset.fn)
+                                        ),
+                                        xyz_dataset.fn.split('.')[-1]),
+                                     'xyz']
+                                )
+                            else:
+                                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(xyz_dataset.fn)), 'xyz'])
+
+                            this_xyz_path = os.path.join(this_dir, sub_xyz_path)
+                            sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))            
+                            with open(this_xyz_path, 'w') as xp:
+                                for this_xyz in xyz_dataset.xyz_yield: # data will be processed independently of each other
+                                    #yield(this_xyz) # don't need to yield data here.
+                                    this_xyz.dump(include_w=True if self.weight is not None else False,
+                                                  include_u=True if self.uncertainty is not None else False,
+                                                  dst_port=xp, encode=False)
+
+        ## generate datalist inf/json
+        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1)._acquire_module().initialize()
+        this_archive.inf()
 
     def yield_block_array(self):
         """yield the xyz data as arrays, for use in `array_yield` or `yield_array`
@@ -1399,11 +1458,7 @@ class XYZFile(ElevationDataset):
         #self.x_offset = utils.int_or(x_offset, 0) # offset x by x_offset
         self.x_offset = x_offset
         self.y_offset = utils.int_or(y_offset, 0) # offset y by y_offset
-
-        #self.scoff = False
         self.rem = False        
-        #self._known_delims = [None, ',', '/', ':'] # space and tab are 'None'
-        #self.data_format = 168
 
     def init_ds(self):
         if self.delim is not None:
@@ -1418,54 +1473,6 @@ class XYZFile(ElevationDataset):
 
         #if self.src_srs is not None:
         #    self.set_transform()        
-            
-    def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the xyz dataset"""
-
-        pts = []
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['numpts'] = 0
-        self.infos['format'] = self.data_format
-        this_region = regions.Region()
-        region_ = self.region
-        self.region = None
-
-        for i, l in enumerate(self.yield_xyz()):
-            if i == 0:
-                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
-            else:
-                if l.x < this_region.xmin:
-                    this_region.xmin = l.x
-                elif l.x > this_region.xmax:
-                    this_region.xmax = l.x
-                if l.y < this_region.ymin:
-                    this_region.ymin = l.y
-                elif l.y > this_region.ymax:
-                    this_region.ymax = l.y
-                if l.z < this_region.zmin:
-                    this_region.zmin = l.z
-                elif l.z > this_region.zmax:
-                    this_region.zmax = l.z
-            #pts.append(l.export_as_list(include_z = True))
-            self.infos['numpts'] = i
-
-        self.infos['minmax'] = this_region.export_as_list(include_z = True)
-        if self.infos['numpts'] > 0:
-            ## todo: put qhull in a yield and perform while scanning for min/max
-            # try:
-            #     out_hull = [pts[i] for i in ConvexHull(
-            #         pts, qhull_options='Qt'
-            #     ).vertices]
-            #     out_hull.append(out_hull[0])
-            #     self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
-            # except:
-            self.infos['wkt'] = this_region.export_as_wkt()
-                
-        self.region = region_
-        self.infos['src_srs'] = self.src_srs
-        
-        return(self.infos)
 
     def line_delim(self, xyz_line):
         """guess a line delimiter"""
@@ -1580,7 +1587,7 @@ class LASFile(ElevationDataset):
         if self.src_srs is None:
             self.src_srs = self.get_epsg()
             if self.src_srs is None:
-                self.src_srs = self.infos['src_srs']
+                self.src_srs = self.infos.src_srs
             
             self.set_transform()
             
@@ -1626,23 +1633,21 @@ class LASFile(ElevationDataset):
                     break
             return(None)
 
-    def generate_inf_new(self, callback=lambda: False):
+    def generate_inf(self, callback=lambda: False):
         """generate an inf file for a lidar dataset."""
         
-        this_inf = INF(name=self.fn, file_hash=self.hash(), numpts=0, fmt=self.data_format,
-                       srs=self.src_srs if self.src_srs is not None else self.get_epsg())
-
         with lp.open(self.fn) as lasf:
-            this_inf.numpts = lasf.header.point_count
+            self.infos.numpts = lasf.header.point_count
             this_region = regions.Region(xmin=lasf.header.x_min, xmax=lasf.header.x_max,
                                          ymin=lasf.header.y_min, ymax=lasf.header.y_max,
                                          zmin=lasf.header.z_min, zmax=lasf.header.z_max)
-            this_inf.minmax = this_region.export_as_list(include_z=True)
-            this_inf.wkt = this_region.export_as_wkt()
-            
-        return(this_inf)
+            self.infos.minmax = this_region.export_as_list(include_z=True)
+            self.infos.wkt = this_region.export_as_wkt()
+
+        self.infos.src_srs = self.src_srs if self.src_srs is not None else self.get_epsg()            
+        return(self.infos)
         
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf_old(self, callback=lambda: False):
         """generate an inf file for a lidar dataset."""
         
         self.infos['name'] = self.fn
@@ -1715,7 +1720,6 @@ class LASFile(ElevationDataset):
         self.init_ds()
         with lp.open(self.fn) as lasf:
             for points in lasf.chunk_iterator(2_000_000):
-                #for points in lasf.read_points:
                 points = points[(np.isin(points.classification, self.classes))]
                 if self.region is not None  and self.region.valid_p():
                     las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
@@ -1735,8 +1739,8 @@ class LASFile(ElevationDataset):
                         if las_region.zmax is not None:
                             points =  points[(points.z < las_region.zmax)]
                             
-                    if len(points) > 0:
-                        yield(points)
+                if len(points) > 0:
+                    yield(points)
     
     def yield_xyz(self):
         """LAS file parsing generator"""
@@ -2011,8 +2015,28 @@ class GDALFile(ElevationDataset):
             self.mask = mem_ds
             
         return(self.src_ds)
+
+    def generate_inf(self, callback=lambda: False):
+        self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+        with gdalfun.gdal_datasource(self.fn) as src_ds:
+            if src_ds is not None:
+                ds_infos = gdalfun.gdal_infos(src_ds)
+                this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                    geo_transform=ds_infos['geoT'],
+                    x_count=ds_infos['nx'],
+                    y_count=ds_infos['ny']
+                )
+
+                zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
+                
+        this_region.zmin, this_region.zmax = zr[0], zr[1]
+        self.infos.minmax = this_region.export_as_list(include_z=True)
+        self.infos.wkt = this_region.export_as_wkt()
+        self.infos.numpts = ds_infos['nb']
+
+        return(self.infos)
         
-    def generate_inf(self, check_z=False, callback=lambda: False):
+    def generate_inf_old(self, check_z=False, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
         self.infos['name'] = self.fn
@@ -2353,8 +2377,29 @@ class BAGFile(ElevationDataset):
         if self.src_srs is None:
             self.src_srs = gdalfun.gdal_get_srs(self.fn)
             self.set_transform()
-        
+
     def generate_inf(self, callback=lambda: False):
+
+        self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+        with gdalfun.gdal_datasource(self.fn) as src_ds:
+            if src_ds is not None:
+                ds_infos = gdalfun.gdal_infos(src_ds)
+                this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                    geo_transform=ds_infos['geoT'],
+                    x_count=ds_infos['nx'],
+                    y_count=ds_infos['ny']
+                )
+
+                zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
+                
+        this_region.zmin, this_region.zmax = zr[0], zr[1]
+        self.infos.minmax = this_region.export_as_list(include_z=True)
+        self.infos.wkt = this_region.export_as_wkt()
+        self.infos.numpts = ds_infos['nb']
+
+        return(self.infos)
+            
+    def generate_inf_old(self, callback=lambda: False):
         """generate a infos dictionary from the raster dataset"""
             
         self.infos['name'] = self.fn
@@ -2474,9 +2519,17 @@ class MBSParser(ElevationDataset):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
-        #self.infos = {}
 
     def generate_inf(self, callback=lambda: False):
+        try:
+            utils.run_cmd('mbdatalist -O -V -I{}'.format(self.fn))
+            return(self.inf_parse())
+        except:
+            pass
+            
+        return(self.infos)
+ 
+    def generate_inf_old(self, callback=lambda: False):
         self.infos['name'] = self.fn
         self.infos['hash'] = None
         self.infos['format'] = self.data_format
@@ -2488,9 +2541,7 @@ class MBSParser(ElevationDataset):
         return(self.infos)
             
     def inf_parse(self):
-        self.infos['name'] = self.fn
         self.infos['minmax'] = [0,0,0,0,0,0]
-        self.infos['hash'] = None
         this_row = 0
         dims = []
         with open('{}.inf'.format(self.fn)) as iob:
@@ -2499,22 +2550,22 @@ class MBSParser(ElevationDataset):
                 if len(til) > 1:
                     if til[0] == 'Swath':
                         if til[2] == 'File:':
-                            self.infos['name'] = til[3]
+                            self.infos.name = til[3]
                             
                     if til[0] == 'Number':
                         if til[2] == 'Records:':
-                            self.infos['numpts'] = utils.int_or(til[3])
+                            self.infos.numpts = utils.int_or(til[3])
                             
                     if til[0] == 'Minimum':
                         if til[1] == 'Longitude:':
-                            self.infos['minmax'][0] = utils.float_or(til[2])
-                            self.infos['minmax'][1] = utils.float_or(til[5])
+                            self.infos.minmax[0] = utils.float_or(til[2])
+                            self.infos.minmax[1] = utils.float_or(til[5])
                         elif til[1] == 'Latitude:':
-                            self.infos['minmax'][2] = utils.float_or(til[2])
-                            self.infos['minmax'][3] = utils.float_or(til[5])
+                            self.infos.minmax[2] = utils.float_or(til[2])
+                            self.infos.minmax[3] = utils.float_or(til[5])
                         elif til[1] == 'Depth:':
-                            self.infos['minmax'][4] = utils.float_or(til[5]) * -1
-                            self.infos['minmax'][5] = utils.float_or(til[2]) * -1
+                            self.infos.minmax[4] = utils.float_or(til[5]) * -1
+                            self.infos.minmax[5] = utils.float_or(til[2]) * -1
                             
                     if til[0] == 'CM':
                         if til[1] == 'dimensions:':
@@ -2526,7 +2577,7 @@ class MBSParser(ElevationDataset):
                             cm_array[this_row][j] = utils.int_or(til[j+1])
                         this_row += 1
 
-        mbs_region = regions.Region().from_list(self.infos['minmax'])
+        mbs_region = regions.Region().from_list(self.infos.minmax)
         xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
         yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
         if abs(xinc) > 0 and abs(yinc) > 0:
@@ -2560,7 +2611,7 @@ class MBSParser(ElevationDataset):
         else:
             wkt = mbs_region.export_as_wkt()
 
-        self.infos['wkt'] = wkt
+        self.infos.wkt = wkt
         return(self)
 
     def parse_(self):
@@ -2698,45 +2749,6 @@ class OGRFile(ElevationDataset):
             if test_layer is not None:
                 return((l, test_layer))
         return(None, None)
-        
-    def generate_inf(self, callback=lambda: False):
-        """generate a infos dictionary from the ogr dataset"""
-
-        pts = []
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['numpts'] = 0
-        self.infos['format'] = self.data_format
-        this_region = regions.Region()
-        region_ = self.region
-        self.region = None
-
-        for i, l in enumerate(self.yield_xyz()):
-            if i == 0:
-                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
-            else:
-                if l.x < this_region.xmin:
-                    this_region.xmin = l.x
-                elif l.x > this_region.xmax:
-                    this_region.xmax = l.x
-                if l.y < this_region.ymin:
-                    this_region.ymin = l.y
-                elif l.y > this_region.ymax:
-                    this_region.ymax = l.y
-                if l.z < this_region.zmin:
-                    this_region.zmin = l.z
-                elif l.z > this_region.zmax:
-                    this_region.zmax = l.z
-            self.infos['numpts'] = i
-
-        self.infos['minmax'] = this_region.export_as_list(include_z = True)
-        if self.infos['numpts'] > 0:
-            self.infos['wkt'] = this_region.export_as_wkt()
-                
-        self.region = region_
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.ogr_get_srs(self.fn)
-        
-        return(self.infos)
 
     def yield_xyz(self):
         ds_ogr = ogr.Open(self.fn)
@@ -2775,89 +2787,67 @@ class OGRFile(ElevationDataset):
 
 class DataList(ElevationDataset):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs)        
 
     def generate_inf(self, callback=lambda: False):
         """generate and return the infos blob of the datalist.
+
+        datasets parsed from the datalist may have variable srs, so
+        we want to transform those to whatever self.dst_srs is, if it
+        exists, in order to properly fill the datalist/json srs and regions...
         """
 
-        ## set self.region to None while generating
-        ## the inf files, otherwise all the inf files
-        ## will reflect the input region...
         _region = self.region
-        out_region = None
+        self.region = None
         out_regions = []
         out_srs = []
-        self.region = None
-        self.infos['name'] = self.fn
-        self.infos['numpts'] = 0
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        ## attempt to generate a datalist-vector geojson and
-        ## if successful, fill it wil the datalist entries, using `parse`
-        #json_status = self._init_datalist_vector()
-        #if json_status == 0:        
-        dst_srs_ = self.dst_srs
-        if self.dst_srs is not None:
-            self.dst_srs = self.dst_srs.split('+')[0]
-
         for entry in self.parse():
             if self.verbose:
                 callback()
-
+                
+            entry_minmax = entry.infos.minmax
+            ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
-
                 if self.dst_srs is not None:
-                    #self.infos['src_srs'] = self.dst_srs
-                    e_region = regions.Region().from_list(entry.infos['minmax'])
-                    e_region.src_srs = entry.src_srs
-                    e_region.warp(self.dst_srs)
-                    entry_region = e_region.export_as_list(include_z=True)
-                else:
-                    entry_region = entry.infos['minmax']
+                    entry_region = regions.Region().from_list(entry_minmax)
+                    entry_region.src_srs = entry.src_srs
+                    entry_region.warp(self.dst_srs)
+                    entry_minmax = entry_region.export_as_list(include_z=True)
 
-            else:
-                out_srs.append(None)
-                entry_region = entry.infos['minmax']
-
-            if regions.Region().from_list(entry_region).valid_p():
+            entry_region = regions.Region().from_list(entry_minmax)
+            if entry_region.valid_p():
                 out_regions.append(entry_region)
-                if 'numpts' in self.infos.keys():
-                    self.infos['numpts'] += entry.infos['numpts']
-                    
-        self.ds = self.layer = None
-        count = 0
+                self.infos.numpts += entry.infos.numpts
+
         ## merge all the gathered regions
+        region_count = 0
+        out_region = None
         for this_region in out_regions:
-            tmp_region = regions.Region().from_list(this_region)
-            if tmp_region.valid_p():
-                if count == 0:
-                    out_region = tmp_region
-                    count += 1
+            if this_region.valid_p():
+                if region_count == 0:
+                    out_region = this_region
+                    region_count += 1
                 else:
-                    out_region = regions.regions_merge(out_region, tmp_region)
+                    out_region = regions.regions_merge(out_region, this_region)
                     
         if out_region is not None:
-            self.infos['minmax'] = out_region.export_as_list(include_z=True)
-            self.infos['wkt'] = out_region.export_as_wkt()
-        else:
-            self.infos['minmax'] = None
-            
-        self.region = _region
-        self.dst_srs = dst_srs_
+            self.infos.minmax = out_region.export_as_list(include_z=True)
+            self.infos.wkt = out_region.export_as_wkt()
 
         ## set the epsg for the datalist
-        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
+        if self.infos.src_srs is None:
             if self.src_srs is not None:
-                self.infos['src_srs'] = self.src_srs
-            else:
+                self.infos.src_srs = self.src_srs
+            elif out_srs:
                 if all(x == out_srs[0] for x in out_srs):
-                    self.infos['src_srs'] = out_srs[0]
-        else:
-            self.src_srs = self.infos['src_srs']
-        
-        return(self.infos)            
-        
+                    self.infos.src_srs = out_srs[0]
+
+                self.src_srs = self.infos.src_srs
+                
+        self.region = _region
+        return(self.infos)
+    
     def parse(self):
         if isinstance(self.fn, list):
             for this_ds in self.fn:
@@ -2963,8 +2953,81 @@ class Datalist(ElevationDataset):
             out_feat.SetField(f, entry_fields[i])
             
         self.layer.CreateFeature(out_feat)
-        
+
     def generate_inf(self, callback=lambda: False):
+        """generate and return the infos blob of the datalist.
+
+        datasets parsed from the datalist may have variable srs, so
+        we want to transform those to whatever self.dst_srs is, if it
+        exists, in order to properly fill the datalist/json srs and regions...
+        """
+
+        _region = self.region
+        self.region = None
+        out_regions = []
+        out_srs = []
+        self.infos.file_hash = self.infos.hash()
+        
+        ## attempt to generate a datalist-vector geojson and
+        ## if successful, fill it wil the datalist entries, using `parse`
+        if self._init_datalist_vector() == 0:
+            
+            for entry in self.parse():
+                if self.verbose:
+                    callback()
+
+                entry_minmax = entry.infos.minmax                    
+                ## entry has an srs and dst_srs is set, so lets transform the region to suit
+                if entry.src_srs is not None:
+                    out_srs.append(entry.src_srs)
+                    if self.dst_srs is not None:
+                        entry_region = regions.Region().from_list(entry_minmax)
+                        entry_region.src_srs = entry.src_srs
+                        entry_region.warp(self.dst_srs)
+                        entry_minmax = entry_region.export_as_list(include_z=True)
+
+                ## create the feature for the geojson
+                entry_region = regions.Region().from_list(entry_minmax)
+                if entry_region.valid_p():
+                    self._create_entry_feature(entry, entry_region)
+                    out_regions.append(entry_region)
+                    self.infos.numpts += entry.infos.numpts
+
+            ## close the geojson ogr dataset
+            self.ds = self.layer = None
+
+        else:
+            return(self.infos)
+        
+        ## merge all the gathered regions
+        region_count = 0
+        out_region = None
+        for this_region in out_regions:
+            if this_region.valid_p():
+                if region_count == 0:
+                    out_region = this_region
+                    region_count += 1
+                else:
+                    out_region = regions.regions_merge(out_region, this_region)
+                    
+        if out_region is not None:
+            self.infos.minmax = out_region.export_as_list(include_z=True)
+            self.infos.wkt = out_region.export_as_wkt()
+
+        ## set the epsg for the datalist
+        if self.infos.src_srs is None:
+            if self.src_srs is not None:
+                self.infos.src_srs = self.src_srs
+            elif out_srs:
+                if all(x == out_srs[0] for x in out_srs):
+                    self.infos.src_srs = out_srs[0]
+
+                self.src_srs = self.infos.src_srs
+
+        self.region = _region
+        return(self.infos)
+        
+    def generate_inf_old(self, callback=lambda: False):
         """generate and return the infos blob of the datalist.
         """
         
@@ -3174,6 +3237,7 @@ class Datalist(ElevationDataset):
                                 fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                         ):
                             data_set.initialize()
+
                             # if data_set.data_format < -10:
                             #     print(data_set)
                             #     yield(data_set)
@@ -3182,26 +3246,31 @@ class Datalist(ElevationDataset):
                             ## check input source region against the dataset region found
                             ## in its inf file.
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                                try:
-                                    inf_region = regions.Region().from_list(
-                                        data_set.infos['minmax']
-                                    )
-                                except:
-                                    inf_region = self.region.copy()
+                                #try:
+                                inf_region = regions.Region().from_list(data_set.infos.minmax)
+                                #except:
+                                #    inf_region = self.region.copy()
 
-                                ## check this!
-                                inf_region.wmin = data_set.weight
-                                inf_region.wmax = data_set.weight
-                                inf_region.umin = data_set.uncertainty
-                                inf_region.umax = data_set.uncertainty
+                                if inf_region.valid_p():
+                                    ## check this!
+                                    inf_region.wmin = data_set.weight
+                                    inf_region.wmax = data_set.weight
+                                    inf_region.umin = data_set.uncertainty
+                                    inf_region.umax = data_set.uncertainty
 
-                                if regions.regions_intersect_p(
-                                        inf_region,
-                                        self.region if data_set.dst_trans is None else data_set.trans_region
-                                ):
+                                    if regions.regions_intersect_p(
+                                            inf_region,
+                                            self.region if data_set.dst_trans is None else data_set.trans_region
+                                    ):
+                                        for ds in data_set.parse():
+                                            self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                                            yield(ds)
+                                            
+                                else:
                                     for ds in data_set.parse():
                                         self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
                                         yield(ds)
+                                        
                             else:
                                 for ds in data_set.parse():
                                     self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
@@ -3249,8 +3318,68 @@ class ZIPlist(ElevationDataset):
     """
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def generate_inf(self, callback=lambda: False):
+        """generate and return the infos blob of the datalist.
+
+        datasets parsed from the datalist may have variable srs, so
+        we want to transform those to whatever self.dst_srs is, if it
+        exists, in order to properly fill the datalist/json srs and regions...
+        """
+
+        _region = self.region
+        self.region = None
+        out_regions = []
+        out_srs = []
+        self.infos.file_hash = self.infos.hash()
+        for entry in self.parse():
+            if self.verbose:
+                callback()
+                
+            entry_minmax = entry.infos.minmax
+            ## entry has an srs and dst_srs is set, so lets transform the region to suit
+            if entry.src_srs is not None:
+                out_srs.append(entry.src_srs)
+                if self.dst_srs is not None:
+                    entry_region = regions.Region().from_list(entry_minmax)
+                    entry_region.src_srs = entry.src_srs
+                    entry_region.warp(self.dst_srs)
+                    entry_minmax = entry_region.export_as_list(include_z=True)
+
+            entry_region = regions.Region().from_list(entry_minmax)
+            if entry_region.valid_p():
+                out_regions.append(entry_region)
+                self.infos.numpts += entry.infos.numpts
+
+        ## merge all the gathered regions
+        region_count = 0
+        out_region = None
+        for this_region in out_regions:
+            if this_region.valid_p():
+                if region_count == 0:
+                    out_region = this_region
+                    region_count += 1
+                else:
+                    out_region = regions.regions_merge(out_region, this_region)
+                    
+        if out_region is not None:
+            self.infos.minmax = out_region.export_as_list(include_z=True)
+            self.infos.wkt = out_region.export_as_wkt()
+
+        ## set the epsg for the datalist
+        if self.infos.src_srs is None:
+            if self.src_srs is not None:
+                self.infos.src_srs = self.src_srs
+            elif out_srs:
+                if all(x == out_srs[0] for x in out_srs):
+                    self.infos.src_srs = out_srs[0]
+
+                self.src_srs = self.infos.src_srs
+                
+        self.region = _region
+        return(self.infos)
         
-    def generate_inf(self, callback = lambda: False):
+    def generate_inf_old(self, callback = lambda: False):
         """return the region of the datalist and generate
         an associated `.inf` file if `inf_file` is True.
         """
@@ -3397,19 +3526,10 @@ class Fetcher(ElevationDataset):
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
 
-        self.infos['name'] = self.fn
-        self.infos['hash'] = None
-        self.infos['numpts'] = 0
-        if self.region is None:
-            tmp_region = self.fetch_module.region
-        else:
-            tmp_region = self.region.copy()
-            
-        self.infos['minmax'] = tmp_region.export_as_list()    
-        self.infos['wkt'] = tmp_region.export_as_wkt()
-        self.infos['format'] = self.data_format
-        self.infos['src_srs'] = self.fetch_module.src_srs
-        #print(self.infos)
+        tmp_region = self.fetch_module.region if self.region is None else self.region.copy()
+        self.infos.minmax = tmp_region.export_as_list()    
+        self.infos.wkt = tmp_region.export_as_wkt()
+        self.infos.src_srs = self.fetch_module.src_srs
         return(self.infos)
 
     def parse(self):
@@ -3418,6 +3538,7 @@ class Fetcher(ElevationDataset):
             for result in self.fetch_module.results:
                 if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
                     for this_ds in self.yield_ds(result):
+                        this_ds.remote = True
                         this_ds.initialize()
                         yield(this_ds)
         else:
