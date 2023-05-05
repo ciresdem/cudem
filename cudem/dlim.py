@@ -3102,11 +3102,9 @@ class Fetcher(ElevationDataset):
         
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
-
         src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
-
         self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
-                         'data_type':self.fetch_module.data_format, 'resolution':None, 'hdatum':src_horz,
+                         'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
                          'vdatum':src_vert, 'url':None}
         
         
