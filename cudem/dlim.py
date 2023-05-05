@@ -715,7 +715,7 @@ class ElevationDataset:
                         trans_fn = vdatums.VerticalTransform(
                             vd_region, '3s', '3s', src_vert, dst_vert,
                             cache_dir=self.cache_dir,
-                            verbose=True
+                            verbose=False
                         ).run(outfile=trans_fn)
                         assert os.path.exists(trans_fn)
 
