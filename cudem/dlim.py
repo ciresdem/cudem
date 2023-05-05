@@ -68,10 +68,8 @@
 ## allow input http data (output of fetches -l should be able to be used as a datalist)
 ## multiple -R in cli
 ## mask to stacks for supercede
-## inf class
 ## fetch results class
 ## speed up xyz parsing, esp in yield_array
-## do something about inf files (esp w/ fetches data)
 ## temp files
 ### Code:
 
@@ -391,9 +389,6 @@ class ElevationDataset:
 
         return(self)
     
-    def generate_inf(self, callback=lambda: False):
-        """set in dataset"""
-
     def generate_inf(self, callback=lambda: False):
         """generate an inf file for the data source. this is generic and
         will parse through all the data via yield_xyz to get point count
@@ -1646,75 +1641,6 @@ class LASFile(ElevationDataset):
 
         self.infos.src_srs = self.src_srs if self.src_srs is not None else self.get_epsg()            
         return(self.infos)
-        
-    def generate_inf_old(self, callback=lambda: False):
-        """generate an inf file for a lidar dataset."""
-        
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['numpts'] = 0
-        self.infos['format'] = self.data_format
-        this_region = regions.Region()
-
-        with lp.open(self.fn) as lasf:
-            self.infos['numpts'] = lasf.header.point_count
-            this_region.from_list([lasf.header.x_min, lasf.header.x_max,
-                                   lasf.header.y_min, lasf.header.y_max,
-                                   lasf.header.z_min, lasf.header.z_max])
-
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else self.get_epsg()
-        self.infos['minmax'] = this_region.export_as_list(
-            include_z=True
-        )
-        self.infos['wkt'] = this_region.export_as_wkt()
-        return(self.infos)
-
-    def generate_inf_scan(self, callback=lambda: False):
-        """generate an inf file for a lidar dataset.
-        ... parse the data to obtain the hull region
-        """
-
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['numpts'] = 0
-        this_region = regions.Region()
-
-        pts = []
-        region_ = self.region
-        self.region = None
-
-        for i, l in enumerate(self.yield_xyz()):
-            if i == 0:
-                this_region.from_list([l.x, l.x, l.y, l.y, l.z, l.z])
-            else:
-                if l.x < this_region.xmin:
-                    this_region.xmin = l.x
-                elif l.x > this_region.xmax:
-                    this_region.xmax = l.x
-                if l.y < this_region.ymin:
-                    this_region.ymin = l.y
-                elif l.y > this_region.ymax:
-                    this_region.ymax = l.y
-                if l.z < this_region.zmin:
-                    this_region.zmin = l.z
-                elif l.z > this_region.zmax:
-                    this_region.zmax = l.z
-            pts.append(l.export_as_list(include_z = True))
-            self.infos['numpts'] = i
-
-        self.infos['minmax'] = this_region.export_as_list(include_z = True)
-        if self.infos['numpts'] > 0:
-            try:
-                out_hull = [pts[i] for i in ConvexHull(
-                    pts, qhull_options='Qt'
-                ).vertices]
-                out_hull.append(out_hull[0])
-                self.infos['wkt'] = regions.create_wkt_polygon(out_hull, xpos=0, ypos=1)
-            except:
-                self.infos['wkt'] = this_region.export_as_wkt()
-                
-        self.region = region_
-        return(self.infos)
 
     def yield_points(self):
         self.init_ds()
@@ -2036,46 +1962,6 @@ class GDALFile(ElevationDataset):
 
         return(self.infos)
         
-    def generate_inf_old(self, check_z=False, callback=lambda: False):
-        """generate a infos dictionary from the raster dataset"""
-            
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.gdal_get_srs(self.fn)
-        self.infos['format'] = self.data_format
-        #src_ds = gdal.Open(self.fn)
-
-        if self.open_options is not None:
-            src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
-        else:
-            src_ds = gdal.Open(self.fn)
-        
-        if src_ds is not None:
-            gt = src_ds.GetGeoTransform()
-            this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
-                #geo_transform=self.dem_infos['geoT'],
-                #x_count=self.dem_infos['nx'],
-                #y_count=self.dem_infos['ny']
-                geo_transform=gt,
-                x_count=src_ds.RasterXSize,
-                y_count=src_ds.RasterYSize
-            )
-            if check_z:
-                try:
-                    zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
-                except:
-                    zr = [None, None]
-            else:
-                zr = [None, None]
-                
-            this_region.zmin, this_region.zmax = zr[0], zr[1]
-            self.infos['minmax'] = this_region.export_as_list(include_z=True)
-            self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
-            self.infos['wkt'] = this_region.export_as_wkt()
-            src_ds = None
-            
-        return(self.infos)
-
     def get_srcwin(self, gt, x_size, y_size, node='grid'):
         if self.region is not None:
             if self.invert_region:
@@ -2398,34 +2284,6 @@ class BAGFile(ElevationDataset):
         self.infos.numpts = ds_infos['nb']
 
         return(self.infos)
-            
-    def generate_inf_old(self, callback=lambda: False):
-        """generate a infos dictionary from the raster dataset"""
-            
-        self.infos['name'] = self.fn
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['src_srs'] = self.src_srs if self.src_srs is not None else gdalfun.gdal_get_srs(self.fn)
-        self.infos['format'] = self.data_format
-        src_ds = gdal.Open(self.fn)
-        if src_ds is not None:
-            gt = src_ds.GetGeoTransform()
-            this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
-                geo_transform=gt,
-                x_count=src_ds.RasterXSize,
-                y_count=src_ds.RasterYSize
-            )
-            try:
-                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax()
-            except:
-                zr = [None, None]
-                
-            this_region.zmin, this_region.zmax = zr[0], zr[1]
-            self.infos['minmax'] = this_region.export_as_list(include_z=True)
-            self.infos['numpts'] = src_ds.RasterXSize * src_ds.RasterYSize
-            self.infos['wkt'] = this_region.export_as_wkt()
-            src_ds = None
-            
-        return(self.infos)
 
     def parse_(self, resample=True):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
@@ -2519,27 +2377,7 @@ class MBSParser(ElevationDataset):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
-
-    def generate_inf(self, callback=lambda: False):
-        try:
-            utils.run_cmd('mbdatalist -O -V -I{}'.format(self.fn))
-            return(self.inf_parse())
-        except:
-            pass
-            
-        return(self.infos)
- 
-    def generate_inf_old(self, callback=lambda: False):
-        self.infos['name'] = self.fn
-        self.infos['hash'] = None
-        self.infos['format'] = self.data_format
-        try:
-            utils.run_cmd('mbdatalist -O -V -I{}'.format(self.fn))
-            self.inf_parse()
-        except: pass
-            
-        return(self.infos)
-            
+             
     def inf_parse(self):
         self.infos['minmax'] = [0,0,0,0,0,0]
         this_row = 0
@@ -3027,87 +2865,6 @@ class Datalist(ElevationDataset):
         self.region = _region
         return(self.infos)
         
-    def generate_inf_old(self, callback=lambda: False):
-        """generate and return the infos blob of the datalist.
-        """
-        
-        _region = self.region
-        out_region = None
-        out_regions = []
-        out_srs = []
-        self.region = None
-        self.infos['name'] = self.fn
-        self.infos['numpts'] = 0
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        ## attempt to generate a datalist-vector geojson and
-        ## if successful, fill it wil the datalist entries, using `parse`
-        json_status = self._init_datalist_vector()
-        if json_status == 0:        
-            dst_srs_ = self.dst_srs
-            if self.dst_srs is not None:
-                self.dst_srs = self.dst_srs.split('+')[0]
-
-            for entry in self.parse():
-                if self.verbose:
-                    callback()
-
-                if entry.src_srs is not None:
-                    out_srs.append(entry.src_srs)
-
-                    if self.dst_srs is not None:
-                        #self.infos['src_srs'] = self.dst_srs
-                        e_region = regions.Region().from_list(entry.infos['minmax'])
-                        e_region.src_srs = entry.src_srs
-                        e_region.warp(self.dst_srs)
-                        entry_region = e_region.export_as_list(include_z=True)
-                    else:
-                        entry_region = entry.infos['minmax']
-
-                else:
-                    out_srs.append(None)
-                    entry_region = entry.infos['minmax']
-
-                if regions.Region().from_list(entry_region).valid_p():
-                    self._create_entry_feature(entry, regions.Region().from_list(entry_region))
-                    out_regions.append(entry_region)
-                    if 'numpts' in self.infos.keys():
-                        self.infos['numpts'] += entry.infos['numpts']
-        else:
-            return(None)
-        
-        self.ds = self.layer = None
-        count = 0
-        ## merge all the gathered regions
-        for this_region in out_regions:
-            tmp_region = regions.Region().from_list(this_region)
-            if tmp_region.valid_p():
-                if count == 0:
-                    out_region = tmp_region
-                    count += 1
-                else:
-                    out_region = regions.regions_merge(out_region, tmp_region)
-                    
-        if out_region is not None:
-            self.infos['minmax'] = out_region.export_as_list(include_z=True)
-            self.infos['wkt'] = out_region.export_as_wkt()
-        else:
-            self.infos['minmax'] = None
-            
-        self.region = _region
-        self.dst_srs = dst_srs_
-
-        ## set the epsg for the datalist
-        if 'src_srs' not in self.infos.keys() or self.infos['src_srs'] is None:
-            if self.src_srs is not None:
-                self.infos['src_srs'] = self.src_srs
-            else:
-                if all(x == out_srs[0] for x in out_srs):
-                    self.infos['src_srs'] = out_srs[0]
-        else:
-            self.src_srs = self.infos['src_srs']
-        
-        return(self.infos)
-
     def parse_json(self):
         """parse the datalist using the datalist-vector geojson.
 
@@ -3237,22 +2994,12 @@ class Datalist(ElevationDataset):
                                 fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                         ):
                             data_set.initialize()
-
-                            # if data_set.data_format < -10:
-                            #     print(data_set)
-                            #     yield(data_set)
-                            
                             ## filter with input source region, if necessary
                             ## check input source region against the dataset region found
                             ## in its inf file.
                             if self.region is not None and self.region.valid_p(check_xy=True):
-                                #try:
                                 inf_region = regions.Region().from_list(data_set.infos.minmax)
-                                #except:
-                                #    inf_region = self.region.copy()
-
                                 if inf_region.valid_p():
-                                    ## check this!
                                     inf_region.wmin = data_set.weight
                                     inf_region.wmax = data_set.weight
                                     inf_region.umin = data_set.uncertainty
@@ -3378,50 +3125,7 @@ class ZIPlist(ElevationDataset):
                 
         self.region = _region
         return(self.infos)
-        
-    def generate_inf_old(self, callback = lambda: False):
-        """return the region of the datalist and generate
-        an associated `.inf` file if `inf_file` is True.
-        """
-        
-        _region = self.region
-        out_region = None
-        out_regions = []
-        self.region = None
-        self.infos['name'] = self.fn
-        self.infos['numpts'] = 0
-        self.infos['hash'] = self.hash()#dl_hash(self.fn)
-        self.infos['format'] = self.data_format
-        
-        for entry in self.parse():
-            if self.verbose:
-                callback()
-
-            out_regions.append(entry.infos['minmax'])
-            if 'numpts' in self.infos.keys():
-                self.infos['numpts'] += entry.infos['numpts']
-
-        count = 0
-        for this_region in out_regions:
-            tmp_region = regions.Region().from_list(this_region)
-            if tmp_region.valid_p():
-                if count == 0:
-                    out_region = tmp_region
-                    count += 1
-                else:
-                    out_region = regions.regions_merge(out_region, tmp_region)
-                    
-        if out_region is not None:
-            self.infos['minmax'] = out_region.export_as_list(include_z=True)
-            self.infos['wkt'] = out_region.export_as_wkt()
-        else:
-            self.infos['minmax'] = None
-
-        self.region = _region
-        self.infos['src_srs'] = self.src_srs
-        
-        return(self.infos)
-        
+                
     def parse(self):
         import zipfile
         exts = [DatasetFactory()._modules[x]['fmts'] for x in DatasetFactory()._modules.keys()]
@@ -3907,21 +3611,6 @@ class TidesFetcher(Fetcher):
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
-
-# class CopernicusFetcher(Fetcher):
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-
-#     def yield_ds(self, result):
-#         out_ds = []
-#         src_cop_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
-#         for src_cop_dem in src_cop_dems:
-#             gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
-#             out_ds.append(GDALFile(fn=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-#                                    x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-#                                    parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-#                                    cache_dir = self.fetch_module._outdir, verbose=self.verbose))
-#         return(out_ds)
 
 class VDatumFetcher(Fetcher):
     def __init__(self, **kwargs):
