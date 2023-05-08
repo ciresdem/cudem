@@ -859,81 +859,77 @@ class ElevationDataset:
             this_dir.reverse()
             return(this_dir)
         
-        #aa_name = self.metadata['name'].split(':')[0]
+        aa_name = self.metadata['name'].split(':')[0]
         if self.region is None:
-            a_name = '{}_{}'.format(self.metadata['name'], utils.this_year())
+            a_name = '{}_{}'.format(aa_name, utils.this_year())
         else:
             a_name = '{}_{}_{}'.format(
-                self.metadata['name'], self.region.format('fn'), utils.this_year())
-
-        if self.remote:
-            a_name = a_name.split(':')[0]
+                aa_name, self.region.format('fn'), utils.this_year())
 
         self.archive_datalist = '{}.datalist'.format(a_name)
+        archive_keys = []
         with utils.CliProgress(message='archiving datasets to {}'.format(self.archive_datalist)) as pbar:
-            self.parse_data_lists() # parse the datalist into a dictionary
             with open('{}.datalist'.format(a_name), 'w') as dlf:
-                for x in self.data_lists.keys():
+                for this_entry in self.parse_json():
                     pbar.update()
-                    #utils.echo_msg(self.data_lists[x])
-
-                    x_name = utils.fn_basename2(os.path.basename(x.split(':')[0])) if self.data_lists[x]['parent'].remote else os.path.basename(x)
-                    if self.region is None:
-                        a_dir = '{}_{}'.format(x_name, utils.this_year())
+                    if this_entry.parent is None:
+                        this_key = this_entry.metadata['name'].split(':')[0]
                     else:
-                        a_dir = '{}_{}_{}'.format(x_name, self.region.format('fn'), utils.this_year())
+                        this_key = this_entry.parent.metadata['name'].split(':')[0]
+                        
+                    if self.region is None:
+                        a_dir = '{}_{}'.format(this_key, utils.this_year())
+                    else:
+                        a_dir = '{}_{}_{}'.format(this_key, self.region.format('fn'), utils.this_year())
 
-                    this_dir = xdl2dir(self.data_lists[x]['parent'])
+                    this_dir = xdl2dir(this_entry.parent)
                     this_dir.append(a_dir)
-                    tmp_dir = this_dir
-                    dlf.write(
-                        '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
-                            name=os.path.join(*(this_dir + [this_dir[-1]])),
-                            weight = utils.float_or(self.data_lists[x]['parent'].weight, 1),
-                            uncertainty = utils.float_or(self.data_lists[x]['parent'].uncertainty, 0),
-                            #weight = 1 if self.weight is None else self.weight,
-                            #uncertainty = 0 if self.uncertainty is None else self.uncertainty,
-                            metadata = self.data_lists[x]['parent'].format_metadata()
+                    if not this_key in archive_keys:
+                        archive_keys.append(this_key)                    
+                        dlf.write(
+                            '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+                                name=os.path.join(*(this_dir + [this_dir[-1]])),
+                                weight = utils.float_or(this_entry.parent.weight, 1),
+                                uncertainty = utils.float_or(this_entry.parent.uncertainty, 0),
+                                metadata = this_entry.parent.format_metadata()
+                            )
                         )
-                    )
+                        
                     this_dir = os.path.join(os.getcwd(), *this_dir)
                     if not os.path.exists(this_dir):
                         os.makedirs(this_dir)
-
 
                     with open(
                             os.path.join(
                                 this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
                     ) as sub_dlf:
-                        for xyz_dataset in self.data_lists[x]['data']:
-                            pbar.update()
-                            xyz_dataset.verbose=self.verbose
-                            if xyz_dataset.remote == True:
-                                sub_xyz_path = '{}_{}.xyz'.format(
-                                    utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn')
-                                )
-                            elif len(xyz_dataset.fn.split('.')) > 1:
-                                xyz_ext = xyz_dataset.fn.split('.')[-1]
-                                sub_xyz_path = '.'.join(
-                                    [utils.fn_basename(
-                                        utils.slugify(
-                                            os.path.basename(xyz_dataset.fn)
-                                        ),
-                                        xyz_dataset.fn.split('.')[-1]),
-                                     'xyz']
-                                )
-                            else:
-                                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(xyz_dataset.fn)), 'xyz'])
+                        pbar.update()
+                        if this_entry.remote == True:
+                            sub_xyz_path = '{}_{}.xyz'.format(
+                                utils.fn_basename2(os.path.basename(this_entry.fn.split(':')[0])), self.region.format('fn')
+                            )
+                        elif len(this_entry.fn.split('.')) > 1:
+                            xyz_ext = this_entry.fn.split('.')[-1]
+                            sub_xyz_path = '.'.join(
+                                [utils.fn_basename(
+                                    utils.slugify(
+                                        os.path.basename(this_entry.fn)
+                                    ),
+                                    this_entry.fn.split('.')[-1]),
+                                 'xyz']
+                            )
+                        else:
+                            sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
 
-                            this_xyz_path = os.path.join(this_dir, sub_xyz_path)
-                            sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))            
-                            with open(this_xyz_path, 'w') as xp:
-                                for this_xyz in xyz_dataset.xyz_yield: # data will be processed independently of each other
-                                    #yield(this_xyz) # don't need to yield data here.
-                                    this_xyz.dump(include_w=True if self.weight is not None else False,
-                                                  include_u=True if self.uncertainty is not None else False,
-                                                  dst_port=xp, encode=False)
-
+                        this_xyz_path = os.path.join(this_dir, sub_xyz_path)
+                        sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
+                        with open(this_xyz_path, 'w') as xp:
+                            for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                                #yield(this_xyz) # don't need to yield data here.
+                                this_xyz.dump(include_w=True if self.weight is not None else False,
+                                              include_u=True if self.uncertainty is not None else False,
+                                              dst_port=xp, encode=False)
+                                
         ## generate datalist inf/json
         this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weight=1,
                                       uncertainty=0)._acquire_module().initialize()
@@ -3094,7 +3090,7 @@ class Fetcher(ElevationDataset):
     See `fetches` for more information.
 """
     
-    def __init__(self, **kwargs):
+    def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(remote=True, **kwargs)
         self.metadata['name'] = self.fn
         self.fetch_module = fetches.FetchesFactory(
@@ -3105,6 +3101,7 @@ class Fetcher(ElevationDataset):
         
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
+        self.keep_fetched_data = keep_fetched_data
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
         # self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
@@ -3130,8 +3127,13 @@ class Fetcher(ElevationDataset):
                         this_ds.remote = True
                         this_ds.initialize()
                         yield(this_ds)
+                        if not self.keep_fetched_data:
+                            utils.remove_glob(this_ds.fn)
         else:
             yield(self)
+
+        if not self.keep_fetched_data:
+            utils.remove_glob(self.fn)
     
     def yield_ds(self, result):
         yield(DatasetFactory(mod=result[1], data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,

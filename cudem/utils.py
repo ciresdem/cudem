@@ -1267,6 +1267,7 @@ class CliProgress():
             return(self)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
+        
         if self.verbose:
             self.thread_is_alive = False
             self.thread.join()
