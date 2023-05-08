@@ -916,7 +916,9 @@ class ElevationDataset:
                             pbar.update()
                             xyz_dataset.verbose=self.verbose
                             if xyz_dataset.remote == True:
-                                sub_xyz_path = '{}_{}.xyz'.format(utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn'))
+                                sub_xyz_path = '{}_{}.xyz'.format(
+                                    utils.fn_basename2(os.path.basename(xyz_dataset.fn.split(':')[0])), self.region.format('fn')
+                                )
                             elif len(xyz_dataset.fn.split('.')) > 1:
                                 xyz_ext = xyz_dataset.fn.split('.')[-1]
                                 sub_xyz_path = '.'.join(
@@ -940,7 +942,8 @@ class ElevationDataset:
                                                   dst_port=xp, encode=False)
 
         ## generate datalist inf/json
-        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1)._acquire_module().initialize()
+        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weights=1,
+                                      uncertainty=0)._acquire_module().initialize()
         this_archive.inf()
 
     def yield_block_array(self):
