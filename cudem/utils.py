@@ -701,7 +701,7 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
                                 if verbose:
                                     echo_msg('Extracted {}'.format(ext_zf))
         except Exception as e:
-            utils.echo_error_msg('could not process ZIP file, {}'.format(e))
+            echo_error_msg('could not process ZIP file, {}'.format(e))
             return([])
                                 
     elif src_file.split('.')[-1] == 'gz':
