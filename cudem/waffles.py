@@ -393,8 +393,8 @@ class Waffle:
         else:
             ## stack the data and run the waffles module
             if self.want_stack:
-                stack_name = '{}_stack'.format(self.name)
-                mask_name = '{}_stack_m'.format(self.name)
+                stack_name = '{}_stack'.format(os.path.basename(self.name))
+                mask_name = '{}_stack_m'.format(os.path.basename(self.name))
                 self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
                                                supercede=self.supercede, want_mask=self.want_mask)
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
@@ -2358,7 +2358,7 @@ class WafflesCUDEM(Waffle):
     """
     
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 poly_count = True, mode = 'gmt-surface', **kwargs):
+                 poly_count = True, mode = 'gmt-surface', filter_outliers = None, **kwargs):
         super().__init__(**kwargs)
         self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
@@ -2368,6 +2368,10 @@ class WafflesCUDEM(Waffle):
         self.mode = mode
         if self.mode not in ['gmt-surface', 'IDW']:
             self.mode = 'IDW'
+            
+        self.filter_outliers = utils.int_or(filter_outliers)
+        #if self.filter_outliers is not None:
+        #    self.filter_outliers = 1 if self.filter_outliers > 9 or self.filter_outliers < 1 else self.filter_outliers
 
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
@@ -2375,9 +2379,11 @@ class WafflesCUDEM(Waffle):
         cst_region.wmin = self.min_weight
         coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=cst_region,
                                   xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
-        coastline.initialize()        
-        coastline.generate()
+                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
+        coastline.initialize()
+        with utils.CliProgress(message='Generating coastline.') as pbar:
+            coastline.generate()
+            
         return('{}.shp:invert=True'.format(coastline.name))
             
     def run(self):
@@ -2392,6 +2398,17 @@ class WafflesCUDEM(Waffle):
         if self.verbose:
             utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
 
+        ## Remove outliers from the stacked data
+        #if self.filter_outliers is not None:
+        gdalfun.gdal_filter_outliers(
+            self.stack, '_tmp_fltr.tif', replace=False
+        )
+        #os.rename('_tmp_fltr.tif', self.stack)
+        # demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
+            # os.rename('_tmp_w.tif', w)
+            # demfun.mask_(c, n, '_tmp_c.tif', verbose=self.verbose)
+            # os.rename('_tmp_c.tif', c)
+            
         ## initial data to pass through surface (stack)
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
         pre_data = [stack_data_entry]

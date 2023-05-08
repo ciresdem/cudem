@@ -491,7 +491,7 @@ class ElevationDataset:
             out_name = os.path.join(self.cache_dir, '{}_{}'.format(
                 utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
                 utils.append_fn('dlim_stacks', self.region, self.x_inc)))
-                
+
             # if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
             #     self.array_yield = self._mask(out_name='{}_m'.format(out_name), fmt='GTiff')
 
@@ -642,15 +642,15 @@ class ElevationDataset:
 
         if self.remote:
             generate_inf = False
-            
+
         if generate_inf:
             self.infos = self.generate_inf()
 
             if write_inf:
                 self.infos.write_inf_file()
 
-        if recursive_check and self.parent is not None:
-            self.parent.inf(check_hash=True)
+            if recursive_check and self.parent is not None:
+                self.parent.inf(check_hash=True)
 
         if self.infos.src_srs is None:
             self.infos.src_srs = self.src_srs
@@ -1078,12 +1078,13 @@ class ElevationDataset:
 
         ## check for x_inc, y_inc and region
         utils.set_cache(self.cache_dir)
+        
         ## initialize the output raster
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
             ))
-            
+
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
@@ -2500,7 +2501,8 @@ class OGRFile(ElevationDataset):
 
 class DataList(ElevationDataset):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)        
+        super().__init__(**kwargs)
+        self.remote = True
 
     def generate_inf(self, callback=lambda: False):
         """generate and return the infos blob of the datalist.
@@ -2517,17 +2519,18 @@ class DataList(ElevationDataset):
         for entry in self.parse():
             if self.verbose:
                 callback()
-                
+
             entry_minmax = entry.infos.minmax
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
                 if self.dst_srs is not None:
                     entry_region = regions.Region().from_list(entry_minmax)
-                    entry_region.src_srs = entry.src_srs
-                    entry_region.warp(self.dst_srs)
-                    entry_minmax = entry_region.export_as_list(include_z=True)
-
+                    if entry_region.valid_p():
+                        entry_region.src_srs = entry.src_srs
+                        entry_region.warp(self.dst_srs)
+                        entry_minmax = entry_region.export_as_list(include_z=True)
+                        
             entry_region = regions.Region().from_list(entry_minmax)
             if entry_region.valid_p():
                 out_regions.append(entry_region)
@@ -3634,8 +3637,12 @@ class DatasetFactory(factory.CUDEMFactory):
         ## file-name (or fetches module name) - entry[0]
         ## set to relative path from parent
         ## ==============================================
-        if self.kwargs['parent'] is None or entry[1] == -11:
+        if 'parent' not in self.kwargs:
+            self.kwargs['parent'] = None
+        
+        if entry.remote or self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
+            self.kwargs['parent'] = None
         else:
             self.kwargs['fn'] = os.path.join(
                 os.path.dirname(self.kwargs['parent'].fn), entry[0]
@@ -3650,6 +3657,9 @@ class DatasetFactory(factory.CUDEMFactory):
         elif entry[2] is None:
             entry[2] = self.set_default_weight()
 
+        if 'weight' not in self.kwargs:
+            self.kwargs['weight'] = 1
+            
         if self.kwargs['parent'] is not None:
             if self.kwargs['weight'] is not None:
                 self.kwargs['weight'] *= entry[2]
@@ -3666,6 +3676,9 @@ class DatasetFactory(factory.CUDEMFactory):
         elif entry[3] is None:
             entry[3] = self.set_default_uncertainty()
 
+        if 'uncertainty' not in self.kwargs:
+            self.kwargs['uncertainty'] = 0
+            
         if self.kwargs['parent'] is not None:
             if self.kwargs['uncertainty'] is not None:
                 self.kwargs['uncertainty'] = math.sqrt(self.kwargs['uncertainty']**2 + entry[3]**2)

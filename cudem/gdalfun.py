@@ -896,7 +896,11 @@ def gdal_blur(src_gdal, dst_gdal, sf = 1):
         else:
             return([], -1)
 
-def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size=None, chunk_step=None, agg_level=1, replace=True):
+## todo: min_weight parameter (only filter points below a weight threshhold)
+## output a filter mask to show which cells were filtered out
+def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
+                         agg_level = 1, replace = True, band = 1, weight_mask = None,
+                         filter_above = None, filter_below = None, return_mask = False):
     """scan a src_dem file for outliers and remove them
     
     aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
@@ -906,37 +910,25 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size=None, chunk_step=None, a
     """
 
     agg_level = utils.int_or(agg_level)
-
     if agg_level is not None:
         percentile = 100 - (agg_level*10)
         if percentile < 50: percentle = 50
         if percentile > 100: percentile = 100
-        #curv_percentile = 0 + (agg_level*10)
 
-    percentile = agg_level    
     max_percentile = percentile
     min_percentile = 100 - percentile
-    #curv_max_percentile = percentile
-    #curv_min_percentile = 100 - percentile
     
-    with gdal_datasource(src_gdal) as src_ds:
-        if src_ is not None:
+    with gdal_datasource(src_gdal, update=True) as src_ds:
+        if src_ds is not None:
             tnd = 0        
-            ds_config = gdal_infos(ds)
-            ds_band = src_ds.GetRasterBand(1)
-            #ds_array = ds_band.ReadAsArray(0, 0, ds_config['nx'], ds_config['ny'])
+            ds_config = gdal_infos(src_ds)
+            ds_band = src_ds.GetRasterBand(band)
             gt = ds_config['geoT']
             gdt = gdal.GDT_Float32
             ndv = ds_band.GetNoDataValue()
-            driver = gdal.GetDriverByName('GTiff')
-            dst_ds = driver.Create(dst_gdal, ds.RasterXSize, ds.RasterYSize, 1, gdt,
-                                   options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
-            dst_ds.SetGeoTransform(gt)
-            dst_band = dst_ds.GetRasterBand(1)
-            dst_band.SetNoDataValue(ndv)
-
+            
             if chunk_size is None:
-                n_chunk = int(ds_config['nx'] * .05)
+                n_chunk = int(ds_config['nx'] * .1)
                 n_chunk = 10 if n_chunk < 10 else n_chunk
             else:
                 n_chunk = chunk_size
@@ -944,78 +936,60 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size=None, chunk_step=None, a
             chunk_step = utils.int_or(chunk_step)
             n_step = chunk_step if chunk_step is not None else int(n_chunk)
             n_step = n_chunk/4
+            
+            src_slp, status = gdal_slope(src_gdal, '{}_slp.tif'.format(utils.fn_basename2(src_gdal)), s = 111120)
+            src_curv, status = gdal_slope('{}_slp.tif'.format(utils.fn_basename2(src_gdal)), '{}_curv.tif'.format(utils.fn_basename2(src_gdal)), s = 111120)
 
+            curv_ds = gdal.Open('{}_curv.tif'.format(utils.fn_basename2(src_gdal)))
+            if curv_ds is not None:
+                curv_band = curv_ds.GetRasterBand(1)
+            
             utils.echo_msg(
                 'scanning {} for outliers with {}@{} using aggression level {} ({}/{})...'.format(
                     src_gdal, n_chunk, n_step, agg_level, max_percentile, min_percentile
                 )
             )
-
             for srcwin in utils.yield_srcwin(
-                    (ds.RasterYSize, ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+                    (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
             ):
                 nd = 0
                 band_data = ds_band.ReadAsArray(*srcwin)
-                band_data[band_data == ds_config['ndv']] = np.nan
+                band_data[band_data == ds_config['ndv']] = np.nan                
 
                 if np.all(np.isnan(band_data)):
-                    #dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
                     continue
 
-                coverage_data = ds_band.ReadAsArray(*srcwin)
-                coverage_data[coverage_data == ds_config['ndv']] = np.nan
-
-                this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], gt)
-                dst_gt = [this_geo_x_origin, float(gt[1]), 0.0, this_geo_y_origin, 0.0, float(gt[5])]
-                dst_config = gdal_copy_infos(ds_config)
-                dst_config['nx'] = srcwin[2]
-                dst_config['ny'] = srcwin[3]
-                dst_config['geoT'] = dst_gt
-
                 if not np.all(band_data == band_data[0,:]):
-                    px, py = np.gradient(band_data, gt[1])
-                    slp_data = np.sqrt(px ** 2, py ** 2)
-                    #slp_data = np.degrees(np.arctan(slp_data_))
 
-                    px, py = np.gradient(slp_data, gt[1])
-                    curv_data = np.sqrt(px ** 2, py ** 2)
-                    #curv_data = np.degrees(np.arctan(curv_data_))
-
+                    ## gradient doesn't work with nans...
+                    ## using GDAL instead.
+                    # px, py = np.gradient(band_data, gt[1])
+                    # slp_data_ = np.sqrt(px ** 2, py ** 2)
+                    # slp_data = np.degrees(np.arctan(slp_data_))
+                    # px, py = np.gradient(slp_data, gt[1])
+                    # curv_data_ = np.sqrt(px ** 2, py ** 2)
+                    # curv_data = np.degrees(np.arctan(curv_data_))
+                    curv_data = curv_band.ReadAsArray(*srcwin)
+                    curv_data[curv_data == ds_config['ndv']] = np.nan
+                    
                     srcwin_perc75 = np.nanpercentile(band_data, max_percentile)
                     srcwin_perc25 = np.nanpercentile(band_data, min_percentile)
                     iqr_p = (srcwin_perc75 - srcwin_perc25) * 1.5
-                    upper_limit = srcwin_perc75 + iqr_p
-                    lower_limit = srcwin_perc25 - iqr_p
-                    #utils.echo_msg('elev upper limit: {}'.format(upper_limit))
-                    #utils.echo_msg('elev lower limit: {}'.format(lower_limit))
-
-                    slp_srcwin_perc75 = np.nanpercentile(slp_data, max_percentile)
-                    slp_srcwin_perc25 = np.nanpercentile(slp_data, min_percentile)
-                    slp_iqr_p = (slp_srcwin_perc75 - slp_srcwin_perc25) * 1.5
-                    slp_upper_limit = slp_srcwin_perc75 + slp_iqr_p
-                    slp_lower_limit = slp_srcwin_perc25 - slp_iqr_p
-                    #utils.echo_msg('slp upper limit: {}'.format(slp_upper_limit))
-                    #utils.echo_msg('slp lower limit: {}'.format(slp_lower_limit))
+                    elev_upper_limit = srcwin_perc75 + iqr_p
+                    elev_lower_limit = srcwin_perc25 - iqr_p
 
                     curv_srcwin_perc75 = np.nanpercentile(curv_data, max_percentile)
                     curv_srcwin_perc25 = np.nanpercentile(curv_data, min_percentile)
                     curv_iqr_p = (curv_srcwin_perc75 - curv_srcwin_perc25) * 1.5
                     curv_upper_limit = curv_srcwin_perc75 + curv_iqr_p
                     curv_lower_limit = curv_srcwin_perc25 - curv_iqr_p
-                    #utils.echo_msg('curv upper limit: {}'.format(curv_upper_limit))
-                    #utils.echo_msg('curv lower limit: {}'.format(curv_lower_limit))
-                    #print(curv_data)
 
-                    band_data[(curv_data > curv_upper_limit)] = np.nan
-                    #band_data[((band_data > upper_limit) | (band_data < lower_limit))] = np.nan
-                    # band_data[((band_data > upper_limit) | (band_data < lower_limit)) \
-                    #           & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit)) \
-                    #           & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit))] = np.nan
-                    #band_data[((band_data > upper_limit) | (band_data < lower_limit)) \
-                    #          & (curv_data > curv_upper_limit)] = np.nan
-                    #(curv_data > curv_upper_limit)] = np.nan
+                    #& ((band_data < filter_below) | (band_data > filter_above))
+                    mask = (((band_data > elev_upper_limit) | (band_data < elev_lower_limit)) \
+                            & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
+                    band_data[mask] = np.nan
 
-                    ## fill nodata here...
+                    ## fill nodata here if replace is true...
                     if replace:
                         point_indices = np.nonzero(~np.isnan(band_data))
                         if len(point_indices[0]):
@@ -1032,11 +1006,11 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size=None, chunk_step=None, a
                             except:
                                 dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
                     else:
-                        dst_band.WriteArray(band_data, srcwin[0], srcwin[1])
-                        #dst_band.WriteArray(curv_data, srcwin[0], srcwin[1])
-
-            dst_ds = None
-            return(dst_gdal, 0)
+                        band_data[np.isnan(band_data)] = ndv
+                        ds_band.WriteArray(band_data, srcwin[0], srcwin[1])
+                    
+            dst_ds = curv_ds = None
+            return(src_gdal, 0)
         else:
             return(None, -1)
         
