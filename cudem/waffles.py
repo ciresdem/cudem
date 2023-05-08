@@ -2399,10 +2399,10 @@ class WafflesCUDEM(Waffle):
             utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
 
         ## Remove outliers from the stacked data
-        #if self.filter_outliers is not None:
-        gdalfun.gdal_filter_outliers(
-            self.stack, '_tmp_fltr.tif', replace=False
-        )
+        if self.filter_outliers is not None:
+            gdalfun.gdal_filter_outliers(
+                self.stack, None, replace=False
+            )
         #os.rename('_tmp_fltr.tif', self.stack)
         # demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
             # os.rename('_tmp_w.tif', w)

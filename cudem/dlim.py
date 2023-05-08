@@ -141,27 +141,27 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
               invert_region=False, cache_dir=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
-    try:
-        xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
-                               weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                               src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
-                               parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
-                               want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
+    #try:
+    xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
+                           weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
+                           src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
+                           parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
+                           want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
 
-        if len(xdls) > 1:
-            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                     verbose=want_verbose)
-        else:
-            this_datalist = xdls[0]
+    if len(xdls) > 1:
+        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                 verbose=want_verbose)
+    else:
+        this_datalist = xdls[0]
 
-        return(this_datalist)
+    return(this_datalist)
     
-    except Exception as e:
-        utils.echo_error_msg('could not initialize data, {}'.format(e))
-        return(None)
+    # except Exception as e:
+    #     utils.echo_error_msg('could not initialize data, {}'.format(e))
+    #     return(None)
 
 ## ==============================================
 ## INF Files
@@ -497,7 +497,7 @@ class ElevationDataset:
 
             self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff', want_mask=self.want_mask)
 
-    def dump_xyz(self, dst_port=sys.stdout, encode=False, **kwargs):
+    def dump_xyz(self, dst_port=sys.stdout, encode=False):
         """dump the XYZ data from the dataset.
 
         data gets parsed through `self.xyz_yield`. See `set_yield` for more info.
@@ -511,7 +511,7 @@ class ElevationDataset:
                 encode=encode
             )
 
-    def dump_xyz_direct(self, dst_port=sys.stdout, encode=False, **kwargs):
+    def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
         """dump the XYZ data from the dataset
 
         data get dumped directly from `self.yield_xyz`.
@@ -525,17 +525,10 @@ class ElevationDataset:
                 encode=encode
             )
 
-    def export_xyz_as_list(self, z_only = False, **kwargs):
+    def export_xyz_as_list(self, z_only = False):
         """return the XYZ data from the dataset as python list"""
-        
-        xyz_l = []
-        for this_xyz in self.xyz_yield:
-            if z_only:
-                xyz_l.append(this_xyz.z)
-            else:
-                xyz_l.append(this_xyz.copy())
-            
-        return(xyz_l)
+
+        return([xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield])
             
     def fetch(self):
         """fetch remote data from self.data_entries"""
@@ -942,7 +935,7 @@ class ElevationDataset:
                                                   dst_port=xp, encode=False)
 
         ## generate datalist inf/json
-        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weights=1,
+        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weight=1,
                                       uncertainty=0)._acquire_module().initialize()
         this_archive.inf()
 
@@ -1251,7 +1244,10 @@ class ElevationDataset:
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            ## remove the nans before looping!
+            ## todo: remove the nans before looping!
+            if np.all(np.isnan(sz)):
+                continue
+            
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
@@ -3222,7 +3218,7 @@ class GEBCOFetcher(Fetcher):
                     yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid), src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                         cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                                         cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
                     
                     utils.remove_glob(tmp_tid)
         else:
@@ -3391,24 +3387,22 @@ class eHydroFetcher(Fetcher):
             src_epsg = self.find_epsg(src_region)
             src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048',
-                                          src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
+                                          cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
 
                 
                 ## check for median z value to see if they are using depth or height
                 ## most data should be negative...
                 usace_ds.initialize()
                 usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
-                z_med = np.percentile(usace_xyz, 50)
-                z_scale = .3048 if z_med < 0 else -.3048
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
-                                          src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                if len(usace_xyz) > 0:
+                    z_med = np.percentile(usace_xyz, 50)
+                    z_scale = .3048 if z_med < 0 else -.3048
+                    usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
+                                              src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 
                 yield(usace_ds)
 
@@ -3643,7 +3637,7 @@ class DatasetFactory(factory.CUDEMFactory):
         if 'parent' not in self.kwargs:
             self.kwargs['parent'] = None
         
-        if entry.remote or self.kwargs['parent'] is None:
+        if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
             self.kwargs['parent'] = None
         else:

@@ -43,6 +43,7 @@ import re
 import curses
 import io
 import json
+import traceback
 
 import threading
 try:
@@ -679,25 +680,29 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
     
     src_procs = []
     if src_file.split('.')[-1].lower() == 'zip':
-        with zipfile.ZipFile(src_file) as z:
-            zfs = z.namelist()
-            for ext in exts:
-                for zf in zfs:
-                    if ext == zf.split('.')[-1]:
-                        ext_zf = os.path.join(outdir, zf)
-                        src_procs.append(ext_zf)
-                        if not os.path.exists(ext_zf):
-                            #echo_msg('Extracting {}'.format(ext_zf))
-                            #pbar.update()
-                            _dirname = os.path.dirname(ext_zf)
-                            if not os.path.exists(_dirname):
-                                os.makedirs(_dirname)
+        try:
+            with zipfile.ZipFile(src_file) as z:
+                zfs = z.namelist()
+                for ext in exts:
+                    for zf in zfs:
+                        if ext == zf.split('.')[-1]:
+                            ext_zf = os.path.join(outdir, zf)
+                            src_procs.append(ext_zf)
+                            if not os.path.exists(ext_zf):
+                                #echo_msg('Extracting {}'.format(ext_zf))
+                                #pbar.update()
+                                _dirname = os.path.dirname(ext_zf)
+                                if not os.path.exists(_dirname):
+                                    os.makedirs(_dirname)
 
-                            with open(ext_zf, 'wb') as f:
-                                f.write(z.read(zf))
+                                with open(ext_zf, 'wb') as f:
+                                    f.write(z.read(zf))
 
-                            if verbose:
-                                echo_msg('Extracted {}'.format(ext_zf))
+                                if verbose:
+                                    echo_msg('Extracted {}'.format(ext_zf))
+        except Exception as e:
+            utils.echo_error_msg('could not process ZIP file, {}'.format(e))
+            return([])
                                 
     elif src_file.split('.')[-1] == 'gz':
         try:
@@ -1338,6 +1343,7 @@ class CliProgress():
             #print(exc_type)
             #print(exc_value)
             #print(exc_traceback)
+            traceback.print_exc()
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
             )

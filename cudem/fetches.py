@@ -325,6 +325,8 @@ class Fetch:
         if tries <= 0:
             utils.echo_error_msg('max-tries exhausted')
             return(None)
+            #raise ConnectionError('Maximum attempts at connecting have failed.')
+        
         try:
             return(
                 requests.get(
@@ -398,6 +400,7 @@ class Fetch:
                 ## hack for earthdata credential redirect...
                 ## recursion here may never end with incorrect user/pass
                 ## ==============================================
+                timed_out = False
                 if req.status_code == 401:
                     ## ==============================================
                     ## we're hoping for a redirect url here.
@@ -422,20 +425,23 @@ class Fetch:
                                 total=int(req.headers.get('content-length', 0)),
                                 verbose=self.verbose
                         ) as pbar:
-                            for chunk in req.iter_content(chunk_size = 8196):
-                                if self.callback():
-                                    break
-                                
-                                pbar.update(len(chunk))
-                                if not chunk:
-                                    break
+                            try:
+                                for chunk in req.iter_content(chunk_size = 8196):
+                                    if self.callback():
+                                        break
 
-                                local_file.write(chunk)
-                                local_file.flush()
-                                # if chunk:
-                                #     local_file.write(chunk)
+                                    pbar.update(len(chunk))
+                                    if not chunk:
+                                        break
 
-                elif req.status_code == 429 or req.status_code == 504:
+                                    local_file.write(chunk)
+                                    local_file.flush()
+                                    # if chunk:
+                                    #     local_file.write(chunk)
+                            except TimeoutError as e:
+                                timed_out = True
+
+                elif req.status_code == 429 or req.status_code == 504 or timed_out:
                     #elif tries > 0:
                     # if self.verbose:
                     #     utils.echo_warning_msg('max tries exhausted...')
