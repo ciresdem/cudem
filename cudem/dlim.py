@@ -1006,7 +1006,6 @@ class ElevationDataset:
                             sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
 
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
-                        print(this_xyz_path)
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
                             os.makedirs(os.path.dirname(this_xyz_path))
                         
