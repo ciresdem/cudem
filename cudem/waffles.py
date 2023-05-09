@@ -177,7 +177,8 @@ class Waffle:
         )
 
         if self.verbose:
-            utils.echo_msg('target region: {}'.format(self.region))
+            utils.echo_msg('input region: {}'.format(self.region))
+            utils.echo_msg('distribution region: {}'.format(self.d_region))
             utils.echo_msg('processing region: {}'.format(self.p_region))
         
     def _init_data(self, set_incs=False):
