@@ -930,6 +930,7 @@ class ElevationDataset:
                             os.makedirs(os.path.dirname(this_xyz_path))
                         
                         sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
+                        #if not os.path.exists(this_xyz_path):
                         with open(this_xyz_path, 'w') as xp:
                             for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                                 #yield(this_xyz) # don't need to yield data here.
@@ -1491,6 +1492,26 @@ class LASFile(ElevationDataset):
         #             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         #         )
 
+    def valid_p(self, fmts = ['scratch']):
+        """check if self appears to be a valid dataset entry"""
+
+        if self.fn is None:
+            return(False)
+        else:
+            if not os.path.exists(self.fn):
+                return (False)
+
+            if os.stat(self.fn).st_size == 0:
+                return(False)
+
+            try:
+                lp.open(self.fn)
+            except:
+                utils.echo_warning_msg('{} could not be opened by the lasreader'.format(self.fn))
+                return(False)
+                        
+        return(True)
+        
     def get_epsg(self):
         with lp.open(self.fn) as lasf:
             lasf_vlrs = lasf.header.vlrs
@@ -1534,6 +1555,7 @@ class LASFile(ElevationDataset):
     def yield_points(self):
         self.init_ds()
         with lp.open(self.fn) as lasf:
+            print(lasf)
             for points in lasf.chunk_iterator(2_000_000):
                 points = points[(np.isin(points.classification, self.classes))]
                 if self.region is not None  and self.region.valid_p():

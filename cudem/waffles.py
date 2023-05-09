@@ -2387,7 +2387,7 @@ class WafflesCUDEM(Waffle):
         cst_region.wmin = self.min_weight
         coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=cst_region,
                                   xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
+                                  srs_transform=self.srs_transform, clobber=True, verbose=True)._acquire_module()
         coastline.initialize()
         with utils.CliProgress(message='Generating coastline.') as pbar:
             coastline.generate()

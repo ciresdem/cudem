@@ -213,9 +213,9 @@ def str2inc(inc_str):
     else:
         try:
             inc = float_or(inc_str)
-            if inc < 0:
-                echo_warning_msg('increment {} is negative, switching to {}'.format(inc, inc*-1))
-                inc = inc*-1
+            #if inc < 0:
+            #    echo_warning_msg('increment {} is negative, switching to {}'.format(inc, inc*-1))
+            #    inc = inc*-1
 
         except ValueError as e:
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
@@ -1266,8 +1266,17 @@ class CliProgress():
 
     def __enter__(self):
         if self.verbose:
-            self.thread_is_alive = True
-            self.thread.start()
+            try:
+                self.thread_is_alive = True
+                self.thread.daemon = True
+                self.thread.start()
+                #while True:
+                #    time.sleep(1)
+            except (KeyboardInterrupt, SystemExit) as e:
+                self.thread_is_alive = False
+                self.__exit__(*sys.exc_info())
+                sys.exit(-1)
+            
             return(self)
         else:
             return(self)
