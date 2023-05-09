@@ -425,21 +425,21 @@ class Fetch:
                                 total=int(req.headers.get('content-length', 0)),
                                 verbose=self.verbose
                         ) as pbar:
-                            try:
-                                for chunk in req.iter_content(chunk_size = 8196):
-                                    if self.callback():
-                                        break
+                            #try:
+                            for chunk in req.iter_content(chunk_size = 8196):
+                                if self.callback():
+                                    break
 
-                                    pbar.update(len(chunk))
-                                    if not chunk:
-                                        break
+                                pbar.update(len(chunk))
+                                if not chunk:
+                                    break
 
-                                    local_file.write(chunk)
-                                    local_file.flush()
-                                    # if chunk:
-                                    #     local_file.write(chunk)
-                            except TimeoutError as e:
-                                timed_out = True
+                                local_file.write(chunk)
+                                local_file.flush()
+                                # if chunk:
+                                #     local_file.write(chunk)
+                            # except TimeoutError as e:
+                            #     timed_out = True
 
                 elif req.status_code == 429 or req.status_code == 504 or timed_out:
                     #elif tries > 0:

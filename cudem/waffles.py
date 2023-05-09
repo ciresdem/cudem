@@ -270,7 +270,8 @@ class Waffle:
         )
 
         if self.verbose:
-            utils.echo_msg('target region: {}'.format(self.region))
+            utils.echo_msg('input region: {}'.format(self.region))
+            utils.echo_msg('distribution region: {}'.format(self.d_region))
             utils.echo_msg('processing region: {}'.format(self.p_region))
         
     def _init_data(self, set_incs=False):
@@ -1690,9 +1691,10 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        gmrt_tif = this_gmrt.results[0]
+        gmrt_result = this_gmrt.results[0]
+        gmrt_tif = os.path.join(this_gmrt._outdir, gmrt_result[1])
         gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', src_srs=self.wgs_srs)
-        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample)
+        gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=self.cst_srs, resampleAlg=self.sample)
         gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr < 0] = 0
@@ -1711,11 +1713,12 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
         
-        for i, cop_tif in enumerate(this_cop.results):
-            gdalfun.gdal_set_ndv(cop_tif[1], 0, verbose=False)
+        for i, cop_result in enumerate(this_cop.results):
+            cop_tif = os.path.join(this_cop._outdir, cop_result[1])
+            gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
             cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', src_srs=self.wgs_srs)
             gdal.Warp(
-                cop_ds, cop_tif[1], dstSRS=self.cst_srs, resampleAlg=self.sample,
+                cop_ds, cop_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
                 callback=False, srcNodata=0
             )
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
@@ -1736,11 +1739,12 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
        
-        for i, wsf_tif in enumerate(this_wsf.results):
-            gdalfun.gdal_set_ndv(wsf_tif[1], 0, verbose=False)
+        for i, wsf_result in enumerate(this_wsf.results):
+            wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
+            gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
             wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs)
             gdal.Warp(
-                wsf_ds, wsf_tif[1], dstSRS=self.cst_srs, resampleAlg='cubicspline',
+                wsf_ds, wsf_tif, dstSRS=self.cst_srs, resampleAlg='cubicspline',
                 callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
             )
             wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
@@ -1766,8 +1770,9 @@ class WafflesCoastline(Waffle):
 
         tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs)
         if len(this_tnm.results) > 0:
-            for i, tnm_zip in enumerate(this_tnm.results):
-                tnm_zips = utils.unzip(tnm_zip[1], self.cache_dir)
+            for i, tnm_result in enumerate(this_tnm.results):
+                tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
+                tnm_zips = utils.unzip(tnm_zip, self.cache_dir)
                 gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
@@ -1823,7 +1828,7 @@ class WafflesCoastline(Waffle):
         fr.join()
         
         lakes_shp = None
-        lakes_zip = this_lakes.results[0][1]
+        lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
         lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
         for i in lakes_shps:
             if i.split('.')[-1] == 'shp':
@@ -1864,17 +1869,20 @@ class WafflesCoastline(Waffle):
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
-                if fetches.Fetch(osm_result[0], verbose=True).fetch_file(osm_result[1], check_size=False, tries=self.osm_tries, read_timeout=3600) >= 0:
+                osm_z = os.path.join(this_osm._outdir, osm_result[1])
+                if fetches.Fetch(osm_result[0], verbose=True).fetch_file(
+                        osm_z, check_size=False, tries=self.osm_tries, read_timeout=3600
+                ) >= 0:
                     #if True:
                     if osm_result[-1] == 'bz2':
-                        osm_planet = utils.unbz2(osm_result[1], self.cache_dir)
+                        osm_planet = utils.unbz2(osm_z, self.cache_dir)
                         osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
                         _clipped = True
                     elif osm_result[-1] == 'pbf':
-                        osm_file = utils.ogr_clip(osm_result[1], self.wgs_region, 'multipolygons')
+                        osm_file = utils.ogr_clip(osm_z, self.wgs_region, 'multipolygons')
                         _clipped = True
                     else:
-                        osm_file = osm_result[1]
+                        osm_file = osm_z
                         _clipped = False
 
                     if os.path.getsize(osm_file) == 366:
@@ -2016,7 +2024,7 @@ class WafflesLakes(Waffle):
         fr.join()
 
         lakes_shp = None
-        lakes_zip = this_lakes.results[0][1]
+        lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
         lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
         for i in lakes_shps:
             if i.split('.')[-1] == 'shp':
@@ -2071,9 +2079,9 @@ class WafflesLakes(Waffle):
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
         
-        gmrt_tif = this_gmrt.results[0]
+        gmrt_tif = os.path.join(this_gmrt._outdir, this_gmrt.results[1])
         gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt')
-        gdal.Warp(gmrt_ds, gmrt_tif[1], dstSRS=dst_srs, resampleAlg=self.sample)
+        gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=dst_srs, resampleAlg=self.sample)
         return(gmrt_ds)
     
     def _fetch_copernicus(self, cop_region=None):
@@ -2085,7 +2093,6 @@ class WafflesLakes(Waffle):
         this_cop = fetches.CopernicusDEM(
             src_region=cop_region, verbose=self.verbose, datatype='1', outdir=self.cache_dir
         )
-        #this_cop._outdir = self.cache_dir
         this_cop.run()
 
         fr = fetches.fetch_results(this_cop, check_size=False)
@@ -2095,8 +2102,9 @@ class WafflesLakes(Waffle):
 
         dst_srs = osr.SpatialReference()
         dst_srs.SetFromUserInput(self.dst_srs)
+        
         cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus')
-        [gdal.Warp(cop_ds, cop_tif[1], dstSRS=dst_srs, resampleAlg=self.sample) for cop_tif in this_cop.results]
+        [gdal.Warp(cop_ds, os.path.join(this_cop._outdir, cop_result[1]), dstSRS=dst_srs, resampleAlg=self.sample) for cop_result in this_cop.results]
         
         return(cop_ds)
     
@@ -3750,7 +3758,7 @@ class WaffleDEM:
 
     def clip(self, clip_str = None):
         ## todo: update for multi-band
-        ## todo: add coastline option
+        ## todo: re-add coastline option
         if clip_str is not None:
             clip_args = {}
             cp = clip_str.split(':')
@@ -3767,13 +3775,18 @@ class WaffleDEM:
             #             self.coast.generate()
             #             gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
             #             os.rename('__tmp_clip__.tif', '{}'.format(fn))
-            
-            #tmp_clip = os.path.join(self.cache_dir, '__tmp_clip__.tif')
-            tmp_clip = utils.make_temp_fn('__tmp_clip__.tif', temp_dir=self.cache_dir)
-            ## update to utils
-            if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
-                os.rename(tmp_clip, self.fn)
-                self.initialize()
+
+            if os.path.exists(clip_args['src_ply']):
+                if ogr.Open(clip_args['src_ply']) is not None:
+                    tmp_clip = utils.make_temp_fn('__tmp_clip__.tif', temp_dir=self.cache_dir)
+                    if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
+                        os.rename(tmp_clip, self.fn)
+                        self.initialize()
+                else:
+                    echo_error_msg('could not read {}'.format(clip_args['src_ply']))
+                    
+            else:
+                echo_error_msg('could not find clip ogr source/clip keyword {}'.fromat(clip_args['src_ply']))
                 
     def cut(self, region = None):
         _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        

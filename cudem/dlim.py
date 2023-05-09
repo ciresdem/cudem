@@ -711,6 +711,8 @@ class ElevationDataset:
                             verbose=False
                         ).run(outfile=trans_fn)
                         assert os.path.exists(trans_fn)
+                else:
+                    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(trans_fn, src_vert, dst_vert))
 
                 if os.path.exists(trans_fn):
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
@@ -966,7 +968,8 @@ class ElevationDataset:
                 this_srcwin = (xpos, ypos, 1, 1)
                 yield(out_arrays, this_srcwin, dst_gt)
 
-    # todo move mask_array to _stacks
+    ## todo: move mask_array to _stacks so we can
+    ## mask superceded data correctly.
     def _mask(self, out_name = None, method='multi', fmt='GTiff'):
         """generate a multi-banded  mask grid
 
@@ -1122,7 +1125,7 @@ class ElevationDataset:
         ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
         ## srcwin is the srcwin of the waffle relative to the incoming arrays
         ## gt is the geotransform of the incoming arrays
-        ## `self.array_yield` is set in `self.set_array`
+        ## `self.array_yield` is set in `self.set_array` (now it's set here), to mask data first if asked
         #for arrs, srcwin, gt in self.yield_array():
         if want_mask:
             array_yield = self._mask(out_name='{}_m'.format(out_name), method='multi', fmt=fmt)
@@ -1243,6 +1246,7 @@ class ElevationDataset:
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            ## skip row if all values are ndv
             if np.all(sz == ndv):
                 continue
             

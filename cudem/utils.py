@@ -213,6 +213,10 @@ def str2inc(inc_str):
     else:
         try:
             inc = float_or(inc_str)
+            if inc < 0:
+                echo_warning_msg('increment {} is negative, switching to {}'.format(inc, inc*-1))
+                inc = inc*-1
+
         except ValueError as e:
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
             return(None)

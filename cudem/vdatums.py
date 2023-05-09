@@ -298,7 +298,7 @@ class VerticalTransform:
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
                 _trans_in = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
                                                   xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
-                                                  dst_srs='epsg:4326', node='pixel', verbose=self.verbose)._acquire_module()
+                                                  cache_dir=self.cache_dir, dst_srs='epsg:4326', node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
 
@@ -325,7 +325,7 @@ class VerticalTransform:
 
                 _trans_out = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
                                                    xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
-                                                   node='pixel', verbose=self.verbose)._acquire_module()
+                                                   cache_dir=self.cache_dir, node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_out.initialize()
                 _trans_out.generate()
 
