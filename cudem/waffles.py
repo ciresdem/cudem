@@ -2646,7 +2646,7 @@ supercede=[True/False]
             pre_surface = WaffleFactory(
                 mod=waffles_mod,
                 data=pre_data,
-                src_region=pre_region if pre !=0 else final_region,
+                src_region=pre_region if pre !=0 else self.p_region,
                 xinc=pre_xinc if pre !=0 else self.xinc,
                 yinc=pre_yinc if pre !=0 else self.yinc,
                 name=pre_name if pre !=0 else self.name,
