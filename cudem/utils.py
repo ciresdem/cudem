@@ -594,7 +594,7 @@ def unbz2(bz2_file, outdir='./', overwrite=False):
                 new_file.write(data)
     return(newfilepath)
 
-def unzip(zip_file, outdir='./', overwrite=False):
+def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
     """unzip (extract) `zip_file`
 
     Args:
@@ -610,7 +610,9 @@ def unzip(zip_file, outdir='./', overwrite=False):
         if not overwrite:
             for fn in zip_files:
                 if not os.path.exists(os.path.join(outdir, fn)):
-                    echo_msg('Extracting {}'.format(os.path.join(outdir, fn)))
+                    if verbose:
+                        echo_msg('Extracting {}'.format(os.path.join(outdir, fn)))
+                        
                     zip_ref.extract(fn, outdir)
         else:
             zip_ref.extractall(outdir)
