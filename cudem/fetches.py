@@ -598,7 +598,7 @@ class fetch_results(threading.Thread):
         for row in self.mod.results:
             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), self.stop_threads, row[2], self.fetch_module])
             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), row[2], self.mod])
-            self.fetch_q.put([row[0], row[1], row[2], self.mod])
+            self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
         self.fetch_q.join()
 
 ## ==============================================
@@ -730,7 +730,7 @@ https://www.gmrt.org
                     float(opts['north'])
                 ])
                 outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
-                self.results.append([url, os.path.join(self._outdir, outf), 'gmrt'])
+                self.results.append([url, outf, 'gmrt'])
                 
         return(self)
 
@@ -819,11 +819,11 @@ https://www.gebco.net
 
         outf = 'gebco.zip'
         if self.want_ice:
-            self.results.append([self._gebco_urls['gebco_ice'][self.want_ice], os.path.join(self._outdir, 'gebco_ice.zip'), 'gebco'])
+            self.results.append([self._gebco_urls['gebco_ice'][self.want_ice], 'gebco_ice.zip', 'gebco'])
         if self.want_sub_ice:
-            self.results.append([self._gebco_urls['gebco_sub_ice'][self.want_sub_ice], os.path.join(self._outdir, 'gebco_sub_ice.zip'), 'gebco'])
+            self.results.append([self._gebco_urls['gebco_sub_ice'][self.want_sub_ice], 'gebco_sub_ice.zip', 'gebco'])
         if self.want_tid:
-            self.results.append([self._gebco_urls['gebco_tid'][self.want_tid], os.path.join(self._outdir, 'gebco_tid.zip'), 'gebco'])
+            self.results.append([self._gebco_urls['gebco_tid'][self.want_tid], 'gebco_tid.zip', 'gebco'])
                 
         return(self)
 
@@ -976,7 +976,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
             for surv in _results:
                 pbar.update()
                 for i in surv['DataLink'].split(','):
-                    self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
+                    self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                     #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                 
         return(self)
@@ -1024,10 +1024,7 @@ https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
                     zipfile_name = feature.GetField('zipfile_name')
                     zipfile_url = '/'.join([self._fabdem_data_url, zipfile_name])
                     if zipfile_url not in [x[0] for x in self.results]:
-                        self.results.append(
-                            [zipfile_url,
-                             os.path.join(self._outdir, zipfile_name),
-                             'raster']
+                        self.results.append([zipfile_url, zipfile_name, 'raster']
                     )
             v_ds = None
                         
@@ -1093,7 +1090,7 @@ class FABDEM_FRED(FetchModule):
                     geom = feature.GetGeometryRef()
                     if geom.Intersects(self.region.export_as_geom()):
                         zipfile_name = feature.GetField('zipfile_name')
-                        self.results.append(['/'.join([self._fabdem_data_url, zipfile_name]), os.path.join(self._outdir, zipfile_name), 'raster'])
+                        self.results.append(['/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster'])
             utils.remove_glob(v_zip)
 
 ## ==============================================
@@ -1191,7 +1188,7 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
 
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                self.results.append([i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']])
+                self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
         return(self)
             
 ## ==============================================
@@ -1233,7 +1230,7 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
         _req = Fetch(self._mar_grav_url, verify=False).fetch_req(params=_data)
         if _req is not None:
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
-            self.results.append([_req.url, os.path.join(self._outdir, outf), 'mar_grav'])
+            self.results.append([_req.url, outf, 'mar_grav'])
             
 ## ==============================================
 ## SRTM Plus
@@ -1267,7 +1264,7 @@ https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
         _req = Fetch(self._srtm_url, verify=False).fetch_req(params=self.data)
         if _req is not None:
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
-            self.results.append([_req.url, os.path.join(self._outdir, outf), 'srtm'])
+            self.results.append([_req.url, outf, 'srtm'])
             
 ## ==============================================
 ## Charts - ENC/RNC
@@ -1413,7 +1410,7 @@ https://www.charts.noaa.gov/
             for surv in _results:
                 pbar.update(1)
                 for i in surv['DataLink'].split(','):
-                    self.results.append([i, os.path.join(self._outdir, i.split('/')[-1]), surv['DataType']])
+                    self.results.append([i, i.split('/')[-1], surv['DataType']])
     
 ## ==============================================
 ## NCEI Multibeam
@@ -1535,10 +1532,10 @@ https://data.ngdc.noaa.gov/platforms/
                     if version in these_surveys[survey].keys():
                         these_surveys[survey][version].append([data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb'])
                     else:
-                        these_surveys[survey][version] = [[data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb']]
+                        these_surveys[survey][version] = [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]
                         
                 else:
-                    these_surveys[survey] = {version: [[data_url.split(' ')[0], os.path.join(self._outdir, '/'.join([survey, dst_fn])), 'mb']]}
+                    these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
                     
         else: utils.echo_error_msg('{}'.format(_req.reason))
                     
@@ -1698,7 +1695,7 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                             geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
                             if geodas:
                                 xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
-                                self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'xyz'])                
+                                self.results.append([xyz_link, xyz_link.split('/')[-1], 'xyz'])                
 
 ## ==============================================
 ## NOAA Trackline
@@ -1806,7 +1803,7 @@ Fields:
             features = _req.json()
             for feature in features['features']:
                 fetch_fn = feature['attributes']['sourcedatalocation']
-                self.results.append([fetch_fn, os.path.join(self._outdir, fetch_fn.split('/')[-1]), 'ehydro'])
+                self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
 
@@ -1878,11 +1875,7 @@ https://www.nauticalcharts.noaa.gov/data/bluetopo.html
                     for key in r['Contents']:
                         if key['Key'].split('.')[-1] == 'tiff':
                             data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
-                            self.results.append(
-                                [data_link,
-                                 os.path.join(self._outdir, data_link.split('/')[-1]),
-                                 'raster']
-                            )
+                            self.results.append([data_link, data_link.split('/')[-1], 'raster'])
             v_ds = None
 
         if not self.keep_index:
@@ -1935,7 +1928,7 @@ data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Anci
             for req_result in req_results:
                 name = req_result.attrib['name']
                 link = req_result.attrib['download']
-                self.results.append([link, os.path.join(self._outdir, name), 'mgds'])
+                self.results.append([link, name, 'mgds'])
                 
         return(self)
 
@@ -1975,7 +1968,7 @@ http://geodesy.noaa.gov/
 
         _req = Fetch(self._ngs_search_url).fetch_req(params=_data)
         if _req is not None:
-            self.results.append([_req.url, os.path.join(self._outdir, 'ngs_results_{}.json'.format(self.region.format('fn'))), 'ngs'])
+            self.results.append([_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'])
             
         return(self)
 
@@ -2049,7 +2042,7 @@ https://tidesandcurrents.noaa.gov/
         }
         _req = Fetch(self._stations_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            self.results.append([_req.url, os.path.join(self._outdir, 'tides_results_{}.json'.format(self.region.format('fn'))), 'tides'])
+            self.results.append([_req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides'])
             
         return(self)
 
@@ -2116,7 +2109,7 @@ https://www.ndbc.noaa.gov
                         if station_id not in current_stations:
                             current_stations.append(station_id)
             for station_id in current_stations:
-                self.results.append([self._buoy_station_realtime + station_id + '.txt', os.path.join(self._outdir, 'buoy_results_{}.txt'.format(station_id)), 'buoys'])
+                self.results.append([self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys'])
             
         return(self)
 
@@ -2327,11 +2320,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
 
                                             self.results.append(
                                                 [tile_url,
-                                                 os.path.join(
-                                                     self._outdir, '{}/{}'.format(
-                                                         feature['attributes']['ID'], tile_url.split('/')[-1]
-                                                     )
-                                                 ),
+                                                 os.path.join('{}/{}'.format(feature['attributes']['ID'], tile_url.split('/')[-1])),
                                                  this_epsg,
                                                  feature['attributes']['DataType']])
 
@@ -2472,19 +2461,13 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
                 .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
             if self.want_wcs:
                 self.results.append(
-                    [wcs_url,
-                     os.path.join(
-                         self._outdir,
-                         surv['DataLink'].split(',')[0].split('/')[-1]
-                     ).replace('.nc', '.tif'),
-                     surv['DataType']])
+                    [wcs_url, surv['DataLink'].split(',')[0].split('/')[-1].replace('.nc', '.tif'), surv['DataType']]
+                )
             else:
                 for d in surv['DataLink'].split(','):
                     if d != '':
                         self.results.append(
-                            [d,
-                             os.path.join(self._outdir, d.split('/')[-1]),
-                             surv['DataType']]
+                            [d, d.split('/')[-1], surv['DataType']]
                         )
 
 ## ==============================================
@@ -2706,7 +2689,7 @@ http://tnmaccess.nationalmap.gov/
 
                                         #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
                                         #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                                        self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+                                        self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
                             else:
                                 for fmt in fmts:
                                     if fmt in item['urls'].keys():
@@ -2718,7 +2701,7 @@ http://tnmaccess.nationalmap.gov/
 
                                 #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
                                 #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                                self.results.append([f_url, os.path.join(self._outdir, f_url.split('/')[-1]), surv['DataType']])
+                                self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
 
                     offset += 100
                     if offset >= total:
@@ -2836,7 +2819,7 @@ https://portal.emodnet-bathymetry.eu/
             emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
                                       .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
             outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-            self.results.append([emodnet_wcs, os.path.join(self._outdir, outf), 'emodnet'])
+            self.results.append([emodnet_wcs, outf, 'emodnet'])
             
         return(self)
 
@@ -2891,7 +2874,7 @@ https://open.canada.ca
             chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
                                   .format(self._chs_url, self.region.format('bbox'), resx, resy)
             outf = 'chs_{}.tif'.format(self.region.format('fn'))
-            self.results.append([_wcs_req.url, os.path.join(self._outdir, outf), 'chs'])
+            self.results.append([_wcs_req.url, outf, 'chs'])
         return(self)
 
 ## ==============================================
@@ -2934,7 +2917,7 @@ https://open.canada.ca
                 geom = feature.GetGeometryRef()
                 if geom.Intersects(self.region.export_as_geom()):
                     data_link = feature.GetField('Ftp_dtm')
-                    self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), 'raster'])
+                    self.results.append([data_link, data_link.split('/')[-1], 'raster'])
             v_ds = None
 
         utils.remove_glob(v_zip, *v_shps)
@@ -3054,7 +3037,7 @@ https://www.pgc.umn.edu/data/arcticdem/
             for f in range(0, fcount):
                 feature = layer[f]
                 data_link = feature.GetField('fileurl')
-                self.results.append([data_link, os.path.join(self._outdir, data_link.split('/')[-1]), 'raster'])
+                self.results.append([data_link, data_link.split('/')[-1], 'raster'])
 
             v_ds = None
             
@@ -3154,7 +3137,7 @@ https://wiki.openstreetmap.org/
                 osm_data = urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
                 
-                self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
+                self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
 
         else:
             c_bbox = self.region.format('osm_bbox')
@@ -3173,7 +3156,7 @@ https://wiki.openstreetmap.org/
             osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
             osm_data = urlencode({'data': osm_q_})
             osm_data_url = self._osm_api + '?' + osm_data            
-            self.results.append([osm_data_url, os.path.join(self._outdir, '{}.{}'.format(out_fn, self.fmt)), 'osm'])
+            self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
     
 ## ==============================================
 ## VDATUM
@@ -3447,7 +3430,7 @@ https://cdn.proj.org
                         os.rename(v_gtx, '{}.gtx'.format(surv['ID']))
                     #utils.remove_glob(dst_zip)
             else:
-                self.results.append([surv['DataLink'], os.path.join(self._outdir, '{}.zip'.format(surv['ID'])), surv['Name']])
+                self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
 
         ## ==============================================
         ## Search PROJ CDN for all other transformation grids:
@@ -3493,7 +3476,7 @@ https://cdn.proj.org
                         _results[-1][key] = feat.GetField(key)
                         
             for _result in _results:
-                self.results.append([_result['url'], os.path.join(self._outdir, _result['name']), _result['source_id']])
+                self.results.append([_result['url'], _result['name'], _result['source_id']])
                 
             cdn_ds = None
             utils.remove_glob(cdn_index)
@@ -3635,9 +3618,9 @@ https://cmr.earthdata.nasa.gov
         for url in url_list:
             if self.name is not None:
                 if self.name in url:
-                    self.results.append([url, os.path.join(self._outdir, url.split('/')[-1]), 'earthdata'])
+                    self.results.append([url, url.split('/')[-1], 'earthdata'])
             else:
-                self.results.append([url, os.path.join(self._outdir, url.split('/')[-1]), 'earthdata'])
+                self.results.append([url, url.split('/')[-1], 'earthdata'])
 
 ## ==============================================
 ## nsidc_download.py from Mike McFerrin
@@ -4259,7 +4242,7 @@ https://geoservice.dlr.de/web/services
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
                 self.results.append(
-                    [i, os.path.join(self._outdir, i.split('/')[-1].split('?')[0]), surv['DataType']]
+                    [i, i.split('/')[-1].split('?')[0], surv['DataType']]
                 )
                 
         return(self)
@@ -4440,22 +4423,12 @@ https://springernature.figshare.com/collections/GLOBathy_the_Global_Lakes_Bathym
         
     def run(self):
         self.results.append(
-            [self._hydrolakes_poly_zip,
-             os.path.join(
-                 self._outdir,
-                 self._hydrolakes_poly_zip.split('/')[-1]
-             ),
-             'hydrolakes']
+            [self._hydrolakes_poly_zip, self._hydrolakes_poly_zip.split('/')[-1], 'hydrolakes']
         )
 
         if self.want_globathy:
             self.results.append(
-                [self._globathy_url,
-                 os.path.join(
-                     self._outdir,
-                     'globathy_parameters.zip'
-                 ),
-                 'globathy']
+                [self._globathy_url, 'globathy_parameters.zip', 'globathy']
             )
         return(self)
 

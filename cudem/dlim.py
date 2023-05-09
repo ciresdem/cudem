@@ -901,12 +901,14 @@ class ElevationDataset:
 
                     with open(
                             os.path.join(
-                                this_dir, '{}.datalist'.format(os.path.basename(this_dir))), 'w'
+                                this_dir, '{}.datalist'.format(os.path.basename(this_dir))
+                            ), 'a'
                     ) as sub_dlf:
                         pbar.update()
                         if this_entry.remote == True:
                             sub_xyz_path = '{}_{}.xyz'.format(
-                                utils.fn_basename2(os.path.basename(this_entry.fn.split(':')[0])), self.region.format('fn')
+                                this_entry.metadata['name'], self.region.format('fn')
+                                #utils.fn_basename2(os.path.basename(this_entry.fn.split(':')[0])), self.region.format('fn')
                             )
                         elif len(this_entry.fn.split('.')) > 1:
                             xyz_ext = this_entry.fn.split('.')[-1]
@@ -922,6 +924,9 @@ class ElevationDataset:
                             sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
 
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
+                        if not os.path.exists(os.path.dirname(this_xyz_path)):
+                            os.makedirs(os.path.dirname(this_xyz_path))
+                        
                         sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
                         with open(this_xyz_path, 'w') as xp:
                             for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
@@ -1238,12 +1243,11 @@ class ElevationDataset:
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-            ## todo: remove the nans before looping!
-            if np.all(np.isnan(sz)):
+            if np.all(sz == ndv):
                 continue
             
+            sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
@@ -3389,22 +3393,22 @@ class eHydroFetcher(Fetcher):
             src_epsg = self.find_epsg(src_region)
             src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
-                                          cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                # usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
+                #                           cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
 
                 
-                ## check for median z value to see if they are using depth or height
-                ## most data should be negative...
-                usace_ds.initialize()
-                usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
-                if len(usace_xyz) > 0:
-                    z_med = np.percentile(usace_xyz, 50)
-                    z_scale = .3048 if z_med < 0 else -.3048
-                    usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
-                                              src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                # ## check for median z value to see if they are using depth or height
+                # ## most data should be negative...
+                # usace_ds.initialize()
+                # usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
+                # #if len(usace_xyz) > 0:
+                # z_med = np.percentile(usace_xyz, 50)
+                z_scale = .3048 #if z_med < 0 else -.3048
+                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
+                                          src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 
                 yield(usace_ds)
 
@@ -3581,7 +3585,10 @@ class DatasetFactory(factory.CUDEMFactory):
 
             # inherit metadata from parent if available
             self.kwargs['metadata'] = {}
-            self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+            if 'remote' in self.kwargs and self.kwargs['remote']:
+                self.kwargs['metadata']['name'] = utils.fn_basename2(self.kwargs['fn'])
+            else:
+                self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
             for key in self._metadata_keys:
                 if key not in self.kwargs['metadata'].keys():
