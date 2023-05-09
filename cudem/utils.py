@@ -150,7 +150,7 @@ def fn_ext(fn):
 def make_temp_fn(fn, temp_dir = cudem_cache()):
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
-    return(os.path.join(temp_dir, '_{}_{}{}'.format(fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S'), '.{}'.format(fn_et) if fn_et is not None else '')))
+    return(os.path.join(temp_dir, '_{}_{}{}'.format(fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'), '.{}'.format(fn_et) if fn_et is not None else '')))
 
 def fn_url_p(fn):
     """check if fn is a url"""

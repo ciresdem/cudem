@@ -163,6 +163,86 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
     #     utils.echo_error_msg('could not initialize data, {}'.format(e))
     #     return(None)
 
+# def fetch_queue(q, m, p=False, c=True):
+#     """fetch queue `q` of fetch results\
+#     each fetch queue should be a list of the following:
+#     [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
+#     if region is defined, will prompt the queue to process the data to the given region.
+#     """
+    
+#     while True:
+#         fetch_args = q.get()
+#         #this_region = fetch_args[2]
+#         if not m.callback():
+#             if not os.path.exists(os.path.dirname(fetch_args[1])):
+#                 try:
+#                     os.makedirs(os.path.dirname(fetch_args[1]))
+#                 except: pass
+            
+#             #if this_region is None:
+#             if not p:
+#                 if fetch_args[0].split(':')[0] == 'ftp':
+#                     Fetch(
+#                         url=fetch_args[0],
+#                         callback=m.callback,
+#                         verbose=m.verbose,
+#                         headers=m.headers
+#                     ).fetch_ftp_file(fetch_args[1])
+#                 else:
+#                     Fetch(
+#                         url=fetch_args[0],
+#                         callback=m.callback,
+#                         verbose=m.verbose,
+#                         headers=m.headers,
+#                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
+#                     ).fetch_file(fetch_args[1], check_size=c)
+#             else:
+#                 if m.region is not None:
+#                     o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '_' + m.region.format('fn') + '.xyz'
+#                 else: o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '.xyz'
+                
+#                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
+#                 if not os.path.exists(o_x_fn):
+#                     with open(o_x_fn, 'w') as out_xyz:
+#                         m.dump_xyz(fetch_args, dst_port=out_xyz)
+                        
+#                     try:
+#                         if os.path.exists(o_x_fn):
+#                             if os.stat(o_x_fn).st_size == 0:
+#                                 utils.remove_glob(o_x_fn)
+                                
+#                     except: pass
+#         q.task_done()
+
+# class fetch_results(threading.Thread):
+#     """fetch results gathered from a fetch module.
+#     results is a list of URLs with data type
+#     e.g. results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
+#     """
+    
+#     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
+#     def __init__(self, mod, want_proc=False, check_size=True, n_threads=3):
+#         threading.Thread.__init__(self)
+#         self.fetch_q = queue.Queue()
+#         self.mod = mod
+#         #self.outdir_ = self.mod._outdir
+#         self.want_proc = want_proc
+#         self.check_size = check_size
+#         self.n_threads = n_threads
+#         if len(self.mod.results) == 0:
+#             self.mod.run()
+        
+#     def run(self):
+#         for _ in range(self.n_threads):
+#             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc, self.check_size))
+#             t.daemon = True
+#             t.start()
+#         for row in self.mod.results:
+#             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), self.stop_threads, row[2], self.fetch_module])
+#             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), row[2], self.mod])
+#             self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
+#         self.fetch_q.join()
+    
 ## ==============================================
 ## INF Files
 ##
@@ -926,6 +1006,7 @@ class ElevationDataset:
                             sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
 
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
+                        print(this_xyz_path)
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
                             os.makedirs(os.path.dirname(this_xyz_path))
                         
@@ -1555,7 +1636,6 @@ class LASFile(ElevationDataset):
     def yield_points(self):
         self.init_ds()
         with lp.open(self.fn) as lasf:
-            print(lasf)
             for points in lasf.chunk_iterator(2_000_000):
                 points = points[(np.isin(points.classification, self.classes))]
                 if self.region is not None  and self.region.valid_p():
@@ -3122,13 +3202,18 @@ class Fetcher(ElevationDataset):
     
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(remote=True, **kwargs)
-        self.metadata['name'] = self.fn
+
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.cache_dir
         )._acquire_module()
         if self.fetch_module is None:
             pass
-        
+
+        f_name = os.path.relpath(self.fn, self.fetch_module._outdir)
+        if f_name == '.':
+            f_name = self.fn
+            
+        self.metadata['name'] = f_name
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
         self.keep_fetched_data = keep_fetched_data
@@ -3166,7 +3251,7 @@ class Fetcher(ElevationDataset):
             utils.remove_glob(self.fn)
     
     def yield_ds(self, result):
-        yield(DatasetFactory(mod=result[1], data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
+        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
                              invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), uncertainty=self.uncertainty,
                              src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
                              cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
@@ -3186,12 +3271,12 @@ class GMRTFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        with gdalfun.gdal_datasource(result[1], update = 1) as src_ds:
+        with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update = 1) as src_ds:
             md = src_ds.GetMetadata()
             md['AREA_OR_POINT'] = 'Point'
             src_ds.SetMetadata(md)
                         
-        yield(DatasetFactory(fn=result[1], data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+        yield(DatasetFactory(fn=os.path.join(self.fetch_module._outdir, result[1]), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -3206,7 +3291,7 @@ class GEBCOFetcher(Fetcher):
         
     def yield_ds(self, result):
         wanted_gebco_fns = []
-        gebco_fns = utils.p_unzip(result[1], ['tif'], self.fetch_module._outdir)
+        gebco_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], self.fetch_module._outdir)
         
         ## fetch the TID zip if needed
         if self.exclude_tid:
@@ -3281,7 +3366,7 @@ class CopernicusFetcher(Fetcher):
         self.check_size=False
         
     def yield_ds(self, result):
-        src_cop_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
+        src_cop_dems = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], outdir=self.fetch_module._outdir)
         for src_cop_dem in src_cop_dems:
             gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
             yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -3294,7 +3379,7 @@ class FABDEMFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        src_fab_dems = utils.p_unzip(result[1], ['tif'], outdir=self.fetch_module._outdir)
+        src_fab_dems = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], outdir=self.fetch_module._outdir)
         for src_fab_dem in src_fab_dems:
             gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
             yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -3321,7 +3406,7 @@ class MarGravFetcher(Fetcher):
         if self.rasterize:
             from cudem import waffles
             mar_grav_fn = utils.make_temp_fn('mar_grav')
-            _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(result[1])],
+            _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(os.path.join(self.fetch_module._outdir, result[1]))],
                                             src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'),
                                             name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()
             yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -3329,7 +3414,7 @@ class MarGravFetcher(Fetcher):
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         else:
-            yield(DatasetFactory(mod=result[1], data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -3341,14 +3426,14 @@ class HydroNOSFetcher(Fetcher):
 
     def yield_ds(self, result):
         if result[2] == 'xyz':
-            nos_fns = utils.p_unzip(result[1], exts=['xyz', 'dat'], outdir=self.fetch_module._outdir)
+            nos_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['xyz', 'dat'], outdir=self.fetch_module._outdir)
             for nos_fn in nos_fns:
                 yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         elif result[2] == 'bag':
-            bag_fns = utils.p_unzip(result[1], exts=['bag'], outdir=self.fetch_module._outdir)
+            bag_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['bag'], outdir=self.fetch_module._outdir)
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
@@ -3364,7 +3449,7 @@ class eHydroFetcher(Fetcher):
         """attempt to grab the src_region from the xml metadata"""
         
         src_region = None
-        src_xmls = utils.p_unzip(result[1], ['xml', 'XML'], outdir=self.fetch_module._outdir)
+        src_xmls = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['xml', 'XML'], outdir=self.fetch_module._outdir)
         for src_xml in src_xmls:
             if src_region is None:
                 this_xml = lxml.etree.parse(src_xml)
@@ -3417,7 +3502,7 @@ class eHydroFetcher(Fetcher):
         src_region = self.find_src_region(result)
         if src_region is not None and src_region.valid_p():
             src_epsg = self.find_epsg(src_region)
-            src_usaces = utils.p_unzip(result[1], ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
                 # usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
                 #                           cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
@@ -3446,9 +3531,9 @@ class BlueTopoFetcher(Fetcher):
     def yield_ds(self, result):
         sid = None
         if not self.want_interpolation:
-            sid = gdalfun.gdal_extract_band(result[1], os.path.join(self.fetch_module._outdir, '_tmp_bt_tid.tif'), band=3, exclude=[0])[0]
+            sid = gdalfun.gdal_extract_band(os.path.join(self.fetch_module._outdir, result[1]), utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir), band=3, exclude=[0])[0]
         
-        yield(DatasetFactory(mod=result[1], data_format='200:band_no=1:mask={}:uncertainty_mask=2'.format(sid), src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='200:band_no=1:mask={}:uncertainty_mask=2'.format(sid), src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
@@ -3462,7 +3547,7 @@ class NGSFetcher(Fetcher):
             self.datum = 'geoidHt'
 
     def yield_ds(self, result):
-        with open(result[1], 'r') as json_file:
+        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), 'w') as tmp_ngs:
@@ -3487,7 +3572,7 @@ class TidesFetcher(Fetcher):
         self.units = units
         
     def yield_ds(self, result):
-        with open(result[1], 'r') as json_file:
+        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), 'w') as tmp_ngs:
@@ -3515,7 +3600,7 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        v_gtx = utils.p_f_unzip(result[1], [result[2]], outdir=self.fetch_module._outdir)
+        v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)
         src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
         utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=self.verbose)
         yield(DatasetFactory(mod=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -3611,10 +3696,10 @@ class DatasetFactory(factory.CUDEMFactory):
 
             # inherit metadata from parent if available
             self.kwargs['metadata'] = {}
-            if 'remote' in self.kwargs and self.kwargs['remote']:
-                self.kwargs['metadata']['name'] = utils.fn_basename2(self.kwargs['fn'])
-            else:
-                self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+            # if 'remote' in self.kwargs and self.kwargs['remote']:
+            #     self.kwargs['metadata']['name'] = os.path.relpath(utils.fn_basename2(self.kwargs['fn']), 
+            # else:
+            self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
             for key in self._metadata_keys:
                 if key not in self.kwargs['metadata'].keys():

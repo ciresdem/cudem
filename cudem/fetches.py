@@ -639,7 +639,7 @@ class FetchModule:
             callback=self.callback,
             verbose=self.verbose,
             headers=self.headers,
-        ).fetch_file(entry[1], timeout=5, read_timeout=5, check_size=check_size))
+        ).fetch_file(os.path.join(self._outdir, entry[1]), timeout=5, read_timeout=5, check_size=check_size))
 
     def fetch_results(self):
         for entry in self.results:

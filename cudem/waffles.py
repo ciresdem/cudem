@@ -1773,7 +1773,7 @@ class WafflesCoastline(Waffle):
             for i, tnm_result in enumerate(this_tnm.results):
                 tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
                 tnm_zips = utils.unzip(tnm_zip, self.cache_dir)
-                gdb = '.'.join(tnm_zip[1].split('.')[:-1]) + '.gdb'
+                gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                         gdb, self.p_region.format('ul_lr')
@@ -3783,10 +3783,10 @@ class WaffleDEM:
                         os.rename(tmp_clip, self.fn)
                         self.initialize()
                 else:
-                    echo_error_msg('could not read {}'.format(clip_args['src_ply']))
+                    utils.echo_error_msg('could not read {}'.format(clip_args['src_ply']))
                     
             else:
-                echo_error_msg('could not find clip ogr source/clip keyword {}'.fromat(clip_args['src_ply']))
+                utils.echo_error_msg('could not find clip ogr source/clip keyword {}'.format(clip_args['src_ply']))
                 
     def cut(self, region = None):
         _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        

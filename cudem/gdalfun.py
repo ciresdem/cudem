@@ -1071,6 +1071,12 @@ def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, v
             echo_error_msg(e)
             remove_glob(dst_gdal)
 
+    try:
+        if not os.path.exists(os.path.dirname(dst_gdal)):
+            os.makedirs(os.path.dirname(dst_gdal))
+    except:
+        pass
+            
     if max_cache:
         gdal.SetCacheMax(2**30)
 
