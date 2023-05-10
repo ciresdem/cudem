@@ -1,4 +1,4 @@
-## Copyright (c) 2012 - 2022 Regents of the University of Colorado
+## Copyright (c) 2012 - 2023 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -20,6 +20,18 @@
 __version__ = "2.0.0"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
+
+## Windows support
+
+import os
+from osgeo import gdal
+from cudem import utils
+gc = utils.config_check() # cudem config file holding foriegn programs and versions
+if gc['platform'] == 'linux':
+    gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
+else:
+    os.system("") # ansi in windows
+    gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows
 
 #from archook import locate_arcgis, get_arcpy
 

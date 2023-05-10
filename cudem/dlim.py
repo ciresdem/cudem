@@ -1698,7 +1698,7 @@ class LASFile(ElevationDataset):
             # pixel_x = pixel_x[pixel_mask]
             # pixel_y = pixel_y[pixel_mask]
 
-            pixel_z = points.z
+            pixel_z = np.array(points.z)
 
             # pixel_z = pixel_z[pixel_x < xcount]            
             # pixel_y = pixel_y[pixel_x < xcount]            
@@ -1734,8 +1734,8 @@ class LASFile(ElevationDataset):
             #zz = points.z[unq_idx]
             zz = pixel_z[unq_idx]
             u = np.zeros(zz.shape)
-            dup_means = [np.mean(points.z[dup]) for dup in dup_idx]
-            dup_stds = [np.std(points.z[dup]) for dup in dup_idx]
+            dup_means = [np.mean(pixel_z[dup]) for dup in dup_idx]
+            dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
             zz[cnt_msk] = dup_means
             u[cnt_msk] = dup_stds
 
