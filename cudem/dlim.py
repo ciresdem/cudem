@@ -3208,11 +3208,7 @@ class Fetcher(ElevationDataset):
         if self.fetch_module is None:
             pass
 
-        f_name = os.path.relpath(self.fn, self.fetch_module._outdir)
-        if f_name == '.':
-            f_name = self.fn
-            
-        self.metadata['name'] = f_name
+        self.metadata['name'] = self.fn
         self.check_size=True
         self.cache_dir=self.fetch_module._outdir
         self.keep_fetched_data = keep_fetched_data
@@ -3238,6 +3234,13 @@ class Fetcher(ElevationDataset):
             for result in self.fetch_module.results:
                 if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
                     for this_ds in self.yield_ds(result):
+
+                        f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
+                        if f_name == '.':
+                            f_name = this_ds.fn
+                            
+                        this_ds.metadata['name'] = utils.fn_basename2(f_name)
+                        
                         this_ds.remote = True
                         this_ds.initialize()
                         yield(this_ds)
