@@ -763,8 +763,8 @@ class WafflesSciPy(Waffle):
             n_chunk = self.chunk_size
             
         if self.chunk_step is None:
-            #n_step = int(n_chunk/2)
-            n_step = n_chunk
+            n_step = int(n_chunk/2)
+            #n_step = n_chunk
         else:
             n_step = self.chunk_step
 

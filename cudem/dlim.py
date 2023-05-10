@@ -3608,6 +3608,17 @@ class VDatumFetcher(Fetcher):
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
+
+## todo: allow lakes bathymetry
+## as well as lakes breaklines (shape nodes)
+## see: https://www.esri.com/arcgis-blog/products/arcgis-pro/3d-gis/hydro-flattening-of-river-shorelines-in-lidar-based-dem-production/
+## 
+class HydroLakesFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+        pass
     
 ## ==============================================
 ## Dataset generator
@@ -3649,7 +3660,8 @@ class DatasetFactory(factory.CUDEMFactory):
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
         -303: {'name': 'arcticdem', 'fmts': ['arcticdem'], 'call': Fetcher},
-        -304: {'name': 'vdatum', 'fmts': ['vdatum'], 'call': VDatumFetcher},        
+        -500: {'name': 'vdatum', 'fmts': ['vdatum'], 'call': VDatumFetcher},
+        -600: {'name': 'hydrolakes', 'fmts': ['hydrolakes'], 'call': HydroLakesFetcher},        
     }
     _datalist_cols = ['path', 'format', 'weight', 'uncertainty', 'title', 'source',
                       'date', 'type', 'resolution', 'horz', 'vert',
@@ -4125,7 +4137,7 @@ def datalists_cli(argv=sys.argv):
                 elif want_region:
                     ## get the region and warp it if necessary
                     this_inf = this_datalist.inf()
-                    this_region = regions.Region().from_list(this_inf['minmax'])
+                    this_region = regions.Region().from_list(this_inf.minmax)
                     if dst_srs is not None:
                         if src_srs is not None:
                             this_region.src_srs = src_srs
