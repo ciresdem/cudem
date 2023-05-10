@@ -3,6 +3,7 @@
 CUDEM is a set of Python scripts and an API for generating Digital Elevation Models (DEMs).
 
 1. [GEBCO Cookbook Chapter](./docs/GEBCO_cookbook.md)
+2. [Continuously Updated Digital Elevation Models (CUDEMs) to Support Coastal Inundation Modeling](https://www.mdpi.com/2072-4292/15/6/1702)
 
 ## Installation
 
