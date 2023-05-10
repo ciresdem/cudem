@@ -134,7 +134,7 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
 
                     utils.remove_glob('tmp_fltr.tif')
         else:
-            os.rename('tmp_fltr.tif', dst_dem)
+            os.replace('tmp_fltr.tif', dst_dem)
         return(0)
     
     else:
@@ -2411,11 +2411,11 @@ class WafflesCUDEM(Waffle):
             gdalfun.gdal_filter_outliers(
                 self.stack, None, replace=False
             )
-        #os.rename('_tmp_fltr.tif', self.stack)
+        #os.replace('_tmp_fltr.tif', self.stack)
         # demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
-            # os.rename('_tmp_w.tif', w)
+            # os.replace('_tmp_w.tif', w)
             # demfun.mask_(c, n, '_tmp_c.tif', verbose=self.verbose)
-            # os.rename('_tmp_c.tif', c)
+            # os.replace('_tmp_c.tif', c)
             
         ## initial data to pass through surface (stack)
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
@@ -2465,7 +2465,7 @@ class WafflesCUDEM(Waffle):
             pre_surface.generate()
             pre -= 1
 
-        os.rename(pre_surface.fn, self.fn)
+        os.replace(pre_surface.fn, self.fn)
         return(self)
 
 ## ==============================================
@@ -2958,7 +2958,7 @@ class WafflesPatch(Waffle):
             utils.echo_msg('resampling diff grid...')
             if gdalfun.sample_warp('_diff.tif', '__tmp_sample.tif', dem_infos['geoT'][1], -1*dem_infos['geoT'][5],
                                    src_region=dem_region, verbose=self.verbose)[1] == 0:
-                os.rename('__tmp_sample.tif', '_tmp_smooth.tif')
+                os.replace('__tmp_sample.tif', '_tmp_smooth.tif')
             else:
                 utils.echo_warning_msg('failed to resample diff grid')
 
@@ -3746,14 +3746,14 @@ class WaffleDEM:
                 if waffles_filter(
                         fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                 ) == 0:
-                    os.rename('__tmp_fltr.tif', fn)
+                    os.replace('__tmp_fltr.tif', fn)
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
             warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
             if gdalfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
                                    sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
-                os.rename(warp_fn, self.fn)
+                os.replace(warp_fn, self.fn)
                 self.initialize()
 
     def clip(self, clip_str = None):
@@ -3774,13 +3774,13 @@ class WaffleDEM:
             #             self.coast.initialize()
             #             self.coast.generate()
             #             gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
-            #             os.rename('__tmp_clip__.tif', '{}'.format(fn))
+            #             os.replace('__tmp_clip__.tif', '{}'.format(fn))
 
             if os.path.exists(clip_args['src_ply']):
                 if ogr.Open(clip_args['src_ply']) is not None:
                     tmp_clip = utils.make_temp_fn('__tmp_clip__.tif', temp_dir=self.cache_dir)
                     if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
-                        os.rename(tmp_clip, self.fn)
+                        os.replace(tmp_clip, self.fn)
                         self.initialize()
                 else:
                     utils.echo_error_msg('could not read {}'.format(clip_args['src_ply']))
@@ -3791,7 +3791,7 @@ class WaffleDEM:
     def cut(self, region = None):
         _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        
         if cut_status == 0:
-            os.rename(_tmp_cut, self.fn)
+            os.replace(_tmp_cut, self.fn)
             self.initialize()
 
     def set_limits(self, upper_limit = None, lower_limit = None, band = 1):
@@ -3838,7 +3838,7 @@ class WaffleDEM:
     def move(self, out_dir = None):
         if out_dir is not None:
             out_fn = os.path.join(out_dir, os.path.basename(self.fn))
-            os.rename(self.fn, out_fn)
+            os.replace(self.fn, out_fn)
             self.fn = out_fn
             self.initialize()
                     

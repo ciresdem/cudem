@@ -3427,7 +3427,7 @@ https://cdn.proj.org
                 if Fetch(surv['DataLink'], callback=self.callback, verbose=self.verbose).fetch_file(dst_zip) == 0:
                     v_gtxs = utils.p_f_unzip(dst_zip, [surv['Name']])
                     for v_gtx in v_gtxs:
-                        os.rename(v_gtx, '{}.gtx'.format(surv['ID']))
+                        os.replace(v_gtx, '{}.gtx'.format(surv['ID']))
                     #utils.remove_glob(dst_zip)
             else:
                 self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
