@@ -770,18 +770,18 @@ class WafflesSciPy(Waffle):
 
         stack_ds = gdal.Open(self.stack)
         points_band = stack_ds.GetRasterBand(1)
-        points_no_data = points_band.GetNoDataValue()
-        
-        try:
-            interp_ds = stack_ds.GetDriver().Create(
-                self.fn, stack_ds.RasterXSize, stack_ds.RasterYSize, bands=1, eType=points_band.DataType,
-                options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
-            )
+        points_no_data = points_band.GetNoDataValue()        
+        interp_ds = stack_ds.GetDriver().Create(
+            self.fn, stack_ds.RasterXSize, stack_ds.RasterYSize, bands=1, eType=points_band.DataType,
+            options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        )
+        if interp_ds is not None:
             interp_ds.SetProjection(stack_ds.GetProjection())
             interp_ds.SetGeoTransform(stack_ds.GetGeoTransform())
             interp_band = interp_ds.GetRasterBand(1)
             interp_band.SetNoDataValue(np.nan)
-        except:
+        else:
+            utils.echo_error_msg('could not create {}...'.format(self.fn))
             return(self)
         
         if self.verbose:
@@ -3683,10 +3683,13 @@ class WaffleDEM:
             return(False)
         
         self.initialize()
-        if self.ds_config is not None:
-            if np.isnan(self.ds_config['zr'][0]):
-                return(False)
-        else:
+        if self.ds_config is None:
+            return(False)
+        
+        if not 'zr' in self.ds_config:
+            return(False)
+            
+        if np.isnan(self.ds_config['zr'][0]):
             return(False)
         
         return(True)

@@ -981,6 +981,8 @@ class ElevationDataset:
                     if not os.path.exists(this_dir):
                         os.makedirs(this_dir)
 
+                    ## todo: if metadata['name'] contains a parent directory, make that into its own datalist
+                        
                     with open(
                             os.path.join(
                                 this_dir, '{}.datalist'.format(os.path.basename(this_dir))
