@@ -1,1 +1,1 @@
-[GEBCO Cookbook Chapter]("./docs/GEBCO_cookbook.md")
+[GEBCO Cookbook Chapter](./docs/GEBCO_cookbook.md)
