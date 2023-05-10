@@ -1,6 +1,8 @@
 # CUDEM
 
-[GEBCO Cookbook Chapter](./docs/GEBCO_cookbook.md)
+CUDEM is a set of Python scripts and an API for generating Digital Elevation Models (DEMs).
+
+1. [GEBCO Cookbook Chapter](./docs/GEBCO_cookbook.md)
 
 ## Installation
 
