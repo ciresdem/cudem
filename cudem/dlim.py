@@ -1826,6 +1826,7 @@ class GDALFile(ElevationDataset):
         self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
+
         if self.x_inc is not None and self.y_inc is not None and self.resample:
             self.resample_and_warp = True
         else:
@@ -1872,7 +1873,7 @@ class GDALFile(ElevationDataset):
             if warp_ds is not None:
                 ## clip wapred ds to warped srcwin
                 warp_ds_config = gdalfun.gdal_infos(warp_ds)
-                gt = warp_ds_config['geoT']                
+                gt = warp_ds_config['geoT']
                 srcwin = self.warp_region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
                 #warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
@@ -1986,6 +1987,7 @@ class GDALFile(ElevationDataset):
             ndv = utils.float_or(band.GetNoDataValue())
             mask_band = weight_band = uncertainty_band = None
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
+
             if ndv is not None:
                 nodata.append('{:g}'.format(ndv))
 
@@ -3234,14 +3236,11 @@ class Fetcher(ElevationDataset):
             for result in self.fetch_module.results:
                 if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
                     for this_ds in self.yield_ds(result):
-
                         f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
                         if f_name == '.':
-                            f_name = this_ds.fn
-                            
-                        this_ds.metadata['name'] = utils.fn_basename2(f_name)
-                        
-                        this_ds.remote = True
+                            f_name = this_ds.fn                            
+                        this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
+                        #this_ds.remote = True
                         this_ds.initialize()
                         yield(this_ds)
                         if not self.keep_fetched_data:
@@ -3254,7 +3253,7 @@ class Fetcher(ElevationDataset):
     
     def yield_ds(self, result):
         yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
-                             invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), uncertainty=self.uncertainty,
+                             invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
                              src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
                              cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
 
@@ -3272,7 +3271,7 @@ class GMRTFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update = 1) as src_ds:
             md = src_ds.GetMetadata()
             md['AREA_OR_POINT'] = 'Point'
