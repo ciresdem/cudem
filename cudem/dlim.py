@@ -982,7 +982,7 @@ class ElevationDataset:
                         os.makedirs(this_dir)
 
                     ## todo: if metadata['name'] contains a parent directory, make that into its own datalist
-                        
+
                     with open(
                             os.path.join(
                                 this_dir, '{}.datalist'.format(os.path.basename(this_dir))
@@ -994,6 +994,7 @@ class ElevationDataset:
                                 this_entry.metadata['name'], self.region.format('fn')
                                 #utils.fn_basename2(os.path.basename(this_entry.fn.split(':')[0])), self.region.format('fn')
                             )
+                                
                         elif len(this_entry.fn.split('.')) > 1:
                             xyz_ext = this_entry.fn.split('.')[-1]
                             sub_xyz_path = '.'.join(
@@ -1006,19 +1007,38 @@ class ElevationDataset:
                             )
                         else:
                             sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
-
+                            
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
                             os.makedirs(os.path.dirname(this_xyz_path))
-                        
-                        sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
-                        #if not os.path.exists(this_xyz_path):
-                        with open(this_xyz_path, 'w') as xp:
-                            for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
-                                #yield(this_xyz) # don't need to yield data here.
-                                this_xyz.dump(include_w=True if self.weight is not None else False,
-                                              include_u=True if self.uncertainty is not None else False,
-                                              dst_port=xp, encode=False)
+                            
+                        sub_dirname = os.path.dirname(sub_xyz_path)
+                        if sub_dirname != '.' and sub_dirname != '':
+                            sub_sub_dlf_path = os.path.join(this_dir, sub_dirname, '{}.datalist'.format(sub_dirname))
+                            sub_sub_dlf = open(sub_sub_dlf_path, 'a')
+                            if not sub_dirname in archive_keys:
+                                archive_keys.append(sub_dirname)
+                                sub_dlf.write('{} -1 1 0\n'.format(os.path.relpath(sub_sub_dlf_path, this_dir)))
+
+                            sub_sub_dlf.write('{} 168 1 0\n'.format(os.path.basename(sub_xyz_path)))
+                            #if not os.path.exists(this_xyz_path):
+                            with open(this_xyz_path, 'w') as xp:
+                                for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                                    #yield(this_xyz) # don't need to yield data here.
+                                    this_xyz.dump(include_w=True if self.weight is not None else False,
+                                                  include_u=True if self.uncertainty is not None else False,
+                                                  dst_port=xp, encode=False)
+                            sub_sub_dlf.close()
+                            
+                        else:
+                            sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
+                            #if not os.path.exists(this_xyz_path):
+                            with open(this_xyz_path, 'w') as xp:
+                                for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                                    #yield(this_xyz) # don't need to yield data here.
+                                    this_xyz.dump(include_w=True if self.weight is not None else False,
+                                                  include_u=True if self.uncertainty is not None else False,
+                                                  dst_port=xp, encode=False)
                                 
         ## generate datalist inf/json
         this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weight=1,
