@@ -28,7 +28,8 @@ from osgeo import gdal
 from cudem import utils
 gc = utils.config_check() # cudem config file holding foriegn programs and versions
 if gc['platform'] == 'linux':
-    gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
+    #gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
+    pass
 else:
     os.system("") # ansi in windows
     gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows

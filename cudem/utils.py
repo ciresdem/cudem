@@ -802,7 +802,8 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     
     if step is None:
         step = n_chunk
-    x_chunk = n_chunk
+    #x_chunk = n_chunk
+    x_chunk = step
     y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
@@ -813,12 +814,15 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
             verbose=verbose,
     ) as pbar:
         while True:
-            y_chunk = n_chunk
+            #y_chunk = n_chunk
+            y_chunk = step
             while True:
                 this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
                 this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
                 this_x_origin = x_chunk - n_chunk
                 this_y_origin = y_chunk - n_chunk
+                this_x_origin = 0 if this_x_origin < 0 else this_x_origin
+                this_y_origin = 0 if this_y_origin < 0 else this_y_origin
                 this_x_size = int(this_x_chunk - this_x_origin)
                 this_y_size = int(this_y_chunk - this_y_origin)
                 if this_x_size == 0 or this_y_size == 0:
@@ -859,7 +863,7 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     y_size = srcwin[2] + (buff_size*2)
     y_size = (n_size[0] - y_origin) if (y_origin + y_size) > n_size[0] else y_size
     
-    return(x_origin, y_origin, x_size, y_size)
+    return(int(x_origin), int(y_origin), int(x_size), int(y_size))
 
 ## ==============================================
 ##

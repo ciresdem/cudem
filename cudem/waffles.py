@@ -402,12 +402,15 @@ class Waffle:
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
             self.run()
+            
             ## post-process the DEM(s)
             waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
             if waffle_dem.valid_p():
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt)
+            else:
+                return(None)
 
             ## calculate estimated uncertainty of the interpolation
             if self.want_uncertainty:
@@ -1656,8 +1659,11 @@ class WafflesCoastline(Waffle):
                 self._write_coast_poly(poly_count=self.polygonize)
             else:
                 self._write_coast_poly()
-            
-        return(self)
+
+        if np.all(self.coast_array == 0) or np.all(self.coast_array == 1):
+            return(None)
+        else:
+            return(self)
 
     def _finalize_array(self):
         self.coast_array[self.coast_array > 0] = 1
@@ -2391,8 +2397,11 @@ class WafflesCUDEM(Waffle):
         coastline.initialize()
         with utils.CliProgress(message='Generating coastline.') as pbar:
             coastline.generate()
-            
-        return('{}.shp:invert=True'.format(coastline.name))
+
+        if coastline is not None:
+            return('{}.shp:invert=True'.format(coastline.name))
+        else:
+            return(None)
             
     def run(self):
         pre = self.pre_count
@@ -2421,7 +2430,11 @@ class WafflesCUDEM(Waffle):
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
         pre_data = [stack_data_entry]
         ## generate coastline
-        pre_clip = self.generate_coastline(pre_data=pre_data) if self.landmask else None
+        if self.landmask:
+            coastline = self.generate_coastline(pre_data=pre_data)
+            #if coastline is not None:
+            pre_clip = coastline
+            print(pre_clip)
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
