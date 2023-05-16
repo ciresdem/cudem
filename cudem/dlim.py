@@ -2280,7 +2280,7 @@ class BAGFile(ElevationDataset):
                     y_count=ds_infos['ny']
                 )
 
-                zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
+                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax() # bag band 1 is elevation
                 
         this_region.zmin, this_region.zmax = zr[0], zr[1]
         self.infos.minmax = this_region.export_as_list(include_z=True)
