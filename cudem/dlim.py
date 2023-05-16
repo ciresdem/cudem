@@ -3455,7 +3455,7 @@ class HydroNOSFetcher(Fetcher):
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         elif result[2] == 'bag':
-            bag_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['bag'], outdir=self.fetch_module._outdir)
+            bag_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['bag'], outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])))
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
