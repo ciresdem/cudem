@@ -66,7 +66,6 @@
 ##
 ### TODO:
 ## allow input http data (output of fetches -l should be able to be used as a datalist)
-## multiple -R in cli
 ## mask to stacks for supercede
 ## fetch results class
 ## speed up xyz parsing, esp in yield_array
@@ -3262,7 +3261,7 @@ class Fetcher(ElevationDataset):
                         if f_name == '.':
                             f_name = this_ds.fn                            
                         this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
-                        #this_ds.remote = True
+                        this_ds.remote = True
                         this_ds.initialize()
                         yield(this_ds)
                         if not self.keep_fetched_data:
@@ -3449,7 +3448,7 @@ class HydroNOSFetcher(Fetcher):
 
     def yield_ds(self, result):
         if result[2] == 'xyz':
-            nos_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['xyz', 'dat'], outdir=self.fetch_module._outdir)
+            nos_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['xyz', 'dat'], outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])))
             for nos_fn in nos_fns:
                 yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
@@ -3670,7 +3669,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -106: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
         -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
         -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
-        -202: {'name': 'nos', 'fmts': ['nos'], 'call': HydroNOSFetcher},
+        -202: {'name': 'hydronos', 'fmts': ['hydronos'], 'call': HydroNOSFetcher},
         -203: {'name': 'ehydro', 'fmts': ['ehydro'], 'call': eHydroFetcher},
         -204: {'name': 'bluetopo', 'fmts': ['bluetopo'], 'call': BlueTopoFetcher},
         -205: {'name': 'ngs', 'fmts': ['ngs'], 'call': NGSFetcher},
