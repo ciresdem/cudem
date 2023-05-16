@@ -4504,7 +4504,15 @@ class ShallowBathyEverywhere(FetchModule):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.sbe_dem_url - 'https://shallowbathymetryeverywhere.com/data/dem/'
-    
+
+class HttpDataset(FetchModule):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def run(self):
+        self.results.append([self.params['mod'], os.path.basename(self.params['mod']), 'https'])
+        return(self)
+        
 ## ==============================================
 ## Fetches Module Parser
 ## ==============================================
@@ -4542,6 +4550,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'usiei': {'call': USIEI},
         'wsf': {'call': WSF},
         'hydrolakes': {'call': HydroLakes},
+        'https': {'call': HttpDataset},
     }
 
     def __init__(self, **kwargs):

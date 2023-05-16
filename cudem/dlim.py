@@ -1596,13 +1596,13 @@ class LASFile(ElevationDataset):
     def valid_p(self, fmts = ['scratch']):
         """check if self appears to be a valid dataset entry"""
 
-        if self.fn is None:
+        if self.fn is None: # and not self.fn.startswith('http'):
             return(False)
         else:
-            if not os.path.exists(self.fn):
-                return (False)
-
-            if os.stat(self.fn).st_size == 0:
+            if os.path.exists(self.fn) :
+                if os.stat(self.fn).st_size == 0:
+                    return(False)
+            else:
                 return(False)
 
             try:
@@ -3241,7 +3241,6 @@ class Fetcher(ElevationDataset):
         #                  'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
         #                  'vdatum':src_vert, 'url':None}
         
-        
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
 
@@ -3252,23 +3251,24 @@ class Fetcher(ElevationDataset):
         return(self.infos)
 
     def parse(self):
-        if self.region is not None:
-            self.fetch_module.run()
-            for result in self.fetch_module.results:
-                if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
-                    for this_ds in self.yield_ds(result):
-                        f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
-                        if f_name == '.':
-                            f_name = this_ds.fn                            
-                        this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
-                        this_ds.remote = True
-                        this_ds.initialize()
-                        yield(this_ds)
-                        if not self.keep_fetched_data:
-                            utils.remove_glob(this_ds.fn)
-        else:
-            yield(self)
-
+        #if self.region is not None:
+        self.fetch_module.run()
+        for result in self.fetch_module.results:
+            if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
+                for this_ds in self.yield_ds(result):
+                    f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
+                    if f_name == '.':
+                        f_name = this_ds.fn                            
+                    this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
+                    this_ds.remote = True
+                    this_ds.initialize()
+                    yield(this_ds)
+                    if not self.keep_fetched_data:
+                        utils.remove_glob(this_ds.fn)
+        #else:
+        #    utils.echo_error_msg('you must specify a region to access fetches data')
+        #    #yield(self)
+            
         if not self.keep_fetched_data:
             utils.remove_glob(self.fn)
     
@@ -3651,7 +3651,7 @@ class DatasetFactory(factory.CUDEMFactory):
     
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
-        -2: {'name': 'zip', 'fmts': ['zip'], 'call': ZIPlist},
+        -2: {'name': 'zip', 'fmts': ['zip'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
         -3: {'name': 'data_list', 'fmts': [''], 'call': DataList},
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
@@ -3660,13 +3660,14 @@ class DatasetFactory(factory.CUDEMFactory):
         301: {'name': 'mbs', 'fmts': ['fbt'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg'], 'call': OGRFile},
         ## fetches modules
-        -100: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': GMRTFetcher},
-        -101: {'name': 'gebco', 'fmts': ['gebco'], 'call': GEBCOFetcher},
-        -102: {'name': 'copernicus', 'fmts': ['copernicus'], 'call': CopernicusFetcher},
-        -103: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
-        -104: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
-        -105: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': MarGravFetcher},
-        -106: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
+        -100: {'name': 'https', 'fmts': ['https'], 'call': Fetcher},
+        -101: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': GMRTFetcher},
+        -102: {'name': 'gebco', 'fmts': ['gebco'], 'call': GEBCOFetcher},
+        -103: {'name': 'copernicus', 'fmts': ['copernicus'], 'call': CopernicusFetcher},
+        -104: {'name': 'fabdem', 'fmts': ['fabdem'], 'call': FABDEMFetcher},
+        -105: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
+        -106: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': MarGravFetcher},
+        -107: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
         -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
         -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
         -202: {'name': 'hydronos', 'fmts': ['hydronos'], 'call': HydroNOSFetcher},
@@ -3764,8 +3765,11 @@ class DatasetFactory(factory.CUDEMFactory):
         ## ==============================================
         if len(entry) < 2:
             for key in self._modules.keys():
-                se = entry[0].split('.')
-                see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
+                if entry[0].startswith('http'):
+                    see = 'https'
+                else:
+                    se = entry[0].split('.')
+                    see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
                 if see in self._modules[key]['fmts']:
                     entry.append(int(key))
                     break
