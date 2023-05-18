@@ -1483,8 +1483,8 @@ class XYZFile(ElevationDataset):
           dst_trans: an srs transformation object
         """
 
-        wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z))
-        point = ogr.CreateGeometryFromWkt(self.export_as_wkt(include_z=True))
+        wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z)
+        point = ogr.CreateGeometryFromWkt(wkt)
         try:
             point.Transform(dst_trans)
             if not 'inf' in point.ExportToWkt():
