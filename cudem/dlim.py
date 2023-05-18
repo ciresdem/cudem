@@ -4140,6 +4140,7 @@ Options:
 \t\t\tpercent of the input REGION.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
+  --z-precision\t\tSet the target precision of dumped z values. (default is 4)
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -4221,7 +4222,7 @@ def datalists_cli(argv=sys.argv):
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
-        elif arg == '--z_precision':
+        elif arg == '--z_precision' or arg == '--z-precision':
             z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
         elif arg == '--mask' or arg == '-m':
