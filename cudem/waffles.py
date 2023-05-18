@@ -817,8 +817,8 @@ class WafflesSciPy(Waffle):
                     )
                     y_origin = srcwin[1]-srcwin_buff[1]
                     x_origin = srcwin[0]-srcwin_buff[0]
-                    y_size = y_origin + srcwin[3]
-                    x_size = x_origin + srcwin[2]
+                    y_size = y_origin + srcwin_buff[3]
+                    x_size = x_origin + srcwin_buff[2]
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:

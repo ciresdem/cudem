@@ -1782,12 +1782,13 @@ Fields:
         
 < ehydro:where=None:inc=None >"""
 
-    def __init__(self, where='1=1', inc=None, **kwargs):
+    def __init__(self, where='1=1', inc=None, survey_name=None, **kwargs):
         super().__init__(name='ehydro', **kwargs)
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
         self._ehydro_api_url = 'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0'
         self._ehydro_query_url = '{0}/query?'.format(self._ehydro_api_url)
         self.where = where
+        self.survey_name = survey_name
         self.inc = utils.str2inc(inc)
 
     def run(self):
@@ -1803,7 +1804,11 @@ Fields:
             features = _req.json()
             for feature in features['features']:
                 fetch_fn = feature['attributes']['sourcedatalocation']
-                self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                if self.survey_name is not None:
+                    if self.survey_name in fetch_fn:
+                        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                else:
+                    self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
 

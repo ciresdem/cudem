@@ -65,7 +65,6 @@
 ## my_mask = my_processed_datalist._mask() # mask the data to the region/increments
 ##
 ### TODO:
-## allow input http data (output of fetches -l should be able to be used as a datalist)
 ## mask to stacks for supercede
 ## fetch results class
 ## speed up xyz parsing, esp in yield_array
@@ -759,7 +758,7 @@ class ElevationDataset:
             src_srs.SetFromUserInput(src_horz)
             dst_srs = osr.SpatialReference()
             dst_srs.SetFromUserInput(dst_horz)
-            
+
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
@@ -1460,6 +1459,12 @@ class XYZFile(ElevationDataset):
         self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
            or self.x_offset != 0 or self.y_offset != 0 else False
 
+        self.field_names  = [x for x in ['x' if self.xpos is not None else None, 'y' if self.ypos is not None else None,
+                                         'z' if self.zpos is not None else None, 'w' if self.wpos is not None else None,
+                                         'u' if self.upos is not None else None]
+                             if x is not None]
+        self.field_formats = ['f4' for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None]
+
     def line_delim(self, xyz_line):
         """guess a line delimiter"""
 
@@ -1470,6 +1475,135 @@ class XYZFile(ElevationDataset):
                     return(this_xyz)
             except:
                 pass
+
+    def transform(self, dst_trans):
+        """transform the x/y using the dst_trans osr transformation (2d)
+
+        Args:
+          dst_trans: an srs transformation object
+        """
+
+        wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z))
+        point = ogr.CreateGeometryFromWkt(self.export_as_wkt(include_z=True))
+        try:
+            point.Transform(dst_trans)
+            if not 'inf' in point.ExportToWkt():
+                self.x = point.GetX() 
+                self.y = point.GetY()
+                self.z = point.GetZ()
+        except Exception as e:
+            sys.stderr.write('transform error: {}\n'.format(str(e)))
+        return(self)
+            
+    def yield_points(self):
+        #with open(self.fn, 'r') as xyzf:
+        self.init_ds()            
+        #for points in lasf.chunk_iterator(2_000_000):        
+        points = np.loadtxt(
+            self.fn, delimiter=self.delim, comments='#', skiprows=self.skip,
+            usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
+            dtype={'names': self.field_names, 'formats': self.field_formats}
+        )
+        print(points)
+        if self.region is not None  and self.region.valid_p():
+            xyz_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            print(xyz_region)
+            if self.invert_region:
+                points = points[((points['x'] > xyz_region.xmax) | (points['x'] < xyz_region.xmin)) | \
+                                ((points['y'] > xyz_region.ymax) | (points['y'] < xyz_region.ymin))]
+                if xyz_region.zmin is not None:
+                    points =  points[(points['z'] < xyz_region.zmin)]
+                    if xyz_region.zmax is not None:
+                        points =  points[(points['z'] > xyz_region.zmax)]
+            else:
+                points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
+                                ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
+                if xyz_region.zmin is not None:
+                    points =  points[(points['z'] > xyz_region.zmin)]
+
+                if xyz_region.zmax is not None:
+                    points =  points[(points['z'] < xyz_region.zmax)]
+            
+        if len(points) > 0:
+            yield(points)
+
+    def _yield_xyz(self):
+        count = 0
+        for points in self.yield_points():
+            dataset = np.vstack((points['x'], points['y'], points['z'])).transpose()
+            count += len(dataset)
+            for point in dataset:
+                this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
+                                           w=self.weight, u=self.uncertainty)
+                if self.dst_trans is not None:
+                    this_xyz.transform(self.dst_trans)
+
+                yield(this_xyz)
+
+        if self.verbose:
+            utils.echo_msg(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+                    
+    def _yield_array(self):
+        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
+        count = 0
+        for points in self.yield_points():            
+            xcount, ycount, dst_gt = self.region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+            )
+
+            pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
+            pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
+            pixel_z = np.array(points['z'])
+            
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+            count += len(pixel_x)
+
+            ## adjust pixels to srcwin and stack together
+            pixel_x = pixel_x - this_srcwin[0]
+            pixel_y = pixel_y - this_srcwin[1]
+            pixel_xy = np.vstack((pixel_y, pixel_x)).T
+
+            ## find the non-unique x/y points and mean their z values together
+            unq, unq_idx, unq_inv, unq_cnt = np.unique(
+                pixel_xy, axis=0, return_inverse=True, return_index=True, return_counts=True
+            )
+            cnt_msk = unq_cnt > 1
+            cnt_idx, = np.nonzero(cnt_msk)
+            idx_msk = np.in1d(unq_inv, cnt_idx)
+            idx_idx, = np.nonzero(idx_msk)
+            srt_idx = np.argsort(unq_inv[idx_msk])
+            dup_idx = np.split(idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1])
+            #zz = points.z[unq_idx]
+            zz = pixel_z[unq_idx]
+            u = np.zeros(zz.shape)
+            dup_means = [np.mean(pixel_z[dup]) for dup in dup_idx]
+            dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+            zz[cnt_msk] = dup_means
+            u[cnt_msk] = dup_stds
+
+            ## make the output arrays to yield
+            out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_z[unq[:,0], unq[:,1]] = zz
+            out_z[out_z == 0] = np.nan
+            out_arrays['z'] = out_z
+            out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+            out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['uncertainty'][unq[:,0], unq[:,1]] = u
+
+            yield(out_arrays, this_srcwin, dst_gt)
+
+        if self.verbose:
+            utils.echo_msg(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
             
     def yield_xyz(self):
         """xyz file parsing generator"""
@@ -2575,7 +2709,7 @@ class OGRFile(ElevationDataset):
     uncertainty_field (str): the field containing uncertainty_values
     """
 
-    _known_layer_names = ['SOUNDG', 'Elevation', 'elev', 'z', 'height', 'depth', 'topography']
+    _known_layer_names = ['SOUNDG', 'Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'SurveyPoint']
     
     def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None, **kwargs):
         super().__init__(**kwargs)
@@ -3521,29 +3655,48 @@ class eHydroFetcher(Fetcher):
         return(src_epsg)
         
     def yield_ds(self, result):
-        src_region = self.find_src_region(result)
-        if src_region is not None and src_region.valid_p():
-            src_epsg = self.find_epsg(src_region)
-            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
-            for src_usace in src_usaces:
-                # usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
-                #                           cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+
+        src_gdb = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['gdb/'], outdir=self.fetch_module._outdir)
+        tmp_gdb = ogr.Open(src_gdb[0])
+        tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
+        src_srs = tmp_layer.GetSpatialRef()
+        src_epsg = gdalfun.osr_parse_srs(src_srs)
+        tmp_gdb = None
+        
+        src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+        for src_usace in src_usaces:
+            usace_ds = DatasetFactory(mod=src_usace, data_format='168',
+                                      src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                
+            yield(usace_ds)
+        
+            
+        # src_region = self.find_src_region(result)
+        # if src_region is not None and src_region.valid_p():
+        #     src_epsg = self.find_epsg(src_region)
+        #     src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+        #     for src_usace in src_usaces:
+        #         # usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
+        #         #                           cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
 
                 
-                # ## check for median z value to see if they are using depth or height
-                # ## most data should be negative...
-                # usace_ds.initialize()
-                # usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
-                # #if len(usace_xyz) > 0:
-                # z_med = np.percentile(usace_xyz, 50)
-                z_scale = .3048 #if z_med < 0 else -.3048
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
-                                          src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+        #         # ## check for median z value to see if they are using depth or height
+        #         # ## most data should be negative...
+        #         # usace_ds.initialize()
+        #         # usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
+        #         # #if len(usace_xyz) > 0:
+        #         # z_med = np.percentile(usace_xyz, 50)
+        #         z_scale = .3048 #if z_med < 0 else -.3048
+        #         usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
+        #                                   src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+        #                                   x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+        #                                   parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+        #                                   cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 
-                yield(usace_ds)
+        #         yield(usace_ds)
 
 class BlueTopoFetcher(Fetcher):
     def __init__(self, want_interpolation=False, **kwargs):
@@ -3651,14 +3804,14 @@ class DatasetFactory(factory.CUDEMFactory):
     
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
-        -2: {'name': 'zip', 'fmts': ['zip'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
+        -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
         -3: {'name': 'data_list', 'fmts': [''], 'call': DataList},
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
         301: {'name': 'mbs', 'fmts': ['fbt'], 'call': MBSParser},
-        302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg'], 'call': OGRFile},
+        302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'], 'call': OGRFile},
         ## fetches modules
         -100: {'name': 'https', 'fmts': ['https'], 'call': Fetcher},
         -101: {'name': 'gmrt', 'fmts': ['gmrt'], 'call': GMRTFetcher},

@@ -797,6 +797,9 @@ def fix_srcwin(srcwin, xcount, ycount):
     return(tuple(out_srcwin))
     
 
+def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
+    return([s for s in yield_srcwin(nsize, nchunk, step, verbose)])
+
 def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     """yield source windows in n_chunks at step"""
     
