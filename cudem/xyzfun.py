@@ -138,7 +138,7 @@ class XYZPoint:
             
         return(xyz_list)
 
-    def export_as_string(self, delim, include_z = False, include_w = False, include_u = False):
+    def export_as_string(self, delim, include_z = False, include_w = False, include_u = False, precision = 6):
         """export xyz data as string
 
         Args:
@@ -148,8 +148,9 @@ class XYZPoint:
         l = self.export_as_list(
             include_z=include_z, include_w=include_w, include_u=include_u
         )
-        
-        return('{}\n'.format(delim.join([str(x) for x in l])))
+
+        return('{}\n'.format(delim.join(['{val:.{i}f}'.format(i=precision if j > 1 else 8, val=x) for j, x in enumerate(l)])))
+    
 
     def export_as_wkt(self, include_z=False):
         if include_z:
@@ -158,7 +159,7 @@ class XYZPoint:
             return('POINT ({} {})'.format(self.x, self.y))
     
     def dump(self, delim=' ', include_z = True, include_w = False, include_u = False,
-             encode = False, dst_port = sys.stdout):
+             encode = False, dst_port = sys.stdout, precision = 6):
         """dump xyz as a string to dst_port
 
         Args:
@@ -172,7 +173,8 @@ class XYZPoint:
         """
     
         l = self.export_as_string(
-            delim, include_z=include_z, include_w=include_w, include_u=include_u
+            delim, include_z=include_z, include_w=include_w, include_u=include_u,
+            precision=precision
         )
         
         dst_port.write(l.encode('utf-8') if encode else l)

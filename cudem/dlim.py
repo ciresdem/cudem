@@ -136,7 +136,7 @@ def write_datalist(data_list, outname=None):
 
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, None), sample_alg='bilinear',
               want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False, want_sm=False,
-              invert_region=False, cache_dir=None):
+              invert_region=False, cache_dir=None, dump_precision=4):
     """initialize a datalist object from a list of supported dataset entries"""
 
     #try:
@@ -144,14 +144,15 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
                            weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
                            src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
                            parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
-                           want_mask=want_mask, want_sm=want_sm, verbose=want_verbose)._acquire_module() for dl in data_list]
+                           want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+                           dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
     if len(xdls) > 1:
         this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
                                  uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
                                  x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
                                  invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                 verbose=want_verbose)
+                                 verbose=want_verbose, dump_precision=dump_precision)
     else:
         this_datalist = xdls[0]
 
@@ -397,7 +398,7 @@ class ElevationDataset:
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None,
                  dst_srs = 'epsg:4326', x_inc = None, y_inc = None, want_mask = False, want_sm = False,
                  sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
-                 cache_dir = None, verbose = False, remote = False, params = {},
+                 cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
                              'vdatum':None, 'url':None}):
@@ -419,6 +420,7 @@ class ElevationDataset:
         self.cache_dir = cache_dir # cache_directory
         self.verbose = verbose # be verbose
         self.remote = remote # dataset is remote
+        self.dump_precision = dump_precision
         self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
         self.params = params # the factory parameters
         if not self.params:
@@ -566,9 +568,11 @@ class ElevationDataset:
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
 
-            out_name = os.path.join(self.cache_dir, '{}_{}'.format(
-                utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
-                utils.append_fn('dlim_stacks', self.region, self.x_inc)))
+            # out_name = os.path.join(self.cache_dir, '{}_{}'.format(
+            #     utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
+            #     utils.append_fn('dlim_stacks', self.region, self.x_inc)))
+
+            out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
 
             # if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
             #     self.array_yield = self._mask(out_name='{}_m'.format(out_name), fmt='GTiff')
@@ -586,7 +590,8 @@ class ElevationDataset:
                 include_w=True if self.weight is not None else False,
                 include_u=True if self.uncertainty is not None else False,
                 dst_port=dst_port,
-                encode=encode
+                encode=encode,
+                precision=self.dump_precision
             )
 
     def dump_xyz_direct(self, dst_port=sys.stdout, encode=False):
@@ -600,7 +605,8 @@ class ElevationDataset:
                 include_w=True if self.weight is not None else False,
                 include_u=True if self.uncertainty is not None else False,
                 dst_port=dst_port,
-                encode=encode
+                encode=encode,
+                precision=self.dump_precision
             )
 
     def export_xyz_as_list(self, z_only = False):
@@ -1036,7 +1042,7 @@ class ElevationDataset:
                                     #yield(this_xyz) # don't need to yield data here.
                                     this_xyz.dump(include_w=True if self.weight is not None else False,
                                                   include_u=True if self.uncertainty is not None else False,
-                                                  dst_port=xp, encode=False)
+                                                  dst_port=xp, encode=False, precision=self.dump_precision)
                                 
         ## generate datalist inf/json
         this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weight=1,
@@ -1186,6 +1192,7 @@ class ElevationDataset:
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
             ))
 
+        print(out_name)
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
@@ -1476,24 +1483,24 @@ class XYZFile(ElevationDataset):
             except:
                 pass
 
-    def transform(self, dst_trans):
-        """transform the x/y using the dst_trans osr transformation (2d)
+    # def transform(self, dst_trans):
+    #     """transform the x/y using the dst_trans osr transformation (2d)
 
-        Args:
-          dst_trans: an srs transformation object
-        """
+    #     Args:
+    #       dst_trans: an srs transformation object
+    #     """
 
-        wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z)
-        point = ogr.CreateGeometryFromWkt(wkt)
-        try:
-            point.Transform(dst_trans)
-            if not 'inf' in point.ExportToWkt():
-                self.x = point.GetX() 
-                self.y = point.GetY()
-                self.z = point.GetZ()
-        except Exception as e:
-            sys.stderr.write('transform error: {}\n'.format(str(e)))
-        return(self)
+    #     wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z)
+    #     point = ogr.CreateGeometryFromWkt(wkt)
+    #     try:
+    #         point.Transform(dst_trans)
+    #         if not 'inf' in point.ExportToWkt():
+    #             self.x = point.GetX() 
+    #             self.y = point.GetY()
+    #             self.z = point.GetZ()
+    #     except Exception as e:
+    #         sys.stderr.write('transform error: {}\n'.format(str(e)))
+    #     return(self)
             
     def yield_points(self):
         #with open(self.fn, 'r') as xyzf:
@@ -3656,22 +3663,25 @@ class eHydroFetcher(Fetcher):
         
     def yield_ds(self, result):
 
-        src_gdb = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['gdb/'], outdir=self.fetch_module._outdir)
-        tmp_gdb = ogr.Open(src_gdb[0])
-        tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
-        src_srs = tmp_layer.GetSpatialRef()
-        src_epsg = gdalfun.osr_parse_srs(src_srs)
-        tmp_gdb = None
+        #src_gdb = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['gdb/'], outdir=self.fetch_module._outdir)
+        src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+
+        if src_gdb is not None:
+            tmp_gdb = ogr.Open(src_gdb)
+            tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
+            src_srs = tmp_layer.GetSpatialRef()
+            src_epsg = gdalfun.osr_parse_srs(src_srs)
+            tmp_gdb = None
         
-        src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
-        for src_usace in src_usaces:
-            usace_ds = DatasetFactory(mod=src_usace, data_format='168',
-                                      src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-                
-            yield(usace_ds)
+            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+            for src_usace in src_usaces:
+                usace_ds = DatasetFactory(mod=src_usace, data_format='168',
+                                          src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+
+                yield(usace_ds)
         
             
         # src_region = self.find_src_region(result)
@@ -4182,6 +4192,7 @@ def datalists_cli(argv=sys.argv):
     want_separate = False
     want_sm = False
     invert_region=False
+    z_precision=4
     
     ## ==============================================
     ## parse command line arguments.
@@ -4209,6 +4220,9 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
+            i = i + 1
+        elif arg == '--z_precision':
+            z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
         elif arg == '--mask' or arg == '-m':
             want_mask = True
@@ -4296,7 +4310,7 @@ def datalists_cli(argv=sys.argv):
             this_datalist = init_data(
                 dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='bilinear',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
-                want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=None
+                want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=None, dump_precision=z_precision
             )
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory._modules[this_datalist.data_format]['fmts']

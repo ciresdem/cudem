@@ -672,7 +672,32 @@ def p_untar(tar_file, exts=None, outdir='./'):
                         with open(ext_tfn, 'wb') as f:
                             f.write(t.read())
     return(src_procs)
-                            
+
+def gdb_unzip(src_zip, outdir='./', verbose=True):
+    src_gdb = None
+    with zipfile.ZipFile(src_zip) as z:
+        zfs = z.namelist()
+        ext_mask = ['.gdb' in x for x in zfs]
+
+        for i, zf in enumerate(zfs):
+            if ext_mask[i]:
+                ext_zf = os.path.join(outdir, zf)
+                if not os.path.exists(ext_zf) and not ext_zf.endswith('/'):
+                    _dirname = os.path.dirname(ext_zf)
+                    if not os.path.exists(_dirname):
+                        os.makedirs(_dirname)
+
+                    with open(ext_zf, 'wb') as f:
+                        f.write(z.read(zf))
+
+                    if verbose:
+                        echo_msg('Extracted {}'.format(ext_zf))
+                        
+                elif ext_zf.endswith('.gdb/'):
+                    src_gdb = ext_zf
+
+    return(src_gdb)
+
 def p_unzip(src_file, exts=None, outdir='./', verbose=True):
     """unzip/gunzip src_file based on `exts`
     
