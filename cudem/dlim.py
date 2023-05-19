@@ -2744,6 +2744,7 @@ class OGRFile(ElevationDataset):
     def yield_xyz(self):
         ds_ogr = ogr.Open(self.fn)
         #print(self.fn)
+        count = 0
         if ds_ogr is not None:
             layer_name = None
             if self.ogr_layer is None:
@@ -2768,8 +2769,7 @@ class OGRFile(ElevationDataset):
                     if not geom.GetGeometryName() == 'MULTIPOINT':
                         xyzs = [xyzs]
 
-                    for xyz in xyzs:
-                        
+                    for xyz in xyzs:                        
                         if not geom.Is3D():
                             if self.elev_field is None:
                                 self.elev_field = find_elevation_field(f)
@@ -2788,9 +2788,17 @@ class OGRFile(ElevationDataset):
                         if self.dst_trans is not None:
                             this_xyz.transform(self.dst_trans)
 
+                        count += 1
                         yield(this_xyz)
 
             ds_ogr = layer_s = None
+            if self.verbose:
+                utils.echo_msg(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+
 
     def yield_array(self):        
         for arrs in self.yield_block_array():
