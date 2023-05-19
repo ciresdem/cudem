@@ -1503,7 +1503,6 @@ class XYZFile(ElevationDataset):
     #     return(self)
             
     def yield_points(self):
-        #with open(self.fn, 'r') as xyzf:
         self.init_ds()            
         #for points in lasf.chunk_iterator(2_000_000):        
         points = np.loadtxt(
@@ -1553,7 +1552,7 @@ class XYZFile(ElevationDataset):
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
-                    
+                     
     def _yield_array(self):
         out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
         count = 0
@@ -3451,10 +3450,10 @@ class Fetcher(ElevationDataset):
             utils.remove_glob(self.fn)
     
     def yield_ds(self, result):
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight, parent=self, src_region=self.region,
-                             invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
-                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
-                             cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
+        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                             uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
 
     def yield_xyz(self):
         for ds in self.parse():
@@ -3532,10 +3531,11 @@ class GEBCOFetcher(Fetcher):
                             
                     gdalfun.gdal_write(tid_array, tmp_tid, tid_config)
 
-                    yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid), src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                         x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                         parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                         cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                    yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid),
+                                         src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                                         weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
+                                         invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
+                                         verbose=self.verbose)._acquire_module())
                     
                     utils.remove_glob(tmp_tid)
         else:
@@ -3658,63 +3658,8 @@ class HydroNOSFetcher(Fetcher):
 class eHydroFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def find_src_region(self, result):
-        """attempt to grab the src_region from the xml metadata"""
-        
-        src_region = None
-        src_xmls = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['xml', 'XML'], outdir=self.fetch_module._outdir)
-        for src_xml in src_xmls:
-            if src_region is None:
-                this_xml = lxml.etree.parse(src_xml)
-                if this_xml is not None:
-                    try:
-                        w = this_xml.find('.//westbc').text
-                        e = this_xml.find('.//eastbc').text
-                        n = this_xml.find('.//northbc').text
-                        s = this_xml.find('.//southbc').text
-                        src_region = regions.Region().from_list(
-                            [float(w), float(e), float(s), float(n)]
-                        )
-                    except:
-                        utils.echo_warning_msg('could not parse region')
-                        src_region = self.region
-
-            utils.remove_glob(src_xml)
-        return(src_region)
-        
-    def find_epsg(self, src_region):
-        """search the stateplane vector for a match
-        keep buffering the src region until a match is found...
-        """
-        
-        tmp_region = src_region.copy()
-        utils.echo_msg(tmp_region)
-        sp_fn = os.path.join(FRED.fetchdata, 'stateplane.geojson')
-        sp = ogr.Open(sp_fn)
-        layer = sp.GetLayer()
-        this_geom = tmp_region.export_as_geom()
-        layer.SetSpatialFilter(this_geom)
-        cnt = 0
-        while len(layer) == 0:
-            cnt+=1
-            tmp_region.buffer(pct=10)
-            utils.echo_msg('buffering region ({}): {}'.format(cnt, tmp_region))
-            this_geom = tmp_region.export_as_geom()
-            layer.SetSpatialFilter(None)
-            layer.SetSpatialFilter(this_geom)
-
-        for feature in layer:
-            src_epsg = feature.GetField('EPSG')
-            break
-
-        utils.echo_msg('ehydro epsg is: {}'.format(src_epsg))
-        sp = None
-        return(src_epsg)
         
     def yield_ds(self, result):
-
-        #src_gdb = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['gdb/'], outdir=self.fetch_module._outdir)
         src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
 
         if src_gdb is not None:
@@ -3730,42 +3675,24 @@ class eHydroFetcher(Fetcher):
                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
-            
-            # src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
-            # for src_usace in src_usaces:
-            #     usace_ds = DatasetFactory(mod=src_usace, data_format='168', #data_format='302:ogr_layer="SurveyPoint", elev_field="Z_depth"',
-            #                               src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-            #                               x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-            #                               parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-            #                               cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
 
-            #     yield(usace_ds)
+    def yield_ds_XYZ(self, result):
+        src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+        if src_gdb is not None:
+            tmp_gdb = ogr.Open(src_gdb)
+            tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
+            src_srs = tmp_layer.GetSpatialRef()
+            src_epsg = gdalfun.osr_parse_srs(src_srs)
+            tmp_gdb = None
+
+            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+            for src_usace in src_usaces:
+                usace_ds = DatasetFactory(mod=src_usace, data_format='168:z_scale=.3048', src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None,
+                                          dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
+                                          src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                yield(usace_ds)
         
-            
-        # src_region = self.find_src_region(result)
-        # if src_region is not None and src_region.valid_p():
-        #     src_epsg = self.find_epsg(src_region)
-        #     src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
-        #     for src_usace in src_usaces:
-        #         # usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048', src_region=self.region, parent=self,
-        #         #                           cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-
-                
-        #         # ## check for median z value to see if they are using depth or height
-        #         # ## most data should be negative...
-        #         # usace_ds.initialize()
-        #         # usace_xyz = np.array(usace_ds.export_xyz_as_list(z_only=True))
-        #         # #if len(usace_xyz) > 0:
-        #         # z_med = np.percentile(usace_xyz, 50)
-        #         z_scale = .3048 #if z_med < 0 else -.3048
-        #         usace_ds = DatasetFactory(mod=src_usace, data_format='168:x_scale=.3048:y_scale=.3048:z_scale={}'.format(z_scale),
-        #                                   src_srs='epsg:{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-        #                                   x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-        #                                   parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-        #                                   cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-                
-        #         yield(usace_ds)
-
 class BlueTopoFetcher(Fetcher):
     def __init__(self, want_interpolation=False, **kwargs):
         super().__init__(**kwargs)

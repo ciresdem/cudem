@@ -57,7 +57,11 @@ import numpy as np
 from scipy import interpolate
 from scipy import spatial
 from scipy import ndimage
-import threading        
+import threading
+try:
+    import Queue as queue
+except: import queue as queue
+
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
@@ -722,6 +726,31 @@ class WafflesIDW(Waffle):
 ## TODO: rename this in some way
 ##
 ## ==============================================
+
+def scipy_queue(q, m):
+    while True:
+        this_srcwin = q.get()
+        m.grid_srcwin(this_srcwin)
+        q.task_done()
+
+class grid_scipy(threading.Thread):
+    def __init__(self, mod, srcwins, n_threads=3):
+        threading.Thread.__init__(self)
+        self.mod = mod
+        self.scipy_q = queue.Queue()
+        self.srcwins = srcwins
+        self.n_threads = n_threads
+        
+    def run(self):
+        for _ in range(self.n_threads):
+            t = threading.Thread(target=scipy_queue, args=(self.scipy_q, self.mod))
+            t.daemon = True
+            t.start()
+        for this_srcwin in self.srcwins:
+            self.scipy_q.put(this_srcwin)
+            
+        self.scipy_q.join()
+        
 class WafflesSciPy(Waffle):
     """Generate DEM using Scipy gridding interpolation
     
@@ -750,6 +779,100 @@ class WafflesSciPy(Waffle):
         self.chunk_step = chunk_step
         self.chunk_buffer = utils.int_or(chunk_buffer)
 
+    def _run(self):
+        self.open()
+        srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
+        num_threads = 3
+        try:
+            gs = grid_scipy(self, srcwins, n_threads=num_threads)
+            gs.daemon = True
+    
+            gs.start()
+            gs.join()
+        except (KeyboardInterrupt, SystemExit):
+            utils.echo_error_msg('user breakage...please wait while fetches exits.')
+            stop_threads = True
+            while not gs.scipy_q.empty():
+                try:
+                    gs.scipy_q.get(False)
+                except Empty:
+                    continue
+                        
+                gs.scipy_q.task_done()
+            
+        self.close()
+        
+    def _open(self):
+        if self.method not in self.methods:
+            utils.echo_error_msg(
+                '{} is not a valid interpolation method, options are {}'.format(
+                    self.method, self.methods
+                )
+            )
+            return(self)
+        
+        if self.chunk_size is None:
+            self.chunk_size = int(self.ds_config['nx'] * .1)
+            self.chunk_size = 10 if self.chunk_size < 10 else self.chunk_size
+            
+        if self.chunk_step is None:
+            self.chunk_step = int(self.chunk_size/2)
+
+        self.stack_ds = gdal.Open(self.stack)
+        self.points_band = self.stack_ds.GetRasterBand(1)
+        self.points_no_data = self.points_band.GetNoDataValue()        
+        self.interp_ds = self.stack_ds.GetDriver().Create(
+            self.fn, self.stack_ds.RasterXSize, self.stack_ds.RasterYSize, bands=1, eType=self.points_band.DataType,
+            options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
+        )
+        if self.interp_ds is not None:
+            self.interp_ds.SetProjection(self.stack_ds.GetProjection())
+            self.interp_ds.SetGeoTransform(self.stack_ds.GetGeoTransform())
+            self.interp_band = self.interp_ds.GetRasterBand(1)
+            self.interp_band.SetNoDataValue(np.nan)
+        else:
+            utils.echo_error_msg('could not create {}...'.format(self.fn))
+            return(self)
+        
+        if self.verbose:
+            utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
+
+    def _close(self):
+        self.interp_ds = self.stack_ds = None            
+            
+    def _grid_srcwin(self, srcwin):
+        srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
+        points_array = self.points_band.ReadAsArray(*srcwin_buff)
+        points_array[points_array == self.points_band.GetNoDataValue()] = np.nan
+        point_indices = np.nonzero(~np.isnan(points_array))
+        if np.count_nonzero(np.isnan(points_array)) == 0:
+            y_origin = srcwin[1]-srcwin_buff[1]
+            x_origin = srcwin[0]-srcwin_buff[0]
+            y_size = y_origin + srcwin[3]
+            x_size = x_origin + srcwin[2]
+            points_array = points_array[y_origin:y_size,x_origin:x_size]
+            self.interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+
+        elif len(point_indices[0]):
+            point_values = points_array[point_indices]
+            xi, yi = np.mgrid[0:srcwin_buff[2],
+                              0:srcwin_buff[3]]
+            try:
+                interp_data = interpolate.griddata(
+                    np.transpose(point_indices), point_values,
+                    (xi, yi), method=self.method
+                )
+                y_origin = srcwin[1]-srcwin_buff[1]
+                x_origin = srcwin[0]-srcwin_buff[0]
+                y_size = y_origin + srcwin[3]
+                x_size = x_origin + srcwin[2]
+                self.interp_data = interp_data[y_origin:y_size,x_origin:x_size]
+                self.interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
+            except Exception as e:
+                pass
+                
+        return(self)
+        
     def run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
@@ -817,8 +940,8 @@ class WafflesSciPy(Waffle):
                     )
                     y_origin = srcwin[1]-srcwin_buff[1]
                     x_origin = srcwin[0]-srcwin_buff[0]
-                    y_size = y_origin + srcwin_buff[3]
-                    x_size = x_origin + srcwin_buff[2]
+                    y_size = y_origin + srcwin[3]
+                    x_size = x_origin + srcwin[2]
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
                 except Exception as e:
@@ -3976,6 +4099,7 @@ Options:
 \t\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
 \t\t\t\tto retain the data, use the --keep-cache flag
   -N, --nodata\t\t\tNODATA value of output DEM
+  -L, --limits\t\t\tLIMIT the output elevations values, append 'u<value>' for the upper limit or 'l<value' for lower limit
 
   -f, --transform\t\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
@@ -4139,6 +4263,21 @@ def waffles_cli(argv = sys.argv):
             wg['ndv'] = utils.float_or(argv[i + 1], -9999)
             i = i + 1
         elif arg[:2] == '-D': wg['ndv'] = utils.float_or(argv[i + 1], -9999)
+
+        elif arg == '--limits' or arg == '-L':
+            this_limit = argv[i + 1]
+            if this_limit.startswith('u'):
+                wg['upper_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('l'):
+                wg['lower_limit'] = utils.float_or(this_limit[1:])
+                
+            i = i + 1
+        elif arg[:2] == '-L':
+            this_limit = argv[i + 1]
+            if this_limit.startswith('u'):
+                wg['upper_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('l'):
+                wg['lower_limit'] = utils.float_or(this_limit[1:])
         
         elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
