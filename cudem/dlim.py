@@ -2716,14 +2716,16 @@ class OGRFile(ElevationDataset):
     uncertainty_field (str): the field containing uncertainty_values
     """
 
-    _known_layer_names = ['SOUNDG', 'Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'SurveyPoint']
+    _known_layer_names = ['SOUNDG', 'SurveyPoint_HD', 'SurveyPoint']
+    _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'surveyPointElev', 'Z_depth', 'Z_height']
     
-    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None, **kwargs):
+    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None, z_scale = None, **kwargs):
         super().__init__(**kwargs)
         self.ogr_layer = ogr_layer
         self.elev_field = elev_field
         self.weight_field = weight_field
         self.uncertainty_field = uncertainty_field
+        self.z_scale = utils.float_or(z_scale)
 
     def find_elevation_layer(self, ds_ogr):
         for l in self._known_layer_names:
@@ -2732,6 +2734,13 @@ class OGRFile(ElevationDataset):
                 return((l, test_layer))
         return(None, None)
 
+    def find_elevation_field(self, ogr_feature):
+        for f in self._known_elev_fields:
+            test_field = ogr_feature.GetField(f)
+            if test_field is not None:
+                return((l, test_field))
+        return(None, None)
+    
     def yield_xyz(self):
         ds_ogr = ogr.Open(self.fn)
         #print(self.fn)
@@ -2741,7 +2750,7 @@ class OGRFile(ElevationDataset):
                 layer_name, layer_s = self.find_elevation_layer(ds_ogr)
             elif utils.str_or(self.ogr_layer) is not None:
                 layer_name = self.ogr_layer
-                layer_s = ds_ogr.GetLayerByName(layer_name)
+                layer_s = ds_ogr.GetLayer(str(self.ogr_layer))
             elif utils.int_or(self.ogr_layer) is not None:
                 layer_s = ds_ogr.GetLayer(self.ogr_layer)
             else:
@@ -2749,15 +2758,35 @@ class OGRFile(ElevationDataset):
 
             if layer_s is not None:
                 if self.region is not None:
-                    layer_s.SetSpatialFilter(self.region.export_as_geom())
+                    layer_s.SetSpatialFilter(self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom())
 
                 for f in layer_s:
-                    g = json.loads(f.GetGeometryRef().ExportToJson())
-                    for xyz in g['coordinates']:
+                    geom = f.GetGeometryRef()
+                    g = json.loads(geom.ExportToJson())
+
+                    xyzs = g['coordinates']
+                    if not geom.GetGeometryName() == 'MULTIPOINT':
+                        xyzs = [xyzs]
+
+                    for xyz in xyzs:
+                        
+                        if not geom.Is3D():
+                            if self.elev_field is None:
+                                self.elev_field = find_elevation_field(f)
+
+                            elev = f.GetField(self.elev_field)
+                            xyz.append(elev)
+
                         this_xyz = xyzfun.XYZPoint().from_list([float(x) for x in xyz])
+                        if self.z_scale is not None:
+                            this_xyz.z *= self.z_scale
+                            
                         if layer_name is not None:
                             if layer_name.lower() in ['soundg', 'depth']:
                                 this_xyz.z *= -1
+
+                        if self.dst_trans is not None:
+                            this_xyz.transform(self.dst_trans)
 
                         yield(this_xyz)
 
@@ -3672,16 +3701,23 @@ class eHydroFetcher(Fetcher):
             src_srs = tmp_layer.GetSpatialRef()
             src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
-        
-            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
-            for src_usace in src_usaces:
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168',
-                                          src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
 
-                yield(usace_ds)
+            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint:elev_field=surveyPointElev:z_scale=0.3048",
+                                      src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+            yield(usace_ds)
+            
+            # src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+            # for src_usace in src_usaces:
+            #     usace_ds = DatasetFactory(mod=src_usace, data_format='168', #data_format='302:ogr_layer="SurveyPoint", elev_field="Z_depth"',
+            #                               src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+            #                               x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+            #                               parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+            #                               cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+
+            #     yield(usace_ds)
         
             
         # src_region = self.find_src_region(result)
