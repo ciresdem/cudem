@@ -2761,7 +2761,9 @@ class OGRFile(ElevationDataset):
 
             if layer_s is not None:
                 if self.region is not None:
-                    layer_s.SetSpatialFilter(self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom())
+                    layer_s.SetSpatialFilter(
+                        self.region.export_as_geom() if self.dst_trans is None else self.trans_region.export_as_geom()
+                    )
 
                 for f in layer_s:
                     geom = f.GetGeometryRef()
@@ -2783,10 +2785,6 @@ class OGRFile(ElevationDataset):
                         if self.z_scale is not None:
                             this_xyz.z *= self.z_scale
                             
-                        if layer_name is not None:
-                            if layer_name.lower() in ['soundg', 'depth']:
-                                this_xyz.z *= -1
-
                         if self.dst_trans is not None:
                             this_xyz.transform(self.dst_trans)
 
@@ -3621,6 +3619,20 @@ class MarGravFetcher(Fetcher):
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+
+class ChartsFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+        src_000s = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['000'], outdir=self.fetch_module._outdir)
+        for src_000 in src_000s:
+            usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1",
+                                      src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+            yield(usace_ds)
             
 class HydroNOSFetcher(Fetcher):
     def __init__(self, **kwargs):
@@ -3877,7 +3889,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -105: {'name': 'nasadem', 'fmts': ['nasadem'], 'call': Fetcher},
         -106: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': MarGravFetcher},
         -107: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
-        -200: {'name': 'charts', 'fmts': ['charts'], 'call': Fetcher},
+        -200: {'name': 'charts', 'fmts': ['charts'], 'call': ChartsFetcher},
         -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
         -202: {'name': 'hydronos', 'fmts': ['hydronos'], 'call': HydroNOSFetcher},
         -203: {'name': 'ehydro', 'fmts': ['ehydro'], 'call': eHydroFetcher},
