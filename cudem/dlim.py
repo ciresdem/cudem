@@ -79,7 +79,13 @@ import json
 import laspy as lp
 import math
 from datetime import datetime
-
+import threading
+import multiprocessing as mp
+#mp.set_start_method('spawn')
+try:
+   import Queue as queue
+except: import queue as queue
+        
 import numpy as np
 from scipy.spatial import ConvexHull
 import lxml.etree
@@ -162,85 +168,224 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
     #     utils.echo_error_msg('could not initialize data, {}'.format(e))
     #     return(None)
 
-# def fetch_queue(q, m, p=False, c=True):
-#     """fetch queue `q` of fetch results\
-#     each fetch queue should be a list of the following:
-#     [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
-#     if region is defined, will prompt the queue to process the data to the given region.
-#     """
-    
-#     while True:
-#         fetch_args = q.get()
-#         #this_region = fetch_args[2]
-#         if not m.callback():
-#             if not os.path.exists(os.path.dirname(fetch_args[1])):
-#                 try:
-#                     os.makedirs(os.path.dirname(fetch_args[1]))
-#                 except: pass
-            
-#             #if this_region is None:
-#             if not p:
-#                 if fetch_args[0].split(':')[0] == 'ftp':
-#                     Fetch(
-#                         url=fetch_args[0],
-#                         callback=m.callback,
-#                         verbose=m.verbose,
-#                         headers=m.headers
-#                     ).fetch_ftp_file(fetch_args[1])
-#                 else:
-#                     Fetch(
-#                         url=fetch_args[0],
-#                         callback=m.callback,
-#                         verbose=m.verbose,
-#                         headers=m.headers,
-#                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
-#                     ).fetch_file(fetch_args[1], check_size=c)
-#             else:
-#                 if m.region is not None:
-#                     o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '_' + m.region.format('fn') + '.xyz'
-#                 else: o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '.xyz'
-                
-#                 utils.echo_msg('processing local file: {}'.format(o_x_fn))
-#                 if not os.path.exists(o_x_fn):
-#                     with open(o_x_fn, 'w') as out_xyz:
-#                         m.dump_xyz(fetch_args, dst_port=out_xyz)
-                        
-#                     try:
-#                         if os.path.exists(o_x_fn):
-#                             if os.stat(o_x_fn).st_size == 0:
-#                                 utils.remove_glob(o_x_fn)
-                                
-#                     except: pass
-#         q.task_done()
+## ==============================================
+##
+## threads and queues for stacks
+##
+## ==============================================
+def arr_queue(procnum, qq, q, ds_list):
+    with utils.CliProgress('Process-{}: parsing data from queue'.format(procnum)) as pbar:
+        while True:
+            if qq.empty():
+                break
 
-# class fetch_results(threading.Thread):
-#     """fetch results gathered from a fetch module.
-#     results is a list of URLs with data type
-#     e.g. results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
-#     """
+            idx = qq.get_nowait()
+            if idx is None:
+                break
+
+            this_ds = ds_list[idx]
+            this_ds.verbose = True
+            for arrs_l in this_ds.yield_array():
+                pbar.update()
+                q.put((arrs_l[0].copy(), arrs_l[1], arrs_l[2]))
+
+class stacks_ds(threading.Thread):
+    def __init__(self, mod, n_threads=3, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
+        threading.Thread.__init__(self)
+        self.mod = mod
+        self.arr_q = mp.Queue()
+        self.stack_q = mp.Queue()
+        self.n_threads = n_threads
+        self.supercede = supercede
+        self.out_name = out_name
+        self.ndv = ndv
+        self.fmt = fmt
+        self.want_mask = want_mask
+        self.pbar = utils.CliProgress('stacking data from {}'.format(self.mod))
+        self.ds_list = []
+        self.arr_list = []
+                
+    def run(self):
+        q = mp.Queue()
+        qq = mp.Queue()
+        ds_list = []
+        processes = []
+        q_list = []
+        with utils.CliProgress('initializing stack') as p:
+            self._init_stacks()
+
+        for idx, this_ds in enumerate(self.mod.parse_json()):
+            #ds_list.append(DatasetFactory(mod=this_ds.params['mod'], **this_ds.params['kwargs'], **this_ds.params['mod_args']))
+            ds_list.append(this_ds)
+            qq.put(idx)
+
+        for i in range(self.n_threads):
+           qq.put(None)
+            
+        for i in range(self.n_threads):
+            t = mp.Process(target=arr_queue, args=(i, qq, q, ds_list))
+            processes.append(t)
+            t.daemon = True
+            t.start()
+            
+        while True:
+            self.pbar.update()
+            if not any([t.is_alive() for t in processes]):
+                q.put(None)
+
+            try:
+                arrs = q.get(True, 5)
+            except queue.Empty:
+                continue
     
-#     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
-#     def __init__(self, mod, want_proc=False, check_size=True, n_threads=3):
-#         threading.Thread.__init__(self)
-#         self.fetch_q = queue.Queue()
-#         self.mod = mod
-#         #self.outdir_ = self.mod._outdir
-#         self.want_proc = want_proc
-#         self.check_size = check_size
-#         self.n_threads = n_threads
-#         if len(self.mod.results) == 0:
-#             self.mod.run()
+            if arrs is None:
+                break
+            else:
+                self._stack_arr(*arrs)
+                
+        [t.join() for t in processes]
+        with utils.CliProgress('finalizing stack') as p:
+            self._finalize_stacks()
+            
+        self.pbar.end(0, 'stacked data from {}'.format(self.mod))
+
+    def _init_stacks(self):
+        ## check for x_inc, y_inc and region
+        utils.set_cache(self.mod.cache_dir)
         
-#     def run(self):
-#         for _ in range(self.n_threads):
-#             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc, self.check_size))
-#             t.daemon = True
-#             t.start()
-#         for row in self.mod.results:
-#             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), self.stop_threads, row[2], self.fetch_module])
-#             #self.fetch_q.put([row[0], os.path.join(self.outdir_, row[1]), row[2], self.mod])
-#             self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
-#         self.fetch_q.join()
+        ## initialize the output raster
+        if self.out_name is None:
+            self.out_name = os.path.join(self.mod.cache_dir, '{}'.format(
+                utils.append_fn('_dlim_stacks', self.mod.region, self.mod.x_inc)
+            ))
+            
+        self.out_file = '{}.{}'.format(self.out_name, gdalfun.gdal_fext(self.fmt))
+        xcount, ycount, dst_gt = self.mod.region.geo_transform(
+            x_inc=self.mod.x_inc, y_inc=self.mod.y_inc, node='grid'
+        )
+        if xcount <= 0 or ycount <=0:
+            utils.echo_error_msg(
+                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                    xcount, ycount, self.mod.x_inc, self.mod.y_inc, self.mod.region
+                )
+            )
+            sys.exit(-1)
+
+        gdt = gdal.GDT_Float32
+        c_gdt = gdal.GDT_Int32
+        driver = gdal.GetDriverByName(self.fmt)
+        if os.path.exists(self.out_file):
+            driver.Delete(self.out_file)
+        
+        self.dst_ds = driver.Create(self.out_file, xcount, ycount, 5, gdt,
+                                    options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if self.fmt != 'MEM' else [])
+
+        if self.dst_ds is None:
+            utils.echo_error_msg('failed to create stack grid...')
+            sys.exit(-1)
+            
+        self.dst_ds.SetGeoTransform(dst_gt)
+        self.stacked_bands = {'z': self.dst_ds.GetRasterBand(1), 'count': self.dst_ds.GetRasterBand(2),
+                              'weights': self.dst_ds.GetRasterBand(3), 'uncertainty': self.dst_ds.GetRasterBand(4),
+                              'src_uncertainty': self.dst_ds.GetRasterBand(5) }        
+        self.stacked_data = {'z': None, 'count': None, 'weights': None, 'uncertainty': None, 'src_uncertainty': None}
+        
+        for key in self.stacked_bands.keys():
+            self.stacked_bands[key].SetNoDataValue(np.nan)
+            self.stacked_bands[key].SetDescription(key)
+        
+    def _stack_arr(self, arrs, srcwin, gt):
+        ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+        for key in self.stacked_bands.keys():
+            self.stacked_data[key] = self.stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+            self.stacked_data[key][np.isnan(self.stacked_data[key])] = 0
+
+        ## set incoming np.nans to zero and mask to non-nan count
+        arrs['weight'][np.isnan(arrs['z'])] = 0
+        arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+        arrs['z'][np.isnan(arrs['z'])] = 0
+        for arr_key in arrs:
+            if arrs[arr_key] is not None:
+                arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+
+        ## add the count to the accumulated rasters
+        self.stacked_data['count'] += arrs['count']
+
+        ## supercede based on weights, else do weighted mean
+        ## todo: do (weighted) mean on cells with same weight
+        if self.supercede:
+            ## higher weight supercedes lower weight (first come first served atm)
+            self.stacked_data['z'][arrs['weight'] > self.stacked_data['weights']] = arrs['z'][arrs['weight'] > self.stacked_data['weights']]
+            self.stacked_data['src_uncertainty'][arrs['weight'] > self.stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > self.stacked_data['weights']]
+            self.stacked_data['weights'][arrs['weight'] > self.stacked_data['weights']] = arrs['weight'][arrs['weight'] > self.stacked_data['weights']]
+            #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+            ## uncertainty is src_uncertainty, as only one point goes into a cell
+            self.stacked_data['uncertainty'][:] = self.stacked_data['src_uncertainty'][:]
+
+            # ## reset all data where weights are zero to nan
+            # for key in stacked_bands.keys():
+            #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
+
+        else:
+            ## accumulate incoming z*weight and uu*weight                
+            self.stacked_data['z'] += (arrs['z'] * arrs['weight'])
+            self.stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+
+            ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+            self.stacked_data['weights'] += arrs['weight']
+            self.stacked_data['weights'][self.stacked_data['weights'] == 0] = np.nan
+            ## accumulate variance * weight
+            self.stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (self.stacked_data['z'] / self.stacked_data['weights'])), 2)
+
+        ## write out results to accumulated rasters
+        #stacked_data['count'][stacked_data['count'] == 0] = ndv
+        self.stacked_data['count'][self.stacked_data['count'] == 0] = np.nan
+
+        for key in self.stacked_bands.keys():
+            #stacked_data[key][np.isnan(stacked_data[key])] = ndv
+            #stacked_data[key][stacked_data['count'] == ndv] = ndv
+            self.stacked_data[key][np.isnan(self.stacked_data['count'])] = np.nan
+            if self.supercede:
+                self.stacked_data[key][np.isnan(self.stacked_data[key])] = self.ndv
+            self.stacked_bands[key].WriteArray(self.stacked_data[key], srcwin[0], srcwin[1])
+
+    def _finalize_stacks(self):
+        ## Finalize weighted mean rasters and close datasets
+        ## incoming arrays have all been processed, if weighted mean the
+        ## "z" is the sum of z*weight, "weights" is the sum of weights
+        ## "uncertainty" is the sum of variance*weight
+        if not self.supercede:
+            srcwin = (0, 0, self.dst_ds.RasterXSize, self.dst_ds.RasterYSize)
+            for y in range(
+                    srcwin[1], srcwin[1] + srcwin[3], 1
+            ):
+                for key in self.stacked_bands.keys():
+                    self.stacked_data[key] = self.stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                    #stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+                ## average the accumulated arrays for finalization
+                ## z and u are weighted sums, so divide by weights
+                self.stacked_data['weights'] = self.stacked_data['weights'] / self.stacked_data['count']
+                self.stacked_data['src_uncertainty'] = (self.stacked_data['src_uncertainty'] / self.stacked_data['weights']) / self.stacked_data['count']
+                self.stacked_data['z'] = (self.stacked_data['z'] / self.stacked_data['weights']) / self.stacked_data['count']
+
+                ## apply the source uncertainty with the sub-cell variance uncertainty
+                ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                self.stacked_data['uncertainty'] = np.sqrt((self.stacked_data['uncertainty'] / self.stacked_data['weights']) / self.stacked_data['count'])
+                self.stacked_data['uncertainty'] = np.sqrt(np.power(self.stacked_data['src_uncertainty'], 2) + np.power(self.stacked_data['uncertainty'], 2))
+
+                ## write out final rasters
+                for key in self.stacked_bands.keys():
+                    self.stacked_data[key][np.isnan(self.stacked_data[key])] = self.ndv
+                    self.stacked_bands[key].WriteArray(self.stacked_data[key], srcwin[0], y)
+
+        ## set the final output nodatavalue
+        for key in self.stacked_bands.keys():
+            self.stacked_bands[key].DeleteNoDataValue()
+        for key in self.stacked_bands.keys():
+            self.stacked_bands[key].SetNoDataValue(self.ndv)
+
+        self.dst_ds = None
     
 ## ==============================================
 ## INF Files
@@ -3515,6 +3660,7 @@ class GEBCOFetcher(Fetcher):
                         wanted_gebco_fns.append(tid_fn)
 
                 for tid_fn in wanted_gebco_fns:
+                    utils.echo_msg(tid_fn)
                     tmp_tid = utils.make_temp_fn('tmp_tid.tif', temp_dir=self.fetch_module._outdir)
                     with gdalfun.gdal_datasource(tid_fn) as tid_ds:
                         tid_config = gdalfun.gdal_infos(tid_ds)
@@ -3530,7 +3676,7 @@ class GEBCOFetcher(Fetcher):
                         tid_array[tid_array == tid_key] = self.fetch_module.tid_dic[tid_key][1]
                             
                     gdalfun.gdal_write(tid_array, tmp_tid, tid_config)
-
+                    utils.echo_msg(tmp_tid)
                     yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid),
                                          src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                                          weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,

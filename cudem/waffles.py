@@ -58,8 +58,9 @@ from scipy import interpolate
 from scipy import spatial
 from scipy import ndimage
 import threading
+import multiprocessing as mp
 try:
-    import Queue as queue
+   import Queue as queue
 except: import queue as queue
 
 from osgeo import gdal
@@ -400,8 +401,28 @@ class Waffle:
             if self.want_stack:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
                 mask_name = '{}_stack_m'.format(os.path.basename(self.name))
-                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
-                                               supercede=self.supercede, want_mask=self.want_mask)
+                num_threads = 8
+                try:
+                    sk = dlim.stacks_ds(self.data, n_threads=num_threads, out_name=os.path.join(self.cache_dir, stack_name),
+                                        supercede=self.supercede, want_mask=self.want_mask)
+                    sk.daemon = True
+                
+                    sk.start()
+                    sk.join()                
+                except (KeyboardInterrupt, SystemExit):
+                    utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                    stop_threads = True
+                    while not sk.arr_q.empty():
+                        try:
+                            sk.arr_q.get(False)
+                        except Empty:
+                            continue
+                        
+                        sk.arr_q.task_done()                        
+
+                self.stack = sk.out_file
+                #self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                #                               supercede=self.supercede, want_mask=self.want_mask)
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
@@ -726,30 +747,58 @@ class WafflesIDW(Waffle):
 ## TODO: rename this in some way
 ##
 ## ==============================================
+def write_array_queue(wq, q, m):
+    while True:
+        wq_args = wq.get()
+        #utils.echo_msg('writing array to disk')
+        m.interp_band.WriteArray(wq_args[0], wq_args[1][0], wq_args[1][1])
+        wq.task_done()
 
-def scipy_queue(q, m):
+def scipy_queue(q, wq, m, p):
     while True:
         this_srcwin = q.get()
-        m.grid_srcwin(this_srcwin)
-        q.task_done()
+        p.update(msg='gridding data to {}: {}'.format(m, q.qsize()))
+        try:
+            interp_array = m.grid_srcwin(this_srcwin)
+        except Exception as e:
+            utils.echo_msg(e)
+            utils.echo_warning_msg('failed to grid srcwin {}, placing back into queue'.format(this_srcwin))
+            q.put(this_srcwin)
+            q.task_done()
+            continue
 
+        wq.put([interp_array, this_srcwin])
+        q.task_done()
+               
 class grid_scipy(threading.Thread):
-    def __init__(self, mod, srcwins, n_threads=3):
+    def __init__(self, mod, n_threads=3):
         threading.Thread.__init__(self)
         self.mod = mod
         self.scipy_q = queue.Queue()
-        self.srcwins = srcwins
+        self.grid_q = queue.Queue()
         self.n_threads = n_threads
+        self.pbar = utils.CliProgress('gridding data to {}'.format(self.mod))
         
     def run(self):
+        for _ in range(1):
+            tg = threading.Thread(target=write_array_queue, args=(self.grid_q, self.scipy_q, self.mod))
+            tg.daemon = True
+            tg.start()
+
         for _ in range(self.n_threads):
-            t = threading.Thread(target=scipy_queue, args=(self.scipy_q, self.mod))
+            t = threading.Thread(target=scipy_queue, args=(self.scipy_q, self.grid_q, self.mod, self.pbar))
             t.daemon = True
             t.start()
-        for this_srcwin in self.srcwins:
+
+        for this_srcwin in utils.yield_srcwin(
+                n_size=(self.mod.ycount, self.mod.xcount), n_chunk=self.mod.chunk_size,
+                step=self.mod.chunk_size, verbose=True
+        ):
             self.scipy_q.put(this_srcwin)
-            
+
+        self.grid_q.join()
         self.scipy_q.join()
+        self.pbar.end(0, 'gridded data to {}'.format(self.mod))
         
 class WafflesSciPy(Waffle):
     """Generate DEM using Scipy gridding interpolation
@@ -769,7 +818,7 @@ class WafflesSciPy(Waffle):
     """
     
     def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 10,
-                 chunk_step = None, **kwargs):
+                 chunk_step = None, num_threads = 1, **kwargs):
         """generate a `scipy` dem"""
         
         super().__init__(**kwargs)
@@ -778,13 +827,13 @@ class WafflesSciPy(Waffle):
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = chunk_step
         self.chunk_buffer = utils.int_or(chunk_buffer)
+        self.num_threads = utils.int_or(num_threads, 1)
 
-    def _run(self):
+    def run(self):
         self.open()
-        srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
-        num_threads = 3
+        #srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
         try:
-            gs = grid_scipy(self, srcwins, n_threads=num_threads)
+            gs = grid_scipy(self, n_threads=self.num_threads)
             gs.daemon = True
     
             gs.start()
@@ -801,8 +850,9 @@ class WafflesSciPy(Waffle):
                 gs.scipy_q.task_done()
             
         self.close()
+        return(self)
         
-    def _open(self):
+    def open(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
                 '{} is not a valid interpolation method, options are {}'.format(
@@ -837,13 +887,17 @@ class WafflesSciPy(Waffle):
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
 
-    def _close(self):
+        self.points_array = self.points_band.ReadAsArray()
+        self.stack_ds = None
+
+    def close(self):
         self.interp_ds = self.stack_ds = None            
             
-    def _grid_srcwin(self, srcwin):
+    def grid_srcwin(self, srcwin):
         srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
-        points_array = self.points_band.ReadAsArray(*srcwin_buff)
-        points_array[points_array == self.points_band.GetNoDataValue()] = np.nan
+        points_array = self.points_array[srcwin_buff[1]:srcwin_buff[1]+srcwin_buff[3],srcwin_buff[0]:srcwin_buff[0]+srcwin_buff[2]]
+        #print(points_array)
+        points_array[points_array == self.points_no_data] = np.nan
         point_indices = np.nonzero(~np.isnan(points_array))
         if np.count_nonzero(np.isnan(points_array)) == 0:
             y_origin = srcwin[1]-srcwin_buff[1]
@@ -851,29 +905,33 @@ class WafflesSciPy(Waffle):
             y_size = y_origin + srcwin[3]
             x_size = x_origin + srcwin[2]
             points_array = points_array[y_origin:y_size,x_origin:x_size]
-            self.interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            #self.interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
+            return(points_array)
 
         elif len(point_indices[0]):
             point_values = points_array[point_indices]
+            #utils.echo_msg(point_values)
             xi, yi = np.mgrid[0:srcwin_buff[2],
                               0:srcwin_buff[3]]
-            try:
-                interp_data = interpolate.griddata(
-                    np.transpose(point_indices), point_values,
-                    (xi, yi), method=self.method
-                )
-                y_origin = srcwin[1]-srcwin_buff[1]
-                x_origin = srcwin[0]-srcwin_buff[0]
-                y_size = y_origin + srcwin[3]
-                x_size = x_origin + srcwin[2]
-                self.interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-                self.interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
-            except Exception as e:
-                pass
+            #try:
+            interp_data = interpolate.griddata(
+                np.transpose(point_indices), point_values,
+                (xi, yi), method=self.method
+            )
+            y_origin = srcwin[1]-srcwin_buff[1]
+            x_origin = srcwin[0]-srcwin_buff[0]
+            y_size = y_origin + srcwin[3]
+            x_size = x_origin + srcwin[2]
+            interp_data = interp_data[y_origin:y_size,x_origin:x_size]
+            #self.interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
+            #utils.echo_msg(interp_data)
+            return(interp_data)
+            #except Exception as e:
+            #    return(points_array)
                 
-        return(self)
+        return(None)
         
-    def run(self):
+    def _run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
                 '{} is not a valid interpolation method, options are {}'.format(
@@ -896,7 +954,7 @@ class WafflesSciPy(Waffle):
 
         stack_ds = gdal.Open(self.stack)
         points_band = stack_ds.GetRasterBand(1)
-        points_no_data = points_band.GetNoDataValue()        
+        points_no_data = points_band.GetNoDataValue()
         interp_ds = stack_ds.GetDriver().Create(
             self.fn, stack_ds.RasterXSize, stack_ds.RasterYSize, bands=1, eType=points_band.DataType,
             options=["BLOCKXSIZE=256", "BLOCKYSIZE=256", "TILED=YES", "COMPRESS=LZW", "BIGTIFF=YES"]
@@ -3832,6 +3890,8 @@ class WaffleDEM:
         
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
                 clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None):
+
+        utils.echo_msg('post processing DEM')
         
         if self.ds_config is None:
             self.initialize()
