@@ -402,27 +402,27 @@ class Waffle:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
                 mask_name = '{}_stack_m'.format(os.path.basename(self.name))
                 num_threads = 8
-                try:
-                    sk = dlim.stacks_ds(self.data, n_threads=num_threads, out_name=os.path.join(self.cache_dir, stack_name),
-                                        supercede=self.supercede, want_mask=self.want_mask)
-                    sk.daemon = True
+                # try:
+                #     sk = dlim.stacks_ds(self.data, n_threads=num_threads, out_name=os.path.join(self.cache_dir, stack_name),
+                #                         supercede=self.supercede, want_mask=self.want_mask)
+                #     sk.daemon = True
                 
-                    sk.start()
-                    sk.join()                
-                except (KeyboardInterrupt, SystemExit):
-                    utils.echo_error_msg('user breakage...please wait while fetches exits.')
-                    stop_threads = True
-                    while not sk.arr_q.empty():
-                        try:
-                            sk.arr_q.get(False)
-                        except Empty:
-                            continue
+                #     sk.start()
+                #     sk.join()                
+                # except (KeyboardInterrupt, SystemExit):
+                #     utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                #     stop_threads = True
+                #     while not sk.arr_q.empty():
+                #         try:
+                #             sk.arr_q.get(False)
+                #         except Empty:
+                #             continue
                         
-                        sk.arr_q.task_done()                        
+                #         sk.arr_q.task_done()                        
 
-                self.stack = sk.out_file
-                #self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
-                #                               supercede=self.supercede, want_mask=self.want_mask)
+                # self.stack = sk.out_file
+                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                                               supercede=self.supercede, want_mask=self.want_mask)
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()

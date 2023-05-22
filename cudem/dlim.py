@@ -145,28 +145,28 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
               invert_region=False, cache_dir=None, dump_precision=4):
     """initialize a datalist object from a list of supported dataset entries"""
 
-    #try:
-    xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
-                           weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                           src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
-                           parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
-                           want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                           dump_precision=dump_precision)._acquire_module() for dl in data_list]
+    try:
+        xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
+                               weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
+                               src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
+                               parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
+                               want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+                               dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
-    if len(xdls) > 1:
-        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                 verbose=want_verbose, dump_precision=dump_precision)
-    else:
-        this_datalist = xdls[0]
+        if len(xdls) > 1:
+            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                     verbose=want_verbose, dump_precision=dump_precision)
+        else:
+            this_datalist = xdls[0]
 
-    return(this_datalist)
+        return(this_datalist)
     
-    # except Exception as e:
-    #     utils.echo_error_msg('could not initialize data, {}'.format(e))
-    #     return(None)
+    except Exception as e:
+        utils.echo_error_msg('could not initialize data, {}'.format(e))
+        return(None)
 
 ## ==============================================
 ##
