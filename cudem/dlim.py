@@ -3819,7 +3819,7 @@ class eHydroFetcher(Fetcher):
             src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
 
-            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=surveyPointElev:z_scale=0.3048",
+            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_depth:z_scale=-0.3048",
                                       src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
