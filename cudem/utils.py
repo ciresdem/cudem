@@ -1057,7 +1057,7 @@ def config_check(chk_vdatum=False, verbose=False):
     """
 
     #cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
-    cudem_cmd_config = '.cudem_cmd_config.json'
+    cudem_cmd_config = os.path.join(os.path.expanduser('~'), '.cudem_cmd_config.json')
     
     if os.path.exists(cudem_cmd_config):
         with open(cudem_cmd_config, 'r') as ccc:
