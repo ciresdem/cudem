@@ -50,10 +50,11 @@ setuptools.setup(
         'requests[security]', # fetches/nsidc
         'lxml', # fetches xml parsing
         'matplotlib', # uncertainty plots
-        'laspy[lazrs, laszip]', # dlim/lasfile support
+        'laspy[lazrs,laszip]', # dlim/lasfile support
         'pyproj',
         'h5py', # nsidc
         'boto3', # for amazon/bluetopo
+        #'windows-curses', # for windows
     ], 
     entry_points = {
         'console_scripts': [

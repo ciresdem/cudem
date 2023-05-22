@@ -170,7 +170,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
 
 ## ==============================================
 ##
-## threads and queues for stacks
+## threads processes and queues for stacks
 ##
 ## ==============================================
 def arr_queue(procnum, qq, q, ds_list):
@@ -183,7 +183,8 @@ def arr_queue(procnum, qq, q, ds_list):
             if idx is None:
                 break
 
-            this_ds = ds_list[idx]
+            this_ds = ds_list[idx]._acquire_module()
+            this_ds.initialize()
             this_ds.verbose = True
             for arrs_l in this_ds.yield_array():
                 pbar.update()
@@ -215,8 +216,8 @@ class stacks_ds(threading.Thread):
             self._init_stacks()
 
         for idx, this_ds in enumerate(self.mod.parse_json()):
-            #ds_list.append(DatasetFactory(mod=this_ds.params['mod'], **this_ds.params['kwargs'], **this_ds.params['mod_args']))
-            ds_list.append(this_ds)
+            ds_list.append(DatasetFactory(mod=this_ds.params['mod'], **this_ds.params['kwargs'], **this_ds.params['mod_args']))
+            #ds_list.append(this_ds)
             qq.put(idx)
 
         for i in range(self.n_threads):
@@ -1164,6 +1165,9 @@ class ElevationDataset:
                         sub_dirname = os.path.dirname(sub_xyz_path)
                         if sub_dirname != '.' and sub_dirname != '':
                             sub_sub_dlf_path = os.path.join(this_dir, sub_dirname, '{}.datalist'.format(sub_dirname))
+                            if not os.path.exists(os.path.dirname(sub_sub_dlf_path)):
+                                os.makedirs(os.path.dirname(sub_sub_dlf_path))
+
                             sub_sub_dlf = open(sub_sub_dlf_path, 'a')
                             if not sub_dirname in archive_keys:
                                 archive_keys.append(sub_dirname)
