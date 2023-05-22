@@ -829,7 +829,7 @@ class WafflesSciPy(Waffle):
         self.chunk_buffer = utils.int_or(chunk_buffer)
         self.num_threads = utils.int_or(num_threads, 1)
 
-    def run(self):
+    def _run(self):
         self.open()
         #srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
         try:
@@ -931,7 +931,7 @@ class WafflesSciPy(Waffle):
                 
         return(None)
         
-    def _run(self):
+    def run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
                 '{} is not a valid interpolation method, options are {}'.format(
