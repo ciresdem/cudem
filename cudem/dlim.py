@@ -153,14 +153,14 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
                                want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
                                dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
-        if len(xdls) > 1:
-            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                     verbose=want_verbose, dump_precision=dump_precision)
-        else:
-            this_datalist = xdls[0]
+        #if len(xdls) > 1:
+        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                 verbose=want_verbose, dump_precision=dump_precision)
+        #else:
+        #    this_datalist = xdls[0]
 
         return(this_datalist)
     
@@ -1069,7 +1069,7 @@ class ElevationDataset:
         Data comes from `self.xyz_yield` set in `self.set_yield`. So will process data through
         `_stacks` before archival if region, x_inc and y_inc are set.
         """
-
+        
         def xdl2dir(xdl):
             this_dir = []
             while True:
@@ -1090,7 +1090,8 @@ class ElevationDataset:
                 
             this_dir.reverse()
             return(this_dir)
-        
+
+        print(self.metadata)
         aa_name = self.metadata['name'].split(':')[0]
         if self.region is None:
             a_name = '{}_{}'.format(aa_name, utils.this_year())
@@ -1103,27 +1104,31 @@ class ElevationDataset:
         with utils.CliProgress(message='archiving datasets to {}'.format(self.archive_datalist)) as pbar:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse_json():
+                    #if this_entry.parent is None:
+                    #    this_entry.parent = this_entry
+
                     pbar.update()
                     if this_entry.parent is None:
                         this_key = this_entry.metadata['name'].split(':')[0]
+                        this_dir = []
                     else:
                         this_key = this_entry.parent.metadata['name'].split(':')[0]
+                        this_dir = xdl2dir(this_entry.parent)
                         
                     if self.region is None:
                         a_dir = '{}_{}'.format(this_key, utils.this_year())
                     else:
                         a_dir = '{}_{}_{}'.format(this_key, self.region.format('fn'), utils.this_year())
-
-                    this_dir = xdl2dir(this_entry.parent)
+                        
                     this_dir.append(a_dir)
                     if not this_key in archive_keys:
                         archive_keys.append(this_key)                    
                         dlf.write(
                             '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
                                 name=os.path.join(*(this_dir + [this_dir[-1]])),
-                                weight = utils.float_or(this_entry.parent.weight, 1),
-                                uncertainty = utils.float_or(this_entry.parent.uncertainty, 0),
-                                metadata = this_entry.parent.format_metadata()
+                                weight = utils.float_or(this_entry.parent.weight, 1) if this_entry.parent is not None else 1,
+                                uncertainty = utils.float_or(this_entry.parent.uncertainty, 0) if this_entry.parent is not None else 0,
+                                metadata = this_entry.parent.format_metadata() if this_entry.parent is not None else this_entry.format_metadata()
                             )
                         )
                         
@@ -2956,6 +2961,7 @@ class DataList(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.remote = True
+        self.metadata['name'] = 'scratch'
 
     def generate_inf(self, callback=lambda: False):
         """generate and return the infos blob of the datalist.
@@ -3020,8 +3026,6 @@ class DataList(ElevationDataset):
     def parse(self):
         if isinstance(self.fn, list):
             for this_ds in self.fn:
-                this_ds.initialize()
-
                 if this_ds is not None and this_ds.valid_p(
                         fmts=DatasetFactory._modules[this_ds.data_format]['fmts']
                 ):
