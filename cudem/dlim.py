@@ -590,6 +590,9 @@ class ElevationDataset:
         #factory._set_mod_params(self) # set the module arguments, if any
         self._fn = None 
         self.dst_trans = None # srs transformation obj
+        self.trans_fn = None # vertical datum transformation grid
+        self.trans_to_meter = False
+        self.trans_from_meter = False
         self.trans_region = None # transformed region
         self.src_trans_srs = None # source srs obj
         self.dst_trans_srs = None # target srs obj        
@@ -929,6 +932,7 @@ class ElevationDataset:
                     dst_vert,
                     vd_region.format('fn')
                 ))
+                self.trans_fn = trans_fn
                 
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(trans_fn):
@@ -950,9 +954,23 @@ class ElevationDataset:
 
                     if src_vert == '6360':
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+                        self.trans_to_meter = True
+                        # with gdalfun.gdal_datasource(self.trans_fn, update=True) as tf:
+                        #     tfi = gdalfun.gdal_infos(tf)
+                        #     b = tf.GetRasterBand(1)
+                        #     a = b.ReadAsArray()
+                        #     a += 0.3048006096012192
+                        #     b.WriteArray(a)
 
                     if dst_vert == '6360':
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
+                        self.trans_from_meter = True
+                        # with gdalfun.gdal_datasource(self.trans_fn, update=True) as tf:
+                        #     tfi = gdalfun.gdal_infos(tf)
+                        #     b = tf.GetRasterBand(1)
+                        #     a = b.ReadAsArray()
+                        #     a += 0.3048006096012192
+                        #     b.WriteArray(a)
                 else:
                     utils.echo_error_msg(
                         'failed to generate vertical transformation grid between {} and {} for this region!'.format(
@@ -1008,7 +1026,7 @@ class ElevationDataset:
 
         dataset object
         """
-        
+
         for ds in self.parse():
             yield(ds)
     
@@ -1034,13 +1052,14 @@ class ElevationDataset:
                     inf_region = regions.Region().from_list(self.infos.minmax)
                 except:
                     inf_region = self.region.copy()
-                
+
             if regions.regions_intersect_p(
                     inf_region,
                     self.region if self.dst_trans is None else self.trans_region
             ):
                 self.data_entries.append(self)
                 yield(self)
+
         else:
             self.data_entries.append(self)
             yield(self)
@@ -1393,7 +1412,7 @@ class ElevationDataset:
             array_yield = self._mask(out_name='{}_m'.format(out_name), method='multi', fmt=fmt)
         else:
             array_yield = self.yield_array()
-            
+
         with utils.CliProgress(
                 message='stacking data to {}/{} grid using {} method to {}'.format(
                     ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
@@ -1402,7 +1421,6 @@ class ElevationDataset:
         ) as pbar:
             for arrs, srcwin, gt in array_yield:
                 pbar.update()
-                
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stacked_bands.keys():
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
@@ -1870,22 +1888,30 @@ class LASFile(ElevationDataset):
                 self.src_srs = self.infos.src_srs
             
             self.set_transform()
-            
-        # self.las_region = None
-        # if self.region is not None  and self.region.valid_p():
-        #     self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
 
-        # ## todo: fix this for dst_trans!
-        # self.las_x_inc = self.x_inc
-        # self.las_y_inc = self.y_inc
-        # if self.las_x_inc is not None and self.las_y_inc is not None:
-        #     if self.dst_trans is not None:
-        #         self.las_x_inc, self.las_y_inc = self.las_region.increments(self.xcount, self.ycount)
-        #         self.las_dst_gt = self.dst_gt
-        #     else:
-        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-        #             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        #         )
+        self.las_region = None
+        if self.region is not None  and self.region.valid_p():
+            self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            xcount, ycount, dst_gt = self.region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+            )
+            
+        ## todo: fix this for dst_trans!
+        self.las_x_inc = self.x_inc
+        self.las_y_inc = self.y_inc
+        
+        if self.las_x_inc is not None and self.las_y_inc is not None:
+            if self.dst_trans is not None:
+                self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
+                #self.las_dst_gt = dst_gt
+                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                    x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
+                )
+            else:
+                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                    x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+                )
+        #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
 
     def valid_p(self, fmts = ['scratch']):
         """check if self appears to be a valid dataset entry"""
@@ -1983,8 +2009,8 @@ class LASFile(ElevationDataset):
             for point in dataset:
                 this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
                                            w=self.weight, u=self.uncertainty)
-                if self.dst_trans is not None:
-                    this_xyz.transform(self.dst_trans)
+                #if self.dst_trans is not None:
+                #    this_xyz.transform(self.dst_trans)
 
                 yield(this_xyz)
 
@@ -2003,18 +2029,16 @@ class LASFile(ElevationDataset):
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
 
-            pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
-            pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
-            # pixel_x = ((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
-            # pixel_y = ((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
-            
+            #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
+            #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
+            pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
+            pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
             # pixel_upper_mask = pixel_x < self.las_xcount | pixel_y < self.las_ycount
             # pixel_lower_mask = pixel_x > 0 | pixel_y > 0
             # pixel_x = pixel_x[pixel_mask]
             # pixel_y = pixel_y[pixel_mask]
 
             pixel_z = np.array(points.z)
-
             # pixel_z = pixel_z[pixel_x < xcount]            
             # pixel_y = pixel_y[pixel_x < xcount]            
             # pixel_x = pixel_x[pixel_x < xcount]
@@ -2029,6 +2053,7 @@ class LASFile(ElevationDataset):
             # pixel_y = pixel_y[pixel_y > 0]
             
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+                
             count += len(pixel_x)
 
             ## adjust pixels to srcwin and stack together
@@ -2058,6 +2083,23 @@ class LASFile(ElevationDataset):
             out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_z[unq[:,0], unq[:,1]] = zz
             out_z[out_z == 0] = np.nan
+
+            if self.trans_fn is not None:
+                tmp_trans_fn = utils.make_temp_fn(self.trans_fn, temp_dir=self.cache_dir)
+                gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
+                                    src_region=self.region, src_srs = 'epsg:4326', dst_srs=self.dst_srs)
+                                    
+                with gdalfun.gdal_datasource(tmp_trans_fn) as tf:
+                    tfi = gdalfun.gdal_infos(tf)
+                    b = tf.GetRasterBand(1)
+                    a = b.ReadAsArray(*this_srcwin)
+                    out_z = out_z + a
+                if self.trans_to_meter:
+                    out_z *= (1200/3937)
+
+                if self.trans_from_meter:
+                    out_z *= 3.2808333333
+
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
@@ -3043,7 +3085,6 @@ class DataList(ElevationDataset):
 
     def yield_array(self):
         """parse the data from the data-list and yield as array-set"""
-        
         for this_entry in self.parse_json():
             for arr in this_entry.yield_array():
                 yield(arr)
