@@ -2009,8 +2009,8 @@ class LASFile(ElevationDataset):
             for point in dataset:
                 this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
                                            w=self.weight, u=self.uncertainty)
-                #if self.dst_trans is not None:
-                #    this_xyz.transform(self.dst_trans)
+                if self.dst_trans is not None:
+                    this_xyz.transform(self.dst_trans)
 
                 yield(this_xyz)
 
