@@ -2033,24 +2033,7 @@ class LASFile(ElevationDataset):
             #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
             pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
             pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
-            # pixel_upper_mask = pixel_x < self.las_xcount | pixel_y < self.las_ycount
-            # pixel_lower_mask = pixel_x > 0 | pixel_y > 0
-            # pixel_x = pixel_x[pixel_mask]
-            # pixel_y = pixel_y[pixel_mask]
-
             pixel_z = np.array(points.z)
-            # pixel_z = pixel_z[pixel_x < xcount]            
-            # pixel_y = pixel_y[pixel_x < xcount]            
-            # pixel_x = pixel_x[pixel_x < xcount]
-
-            # pixel_z = pixel_z[pixel_y < ycount]
-            # pixel_x = pixel_x[pixel_y < ycount]
-            # pixel_y = pixel_y[pixel_y < ycount]
-            
-            # pixel_y = pixel_y[pixel_x > 0]
-            # pixel_x = pixel_x[pixel_x > 0]
-            # pixel_x = pixel_x[pixel_y > 0]
-            # pixel_y = pixel_y[pixel_y > 0]
             
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
                 
