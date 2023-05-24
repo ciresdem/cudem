@@ -1419,6 +1419,7 @@ class ElevationDataset:
                 verbose=self.verbose
         ) as pbar:
             for arrs, srcwin, gt in array_yield:
+                #utils.echo_msg(srcwin)
                 pbar.update()
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stacked_bands.keys():
@@ -1888,29 +1889,29 @@ class LASFile(ElevationDataset):
             
             self.set_transform()
 
-        self.las_region = None
-        if self.region is not None  and self.region.valid_p():
-            self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-            xcount, ycount, dst_gt = self.region.geo_transform(
-                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-            )
+        # self.las_region = None
+        # if self.region is not None  and self.region.valid_p():
+        #     self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+        #     xcount, ycount, dst_gt = self.region.geo_transform(
+        #         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        #     )
             
-        ## todo: fix this for dst_trans!
-        self.las_x_inc = self.x_inc
-        self.las_y_inc = self.y_inc
+        # ## todo: fix this for dst_trans!
+        # self.las_x_inc = self.x_inc
+        # self.las_y_inc = self.y_inc
         
-        if self.las_x_inc is not None and self.las_y_inc is not None:
-            if self.dst_trans is not None:
-                self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
-                #self.las_dst_gt = dst_gt
-                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-                    x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
-                )
-            else:
-                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-                    x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-                )
-        #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
+        # if self.las_x_inc is not None and self.las_y_inc is not None:
+        #     if self.dst_trans is not None:
+        #         self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
+        #         #self.las_dst_gt = dst_gt
+        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+        #             x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
+        #         )
+        #     else:
+        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+        #             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        #         )
+        # #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
 
     def valid_p(self, fmts = ['scratch']):
         """check if self appears to be a valid dataset entry"""
@@ -2027,13 +2028,19 @@ class LASFile(ElevationDataset):
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
-
             ## convert the coordinates to pixels and determine the srcwin
-            #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
-            #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
-            pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
-            pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
+            pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
+            pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
+            #pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
+            #pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
             pixel_z = np.array(points.z)
+
+            ## remove pixels that will break the srcwin
+            out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))
+            
+            pixel_x = np.delete(pixel_x, out_idx)
+            pixel_y = np.delete(pixel_y, out_idx)
+            pixel_z = np.delete(pixel_z, out_idx)
             
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
