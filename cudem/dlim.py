@@ -872,7 +872,8 @@ class ElevationDataset:
         if generate_inf:
             self.infos = self.generate_inf()
 
-            if write_inf:
+            ## update this
+            if self.data_format != -3 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
@@ -1110,7 +1111,6 @@ class ElevationDataset:
             this_dir.reverse()
             return(this_dir)
 
-        print(self.metadata)
         aa_name = self.metadata['name'].split(':')[0]
         if self.region is None:
             a_name = '{}_{}'.format(aa_name, utils.this_year())
@@ -1365,7 +1365,6 @@ class ElevationDataset:
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
             ))
 
-        print(out_name)
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
@@ -2029,6 +2028,7 @@ class LASFile(ElevationDataset):
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
 
+            ## convert the coordinates to pixels and determine the srcwin
             #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
             #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
             pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
@@ -2036,7 +2036,6 @@ class LASFile(ElevationDataset):
             pixel_z = np.array(points.z)
             
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
-                
             count += len(pixel_x)
 
             ## adjust pixels to srcwin and stack together
@@ -2985,7 +2984,8 @@ class OGRFile(ElevationDataset):
 class DataList(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.remote = True
+        #self.remote = True
+        #self.fn = 'scratch'
         self.metadata['name'] = 'scratch'
 
     def generate_inf(self, callback=lambda: False):
