@@ -781,24 +781,30 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
 
     return 0 if success else None
     """
-
+    
     prog_func = None
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
-            src_band = src_ds.GetRasterBand(band)
             ds_config = gdal_infos(src_ds)
-            drv = gdal.GetDriverByName('GTiff')
-            dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Float32, [])                
-            dst_ds.SetGeoTransform(ds_config['geoT'])
-            dst_ds.SetProjection(ds_config['proj'])
-            dst_band = dst_ds.GetRasterBand(1)
-            dst_band.SetNoDataValue(ds_config['ndv'])
-            gdal.ComputeProximity(src_band, dst_band, ['DISTUNITS=PIXEL'], callback = prog_func)
-            dst_ds = None
-            return(0)
-        
+            mem_ds = gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None)
+            src_band = src_ds.GetRasterBand(band)
+            src_arr = src_band.ReadAsArray()
+            src_arr[src_arr != ds_config['ndv']] = 1
+            src_arr[src_arr == ds_config['ndv']] = 0
+            mem_band = mem_ds.GetRasterBand(1)
+            mem_band.WriteArray(src_arr)
         else:
             return(None)
+
+    drv = gdal.GetDriverByName('GTiff')
+    dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Float32, [])                
+    dst_ds.SetGeoTransform(ds_config['geoT'])
+    dst_ds.SetProjection(ds_config['proj'])
+    dst_band = dst_ds.GetRasterBand(1)
+    dst_band.SetNoDataValue(ds_config['ndv'])
+    gdal.ComputeProximity(mem_band, dst_band, ['VALUES=1', 'DISTUNITS=PIXEL'], callback = prog_func)
+    mem_ds = dst_ds = None
+    return(0)
         
 def gdal_polygonize(src_gdal, dst_layer, verbose = False):
     '''run gdal.Polygonize on src_ds and add polygon to dst_layer'''
@@ -1562,6 +1568,9 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
                     outs = []
                     for i in out_form:
                         outs.append(vars()[i])
+
+                    #print(g)
+                    #print(outs)
                     yield(outs)
 
 def gdal_query(src_xyz, src_gdal, out_form, band = 1):

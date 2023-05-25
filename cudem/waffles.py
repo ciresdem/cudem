@@ -3256,8 +3256,8 @@ class InterpolationUncertainty:#(Waffle):
             srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
             
         ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin)
-        ds_arr[ds_arr == ds_config['ndv']] = np.nan
-        prox_perc = np.nanpercentile(ds_arr, 95)
+        #ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        prox_perc = np.percentile(ds_arr, 95)
         dst_arr = None
 
         return(prox_perc)
@@ -3555,9 +3555,13 @@ class InterpolationUncertainty:#(Waffle):
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
                 s_sum, s_g_max, s_perc = self._mask_analysis(stack_ds, region=sub_region)
+                if s_sum == 0:
+                    continue
+
                 s_dc = gdalfun.gdal_infos(stack_ds, region=sub_region, scan=True)
                 p_perc = self._prox_analysis(prox_ds, region=sub_region)
                 slp_perc = self._prox_analysis(slp_ds, region=sub_region)
+                #utils.echo_msg('{} {} {} {} {}'.format(s_sum, s_g_max, s_perc, p_perc, slp_perc))
                 zone = None
                 ## assign the region to the zone based on the density/slope
                 if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
@@ -3639,61 +3643,70 @@ class InterpolationUncertainty:#(Waffle):
                            for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin):
                                xyz.dump(dst_port=o_fh)
 
-                    if os.stat(o_xyz).st_size != 0:
-                        ## ==============================================
-                        ## split the xyz data to inner/outer; outer is
-                        ## the data buffer, inner will be randomly sampled
-                        ## ==============================================
-                        s_inner, s_outer = self._select_split(o_xyz, this_region, 'sub_{}'.format(n))
-                        if os.stat(s_inner).st_size != 0:
-                            sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
-                            ss_len = len(sub_xyz)
-                            #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                            sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                            #####sx_cnt = int(ss_len * (ss_samp / 100.))
+                    if os.stat(o_xyz).st_size == 0:
+                        continue
 
-                            sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
-                            sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
-                            np.random.shuffle(sub_xyz)
-                            np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
+                    ## ==============================================
+                    ## split the xyz data to inner/outer; outer is
+                    ## the data buffer, inner will be randomly sampled
+                    ## ==============================================
+                    s_inner, s_outer = self._select_split(o_xyz, this_region, 'sub_{}'.format(n))
+                    if os.stat(s_inner).st_size == 0:
+                        continue
 
-                            ## ==============================================
-                            ## generate the random-sample DEM
-                            ## ==============================================
-                            mod = self.dem.params['mod']
-                            mod_args = self.dem.params['mod_args']
-                            this_mod = '{}:{}'.format(mod, factory.dict2args(mod_args))
-                            kwargs = self.dem.params['kwargs']
-                            kwargs['name'] = 'sub_{}'.format(n)
-                            kwargs['data'] = [s_outer, sub_xyz_head]
-                            kwargs['src_region'] = b_region
-                            kwargs['want_mask'] = True
-                            kwargs['keep_auxiliary'] = True # to keep mask
-                            kwargs['want_uncertainty'] = False
-                            kwargs['verbose'] = False
-                            kwargs['clobber'] = True
-                            this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
-                            this_waffle.initialize()
-                            wf = this_waffle.generate()
-                            
-                            ## ==============================================
-                            ## generate the random-sample data PROX and SLOPE
-                            ## ==============================================
-                            sub_prox = '{}_prox.tif'.format(wf.name)
-                            gdalfun.gdal_proximity('{}_stack_m.tif'.format(wf.name), sub_prox)
+                    sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
+                    ss_len = len(sub_xyz)
+                    #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
+                    #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                    sx_cnt = int(ss_len * (ss_samp / 100.))
+                    #utils.echo_msg(sub_region)
+                    #utils.echo_msg(ss_samp)
+                    #utils.echo_msg(ss_len)
+                    #utils.echo_msg(sx_cnt)
+                    
+                    sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                    sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
+                    np.random.shuffle(sub_xyz)
+                    np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
 
-                            ## ==============================================
-                            ## Calculate the random-sample errors
-                            ## todo: account for source uncertainty (rms with xyz?)
-                            ## ==============================================
-                            sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
-                            sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
-                            utils.remove_glob('{}*'.format(sub_xyz_head))
-                            if sub_dp is not None and len(sub_dp) > 0:
-                                try:
-                                    s_dp = np.vstack((s_dp, sub_dp))
-                                except:
-                                    s_dp = sub_dp
+                    ## ==============================================
+                    ## generate the random-sample DEM
+                    ## ==============================================
+                    mod = self.dem.params['mod']
+                    mod_args = self.dem.params['mod_args']
+                    this_mod = '{}:{}'.format(mod, factory.dict2args(mod_args))
+                    kwargs = self.dem.params['kwargs']
+                    kwargs['name'] = 'sub_{}'.format(n)
+                    kwargs['data'] = [s_outer, sub_xyz_head]
+                    kwargs['src_region'] = b_region
+                    kwargs['want_mask'] = True
+                    kwargs['keep_auxiliary'] = True # to keep mask
+                    kwargs['want_uncertainty'] = False
+                    kwargs['verbose'] = False
+                    kwargs['clobber'] = True
+                    this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
+                    this_waffle.initialize()
+                    wf = this_waffle.generate()
+
+                    ## ==============================================
+                    ## generate the random-sample data PROX and SLOPE
+                    ## ==============================================
+                    sub_prox = '{}_prox.tif'.format(wf.name)
+                    gdalfun.gdal_proximity('{}_stack_m.tif'.format(wf.name), sub_prox)
+
+                    ## ==============================================
+                    ## Calculate the random-sample errors
+                    ## todo: account for source uncertainty (rms with xyz?)
+                    ## ==============================================
+                    sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
+
+                    sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
+                    utils.remove_glob('{}*'.format(sub_xyz_head))
+                    if sub_dp is not None and len(sub_dp) > 0:
+                        try:
+                            s_dp = np.vstack((s_dp, sub_dp))
+                        except:
+                            s_dp = sub_dp
 
                     utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
 
@@ -3709,8 +3722,8 @@ class InterpolationUncertainty:#(Waffle):
                 else:
                     last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
 
-                ec_d = self._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d,
-                                       dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
+                ec_d = utils._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d,
+                                        dst_name=self.dem.name + '_prox', xa='Distance to Nearest Measurement (cells)')
                 ec_diff = abs(ec_d[2] - ec_d[1])
                 ec_l_diff = abs(last_ec_diff - ec_diff)
                 utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
@@ -3759,10 +3772,8 @@ class InterpolationUncertainty:#(Waffle):
         ## region and der. analysis
         ## ==============================================
         self.region_info = {}
-        #msk_ds = gdal.Open(self.mask_fn)
-        msk_ds = gdal.Open(self.dem.stack)
-        num_sum, g_max, num_perc = self._mask_analysis(msk_ds)
-        msk_ds = None
+        with gdalfun.gdal_datasource(self.dem.stack) as tmp_ds:
+            num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
 
         self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
         self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
@@ -3774,18 +3785,20 @@ class InterpolationUncertainty:#(Waffle):
         self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
         self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
 
-        self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile] 
+        self.region_info[self.dem.name] = [self.dem.region, g_max, num_sum, num_perc, self.prox_percentile]
         for x in self.region_info.keys():
             utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
 
         ## ==============================================
         ## chunk region into sub regions
         ## ==============================================
-        chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
-        chnk_inc = chnk_inc if chnk_inc > 10 else 10
+        #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        #chnk_inc = chnk_inc if chnk_inc > 10 else 10
+
+        chnk_inc = int(self.prox_percentile)
         
         utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
-        sub_regions = self.region.chunk(self.dem.xinc, chnk_inc)
+        sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
         ## ==============================================
@@ -3833,12 +3846,13 @@ class InterpolationUncertainty:#(Waffle):
         ## ==============================================
         if self.sims is None:
             self.sims = int(len(sub_regions)/tot_trains)
+            
             #self.sims = 12
 
         if self.max_sample is None:
             self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .1)
 
-        utils.echo_msg('max sample is {}'.format(self.max_sample))
+        utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
         ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
 
         ## ==============================================
@@ -3852,6 +3866,7 @@ class InterpolationUncertainty:#(Waffle):
             prox_band = prox_ds.GetRasterBand(1)
             prox_arr = prox_band.ReadAsArray()
             prox_arr = ec_d[1] * (prox_arr**ec_d[2])
+            #prox_arr = (ec_d[0] + ec_d[1]) * prox_arr**ec_d[2]
             #prox_arr[prox_arr == pro
 
             with gdalfun.gdal_datasource(self.dem.stack) as stack_ds:
@@ -3922,7 +3937,8 @@ class WaffleDEM:
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
                 clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None):
 
-        utils.echo_msg('post processing DEM')
+        if self.verbose:
+            utils.echo_msg('post processing DEM...')
         
         if self.ds_config is None:
             self.initialize()

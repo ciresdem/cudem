@@ -1464,4 +1464,60 @@ dtypes_dict = {numpy.int8:    'b',
                numpy.dtype('float32'): 'f',
                numpy.dtype('float64'): 'd'}
 
+## test
+
+def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'unc', xa = 'distance', plots = False):
+    """calculate and plot the error coefficient given err_arr which is 
+    a 2 col array with `err dist
+
+    Args:
+      error_arr (array): an array of errors and distances
+
+    Returns:
+      list: [coefficient-list]
+    """
+
+    from scipy import optimize
+
+    error = err_arr[:,0]
+    distance = err_arr[:,1]
+    max_err = np.max(error)
+    min_err = np.min(error)
+    max_int_dist = int(np.max(distance))
+    nbins = 10
+    n, _ = np.histogram(distance, bins = nbins)
+    while 0 in n:
+        nbins -= 1
+        n, _ = np.histogram(distance, bins=nbins)
+
+    serror, _ = np.histogram(distance, bins=nbins, weights=error)
+    serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
+
+    mean = serror / n
+    std = np.sqrt(serror2 / n - mean * mean)
+    ydata = np.insert(std, 0, 0)
+    bins_orig=(_[1:] + _[:-1]) / 2
+
+    xdata = np.insert(bins_orig, 0, 0)
+    xdata[xdata - 0 < 0.0001] = 0.0001
+    while len(xdata) < 3:
+        xdata = np.append(xdata, 0)
+        ydata = np.append(ydata, 0)
+
+    #fitfunc = lambda p, x: (p[0] + p[1]) * (x ** p[2])
+    fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
+    errfunc = lambda p, x, y: y - fitfunc(p, x)
+    out, cov, infodict, mesg, ier = optimize.leastsq(
+        errfunc, coeff_guess, args=(xdata, ydata), full_output=True
+    )
+
+    if plots:
+        try:
+            self._err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
+            self._err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
+        except:
+           utils.echo_error_msg('unable to generate error plots, please check configs.')
+
+    return(out)
+
 ### End

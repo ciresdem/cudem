@@ -153,14 +153,14 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
                                want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
                                dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
-        #if len(xdls) > 1:
-        this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                 uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                 x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                 invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                 verbose=want_verbose, dump_precision=dump_precision)
-        #else:
-        #    this_datalist = xdls[0]
+        if len(xdls) > 1:
+            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                     verbose=want_verbose, dump_precision=dump_precision)
+        else:
+            this_datalist = xdls[0]
 
         return(this_datalist)
     
@@ -1889,29 +1889,29 @@ class LASFile(ElevationDataset):
             
             self.set_transform()
 
-        # self.las_region = None
-        # if self.region is not None  and self.region.valid_p():
-        #     self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-        #     xcount, ycount, dst_gt = self.region.geo_transform(
-        #         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        #     )
+        self.las_region = None
+        if self.region is not None  and self.region.valid_p():
+            self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            xcount, ycount, dst_gt = self.region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+            )
             
-        # ## todo: fix this for dst_trans!
-        # self.las_x_inc = self.x_inc
-        # self.las_y_inc = self.y_inc
+        ## todo: fix this for dst_trans!
+        self.las_x_inc = self.x_inc
+        self.las_y_inc = self.y_inc
         
-        # if self.las_x_inc is not None and self.las_y_inc is not None:
-        #     if self.dst_trans is not None:
-        #         self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
-        #         #self.las_dst_gt = dst_gt
-        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-        #             x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
-        #         )
-        #     else:
-        #         self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-        #             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        #         )
-        # #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
+        if self.las_x_inc is not None and self.las_y_inc is not None:
+            if self.dst_trans is not None:
+                self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
+                #self.las_dst_gt = dst_gt
+                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                    x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
+                )
+            else:
+                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                    x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+                )
+        #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
 
     def valid_p(self, fmts = ['scratch']):
         """check if self appears to be a valid dataset entry"""
@@ -2029,10 +2029,10 @@ class LASFile(ElevationDataset):
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
             ## convert the coordinates to pixels and determine the srcwin
-            pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
-            pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
-            #pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
-            #pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
+            #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
+            #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
+            pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
+            pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
             pixel_z = np.array(points.z)
 
             ## remove pixels that will break the srcwin
@@ -2041,8 +2041,13 @@ class LASFile(ElevationDataset):
             pixel_x = np.delete(pixel_x, out_idx)
             pixel_y = np.delete(pixel_y, out_idx)
             pixel_z = np.delete(pixel_z, out_idx)
+
+            #print(len(pixel_x), len(pixel_y), len(pixel_z))
+            #if len(pixel_x) == 0 or len(pixel_y) == 0:
+            #    continue
             
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+            #print(this_srcwin)
             count += len(pixel_x)
 
             ## adjust pixels to srcwin and stack together
@@ -4505,8 +4510,8 @@ def datalists_cli(argv=sys.argv):
                         if src_srs is not None:
                             this_region.src_srs = src_srs
                             this_region.warp(dst_srs)
-                        elif 'src_srs' in this_inf and this_inf['src_srs'] is not None:
-                            this_region.src_srs = this_inf['src_srs']
+                        elif this_inf.src_srs is not None:
+                            this_region.src_srs = this_inf.src_srs
                             this_region.warp(dst_srs)
                     print(this_region.format('gmt'))
                 elif want_archive:
