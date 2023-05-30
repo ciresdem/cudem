@@ -784,7 +784,7 @@ class ElevationDataset:
 
         if self.fn is None:
             return(False)
-        
+
         if self.data_format is None:
             return(False)
         
@@ -2078,6 +2078,7 @@ class LASFile(ElevationDataset):
             out_z[unq[:,0], unq[:,1]] = zz
             out_z[out_z == 0] = np.nan
 
+            ## apply the vertical transformation grid
             if self.trans_fn is not None:
                 tmp_trans_fn = utils.make_temp_fn(self.trans_fn, temp_dir=self.cache_dir)
                 gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
@@ -2088,11 +2089,14 @@ class LASFile(ElevationDataset):
                     b = tf.GetRasterBand(1)
                     a = b.ReadAsArray(*this_srcwin)
                     out_z = out_z + a
+                    
                 if self.trans_to_meter:
                     out_z *= (1200/3937)
 
                 if self.trans_from_meter:
                     out_z *= 3.2808333333
+
+                utils.remove_glob(tmp_trans_fn)
 
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -2932,7 +2936,6 @@ class OGRFile(ElevationDataset):
     
     def yield_xyz(self):
         ds_ogr = ogr.Open(self.fn)
-        #print(self.fn)
         count = 0
         if ds_ogr is not None:
             layer_name = None
@@ -3206,6 +3209,7 @@ class Datalist(ElevationDataset):
             self.ds = self.layer = None
 
         else:
+            utils.echo_warning_msg('could not initialize datalist vector')
             return(self.infos)
         
         ## merge all the gathered regions
@@ -3322,6 +3326,7 @@ class Datalist(ElevationDataset):
                         data_set.initialize()
                         for ds in data_set.parse_json():
                             self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                            print(ds)
                             yield(ds)
 
             dl_ds = dl_layer = None
@@ -4082,6 +4087,7 @@ class DatasetFactory(factory.CUDEMFactory):
 
         ## ==============================================
         ## if fn is not a path, parse it as a datalist entry
+		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
         ## ==============================================
         this_entry = re.findall(r'[^"\s]\S*|".+?"', self.kwargs['fn'].rstrip())        
         try:
@@ -4121,11 +4127,12 @@ class DatasetFactory(factory.CUDEMFactory):
                 self.mod_args = utils.args2dict(list(opts[1:]), {})
                 entry[1] = opts[0]
             else:
-                self.mod_args = {}
+               self.mod_args = {}
 
-        self.mod_name = int(entry[1])
+        assert isinstance(utils.int_or(entry[1]), int)
         self.kwargs['data_format'] = int(entry[1])
-
+        self.mod_name = int(entry[1])
+        
         ## ==============================================
         ## file-name (or fetches module name) - entry[0]
         ## set to relative path from parent
