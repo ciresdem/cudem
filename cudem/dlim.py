@@ -591,6 +591,7 @@ class ElevationDataset:
         self._fn = None 
         self.dst_trans = None # srs transformation obj
         self.trans_fn = None # vertical datum transformation grid
+        self.trans_fn_full = None # full resolution vertical datum transformation grid
         self.trans_to_meter = False
         self.trans_from_meter = False
         self.trans_region = None # transformed region
@@ -934,6 +935,14 @@ class ElevationDataset:
                     vd_region.format('fn')
                 ))
                 self.trans_fn = trans_fn
+
+                trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
+                    src_vert,
+                    dst_vert,
+                    vd_region.format('fn'),
+                    utils.inc2str(self.x_inc)
+                ))
+                self.trans_fn_full = trans_fn_full
                 
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(trans_fn):
@@ -946,6 +955,12 @@ class ElevationDataset:
                             verbose=False
                         ).run(outfile=trans_fn)
                         assert os.path.exists(trans_fn)
+
+                elif not os.path.exists(trans_fn_full):
+                    gdalfun.sample_warp(self.trans_fn, trans_fn_full, self.x_inc, self.y_inc,
+                                        src_region=self.region, src_srs='epsg:4326', dst_srs=self.dst_srs)
+                    
+                    assert os.path.exists(trans_fn_full)
                 else:
                     utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(trans_fn, src_vert, dst_vert))
 
@@ -2080,11 +2095,13 @@ class LASFile(ElevationDataset):
 
             ## apply the vertical transformation grid
             if self.trans_fn is not None:
-                tmp_trans_fn = utils.make_temp_fn(self.trans_fn, temp_dir=self.cache_dir)
-                gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
-                                    src_region=self.region, src_srs = 'epsg:4326', dst_srs=self.dst_srs)
+                # tmp_trans_fn = utils.make_temp_fn(self.trans_fn, temp_dir=self.cache_dir)
+
+
+                # gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
+                #                     src_region=self.region, src_srs = 'epsg:4326', dst_srs=self.dst_srs)
                                     
-                with gdalfun.gdal_datasource(tmp_trans_fn) as tf:
+                with gdalfun.gdal_datasource(self.trans_fn_full) as tf:
                     tfi = gdalfun.gdal_infos(tf)
                     b = tf.GetRasterBand(1)
                     a = b.ReadAsArray(*this_srcwin)
@@ -2096,7 +2113,7 @@ class LASFile(ElevationDataset):
                 if self.trans_from_meter:
                     out_z *= 3.2808333333
 
-                utils.remove_glob(tmp_trans_fn)
+                #utils.remove_glob(tmp_trans_fn)
 
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -3326,7 +3343,6 @@ class Datalist(ElevationDataset):
                         data_set.initialize()
                         for ds in data_set.parse_json():
                             self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
-                            print(ds)
                             yield(ds)
 
             dl_ds = dl_layer = None
