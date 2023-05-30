@@ -1391,10 +1391,11 @@ class CliProgress():
             #print(exc_type)
             #print(exc_value)
             #print(exc_traceback)
-            traceback.print_exc()
+            #traceback.print_exc()
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
             )
+            raise(exc_value)
         else:
             sys.stderr.write(
                 '\r[\033[32m\033[1m{:^6}\033[m] {}\n'.format('ok', message)

@@ -3314,8 +3314,8 @@ class Datalist(ElevationDataset):
                         md[key] = feat.GetField(key)
 
                     ## generate the dataset object to yield
-                    data_set = DatasetFactory(mod = '{} {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
-                                                                         feat.GetField('weight'), feat.GetField('uncertainty')),
+                    data_set = DatasetFactory(mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
+                                                                           feat.GetField('weight'), feat.GetField('uncertainty')),
                                               weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
                                               invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                               x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
