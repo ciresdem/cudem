@@ -825,7 +825,7 @@ def fix_srcwin(srcwin, xcount, ycount):
 def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     return([s for s in yield_srcwin(n_size, n_chunk, step, verbose)])
 
-def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
+def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_msg='chunked srcwin', verbose=True):
     """yield source windows in n_chunks at step"""
     
     if step is None:
@@ -838,7 +838,8 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
 
     with CliProgress(
             total=(n_size[0]*n_size[1])/step,
-            message='{}: chunking srcwin @ chunk:{}/step:{}'.format(_command_name(), n_chunk, step),
+            message='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
+            end_message='{}: {} @ chunk:{}/step:{}'.format(_command_name(), end_msg, n_chunk, step),
             verbose=verbose,
     ) as pbar:
         while True:
@@ -1256,7 +1257,7 @@ class CliProgress():
     True
     """
 
-    def __init__(self, message=None, total=0, sleep=2, verbose=True):
+    def __init__(self, message = None, end_message = None, total = 0, sleep = 2, verbose = True):
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7
@@ -1267,6 +1268,7 @@ class CliProgress():
         self.sleep = int_or(sleep)
 
         self.message = message
+        self.end_message = end_message
         self.total = total
         self._init_opm()
         
@@ -1381,11 +1383,14 @@ class CliProgress():
             self.count = self.spin_way(self.count)
             sys.stderr.flush()
     
-    def end(self, status=0, message = None, exc_type = None, exc_value = None, exc_traceback = None):
+    def end(self, status = 0, message = None, exc_type = None, exc_value = None, exc_traceback = None):
         self._init_opm()
         self._clear_stderr()
         if message is None:
-            message = self.message
+            if self.end_message is None:
+                message = self.message
+            else:
+                message = self.end_message
             
         if status != 0 and status is not None:
             #print(exc_type)

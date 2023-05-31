@@ -1293,7 +1293,8 @@ class ElevationDataset:
         )
 
         with utils.CliProgress(
-                message='masking data to {}/{} grid to {} {}'.format(ycount, xcount, self.region, out_name),
+                message='masking data to {}/{} grid to {} {}...'.format(ycount, xcount, self.region, out_name),
+                end_message='masked data to {}/{} grid to {} {}'.format(ycount, xcount, self.region, out_name),
                 verbose=self.verbose
         ) as pbar:        
             gdt = gdal.GDT_Int32
@@ -3369,7 +3370,8 @@ class Datalist(ElevationDataset):
 
             with open(self.fn, 'r') as op:
                 with utils.CliProgress(
-                        message='parsing datalist {}'.format(self.fn),
+                        message='parsing datalist {}...'.format(self.fn),
+                        end_message='parsed datalist {}'.format(self.fn),
                 ) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()

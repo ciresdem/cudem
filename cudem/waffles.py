@@ -712,7 +712,9 @@ class WafflesIDW(Waffle):
 
         stack_ds = None
         invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
-        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose):
+        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk,
+                                         msg='Generating IDW DEM', end_msg='Generated IDW DEM',
+                                         verbose=self.verbose):
             # if np.count_nonzero(np.isnan(points_array)) == 0:
             #     #if not np.all(~np.nan(points_array)):
             #     # y_origin = srcwin[1]-srcwin_buff[1]
@@ -972,7 +974,9 @@ class WafflesSciPy(Waffle):
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
        
         for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, verbose=self.verbose, step=n_step):
-            srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
+            chunk_buffer = self.chunk_buffer
+            #while True:
+            srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             points_array[points_array == points_no_data] = np.nan
             point_indices = np.nonzero(~np.isnan(points_array))
@@ -985,12 +989,13 @@ class WafflesSciPy(Waffle):
                 x_size = x_origin + srcwin[2]
                 points_array = points_array[y_origin:y_size,x_origin:x_size]
                 interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-                
+                #break
+
             elif len(point_indices[0]):
                 point_values = points_array[point_indices]
                 xi, yi = np.mgrid[0:srcwin_buff[2],
                                   0:srcwin_buff[3]]
-                
+
                 try:
                     interp_data = interpolate.griddata(
                         np.transpose(point_indices), point_values,
@@ -1001,7 +1006,12 @@ class WafflesSciPy(Waffle):
                     y_size = y_origin + srcwin[3]
                     x_size = x_origin + srcwin[2]
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
+                    #if np.any(interp_data[np_isnan(interp_data)]):
+                    #chunk_buffer *= 2
+                    #utils.echo_msg('chunk buffer to {}'.format(chunk_buffer))
+                    #else:
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
+                    #break
                 except Exception as e:
                     continue
                 
@@ -2576,7 +2586,9 @@ class WafflesCUDEM(Waffle):
                                   xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
         coastline.initialize()
-        with utils.CliProgress(message='Generating coastline.') as pbar:
+        with utils.CliProgress(message='Generating coastline...',
+                               end_message='Generated coastline.',
+                               verbose=self.verbose) as pbar:
             coastline.generate()
 
         if coastline is not None:
@@ -2648,7 +2660,8 @@ class WafflesCUDEM(Waffle):
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
                 
-            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'linear:chunk_step=None:chunk_buffer=10'
+            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+            #'linear:chunk_step=None:chunk_buffer=10'
             pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
