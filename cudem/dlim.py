@@ -3293,6 +3293,7 @@ class Datalist(ElevationDataset):
             count = len(dl_layer)
             with utils.CliProgress(
                     message='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
+                    end_message='parsed {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
                     total=len(dl_layer),
                     verbose=self.verbose,
                     sleep=10,
@@ -3561,6 +3562,9 @@ class ZIPlist(ElevationDataset):
                     inf_region.wmax = data_set.weight
                     inf_region.umin = data_set.uncertainty
                     inf_region.umax = data_set.uncertainty
+                    utils.echo_msg('ds: {}'.format(data_set))
+                    utils.echo_msg('inf_region: {}'.format(inf_region))
+                    utils.echo_msg('region: {}'.format(self.region))
                     if regions.regions_intersect_p(inf_region, self.region):
                         for ds in data_set.parse():
                             self.data_entries.append(ds)

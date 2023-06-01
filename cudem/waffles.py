@@ -920,6 +920,15 @@ class WafflesSciPy(Waffle):
                 np.transpose(point_indices), point_values,
                 (xi, yi), method=self.method
             )
+            # while np.any(interp_data[np.isnan(interp_data)]):
+            #     utils.echo_msg('nodata in {}'.format(srcwin))
+            #     point_indices = np.nonzero(~np.isnan(interp_data))
+            #     point_values = interp_data[point_indices]
+            #     interp_data = interpolate.griddata(
+            #         np.transpose(point_indices), point_values,
+            #         (xi, yi), method=self.method
+            #     )
+
             y_origin = srcwin[1]-srcwin_buff[1]
             x_origin = srcwin[0]-srcwin_buff[0]
             y_size = y_origin + srcwin[3]
@@ -1001,12 +1010,21 @@ class WafflesSciPy(Waffle):
                         np.transpose(point_indices), point_values,
                         (xi, yi), method=self.method
                     )
+                    # while np.any(interp_data[np.isnan(interp_data)]):
+                    #     utils.echo_msg('nodata in {}'.format(srcwin))
+                    #     point_indices = np.nonzero(~np.isnan(interp_data))
+                    #     point_values = interp_data[point_indices]
+                    #     interp_data = interpolate.griddata(
+                    #         np.transpose(point_indices), point_values,
+                    #         (xi, yi), method=self.method
+                    #     )
+                    
                     y_origin = srcwin[1]-srcwin_buff[1]
                     x_origin = srcwin[0]-srcwin_buff[0]
                     y_size = y_origin + srcwin[3]
                     x_size = x_origin + srcwin[2]
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-                    #if np.any(interp_data[np_isnan(interp_data)]):
+                        
                     #chunk_buffer *= 2
                     #utils.echo_msg('chunk buffer to {}'.format(chunk_buffer))
                     #else:
@@ -4458,18 +4476,19 @@ def waffles_cli(argv = sys.argv):
             try:
                 with open(wg_user, 'r') as wgj:
                     wg = json.load(wgj)
-                    if wg['src_region'] is not None:
-                        wg['src_region'] = regions.Region().from_list(
-                            wg['src_region']
+                    if wg['kwargs']['src_region'] is not None:
+                        wg['kwargs']['src_region'] = regions.Region().from_list(
+                            wg['kwargs']['src_region']
                         )
             
-                this_waffle = WaffleFactory(**wg)
-                this_waffle_module = this_waffle.acquire()
+                this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
+                this_waffle_module = this_waffle._acquire_module()
                 #this_wg = this_waffle._export_config(parse_data=False)
                 with utils.CliProgress(
                         message='Generating: {}'.format(this_waffle),
-                        verbose=wg['verbose'],
+                        verbose=wg['kwargs']['verbose'],
                 ) as pbar:
+                    this_waffle_module.initialize()
                     this_waffle_module.generate()
             except (KeyboardInterrupt, SystemExit):
                 utils.echo_error_msg('user breakage...please wait while waffles exits...')
@@ -4544,12 +4563,16 @@ def waffles_cli(argv = sys.argv):
                 name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
             )
         if want_config:
+            #wg['src_region'] = this_region.format('cudem')
+            wg['src_region'] = this_region.export_as_list()
             this_waffle = WaffleFactory(mod=module, **wg)
-            this_wg = this_waffle._export_config(parse_data=True)
-            utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
-            with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
-                utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
-                wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
+            print(this_waffle)
+            this_waffle.write_parameter_file('{}.json'.format(this_waffle['kwargs']['name']))
+            #this_wg = this_waffle._export_config(parse_data=True)
+            #utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
+            #with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
+            #    utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
+            #    wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
         else:
             this_waffle = WaffleFactory(mod=module, **wg)
             #print(this_waffle)

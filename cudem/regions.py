@@ -233,42 +233,31 @@ class Region:
         """
 
         if self.valid_p():
-            if t == 'str': return(
-                    '/'.join([str(self.xmin), str(self.xmax),
-                              str(self.ymin), str(self.ymax)])
-            )
-            elif t == 'sstr': return(
-                    ' '.join([str(self.xmin), str(self.xmax),
-                              str(self.ymin), str(self.ymax)])
-            )
-            elif t == 'fstr': return(
-                    ' '.join([str(self.xmin), str(self.xmax),
-                              str(self.ymin), str(self.ymax),
-                              str(self.zmin), str(self.zmax),
-                              str(self.wmin), str(self.wmax),
-                              str(self.umin), str(self.umax),])
-            )
-            elif t == 'gmt': return(
-                    '-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
-                        self.xmin, self.xmax,
-                        self.ymin, self.ymax)
-            )
-            elif t == 'bbox': return(
-                    ','.join([str(self.xmin), str(self.ymin),
-                              str(self.xmax), str(self.ymax)])
-            )
-            elif t == 'osm_bbox': return(
-                    ','.join([str(self.ymin), str(self.xmin),
-                              str(self.ymax), str(self.xmax)])
-            )
-            elif t == 'te': return(
-                    ' '.join([str(self.xmin), str(self.ymin),
-                              str(self.xmax), str(self.ymax)])
-            )
-            elif t == 'ul_lr': return(
-                    ' '.join([str(self.xmin), str(self.ymax),
-                              str(self.xmax), str(self.ymin)])
-            )
+            if t == 'str': return('/'.join([str(self.xmin), str(self.xmax),
+                                            str(self.ymin), str(self.ymax)]))
+            elif t == 'sstr': return(' '.join([str(self.xmin), str(self.xmax),
+                                               str(self.ymin), str(self.ymax)]))
+            elif t == 'fstr': return(' '.join([str(self.xmin), str(self.xmax),
+                                               str(self.ymin), str(self.ymax),
+                                               str(self.zmin), str(self.zmax),
+                                               str(self.wmin), str(self.wmax),
+                                               str(self.umin), str(self.umax),]))
+            elif t == 'gmt': return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}'.format(
+                    self.xmin, self.xmax,
+                    self.ymin, self.ymax))
+            elif t == 'cudem': return('-R{:.16f}/{:.16f}/{:.16f}/{:.16f}/{}/{}/{}/{}'.format(
+                    self.xmin, self.xmax,
+                    self.ymin, self.ymax,
+                    utils.float_or(self.wmin, '-'), utils.float_or(self.wmax, '-'),
+                    utils.float_or(self.umin, '-'), utils.float_or(self.umax, '-')))
+            elif t == 'bbox': return(','.join([str(self.xmin), str(self.ymin),
+                                               str(self.xmax), str(self.ymax)]))
+            elif t == 'osm_bbox': return(','.join([str(self.ymin), str(self.xmin),
+                                                   str(self.ymax), str(self.xmax)]))
+            elif t == 'te': return(' '.join([str(self.xmin), str(self.ymin),
+                                             str(self.xmax), str(self.ymax)]))
+            elif t == 'ul_lr': return(' '.join([str(self.xmin), str(self.ymax),
+                                                str(self.xmax), str(self.ymin)]))
             elif t == 'fn':
                 ns = 's' if self.ymax < 0 else 'n'
                 ew = 'e' if self.xmin > 0 else 'w'
@@ -280,16 +269,13 @@ class Region:
                 ns_mn = 's' if self.ymin < 0 else 'n'
                 ew_mx = 'e' if self.xmax > 0 else 'w'
                 ew_mn = 'e' if self.xmin > 0 else 'w'
-                return(
-                    '{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(
-                        ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
-                        ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
-                        ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
-                        ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100)
-                )
-            elif t == 'inf': return(
-                    ' '.join([str(x) for x in self.region])
-            )
+                return('{}{:02d}x{:6f}_{}{:03d}x{:6f}_{}{:02d}x{:6f}_{}{:03d}x{:6f}'.format(
+                    ns_mx, abs(int(self.ymax)), abs(self.ymax * 100) % 100, 
+                    ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
+                    ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
+                    ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100))
+            elif t == 'inf':
+                return(' '.join([str(x) for x in self.region]))
             else:
                 return('/'.join([str(x) for x in self.region[:4]]))
         else:
