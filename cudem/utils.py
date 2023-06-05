@@ -1489,17 +1489,21 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
     distance = err_arr[:,1]
     max_err = np.max(error)
     min_err = np.min(error)
+    echo_msg('min/max error: {}/{}'.format(min_err, max_err))
     max_int_dist = int(np.max(distance))
+    echo_msg('max dist: {}'.format(max_int_dist))
     nbins = 10
     n, _ = np.histogram(distance, bins = nbins)
     while 0 in n:
         nbins -= 1
         n, _ = np.histogram(distance, bins=nbins)
 
+    echo_msg('histogram: {}'.format(n))
     serror, _ = np.histogram(distance, bins=nbins, weights=error)
     serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
 
     mean = serror / n
+    echo_msg('mean: {}'.format(mean))
     std = np.sqrt(serror2 / n - mean * mean)
     ydata = np.insert(std, 0, 0)
     bins_orig=(_[1:] + _[:-1]) / 2
@@ -1510,6 +1514,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
         xdata = np.append(xdata, 0)
         ydata = np.append(ydata, 0)
 
+    echo_msg('xdata: {} ydata: {}'.format(xdata, ydata))
     #fitfunc = lambda p, x: (p[0] + p[1]) * (x ** p[2])
     fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
     errfunc = lambda p, x, y: y - fitfunc(p, x)
@@ -1517,12 +1522,14 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
         errfunc, coeff_guess, args=(xdata, ydata), full_output=True
     )
 
+    echo_msg('{}, {}, {}, {}, {}'.format(out, cov, infodict, mesg, ier))
+    
     if plots:
         try:
-            self._err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
-            self._err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
+            _err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
+            _err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
         except:
-           utils.echo_error_msg('unable to generate error plots, please check configs.')
+           echo_error_msg('unable to generate error plots, please check configs.')
 
     return(out)
 

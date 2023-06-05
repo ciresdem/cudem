@@ -179,6 +179,7 @@ class Waffle:
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
         self.region = src_region # the region to grid
+        self.src_region = src_region # the region to grid
         self.inc = inc # the gridding increments [xinc, yinc]
         self.xinc = xinc # the x/lon gridding increment
         self.yinc = yinc # the y/lat gridding increment
@@ -421,8 +422,11 @@ class Waffle:
                 #         sk.arr_q.task_done()                        
 
                 # self.stack = sk.out_file
-                self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
-                                               supercede=self.supercede, want_mask=self.want_mask)
+                if os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
+                    self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                else:
+                    self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                                                   supercede=self.supercede, want_mask=self.want_mask)
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
@@ -438,18 +442,19 @@ class Waffle:
                 return(None)
 
             ## calculate estimated uncertainty of the interpolation
-            if self.want_uncertainty:
-                iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
-                unc_out, unc_status = iu.run()
-                if unc_status == 0:
-                    self.aux_dems.append(unc_out['prox_unc'][0])
+            # if self.want_uncertainty:
+            #     iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
+            #     unc_out, unc_status = iu.run()
+            #     if unc_status == 0:
+            #         self.aux_dems.append(unc_out['prox_unc'][0])
                 
             if self.keep_auxiliary:
                 if self.want_stack:
                     self.aux_dems.append(self.stack)
-                    
-                if self.want_mask:
-                    self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
+
+                ## post-processing the mask breaks it :(
+                # if self.want_mask:
+                #     self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
                     
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
@@ -3739,6 +3744,7 @@ class InterpolationUncertainty:#(Waffle):
                         except:
                             s_dp = sub_dp
 
+                    utils.remove_glob('{}*'.format(wf.stack))
                     utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
 
             if s_dp is not None and len(s_dp) > 0:
@@ -3918,6 +3924,720 @@ class InterpolationUncertainty:#(Waffle):
         unc_out['prox_unc'] = [self.prox, 'raster']
         unc_out['prox_bf'] = ['{}_prox_bf.png'.format(self.dem.name), 'image']
         unc_out['prox_scatter'] = ['{}_prox_scatter.png'.format(self.dem.name), 'image']
+
+        return(unc_out, 0)
+
+## ==============================================
+##
+## Waffles Uncertainty module
+##
+## ==============================================
+class WafflesUncertainty(Waffle):
+
+    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None, max_sample = None, **kwargs):
+        """calculate cell-level interpolation uncertainty
+
+        Args:
+          waffles_module (str): waffles module string
+          percentile (int): max percentile
+          sims (int): number of split-sample simulations
+          chnk_lvl (int): the 'chunk-level'
+        """
+
+        self.waffles_module_args = {}
+        tmp_waffles = Waffle()
+        for kpam, kval in kwargs.items():
+            if kpam not in tmp_waffles.__dict__:
+                self.waffles_module_args[kpam] = kval
+
+        for kpam, kval in self.waffles_module_args.items():
+            del kwargs[kpam]
+            
+        super().__init__(**kwargs)
+
+        # print(self.params)
+        # for kpam, kval in self.waffles_module_args.items():
+        #     print(kpam)
+        
+        self.waffles_module = waffles_module
+        self.percentile = percentile
+        self.sims = sims
+        self.max_sample = max_sample
+        self.chnk_lvl = chnk_lvl        
+        self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
+        self.prox = None
+        self.slope = None
+
+    def _mask_analysis(self, src_gdal, region = None):
+        """
+        returns the number of filled cells, the total number of cells 
+        and the percent of total cells filled.
+        """
+       
+        ds_config = gdalfun.gdal_infos(src_gdal)
+        if region is not None:
+            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+        else:
+            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+          
+        ds_arr = src_gdal.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        ds_arr[~np.isnan(ds_arr)] = 1
+        msk_sum = np.nansum(ds_arr)
+        msk_max = float(srcwin[2] * srcwin[3])
+        msk_perc = float((msk_sum / msk_max) * 100.)
+        dst_arr = None
+
+        return(msk_sum, msk_max, msk_perc)
+
+    def _prox_analysis(self, src_gdal, region = None, band = 1):
+        """
+        returns the percentile of values in the srcwin
+        """
+        
+        ds_config = gdalfun.gdal_infos(src_gdal)
+        if region is not None:
+            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+        else:
+            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+            
+        ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin)
+        #ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        prox_perc = np.percentile(ds_arr, 95)
+        dst_arr = None
+
+        return(prox_perc)
+
+    def _gen_prox(self, out_prox = None):
+        """
+        generate a proximity grid from the data mask raster
+        
+        returns the output proximity grid's fn
+        """
+        
+        if out_prox is None:
+            out_prox = '{}_prox.tif'.format(self.params['mod_args']['waffles_module'])
+            
+        utils.echo_msg('generating proximity grid {}...'.format(out_prox))
+        gdalfun.gdal_proximity(self.stack, out_prox)
+        if self.dst_srs is not None:
+            gdalfun.gdal_set_srs(out_prox, self.dst_srs)
+
+        return(out_prox)
+
+    def _gen_slope(self, out_slope = None):
+        """
+        generate a slope grid from the elevation raster
+        
+        returns the output slope grid's fn
+        """
+
+        if out_slope is None:
+            out_slope = '{}_slope.tif'.format(self.params['mod_args']['waffles_module'])
+            
+        utils.echo_msg('generating slope grid {}...'.format(out_slope))
+        gdalfun.gdal_slope(self.stack, out_slope)
+        if self.dst_srs is not None:
+            gdalfun.gdal_set_srs(out_slope, self.dst_srs)
+
+        return(out_slope)
+
+    def _regions_sort(self, trainers, t_num = 25, verbose = False):
+        """sort regions (trainers is a list of regions) by distance; 
+        a region is a list: [xmin, xmax, ymin, ymax].
+        
+        returns the sorted region-list
+        """
+
+        train_sorted = []
+        for z, train in enumerate(trainers):
+            train_d = []
+            np.random.shuffle(train)
+            train_total = len(train)
+            while True:
+                if verbose:
+                    utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
+                    
+                if len(train) == 0:
+                    break
+                
+                this_center = train[0][0].center()
+                train_d.append(train[0])
+                train = train[1:]
+                if len(train_d) > t_num or len(train) == 0:
+                    break
+                
+                dsts = [utils.euc_dst(this_center, x[0].center()) for x in train]
+                min_dst = np.percentile(dsts, 50)
+                d_t = lambda t: utils.euc_dst(this_center, t[0].center()) > min_dst
+                np.random.shuffle(train)
+                train.sort(reverse=True, key=d_t)
+            #if verbose:
+            #    utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
+                
+            train_sorted.append(train_d)
+            
+        if verbose:
+            utils.echo_msg_inline('sorting training tiles [OK]\n')
+            
+        return(train_sorted)
+
+    def _select_split(self, o_xyz, sub_region, sub_bn, verbose = False):
+        """split an xyz file into an inner and outer region."""
+        
+        out_inner = '{}_inner.xyz'.format(sub_bn)
+        out_outer = '{}_outer.xyz'.format(sub_bn)
+        xyz_ds = dlim.XYZFile(fn=o_xyz, data_format=168, src_region=sub_region).initialize()
+        with open(out_inner, 'w') as sub_inner:
+            xyz_ds.dump_xyz_direct(dst_port=sub_inner)
+            
+        xyz_ds.invert_region = True
+        with open(out_outer, 'w') as sub_outer:
+            xyz_ds.dump_xyz_direct(dst_port=sub_outer)
+            
+        return([out_inner, out_outer])
+    
+    def _err_fit_plot(self, xdata, ydata, out, fitfunc, bins_final, std_final, sampling_den, max_int_dist,
+                      dst_name = 'unc', xa = 'distance'):
+        """plot a best fit plot with matplotlib
+
+        Args:
+          xdata (list): list of x-axis data
+          ydata (list): list of y-axis data
+
+        """
+
+        #try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.offsetbox import AnchoredText
+
+        short_name="All Terrain"
+        
+        fig = plt.figure()
+        ax = plt.subplot(111)
+
+        plt_data=ax.scatter(bins_final, std_final, zorder=1, label='Error St. Dev.', marker="o", color="black", s=30)
+        #plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
+        plt_best_fit,=ax.plot(xdata, fitfunc(out, xdata), '-')
+        
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+
+        anchored_text = AnchoredText(short_name, loc=2)
+        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text)
+
+        anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$ "%(out[1],out[2]), loc=1)
+        #add r2 value using below
+        #anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$      $r^2=%g$ "%(coeff1,coeff2,rsquared), loc=1)
+        anchored_text2.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text2)
+
+        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
+        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
+        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text3)
+
+        plt.legend([plt_data, plt_best_fit], ['Interpolation Error St Dev', 'Best-Fit Line'], loc='upper center', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+        
+        plt.xlabel('Distance from Measurement (cells)', fontsize=14)
+        plt.ylabel('Interpolation Error St Dev (m)', fontsize=14)
+        plt.xlim(xmin=0)
+        plt.xlim(xmax=int(max_int_dist)+1)
+        plt.ylim(ymin=0)
+        y_max=max(std_final)+(0.25*max(std_final))
+        plt.ylim(ymax=y_max)
+
+        # plt.plot(xdata, ydata, 'o')
+        # plt.plot(xdata, fitfunc(out, xdata), '-')
+        #plt.xlabel(xa)
+        #plt.ylabel('Interpolation Error (m)')
+        out_png = '{}_bf.png'.format(dst_name)
+        plt.savefig(out_png)
+        plt.close()
+
+        #except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+
+    def _err_scatter_plot(self, error_arr, dist_arr, mean, std, max_int_dist, bins_orig, sampling_den,
+                          dst_name = 'unc', xa = 'distance'):
+        """plot a scatter plot with matplotlib
+
+        Args:
+          error_arr (array): an array of errors
+          dist_arr (array): an array of distances
+
+        """
+
+        #try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.offsetbox import AnchoredText
+
+        short_name="All Terrain"
+
+        fig = plt.figure()
+        ax = plt.subplot(111)
+        plt_data=ax.scatter(dist_arr, error_arr, zorder=1, label="Measurements", marker=".", color="black", s=20)
+        plt_data_uncert=ax.errorbar(bins_orig, mean, yerr=std, fmt='r-', linewidth=3)
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
+
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom='on',      # ticks along the bottom edge are off
+            top='off',         # ticks along the top edge are off
+            labelbottom='on') # labels along the bottom edge are off
+
+        anchored_text = AnchoredText(short_name, loc=2)
+        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text)
+
+        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
+        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
+        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
+        ax.add_artist(anchored_text3)
+
+        plt.legend([plt_data, plt_data_uncert], ["Interpolation Error", "Mean +/- St. Deviation"], loc="upper center", bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
+        plt.xlabel("Distance from Measurement (cells)", fontsize=14)
+        plt.ylabel("Interpolation Error (m)", fontsize=14)
+        plt.xlim(xmin=0)
+        plt.xlim(xmax=int(max_int_dist)+1)
+
+        #plt.xlabel(xa)
+        #plt.ylabel('Interpolation Error (m)')
+        out_png = "{}_scatter.png".format(dst_name)
+        plt.savefig(out_png)
+        plt.close()
+
+        #xcept: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
+
+    def _err2coeff(self, err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'unc', xa = 'distance', plots = False):
+        """calculate and plot the error coefficient given err_arr which is 
+        a 2 col array with `err dist
+
+        Args:
+          error_arr (array): an array of errors and distances
+
+        Returns:
+          list: [coefficient-list]
+        """
+
+        from scipy import optimize
+        
+        error = err_arr[:,0]
+        distance = err_arr[:,1]
+        max_err = np.max(error)
+        min_err = np.min(error)
+        max_int_dist = int(np.max(distance))
+        nbins = 10
+        n, _ = np.histogram(distance, bins = nbins)
+        while 0 in n:
+            nbins -= 1
+            n, _ = np.histogram(distance, bins=nbins)
+            
+        serror, _ = np.histogram(distance, bins=nbins, weights=error)
+        serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
+
+        mean = serror / n
+        std = np.sqrt(serror2 / n - mean * mean)
+        ydata = np.insert(std, 0, 0)
+        bins_orig=(_[1:] + _[:-1]) / 2
+        
+        xdata = np.insert(bins_orig, 0, 0)
+        xdata[xdata - 0 < 0.0001] = 0.0001
+        while len(xdata) < 3:
+            xdata = np.append(xdata, 0)
+            ydata = np.append(ydata, 0)
+            
+        fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
+        errfunc = lambda p, x, y: y - fitfunc(p, x)
+        out, cov, infodict, mesg, ier = optimize.leastsq(
+            errfunc, coeff_guess, args=(xdata, ydata), full_output=True
+        )
+
+        if plots:
+            try:
+                self._err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
+                self._err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
+            except:
+               utils.echo_error_msg('unable to generate error plots, please check configs.')
+            
+        return(out)
+
+    def _sub_region_analysis(self, sub_regions):
+        """sub-region analysis
+
+        return the sub-zones.
+        """
+        
+        sub_zones = {}
+        #dem_ds = gdal.Open(self.fn)
+        #msk_ds = gdal.Open(self.mask_fn)
+        stack_ds = gdal.Open(self.stack)
+        prox_ds = gdal.Open(self.prox)
+        slp_ds = gdal.Open(self.slope)
+        with utils.CliProgress(
+                total=len(sub_regions),
+                message='analyzing {} sub-regions'.format(len(sub_regions)),
+        ) as pbar:
+            for sc, sub_region in enumerate(sub_regions):
+                pbar.update()
+                s_sum, s_g_max, s_perc = self._mask_analysis(stack_ds, region=sub_region)
+                if s_sum == 0:
+                    continue
+
+                #s_dc = gdalfun.gdal_infos(stack_ds, region=sub_region, scan=True)
+                p_perc = self._prox_analysis(prox_ds, region=sub_region)
+                slp_perc = self._prox_analysis(slp_ds, region=sub_region)
+                #utils.echo_msg('{} {} {} {} {}'.format(s_sum, s_g_max, s_perc, p_perc, slp_perc))
+                zone = None
+                ## assign the region to the zone based on the density/slope
+                if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[6]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[7]
+                    else:
+                        zone = self._zones[8]
+                elif p_perc < self.prox_perc_66 or abs(p_perc - self.prox_perc_66) < 0.01:
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[3]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[4]
+                    else:
+                        zone = self._zones[5]
+                else:
+                    if slp_perc < self.slp_perc_33 or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[0]
+                    elif slp_perc < self.slp_perc_66 or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[1]
+                    else:
+                        zone = self._zones[2]
+
+                if zone is not None:
+                    sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
+            
+        #dem_ds = msk_ds =
+        stack_ds = prox_ds = slp_ds = None
+        return(sub_zones)
+     
+    def _split_sample(self, trainers, perc, max_dist):
+        """split-sample simulations and error calculations
+        sims = max-simulations
+        """
+            
+        sim = 0
+        last_ec_d = None
+        s_dp = []
+        with utils.CliProgress(
+                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        ) as pbar:
+            utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
+            
+            while True:
+                status = 0
+                sim += 1
+                trains = self._regions_sort(trainers, verbose=False)
+                tot_trains = len([x for s in trains for x in s])
+
+                for z, train in enumerate(trains):
+                    train_h = train[:3] # 25
+                    ss_samp = perc
+
+                    ## ==============================================
+                    ## perform split-sample analysis on each training region.
+                    ## ==============================================
+                    for n, sub_region in enumerate(train_h):
+                        pbar.update()
+                        ss_samp = perc
+                        this_region = sub_region[0].copy()
+                        if sub_region[3] < ss_samp:
+                           ss_samp = sub_region[3]
+
+                        ## ==============================================
+                        ## extract the xyz data for the region from the DEM
+                        ## ==============================================
+                        o_xyz = '{}_{}.xyz'.format(self.name, n)
+                        with gdalfun.gdal_datasource(self.stack) as ds:
+                           #ds_config = gdalfun.gdal_infos(self.fn)
+                           ds_config = gdalfun.gdal_infos(ds)
+                           b_region = this_region.copy()
+                           b_region.buffer(pct=20, x_inc=self.xinc, y_inc=self.yinc)
+                           srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+
+                           ## TODO: extract weights here as well...
+                           with open(o_xyz, 'w') as o_fh:
+                               for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin):
+                                   xyz.dump(dst_port=o_fh)
+
+                        if os.stat(o_xyz).st_size == 0:
+                            continue
+
+                        ## ==============================================
+                        ## split the xyz data to inner/outer; outer is
+                        ## the data buffer, inner will be randomly sampled
+                        ## ==============================================
+                        s_inner, s_outer = self._select_split(o_xyz, this_region, 'sub_{}'.format(n))
+                        if os.stat(s_inner).st_size == 0:
+                            continue
+
+                        sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
+                        ss_len = len(sub_xyz)
+                        #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
+                        #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                        sx_cnt = int(ss_len * (ss_samp / 100.))
+                        #utils.echo_msg(sub_region)
+                        #utils.echo_msg(ss_samp)
+                        #utils.echo_msg(ss_len)
+                        #utils.echo_msg(sx_cnt)
+
+                        sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                        sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
+                        np.random.shuffle(sub_xyz)
+                        np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
+
+                        ## ==============================================
+                        ## generate the random-sample DEM
+                        ## ==============================================
+                        #mod = self.params['mod']
+                        #mod_args = self.params['mod_args']
+                        this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
+                        kwargs = self.params['kwargs']
+                        kwargs['name'] = 'sub_{}'.format(n)
+                        kwargs['data'] = [s_outer, sub_xyz_head]
+                        kwargs['src_region'] = b_region
+                        #kwargs['want_mask'] = True
+                        #kwargs['keep_auxiliary'] = True # to keep mask
+                        kwargs['want_uncertainty'] = False
+                        kwargs['verbose'] = False
+                        kwargs['clobber'] = True
+                        this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
+                        this_waffle.initialize()
+                        wf = this_waffle.generate()
+
+                        ## ==============================================
+                        ## generate the random-sample data PROX and SLOPE
+                        ## ==============================================
+                        sub_prox = '{}_prox.tif'.format(wf.name)
+                        gdalfun.gdal_proximity(wf.stack, sub_prox)
+
+                        ## ==============================================
+                        ## Calculate the random-sample errors
+                        ## todo: account for source uncertainty (rms with xyz?)
+                        ## ==============================================
+                        sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
+                        sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
+                        utils.remove_glob('{}*'.format(sub_xyz_head))
+                        if sub_dp is not None and len(sub_dp) > 0:
+                            try:
+                                s_dp = np.vstack((s_dp, sub_dp))
+                            except:
+                                s_dp = sub_dp
+
+                        utils.remove_glob('{}*'.format(wf.stack))
+                        utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
+
+                if s_dp is not None and len(s_dp) > 0:
+                    d_max = self.region_info[self.name][4]
+                    s_dp = s_dp[s_dp[:,3] < max_dist,:]
+                    s_dp = s_dp[s_dp[:,3] >= 1,:]
+                    prox_err = s_dp[:,[2,3]]
+
+                    if last_ec_d is None:
+                        last_ec_d = [0, 0.1, 0.2]
+                        last_ec_diff = 10
+                    else:
+                        last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
+
+                    ec_d = utils._err2coeff(prox_err[:50000000], perc, coeff_guess=last_ec_d,
+                                            dst_name=self.name + '_prox', xa='Distance to Nearest Measurement (cells)')
+                    ec_diff = abs(ec_d[2] - ec_d[1])
+                    ec_l_diff = abs(last_ec_diff - ec_diff)
+                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+                    utils.echo_msg(ec_d[0] + ec_d[1])
+
+                    ## continue if we got back the default err coeff
+                    if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
+                        last_ec_d = ec_d
+                        continue
+
+                    ## continue if we haven't reached max_sample
+                    if len(s_dp) < self.max_sample:
+                        last_ec_d = ec_d
+                        continue
+
+                    ## break if we gathered enough simulation errors
+                    if sim >= int(self.sims): 
+                        break
+                    
+                    ## break if the err coeff doesn't change much
+                    if abs(last_ec_diff - ec_diff) < 0.01:
+                        break
+
+                    last_ec_d = ec_d
+                else:
+                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
+
+        np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
+        return([ec_d])
+        
+    def run(self):
+        print(self.stack)
+        s_dp = s_ds = None
+        unc_out = {}
+        zones = ['low-dens-low-slp', 'low-dens-mid-slp', 'low-dens-high-slp',
+                 'mid-dens-low-slp', 'mid-dens-mid-slp', 'mid-dens-high-slp',
+                 'high-dens-low-slp', 'high-dens-mid-slp', 'high-dens-low-slp']
+        utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
+        
+        if self.prox is None:
+            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
+
+        if self.slope is None:
+            self.slope = self._gen_slope()
+            
+        ## ==============================================
+        ## region and der. analysis
+        ## ==============================================
+        self.region_info = {}
+        with gdalfun.gdal_datasource(self.stack) as tmp_ds:
+            num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
+
+        self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
+        self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
+        self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
+        self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
+
+        self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
+        self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
+        self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
+        self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
+
+        self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
+        for x in self.region_info.keys():
+            utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
+
+        ## ==============================================
+        ## chunk region into sub regions
+        ## ==============================================
+        #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        #chnk_inc = chnk_inc if chnk_inc > 10 else 10
+
+        chnk_inc = int(self.prox_percentile)
+        
+        utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
+        sub_regions = self.region.chunk(self.xinc, chnk_inc)
+        utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
+
+        ## ==============================================
+        ## sub-region analysis
+        ## ==============================================
+        sub_zones = self._sub_region_analysis(sub_regions)
+        #sub_zones.append(self._sub_region_analysis(sub_regions, prox_or_slp='slp'))
+
+        ## ==============================================
+        ## sub-region density and percentiles
+        ## ==============================================
+        s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
+        s_5perc = np.percentile(s_dens, 5)
+        s_dens = None
+        #utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
+        utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
+
+        ## ==============================================
+        ## zone analysis / generate training regions
+        ## ==============================================
+        trainers = []
+        t_perc = 95
+        s_perc = 50
+
+        for z, this_zone in enumerate(self._zones):
+            tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
+            if len(tile_set) > 0:
+                d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
+            else:
+                continue
+            
+            t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
+            utils.echo_msg(
+                'possible {} training zones: {} @ MAX {}'.format(
+                    self._zones[z].upper(), len(t_trainers), d_50perc
+                )
+            )
+            trainers.append(t_trainers)
+            
+        utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
+
+        ## ==============================================
+        ## split-sample simulations and error calculations
+        ## sims = max-simulations
+        ## ==============================================
+        if self.sims is None:
+            self.sims = int(len(sub_regions)/tot_trains)
+            
+            #self.sims = 12
+
+        if self.max_sample is None:
+            self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .1)
+
+        utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
+        ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+
+        ## ==============================================
+        ## Save/Output results
+        ## apply error coefficient to full proximity grid
+        ## TODO: USE numpy/gdal instead!
+        ## ==============================================
+        utils.echo_msg('applying coefficient to PROXIMITY grid {}'.format(self.prox))
+
+        with gdalfun.gdal_datasource(self.prox, update=True) as prox_ds:
+            prox_inf = gdalfun.gdal_infos(prox_ds)
+            prox_band = prox_ds.GetRasterBand(1)
+            prox_arr = prox_band.ReadAsArray().astype(float)
+            prox_arr = ec_d[1] * (prox_arr**ec_d[2])
+            #prox_arr = (ec_d[0] + ec_d[1]) * prox_arr**ec_d[2]
+            #prox_arr[prox_arr == pro
+
+        utils.echo_msg('combining uncertainty grid {} with proximity uncertainty'.format(self.stack))
+        with gdalfun.gdal_datasource(self.stack) as stack_ds:
+            unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+            unc_band = stack_ds.GetRasterBand(4)
+            unc_arr = unc_band.ReadAsArray()
+            unc_arr[unc_arr == unc_inf['ndv']] = 0
+
+        out_arr = prox_arr + unc_arr
+        unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
+        #prox_band.SetNoDataValue(self.ndv)
+        #prox_band.WriteArray(out_arr)
+            
+        if self.dst_srs is not None:
+            status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
+            
+        utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
+        utils.remove_glob(self.slope)
+        utils.remove_glob(self.prox)
+
+        #unc_out['prox_unc'] = [self.prox, 'raster']
+        #unc_out['prox_bf'] = ['{}_prox_bf.png'.format(self.name), 'image']
+        #unc_out['prox_scatter'] = ['{}_prox_scatter.png'.format(self.name), 'image']
 
         return(unc_out, 0)
     
@@ -4175,6 +4895,7 @@ class WaffleFactory(factory.CUDEMFactory):
         'coastline': {'name': 'coastline', 'stack': False, 'call': WafflesCoastline},
         'lakes': {'name': 'lakes', 'stack': False, 'call': WafflesLakes},
         'cudem': {'name': 'cudem', 'stack': True, 'call': WafflesCUDEM},
+        'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': WafflesUncertainty},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch},
         #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE},

@@ -936,13 +936,16 @@ class ElevationDataset:
                 ))
                 self.trans_fn = trans_fn
 
-                trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
-                    src_vert,
-                    dst_vert,
-                    vd_region.format('fn'),
-                    utils.inc2str(self.x_inc)
-                ))
-                self.trans_fn_full = trans_fn_full
+                if self.x_inc is not None:
+                    trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
+                        src_vert,
+                        dst_vert,
+                        vd_region.format('fn'),
+                        utils.inc2str(self.x_inc)
+                    ))
+                    self.trans_fn_full = trans_fn_full
+                else:
+                    self.trans_fn_full = trans_fn
                 
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(trans_fn):
@@ -3562,13 +3565,14 @@ class ZIPlist(ElevationDataset):
                     inf_region.wmax = data_set.weight
                     inf_region.umin = data_set.uncertainty
                     inf_region.umax = data_set.uncertainty
-                    utils.echo_msg('ds: {}'.format(data_set))
-                    utils.echo_msg('inf_region: {}'.format(inf_region))
-                    utils.echo_msg('region: {}'.format(self.region))
-                    if regions.regions_intersect_p(inf_region, self.region):
-                        for ds in data_set.parse():
-                            self.data_entries.append(ds)
-                            yield(ds)
+                    if inf_region.valid_p(check_xy=True):
+                        if regions.regions_intersect_p(inf_region, self.region):
+                            for ds in data_set.parse():
+                                self.data_entries.append(ds)
+                                yield(ds)
+                    else:
+                        if self.verbose:
+                            utils.echo_warning_msg('invalid inf file: {}.inf, skipping'.format(data_set.fn))
                 else:
                     for ds in data_set.parse():
                         self.data_entries.append(ds)

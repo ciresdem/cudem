@@ -797,7 +797,7 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             return(None)
 
     drv = gdal.GetDriverByName('GTiff')
-    dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Float32, [])                
+    dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Int32, [])
     dst_ds.SetGeoTransform(ds_config['geoT'])
     dst_ds.SetProjection(ds_config['proj'])
     dst_band = dst_ds.GetRasterBand(1)

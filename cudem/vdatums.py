@@ -172,7 +172,9 @@ _cdn_reference_frames = {
     9279: {'name': 'SA LLD height',},
 }
 
+## todo: allow input/output geoids
 _geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
+_geoids = ['g2018']
 
 def get_vdatum_by_name(datum_name):
     ## tidal
@@ -370,7 +372,10 @@ class VerticalTransform:
         for _result in cdn_results:
             for g in _geoids:
                 if g in _result['name']:
+                    print(g)
+                    print(_result)
                     cdn_results = [_result]
+                    break
                     
         if len(cdn_results) > 0:
             for _result in cdn_results:
@@ -487,8 +492,10 @@ class VerticalTransform:
             
         return(trans_array)
     
-    def run(self, outfile='trans_grid.tif'):
-        
+    def run(self, outfile=None):
+        if outfile is None:
+            outfile = utils.make_temp_fn('trans_grid.tif', self.cache_dir)
+            
         if os.path.exists(outfile):
             if self.verbose:
                 utils.echo_warning_msg('{} exists, skipping...'.format(outfile))
@@ -699,6 +706,7 @@ usage: {cmd} [OPTIONS] input_grid output_grid
 
   -k, --keep-cache\tKEEP the cache data intact after run
   -l, --list-epsg\tList the supported EPSG codes and their names
+  -q, --quiet\t\tLower verbosity to a quiet.
 
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
@@ -714,7 +722,7 @@ def vdatums_cli(argv = sys.argv):
     dst_grid = None
     vdatum_in = 5703
     vdatum_out = 7662
-    verbose = False
+    verbose = True
     keep_cache = False
     cache_dir = _vdatums_cache
     i = 1
@@ -740,8 +748,8 @@ def vdatums_cli(argv = sys.argv):
             sys.exit(1)
         elif arg == '-k' or arg == '--keep-cache':
             keep_cache = True
-        elif arg == '--verbose':
-            verbose = True
+        elif arg == '--quiet':
+            verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
             print(_usage)
             sys.exit(1)
@@ -787,20 +795,21 @@ def vdatums_cli(argv = sys.argv):
         
         vt = VerticalTransform(trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid = vt.run()
-
-        if os.path.exists('_{}'.format(_trans_grid)):
-            utils.remove_glob('_{}'.format(_trans_grid))
+        out_trans_grid = utils.make_temp_fn('_trans_grid.tif')
+        
+        if os.path.exists(out_trans_grid):
+            utils.remove_glob(out_trans_grid)
         
         if _trans_grid is not None:
 
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs epsg:{}'.format(
-                _trans_grid, '_{}'.format(_trans_grid),
+            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(
+                _trans_grid, out_trans_grid,
                 src_region.format('te'),
                 src_infos['nx'],
                 src_infos['ny'],
-                out_h), verbose=self.verbose)
+                out_h), verbose=verbose)
             
             # utils.run_cmd(
             #     'gdalwarp {} {} -te {} -tr {} {} -s_srs epsg:4326 -t_srs {} -co COMPRESS=LZW -co TILED=YES -co PREDICTOR=3'.format(
@@ -821,13 +830,13 @@ def vdatums_cli(argv = sys.argv):
             # if status == 0:
 
             gdc_cmd = 'gdal_calc.py -A {} -B {} --calc "A+B" --outfile {} --co COMPRESS=LZW --co TILED=YES --co PREDICTOR=3 --overwrite'.format(
-                src_grid.replace(' ', '\ '), '_{}'.format(_trans_grid).replace(' ', '\ '), dst_grid.replace(' ', '\ '))
+                src_grid.replace(' ', '\ '), out_trans_grid.replace(' ', '\ '), dst_grid.replace(' ', '\ '))
             os.system(gdc_cmd)
                 
         else:
             utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
 
-        if not keep_cache:
-            utils.remove_glob(cache_dir)
+        #if not keep_cache:
+        #    utils.remove_glob(cache_dir)
             
 ### End

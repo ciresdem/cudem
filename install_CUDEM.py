@@ -31,8 +31,11 @@ def check_dependencies(install_missing=False):
     try:
         from osgeo import gdal
     except ImportError:
-        if install_missing and use_dnf:
-            os.system('sudo dnf install gdal gdal-devel python3-gdal gdal-python-tools')
+        if install_missing:
+            if use_dnf:
+                os.system('sudo dnf install gdal gdal-devel python3-gdal gdal-python-tools')
+            elif use_apt:
+                os.system('sudo apt install python-is-python3 python3-pip python3-gdal gdal-bin gdal-data')
         else:
             print(""" ERROR: Could not find the GDAL/OGR Python library bindings. 
             On Debian based systems you can install it with this command:
@@ -42,8 +45,11 @@ def check_dependencies(install_missing=False):
             On windows, either use `OSGEO4W` or install GDAL via ...""")
 
     if not cmd_exists('gmt'):
-        if install_missing and use_dnf:
-            os.system('sudo dnf install GMT GMT-devel GMT-doc')
+        if install_missing:
+            if use_dnf:
+                os.system('sudo dnf install GMT GMT-devel GMT-doc')
+            elif use_apt:
+                os.system('sudo apt install gmt gmt-common gmt-dcw gmt-gshhg gmt-gshhg-full gmt-gshhg-low gmt-gshhg-high')
         else:
             print(""" WARNING: Could not find GMT on the system.
             Some functionality of CUDEM will be unavailable without it.
@@ -54,7 +60,11 @@ def check_dependencies(install_missing=False):
 
     if not cmd_exists('mblist') or want_mbsystem:
         if install_missing and use_dnf:
-            os.system('sudo dnf install g++ motif motif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel GMT GMT-devel boost boost-python3 glibc-devel mesa* xorg-x11-fonts* gcc-c++ libtirpc-devel')
+            if use_dnf:
+                os.system('sudo dnf install g++ motif motif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel GMT GMT-devel boost boost-python3 glibc-devel mesa* xorg-x11-fonts* gcc-c++ libtirpc-devel')
+            elif use_apt:
+                os.system('sudo apt install g++ libgdal-dev libgmt-dev libmotif-common libmotif-dev libfftw3-dev fftw-dev libnetcdf-dev libproj-dev libboost-python-dev mesa* libtirpc-dev libglu1-mesa-dev freeglut3-dev mesa-common-dev')
+                
             os.system('git clone https://github.com/dwcaress/MB-System.git')
             os.chdir('MB-System')
             os.system('./configure --prefix ~/.local')
@@ -75,6 +85,8 @@ def check_dependencies(install_missing=False):
                 if not cmd_exists('gfortran'):
                     if use_dnf:
                         os.system('sudo dnf install gfortran')
+                    elif use_apt:
+                        os.system('sudo apt install gfortran')
 
                 if cmd_exists('gfortran'):
                     install_htdp()
