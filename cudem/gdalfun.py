@@ -308,7 +308,11 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
         for k in this_band_md.keys():
             if k[:9] not in field_names:
                 layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
-        
+
+        if 'Title' not in this_band_md.keys():
+            if 'Title' not in field_names:
+                layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+
         if b_infos['zr'][1] == 1:
             tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
                 '{}_poly'.format(this_band.GetDescription())
@@ -319,12 +323,14 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                     '{}_poly'.format(this_band.GetDescription()), None, ogr.wkbMultiPolygon
                 )
                 tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                if 'Title' not in this_band_md.keys():
-                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-                    
+                tmp_name = str(this_band.GetDescription())
+                                    
                 for k in this_band_md.keys():
                     tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
 
+                if 'Title' not in this_band_md.keys():
+                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+                    
                 if verbose:
                     utils.echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
                             
@@ -346,14 +352,15 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                     #utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
                     with utils.CliProgress(message='creating feature {}...'.format(this_band.GetDescription()),
                                            total=len(this_band_md.keys())) as pbar:
-
-                        if 'Title' not in this_band_md.keys():
-                            out_feat.SetField('Title', this_band.GetDescription())
                             
                         for k in this_band_md.keys():
                             pbar.update()
                             out_feat.SetField(k[:9], this_band_md[k])
-                    
+
+                        if 'Title' not in this_band_md.keys():
+                            out_feat.SetField('Title', tmp_name)
+                            
+                        out_feat.SetField('DN', b)                           
                         layer.CreateFeature(out_feat)
 
             if verbose:
