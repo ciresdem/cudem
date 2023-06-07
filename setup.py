@@ -84,7 +84,7 @@ setuptools.setup(
         'scripts/gdal_hillshade.py',
         'scripts/gdal_minmax.py',
         'scripts/gdal_mask.py',
-        'scipts/gdal_polygonize_mask.py'
+        'scripts/gdal_polygonize_mask.py',
         'scripts/ddms.py',
         'scripts/has_nulls.py',
         'scripts/all_ndv.py',
@@ -123,7 +123,7 @@ setuptools.setup(
         'scripts/dem_update.sh',
         'scripts/xyz_vs_dem.sh',
         'scripts/dem_set_metadata.py',
-        'scripts/dem_patch.sh',
+        'scripts/dem_patch.sh'
     ],
     python_requires = '>=3.0',
     project_urls = {

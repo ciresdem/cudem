@@ -448,8 +448,8 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt)
-            else:
-                return(None)
+            #else:
+            #    return(None)
 
             ## post-process the mask
             if self.want_mask or self.want_sm:
@@ -502,6 +502,34 @@ class Waffle:
 ## Waffles Raster Stacking
 ##
 ## ==============================================
+class WafflesScratch(Waffle):
+    """STACK data into a DEM. 
+    
+    Generate a DEM using a raster STACKing method. 
+    By default, will calculate the [weighted]-mean where overlapping cells occur. 
+    Set supercede to True to overwrite overlapping cells with higher weighted data.
+
+    stack data to generate DEM. No interpolation
+    occurs with this module. To guarantee a full DEM,
+    use a background DEM with a low weight, such as GMRT or GEBCO,
+    which will be stacked upon to create the final DEM.
+    
+    -----------
+    Parameters:
+    
+    min_count=[val] - only retain data cells if they contain `min_count` overlapping data
+    
+    < stacks:min_count=None >
+    """
+
+    ## todo: add parameters for specifying outputs...
+    def __init__(self, min_count = None, **kwargs):
+        super().__init__(**kwargs)
+        self.min_count = min_count
+        
+    def run(self):
+        return(self)
+
 class WafflesStacks(Waffle):
     """STACK data into a DEM. 
     
@@ -4919,6 +4947,7 @@ class WaffleFactory(factory.CUDEMFactory):
         'lakes': {'name': 'lakes', 'stack': False, 'call': WafflesLakes},
         'cudem': {'name': 'cudem', 'stack': True, 'call': WafflesCUDEM},
         'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': WafflesUncertainty},
+        'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch},
         #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE},
