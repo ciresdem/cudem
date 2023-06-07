@@ -83,6 +83,8 @@ setuptools.setup(
         'scripts/gdal_histogram.py',
         'scripts/gdal_hillshade.py',
         'scripts/gdal_minmax.py',
+        'scripts/gdal_mask.py',
+        'scipts/gdal_polygonize_mask.py'
         'scripts/ddms.py',
         'scripts/has_nulls.py',
         'scripts/all_ndv.py',
@@ -113,7 +115,6 @@ setuptools.setup(
         'scripts/vdatum_cmd.py',
         'scripts/x360.py',
         'scripts/xyztindex.py',
-        'scripts/gdal_mask.py',
         'scripts/vrbag2tif2chunks2xyz.sh',
         'scripts/VR_to_image.py',
         'scripts/explode_bags.sh',
@@ -122,7 +123,7 @@ setuptools.setup(
         'scripts/dem_update.sh',
         'scripts/xyz_vs_dem.sh',
         'scripts/dem_set_metadata.py',
-        'scripts/dem_patch.sh'
+        'scripts/dem_patch.sh',
     ],
     python_requires = '>=3.0',
     project_urls = {

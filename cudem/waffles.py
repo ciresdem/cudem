@@ -51,6 +51,7 @@ import os
 import math
 import json
 import time
+import glob
 import traceback
 
 import numpy as np
@@ -291,7 +292,7 @@ class Waffle:
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   want_sm=self.want_sm, invert_region=False, cache_dir=self.cache_dir)
+                                   invert_region=False, cache_dir=self.cache_dir)
         self.data.initialize()
         if not self.want_weight:
             self.data.weight = None
@@ -401,7 +402,8 @@ class Waffle:
             ## stack the data and run the waffles module
             if self.want_stack:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
-                mask_name = '{}_stack_m'.format(os.path.basename(self.name))
+                mask_name = '{}_msk'.format(stack_name)
+                mask_fn = '{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt))
                 num_threads = 8
                 # try:
                 #     sk = dlim.stacks_ds(self.data, n_threads=num_threads, out_name=os.path.join(self.cache_dir, stack_name),
@@ -422,14 +424,22 @@ class Waffle:
                 #         sk.arr_q.task_done()                        
 
                 # self.stack = sk.out_file
-                if os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
+                if not self.clobber and os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
                     self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 else:
                     self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
-                                                   supercede=self.supercede, want_mask=self.want_mask)
+                                                   supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
+                    
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
+
+                if self.keep_auxiliary:
+                    self.aux_dems.append(self.stack)
+
+                #if self.want_mask or self.want_sm:
+                #    self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
+                        
             self.run()
             
             ## post-process the DEM(s)
@@ -441,28 +451,39 @@ class Waffle:
             else:
                 return(None)
 
+            ## post-process the mask
+            if self.want_mask or self.want_sm:
+                mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+                if mask_dem.valid_p():
+                    mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                                     dst_dir=os.path.dirname(self.fn) if self.want_mask else None)
+
+                    if self.want_sm:
+                        with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                            sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
+
+                        sm_files = glob.glob('{}.*'.format(sm_layer))
+                        #sm_files = glob.glob('{}_sm.*'.format(os.path.join(self.cache_dir, mask_name)))
+                        for sm_file in sm_files:
+                            os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
+            
             ## calculate estimated uncertainty of the interpolation
             # if self.want_uncertainty:
             #     iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
             #     unc_out, unc_status = iu.run()
             #     if unc_status == 0:
             #         self.aux_dems.append(unc_out['prox_unc'][0])
-                
-            if self.keep_auxiliary:
-                if self.want_stack:
-                    self.aux_dems.append(self.stack)
 
-                ## post-processing the mask breaks it :(
-                # if self.want_mask:
-                #     self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
-                    
+            ## post-process any auxiliary rasters
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
                 if aux_dem.valid_p():
                     aux_dem.process(ndv=None, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
-                                    dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn))
+                                    node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
+                                    set_metadata=False)
 
+            ## reset the self.stack to new post-processed fn and ds
             if self.want_stack and self.keep_auxiliary:
                 self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
@@ -2605,12 +2626,13 @@ class WafflesCUDEM(Waffle):
     def generate_coastline(self, pre_data=None):
         cst_region = self.p_region.copy()
         cst_region.wmin = self.min_weight
+        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
         coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=cst_region,
-                                  xinc=self.xinc, yinc=self.yinc, name='{}_cst'.format(self.name), node=self.node, dst_srs=self.dst_srs,
+                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
         coastline.initialize()
-        with utils.CliProgress(message='Generating coastline...',
-                               end_message='Generated coastline.',
+        with utils.CliProgress(message='Generating coastline {}...'.format(cst_fn),
+                               end_message='Generated coastline {}.'.format(cst_fn),
                                verbose=self.verbose) as pbar:
             coastline.generate()
 
@@ -2650,7 +2672,7 @@ class WafflesCUDEM(Waffle):
             coastline = self.generate_coastline(pre_data=pre_data)
             #if coastline is not None:
             pre_clip = coastline
-            print(pre_clip)
+            #print(pre_clip)
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
@@ -4686,10 +4708,11 @@ class WaffleDEM:
         return(True)
         
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
-                clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None):
+                clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None,
+                set_metadata = True):
 
         if self.verbose:
-            utils.echo_msg('post processing DEM...')
+            utils.echo_msg('post processing DEM {}...'.format(self.fn))
         
         if self.ds_config is None:
             self.initialize()

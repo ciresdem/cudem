@@ -5,14 +5,11 @@
 #--
 
 import sys
-import os
-import struct
-import numpy as np
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 
-gfr_version = 0.2
+gfr_version = 0.3
 
 def Usage():
     print('Usage: gdal_mask.py [-eq value] [-gt value] [-lt value] [-nodata]')
@@ -75,7 +72,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     ds = gdal.Open(ingrd)
-    ds_config = demfun.gather_infos(ds)
+    ds_config = gdalfun.gdal_infos(ds)
     
     band = ds.GetRasterBand(1)
     in_ndata = band.GetNoDataValue()
@@ -104,22 +101,22 @@ if __name__ == "__main__":
     if applygrd is not None:
 
         a_ds = gdal.Open(applygrd)
-        a_ds_config = demfun.gather_infos(a_ds)
+        a_ds_config = gdalfun.gdal_infos(a_ds)
     
         a_band = a_ds.GetRasterBand(1)
         msk_array = a_band.ReadAsArray()
-        dst_ds = demfun.copy_infos(a_ds_config)
+        dst_ds = gdalfun.gdal_copy_infos(a_ds_config)
         
         msk_array[outarray == 0] = a_ds_config['ndv']
         outarray = msk_array
         a_ds = None
     else:
         
-        dst_ds = demfun.copy_infos(ds_config)
+        dst_ds = gdalfun.gdal_copy_infos(ds_config)
         if mk_ndata is True:
             dst_ds['ndv'] = float(ndata)
         
-    utils.gdal_write(outarray, outgrd, dst_ds)
+    gdalfun.gdal_write(outarray, outgrd, dst_ds)
         
     ds = None
 #--END

@@ -929,46 +929,44 @@ class ElevationDataset:
                 ) if self.region is None else self.region.copy()
 
                 vd_region.buffer(pct=2)
-                trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
+                self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
                     dst_vert,
                     vd_region.format('fn')
                 ))
-                self.trans_fn = trans_fn
 
                 if self.x_inc is not None:
-                    trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
+                    self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
                         src_vert,
                         dst_vert,
                         vd_region.format('fn'),
                         utils.inc2str(self.x_inc)
                     ))
-                    self.trans_fn_full = trans_fn_full
                 else:
-                    self.trans_fn_full = trans_fn
+                    self.trans_fn_full = self.trans_fn
                 
                 ## vertical transformation grid is generated in WGS84
-                if not os.path.exists(trans_fn):
+                if not os.path.exists(self.trans_fn):
                     with utils.CliProgress(
-                            message='generating vertical transformation grid {} from {} to {}'.format(trans_fn, src_vert, dst_vert)
+                            message='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert)
                     ) as pbar:
-                        trans_fn = vdatums.VerticalTransform(
+                        self.trans_fn = vdatums.VerticalTransform(
                             vd_region, '3s', '3s', src_vert, dst_vert,
                             cache_dir=self.cache_dir,
                             verbose=False
-                        ).run(outfile=trans_fn)
-                        assert os.path.exists(trans_fn)
+                        ).run(outfile=self.trans_fn)
+                        assert os.path.exists(self.trans_fn)
+                else:
+                    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert))
 
-                elif not os.path.exists(trans_fn_full):
-                    gdalfun.sample_warp(self.trans_fn, trans_fn_full, self.x_inc, self.y_inc,
+                if not os.path.exists(self.trans_fn_full):
+                    gdalfun.sample_warp(self.trans_fn, self.trans_fn_full, self.x_inc, self.y_inc,
                                         src_region=self.region, src_srs='epsg:4326', dst_srs=self.dst_srs)
                     
-                    assert os.path.exists(trans_fn_full)
-                else:
-                    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(trans_fn, src_vert, dst_vert))
-
-                if os.path.exists(trans_fn):
-                    out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), trans_fn)
+                    assert os.path.exists(self.trans_fn_full)
+                    
+                if os.path.exists(self.trans_fn):
+                    out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), self.trans_fn)
                     out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
                     if src_vert == '6360':
@@ -1024,9 +1022,12 @@ class ElevationDataset:
                 self.trans_region.warp(out_src_srs)
                 self.trans_region.src_srs = out_src_srs
             else:
-                self.trans_region = regions.Region().from_string(self.infos.wkt)
-                self.trans_region.src_srs = self.src_srs
-                self.trans_region.warp(self.dst_srs)
+                if self.infos.wkt is not None:
+                    self.trans_region = regions.Region().from_string(self.infos.wkt)
+                    self.trans_region.src_srs = self.src_srs
+                    self.trans_region.warp(self.dst_srs)
+                else:
+                    utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
                 
             src_osr_srs = dst_osr_srs = None
             
@@ -1287,7 +1288,7 @@ class ElevationDataset:
         
         utils.set_cache(self.cache_dir)
         if out_name is None:
-            out_name = '_m'.format(os.path.join(self.cache_dir, '{}'.format(
+            out_name = '{}_msk'.format(os.path.join(self.cache_dir, '{}'.format(
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
             )))
 
@@ -1427,7 +1428,7 @@ class ElevationDataset:
         ## `self.array_yield` is set in `self.set_array` (now it's set here), to mask data first if asked
         #for arrs, srcwin, gt in self.yield_array():
         if want_mask:
-            array_yield = self._mask(out_name='{}_m'.format(out_name), method='multi', fmt=fmt)
+            array_yield = self._mask(out_name='{}_msk'.format(out_name), method='multi', fmt=fmt)
         else:
             array_yield = self.yield_array()
 
@@ -1909,27 +1910,29 @@ class LASFile(ElevationDataset):
             self.set_transform()
 
         self.las_region = None
-        if self.region is not None  and self.region.valid_p():
-            self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-            xcount, ycount, dst_gt = self.region.geo_transform(
-                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-            )
-            
         ## todo: fix this for dst_trans!
         self.las_x_inc = self.x_inc
         self.las_y_inc = self.y_inc
         
-        if self.las_x_inc is not None and self.las_y_inc is not None:
-            if self.dst_trans is not None:
-                self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
-                #self.las_dst_gt = dst_gt
-                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
-                    x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
-                )
-            else:
-                self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+        if self.region is not None  and self.region.valid_p():
+            self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+
+            if self.x_inc is not None and self.y_inc is not None:
+                xcount, ycount, dst_gt = self.region.geo_transform(
                     x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
                 )
+
+            if self.las_x_inc is not None and self.las_y_inc is not None:
+                if self.dst_trans is not None:
+                    self.las_x_inc, self.las_y_inc = self.las_region.increments(xcount, ycount)
+                    #self.las_dst_gt = dst_gt
+                    self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                        x_inc=self.las_x_inc, y_inc=self.las_y_inc, node='grid'
+                    )
+                else:
+                    self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
+                        x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+                    )
         #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
 
     def valid_p(self, fmts = ['scratch']):
@@ -1995,28 +1998,31 @@ class LASFile(ElevationDataset):
     def yield_points(self):
         self.init_ds()
         with lp.open(self.fn) as lasf:
-            for points in lasf.chunk_iterator(2_000_000):
-                points = points[(np.isin(points.classification, self.classes))]
-                if self.region is not None  and self.region.valid_p():
-                    las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-                    if self.invert_region:
-                        points = points[((points.x > las_region.xmax) | (points.x < las_region.xmin)) | \
-                                        ((points.y > las_region.ymax) | (points.y < las_region.ymin))]
-                        if las_region.zmin is not None:
-                            points =  points[(points.z < las_region.zmin)]
+            try:
+                for points in lasf.chunk_iterator(2_000_000):
+                    points = points[(np.isin(points.classification, self.classes))]
+                    if self.region is not None  and self.region.valid_p():
+                        las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                        if self.invert_region:
+                            points = points[((points.x > las_region.xmax) | (points.x < las_region.xmin)) | \
+                                            ((points.y > las_region.ymax) | (points.y < las_region.ymin))]
+                            if las_region.zmin is not None:
+                                points =  points[(points.z < las_region.zmin)]
+                                if las_region.zmax is not None:
+                                    points =  points[(points.z > las_region.zmax)]
+                        else:
+                            points = points[((points.x < las_region.xmax) & (points.x > las_region.xmin)) & \
+                                            ((points.y < las_region.ymax) & (points.y > las_region.ymin))]
+                            if las_region.zmin is not None:
+                                points =  points[(points.z > las_region.zmin)]
+
                             if las_region.zmax is not None:
-                                points =  points[(points.z > las_region.zmax)]
-                    else:
-                        points = points[((points.x < las_region.xmax) & (points.x > las_region.xmin)) & \
-                                        ((points.y < las_region.ymax) & (points.y > las_region.ymin))]
-                        if las_region.zmin is not None:
-                            points =  points[(points.z > las_region.zmin)]
-                            
-                        if las_region.zmax is not None:
-                            points =  points[(points.z < las_region.zmax)]
-                            
-                if len(points) > 0:
-                    yield(points)
+                                points =  points[(points.z < las_region.zmax)]
+
+                    if len(points) > 0:
+                        yield(points)
+            except Exception as e:
+                utils.echo_warning_msg('could not read points from lasfile {}, {}'.format(self.fn, e))
     
     def yield_xyz(self):
         """LAS file parsing generator"""
@@ -2104,7 +2110,7 @@ class LASFile(ElevationDataset):
 
                 # gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
                 #                     src_region=self.region, src_srs = 'epsg:4326', dst_srs=self.dst_srs)
-                                    
+
                 with gdalfun.gdal_datasource(self.trans_fn_full) as tf:
                     tfi = gdalfun.gdal_infos(tf)
                     b = tf.GetRasterBand(1)
@@ -2845,7 +2851,7 @@ class MBSParser(ElevationDataset):
         for ds in self.parse_():
             if ds is None:
                 for line in utils.yield_cmd(
-                        'mblist -M{} -OXYZ -I{}'.format(self.mb_exclude, self.fn),
+                        'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), self.fn),
                         verbose=True,
                 ):
                     this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
@@ -3140,6 +3146,8 @@ class Datalist(ElevationDataset):
         the geojson datalist vector, containing gathered metadata based on the
         source datalist.
         """
+
+        #self.set_transform()
         self.dst_layer = '{}'.format(self.fn)
         self.dst_vector = self.dst_layer + '.json'
 
@@ -3355,7 +3363,7 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            utils.echo_warning_msg('could not load datalist-vector json, falling back to parse')
+            utils.echo_warning_msg('could not load datalist-vector json {}.json, falling back to parse'.format(self.fn))
             for ds in self.parse():
                 yield(ds)
                                         
@@ -4348,6 +4356,7 @@ Options:
 \t\t\tpercent of the input REGION.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
+  -D, --cache-dir\tCACHE Directory for storing temp and output data.
   --z-precision\t\tSet the target precision of dumped z values. (default is 4)
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
@@ -4402,6 +4411,7 @@ def datalists_cli(argv=sys.argv):
     want_sm = False
     invert_region=False
     z_precision=4
+    cache_dir = utils.cudem_cache()
     
     ## ==============================================
     ## parse command line arguments.
@@ -4433,6 +4443,12 @@ def datalists_cli(argv=sys.argv):
         elif arg == '--z_precision' or arg == '--z-precision':
             z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
+
+        elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
+            cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
+            i = i + 1
+        elif arg[:2] == '-D': cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
+            
         elif arg == '--mask' or arg == '-m':
             want_mask = True
         elif arg == '--invert_region' or arg == '-v':
@@ -4519,7 +4535,8 @@ def datalists_cli(argv=sys.argv):
             this_datalist = init_data(
                 dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='bilinear',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
-                want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=None, dump_precision=z_precision
+                want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
+                dump_precision=z_precision
             )
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory._modules[this_datalist.data_format]['fmts']

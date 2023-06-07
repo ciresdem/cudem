@@ -1095,17 +1095,31 @@ def config_check(chk_vdatum=False, verbose=False):
 ## TODO: add threading and verbosity
 ## ==============================================
 def _terminal_width():
-    cols = 40
-    try:
-        cols = shutil.get_terminal_size().columns
-    except:
-        try:
-            rows, cols = curses.initscr().getmaxyx()
-        finally:
-            curses.endwin()
-                
+    #cols = 40
+    #try:
+    #    cols = shutil.get_terminal_size().columns
+    #    print(cols)
+    #except:
+    # try:
+    #     rows, cols = curses.initscr().getmaxyx()
+    # finally:
+    #     curses.endwin()
+
+    cols = get_terminal_size_stderr()[0]
     return(cols)
 
+def get_terminal_size_stderr(fallback=(80, 24)):
+    """
+    Unlike shutil.get_terminal_size, which looks at stdout, this looks at stderr.
+    """
+        
+    try:
+        size = os.get_terminal_size(sys.__stderr__.fileno())
+    except (AttributeError, ValueError, OSError):
+        size = os.terminal_size(fallback)
+        
+    return(size)
+    
 def _init_msg(msg, prefix_len):
     width = int(_terminal_width()) - (prefix_len+6)
     try:
@@ -1257,7 +1271,7 @@ class CliProgress():
     True
     """
 
-    def __init__(self, message = None, end_message = None, total = 0, sleep = 2, verbose = True):
+    def __init__(self, message = None, end_message = None, total = 0, sleep = 2, verbose = True): 
         self.thread = threading.Thread(target=self.updates)
         self.thread_is_alive = False
         self.tw = 7

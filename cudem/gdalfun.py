@@ -282,12 +282,13 @@ def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
         
     else: return(True)
     
-def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Shapefile', verbose=True):
+def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True):
     dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
     dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
     utils.remove_glob('{}.*'.format(dst_layer))
     osr_prj_file('{}.prj'.format(dst_layer), dst_srs)
-    ds = ogr.GetDriverByName(ogr_format).CreateDataSource(dst_vector)
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
     if ds is not None: 
         layer = ds.CreateLayer(
             '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
@@ -330,7 +331,8 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Sh
                     tmp_layer,
                     tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
                     [],
-                    callback = gdal.TermProgress if verbose else None
+                    #callback = gdal.TermProgress if verbose else None
+                    callback = None
                 )
 
                 if len(tmp_layer) > 0:
@@ -338,17 +340,21 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format='ESRI Sh
                         defn = tmp_layer.GetLayerDefn()
 
                     out_feat = ogr_mask_union(tmp_layer, 'DN', defn)
-                    utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
-                    for k in this_band_md.keys():
-                        out_feat.SetField(k[:9], this_band_md[k])
+                    #utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
+                    with utils.CliProgress(message='creating feature {}...'.format(this_band.GetDescription()),
+                                           total=len(this_band_md.keys())) as pbar:
+                        for k in this_band_md.keys():
+                            pbar.update()
+                            out_feat.SetField(k[:9], this_band_md[k])
                     
-                    layer.CreateFeature(out_feat)
+                        layer.CreateFeature(out_feat)
 
             if verbose:
                 utils.echo_msg('polygonized {}'.format(this_band.GetDescription()))
                 
             tmp_ds = tmp_layer = None
     ds = None
+    return(dst_layer, ogr_format)
 
 ## ==============================================
 ## GDAL
@@ -515,7 +521,7 @@ def gdal_get_ndv(src_gdal, band = 1):
             src_band = src_ds.GetRasterBand(band)
             return(src_band.GetNoDataValue())
 
-def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose  =True):
+def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose = True):
     """set the nodata value of gdal datasource
 
     returns 0
@@ -641,6 +647,14 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
             mem_ds = gdal_mem_ds(out_ds_config, bands=in_bands)
             for band in range(1, in_bands+1):
                 this_band = mem_ds.GetRasterBand(band)
+                that_band = src_ds.GetRasterBand(band)
+                that_band_md = that_band.GetMetadata()
+                this_band_md = this_band.GetMetadata()
+                this_band.SetDescription(that_band.GetDescription())
+                
+                for key in that_band_md.keys():
+                    this_band_md[key] = that_band_md[key]
+                
                 this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                 mem_ds.FlushCache()
 
