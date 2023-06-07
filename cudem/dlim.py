@@ -2997,8 +2997,11 @@ class OGRFile(ElevationDataset):
                             if self.elev_field is None:
                                 self.elev_field = find_elevation_field(f)
 
-                            elev = f.GetField(self.elev_field)
-                            xyz.append(elev)
+                            elev = utils.float_or(f.GetField(self.elev_field))
+                            if elev is not None:
+                                xyz.append(elev)
+                            else:
+                                continue
 
                         this_xyz = xyzfun.XYZPoint().from_list([float(x) for x in xyz])
                         if self.z_scale is not None:
@@ -3898,7 +3901,7 @@ class eHydroFetcher(Fetcher):
             src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
 
-            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_depth:z_scale=-0.3048",
+            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048",
                                       src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
@@ -4342,18 +4345,18 @@ usage: {cmd} [ -acdghijquwEJPR [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-\t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
+\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
+\t\t\t\tIf a vector file is supplied, will use each region found therein.
   -E, --increment\tBlock data to INCREMENT in native units.
-\t\t\tWhere INCREMENT is x-inc[/y-inc]
+\t\t\t\tWhere INCREMENT is x-inc[/y-inc]
   -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
-\t\t\tpercentage to extend the processing REGION.
-\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-\t\t\tpercent of the input REGION.
+\t\t\t\tpercentage to extend the processing REGION.
+\t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
+\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\t\tpercent of the input REGION.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.

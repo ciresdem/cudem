@@ -286,7 +286,7 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
     dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
     dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
     utils.remove_glob('{}.*'.format(dst_layer))
-    osr_prj_file('{}.prj'.format(dst_layer), dst_srs)
+    osr_prj_file('{}.prj'.format(dst_layer), gdal_infos(src_ds)['proj'])
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_vector)
     if ds is not None: 
@@ -319,9 +319,12 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                     '{}_poly'.format(this_band.GetDescription()), None, ogr.wkbMultiPolygon
                 )
                 tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                if 'Title' not in this_band_md.keys():
+                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+                    
                 for k in this_band_md.keys():
                     tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
-                
+
                 if verbose:
                     utils.echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
                             
@@ -343,6 +346,10 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                     #utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
                     with utils.CliProgress(message='creating feature {}...'.format(this_band.GetDescription()),
                                            total=len(this_band_md.keys())) as pbar:
+
+                        if 'Title' not in this_band_md.keys():
+                            out_feat.SetField('Title', this_band.GetDescription())
+                            
                         for k in this_band_md.keys():
                             pbar.update()
                             out_feat.SetField(k[:9], this_band_md[k])
