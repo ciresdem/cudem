@@ -65,7 +65,9 @@ import cudem
 
 #cudem_cache = os.path.join(os.path.expanduser('~'), '.cudem_cache')
 #cudem_cache = os.path.abspath('./.cudem_cache')
+this_dir, this_filename = os.path.split(__file__)
 cudem_cache = lambda: os.path.abspath('./.cudem_cache')
+cudem_data = os.path.join(this_dir, 'data')
 
 ## heaps of thanks to https://github.com/fitnr/stateplane
 FIPS_TO_EPSG = {
@@ -1407,10 +1409,6 @@ class CliProgress():
                 message = self.end_message
             
         if status != 0 and status is not None:
-            #print(exc_type)
-            #print(exc_value)
-            #print(exc_traceback)
-            #traceback.print_exc()
             sys.stderr.write(
                 '\r[\033[31m\033[1m{:^6}\033[m] {}\n'.format('fail', message)
             )
@@ -1503,21 +1501,21 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
     distance = err_arr[:,1]
     max_err = np.max(error)
     min_err = np.min(error)
-    echo_msg('min/max error: {}/{}'.format(min_err, max_err))
+    #echo_msg('min/max error: {}/{}'.format(min_err, max_err))
     max_int_dist = int(np.max(distance))
-    echo_msg('max dist: {}'.format(max_int_dist))
+    #echo_msg('max dist: {}'.format(max_int_dist))
     nbins = 10
     n, _ = np.histogram(distance, bins = nbins)
     while 0 in n:
         nbins -= 1
         n, _ = np.histogram(distance, bins=nbins)
 
-    echo_msg('histogram: {}'.format(n))
+    #echo_msg('histogram: {}'.format(n))
     serror, _ = np.histogram(distance, bins=nbins, weights=error)
     serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
 
     mean = serror / n
-    echo_msg('mean: {}'.format(mean))
+    #echo_msg('mean: {}'.format(mean))
     std = np.sqrt(serror2 / n - mean * mean)
     ydata = np.insert(std, 0, 0)
     bins_orig=(_[1:] + _[:-1]) / 2
@@ -1528,7 +1526,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
         xdata = np.append(xdata, 0)
         ydata = np.append(ydata, 0)
 
-    echo_msg('xdata: {} ydata: {}'.format(xdata, ydata))
+    #echo_msg('xdata: {} ydata: {}'.format(xdata, ydata))
     #fitfunc = lambda p, x: (p[0] + p[1]) * (x ** p[2])
     fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
     errfunc = lambda p, x, y: y - fitfunc(p, x)
@@ -1536,7 +1534,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
         errfunc, coeff_guess, args=(xdata, ydata), full_output=True
     )
 
-    echo_msg('{}, {}, {}, {}, {}'.format(out, cov, infodict, mesg, ier))
+    #echo_msg('{}, {}, {}, {}, {}'.format(out, cov, infodict, mesg, ier))
     
     if plots:
         try:

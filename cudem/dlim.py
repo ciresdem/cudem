@@ -3892,7 +3892,11 @@ class eHydroFetcher(Fetcher):
         super().__init__(**kwargs)
         
     def yield_ds(self, result):
-        src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+        try:
+            src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+        except Exception as e:
+            utils.echo_error_msg('{}: {}'.format(self.fn, e))
+            src_gdb = None
 
         if src_gdb is not None:
             tmp_gdb = ogr.Open(src_gdb)

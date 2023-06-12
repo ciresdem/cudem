@@ -469,6 +469,8 @@ class Waffle:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
             
             ## calculate estimated uncertainty of the interpolation
+            #if self.want_uncertainty:
+                
             # if self.want_uncertainty:
             #     iu = InterpolationUncertainty(dem=self, percentile=95, sims=2, chnk_lvl=None, max_sample=None)
             #     unc_out, unc_status = iu.run()
@@ -3686,7 +3688,9 @@ class InterpolationUncertainty:#(Waffle):
             
         sim = 0
         last_ec_d = None
-        s_dp = []
+        #s_dp = []
+        s_dp = np.loadtxt(self.prox_errs)
+        utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
         utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
         
         # with utils.CliProgress(
@@ -3837,7 +3841,9 @@ class InterpolationUncertainty:#(Waffle):
             else:
                 utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
 
-        np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
+        with open(self.prox_errs, 'a') as prox_dat:
+            np.savetxt(prox_dat, prox_err, '%f', ' ')
+            
         return([ec_d])
         
     def run(self):
@@ -3940,7 +3946,14 @@ class InterpolationUncertainty:#(Waffle):
             self.max_sample = int((self.region_info[self.dem.name][1] - self.region_info[self.dem.name][2]) * .1)
 
         utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
-        ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+
+
+        if self.accumulate:
+            ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+        else:
+            prox_errs = np.loadtxt(self.prox_errs)
+            ec_d = utils._err2coeff(prox_errs[:50000000], perc, coeff_guess=[0, 0.1, 0.2],
+                                    dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)')
 
         ## ==============================================
         ## Save/Output results
@@ -3984,7 +3997,8 @@ class InterpolationUncertainty:#(Waffle):
 ## ==============================================
 class WafflesUncertainty(Waffle):
 
-    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None, max_sample = None, **kwargs):
+    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
+                 max_sample = None, accumulate = True, **kwargs):
         """calculate cell-level interpolation uncertainty
 
         Args:
@@ -4013,7 +4027,17 @@ class WafflesUncertainty(Waffle):
         self.percentile = percentile
         self.sims = sims
         self.max_sample = max_sample
-        self.chnk_lvl = chnk_lvl        
+        self.chnk_lvl = chnk_lvl
+        self.accumulate = accumulate
+        self.prox_errs = '{}_errs.dat'.format(self.waffles_module)
+        if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
+            self.prox_errs = os.path.join(self.cudem_data, self.prox_errs)
+        else:
+            self.accumulate = True
+
+        print(self.accumulate)
+        print(self.prox_errs)
+        
         self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
         self.prox = None
         self.slope = None
@@ -4051,9 +4075,9 @@ class WafflesUncertainty(Waffle):
         else:
             srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
             
-        ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin)
-        #ds_arr[ds_arr == ds_config['ndv']] = np.nan
-        prox_perc = np.percentile(ds_arr, 95)
+        ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin).astype(float)
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        prox_perc = np.nanpercentile(ds_arr, 95)
         dst_arr = None
 
         return(prox_perc)
@@ -4145,192 +4169,7 @@ class WafflesUncertainty(Waffle):
         with open(out_outer, 'w') as sub_outer:
             xyz_ds.dump_xyz_direct(dst_port=sub_outer)
             
-        return([out_inner, out_outer])
-    
-    def _err_fit_plot(self, xdata, ydata, out, fitfunc, bins_final, std_final, sampling_den, max_int_dist,
-                      dst_name = 'unc', xa = 'distance'):
-        """plot a best fit plot with matplotlib
-
-        Args:
-          xdata (list): list of x-axis data
-          ydata (list): list of y-axis data
-
-        """
-
-        #try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        from matplotlib.offsetbox import AnchoredText
-
-        short_name="All Terrain"
-        
-        fig = plt.figure()
-        ax = plt.subplot(111)
-
-        plt_data=ax.scatter(bins_final, std_final, zorder=1, label='Error St. Dev.', marker="o", color="black", s=30)
-        #plt_best_fit,=ax.plot(xdata,ydata, zorder=1, linewidth=2.0)
-        plt_best_fit,=ax.plot(xdata, fitfunc(out, xdata), '-')
-        
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
-
-        plt.tick_params(
-            axis='x',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            bottom='on',      # ticks along the bottom edge are off
-            top='off',         # ticks along the top edge are off
-            labelbottom='on') # labels along the bottom edge are off
-
-        anchored_text = AnchoredText(short_name, loc=2)
-        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(anchored_text)
-
-        anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$ "%(out[1],out[2]), loc=1)
-        #add r2 value using below
-        #anchored_text2 = AnchoredText(" $y = {%gx}^{%g}$      $r^2=%g$ "%(coeff1,coeff2,rsquared), loc=1)
-        anchored_text2.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(anchored_text2)
-
-        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
-        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
-        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(anchored_text3)
-
-        plt.legend([plt_data, plt_best_fit], ['Interpolation Error St Dev', 'Best-Fit Line'], loc='upper center', bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
-
-        plt.tick_params(
-            axis='x',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            bottom='on',      # ticks along the bottom edge are off
-            top='off',         # ticks along the top edge are off
-            labelbottom='on') # labels along the bottom edge are off
-        
-        plt.xlabel('Distance from Measurement (cells)', fontsize=14)
-        plt.ylabel('Interpolation Error St Dev (m)', fontsize=14)
-        plt.xlim(xmin=0)
-        plt.xlim(xmax=int(max_int_dist)+1)
-        plt.ylim(ymin=0)
-        y_max=max(std_final)+(0.25*max(std_final))
-        plt.ylim(ymax=y_max)
-
-        # plt.plot(xdata, ydata, 'o')
-        # plt.plot(xdata, fitfunc(out, xdata), '-')
-        #plt.xlabel(xa)
-        #plt.ylabel('Interpolation Error (m)')
-        out_png = '{}_bf.png'.format(dst_name)
-        plt.savefig(out_png)
-        plt.close()
-
-        #except: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
-
-    def _err_scatter_plot(self, error_arr, dist_arr, mean, std, max_int_dist, bins_orig, sampling_den,
-                          dst_name = 'unc', xa = 'distance'):
-        """plot a scatter plot with matplotlib
-
-        Args:
-          error_arr (array): an array of errors
-          dist_arr (array): an array of distances
-
-        """
-
-        #try:
-        import matplotlib
-        matplotlib.use('Agg')
-        import matplotlib.pyplot as plt
-        from matplotlib.offsetbox import AnchoredText
-
-        short_name="All Terrain"
-
-        fig = plt.figure()
-        ax = plt.subplot(111)
-        plt_data=ax.scatter(dist_arr, error_arr, zorder=1, label="Measurements", marker=".", color="black", s=20)
-        plt_data_uncert=ax.errorbar(bins_orig, mean, yerr=std, fmt='r-', linewidth=3)
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
-
-        plt.tick_params(
-            axis='x',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            bottom='on',      # ticks along the bottom edge are off
-            top='off',         # ticks along the top edge are off
-            labelbottom='on') # labels along the bottom edge are off
-
-        anchored_text = AnchoredText(short_name, loc=2)
-        anchored_text.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(anchored_text)
-
-        str_ss_samp_den="Sampling Density = " + str(sampling_den) + " %"
-        anchored_text3 = AnchoredText(str_ss_samp_den, loc=4)
-        anchored_text3.patch.set_boxstyle("round,pad=0.,rounding_size=0.2")
-        ax.add_artist(anchored_text3)
-
-        plt.legend([plt_data, plt_data_uncert], ["Interpolation Error", "Mean +/- St. Deviation"], loc="upper center", bbox_to_anchor=(0.5, 1.15), fancybox=True, shadow=True, ncol=2, fontsize=14)
-        plt.xlabel("Distance from Measurement (cells)", fontsize=14)
-        plt.ylabel("Interpolation Error (m)", fontsize=14)
-        plt.xlim(xmin=0)
-        plt.xlim(xmax=int(max_int_dist)+1)
-
-        #plt.xlabel(xa)
-        #plt.ylabel('Interpolation Error (m)')
-        out_png = "{}_scatter.png".format(dst_name)
-        plt.savefig(out_png)
-        plt.close()
-
-        #xcept: utils.echo_error_msg('you need to install matplotlib to run uncertainty plots...')
-
-    def _err2coeff(self, err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'unc', xa = 'distance', plots = False):
-        """calculate and plot the error coefficient given err_arr which is 
-        a 2 col array with `err dist
-
-        Args:
-          error_arr (array): an array of errors and distances
-
-        Returns:
-          list: [coefficient-list]
-        """
-
-        from scipy import optimize
-        
-        error = err_arr[:,0]
-        distance = err_arr[:,1]
-        max_err = np.max(error)
-        min_err = np.min(error)
-        max_int_dist = int(np.max(distance))
-        nbins = 10
-        n, _ = np.histogram(distance, bins = nbins)
-        while 0 in n:
-            nbins -= 1
-            n, _ = np.histogram(distance, bins=nbins)
-            
-        serror, _ = np.histogram(distance, bins=nbins, weights=error)
-        serror2, _ = np.histogram(distance, bins=nbins, weights=error**2)
-
-        mean = serror / n
-        std = np.sqrt(serror2 / n - mean * mean)
-        ydata = np.insert(std, 0, 0)
-        bins_orig=(_[1:] + _[:-1]) / 2
-        
-        xdata = np.insert(bins_orig, 0, 0)
-        xdata[xdata - 0 < 0.0001] = 0.0001
-        while len(xdata) < 3:
-            xdata = np.append(xdata, 0)
-            ydata = np.append(ydata, 0)
-            
-        fitfunc = lambda p, x: p[0] + p[1] * (x ** p[2])
-        errfunc = lambda p, x, y: y - fitfunc(p, x)
-        out, cov, infodict, mesg, ier = optimize.leastsq(
-            errfunc, coeff_guess, args=(xdata, ydata), full_output=True
-        )
-
-        if plots:
-            try:
-                self._err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
-                self._err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
-            except:
-               utils.echo_error_msg('unable to generate error plots, please check configs.')
-            
-        return(out)
+        return([out_inner, out_outer])    
 
     def _sub_region_analysis(self, sub_regions):
         """sub-region analysis
@@ -4357,7 +4196,7 @@ class WafflesUncertainty(Waffle):
                 #s_dc = gdalfun.gdal_infos(stack_ds, region=sub_region, scan=True)
                 p_perc = self._prox_analysis(prox_ds, region=sub_region)
                 slp_perc = self._prox_analysis(slp_ds, region=sub_region)
-                #utils.echo_msg('{} {} {} {} {}'.format(s_sum, s_g_max, s_perc, p_perc, slp_perc))
+                utils.echo_msg('{} {} {} {} {}'.format(s_sum, s_g_max, s_perc, p_perc, slp_perc))
                 zone = None
                 ## assign the region to the zone based on the density/slope
                 if p_perc < self.prox_perc_33 or abs(p_perc - self.prox_perc_33) < 0.01:
@@ -4396,7 +4235,9 @@ class WafflesUncertainty(Waffle):
             
         sim = 0
         last_ec_d = None
-        s_dp = []
+        #s_dp = []
+        s_dp = np.loadtxt(self.prox_errs)
+        utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
         with utils.CliProgress(
                 message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
         ) as pbar:
@@ -4494,7 +4335,7 @@ class WafflesUncertainty(Waffle):
                         ## todo: account for source uncertainty (rms with xyz?)
                         ## ==============================================
                         sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
-                        sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'xyzg')
+                        sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
                         utils.remove_glob('{}*'.format(sub_xyz_head))
                         if sub_dp is not None and len(sub_dp) > 0:
                             try:
@@ -4502,14 +4343,20 @@ class WafflesUncertainty(Waffle):
                             except:
                                 s_dp = sub_dp
 
+                            with open(self.prox_errs, 'a') as prox_dat:
+                                np.savetxt(prox_dat, sub_dp, '%f', ' ')
+
                         utils.remove_glob('{}*'.format(wf.stack))
                         utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
 
                 if s_dp is not None and len(s_dp) > 0:
                     d_max = self.region_info[self.name][4]
-                    s_dp = s_dp[s_dp[:,3] < max_dist,:]
-                    s_dp = s_dp[s_dp[:,3] >= 1,:]
-                    prox_err = s_dp[:,[2,3]]
+                    # s_dp = s_dp[s_dp[:,3] < max_dist,:]
+                    # s_dp = s_dp[s_dp[:,3] >= 1,:]
+                    # prox_err = s_dp[:,[2,3]]
+
+                    prox_err = s_dp[s_dp[:,1] < max_dist,:]
+                    prox_err = s_dp[s_dp[:,1] >= 1,:]
 
                     if last_ec_d is None:
                         last_ec_d = [0, 0.1, 0.2]
@@ -4521,7 +4368,7 @@ class WafflesUncertainty(Waffle):
                                             dst_name=self.name + '_prox', xa='Distance to Nearest Measurement (cells)')
                     ec_diff = abs(ec_d[2] - ec_d[1])
                     ec_l_diff = abs(last_ec_diff - ec_diff)
-                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
+                    utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(prox_err), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
                     utils.echo_msg(ec_d[0] + ec_d[1])
 
                     ## continue if we got back the default err coeff
@@ -4546,7 +4393,8 @@ class WafflesUncertainty(Waffle):
                 else:
                     utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
 
-        np.savetxt('prox_err.xyz', prox_err, '%f', ' ')                
+        #np.savetxt('prox_err.xyz', prox_err, '%f', ' ')
+
         return([ec_d])
         
     def run(self):
@@ -4557,12 +4405,6 @@ class WafflesUncertainty(Waffle):
                  'mid-dens-low-slp', 'mid-dens-mid-slp', 'mid-dens-high-slp',
                  'high-dens-low-slp', 'high-dens-mid-slp', 'high-dens-low-slp']
         utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
-        
-        if self.prox is None:
-            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
-
-        if self.slope is None:
-            self.slope = self._gen_slope()
             
         ## ==============================================
         ## region and der. analysis
@@ -4571,16 +4413,25 @@ class WafflesUncertainty(Waffle):
         with gdalfun.gdal_datasource(self.stack) as tmp_ds:
             num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
 
+        if self.prox is None:
+            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
+            
         self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
         self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
         self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
         self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
 
+        if self.slope is None:
+            self.slope = self._gen_slope()
+            
         self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
         self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
         self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
         self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
 
+        print(self.prox_perc_33, self.prox_perc_66, self.prox_perc_100)
+        print(self.slp_perc_33, self.slp_perc_66, self.slp_perc_100)
+        
         self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
         for x in self.region_info.keys():
             utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
@@ -4649,7 +4500,13 @@ class WafflesUncertainty(Waffle):
             self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .1)
 
         utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
-        ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+        #ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+        if self.accumulate:
+            ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
+        #else:
+        prox_errs = np.loadtxt(self.prox_errs)
+        ec_d = utils._err2coeff(prox_errs, num_perc, coeff_guess=[0, 0.1, 0.2],
+                                dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)')
 
         ## ==============================================
         ## Save/Output results
@@ -4662,18 +4519,23 @@ class WafflesUncertainty(Waffle):
             prox_inf = gdalfun.gdal_infos(prox_ds)
             prox_band = prox_ds.GetRasterBand(1)
             prox_arr = prox_band.ReadAsArray().astype(float)
-            prox_arr = ec_d[1] * (prox_arr**ec_d[2])
-            #prox_arr = (ec_d[0] + ec_d[1]) * prox_arr**ec_d[2]
-            #prox_arr[prox_arr == pro
+            with gdalfun.gdal_datasource(self.stack) as stack_ds:
+                unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+                unc_band = stack_ds.GetRasterBand(4)
+                unc_arr = unc_band.ReadAsArray()
+                unc_arr[unc_arr == unc_inf['ndv']] = 0
+                out_arr = unc_arr + ec_d[1] * (prox_arr**ec_d[2])
+                #prox_arr = (ec_d[0] + ec_d[1]) * prox_arr**ec_d[2]
+                #prox_arr[prox_arr == pro
 
-        utils.echo_msg('combining uncertainty grid {} with proximity uncertainty'.format(self.stack))
-        with gdalfun.gdal_datasource(self.stack) as stack_ds:
-            unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
-            unc_band = stack_ds.GetRasterBand(4)
-            unc_arr = unc_band.ReadAsArray()
-            unc_arr[unc_arr == unc_inf['ndv']] = 0
+        # utils.echo_msg('combining uncertainty grid {} with proximity uncertainty'.format(self.stack))
+        # with gdalfun.gdal_datasource(self.stack) as stack_ds:
+        #     unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+        #     unc_band = stack_ds.GetRasterBand(4)
+        #     unc_arr = unc_band.ReadAsArray()
+        #     unc_arr[unc_arr == unc_inf['ndv']] = 0
 
-        out_arr = prox_arr + unc_arr
+        #out_arr = prox_arr + unc_arr
         unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
         #prox_band.SetNoDataValue(self.ndv)
         #prox_band.WriteArray(out_arr)
@@ -5060,7 +4922,7 @@ def waffles_cli(argv = sys.argv):
     dls = []
     i_regions = []
     these_regions = []
-    module = None
+    module = 'scratch'
     wg_user = None
     want_prefix = False
     prefix_args = {}
@@ -5283,12 +5145,12 @@ def waffles_cli(argv = sys.argv):
     ## Otherwise run from cli options...
     ## set the dem module
     ## ==============================================        
-    if module is None:
-        sys.stderr.write(waffles_cli_usage)
-        utils.echo_error_msg(
-            '''must specify a waffles -M module.'''
-        )
-        sys.exit(-1)
+    # if module is None:
+    #     # sys.stderr.write(waffles_cli_usage)
+    #     # utils.echo_error_msg(
+    #     #     '''must specify a waffles -M module.'''
+    #     # )
+    #     # sys.exit(-1)
 
     if module.split(':')[0] not in WaffleFactory()._modules.keys():
         utils.echo_error_msg(

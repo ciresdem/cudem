@@ -349,7 +349,6 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                         defn = tmp_layer.GetLayerDefn()
 
                     out_feat = ogr_mask_union(tmp_layer, 'DN', defn)
-                    #utils.echo_msg('creating feature {}...'.format(this_band.GetDescription()))
                     with utils.CliProgress(message='creating feature {}...'.format(this_band.GetDescription()),
                                            total=len(this_band_md.keys())) as pbar:
                             
