@@ -30,6 +30,7 @@
 
 import os
 import json
+from tqdm import tqdm
 
 from osgeo import ogr
 
