@@ -54,6 +54,7 @@ setuptools.setup(
         'pyproj',
         'h5py', # nsidc
         'boto3', # for amazon/bluetopo
+        'tqdm',
         #'windows-curses', # for windows
     ], 
     entry_points = {
@@ -85,6 +86,7 @@ setuptools.setup(
         'scripts/gdal_minmax.py',
         'scripts/gdal_mask.py',
         'scripts/gdal_polygonize_mask.py',
+        'scripts/gdal_hydro_flatten.py',
         'scripts/ddms.py',
         'scripts/has_nulls.py',
         'scripts/all_ndv.py',

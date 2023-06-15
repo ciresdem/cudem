@@ -35,6 +35,8 @@ import requests
 import urllib
 import lxml.etree
 import lxml.html as lh
+from tqdm import tqdm
+
 import threading
 try:
     import Queue as queue
@@ -420,10 +422,9 @@ class Fetch:
                 elif req.status_code == 200:
                     curr_chunk = 0
                     with open(dst_fn, 'wb') as local_file:
-                        with utils.CliProgress(
-                                message='fetching: {}'.format(self.url),
+                        with tqdm(
+                                desc='fetching: {}'.format(self.url),
                                 total=int(req.headers.get('content-length', 0)),
-                                verbose=self.verbose
                         ) as pbar:
                             #try:
                             for chunk in req.iter_content(chunk_size = 8196):
@@ -878,8 +879,8 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         surveys = []
         page = Fetch(self.cop_10_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
-        with utils.CliProgress(
-                message='scanning for COPERNICUS COP-10 datasets',
+        with tqdm(
+                desc='scanning for COPERNICUS COP-10 datasets',
         ) as pbar:            
             for i, row in enumerate(rows):
                 pbar.update()
@@ -915,10 +916,9 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         f = Fetch(self.cop30_vrt_url, headers=self.headers, verbose=True)
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
-        with utils.CliProgress(
+        with tqdm(
                 total=len(fns),
-                message='scanning for COPERNICUS COP-30 datasets',
-                verbose=self.verbose
+                desc='scanning for COPERNICUS COP-30 datasets',
         ) as pbar:
             for i, fn in enumerate(fns):
                 pbar.update()
@@ -968,10 +968,9 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
             self.where.append("DataType = '{}'".format(self.datatype))
 
         _results = FRED._filter_FRED(self)
-        with utils.CliProgress(
+        with tqdm(
                 total=len(_results),
-                message='scanning COPERNICUS datasets',
-                verbose=self.verbose,
+                desc='scanning COPERNICUS datasets',
         ) as pbar:
             for surv in _results:
                 pbar.update()
@@ -1141,7 +1140,7 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
 
-        with utils.CliProgress(total=len(fns), message='scanning NASADEM datasets') as pbar:        
+        with tqdm(total=len(fns), desc='scanning NASADEM datasets') as pbar:        
             for i, fn in enumerate(fns):
                 sid = fn.text.split('/')[-1].split('.')[0]
                 pbar.update()
@@ -1353,9 +1352,9 @@ https://www.charts.noaa.gov/
             surveys = []
             this_xml = iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
-            with utils.CliProgress(
+            with tqdm(
                     total=len(charts),
-                    message='scanning for CHARTS ({}) datasets'.format(dt)
+                    desc='scanning for CHARTS ({}) datasets'.format(dt)
             ) as pbar:
                 for i, chart in enumerate(charts):
                     pbar.update(1)
@@ -1403,9 +1402,9 @@ https://www.charts.noaa.gov/
             self.where.append("DataType = 'ENC'")
 
         _results = FRED._filter_FRED(self)
-        with utils.CliProgress(
+        with tqdm(
                 total=len(_results),
-                message='scanning CHARTS datasets'
+                desc='scanning CHARTS datasets'
         ) as pbar:
             for surv in _results:
                 pbar.update(1)
@@ -2395,9 +2394,9 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
         this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
         this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
         surveys = []
-        with utils.CliProgress(
+        with tqdm(
                 total=len(this_ds),
-                message='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
+                desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
         ) as pbar:
             for i, node in enumerate(this_ds):
                 this_title = node.attrib['name']
@@ -2606,10 +2605,9 @@ http://tnmaccess.nationalmap.gov/
         
         datasets = self._datasets()
         self.FRED._open_ds(1)
-        with utils.CliProgress(
+        with tqdm(
                 total=len(datasets),
-                message='scanning TNM datasets',
-                verbose=self.verbose,
+                desc='scanning TNM datasets',
         ) as pbar:
             for i, ds in enumerate(datasets):
                 pbar.update(1)
@@ -2643,10 +2641,10 @@ http://tnmaccess.nationalmap.gov/
         f = self.formats.split(',') if self.formats is not None else None
         q = self.q
         _results = FRED._filter_FRED(self)
-        with utils.CliProgress(
+        with tqdm(
                 total=len(_results),
-                message='scanning for TNM datasets',
-                verbose=self.verbose) as pbar:
+                desc='scanning for TNM datasets',
+        ) as pbar:
             for surv in _results:
                 offset = 0
                 total = 0
@@ -4197,9 +4195,9 @@ https://geoservice.dlr.de/web/services
         surveys = []
         page = Fetch(self._wsf_url, verbose=True).fetch_html()
         rows = page.xpath('//a[contains(@href, ".tif")]/@href')
-        with utils.CliProgress(
+        with tqdm(
                 total=len(rows),
-                message='scanning WSF datasets',
+                desc='scanning WSF datasets',
         ) as pbar:
             for i, row in enumerate(rows):
                 pbar.update(1)
@@ -4460,9 +4458,9 @@ https://springernature.figshare.com/collections/GLOBathy_the_Global_Lakes_Bathym
     #             lk_layer.SetSpatialFilter(self.region.export_as_geom())
     #             lk_features = lk_layer.GetFeatureCount()
 
-    #             with utils.CliProgress(
+    #             with tqdm(
     #                     total=len(lk_layer),
-    #                     message='Processing {} HYDROLAKES'.format(lk_features),
+    #                     desc='Processing {} HYDROLAKES'.format(lk_features),
     #             ) as pbar:
     #                 for i, feat in enumerate(lk_layer):
     #                     pbar.update(1)

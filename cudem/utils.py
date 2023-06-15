@@ -44,6 +44,7 @@ import curses
 import io
 import json
 import traceback
+from tqdm import tqdm
 
 import threading
 try:
@@ -838,11 +839,15 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     i_chunk = 0
     x_i_chunk = 0
 
-    with CliProgress(
+    # with CliProgress(
+    #         total=(n_size[0]*n_size[1])/step,
+    #         message='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
+    #         end_message='{}: {} @ chunk:{}/step:{}'.format(_command_name(), end_msg, n_chunk, step),
+    #         verbose=verbose,
+    # ) as pbar:
+    with tqdm(
             total=(n_size[0]*n_size[1])/step,
-            message='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
-            end_message='{}: {} @ chunk:{}/step:{}'.format(_command_name(), end_msg, n_chunk, step),
-            verbose=verbose,
+            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step)
     ) as pbar:
         while True:
             #y_chunk = n_chunk
@@ -943,9 +948,12 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     out = None
-    with CliProgress(
-            message='cmd: `{}...`'.format(cmd.rstrip()[:24]),
-            verbose=verbose,
+    # with CliProgress(
+    #         message='cmd: `{}...`'.format(cmd.rstrip()[:24]),
+    #         verbose=verbose,
+    # ) as pbar:
+    with tqdm(
+            desc='cmd: `{}...`'.format(cmd.rstrip()[:24])
     ) as pbar:
         
         if data_fun is not None:
@@ -1146,7 +1154,8 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     msg = _init_msg(msg, len(prefix) + 9)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg))
     sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
@@ -1163,7 +1172,8 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     msg = _init_msg(msg, len(prefix) + 7)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
-    sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+    #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
+    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg))
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
@@ -1182,9 +1192,11 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     if bold:
-        sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+        #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
+        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg))
     else:
-        sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+        #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
+        tqdm.write('{}: {}'.format(prefix, msg))
     sys.stderr.flush()
     
 ## ==============================================

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_cut.py
 ##
-## Copyright (c) 2018 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2018 - 2023 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -28,10 +28,10 @@ import os
 import sys
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 from cudem import regions
 
-_version = '0.0.1'
+_version = '0.0.2'
 _usage = '''gdal_cut.py ({}): cut a DEM to a region
 
 usage: gdal_cut.py [ file ]
@@ -87,6 +87,6 @@ if __name__ == '__main__':
         
     if os.path.exists(elev):
         output_name = elev[:-4] + '_cut.tif'
-        demfun.cut(elev, src_region, output_name)
+        gdalfun.gdal_cut(elev, src_region, output_name)
     else: utils.echo_error_msg('{} is not a valid file'.format(elev))
 ### End

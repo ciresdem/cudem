@@ -53,6 +53,7 @@ import json
 import time
 import glob
 import traceback
+from tqdm import tqdm
 
 import numpy as np
 from scipy import interpolate
@@ -574,6 +575,33 @@ class WafflesStacks(Waffle):
 
 ## ==============================================
 ##
+## The Flattening
+##
+## ==============================================
+class WafflesFlatten(Waffle):
+    """Stack the data into a DEM and then hydro-flatten all the void areas.
+
+    specify 'size_threshold' to only flatten voids above threshold.
+
+    -----------
+    Parameters:
+    
+    min_count=[val] - only retain data cells if they contain `min_count` overlapping data
+    size_threshold=[val] - the minimum size void to flatten (in cells)
+    """
+    
+    ## todo: add parameters for specifying outputs...
+    def __init__(self, min_count = None, size_threshold=1, **kwargs):
+        super().__init__(**kwargs)
+        self.min_count = min_count
+        self.size_threshold = size_threshold
+        
+    def run(self):
+        gdalfun.gdal_hydro_flatten(self.stack, dst_dem=self.fn, band=1, size_threshold=self.size_threshold)
+        return(self)
+    
+## ==============================================
+##
 ## Waffles IDW
 ##
 ## ==============================================
@@ -796,10 +824,10 @@ class WafflesIDW(Waffle):
                 
         interp_ds = point_values = weight_values = None        
         return(self)    
-
+    
 ## ==============================================
 ##
-## Scipy gridding (linear, cubic, nearest)
+## Scipy interpolate.griddata gridding (linear, cubic, nearest)
 ##
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
 ## TODO: rename this in some way
@@ -1500,7 +1528,8 @@ class WafflesGDALGrid(Waffle):
             layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with utils.CliProgress(message='vectorizing stack', verbose=self.verbose) as pbar:
+        #with utils.CliProgress(message='vectorizing stack', verbose=self.verbose) as pbar:
+        with tqdm(desc='vectorizing stack') as pbar:
             for this_xyz in self.stack_ds.yield_xyz():
                 pbar.update()
                 f.SetField(0, this_xyz.x)
@@ -1522,7 +1551,8 @@ class WafflesGDALGrid(Waffle):
                 self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
             )
         )
-        _prog = utils.CliProgress(message='running GDAL GRID {} algorithm'.format(self.alg_str))
+        #_prog = utils.CliProgress(message='running GDAL GRID {} algorithm'.format(self.alg_str))
+        _prog = tqdm(desc='running GDAL GRID {} algorithm'.format(self.alg_str))
         _prog_update = lambda x, y, z: _prog.update()
         ogr_ds = self._vectorize_stack()
         if ogr_ds.GetLayer().GetFeatureCount() == 0:
@@ -2134,9 +2164,13 @@ class WafflesCoastline(Waffle):
         this_osm.run()
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        with utils.CliProgress(
+        # with utils.CliProgress(
+        #         total=len(this_osm.results),
+        #         message='processing OSM buildings',
+        # ) as pbar:
+        with tqdm(
                 total=len(this_osm.results),
-                message='processing OSM buildings',
+                desc='processing OSM buildings',
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
@@ -2410,9 +2444,13 @@ class WafflesLakes(Waffle):
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        with utils.CliProgress(
+        # with utils.CliProgress(
+        #         total=len(nfeatures),
+        #         message='applying labels...',
+        # ) as pbar:
+        with tqdm(
                 total=len(nfeatures),
-                message='applying labels...',
+                desc='applying labels.',
         ) as pbar:
             for n, x in enumerate(nfeatures):
                 pbar.update()
@@ -2477,10 +2515,14 @@ class WafflesLakes(Waffle):
         utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
         
         lk_regions = self.p_region.copy()
-        with utils.CliProgress(
+        # with utils.CliProgress(
+        #         total=len(lk_layer),
+        #         message='processing {} lakes'.format(lk_features),
+        # ) as pbar:
+        with tqdm(
                 total=len(lk_layer),
-                message='processing {} lakes'.format(lk_features),
-        ) as pbar:
+                desc='processing {} lakes'.format(lk_features),
+        ) as pbar:            
             for lk_f in lk_layer:
                 pbar.update()
                 this_region = regions.Region()
@@ -2549,10 +2591,15 @@ class WafflesLakes(Waffle):
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            with utils.CliProgress(
+            # with utils.CliProgress(
+            #         total=len(lk_ids),
+            #         message='Assigning Globathy Depths to rasterized lakes...',
+            # ) as pbar:
+            with tqdm(
                     total=len(lk_ids),
-                    message='Assigning Globathy Depths to rasterized lakes...',
+                    desc='Assigning Globathy Depths to rasterized lakes...',
             ) as pbar:
+                
                 for n, this_id in enumerate(lk_ids):
                     depth = globd[this_id]
                     msk_arr[msk_arr == this_id] = depth
@@ -2661,9 +2708,10 @@ class WafflesCUDEM(Waffle):
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
         coastline.initialize()
-        with utils.CliProgress(message='Generating coastline {}...'.format(cst_fn),
-                               end_message='Generated coastline {}.'.format(cst_fn),
-                               verbose=self.verbose) as pbar:
+        # with utils.CliProgress(message='Generating coastline {}...'.format(cst_fn),
+        #                        end_message='Generated coastline {}.'.format(cst_fn),
+        #                        verbose=self.verbose) as pbar:
+        with tqdm(desc='generating coastline {}...'.format(cst_fn)) as pbar:
             coastline.generate()
 
         if coastline is not None:
@@ -2735,7 +2783,7 @@ class WafflesCUDEM(Waffle):
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
                 
-            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             #'linear:chunk_step=None:chunk_buffer=10'
             pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
@@ -2747,7 +2795,8 @@ class WafflesCUDEM(Waffle):
             pre_surface.generate()
             pre -= 1
 
-        os.replace(pre_surface.fn, self.fn)
+        #os.replace(pre_surface.fn, self.fn)
+        gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=10)
         return(self)
 
 ## ==============================================
@@ -3636,9 +3685,13 @@ class InterpolationUncertainty:#(Waffle):
         stack_ds = gdal.Open(self.dem.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with utils.CliProgress(
+        # with utils.CliProgress(
+        #         total=len(sub_regions),
+        #         message='analyzing {} sub-regions'.format(len(sub_regions)),
+        # ) as pbar:
+        with tqdm(
+                desc='analyzing {} sub-regions'.format(len(sub_regions)),
                 total=len(sub_regions),
-                message='analyzing {} sub-regions'.format(len(sub_regions)),
         ) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
@@ -4183,9 +4236,13 @@ class WafflesUncertainty(Waffle):
         stack_ds = gdal.Open(self.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        with utils.CliProgress(
+        # with utils.CliProgress(
+        #         total=len(sub_regions),
+        #         message='analyzing {} sub-regions'.format(len(sub_regions)),
+        # ) as pbar:
+        with tqdm(
                 total=len(sub_regions),
-                message='analyzing {} sub-regions'.format(len(sub_regions)),
+                desc='analyzing {} sub-regions'.format(len(sub_regions)),
         ) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
@@ -4238,8 +4295,11 @@ class WafflesUncertainty(Waffle):
         #s_dp = []
         s_dp = np.loadtxt(self.prox_errs)
         utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
-        with utils.CliProgress(
-                message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        # with utils.CliProgress(
+        #         message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+        # ) as pbar:
+        with tqdm(
+                desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
         ) as pbar:
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
             
@@ -4810,6 +4870,7 @@ class WaffleFactory(factory.CUDEMFactory):
         'cudem': {'name': 'cudem', 'stack': True, 'call': WafflesCUDEM},
         'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': WafflesUncertainty},
         'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
+        'flatten': {'name': 'flatten', 'stack': True, 'call': WafflesFlatten},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch},
         #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE},
@@ -5119,9 +5180,12 @@ def waffles_cli(argv = sys.argv):
                 this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
                 this_waffle_module = this_waffle._acquire_module()
                 #this_wg = this_waffle._export_config(parse_data=False)
-                with utils.CliProgress(
-                        message='Generating: {}'.format(this_waffle),
-                        verbose=wg['kwargs']['verbose'],
+                # with utils.CliProgress(
+                #         message='Generating: {}'.format(this_waffle),
+                #         verbose=wg['kwargs']['verbose'],
+                # ) as pbar:
+                with tqdm(
+                        desc='Generating: {}'.format(this_waffle),
                 ) as pbar:
                     this_waffle_module.initialize()
                     this_waffle_module.generate()

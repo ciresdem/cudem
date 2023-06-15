@@ -213,10 +213,9 @@ class FRED:
         else:
             close_p = False
 
-        with utils.CliProgress(
+        with tqdm(
                 total=len(layers),
-                message='filtering {}'.format(self.FREDloc),
-                verbose=self._verbose
+                desc='filtering {}'.format(self.FREDloc),
         ) as pbar:
             for i, layer in enumerate(layers):
                 pbar.update(1)
