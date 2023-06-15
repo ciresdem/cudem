@@ -258,7 +258,6 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
     feats = len(src_layer)
     
     if feats > 0:
-        #with utils.CliProgress(total=len(src_layer), message='unioning {} features...'.format(feats)) as pbar:
         with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
             for n, f in enumerate(src_layer):
                 pbar.update()
@@ -353,8 +352,6 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
                         defn = tmp_layer.GetLayerDefn()
 
                     out_feat = ogr_mask_union(tmp_layer, 'DN', defn)
-                    # with utils.CliProgress(message='creating feature {}...'.format(this_band.GetDescription()),
-                    #                        total=len(this_band_md.keys())) as pbar:
                     with tqdm(
                             desc='creating feature {}...'.format(this_band.GetDescription()),
                             total=len(this_band_md.keys())
@@ -1318,12 +1315,7 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
 
-        # with utils.CliProgress(message='flattening nodata areas above {}'.format(size_threshold),
-        #                        total=n,
-        #                        ) as pbar:
-        #for i in range(0, n):
         for i in trange(0,n):
-            #pbar.update()
             if mn[i] >= size_threshold:
                 i += 1
                 ll = expand_for(l==i)
@@ -1464,7 +1456,6 @@ def gdal_yield_srcwin(src_gdal, n_chunk = 10, step = 5, verbose = False):
     i_chunk = 0
     x_i_chunk = 0
     
-    #with utils.CliProgress(total=ds_config['nb']/step, message='chunking srcwin') as pbar:
     with tqdm(total=ds_config['nb']/step, desc='chunking srcwin') as pbar:
         while True:
             y_chunk = n_chunk

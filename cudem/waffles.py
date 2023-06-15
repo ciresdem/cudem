@@ -1528,7 +1528,6 @@ class WafflesGDALGrid(Waffle):
             layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        #with utils.CliProgress(message='vectorizing stack', verbose=self.verbose) as pbar:
         with tqdm(desc='vectorizing stack') as pbar:
             for this_xyz in self.stack_ds.yield_xyz():
                 pbar.update()
@@ -1551,7 +1550,6 @@ class WafflesGDALGrid(Waffle):
                 self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
             )
         )
-        #_prog = utils.CliProgress(message='running GDAL GRID {} algorithm'.format(self.alg_str))
         _prog = tqdm(desc='running GDAL GRID {} algorithm'.format(self.alg_str))
         _prog_update = lambda x, y, z: _prog.update()
         ogr_ds = self._vectorize_stack()
@@ -2164,10 +2162,6 @@ class WafflesCoastline(Waffle):
         this_osm.run()
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        # with utils.CliProgress(
-        #         total=len(this_osm.results),
-        #         message='processing OSM buildings',
-        # ) as pbar:
         with tqdm(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
@@ -2444,10 +2438,6 @@ class WafflesLakes(Waffle):
         nfeatures = np.arange(1, nfeatures +1)
         maxes = ndimage.maximum(shore_distance_arr, labels, nfeatures)
         max_dist_arr = np.zeros(np.shape(shore_distance_arr))
-        # with utils.CliProgress(
-        #         total=len(nfeatures),
-        #         message='applying labels...',
-        # ) as pbar:
         with tqdm(
                 total=len(nfeatures),
                 desc='applying labels.',
@@ -2515,10 +2505,6 @@ class WafflesLakes(Waffle):
         utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
         
         lk_regions = self.p_region.copy()
-        # with utils.CliProgress(
-        #         total=len(lk_layer),
-        #         message='processing {} lakes'.format(lk_features),
-        # ) as pbar:
         with tqdm(
                 total=len(lk_layer),
                 desc='processing {} lakes'.format(lk_features),
@@ -2591,10 +2577,6 @@ class WafflesLakes(Waffle):
 
             ## assign max depth from globathy
             msk_arr = msk_band.ReadAsArray()
-            # with utils.CliProgress(
-            #         total=len(lk_ids),
-            #         message='Assigning Globathy Depths to rasterized lakes...',
-            # ) as pbar:
             with tqdm(
                     total=len(lk_ids),
                     desc='Assigning Globathy Depths to rasterized lakes...',
@@ -2708,9 +2690,6 @@ class WafflesCUDEM(Waffle):
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
         coastline.initialize()
-        # with utils.CliProgress(message='Generating coastline {}...'.format(cst_fn),
-        #                        end_message='Generated coastline {}.'.format(cst_fn),
-        #                        verbose=self.verbose) as pbar:
         with tqdm(desc='generating coastline {}...'.format(cst_fn)) as pbar:
             coastline.generate()
 
@@ -3685,10 +3664,6 @@ class InterpolationUncertainty:#(Waffle):
         stack_ds = gdal.Open(self.dem.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        # with utils.CliProgress(
-        #         total=len(sub_regions),
-        #         message='analyzing {} sub-regions'.format(len(sub_regions)),
-        # ) as pbar:
         with tqdm(
                 desc='analyzing {} sub-regions'.format(len(sub_regions)),
                 total=len(sub_regions),
@@ -3746,10 +3721,6 @@ class InterpolationUncertainty:#(Waffle):
         utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
         utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
         
-        # with utils.CliProgress(
-        #         message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
-        # ) as pbar:
-        ## multi-process?
         while True:
             status = 0
             sim += 1
@@ -4236,10 +4207,6 @@ class WafflesUncertainty(Waffle):
         stack_ds = gdal.Open(self.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
-        # with utils.CliProgress(
-        #         total=len(sub_regions),
-        #         message='analyzing {} sub-regions'.format(len(sub_regions)),
-        # ) as pbar:
         with tqdm(
                 total=len(sub_regions),
                 desc='analyzing {} sub-regions'.format(len(sub_regions)),
@@ -4295,9 +4262,6 @@ class WafflesUncertainty(Waffle):
         #s_dp = []
         s_dp = np.loadtxt(self.prox_errs)
         utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
-        # with utils.CliProgress(
-        #         message='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
-        # ) as pbar:
         with tqdm(
                 desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
         ) as pbar:
@@ -5180,10 +5144,6 @@ def waffles_cli(argv = sys.argv):
                 this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
                 this_waffle_module = this_waffle._acquire_module()
                 #this_wg = this_waffle._export_config(parse_data=False)
-                # with utils.CliProgress(
-                #         message='Generating: {}'.format(this_waffle),
-                #         verbose=wg['kwargs']['verbose'],
-                # ) as pbar:
                 with tqdm(
                         desc='Generating: {}'.format(this_waffle),
                 ) as pbar:

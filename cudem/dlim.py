@@ -181,7 +181,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
 ##
 ## ==============================================
 def arr_queue(procnum, qq, q, ds_list):
-    with utils.CliProgress('Process-{}: parsing data from queue'.format(procnum)) as pbar:
+    with tqdm(desc='Process-{}: parsing data from queue'.format(procnum)) as pbar:
         while True:
             if qq.empty():
                 break
@@ -209,7 +209,7 @@ class stacks_ds(threading.Thread):
         self.ndv = ndv
         self.fmt = fmt
         self.want_mask = want_mask
-        self.pbar = utils.CliProgress('stacking data from {}'.format(self.mod))
+        self.pbar = tqdm(desc='stacking data from {}'.format(self.mod))
         self.ds_list = []
         self.arr_list = []
                 
@@ -219,7 +219,7 @@ class stacks_ds(threading.Thread):
         ds_list = []
         processes = []
         q_list = []
-        with utils.CliProgress('initializing stack') as p:
+        with tqdm(desc='initializing stack') as p:
             self._init_stacks()
 
         for idx, this_ds in enumerate(self.mod.parse_json()):
@@ -252,7 +252,7 @@ class stacks_ds(threading.Thread):
                 self._stack_arr(*arrs)
                 
         [t.join() for t in processes]
-        with utils.CliProgress('finalizing stack') as p:
+        with tqdm(desc='finalizing stack') as p:
             self._finalize_stacks()
             
         self.pbar.end(0, 'stacked data from {}'.format(self.mod))
@@ -953,9 +953,6 @@ class ElevationDataset:
                 
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(self.trans_fn):
-                    # with utils.CliProgress(
-                    #         message='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert)
-                    # ) as pbar:
                     with tqdm(
                             desc='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert)
                     ) as pbar:
@@ -1148,7 +1145,6 @@ class ElevationDataset:
 
         self.archive_datalist = '{}.datalist'.format(a_name)
         archive_keys = []
-        #with utils.CliProgress(message='archiving datasets to {}'.format(self.archive_datalist)) as pbar:
         with tqdm(desc='archiving datasets to {}'.format(self.archive_datalist)) as pbar:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse_json():
@@ -1306,10 +1302,8 @@ class ElevationDataset:
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
 
-        with utils.CliProgress(
-                message='masking data to {}/{} grid to {} {}...'.format(ycount, xcount, self.region, out_name),
-                end_message='masked data to {}/{} grid to {} {}'.format(ycount, xcount, self.region, out_name),
-                verbose=self.verbose
+        with tqdm(
+                desc='masking data to {}/{} grid to {} {}...'.format(ycount, xcount, self.region, out_name),
         ) as pbar:        
             gdt = gdal.GDT_Int32
             mask_fn = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
@@ -1447,13 +1441,7 @@ class ElevationDataset:
         # else:
         #     array_yield = self.yield_array()
 
-        # with utils.CliProgress(
-        #         message='stacking data to {}/{} grid using {} method to {}'.format(
-        #             ycount, xcount, 'supercede' if supercede else 'weighted mean', out_name
-        #         ),
-        #         verbose=self.verbose
-        # ) as pbar:
-        with tqdm(desc='stacking data to {}'.format(out_name)) as pbar:
+        with tqdm(desc='stacking data to {}/{} grid'.format(ycount, xcount)) as pbar:
             ## mask grid
             driver = gdal.GetDriverByName('MEM')
             m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
@@ -3363,13 +3351,6 @@ class Datalist(ElevationDataset):
 
             dl_layer.SetSpatialFilter(_boundsGeom)
             count = len(dl_layer)
-            # with utils.CliProgress(
-            #         message='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
-            #         end_message='parsed {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
-            #         total=len(dl_layer),
-            #         verbose=self.verbose,
-            #         sleep=10,
-            # ) as pbar:
             with tqdm(
                     total=len(dl_layer),
                     desc='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight)
@@ -3446,10 +3427,6 @@ class Datalist(ElevationDataset):
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                # with utils.CliProgress(
-                #         message='parsing datalist {}...'.format(self.fn),
-                #         end_message='parsed datalist {}'.format(self.fn),
-                # ) as pbar:
                 with tqdm(desc='parsing datalist {}...'.format(self.fn)) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()

@@ -839,12 +839,6 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     i_chunk = 0
     x_i_chunk = 0
 
-    # with CliProgress(
-    #         total=(n_size[0]*n_size[1])/step,
-    #         message='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
-    #         end_message='{}: {} @ chunk:{}/step:{}'.format(_command_name(), end_msg, n_chunk, step),
-    #         verbose=verbose,
-    # ) as pbar:
     with tqdm(
             total=(n_size[0]*n_size[1])/step,
             desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step)
@@ -948,10 +942,6 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     out = None
-    # with CliProgress(
-    #         message='cmd: `{}...`'.format(cmd.rstrip()[:24]),
-    #         verbose=verbose,
-    # ) as pbar:
     with tqdm(
             desc='cmd: `{}...`'.format(cmd.rstrip()[:24])
     ) as pbar:
