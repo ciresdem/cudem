@@ -3340,7 +3340,7 @@ class Datalist(ElevationDataset):
         """
 
         ## check for the datalist-vector geojson
-        status = -1
+        status = 0
         count = 0
         #while status == -1:
         ## user input to re-gerenate json...?
