@@ -3342,18 +3342,16 @@ class Datalist(ElevationDataset):
         ## check for the datalist-vector geojson
         status = -1
         count = 0
-        while status == -1:
-            ## user input to re-gerenate json...?
-            if os.path.exists('{}.json'.format(self.fn)):
-                driver = ogr.GetDriverByName('GeoJSON')
-                dl_ds = driver.Open('{}.json'.format(self.fn))
-                if dl_ds is None:
-                    utils.echo_error_msg('could not open {}.json'.format(self.fn))
-                    status = -2
-                status = 0
-            else:
+        #while status == -1:
+        ## user input to re-gerenate json...?
+        if os.path.exists('{}.json'.format(self.fn)):
+            driver = ogr.GetDriverByName('GeoJSON')
+            dl_ds = driver.Open('{}.json'.format(self.fn))
+            if dl_ds is None:
+                utils.echo_error_msg('could not open {}.json'.format(self.fn))
                 status = -1
-                self.generate_inf()
+        else:
+            status = -1
 
         ## parse the datalist-vector geojson and yield the results
         if status != -1:
@@ -3423,7 +3421,7 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            utils.echo_warning_msg('could not load datalist-vector json {}.json, use falling back to parse'.format(self.fn))
+            utils.echo_warning_msg('could not load datalist-vector json {}.json, use falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn))
             for ds in self.parse():
                 yield(ds)
                                         
