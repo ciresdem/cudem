@@ -991,7 +991,7 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
                 )
             )
             for srcwin in utils.yield_srcwin(
-                    (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+                    (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=n_chunk, step=n_step, msg='filtering outliers', verbose=True
             ):
                 nd = 0
                 band_data = ds_band.ReadAsArray(*srcwin)
@@ -1035,8 +1035,8 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
 
                     #& ((band_data < filter_below) | (band_data > filter_above))
                     mask = (((band_data > elev_upper_limit) | (band_data < elev_lower_limit)) \
-                            & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0))
-                            & ((slp_data > slp_upper_limit) | (slp_data < curv_lower_limit)))
+                            & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
+                            #& ((slp_data > slp_upper_limit) | (slp_data < curv_lower_limit)))
                     band_data[mask] = np.nan
 
                     ## fill nodata here if replace is true...
@@ -1105,9 +1105,10 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             ndv = ds_band.GetNoDataValue()
 
             ## to hold the mask data
+            tmp_mask = utils.make_temp_fn('fltr_mask.tif', './')
             mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
-            mask_mask_ds = driver.Create('test_mask.tif', ds_config['nx'], ds_config['ny'], 1,
+            mask_mask_ds = driver.Create(tmp_mask, ds_config['nx'], ds_config['ny'], 1,
                                          ds_config['dt'], options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
             mask_mask_ds.SetGeoTransform(ds_config['geoT'])
             mask_mask_band = mask_mask_ds.GetRasterBand(1)
@@ -1116,9 +1117,10 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             mask_mask_band.FlushCache()
 
             ## to hold the count data
+            cnt_mask = utils.make_temp_fn('fltr_cnt.tif', './')
             count_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
-            count_mask_ds = driver.Create('test_count.tif', ds_config['nx'], ds_config['ny'], 1,
+            count_mask_ds = driver.Create(cnt_mask, ds_config['nx'], ds_config['ny'], 1,
                                          ds_config['dt'], options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
             count_mask_ds.SetGeoTransform(ds_config['geoT'])
             count_mask_band = count_mask_ds.GetRasterBand(1)
@@ -1197,6 +1199,8 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
                     ## break the loop if the srcwin data is all nan
                     if np.all(np.isnan(band_data)):
+                        utils.remove_glob(tmp_curv)
+                        utils.remove_glob(tmp_slp)
                         break
                     
                     #if not np.all(band_data == band_data[0,:]):
@@ -1253,32 +1257,36 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                         ## srcwin data to find newly created outliers...
                         band_data[(elev_mask & curv_mask)] = ds_config['ndv']
 
-            ## read the mask id sum data and get the 75th percentile
-            ## todo: put this in a srcwin yield
+            # ## read the mask id sum data and get the 75th percentile
+            # ## todo: put this in a srcwin yield
             mask_mask_data = mask_mask_band.ReadAsArray()
             mask_mask_data[mask_mask_data == 0] = np.nan
-            count_mask_data = count_mask_band.ReadAsArray()
-            count_mask_data[count_mask_data == 0] = np.nan
+            # count_mask_data = count_mask_band.ReadAsArray()
+            # count_mask_data[count_mask_data == 0] = np.nan
             
-            mask_mask_data = mask_mask_data * count_mask_data
+            # mask_mask_data = mask_mask_data / count_mask_data
 
+            # mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
+            # print(mask_upper_limit)
+            # # mask_perc75 = np.nanpercentile(mask_mask_data, max_percentile)
+            # # mask_perc25 = np.nanpercentile(mask_mask_data, min_percentile)
+            # # mask_iqr_p = (mask_perc75 - mask_perc25) * 1.5
+            # # mask_upper_limit = mask_perc75 + mask_iqr_p
+            # # mask_lower_limit = mask_perc25 - mask_iqr_p
+            
+            # mask_mask_data[mask_mask_data < mask_upper_limit] = 0
+            # mask_mask_data[mask_mask_data >= mask_upper_limit] = 1
+            # mask_mask_band.WriteArray(mask_mask_data)
+
+            ## remove data from the source dem where the mask id is above the 75th percentile
             mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
-            print(mask_upper_limit)
-            # mask_perc75 = np.nanpercentile(mask_mask_data, max_percentile)
-            # mask_perc25 = np.nanpercentile(mask_mask_data, min_percentile)
-            # mask_iqr_p = (mask_perc75 - mask_perc25) * 1.5
-            # mask_upper_limit = mask_perc75 + mask_iqr_p
-            # mask_lower_limit = mask_perc25 - mask_iqr_p
-            
-            mask_mask_data[mask_mask_data < mask_upper_limit] = 0
-            mask_mask_data[mask_mask_data >= mask_upper_limit] = 1
-            mask_mask_band.WriteArray(mask_mask_data)
-
-            # ## remove data from the source dem where the mask id is above the 75th percentile
-            # src_data = ds_band.ReadAsArray()
-            # src_data[mask_mask_data >= mask_id_perc] = ds_config['ndv']
-            # ds_band.WriteArray(src_data)
+            utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
+            src_data = ds_band.ReadAsArray()
+            src_data[mask_mask_data >= mask_upper_limit] = ds_config['ndv']
+            ds_band.WriteArray(src_data)
             dst_ds = curv_ds = slp_ds = slp_full = curv_full = tri_full = mask_mask_ds = count_mask_ds = None
+            utils.remove_glob(tmp_mask)
+            utils.remove_glob(cnt_mask)
             return(src_gdal, 0)
         else:
             return(None, -1)
@@ -1315,7 +1323,7 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
 
-        for i in trange(0,n):
+        for i in trange(0, n, desc='flattening data voids greater than {} cells'.format(size_threshold)):
             if mn[i] >= size_threshold:
                 i += 1
                 ll = expand_for(l==i)

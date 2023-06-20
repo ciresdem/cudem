@@ -942,8 +942,10 @@ def run_cmd(cmd, data_fun=None, verbose=False):
       list: [command-output, command-return-code]
     """
     out = None
+    width = int(_terminal_width()) - 55
     with tqdm(
-            desc='cmd: `{}...`'.format(cmd.rstrip()[:24])
+            desc='cmd: `{}...`'.format(cmd.rstrip()[:width])
+            #desc='cmd: `{}...`'.format(cmd.rstrip())
     ) as pbar:
         
         if data_fun is not None:

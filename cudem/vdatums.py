@@ -372,8 +372,8 @@ class VerticalTransform:
         for _result in cdn_results:
             for g in _geoids:
                 if g in _result['name']:
-                    print(g)
-                    print(_result)
+                    #print(g)
+                    #print(_result)
                     cdn_results = [_result]
                     break
                     

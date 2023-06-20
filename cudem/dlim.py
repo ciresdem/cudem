@@ -957,7 +957,7 @@ class ElevationDataset:
                             desc='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert)
                     ) as pbar:
                         self.trans_fn = vdatums.VerticalTransform(
-                            vd_region, '3s', '3s', src_vert, dst_vert,
+                            vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
@@ -1548,7 +1548,7 @@ class ElevationDataset:
                 ):
                     for key in stacked_bands.keys():
                         stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                        #stacked_data[key][stacked_data[key] == ndv] = np.nan
+                        stacked_data[key][stacked_data[key] == ndv] = np.nan
 
                     ## average the accumulated arrays for finalization
                     ## z and u are weighted sums, so divide by weights
@@ -2101,6 +2101,7 @@ class LASFile(ElevationDataset):
             ## convert the coordinates to pixels and determine the srcwin
             #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
             #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
+            ## this fails (shifts data) with reprojections, esp. from projected to wgs, fix accordingly!
             pixel_x = np.floor((points.x - self.las_dst_gt[0]) / self.las_dst_gt[1]).astype(int)
             pixel_y = np.floor((points.y - self.las_dst_gt[3]) / self.las_dst_gt[5]).astype(int)
             pixel_z = np.array(points.z)
@@ -2173,9 +2174,17 @@ class LASFile(ElevationDataset):
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+            
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+            if self.weight is not None:
+                out_arrays['weight'][unq[:,0], unq[:,1]] = self.weight
+
+            out_arrays['weight'] = out_arrays['weight'] * out_arrays['count']
+            out_arrays['weight'][np.isnan(out_z)] = np.nan
+                
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] = u
+            out_arrays['uncertainty'][np.isnan(out_z)] = np.nan
 
             yield(out_arrays, this_srcwin, dst_gt)
 
@@ -3227,7 +3236,7 @@ class Datalist(ElevationDataset):
         entry - the datalist entry object
         entry_region - the region of the datalist entry
         """
-        
+
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
         entry_fields = [entry_path, entry.data_format, entry.weight, entry.uncertainty,
                         entry.metadata['name'], entry.metadata['title'], entry.metadata['source'],
@@ -3272,6 +3281,7 @@ class Datalist(ElevationDataset):
                     if self.dst_srs is not None:
                         entry_region = regions.Region().from_list(entry_minmax)
                         entry_region.src_srs = entry.src_srs
+                        #entry_region.warp(gdalfun.epsg_from_input(self.dst_srs)[0])
                         entry_region.warp(self.dst_srs)
                         entry_minmax = entry_region.export_as_list(include_z=True)
 
@@ -3330,15 +3340,20 @@ class Datalist(ElevationDataset):
         """
 
         ## check for the datalist-vector geojson
-        status = count = 0
-        if os.path.exists('{}.json'.format(self.fn)):
-            driver = ogr.GetDriverByName('GeoJSON')
-            dl_ds = driver.Open('{}.json'.format(self.fn))
-            if dl_ds is None:
-                utils.echo_error_msg('could not open {}.json'.format(self.fn))
+        status = -1
+        count = 0
+        while status == -1:
+            ## user input to re-gerenate json...?
+            if os.path.exists('{}.json'.format(self.fn)):
+                driver = ogr.GetDriverByName('GeoJSON')
+                dl_ds = driver.Open('{}.json'.format(self.fn))
+                if dl_ds is None:
+                    utils.echo_error_msg('could not open {}.json'.format(self.fn))
+                    status = -2
+                status = 0
+            else:
                 status = -1
-        else:
-            status = -1
+                self.generate_inf()
 
         ## parse the datalist-vector geojson and yield the results
         if status != -1:
@@ -3389,9 +3404,9 @@ class Datalist(ElevationDataset):
                         md[key] = feat.GetField(key)
 
                     ## generate the dataset object to yield
-                    data_set = DatasetFactory(mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
-                                                                           feat.GetField('weight'), feat.GetField('uncertainty')),
-                                              weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                    data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
+                                                      feat.GetField('weight'), feat.GetField('uncertainty'))
+                    data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
                                               invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                               x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
                                               verbose=self.verbose, **data_set_args)._acquire_module()
@@ -3408,7 +3423,7 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            utils.echo_warning_msg('could not load datalist-vector json {}.json, falling back to parse'.format(self.fn))
+            utils.echo_warning_msg('could not load datalist-vector json {}.json, use falling back to parse'.format(self.fn))
             for ds in self.parse():
                 yield(ds)
                                         

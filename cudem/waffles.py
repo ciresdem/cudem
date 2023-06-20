@@ -1859,7 +1859,7 @@ class WafflesCoastline(Waffle):
             min_building_length=None,
             want_osm_planet=False,
             invert=False,
-            polygonize=True,
+            polygonize=True, # float(True) is 1.0
             osm_tries=5,
             want_wsf=False,
             **kwargs
@@ -2236,7 +2236,7 @@ class WafflesCoastline(Waffle):
         """convert to coast_array vector"""
 
         if self.verbose:
-            utils.echo_msg('polygonizing array to {}.shp...'.format(self.name))
+            utils.echo_msg('polygonizing {} features from array to {}.shp...'.format(poly_count, self.name))
         
         poly_count = utils.int_or(poly_count)
         tmp_ds = ogr.GetDriverByName('ESRI Shapefile').CreateDataSource(
@@ -2250,14 +2250,14 @@ class WafflesCoastline(Waffle):
             tmp_ds = None
             
         utils.run_cmd(
-            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0 {}" {}.shp {}_tmp_c.shp'.format(
-                os.path.basename(self.name), 'order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+            'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" {}.shp {}_tmp_c.shp'.format(
+                os.path.basename(self.name), ' order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
             verbose=self.verbose
         )        
         utils.remove_glob('{}_tmp_c.*'.format(self.name))
         utils.run_cmd(
             'ogrinfo -dialect SQLITE -sql "UPDATE {} SET geometry = ST_MakeValid(geometry)" {}.shp'.format(
-                self.name, self.name),
+                os.path.basename(self.name), self.name),
             verbose=self.verbose
         )        
         #print(self.dst_srs)
@@ -2666,13 +2666,23 @@ class WafflesCUDEM(Waffle):
     """
     
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 poly_count = True, mode = 'gmt-surface', filter_outliers = None, **kwargs):
+                 mode = 'gmt-surface', filter_outliers = None, **kwargs):
+        
+        self.coastline_args = {}
+        tmp_waffles = Waffle()
+        for kpam, kval in kwargs.items():
+            if kpam not in tmp_waffles.__dict__:
+                self.coastline_args[kpam] = kval
+
+        for kpam, kval in self.coastline_args.items():
+            del kwargs[kpam]
+
         super().__init__(**kwargs)
         self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
         self.landmask = landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
-        self.poly_count = poly_count
+        #self.poly_count = poly_count
         self.mode = mode
         if self.mode not in ['gmt-surface', 'IDW']:
             self.mode = 'IDW'
@@ -2685,13 +2695,15 @@ class WafflesCUDEM(Waffle):
     def generate_coastline(self, pre_data=None):
         cst_region = self.p_region.copy()
         cst_region.wmin = self.min_weight
+        utils.echo_msg('coast region is: {}'.format(cst_region))
         cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
-        coastline = WaffleFactory(mod='coastline', polygonize=self.poly_count, data=pre_data, src_region=cst_region,
+        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
+        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region,
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
+                                  srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
         coastline.initialize()
-        with tqdm(desc='generating coastline {}...'.format(cst_fn)) as pbar:
-            coastline.generate()
+        #with tqdm(desc='generating coastline {}...'.format(cst_fn)) as pbar:
+        coastline.generate()
 
         if coastline is not None:
             return('{}.shp:invert=True'.format(coastline.name))
@@ -2712,8 +2724,8 @@ class WafflesCUDEM(Waffle):
 
         ## Remove outliers from the stacked data
         if self.filter_outliers is not None:
-            gdalfun.gdal_filter_outliers(
-                self.stack, None, replace=False
+            gdalfun.gdal_filter_outliers2(
+                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95)
             )
         #os.replace('_tmp_fltr.tif', self.stack)
         # demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
@@ -2726,7 +2738,8 @@ class WafflesCUDEM(Waffle):
         pre_data = [stack_data_entry]
         ## generate coastline
         if self.landmask:
-            coastline = self.generate_coastline(pre_data=pre_data)
+            coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
+            coastline = self.generate_coastline(pre_data=coast_data)
             #if coastline is not None:
             pre_clip = coastline
             #print(pre_clip)
@@ -2764,7 +2777,7 @@ class WafflesCUDEM(Waffle):
                 
             waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             #'linear:chunk_step=None:chunk_buffer=10'
-            pre_surface = WaffleFactory(mod = waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
+            pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
@@ -2775,7 +2788,7 @@ class WafflesCUDEM(Waffle):
             pre -= 1
 
         #os.replace(pre_surface.fn, self.fn)
-        gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=10)
+        gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
         return(self)
 
 ## ==============================================
