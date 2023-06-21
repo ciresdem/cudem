@@ -679,10 +679,11 @@ https://www.gmrt.org
 < gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >
     """
     
-    def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', **kwargs):
+    def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', want_swath = False, **kwargs):
         super().__init__(name='gmrt', **kwargs) 
         self.res = res
         self.fmt = fmt
+        self.want_swath = want_swath
         if layer != 'topo' and layer != 'topo-mask':
             self.layer = 'topo'
         else:
@@ -691,7 +692,8 @@ https://www.gmrt.org
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
         self._gmrt_grid_urls_url = "https://www.gmrt.org:443/services/GridServer/urls?"
         self._gmrt_grid_metadata_url = "https://www.gmrt.org/services/GridServer/metadata?"        
-            
+        self._gmrt_swath_poly_url = "https://www.gmrt.org/shapefiles/gmrt_swath_polygons.zip"
+        
         self.gmrt_region = self.region.copy()
         self.gmrt_region.buffer(pct=2.33,x_inc=.0088,y_inc=.0088)
         self.gmrt_region._wgs_extremes(just_below=True)
@@ -712,7 +714,7 @@ https://www.gmrt.org
         req = Fetch(self._gmrt_grid_url).fetch_req(params=self.data, tries=10, timeout=2)
         if req is not None:
             outf = 'gmrt_{}_{}_{}.{}'.format(self.layer, self.res, self.region.format('fn_full'), 'tif' if self.fmt == 'geotiff' else 'grd')
-            self.results.append([req.url, os.path.join(self._outdir, outf), 'gmrt']) 
+            self.results.append([req.url, outf, 'gmrt']) 
         else:            
             gmrt_urls = req.json()
             for url in gmrt_urls:
@@ -732,6 +734,9 @@ https://www.gmrt.org
                 ])
                 outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
                 self.results.append([url, outf, 'gmrt'])
+                if self.want_swath:
+                    self.results.append([self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt'])
+
                 
         return(self)
 

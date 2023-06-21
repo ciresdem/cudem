@@ -3749,19 +3749,54 @@ class Fetcher(ElevationDataset):
                 yield(arr)
 
 class GMRTFetcher(Fetcher):
-    def __init__(self, **kwargs):
+    def __init__(self, swath_only = False, **kwargs):
         super().__init__(**kwargs)
+        self.swath_only = swath_only
 
     def yield_ds(self, result):
-        with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update = 1) as src_ds:
+        swath_mask=None
+        gmrt_fn = os.path.join(self.fetch_module._outdir, result[1])
+        with gdalfun.gdal_datasource(gmrt_fn, update = 1) as src_ds:
             md = src_ds.GetMetadata()
             md['AREA_OR_POINT'] = 'Point'
             src_ds.SetMetadata(md)
-                        
-        yield(DatasetFactory(fn=os.path.join(self.fetch_module._outdir, result[1]), data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+
+        if self.swath_only:
+            if fetches.Fetch(
+                    self.fetch_module._gmrt_swath_poly_url, verbose=self.verbose
+            ).fetch_file(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip')) == 0:
+                swath_shps = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip'), exts=['shp', 'shx', 'prj', 'dbf'], outdir=self.cache_dir)
+                print(swath_shps)
+                swath_shp = None
+                swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
+                
+                for v in swath_shps:
+                    if '.shp' in v:
+                        swath_shp = v
+                        break
+                    
+                print(swath_shp)
+                if not os.path.exists(swath_shp):
+                    utils.echo_error_msg('could not find gmrt swath polygons...')
+                    self.swath_only = False
+                else:
+                    tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
+                    gdalfun.gdal_clip(gmrt_fn, tmp_gmrt, src_ply=swath_shp, invert=True)
+                    gmrt_fn = tmp_gmrt
+                    # gr_cmd = 'gdal_rasterize -burn 1 -l {} {} {}'\
+                    #     .format(os.path.basename(swath_shp).split('.')[0], swath_shp, swath_mask)
+                    # out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
+
+                    # if status != 0:
+                    #     utils.echo_error_msg('could not rasterize swath polygons')
+                    #     self.swath_only = False
+
+        yield(DatasetFactory(mod=gmrt_fn,
+                             data_format='200:mask={}'.format(swath_mask) if self.swath_only else 200,
+                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                             cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         
 class GEBCOFetcher(Fetcher):
     def __init__(self, exclude_tid = None, **kwargs):
@@ -3982,19 +4017,26 @@ class eHydroFetcher(Fetcher):
                 yield(usace_ds)
         
 class BlueTopoFetcher(Fetcher):
-    def __init__(self, want_interpolation=False, **kwargs):
+    def __init__(self, want_interpolation=False, unc_weights=False, **kwargs):
         super().__init__(**kwargs)
         self.want_interpolation = want_interpolation
+        self.unc_weights = unc_weights
 
     def yield_ds(self, result):
         sid = None
         if not self.want_interpolation:
             sid = gdalfun.gdal_extract_band(os.path.join(self.fetch_module._outdir, result[1]), utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir), band=3, exclude=[0])[0]
         
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='200:band_no=1:mask={}:uncertainty_mask=2'.format(sid), src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
+        yield(
+            DatasetFactory(
+                mod=os.path.join(self.fetch_module._outdir, result[1]),
+                data_format='200:band_no=1:mask={}:uncertainty_mask=2{}'.format(sid, ':weight_mask=2' if self.unc_weights else ''),
+                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                cache_dir = self.fetch_module._outdir, verbose=self.verbose
+            )._acquire_module()
+        ) 
 
 class NGSFetcher(Fetcher):
     def __init__(self, datum = 'geoidHt', **kwargs):

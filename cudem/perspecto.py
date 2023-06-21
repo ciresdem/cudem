@@ -132,7 +132,7 @@ class Perspecto:
         self.verbose = verbose
         self.params = params
     
-        self.dem_infos = gdalfun.infos(self.src_dem, scan=True)
+        self.dem_infos = gdalfun.gdal_infos(self.src_dem, scan=True)
         self.dem_region = regions.Region().from_geo_transform(
             self.dem_infos['geoT'], self.dem_infos['nx'], self.dem_infos['ny']
         )
