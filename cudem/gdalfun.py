@@ -408,6 +408,7 @@ class gdal_datasource:
         ## don't close src_ds if incoming was already open
         #print(exc_type, exc_value, exc_traceback)
         if not isinstance(self.src_gdal, gdal.Dataset):
+            self.src_ds.FlushCache()
             self.src_ds = None
 
 def gdal_multi_mask2single_mask(src_gdal):
@@ -680,6 +681,7 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
         else:
             return(None, -1)
 
+## doesn't work with multipolygons and -i
 def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True):
     """clip dem to polygon `src_ply`, optionally invert the clip.
 
@@ -690,7 +692,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
     tmp_ply = '__tmp_clp_ply.shp'
     
-    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt POLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
+    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
         #if invert:
         #    gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)

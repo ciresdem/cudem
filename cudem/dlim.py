@@ -2237,7 +2237,7 @@ class GDALFile(ElevationDataset):
         self.check_path = check_path
         self.super_grid = super_grid
         self.band_no = band_no
-
+        
     def init_ds(self):
         """initialize the raster dataset
 
@@ -2421,9 +2421,14 @@ class GDALFile(ElevationDataset):
             band = self.src_ds.GetRasterBand(utils.int_or(self.band_no, 1))
             gt = self.src_ds.GetGeoTransform()
             ndv = utils.float_or(band.GetNoDataValue())
-            mask_band = weight_band = uncertainty_band = None
+            mask_band = None
+            weight_band = None
+            uncertainty_band = None
             nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
 
+            # with gdalfun.gdal_datasource(self.mask) as ds:
+            #     print(ds.GetRasterBand(1).ReadAsArray())
+            
             if ndv is not None:
                 nodata.append('{:g}'.format(ndv))
 
@@ -2481,12 +2486,16 @@ class GDALFile(ElevationDataset):
                     ## out the entire input region...
                     mask_band = self.mask.GetRasterBand(1)
                 elif os.path.exists(self.mask):
+                    utils.echo_msg('using mask dataset: {}'.format(self.mask))
+                    #with gdalfun.gdal_datasource(self.mask) as ds:
+                    #    print(ds.GetRasterBand(1).ReadAsArray())
+                        
                     if self.x_inc is not None and self.y_inc is not None:
                         src_mask = gdalfun.sample_warp(
                             self.mask, None, self.x_inc, self.y_inc,
                             src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                             src_region=self.warp_region, sample_alg=self.sample_alg,
-                            ndv=ndv, verbose=self.verbose
+                            ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
                         )[0]
                     else:
                         src_mask = gdal.Open(self.mask)
@@ -2535,7 +2544,8 @@ class GDALFile(ElevationDataset):
                 ## mask
                 if mask_band is not None:
                     mask_data = mask_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    mask_ndv = float(mask_band.GetNoDataValue())
+                    #print(mask_data)
+                    mask_ndv = mask_band.GetNoDataValue()
                     if not np.isnan(mask_ndv):
                         mask_data[mask_data==mask_ndv] = np.nan
 
@@ -3760,13 +3770,14 @@ class GMRTFetcher(Fetcher):
             md = src_ds.GetMetadata()
             md['AREA_OR_POINT'] = 'Point'
             src_ds.SetMetadata(md)
+            gdalfun.gdal_set_srs(src_ds)
+            gdalfun.gdal_set_ndv(src_ds)
 
         if self.swath_only:
             if fetches.Fetch(
                     self.fetch_module._gmrt_swath_poly_url, verbose=self.verbose
             ).fetch_file(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip')) == 0:
                 swath_shps = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip'), exts=['shp', 'shx', 'prj', 'dbf'], outdir=self.cache_dir)
-                print(swath_shps)
                 swath_shp = None
                 swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
                 
@@ -3775,16 +3786,39 @@ class GMRTFetcher(Fetcher):
                         swath_shp = v
                         break
                     
-                print(swath_shp)
                 if not os.path.exists(swath_shp):
                     utils.echo_error_msg('could not find gmrt swath polygons...')
                     self.swath_only = False
                 else:
+                    import shutil
                     tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
-                    gdalfun.gdal_clip(gmrt_fn, tmp_gmrt, src_ply=swath_shp, invert=True)
-                    gmrt_fn = tmp_gmrt
+                    shutil.copyfile(gmrt_fn, tmp_gmrt)
+                    
+                    gi = gdalfun.gdal_infos(gmrt_fn)
+                    gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
+                        .format(gi['ndv'], os.path.basename(swath_shp).split('.')[0], swath_shp, tmp_gmrt)
+                    out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
 
-        yield(DatasetFactory(mod=gmrt_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                    with gdalfun.gdal_datasource(tmp_gmrt, update=True) as tmp_ds:
+                        b = tmp_ds.GetRasterBand(1)
+                        a = b.ReadAsArray()
+                        a[a != gi['ndv']] = 0
+                        a[a == gi['ndv']] = 1
+                        b.WriteArray(a)
+                        gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
+                    
+                    #gdalfun.gdal_clip(gmrt_fn, tmp_gmrt, src_ply=swath_shp, invert=True)
+                    #gmrt_fn = tmp_gmrt
+
+        # print(tmp_gmrt)
+        # o, s = utils.run_cmd('gdalinfo {} -stats'.format(tmp_gmrt))
+        # print(o)
+        # g = gdal.Open(tmp_gmrt)
+        # b = g.GetRasterBand(1)
+        # a = b.ReadAsArray()
+        # print(a)
+        # g = None
+        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                              cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
