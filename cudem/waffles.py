@@ -2666,7 +2666,7 @@ class WafflesCUDEM(Waffle):
     """
     
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface', filter_outliers = None, **kwargs):
+                 mode = 'gmt-surface:tension=1', filter_outliers = None, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
