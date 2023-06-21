@@ -3783,17 +3783,8 @@ class GMRTFetcher(Fetcher):
                     tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
                     gdalfun.gdal_clip(gmrt_fn, tmp_gmrt, src_ply=swath_shp, invert=True)
                     gmrt_fn = tmp_gmrt
-                    # gr_cmd = 'gdal_rasterize -burn 1 -l {} {} {}'\
-                    #     .format(os.path.basename(swath_shp).split('.')[0], swath_shp, swath_mask)
-                    # out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
 
-                    # if status != 0:
-                    #     utils.echo_error_msg('could not rasterize swath polygons')
-                    #     self.swath_only = False
-
-        yield(DatasetFactory(mod=gmrt_fn,
-                             data_format='200:mask={}'.format(swath_mask) if self.swath_only else 200,
-                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+        yield(DatasetFactory(mod=gmrt_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                              cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
