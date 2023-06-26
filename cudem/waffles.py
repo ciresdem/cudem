@@ -1528,7 +1528,7 @@ class WafflesGDALGrid(Waffle):
             layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(desc='vectorizing stack') as pbar:
+        with tqdm(desc='vectorizing stack', leave=self.verbose) as pbar:
             for this_xyz in self.stack_ds.yield_xyz():
                 pbar.update()
                 f.SetField(0, this_xyz.x)
@@ -1550,7 +1550,7 @@ class WafflesGDALGrid(Waffle):
                 self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
             )
         )
-        _prog = tqdm(desc='running GDAL GRID {} algorithm'.format(self.alg_str))
+        _prog = tqdm(desc='running GDAL GRID {} algorithm'.format(self.alg_str), leave=self.verbose)
         _prog_update = lambda x, y, z: _prog.update()
         ogr_ds = self._vectorize_stack()
         if ogr_ds.GetLayer().GetFeatureCount() == 0:
@@ -2165,6 +2165,7 @@ class WafflesCoastline(Waffle):
         with tqdm(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
+                leave=self.verbose
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
@@ -2441,6 +2442,7 @@ class WafflesLakes(Waffle):
         with tqdm(
                 total=len(nfeatures),
                 desc='applying labels.',
+                leave=self.verbose
         ) as pbar:
             for n, x in enumerate(nfeatures):
                 pbar.update()
@@ -2508,6 +2510,7 @@ class WafflesLakes(Waffle):
         with tqdm(
                 total=len(lk_layer),
                 desc='processing {} lakes'.format(lk_features),
+                leave=self.verbose
         ) as pbar:            
             for lk_f in lk_layer:
                 pbar.update()
@@ -2580,6 +2583,7 @@ class WafflesLakes(Waffle):
             with tqdm(
                     total=len(lk_ids),
                     desc='Assigning Globathy Depths to rasterized lakes...',
+                    leave=self.verbose
             ) as pbar:
                 
                 for n, this_id in enumerate(lk_ids):
@@ -3680,6 +3684,7 @@ class InterpolationUncertainty:#(Waffle):
         with tqdm(
                 desc='analyzing {} sub-regions'.format(len(sub_regions)),
                 total=len(sub_regions),
+                leave=self.verbose
         ) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
@@ -4067,13 +4072,16 @@ class WafflesUncertainty(Waffle):
         self.chnk_lvl = chnk_lvl
         self.accumulate = accumulate
         self.prox_errs = '{}_errs.dat'.format(self.waffles_module)
-        if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
-            self.prox_errs = os.path.join(self.cudem_data, self.prox_errs)
-        else:
-            self.accumulate = True
 
-        print(self.accumulate)
-        print(self.prox_errs)
+        if not os.path.exists(self.prox_errs):
+            if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
+                self.prox_errs = os.path.join(self.cudem_data, self.prox_errs)
+            else:
+                utils.touch(self.prox_errs)
+                self.accumulate = True
+
+        if self.verbose:
+            utils.echo_msg('using {}; accumulate is {}'.format(self.prox_errs, self.accumulate))
         
         self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
         self.prox = None
@@ -4130,7 +4138,7 @@ class WafflesUncertainty(Waffle):
             out_prox = '{}_prox.tif'.format(self.params['mod_args']['waffles_module'])
             
         utils.echo_msg('generating proximity grid {}...'.format(out_prox))
-        gdalfun.gdal_proximity(self.stack, out_prox)
+        gdalfun.gdal_proximity(self.stack, out_prox, distunits='GEO')
         if self.dst_srs is not None:
             gdalfun.gdal_set_srs(out_prox, self.dst_srs)
 
@@ -4223,6 +4231,7 @@ class WafflesUncertainty(Waffle):
         with tqdm(
                 total=len(sub_regions),
                 desc='analyzing {} sub-regions'.format(len(sub_regions)),
+                leave=self.verbose
         ) as pbar:
             for sc, sub_region in enumerate(sub_regions):
                 pbar.update()
@@ -4276,7 +4285,8 @@ class WafflesUncertainty(Waffle):
         s_dp = np.loadtxt(self.prox_errs)
         utils.echo_msg('loaded {} error points from {}'.format(len(s_dp), self.prox_errs))
         with tqdm(
-                desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample)
+                desc='performing MAX {} SPLIT-SAMPLE simulations looking for MIN {} sample errors'.format(self.sims, self.max_sample),
+                leave=self.verbose
         ) as pbar:
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff')
             
@@ -4365,7 +4375,7 @@ class WafflesUncertainty(Waffle):
                         ## generate the random-sample data PROX and SLOPE
                         ## ==============================================
                         sub_prox = '{}_prox.tif'.format(wf.name)
-                        gdalfun.gdal_proximity(wf.stack, sub_prox)
+                        gdalfun.gdal_proximity(wf.stack, sub_prox, distunits='GEO')
 
                         ## ==============================================
                         ## Calculate the random-sample errors
@@ -4406,7 +4416,7 @@ class WafflesUncertainty(Waffle):
                     ec_diff = abs(ec_d[2] - ec_d[1])
                     ec_l_diff = abs(last_ec_diff - ec_diff)
                     utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(prox_err), np.mean(prox_err, axis=0)[0], ec_d, ec_l_diff))
-                    utils.echo_msg(ec_d[0] + ec_d[1])
+                    #utils.echo_msg(ec_d[0] + ec_d[1])
 
                     ## continue if we got back the default err coeff
                     if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
@@ -4476,10 +4486,10 @@ class WafflesUncertainty(Waffle):
         ## ==============================================
         ## chunk region into sub regions
         ## ==============================================
-        #chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
-        #chnk_inc = chnk_inc if chnk_inc > 10 else 10
+        chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        chnk_inc = chnk_inc if chnk_inc > 10 else 10
 
-        chnk_inc = int(self.prox_percentile)
+        #chnk_inc = int(self.prox_percentile)
         
         utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
         sub_regions = self.region.chunk(self.xinc, chnk_inc)
@@ -5159,6 +5169,7 @@ def waffles_cli(argv = sys.argv):
                 #this_wg = this_waffle._export_config(parse_data=False)
                 with tqdm(
                         desc='Generating: {}'.format(this_waffle),
+                        leave=wg['verbose']
                 ) as pbar:
                     this_waffle_module.initialize()
                     this_waffle_module.generate()

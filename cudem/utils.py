@@ -451,6 +451,12 @@ def lll(src_lat):
 
     return(lonl_, latl_)
 
+def touch(fname, times = None):
+    with open(fname, 'a'):
+        os.utime(fname, times)
+        
+    return(fname)
+        
 ## ==============================================
 ##
 ## Geotransform functions
@@ -841,7 +847,8 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
 
     with tqdm(
             total=(n_size[0]*n_size[1])/step,
-            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step)
+            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
+            leave=verbose
     ) as pbar:
         while True:
             #y_chunk = n_chunk
@@ -944,7 +951,8 @@ def run_cmd(cmd, data_fun=None, verbose=False):
     out = None
     width = int(_terminal_width()) - 55
     with tqdm(
-            desc='cmd: `{}...`'.format(cmd.rstrip()[:width])
+            desc='cmd: `{}...`'.format(cmd.rstrip()[:width]),
+            leave=verbose
             #desc='cmd: `{}...`'.format(cmd.rstrip())
     ) as pbar:
         
@@ -1147,7 +1155,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg))
+    tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg), file=sys.stderr)
     sys.stderr.flush()
 
 def echo_error_msg2(msg, prefix = 'waffles'):
@@ -1165,7 +1173,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
-    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg))
+    tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg), file=sys.stderr)
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
@@ -1185,10 +1193,10 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     sys.stderr.write('\x1b[2K\r')
     if bold:
         #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg))
+        tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg), file=sys.stderr)
     else:
         #sys.stderr.write('{}: {}{}'.format(prefix, msg, '\n' if nl else ''))
-        tqdm.write('{}: {}'.format(prefix, msg))
+        tqdm.write('{}: {}'.format(prefix, msg), file=sys.stderr)
     sys.stderr.flush()
     
 ## ==============================================

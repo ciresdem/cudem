@@ -886,6 +886,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         rows = page.xpath('//a[contains(@href, ".zip")]/@href')
         with tqdm(
                 desc='scanning for COPERNICUS COP-10 datasets',
+                leave=self.verbose
         ) as pbar:            
             for i, row in enumerate(rows):
                 pbar.update()
@@ -924,6 +925,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         with tqdm(
                 total=len(fns),
                 desc='scanning for COPERNICUS COP-30 datasets',
+                leave=self.verbose
         ) as pbar:
             for i, fn in enumerate(fns):
                 pbar.update()
@@ -976,6 +978,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         with tqdm(
                 total=len(_results),
                 desc='scanning COPERNICUS datasets',
+                leave=self.verbose
         ) as pbar:
             for surv in _results:
                 pbar.update()
@@ -1145,7 +1148,7 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
         page = f.fetch_xml()
         fns = page.findall('.//SourceFilename')
 
-        with tqdm(total=len(fns), desc='scanning NASADEM datasets') as pbar:        
+        with tqdm(total=len(fns), desc='scanning NASADEM datasets', leave=self.verbose) as pbar:        
             for i, fn in enumerate(fns):
                 sid = fn.text.split('/')[-1].split('.')[0]
                 pbar.update()
@@ -1359,7 +1362,8 @@ https://www.charts.noaa.gov/
             charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
             with tqdm(
                     total=len(charts),
-                    desc='scanning for CHARTS ({}) datasets'.format(dt)
+                    desc='scanning for CHARTS ({}) datasets'.format(dt),
+                    leave=self.verbose
             ) as pbar:
                 for i, chart in enumerate(charts):
                     pbar.update(1)
@@ -1409,7 +1413,8 @@ https://www.charts.noaa.gov/
         _results = FRED._filter_FRED(self)
         with tqdm(
                 total=len(_results),
-                desc='scanning CHARTS datasets'
+                desc='scanning CHARTS datasets',
+                leave=self.verbose
         ) as pbar:
             for surv in _results:
                 pbar.update(1)
@@ -2402,6 +2407,7 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
         with tqdm(
                 total=len(this_ds),
                 desc='scanning NCEI THREDDS datasets in {}'.format(this_ds[0].attrib['name']),
+                leave=self.verbose
         ) as pbar:
             for i, node in enumerate(this_ds):
                 this_title = node.attrib['name']
@@ -2613,6 +2619,7 @@ http://tnmaccess.nationalmap.gov/
         with tqdm(
                 total=len(datasets),
                 desc='scanning TNM datasets',
+                leave=self.verbose
         ) as pbar:
             for i, ds in enumerate(datasets):
                 pbar.update(1)
@@ -2649,6 +2656,7 @@ http://tnmaccess.nationalmap.gov/
         with tqdm(
                 total=len(_results),
                 desc='scanning for TNM datasets',
+                leave=self.verbose
         ) as pbar:
             for surv in _results:
                 offset = 0
@@ -4203,6 +4211,7 @@ https://geoservice.dlr.de/web/services
         with tqdm(
                 total=len(rows),
                 desc='scanning WSF datasets',
+                leave=self.verbose
         ) as pbar:
             for i, row in enumerate(rows):
                 pbar.update(1)

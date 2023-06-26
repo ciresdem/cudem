@@ -954,7 +954,8 @@ class ElevationDataset:
                 ## vertical transformation grid is generated in WGS84
                 if not os.path.exists(self.trans_fn):
                     with tqdm(
-                            desc='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert)
+                            desc='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert),
+                            leave=self.verbose
                     ) as pbar:
                         self.trans_fn = vdatums.VerticalTransform(
                             vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
@@ -1145,7 +1146,7 @@ class ElevationDataset:
 
         self.archive_datalist = '{}.datalist'.format(a_name)
         archive_keys = []
-        with tqdm(desc='archiving datasets to {}'.format(self.archive_datalist)) as pbar:
+        with tqdm(desc='archiving datasets to {}'.format(self.archive_datalist), leave=self.verbose) as pbar:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse_json():
                     #if this_entry.parent is None:
@@ -1304,6 +1305,7 @@ class ElevationDataset:
 
         with tqdm(
                 desc='masking data to {}/{} grid to {} {}...'.format(ycount, xcount, self.region, out_name),
+                leave=self.verbose
         ) as pbar:        
             gdt = gdal.GDT_Int32
             mask_fn = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
@@ -1538,7 +1540,9 @@ class ElevationDataset:
         ## incoming arrays have all been processed, if weighted mean the
         ## "z" is the sum of z*weight, "weights" is the sum of weights
         ## "uncertainty" is the sum of variance*weight
-        utils.echo_msg('finalizing stacked raster bands...')
+        if self.verbose:
+            utils.echo_msg('finalizing stacked raster bands...')
+            
         msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
         if not mask_only:
             if not supercede:
@@ -3375,7 +3379,8 @@ class Datalist(ElevationDataset):
             count = len(dl_layer)
             with tqdm(
                     total=len(dl_layer),
-                    desc='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight)
+                    desc='parsing {} datasets from datalist json {} @ {}'.format(count, self.fn, self.weight),
+                    leave=self.verbose
             ) as pbar:
                 for l,feat in enumerate(dl_layer):
                     pbar.update()
@@ -3449,7 +3454,7 @@ class Datalist(ElevationDataset):
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                with tqdm(desc='parsing datalist {}...'.format(self.fn)) as pbar:
+                with tqdm(desc='parsing datalist {}...'.format(self.fn), leave=self.verbose) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()
                         ## parse the datalist entry line

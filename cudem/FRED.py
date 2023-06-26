@@ -42,7 +42,7 @@ fetchdata = os.path.join(this_dir, 'data')
 
 class FRED:
     def __init__(self, name='FRED', verbose=False, local=False):
-        self._verbose = verbose
+        self.verbose = verbose
         self.fetchdata = os.path.join(this_dir, 'data')
         self.driver = ogr.GetDriverByName('GeoJSON')
         self.fetch_v = '{}.geojson'.format(name)
@@ -52,8 +52,12 @@ class FRED:
             self.FREDloc = self.fetch_v
         elif os.path.exists(os.path.join(self.fetchdata, self.fetch_v)):
             self.FREDloc = os.path.join(self.fetchdata, self.fetch_v)
-        else: self.FREDloc = self.fetch_v
-        if self._verbose: utils.echo_msg('using {}'.format(self.FREDloc))
+        else:
+            self.FREDloc = self.fetch_v
+            
+        if self.verbose:
+            utils.echo_msg('using {}'.format(self.FREDloc))
+            
         self.ds = None
         self.layer = None
         self.open_p = False
@@ -175,9 +179,9 @@ class FRED:
 
     def _get_region(self, where = [], layers = []):
         out_regions = []
-        if self._verbose: _prog = _progress('gathering regions from {}...'.format(self.FREDloc))
+        if self.verbose: _prog = _progress('gathering regions from {}...'.format(self.FREDloc))
         for i, layer in enumerate(layers):
-            if self._verbose: _prog.update_perc((i, len(layers)))
+            if self.verbose: _prog.update_perc((i, len(layers)))
             this_layer = self.layer
             this_layer.SetAttributeFilter("DataSource = '{}'".format(layer))
             [this_layer.SetAttributeFilter('{}'.format(filt)) for filt in where]
@@ -217,12 +221,13 @@ class FRED:
         with tqdm(
                 total=len(layers),
                 desc='filtering {}'.format(self.FREDloc),
+                leave=self.verbose
         ) as pbar:
             for i, layer in enumerate(layers):
                 pbar.update(1)
                 #this_layer = self.layer
                 where.append("DataSource = '{}'".format(layer))
-                if self._verbose:
+                if self.verbose:
                     utils.echo_msg('FRED region: {}'.format(region))
                     utils.echo_msg('FRED filter: {}'.format(where))
 

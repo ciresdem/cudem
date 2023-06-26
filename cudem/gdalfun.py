@@ -809,12 +809,16 @@ def gdal_slope(src_gdal, dst_gdal, s = 111120):
     gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
     return(utils.run_cmd(gds_cmd))
     
-def gdal_proximity(src_gdal, dst_gdal, band = 1):
+def gdal_proximity(src_gdal, dst_gdal, band = 1, distunits='pixel'):
     """compute a proximity grid via GDAL
 
     return 0 if success else None
     """
-    
+
+    distunits = utils.str_or(distunits, 'PIXEL')
+    if distunits.upper() not in ['PIXEL', 'GEO']:
+        distunits = 'PIXEL'
+        
     prog_func = None
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
@@ -830,12 +834,12 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1):
             return(None)
 
     drv = gdal.GetDriverByName('GTiff')
-    dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Int32, [])
+    dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Int32 if distunits == 'PIXEL' else gdal.GDT_Float32, [])
     dst_ds.SetGeoTransform(ds_config['geoT'])
     dst_ds.SetProjection(ds_config['proj'])
     dst_band = dst_ds.GetRasterBand(1)
     dst_band.SetNoDataValue(ds_config['ndv'])
-    gdal.ComputeProximity(mem_band, dst_band, ['VALUES=1', 'DISTUNITS=PIXEL'], callback = prog_func)
+    gdal.ComputeProximity(mem_band, dst_band, ['VALUES=1', 'DISTUNITS={}'.format(distunits)], callback = prog_func)
     mem_ds = dst_ds = None
     return(0)
         
