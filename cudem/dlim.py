@@ -2102,7 +2102,7 @@ class LASFile(ElevationDataset):
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
-            ## convert the coordinates to pixels and determine the srcwin
+            ## convert the coordinates to pixels and determine the srcwin (no transforms!)
             #pixel_x = np.floor((points.x - dst_gt[0]) / dst_gt[1]).astype(int)
             #pixel_y = np.floor((points.y - dst_gt[3]) / dst_gt[5]).astype(int)
             ## this fails (shifts data) with reprojections, esp. from projected to wgs, fix accordingly!

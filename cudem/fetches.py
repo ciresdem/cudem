@@ -483,8 +483,10 @@ class Fetch:
             status = -1
                 
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
-            utils.echo_error_msg('data not fetched...')
+            #utils.echo_error_msg('data not fetched...')
             status = -1
+            raise UnboundLocalError('data not fetched')
+            #status = -1
                         
         return(status)
 
@@ -548,13 +550,18 @@ def fetch_queue(q, m, p=False, c=True):
                         headers=m.headers
                     ).fetch_ftp_file(fetch_args[1])
                 else:
-                    Fetch(
-                        url=fetch_args[0],
-                        callback=m.callback,
-                        verbose=m.verbose,
-                        headers=m.headers,
-                        verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
-                    ).fetch_file(fetch_args[1], check_size=c)
+                    try:
+                        Fetch(
+                            url=fetch_args[0],
+                            callback=m.callback,
+                            verbose=m.verbose,
+                            headers=m.headers,
+                            verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
+                        ).fetch_file(fetch_args[1], check_size=c)
+                    except:
+                        utils.echo_warning_msg('fetch of {} failed, adding to end of queue...'.format(fetch_args[0]))
+                        q.put(fetch_args)
+                        
             else:
                 if m.region is not None:
                     o_x_fn = '_'.join(fetch_args[1].split('.')[:-1]) + '_' + m.region.format('fn') + '.xyz'
