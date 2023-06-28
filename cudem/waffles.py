@@ -470,13 +470,13 @@ class Waffle:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
             
             ## calculate estimated uncertainty of the interpolation
-            if self.want_uncertainty:
-                iu = WafflesUncertainty(
-                    waffles_module=self.mod, percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, clobber=False
-                )
-                unc_out, unc_status = iu.run()
-                if unc_status == 0:
-                    self.aux_dems.append(unc_out['prox_unc'][0])
+            # if self.want_uncertainty:
+            #     iu = WafflesUncertainty(
+            #         waffles_module=self.mod, percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, clobber=False
+            #     )
+            #     unc_out, unc_status = iu.run()
+            #     if unc_status == 0:
+            #         self.aux_dems.append(unc_out['prox_unc'][0])
 
             ## post-process any auxiliary rasters
             for aux_dem in self.aux_dems:
