@@ -54,7 +54,8 @@ setuptools.setup(
         'pyproj',
         'h5py', # nsidc
         'boto3', # for amazon/bluetopo
-        'tqdm',
+        'tqdm', # progress bar
+        'mercantile', # for MS building footprints
         #'windows-curses', # for windows
     ], 
     entry_points = {

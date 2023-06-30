@@ -3888,11 +3888,11 @@ class WafflesUncertainty(Waffle):
 
                         #h, e = np.histogram(s_dp[:,0][arr], d_err_count)
                         #d_errs = e[np.nonzero(h)]
-                        num = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
-                        den = np.histogram(s_dp[:,0][arr], d_err_count)[0]
-                        num = num[np.nonzero(den)]
-                        den = den[np.nonzero(den)]
-                        d_errs = num/den
+                        err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
+                        err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
+                        err_sum = num[np.nonzero(err_cnt)]
+                        err_cnt = den[np.nonzero(err_cnt)]
+                        d_errs = err_sum/err_cnt
                         #d_mean = (np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0] / np.histogram(s_dp[:,0][arr], d_err_count)[0])
                         #d_mean = d_mean[np.nonzero(h)]
                         #print(d_mean)

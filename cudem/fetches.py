@@ -36,6 +36,8 @@ import urllib
 import lxml.etree
 import lxml.html as lh
 from tqdm import tqdm
+import mercantile
+import csv
 
 import threading
 try:
@@ -3180,7 +3182,46 @@ https://wiki.openstreetmap.org/
             osm_data = urlencode({'data': osm_q_})
             osm_data_url = self._osm_api + '?' + osm_data            
             self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
+
+## ==============================================
+## BING Building Footprints
+## ==============================================
+class BingBFP(FetchModule):
+    """Bing Building Footprints
+
+https://github.com/microsoft/GlobalMLBuildingFootprints
+"""
     
+    def __init__(self, **kwargs):
+        super().__init__(name='bingbfp', **kwargs)
+        self._bing_bfp_csv = 'https://minedbuildings.blob.core.windows.net/global-buildings/dataset-links.csv'
+        
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                         'referer': 'https://lz4.overpass-api.de/' }
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        bbox = self.region.format('bbox')
+
+        quad_keys = set()
+        for tile in list(mercantile.tiles(self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax, zooms=9)):
+            quad_keys.add(int(mercantile.quadkey(tile)))
+            
+        quad_keys = list(quad_keys)
+        print(f"The input area spans {len(quad_keys)} tiles: {quad_keys}")
+
+        bing_csv = os.path.basename(self._bing_bfp_csv)
+        Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
+
+        with open(bing_csv, mode='r') as bc:
+            reader = csv.reader(bc)
+            next(reader)
+            bd = [row[2] for row in reader if int(row[1]) in quad_keys]
+
+        self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
+        
 ## ==============================================
 ## VDATUM
 ## ==============================================
@@ -4548,7 +4589,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'mar_grav': {'call': MarGrav},
         'srtm_plus': {'call': SRTMPlus},
         'charts': {'call': NauticalCharts}, # 'Charts' isn't working! :(
-	'digital_coast': {'call': DAV},
+	    'digital_coast': {'call': DAV},
         'multibeam': {'call': Multibeam}, # MBDB isn't working!
         'gebco': {'call': GEBCO},
         'mgds': {'call': MGDS},
@@ -4575,6 +4616,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'wsf': {'call': WSF},
         'hydrolakes': {'call': HydroLakes},
         'https': {'call': HttpDataset},
+        'bing_bfp': {'call': BingBFP},
     }
 
     def __init__(self, **kwargs):
