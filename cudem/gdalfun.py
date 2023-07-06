@@ -101,7 +101,11 @@ def epsg_from_input(in_srs):
     ## VERT
     if src_srs.IsVertical() == 1:
         csvtype = 'VERT_CS'
+        vn = src_srs.GetAuthorityName(csvtype)
         src_vert = src_srs.GetAuthorityCode(csvtype)
+        
+        if src_vert is not None:
+            src_vert = '{}:{}'.format(vn, src_vert)
     else:
         src_vert = None
 
@@ -129,16 +133,21 @@ def osr_parse_srs(src_srs, return_vertcs = True):
             csvtype = vc = vn = None
 
         if an is not None and ac is not None:
-            if vn is not None and vc is not None:
-                return('{}:{}+{}'.format(an, ac, vc))
-            else:
-                return('{}:{}'.format(an, ac))
+            return(['{}:{}'.format(an, ac), '{}:{}'.format(vn, vc)])
+            # if vn is not None and vc is not None:
+            #     return('{}:{}+{}'.format(an, ac, vc))
+            # else:
+            #     return('{}:{}'.format(an, ac))
         else:
             dst_srs = src_srs.ExportToProj4()
-            if dst_srs:
-                    return(dst_srs)
-            else:
-                return(None)
+            return([dst_srs, '{}:{}'.format(vn, vc)])
+            # if vn is not None and vc is not None:
+            #     print(vn, vc)
+                
+            # if dst_srs:
+            #     return(dst_srs)
+            # else:
+            #     return(None)
     else:
         return(None)
 
@@ -178,6 +187,7 @@ def gdal_get_srs(src_gdal):
     src_ds = gdal.Open(src_gdal)
     src_srs = src_ds.GetSpatialRef()
     src_ds = None
+    #return(epsg_from_input(src_srs))
     return(osr_parse_srs(src_srs))
     
 def ogr_get_srs(src_ogr):

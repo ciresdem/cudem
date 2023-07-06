@@ -3839,7 +3839,7 @@ class WafflesUncertainty(Waffle):
             #self.sims = 12
 
         if self.max_sample is None:
-            self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .01)
+            self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
 
         utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
         # ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
@@ -3863,10 +3863,10 @@ class WafflesUncertainty(Waffle):
             #ec_d = self._split_sample(trainers, num_perc, chnk_inc/2, s_dp, pre_ec_d)[0]
             #sample_dp =
             sim = 0
+            total_keep = 5000000
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
             while True:
                 sim += 1
-                total_keep = 5000000
                 sample_dp = self._split_sample(trainers, num_perc)
                 #print(sample_dp)
                 if len(s_dp) == 0:
@@ -3881,17 +3881,20 @@ class WafflesUncertainty(Waffle):
                 for d in ds:
                     arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
                     if arr.any():
-                        dm = np.mean(s_dp[:,0][arr])
+                        ##dm = np.mean(s_dp[:,0][arr])
                         arr_count = np.count_nonzero(arr)
                         err_perc = (arr_count / err_count)
+                        #utils.echo_msg(err_perc)
                         d_err_count = int(total_keep * err_perc)
+                        #utils.echo_msg(d_err_count)
+                        #d_err_count = int(total_keep)
 
                         #h, e = np.histogram(s_dp[:,0][arr], d_err_count)
                         #d_errs = e[np.nonzero(h)]
                         err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
                         err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
-                        err_sum = num[np.nonzero(err_cnt)]
-                        err_cnt = den[np.nonzero(err_cnt)]
+                        err_sum = err_sum[np.nonzero(err_cnt)]
+                        err_cnt = err_cnt[np.nonzero(err_cnt)]
                         d_errs = err_sum/err_cnt
                         #d_mean = (np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0] / np.histogram(s_dp[:,0][arr], d_err_count)[0])
                         #d_mean = d_mean[np.nonzero(h)]

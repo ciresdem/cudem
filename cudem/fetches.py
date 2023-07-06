@@ -644,6 +644,7 @@ class FetchModule:
         raise(NotImplementedError)
 
     def fetch(self, entry, check_size = True):
+        ## make sure this fetches correctly and retry if it doesn't!
         return(Fetch(
             entry[0],
             callback=self.callback,
