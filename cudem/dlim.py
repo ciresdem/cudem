@@ -941,15 +941,15 @@ class ElevationDataset:
 
                 vd_region.buffer(pct=2)
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
-                    src_vert,
-                    dst_vert,
+                    src_vert.split(':')[-1],
+                    dst_vert.split(':')[-1],
                     vd_region.format('fn')
                 ))
 
                 if self.x_inc is not None:
                     self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
-                        src_vert,
-                        dst_vert,
+                        src_vert.split(':')[-1],
+                        dst_vert.split(':')[-1],
                         vd_region.format('fn'),
                         utils.inc2str(self.x_inc)
                     ))
