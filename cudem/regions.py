@@ -569,12 +569,11 @@ class Region:
 
         dst_srs = utils.str_or(dst_srs)
         if dst_srs is None or self.src_srs is None: return(self)
-
         src_srs = osr.SpatialReference()
         src_srs.SetFromUserInput(self.src_srs)
-
         dst_srs_ = osr.SpatialReference()
         dst_srs_.SetFromUserInput(dst_srs)
+        
         try:
             src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
             dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)

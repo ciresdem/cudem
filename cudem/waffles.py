@@ -3802,7 +3802,7 @@ class WafflesUncertainty(Waffle):
         s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
         s_5perc = np.percentile(s_dens, 5)
         s_dens = None
-        print(s_dens)
+
         #utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
         utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
 
@@ -3887,7 +3887,7 @@ class WafflesUncertainty(Waffle):
                         err_perc = (arr_count / err_count)
                         #utils.echo_msg(err_perc)
                         d_err_count = int(total_keep * err_perc)
-                        #utils.echo_msg(d_err_count)
+                        utils.echo_msg(d_err_count)
                         #d_err_count = int(total_keep)
 
                         #h, e = np.histogram(s_dp[:,0][arr], d_err_count)

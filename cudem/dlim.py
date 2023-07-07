@@ -913,13 +913,13 @@ class ElevationDataset:
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             ## split the horizontal and vertical CRSs
-            src_horz, src_vert = gdalfun.split_srs(self.src_srs, as_epsg=False)
-            dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs, as_epsg=False)
+            #src_horz, src_vert = gdalfun.split_srs(self.src_srs, as_epsg=False)
+            #dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs, as_epsg=False)
 
             ## parse out the horizontal and vertical epsgs if they exist
-            #src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
-            #dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
-
+            src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
+            dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
+            
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(src_horz)
@@ -929,6 +929,7 @@ class ElevationDataset:
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
+            utils.echo_msg('vertical transfomation needed: {} to {}'.format(src_vert, dst_vert))
             if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
                 vd_region = regions.Region(
                     src_srs=src_horz
