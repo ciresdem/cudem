@@ -33,6 +33,8 @@ from tqdm import trange
 from osgeo import gdal
 from osgeo import osr
 from osgeo import ogr
+from pyproj import CRS
+
 import numpy as np
 import scipy
 import scipy.ndimage
@@ -42,8 +44,35 @@ from cudem import regions
 from cudem import xyzfun
 
 ## ==============================================
-## OSR/WKT
+## OSR/WKT/proj
 ## ==============================================
+def split_srs(srs, as_epsg = False):
+    src_srs = osr.SpatialReference()
+    src_srs.SetFromUserInput(srs)
+    
+    srs_wkt = src_srs.ExportToWkt()
+    wkt_CRS = CRS.from_wkt(srs_wkt)
+
+    if wkt_CRS.is_compound:
+        horz = wkt_CRS.sub_crs_list[0]
+        horz_epsg = horz.to_epsg()
+        horz_wkt = horz.to_wkt()
+        vert = wkt_CRS.sub_crs_list[1]
+        vert_epsg = vert.to_epsg()
+        vert_wkt = vert.to_wkt()
+    else:
+        horz = wkt_CRS
+        horz_epsg = horz.to_epsg()
+        horz_wkt = horz.to_wkt()
+        vert = None
+        vert_epsg = None
+        vert_wkt = None
+
+    if as_epsg:
+        return(horz_epsg if horz_epsg is not None else horz_wkt, vert_epsg if vert_epsg is not None else vert_wkt)
+    else:
+        return(horz_wkt, vert_epsg)
+    
 def wkt2geom(wkt):
     """transform a wkt to an ogr geometry
 
@@ -101,16 +130,12 @@ def epsg_from_input(in_srs):
     ## VERT
     if src_srs.IsVertical() == 1:
         csvtype = 'VERT_CS'
-        vn = src_srs.GetAuthorityName(csvtype)
         src_vert = src_srs.GetAuthorityCode(csvtype)
-        
-        if src_vert is not None:
-            src_vert = '{}:{}'.format(vn, src_vert)
     else:
         src_vert = None
 
     return(src_horz, src_vert)
-    
+
 def osr_parse_srs(src_srs, return_vertcs = True):
     if src_srs is not None:
         if src_srs.IsLocal() == 1:
@@ -133,21 +158,16 @@ def osr_parse_srs(src_srs, return_vertcs = True):
             csvtype = vc = vn = None
 
         if an is not None and ac is not None:
-            return(['{}:{}'.format(an, ac), '{}:{}'.format(vn, vc)])
-            # if vn is not None and vc is not None:
-            #     return('{}:{}+{}'.format(an, ac, vc))
-            # else:
-            #     return('{}:{}'.format(an, ac))
+            if vn is not None and vc is not None:
+                return('{}:{}+{}'.format(an, ac, vc))
+            else:
+                return('{}:{}'.format(an, ac))
         else:
             dst_srs = src_srs.ExportToProj4()
-            return([dst_srs, '{}:{}'.format(vn, vc)])
-            # if vn is not None and vc is not None:
-            #     print(vn, vc)
-                
-            # if dst_srs:
-            #     return(dst_srs)
-            # else:
-            #     return(None)
+            if dst_srs:
+                    return(dst_srs)
+            else:
+                return(None)
     else:
         return(None)
 
@@ -187,14 +207,15 @@ def gdal_get_srs(src_gdal):
     src_ds = gdal.Open(src_gdal)
     src_srs = src_ds.GetSpatialRef()
     src_ds = None
-    #return(epsg_from_input(src_srs))
-    return(osr_parse_srs(src_srs))
+    return(src_srs.ExportToWkt())
+    #return(osr_parse_srs(src_srs))
     
 def ogr_get_srs(src_ogr):
     src_ds = ogr.Open(src_ogr, 0)
     src_srs = src_ds.GetLayer().GetSpatialRef()
     src_ds = None
-    return(osr_parse_srs(src_srs))
+    return(src_srs.ExportToWkt())
+    #return(osr_parse_srs(src_srs))
     
 def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
 

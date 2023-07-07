@@ -912,13 +912,13 @@ class ElevationDataset:
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
-            ## parse out the horizontal and vertical epsgs if they exist
-            if isinstance(self.src_srs, list):
-                src_horz, src_vert = self.src_srs
-            else:
-                src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
+            ## split the horizontal and vertical CRSs
+            src_horz, src_vert = gdalfun.split_srs(self.src_srs, as_epsg=False)
+            dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs, as_epsg=False)
 
-            dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
+            ## parse out the horizontal and vertical epsgs if they exist
+            #src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
+            #dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
 
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
@@ -929,27 +929,26 @@ class ElevationDataset:
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
-            print(src_vert, dst_vert)
             if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
                 vd_region = regions.Region(
-                    src_srs=src_srs.ExportToProj4()
+                    src_srs=src_horz
                 ).from_list(
                     self.infos.minmax
                 ).warp(
-                    dst_srs.ExportToProj4()
+                    dst_horz
                 ) if self.region is None else self.region.copy()
 
                 vd_region.buffer(pct=2)
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
-                    src_vert.split(':')[-1],
-                    dst_vert.split(':')[-1],
+                    src_vert,
+                    dst_vert,
                     vd_region.format('fn')
                 ))
 
                 if self.x_inc is not None:
                     self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
-                        src_vert.split(':')[-1],
-                        dst_vert.split(':')[-1],
+                        src_vert,
+                        dst_vert,
                         vd_region.format('fn'),
                         utils.inc2str(self.x_inc)
                     ))
@@ -963,7 +962,8 @@ class ElevationDataset:
                             leave=self.verbose
                     ) as pbar:
                         self.trans_fn = vdatums.VerticalTransform(
-                            vd_region, '3s' if self.x_inc is None else self.x_inc, '3s' if self.y_inc is None else self.y_inc, src_vert, dst_vert,
+                            #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
+                            vd_region, '3s', '3s', src_vert, dst_vert,
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
@@ -1036,10 +1036,8 @@ class ElevationDataset:
             else:
                 if self.infos.wkt is not None:
                     self.trans_region = regions.Region().from_string(self.infos.wkt)
-                    #self.trans_region.src_srs = self.src_srs
-                    self.trans_region.src_srs = src_horz
-                    #self.trans_region.warp(self.dst_srs)
-                    self.trans_region.warp(dst_horz)
+                    self.trans_region.src_srs = self.src_srs
+                    self.trans_region.warp(self.dst_srs)
                 else:
                     utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
                 
@@ -2704,7 +2702,6 @@ class BAGFile(ElevationDataset):
             self.set_transform()
 
     def generate_inf(self, callback=lambda: False):
-
         self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
@@ -4026,7 +4023,7 @@ class eHydroFetcher(Fetcher):
             tmp_gdb = ogr.Open(src_gdb)
             tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
             src_srs = tmp_layer.GetSpatialRef()
-            src_epsg = gdalfun.osr_parse_srs(src_srs)[0]
+            src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
 
             usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048",
@@ -4042,7 +4039,7 @@ class eHydroFetcher(Fetcher):
             tmp_gdb = ogr.Open(src_gdb)
             tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
             src_srs = tmp_layer.GetSpatialRef()
-            src_epsg = gdalfun.osr_parse_srs(src_srs)[0]
+            src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
 
             src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
@@ -4699,12 +4696,7 @@ def datalists_cli(argv=sys.argv):
                             this_region.src_srs = src_srs
                             this_region.warp(dst_srs)
                         elif this_inf.src_srs is not None:
-                            if isinstance(this_inf.src_srs, list):
-                                src_horz = this_inf.src_srs[0]
-                            else:
-                                src_horz = this_inf.src_srs
-                                
-                            this_region.src_srs = src_horz
+                            this_region.src_srs = this_inf.src_srs
                             this_region.warp(dst_srs)
                     print(this_region.format('gmt'))
                 elif want_archive:
