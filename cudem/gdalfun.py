@@ -207,14 +207,20 @@ def gdal_get_srs(src_gdal):
     src_ds = gdal.Open(src_gdal)
     src_srs = src_ds.GetSpatialRef()
     src_ds = None
-    return(src_srs.ExportToWkt())
+    if src_srs is not None:
+        return(src_srs.ExportToWkt())
+    else:
+        return(None)
     #return(osr_parse_srs(src_srs))
     
 def ogr_get_srs(src_ogr):
     src_ds = ogr.Open(src_ogr, 0)
     src_srs = src_ds.GetLayer().GetSpatialRef()
     src_ds = None
-    return(src_srs.ExportToWkt())
+    if src_srs is not None:
+        return(src_srs.ExportToWkt())
+    else:
+        return(None)
     #return(osr_parse_srs(src_srs))
     
 def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
