@@ -919,7 +919,6 @@ class ElevationDataset:
             ## parse out the horizontal and vertical epsgs if they exist
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
-            
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(src_horz)
@@ -2247,6 +2246,9 @@ class GDALFile(ElevationDataset):
         self.check_path = check_path
         self.super_grid = super_grid
         self.band_no = band_no
+        self.tmp_elev_band = None
+        self.tmp_unc_band = None
+        self.tmp_weight_band = None
         
     def init_ds(self):
         """initialize the raster dataset
@@ -2307,13 +2309,34 @@ class GDALFile(ElevationDataset):
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
             ## doing this in MEM has a bug, fix if able
-            #tmp_warp = os.path.join(self.cache_dir, '_tmp_gdal.tif')
             tmp_warp = utils.make_temp_fn('{}'.format(tmp_ds), temp_dir=self.cache_dir)
+
+            ## extract necessary bands before warping!
+            in_bands = self.src_ds.RasterCount
+            self.src_ds = None
+            if in_bands > 1:
+                self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                gdalfun.gdal_extract_band(self.fn, tmp_elev_band, band=self.band_no, exclude=[], inverse=False)
+                tmp_ds = tmp_elev_band
+
+                if utils.int_or(self.uncertainty_mask) is not None:
+                    self.tmp_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                    gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
+                    self.uncertainty_mask = tmp_unc_band
+
+                if utils.int_or(self.weight_mask) is not None:
+                    self.tmp_weight_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                    gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=self.weight_mask, exclude=[], inverse=False)
+                    self.weight_mask = tmp_weight_band
+                    
+
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                                        ndv=ndv, verbose=self.verbose)[0] 
+                                        ndv=ndv, verbose=self.verbose)[0]
+
             tmp_ds = None
+            
             ## the following seems to be redundant...
             warp_ds = gdal.Open(tmp_warp)
             if warp_ds is not None:
@@ -2321,7 +2344,6 @@ class GDALFile(ElevationDataset):
                 warp_ds_config = gdalfun.gdal_infos(warp_ds)
                 gt = warp_ds_config['geoT']
                 srcwin = self.warp_region.srcwin(gt, warp_ds.RasterXSize, warp_ds.RasterYSize, node='grid')
-                #warp_arr = warp_ds.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
                 out_ds_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2] * srcwin[3], dst_gt, warp_ds_config['proj'],
                                                   warp_ds_config['dt'], warp_ds_config['ndv'], warp_ds_config['fmt'], None, None)
@@ -2641,6 +2663,15 @@ class GDALFile(ElevationDataset):
                 yield(out_arrays, this_srcwin, this_gt)
                                             
             band = mask_band = weight_band = src_weight = src_mask = self.src_ds = None
+            if self.tmp_elev_band is not None:
+                utils.remove_glob(self.tmp_elev_band)
+                
+            if self.tmp_unc_band is not None:
+                utils.remove_glob(self.tmp_unc_band)
+
+            if self.tmp_weight_band is not None:
+                utils.remove_glob(self.tmp_weight_band)
+                
             if self.verbose:
                 utils.echo_msg(
                     'parsed {} data records from {}{}'.format(
@@ -2650,7 +2681,6 @@ class GDALFile(ElevationDataset):
                 
     def yield_xyz(self):
         """yield the gdal file data as xyz"""
-        
         for arrs, srcwin, gt in self.yield_array():
             z_array = arrs['z']
             w_array = arrs['weight']
@@ -2769,10 +2799,16 @@ class BAGFile(ElevationDataset):
                                   verbose=self.verbose, resample=resample, uncertainty_mask=2)
                 yield(sub_ds)
         else:
-            sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
+            bag_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+            bag_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+            gdalfun.gdal_extract_band(self.fn, bag_elev_band, band=1, exclude=[], inverse=False)
+            gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=2, exclude=[], inverse=False)
+            sub_ds = GDALFile(fn=bag_elev_band, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-                              resample=resample, uncertainty_mask=2)
+                              resample=resample, uncertainty_mask=bag_unc_band)
             yield(sub_ds)
+            utils.remove_glob(bag_elev_band)
+            utils.remove_glob(bag_unc_band)
 
     def yield_xyz(self):
         self.init_ds()

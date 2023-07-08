@@ -1407,18 +1407,22 @@ def sample_warp(
                 os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
             )
         )
-        #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r bilinear'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc))
-
+        
+    #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
+    
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
-        
+            
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs, resampleAlg=sample_alg, errorThreshold=0,
                        options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32,
                        callback=None)
 
+
+    #utils.remove_glob(tmp_band)
+    
     if dst_dem is None:
         return(dst_ds, 0)
     else:
