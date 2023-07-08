@@ -928,7 +928,7 @@ class ElevationDataset:
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
-            utils.echo_msg('vertical transfomation needed: {} to {}'.format(src_vert, dst_vert))
+            ## utils.echo_msg('vertical transfomation needed: {} to {}'.format(src_vert, dst_vert))
             if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
                 vd_region = regions.Region(
                     src_srs=src_horz
