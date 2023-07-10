@@ -642,6 +642,8 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
 
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = False):
 
+    band = utils.int_or(band, 1)
+    
     with gdal_datasource(src_gdal) as src_ds:        
         ds_config = gdal_infos(src_ds)
         ds_band = src_ds.GetRasterBand(band)

@@ -2321,12 +2321,12 @@ class GDALFile(ElevationDataset):
 
                 if utils.int_or(self.uncertainty_mask) is not None:
                     self.tmp_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-                    gdalfun.gdal_extract_band(self.fn, self.bag_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
+                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
                     self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
                     self.tmp_weight_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-                    gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=self.weight_mask, exclude=[], inverse=False)
+                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.weight_mask, exclude=[], inverse=False)
                     self.weight_mask = self.tmp_weight_band
                     
 
