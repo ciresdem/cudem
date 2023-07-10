@@ -40,9 +40,8 @@
 ## If region, x_inc, and y_inc are set, all processing will go through Dataset._stacks() where the data will be combined
 ## either using the 'supercede' or 'weighted-mean' method. _stacks will output a multi-banded gdal file with the following
 ## bands: 1: z, 2: count, 3: weight, 4: uncerainty, 5: source-uncertainty
-##
-## If want_mask is set, data will be passed through Dataset._mask() which will generate a multi-band gdal file where each
-## mask band contains the mask of a specific dataset/datalist, depending on the input data. For a datalist, each band will
+## If want_mask is set, _stacks() will also generate a multi-band gdal file where each
+## mask band contains the mask (0/1) of a specific dataset/datalist, depending on the input data. For a datalist, each band will
 ## contain a mask for each of the top-level datasets in the main datalist file. If want_sm is also set, the multi-band mask
 ## will be processed to an OGR supported vector, with a feature for each band and the metadata items as fields.
 ##
@@ -156,11 +155,11 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
                                dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
-            this_datalist = DataList(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                     x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                     invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                     verbose=want_verbose, dump_precision=dump_precision)
+            this_datalist = Scratch(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                                    uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                                    x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
+                                    invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
+                                    verbose=want_verbose, dump_precision=dump_precision)
         else:
             this_datalist = xdls[0]
 
@@ -729,10 +728,6 @@ class ElevationDataset:
             #     utils.append_fn('dlim_stacks', self.region, self.x_inc)))
 
             out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
-
-            # if self.want_mask: # masking only makes sense with region/x_inc/y_inc...perhaps do a hull otherwise.
-            #     self.array_yield = self._mask(out_name='{}_m'.format(out_name), fmt='GTiff')
-
             self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff', want_mask=self.want_mask)
 
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
@@ -900,25 +895,23 @@ class ElevationDataset:
 
         return(self.infos)
 
-    ## todo: clean up this function, it's messy and buggy
     def set_transform(self):
         """Set the transformation parameters for the dataset.
 
         this will set the osr transformation to be used in
-        transforming all the data in this dataset...including vertical
+        transforming all the data in this dataset, including vertical
         transformations.
+
+        transformations are set based on src_srs and dst_srs
         """
 
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
-            ## split the horizontal and vertical CRSs
-            #src_horz, src_vert = gdalfun.split_srs(self.src_srs, as_epsg=False)
-            #dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs, as_epsg=False)
-
             ## parse out the horizontal and vertical epsgs if they exist
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
+            
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(src_horz)
@@ -928,7 +921,6 @@ class ElevationDataset:
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
-            ## utils.echo_msg('vertical transfomation needed: {} to {}'.format(src_vert, dst_vert))
             if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
                 vd_region = regions.Region(
                     src_srs=src_horz
@@ -984,36 +976,21 @@ class ElevationDataset:
                     if src_vert == '6360':
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_to_meter = True
-                        # with gdalfun.gdal_datasource(self.trans_fn, update=True) as tf:
-                        #     tfi = gdalfun.gdal_infos(tf)
-                        #     b = tf.GetRasterBand(1)
-                        #     a = b.ReadAsArray()
-                        #     a += 0.3048006096012192
-                        #     b.WriteArray(a)
 
                     if dst_vert == '6360':
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_from_meter = True
-                        # with gdalfun.gdal_datasource(self.trans_fn, update=True) as tf:
-                        #     tfi = gdalfun.gdal_infos(tf)
-                        #     b = tf.GetRasterBand(1)
-                        #     a = b.ReadAsArray()
-                        #     a += 0.3048006096012192
-                        #     b.WriteArray(a)
                 else:
                     utils.echo_error_msg(
                         'failed to generate vertical transformation grid between {} and {} for this region!'.format(
                             src_vert, dst_vert
                         )
                     )
-                    out_src_srs = src_srs.ExportToProj4()
-                    out_dst_srs = dst_srs.ExportToProj4()
-                
-            else:
-                out_src_srs = src_srs.ExportToProj4()
-                out_dst_srs = dst_srs.ExportToProj4()
 
+            ## export to proj4 for transformation and
             ## setup final OSR transformation objects
+            out_src_srs = src_srs.ExportToProj4()
+            out_dst_srs = dst_srs.ExportToProj4()
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -1024,10 +1001,11 @@ class ElevationDataset:
             except:
                 pass
 
-            ## transform input region if necessary
             self.src_trans_srs = out_src_srs
             self.dst_trans_srs = out_dst_srs
             self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
+            
+            ## transform input region if necessary
             if self.region is not None: # and self.region.src_srs != self.src_srs:
                 self.trans_region = self.region.copy()
                 self.trans_region.src_srs = out_dst_srs
@@ -1187,7 +1165,6 @@ class ElevationDataset:
                         os.makedirs(this_dir)
 
                     ## todo: if metadata['name'] contains a parent directory, make that into its own datalist
-
                     with open(
                             os.path.join(
                                 this_dir, '{}.datalist'.format(os.path.basename(this_dir))
@@ -1197,7 +1174,6 @@ class ElevationDataset:
                         if this_entry.remote == True:
                             sub_xyz_path = '{}_{}.xyz'.format(
                                 this_entry.metadata['name'], self.region.format('fn')
-                                #utils.fn_basename2(os.path.basename(this_entry.fn.split(':')[0])), self.region.format('fn')
                             )
                                 
                         elif len(this_entry.fn.split('.')) > 1:
@@ -1216,6 +1192,9 @@ class ElevationDataset:
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
                             os.makedirs(os.path.dirname(this_xyz_path))
+                        else:
+                            utils.echo_msg('{} already exists, skipping...'.format(this_xyz_path))
+                            continue
                             
                         sub_dirname = os.path.dirname(sub_xyz_path)
                         if sub_dirname != '.' and sub_dirname != '':
@@ -1229,7 +1208,6 @@ class ElevationDataset:
                                 sub_dlf.write('{} -1 1 0\n'.format(os.path.relpath(sub_sub_dlf_path, this_dir)))
 
                             sub_sub_dlf.write('{} 168 1 0\n'.format(os.path.basename(sub_xyz_path)))
-                            #if not os.path.exists(this_xyz_path):
                             with open(this_xyz_path, 'w') as xp:
                                 for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                                     #yield(this_xyz) # don't need to yield data here.
@@ -1240,7 +1218,6 @@ class ElevationDataset:
                             
                         else:
                             sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
-                            #if not os.path.exists(this_xyz_path):
                             with open(this_xyz_path, 'w') as xp:
                                 for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                                     #yield(this_xyz) # don't need to yield data here.
@@ -1278,92 +1255,6 @@ class ElevationDataset:
                 out_arrays['uncertainty'] = np.array([[this_xyz.u]])
                 this_srcwin = (xpos, ypos, 1, 1)
                 yield(out_arrays, this_srcwin, dst_gt)
-
-    ## todo: move mask_array to _stacks so we can
-    ## mask superceded data correctly.
-    def _mask(self, out_name = None, method='multi', fmt='GTiff'):
-        """generate a multi-banded  mask grid
-
-        each band will represent a top-level dataset. If run from
-        `parse` instead of `parse_json` will mask each dataset at it's most
-        recent parent location.
-        
-        -----------
-        Parameters:
-
-        out_name: output mask raster basename
-        method: masking method, either 'multi' or 'single'
-                where 'multi' will generate a multi-band raster with masks for each dataset parent
-                and 'single' will generate a single-band raster with a single data mask
-        fmt: output gdal raster format
-        """
-        
-        utils.set_cache(self.cache_dir)
-        if out_name is None:
-            out_name = '{}_msk'.format(os.path.join(self.cache_dir, '{}'.format(
-                utils.append_fn('_dlim_stacks', self.region, self.x_inc)
-            )))
-
-        xcount, ycount, dst_gt = self.region.geo_transform(
-            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        )
-
-        with tqdm(
-                desc='masking data to {}/{} grid to {} {}...'.format(ycount, xcount, self.region, out_name),
-                leave=self.verbose
-        ) as pbar:        
-            gdt = gdal.GDT_Int32
-            mask_fn = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-            if method == 'single':
-                driver = gdal.GetDriverByName(fmt)
-                if os.path.exists(mask_fn):
-                    driver.Delete(mask_fn)
-                    
-                m_ds = driver.Create(mask_fn, xcount, ycount, 0, gdt)
-                m_ds.SetGeoTransform(dst_gt)
-                m_band = m_ds.GetRasterBand(1)
-                m_band.SetNoDataValue(ndv)
-                for arrs, srcwin, gt in self.yield_array():
-                    pbar.update()
-                    m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                    m_array[arrs['count'] != 0] = 1
-                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                    yield((arrs, srcwin, gt))
-            else:
-                driver = gdal.GetDriverByName('MEM')
-                m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
-                m_ds.SetGeoTransform(dst_gt)
-                for this_entry in self.parse_json():
-                    pbar.update()
-                    bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
-                    if not this_entry.metadata['name'] in bands.keys():
-                        m_ds.AddBand()
-                        m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-                        m_band.SetNoDataValue(0)
-                        m_band.SetDescription(this_entry.metadata['name'])
-                        band_md = m_band.GetMetadata()
-                        for k in this_entry.metadata.keys():
-                            band_md[k] = this_entry.metadata[k]
-
-                        band_md['weight'] = this_entry.weight
-                        band_md['uncertainty'] = this_entry.uncertainty
-                        m_band.SetMetadata(band_md)
-                    else:
-                        m_band = m_ds.GetRasterBand(bands[this_entry.metadata['name']])
-
-                    for arrs, srcwin, gt in this_entry.yield_array():
-                        m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                        m_array[arrs['count'] != 0] = 1
-                        m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                        yield((arrs, srcwin, gt))
-
-            dst_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
-
-            ## create a vector of the masks (spatial-metadata)
-            if self.want_sm:
-                gdalfun.ogr_polygonize_multibands(dst_ds)
-            
-        m_ds = dst_ds =None
 
     ## todo: properly mask supercede mode...
     def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False, mask_only = False):
@@ -1437,19 +1328,9 @@ class ElevationDataset:
             #stacked_bands[key].SetNoDataValue(ndv)
             stacked_bands[key].SetDescription(key)
         
-        ## incoming arrays can be quite large...perhaps chunks these
         ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
         ## srcwin is the srcwin of the waffle relative to the incoming arrays
         ## gt is the geotransform of the incoming arrays
-        ## `self.array_yield` is set in `self.set_array` (now it's set here), to mask data first if asked
-        #for arrs, srcwin, gt in self.yield_array():
-        # if want_mask:
-        #     array_yield = self._mask(out_name='{}_msk'.format(out_name), method='multi', fmt=fmt)
-        # else:
-        #     array_yield = self.yield_array()
-
-        ## parse_json already has a tqdm instance, no real need for this one when we're using that...
-        #with tqdm(desc='stacking data to {}/{} grid'.format(ycount, xcount)) as pbar:
         ## mask grid
         driver = gdal.GetDriverByName('MEM')
         m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
@@ -3135,11 +3016,9 @@ class OGRFile(ElevationDataset):
         for arrs in self.yield_block_array():
             yield(arrs)
 
-class DataList(ElevationDataset):
+class Scratch(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        #self.remote = True
-        #self.fn = 'scratch'
         self.metadata['name'] = 'scratch'
 
     def generate_inf(self, callback=lambda: False):
@@ -3397,7 +3276,7 @@ class Datalist(ElevationDataset):
         ## check for the datalist-vector geojson
         status = 0
         count = 0
-        #while status == -1:
+
         ## user input to re-gerenate json...?
         if os.path.exists('{}.json'.format(self.fn)):
             driver = ogr.GetDriverByName('GeoJSON')
@@ -3469,7 +3348,8 @@ class Datalist(ElevationDataset):
                     ):
                         data_set.initialize()
                         for ds in data_set.parse_json():
-                            self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                            # fill self.data_entries with each dataset for use outside the yield.
+                            self.data_entries.append(ds) 
                             yield(ds)
 
             dl_ds = dl_layer = None
@@ -3477,7 +3357,9 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            utils.echo_warning_msg('could not load datalist-vector json {}.json, use falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn))
+            utils.echo_warning_msg(
+                'could not load datalist-vector json {}.json, use falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
+            )
             for ds in self.parse():
                 yield(ds)
                                         
@@ -3729,69 +3611,6 @@ class ZIPlist(ElevationDataset):
 ## sub-class for it.
 ##
 ## ==============================================
-# def fetcher_queue(q, m, c=True):
-#     """fetch queue `q` of fetch results\
-#     each fetch queue should be a list of the following:
-#     [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
-#     """
-    
-#     while True:
-#         fetch_args = q.get()
-#         if not m.callback():
-#             if not os.path.exists(os.path.dirname(fetch_args[1])):
-#                 try:
-#                     os.makedirs(os.path.dirname(fetch_args[1]))
-#                 except: pass
-            
-#             if fetch_args[0].split(':')[0] == 'ftp':
-#                 Fetch(
-#                     url=fetch_args[0],
-#                     callback=m.callback,
-#                     verbose=m.verbose,
-#                     headers=m.headers
-#                 ).fetch_ftp_file(fetch_args[1])
-
-#             else:
-#                 try:
-#                     Fetch(
-#                         url=fetch_args[0],
-#                         callback=m.callback,
-#                         verbose=m.verbose,
-#                         headers=m.headers,
-#                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
-#                     ).fetch_file(fetch_args[1], check_size=c)
-#                 except:
-#                     utils.echo_warning_msg('fetch of {} failed, adding to end of queue...'.format(fetch_args[0]))
-#                     q.put(fetch_args)
-#         q.task_done()
-
-# class fetcher_results(threading.Thread):
-#     """fetch results gathered from a fetch module.
-#     results is a list of URLs with data type
-#     e.g. results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
-#     """
-    
-#     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
-#     def __init__(self, mod, want_proc=False, check_size=True, n_threads=3):
-#         threading.Thread.__init__(self)
-#         self.fetch_q = queue.Queue()
-#         self.mod = mod
-#         self.want_proc = want_proc
-#         self.check_size = check_size
-#         self.n_threads = n_threads
-#         if len(self.mod.results) == 0:
-#             self.mod.run()
-        
-#     def run(self):
-#         for _ in range(self.n_threads):
-#             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc, self.check_size))
-#             t.daemon = True
-#             t.start()
-#         for row in self.mod.results:
-#             self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
-            
-#         self.fetch_q.join()
-
 class Fetcher(ElevationDataset):
     """The generic fetches dataset type.
 
@@ -3883,7 +3702,11 @@ class GMRTFetcher(Fetcher):
             if fetches.Fetch(
                     self.fetch_module._gmrt_swath_poly_url, verbose=self.verbose
             ).fetch_file(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip')) == 0:
-                swath_shps = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip'), exts=['shp', 'shx', 'prj', 'dbf'], outdir=self.cache_dir)
+                swath_shps = utils.p_unzip(
+                    os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip'),
+                    exts=['shp', 'shx', 'prj', 'dbf'],
+                    outdir=self.cache_dir
+                )
                 swath_shp = None
                 swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
                 
@@ -3913,21 +3736,11 @@ class GMRTFetcher(Fetcher):
                         b.WriteArray(a)
                         gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
                     
-                    #gdalfun.gdal_clip(gmrt_fn, tmp_gmrt, src_ply=swath_shp, invert=True)
-                    #gmrt_fn = tmp_gmrt
-
-        # print(tmp_gmrt)
-        # o, s = utils.run_cmd('gdalinfo {} -stats'.format(tmp_gmrt))
-        # print(o)
-        # g = gdal.Open(tmp_gmrt)
-        # b = g.GetRasterBand(1)
-        # a = b.ReadAsArray()
-        # print(a)
-        # g = None
-        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                             cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200',
+                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                             weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
+                             invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
+                             verbose=self.verbose)._acquire_module())
         
 class GEBCOFetcher(Fetcher):
     def __init__(self, exclude_tid = None, **kwargs):
@@ -3939,14 +3752,22 @@ class GEBCOFetcher(Fetcher):
         
     def yield_ds(self, result):
         wanted_gebco_fns = []
-        gebco_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], self.fetch_module._outdir)
+        gebco_fns = utils.p_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            exts=['tif'],
+            outdir=self.fetch_module._outdir
+        )
         
         ## fetch the TID zip if needed
         if self.exclude_tid:
             if fetches.Fetch(
                     self.fetch_module._gebco_urls['gebco_tid']['geotiff'], verbose=self.verbose
             ).fetch_file(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip')) == 0:
-                tid_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'), ['tif'], self.cache_dir)
+                tid_fns = utils.p_unzip(
+                    os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'),
+                    exts=['tif'],
+                    outdir=self.cache_dir
+                )
 
                 for tid_fn in tid_fns:
                     ds_config = gdalfun.gdal_infos(tid_fn)
@@ -4016,7 +3837,11 @@ class CopernicusFetcher(Fetcher):
         self.check_size=False
         
     def yield_ds(self, result):
-        src_cop_dems = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], outdir=self.fetch_module._outdir)
+        src_cop_dems = utils.p_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            exts=['tif'],
+            outdir=self.fetch_module._outdir
+        )
         for src_cop_dem in src_cop_dems:
             gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
             yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -4029,7 +3854,11 @@ class FABDEMFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        src_fab_dems = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['tif'], outdir=self.fetch_module._outdir)
+        src_fab_dems = utils.p_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            exts=['tif'],
+            outdir=self.fetch_module._outdir
+        )
         for src_fab_dem in src_fab_dems:
             gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
             yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
@@ -4069,16 +3898,18 @@ class MarGravFetcher(Fetcher):
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
-
 class ChartsFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        src_000s = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['000'], outdir=self.fetch_module._outdir)
+        src_000s = utils.p_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            exts=['000'],
+            outdir=self.fetch_module._outdir
+        )
         for src_000 in src_000s:
-            usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1",
-                                      src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1", src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
@@ -4090,14 +3921,22 @@ class HydroNOSFetcher(Fetcher):
 
     def yield_ds(self, result):
         if result[2] == 'xyz':
-            nos_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['xyz', 'dat'], outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])))
+            nos_fns = utils.p_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                exts=['xyz', 'dat'],
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
+            )
             for nos_fn in nos_fns:
                 yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         elif result[2] == 'bag':
-            bag_fns = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), exts=['bag'], outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])))
+            bag_fns = utils.p_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                exts=['bag'],
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
+            )
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
@@ -4261,7 +4100,7 @@ class DatasetFactory(factory.CUDEMFactory):
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
-        -3: {'name': 'data_list', 'fmts': [''], 'call': DataList},
+        -3: {'name': 'scratch  ', 'fmts': [''], 'call': Scratch },
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
@@ -4340,9 +4179,6 @@ class DatasetFactory(factory.CUDEMFactory):
 
             # inherit metadata from parent if available
             self.kwargs['metadata'] = {}
-            # if 'remote' in self.kwargs and self.kwargs['remote']:
-            #     self.kwargs['metadata']['name'] = os.path.relpath(utils.fn_basename2(self.kwargs['fn']), 
-            # else:
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
             for key in self._metadata_keys:
@@ -4470,13 +4306,6 @@ class DatasetFactory(factory.CUDEMFactory):
         else:
             self.kwargs['metadata']['title'] = entry[4]
 
-        # if self.kwargs['parent'] is not None:
-        #     if self.kwargs['parent'].metadata['title'] is None:
-        #         self.kwargs['metadata']['name'] = None
-        #     else:
-        #         if self.kwargs['parent'].metadata['title'] == self.kwargs['metadata']['title']:
-        #             self.kwargs['metadata']['name'] = self.kwargs['parent'].metadata['name']
-            
         if self.kwargs['metadata']['name'] is None:
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
@@ -4574,22 +4403,22 @@ usage: {cmd} [ -acdghijquwEJPR [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
-\t\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-\t\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-\t\t\t\tOR an OGR-compatible vector file with regional polygons. 
-\t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-\t\t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\tWhere a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+\t\t\tUse '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
+\t\t\tOR an OGR-compatible vector file with regional polygons. 
+\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
+\t\t\tIf a vector file is supplied, will use each region found therein.
   -E, --increment\tBlock data to INCREMENT in native units.
-\t\t\t\tWhere INCREMENT is x-inc[/y-inc]
+\t\t\tWhere INCREMENT is x-inc[/y-inc]
   -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
-\t\t\t\tpercentage to extend the processing REGION.
-\t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-\t\t\t\tpercent of the input REGION.
+\t\t\tpercentage to extend the processing REGION.
+\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
+\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\tpercent of the input REGION.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
-  --z-precision\t\tSet the target precision of dumped z values. (default is 4)
+  -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -4672,7 +4501,9 @@ def datalists_cli(argv=sys.argv):
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
-        elif arg == '--z_precision' or arg == '--z-precision':
+        elif arg[:2] == '-Z':
+            z_precision = utils.int_or(argv[2:], 4)
+        elif arg == '--z_precision' or arg == '--z-precision' or arg == '-Z':
             z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
 

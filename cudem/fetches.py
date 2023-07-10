@@ -645,12 +645,17 @@ class FetchModule:
 
     def fetch(self, entry, check_size = True):
         ## make sure this fetches correctly and retry if it doesn't!
-        return(Fetch(
-            entry[0],
-            callback=self.callback,
-            verbose=self.verbose,
-            headers=self.headers,
-        ).fetch_file(os.path.join(self._outdir, entry[1]), timeout=5, read_timeout=5, check_size=check_size))
+        try:
+            status = Fetch(
+                entry[0],
+                callback=self.callback,
+                verbose=self.verbose,
+                headers=self.headers,
+            ).fetch_file(os.path.join(self._outdir, entry[1]), timeout=5, read_timeout=5, check_size=check_size)
+        except:
+            status = -1
+
+        return(status)
 
     def fetch_results(self):
         for entry in self.results:
