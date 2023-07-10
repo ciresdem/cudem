@@ -2316,18 +2316,18 @@ class GDALFile(ElevationDataset):
             self.src_ds = None
             if in_bands > 1:
                 self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-                gdalfun.gdal_extract_band(self.fn, tmp_elev_band, band=self.band_no, exclude=[], inverse=False)
-                tmp_ds = tmp_elev_band
+                gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], inverse=False)
+                tmp_ds = self.tmp_elev_band
 
                 if utils.int_or(self.uncertainty_mask) is not None:
                     self.tmp_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-                    gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
-                    self.uncertainty_mask = tmp_unc_band
+                    gdalfun.gdal_extract_band(self.fn, self.bag_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
+                    self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
                     self.tmp_weight_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
                     gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=self.weight_mask, exclude=[], inverse=False)
-                    self.weight_mask = tmp_weight_band
+                    self.weight_mask = self.tmp_weight_band
                     
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
@@ -3729,6 +3729,69 @@ class ZIPlist(ElevationDataset):
 ## sub-class for it.
 ##
 ## ==============================================
+# def fetcher_queue(q, m, c=True):
+#     """fetch queue `q` of fetch results\
+#     each fetch queue should be a list of the following:
+#     [remote_data_url, local_data_path, regions.region, lambda: stop_p, data-type]
+#     """
+    
+#     while True:
+#         fetch_args = q.get()
+#         if not m.callback():
+#             if not os.path.exists(os.path.dirname(fetch_args[1])):
+#                 try:
+#                     os.makedirs(os.path.dirname(fetch_args[1]))
+#                 except: pass
+            
+#             if fetch_args[0].split(':')[0] == 'ftp':
+#                 Fetch(
+#                     url=fetch_args[0],
+#                     callback=m.callback,
+#                     verbose=m.verbose,
+#                     headers=m.headers
+#                 ).fetch_ftp_file(fetch_args[1])
+
+#             else:
+#                 try:
+#                     Fetch(
+#                         url=fetch_args[0],
+#                         callback=m.callback,
+#                         verbose=m.verbose,
+#                         headers=m.headers,
+#                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
+#                     ).fetch_file(fetch_args[1], check_size=c)
+#                 except:
+#                     utils.echo_warning_msg('fetch of {} failed, adding to end of queue...'.format(fetch_args[0]))
+#                     q.put(fetch_args)
+#         q.task_done()
+
+# class fetcher_results(threading.Thread):
+#     """fetch results gathered from a fetch module.
+#     results is a list of URLs with data type
+#     e.g. results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
+#     """
+    
+#     #def __init__(self, results, out_dir, region=None, fetch_module=None, callback=lambda: False):
+#     def __init__(self, mod, want_proc=False, check_size=True, n_threads=3):
+#         threading.Thread.__init__(self)
+#         self.fetch_q = queue.Queue()
+#         self.mod = mod
+#         self.want_proc = want_proc
+#         self.check_size = check_size
+#         self.n_threads = n_threads
+#         if len(self.mod.results) == 0:
+#             self.mod.run()
+        
+#     def run(self):
+#         for _ in range(self.n_threads):
+#             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.mod, self.want_proc, self.check_size))
+#             t.daemon = True
+#             t.start()
+#         for row in self.mod.results:
+#             self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
+            
+#         self.fetch_q.join()
+
 class Fetcher(ElevationDataset):
     """The generic fetches dataset type.
 
@@ -3736,7 +3799,7 @@ class Fetcher(ElevationDataset):
     parsing and processing.
     
     See `fetches` for more information.
-"""
+    """
     
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(remote=True, **kwargs)
@@ -3767,23 +3830,20 @@ class Fetcher(ElevationDataset):
         return(self.infos)
 
     def parse(self):
-        #if self.region is not None:
         self.fetch_module.run()
         for result in self.fetch_module.results:
             if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
                 for this_ds in self.yield_ds(result):
                     f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
                     if f_name == '.':
-                        f_name = this_ds.fn                            
+                        f_name = this_ds.fn
+                        
                     this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
                     this_ds.remote = True
                     this_ds.initialize()
                     yield(this_ds)
                     if not self.keep_fetched_data:
                         utils.remove_glob(this_ds.fn)
-        #else:
-        #    utils.echo_error_msg('you must specify a region to access fetches data')
-        #    #yield(self)
             
         if not self.keep_fetched_data:
             utils.remove_glob(self.fn)
