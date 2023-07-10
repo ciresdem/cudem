@@ -1609,25 +1609,6 @@ class XYZFile(ElevationDataset):
                     return(this_xyz)
             except:
                 pass
-
-    # def transform(self, dst_trans):
-    #     """transform the x/y using the dst_trans osr transformation (2d)
-
-    #     Args:
-    #       dst_trans: an srs transformation object
-    #     """
-
-    #     wkt = 'POINT ({} {} {})'.format(self.x, self.y, self.z)
-    #     point = ogr.CreateGeometryFromWkt(wkt)
-    #     try:
-    #         point.Transform(dst_trans)
-    #         if not 'inf' in point.ExportToWkt():
-    #             self.x = point.GetX() 
-    #             self.y = point.GetY()
-    #             self.z = point.GetZ()
-    #     except Exception as e:
-    #         sys.stderr.write('transform error: {}\n'.format(str(e)))
-    #     return(self)
             
     def yield_points(self):
         self.init_ds()            
@@ -1894,8 +1875,6 @@ class LASFile(ElevationDataset):
         with lp.open(self.fn) as lasf:
             lasf_vlrs = lasf.header.vlrs
             for vlr in lasf_vlrs:
-                #if 'OGC WKT' in vlr.description:
-                #utils.echo_msg(vlr.description)
                 if vlr.record_id == 2112:
                     src_srs = osr.SpatialReference()
                     src_srs.SetFromUserInput(vlr.string)
@@ -2337,11 +2316,7 @@ class GDALFile(ElevationDataset):
             mask_band = None
             weight_band = None
             uncertainty_band = None
-            nodata = ['{:g}'.format(-9999), 'nan', float('nan')]
-
-            # with gdalfun.gdal_datasource(self.mask) as ds:
-            #     print(ds.GetRasterBand(1).ReadAsArray())
-            
+            nodata = ['{:g}'.format(-9999), 'nan', float('nan')]            
             if ndv is not None:
                 nodata.append('{:g}'.format(ndv))
 
@@ -2400,9 +2375,6 @@ class GDALFile(ElevationDataset):
                     mask_band = self.mask.GetRasterBand(1)
                 elif os.path.exists(self.mask):
                     utils.echo_msg('using mask dataset: {}'.format(self.mask))
-                    #with gdalfun.gdal_datasource(self.mask) as ds:
-                    #    print(ds.GetRasterBand(1).ReadAsArray())
-                        
                     if self.x_inc is not None and self.y_inc is not None:
                         src_mask = gdalfun.sample_warp(
                             self.mask, None, self.x_inc, self.y_inc,
@@ -2457,7 +2429,6 @@ class GDALFile(ElevationDataset):
                 ## mask
                 if mask_band is not None:
                     mask_data = mask_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    #print(mask_data)
                     mask_ndv = mask_band.GetNoDataValue()
                     if not np.isnan(mask_ndv):
                         mask_data[mask_data==mask_ndv] = np.nan
@@ -2535,7 +2506,6 @@ class GDALFile(ElevationDataset):
                 count_data = np.zeros(band_data.shape)
                 count_data[~np.isnan(band_data)] = 1
                 count += np.count_nonzero(count_data)
-                #count_data[count_data == 0] = np.nan
                 out_arrays = {'z':band_data, 'count':count_data, 'weight':weight_data,
                               'mask':mask_data, 'uncertainty':uncertainty_data}
                 ds_config = gdalfun.gdal_set_infos(1, y, y, this_gt, self.dst_srs, gdal.GDT_Float32,
@@ -2929,7 +2899,8 @@ class OGRFile(ElevationDataset):
     _known_layer_names = ['SOUNDG', 'SurveyPoint_HD', 'SurveyPoint']
     _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'surveyPointElev', 'Z_depth', 'Z_height']
     
-    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None, z_scale = None, **kwargs):
+    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None,
+                 z_scale = None, **kwargs):
         super().__init__(**kwargs)
         self.ogr_layer = ogr_layer
         self.elev_field = elev_field
@@ -3410,17 +3381,20 @@ class Datalist(ElevationDataset):
                                                 self.region if data_set.dst_trans is None else data_set.trans_region
                                         ):
                                             for ds in data_set.parse():
-                                                self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                                                # fill self.data_entries with each dataset for use outside the yield.
+                                                self.data_entries.append(ds) 
                                                 yield(ds)
 
                                     else:
                                         for ds in data_set.parse():
-                                            self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                                            # fill self.data_entries with each dataset for use outside the yield.
+                                            self.data_entries.append(ds) 
                                             yield(ds)
 
                                 else:
                                     for ds in data_set.parse():
-                                        self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                                        # fill self.data_entries with each dataset for use outside the yield.
+                                        self.data_entries.append(ds)
                                         yield(ds)
 
         ## self.fn is not a file-name, so check if self.data_entries not empty
@@ -3995,7 +3969,12 @@ class BlueTopoFetcher(Fetcher):
     def yield_ds(self, result):
         sid = None
         if not self.want_interpolation:
-            sid = gdalfun.gdal_extract_band(os.path.join(self.fetch_module._outdir, result[1]), utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir), band=3, exclude=[0])[0]
+            sid = gdalfun.gdal_extract_band(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir),
+                band=3,
+                exclude=[0]
+            )[0]
         
         yield(
             DatasetFactory(
