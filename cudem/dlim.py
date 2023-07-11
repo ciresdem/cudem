@@ -2177,14 +2177,15 @@ class GDALFile(ElevationDataset):
 
                 if utils.int_or(self.uncertainty_mask) is not None:
                     self.tmp_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                    utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
                     gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
                     self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
                     self.tmp_weight_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.weight_mask, exclude=[], inverse=False)
+                    utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
+                    gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], inverse=False)
                     self.weight_mask = self.tmp_weight_band
-                    
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
@@ -2510,14 +2511,14 @@ class GDALFile(ElevationDataset):
                 yield(out_arrays, this_srcwin, this_gt)
                                             
             band = mask_band = weight_band = src_weight = src_mask = self.src_ds = None
-            if self.tmp_elev_band is not None:
-                utils.remove_glob(self.tmp_elev_band)
+            # if self.tmp_elev_band is not None:
+            #     utils.remove_glob(self.tmp_elev_band)
                 
-            if self.tmp_unc_band is not None:
-                utils.remove_glob(self.tmp_unc_band)
+            # if self.tmp_unc_band is not None:
+            #     utils.remove_glob(self.tmp_unc_band)
 
-            if self.tmp_weight_band is not None:
-                utils.remove_glob(self.tmp_weight_band)
+            # if self.tmp_weight_band is not None:
+            #     utils.remove_glob(self.tmp_weight_band)
                 
             if self.verbose:
                 utils.echo_msg(
