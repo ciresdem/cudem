@@ -2688,7 +2688,7 @@ class WafflesCUDEM(Waffle):
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
         #self.poly_count = poly_count
         self.mode = mode
-        if self.mode not in ['gmt-surface', 'IDW']:
+        if self.mode.split(':')[0] not in ['gmt-surface', 'IDW']:
             self.mode = 'IDW'
             
         self.filter_outliers = utils.int_or(filter_outliers)
@@ -2747,6 +2747,8 @@ class WafflesCUDEM(Waffle):
             #if coastline is not None:
             pre_clip = coastline
             #print(pre_clip)
+        else:
+            pre_clip = None
 
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
         while pre >= 0:
