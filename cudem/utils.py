@@ -638,7 +638,7 @@ def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
         
         return(None)
 
-def gunzip(gz_file):
+def gunzip(gz_file, outdir='./'):
     """gunzip `gz_file`
 
     Args:
@@ -649,8 +649,7 @@ def gunzip(gz_file):
     """
     
     if os.path.exists(gz_file):
-        gz_split = gz_file.split('.')[:-1]
-        guz_file = '{}.{}'.format(gz_split[0], gz_split[1])
+        guz_file = os.path.join(outdir, os.path.basename(fn_basename2(gz_file)))
         with gzip.open(gz_file, 'rb') as in_gz, \
              open(guz_file, 'wb') as f:
             while True:
@@ -746,13 +745,13 @@ def p_unzip(src_file, exts=None, outdir='./', verbose=True):
                                 
     elif src_file.split('.')[-1] == 'gz':
         try:
-            tmp_proc = gunzip(src_file)
+            tmp_proc = gunzip(src_file, outdir=outdir)
         except:
             if verbose:
                 echo_error_msg('unable to gunzip {}'.format(src_file))
                 
             tmp_proc = None
-            
+
         if tmp_proc is not None:
             for ext in exts:
                 if ext == tmp_proc.split('.')[-1]:

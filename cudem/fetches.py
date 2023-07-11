@@ -1711,7 +1711,8 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                         if feature['attributes']['BAGS_EXIST'] == 'TRUE':
                             page = Fetch(data_link + 'BAG').fetch_html()
                             bags = page.xpath('//a[contains(@href, ".bag")]/@href')
-                            [self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join(self._outdir, 'bag', bag), 'bag']) for bag in bags]
+                            #[self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join(self._outdir, 'bag', bag), 'bag']) for bag in bags]
+                            [self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join('bag', bag), 'bag']) for bag in bags]
 
                     if self.datatype is None or 'xyz' in self.datatype.lower():
                         page = Fetch(data_link).fetch_html()

@@ -1132,9 +1132,6 @@ class ElevationDataset:
         with tqdm(desc='archiving datasets to {}'.format(self.archive_datalist), leave=self.verbose) as pbar:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse_json():
-                    #if this_entry.parent is None:
-                    #    this_entry.parent = this_entry
-
                     pbar.update()
                     if this_entry.parent is None:
                         this_key = this_entry.metadata['name'].split(':')[0]
@@ -1190,12 +1187,13 @@ class ElevationDataset:
                             sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
                             
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
-                        if not os.path.exists(os.path.dirname(this_xyz_path)):
-                            os.makedirs(os.path.dirname(this_xyz_path))
-                        else:
+                        if os.path.exists(this_xyz_path):
                             utils.echo_msg('{} already exists, skipping...'.format(this_xyz_path))
                             continue
-                            
+                        
+                        if not os.path.exists(os.path.dirname(this_xyz_path)):
+                            os.makedirs(os.path.dirname(this_xyz_path))
+                                                        
                         sub_dirname = os.path.dirname(sub_xyz_path)
                         if sub_dirname != '.' and sub_dirname != '':
                             sub_sub_dlf_path = os.path.join(this_dir, sub_dirname, '{}.datalist'.format(sub_dirname))

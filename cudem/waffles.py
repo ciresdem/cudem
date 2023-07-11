@@ -3885,9 +3885,10 @@ class WafflesUncertainty(Waffle):
                         ##dm = np.mean(s_dp[:,0][arr])
                         arr_count = np.count_nonzero(arr)
                         err_perc = (arr_count / err_count)
+                        #err_perc = (arr_count / total_keep)
                         #utils.echo_msg(err_perc)
                         d_err_count = int(total_keep * err_perc)
-                        utils.echo_msg(d_err_count)
+                        #utils.echo_msg(d_err_count)
                         #d_err_count = int(total_keep)
 
                         #h, e = np.histogram(s_dp[:,0][arr], d_err_count)
@@ -3926,8 +3927,8 @@ class WafflesUncertainty(Waffle):
                     continue
                     
                 ## continue if we haven't reached max_sample
-                if len(s_dp) < self.max_sample:
-                    continue
+                #if len(s_dp) < self.max_sample:
+                #    continue
 
                 ## break if we gathered enough simulation errors
                 if sim >= int(self.sims): 
