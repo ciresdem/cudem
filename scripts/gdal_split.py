@@ -30,7 +30,7 @@ import numpy as np
 from osgeo import osr
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 #from osgeo.gdal.gdalconst import *
 
 _version = "0.1.1"
@@ -86,6 +86,6 @@ if __name__ == '__main__':
 
     if not os.path.exists(elev):
         utils.echo_error_msg("{} is not a valid file".format(elev))
-    else: demfun.split(elev, split_value)
+    else: gdalfun.gdal_split(elev, split_value)
 
 ### End

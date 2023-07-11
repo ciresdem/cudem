@@ -3755,6 +3755,7 @@ class WafflesUncertainty(Waffle):
         with gdalfun.gdal_datasource(self.stack) as tmp_ds:
             num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
 
+        #num_perc = 75
         if self.prox is None:
             self.prox = self._gen_prox('{}_u.tif'.format(self.name))
             
@@ -3861,6 +3862,8 @@ class WafflesUncertainty(Waffle):
         utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
         utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
         if self.accumulate:
+            max_dist = gdalfun.gdal_percentile(self.prox, 75)
+            utils.echo_msg('max distance is {}'.format(max_dist))
             #ec_d = self._split_sample(trainers, num_perc, chnk_inc/2, s_dp, pre_ec_d)[0]
             #sample_dp =
             sim = 0
@@ -3868,12 +3871,13 @@ class WafflesUncertainty(Waffle):
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
             while True:
                 sim += 1
+                #sample_dp = self._split_sample(trainers, num_perc)
                 sample_dp = self._split_sample(trainers, num_perc)
                 #print(sample_dp)
                 if len(s_dp) == 0:
                     s_dp = sample_dp
                 else:
-                    s_dp = np.vstack((s_dp, sample_dp))
+                    s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
                 
                 err_count = len(s_dp)
                 ds = np.unique(s_dp[:,1])

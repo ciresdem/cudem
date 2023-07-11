@@ -581,8 +581,6 @@ class ElevationDataset:
             self.params['mod_name'] = self.data_format
             self.params['mod_args'] = {}
 
-        #factory._set_params(self, mod=self.fn, mod_name=self.data_format) # set up the default factory parameters
-        
     def __str__(self):
         return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
     
@@ -1188,7 +1186,7 @@ class ElevationDataset:
                             
                         this_xyz_path = os.path.join(this_dir, sub_xyz_path)
                         if os.path.exists(this_xyz_path):
-                            utils.echo_msg('{} already exists, skipping...'.format(this_xyz_path))
+                            utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
                             continue
                         
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
@@ -4607,18 +4605,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    # try:
-                    #    if want_separate: # process and dump each dataset independently
-                    #        for this_entry in this_datalist.parse():
-                    #            this_entry.dump_xyz()
-                    #    else: # process and dump the datalist as a whole
-                    this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #    utils.echo_error_msg('Killed by user')
-                    #    break
-                    # except BrokenPipeError:
-                    #    utils.echo_error_msg('Pipe Broken')
-                    #    break
-                    # except Exception as e:
-                    #    utils.echo_error_msg(e)
+                    try:
+                       if want_separate: # process and dump each dataset independently
+                           for this_entry in this_datalist.parse():
+                               this_entry.dump_xyz()
+                       else: # process and dump the datalist as a whole
+                           this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                       utils.echo_error_msg('Killed by user')
+                       break
+                    except BrokenPipeError:
+                       utils.echo_error_msg('Pipe Broken')
+                       break
+                    except Exception as e:
+                       utils.echo_error_msg(e)
 ### End
