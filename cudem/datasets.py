@@ -702,7 +702,7 @@ class ElevationDataset():
         returns the gdal dataset and config
         """
 
-        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_x_inc, y_inc=dst_y_inc)
+        xcount, ycount, dst_gt = self.region.geo_transform(x_inc=dst_x_inc, y_inc=dst_y_inc, node='grid')
         ptArray = np.zeros((ycount, xcount))
         ds_config = demfun.set_infos(
             xcount,
