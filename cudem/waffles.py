@@ -3364,7 +3364,7 @@ class WafflesUncertainty(Waffle):
         self.chnk_lvl = chnk_lvl
         self.accumulate = accumulate
         self.max_errors = max_errors
-        self.prox_errs = '{}_errs.dat'.format(self.waffles_module)
+        self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module)
 
         if not os.path.exists(self.prox_errs):
             if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
@@ -3635,12 +3635,13 @@ class WafflesUncertainty(Waffle):
                 #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
                 #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
                 sx_cnt = int(ss_len * (ss_samp / 100.))
-                #utils.echo_msg(sub_region)
-                #utils.echo_msg(ss_samp)
-                #utils.echo_msg(ss_len)
-                #utils.echo_msg(sx_cnt)
-
                 sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                
+                #utils.echo_msg(sub_region)
+                #utils.echo_msg('split-sample sampling: {}'.format(ss_samp))
+                #utils.echo_msg('split-sample length: {}'.format(ss_len))
+                #utils.echo_msg('split-sample count: {}'.format(sx_cnt))
+
                 sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
                 np.random.shuffle(sub_xyz)
                 np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
@@ -3691,6 +3692,33 @@ class WafflesUncertainty(Waffle):
                 utils.remove_glob('{}*'.format(wf.stack))
                 utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
 
+                s_dp_m = []
+                if s_dp is not None and len(s_dp) > 0:
+                    err_count = len(s_dp)
+                    ds = np.unique(s_dp[:,1])
+                    total_keep = 5000000
+
+                    for d in ds:
+                        arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
+                        if arr.any():
+                            arr_count = np.count_nonzero(arr)
+                            err_perc = (arr_count / err_count)
+                            d_err_count = int(total_keep * err_perc)
+                            err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
+                            err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
+                            err_sum = err_sum[np.nonzero(err_cnt)]
+                            err_cnt = err_cnt[np.nonzero(err_cnt)]
+                            d_errs = err_sum/err_cnt
+                            d_dist = np.full((d_errs.size, 1), d)
+                            dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
+                            if len(s_dp_m) == 0:
+                                s_dp_m = np.array(dist_errs)
+                            else:
+                                s_dp_m = np.vstack((s_dp_m, dist_errs))
+
+                s_dp = np.array(s_dp_m)
+
+                
                 # if s_dp is not None and len(s_dp) > 0:
                 #     d_max = self.region_info[self.name][4]
                 #     # s_dp = s_dp[s_dp[:,3] < max_dist,:]
@@ -3864,7 +3892,7 @@ class WafflesUncertainty(Waffle):
         utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
         utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
         if self.accumulate:
-            max_dist = gdalfun.gdal_percentile(self.prox, 75)
+            max_dist = gdalfun.gdal_percentile(self.prox, 95)
             utils.echo_msg('max distance is {}'.format(max_dist))
             #ec_d = self._split_sample(trainers, num_perc, chnk_inc/2, s_dp, pre_ec_d)[0]
             #sample_dp =
@@ -3873,9 +3901,7 @@ class WafflesUncertainty(Waffle):
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
             while True:
                 sim += 1
-                #sample_dp = self._split_sample(trainers, num_perc)
                 sample_dp = self._split_sample(trainers, num_perc)
-                #print(sample_dp)
                 if len(s_dp) == 0:
                     s_dp = sample_dp
                 else:

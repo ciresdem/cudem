@@ -3909,7 +3909,8 @@ class HydroNOSFetcher(Fetcher):
                 outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
             )
             for bag_fn in bag_fns:
-                if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
+                #if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
+                if 'ellipsoid' not in bag_fn.lower():
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),

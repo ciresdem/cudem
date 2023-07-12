@@ -540,7 +540,13 @@ def gdal_infos(src_gdal, region = None, scan = False, band = 1):
 
             if scan:
                 src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                #src_arr[src_arr == ds_config['ndv']] = np.nan
+                #if not np.all(src_arr[np.isnan(src_arr)]):
                 ds_config['zr'] = src_band.ComputeRasterMinMax()
+                #else:
+                #    utils.echo_warning_msg('all nan')
+                #    ds_config['zr'] = [np.nan, np.nan]
+                    
                 src_arr = src_band = None
 
             return(ds_config)
