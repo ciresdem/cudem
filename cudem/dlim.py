@@ -2179,11 +2179,8 @@ class GDALFile(ElevationDataset):
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
             ## doing this in MEM has a bug, fix if able
             tmp_warp = utils.make_temp_fn('{}'.format(tmp_ds), temp_dir=self.cache_dir)
-
-            ## extract necessary bands before warping!
+            ## extract necessary bands before warping, gadlwarp does not work with multiband rasters!
             in_bands = self.src_ds.RasterCount
-            #utils.echo_msg(self.fn)
-            #utils.echo_msg('{} {}'.format(in_bands, self.src_ds.GetDescription()))
             self.src_ds = None
             if in_bands > 1:
                 self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
@@ -2637,8 +2634,6 @@ class BAGFile(ElevationDataset):
             bag_region = regions.Region().from_list(self.infos.minmax)
             bag_region.src_srs = self.infos.src_srs
 
-        #print(bag_region)
-        #print(self.trans_region)
         if self.dst_trans is not None:
             bag_region.warp(self.dst_srs)
             
@@ -2668,21 +2663,11 @@ class BAGFile(ElevationDataset):
                                   verbose=self.verbose, resample=resample, uncertainty_mask=2)
                 yield(sub_ds)
         else:
-            #bag_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-            #bag_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
-            #gdalfun.gdal_extract_band(self.fn, bag_elev_band, band=1, exclude=[], inverse=False)
-            #gdalfun.gdal_extract_band(self.fn, bag_unc_band, band=2, exclude=[], inverse=False)
-            # sub_ds = GDALFile(fn=bag_elev_band, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
-            #                   src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-            #                   resample=resample, uncertainty_mask=bag_unc_band)
-
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
                               resample=resample, uncertainty_mask=2)
 
             yield(sub_ds)
-            utils.remove_glob(bag_elev_band)
-            utils.remove_glob(bag_unc_band)
 
     def yield_xyz(self):
         self.init_ds()
