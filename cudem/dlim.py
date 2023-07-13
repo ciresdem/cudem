@@ -909,15 +909,10 @@ class ElevationDataset:
             ## parse out the horizontal and vertical epsgs if they exist
             src_horz, src_vert1 = gdalfun.split_srs(self.src_srs)
             #dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs)
-            #utils.echo_msg(src_horz)
-            #utils.echo_msg(src_vert)
-            #utils.echo_msg(dst_horz)
-            #utils.echo_msg(dst_vert)
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
             src_vert = src_vert1
-            #utils.echo_msg(src_vert)
-            #utils.echo_msg(dst_vert)
+
             ## set the horizontal OSR srs objects
             src_srs = osr.SpatialReference()
             src_srs.SetFromUserInput(src_horz)
