@@ -927,8 +927,11 @@ class ElevationDataset:
                 ).warp(
                     dst_horz
                 ) if self.region is None else self.region.copy()
-
-                vd_region.buffer(pct=2)
+                
+                vd_region.zmin = None
+                vd_region.zmax = None
+                
+                vd_region.buffer(pct=5)
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
                     dst_vert,
@@ -985,10 +988,12 @@ class ElevationDataset:
                         )
                     )
 
-            ## export to proj4 for transformation and
-            ## setup final OSR transformation objects
-            out_src_srs = src_srs.ExportToProj4()
-            out_dst_srs = dst_srs.ExportToProj4()
+            else:
+                ## export to proj4 for transformation and
+                ## setup final OSR transformation objects
+                out_src_srs = src_srs.ExportToProj4()
+                out_dst_srs = dst_srs.ExportToProj4()
+  
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -1759,7 +1764,7 @@ class XYZFile(ElevationDataset):
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
                     if self.dst_trans is not None:
                         this_xyz.transform(self.dst_trans)
-
+                    
                     if self.region is not None and self.region.valid_p():
                         if self.invert_region:
                             if not regions.xyz_in_region_p(this_xyz, self.region):
@@ -2581,7 +2586,11 @@ class BAGFile(ElevationDataset):
             self.set_transform()
 
     def generate_inf(self, callback=lambda: False):
-        self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+        if self.src_srs is None:
+            self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+        else:
+            self.infos.src_srs = self.src_srs
+            
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
                 ds_infos = gdalfun.gdal_infos(src_ds)
@@ -2606,7 +2615,25 @@ class BAGFile(ElevationDataset):
 
         if self.region is not None and self.region.valid_p():
             bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            #print(bag_region)
             inf_region = regions.Region().from_list(self.infos.minmax)
+            print(inf_region)
+            if inf_region is None:
+                print('hi')
+                with gdalfun.gdal_datasource(self.fn) as src_ds:
+                    if src_ds is not None:
+                        ds_infos = gdalfun.gdal_infos(src_ds)
+                        inf_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
+                            geo_transform=ds_infos['geoT'],
+                            x_count=ds_infos['nx'],
+                            y_count=ds_infos['ny']
+                        )
+
+                        zr = src_ds.GetRasterBand(1).ComputeRasterMinMax() # bag band 1 is elevation
+                        inf_region.zmin, inf_region.zmax = zr[0], zr[1]
+                
+            #print(inf_region)
+            #print(self.infos)
             bag_region = regions.regions_reduce(bag_region, inf_region)
             bag_region.src_srs = self.infos.src_srs
             
@@ -2618,6 +2645,8 @@ class BAGFile(ElevationDataset):
             bag_region = regions.Region().from_list(self.infos.minmax)
             bag_region.src_srs = self.infos.src_srs
 
+        #print(bag_region)
+        #print(self.trans_region)
         if self.dst_trans is not None:
             bag_region.warp(self.dst_srs)
             
@@ -3911,7 +3940,26 @@ class HydroNOSFetcher(Fetcher):
             for bag_fn in bag_fns:
                 #if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                 if 'ellipsoid' not in bag_fn.lower():
-                    yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
+                    #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
+                    src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(bag_fn))
+                    if src_vert is None:
+                        src_vert = '5866'
+
+                    #print(src_horz)
+                    #print(src_vert)
+                    horz_srs = osr.SpatialReference()
+                    horz_srs.SetFromUserInput(src_horz)
+                    #print(horz_srs)
+                    vert_srs = osr.SpatialReference()
+                    vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+                    #print(vert_srs)
+                    src_srs = osr.SpatialReference()
+                    src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
+                    #print(src_srs)
+
+                    bag_srs = src_srs.ExportToWkt()
+                    #print(bag_srs)
+                    yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=bag_srs, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())

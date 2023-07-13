@@ -596,7 +596,7 @@ class Region:
         if dst_trans is None:
             utils.echo_error_msg('could not perform transformation')
             return(self)
-            
+
         pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
         pointA.Transform(dst_trans)
 

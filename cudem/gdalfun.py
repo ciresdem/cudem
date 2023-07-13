@@ -136,6 +136,13 @@ def epsg_from_input(in_srs):
 
     return(src_horz, src_vert)
 
+# def osr_set_from_input(in_horz, in_vert=None):
+#     srs = osr.SpatialReference()
+#     srs.SetFromUserInput(in_horz)
+
+#     if in_vert is not None:
+#         srs.SetVertical(
+
 def osr_parse_srs(src_srs, return_vertcs = True):
     if src_srs is not None:
         if src_srs.IsLocal() == 1:
