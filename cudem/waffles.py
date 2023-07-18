@@ -440,8 +440,11 @@ class Waffle:
 
                 #if self.want_mask or self.want_sm:
                 #    self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
-                        
-            self.run()
+
+                if WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
+                    self.run()
+            else:
+                self.run()    
             
             ## post-process the DEM(s)
             waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
