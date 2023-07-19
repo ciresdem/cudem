@@ -3908,7 +3908,8 @@ class WafflesUncertainty(Waffle):
                 if len(s_dp) == 0:
                     s_dp = sample_dp
                 else:
-                    s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
+                    #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
+                    s_dp = np.vstack((s_dp, sample_dp))
                 
                 err_count = len(s_dp)
                 ds = np.unique(s_dp[:,1])
@@ -3923,7 +3924,10 @@ class WafflesUncertainty(Waffle):
                         #err_perc = (arr_count / total_keep)
                         #utils.echo_msg(err_perc)
                         d_err_count = int(total_keep * err_perc)
-                        #utils.echo_msg(d_err_count)
+                        #utils.echo_msg('arr_count: {} ({})'.format(arr_count, d))
+                        #utils.echo_msg('err_count: {}'.format(err_count))
+                        #utils.echo_msg('err_perc: {}'.format(err_perc))
+                        #utils.echo_msg('d_err_count: {}'.format(d_err_count))
                         #d_err_count = int(total_keep)
 
                         #h, e = np.histogram(s_dp[:,0][arr], d_err_count)

@@ -26,10 +26,10 @@ import os
 import sys
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 from cudem import regions
 
-_version = '0.0.1'
+_version = '0.0.2'
 _usage = '''dem_combine_split.py ({}):
 
 usage: gdal_combine_split.py [ dems ]
