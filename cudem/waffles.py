@@ -457,7 +457,7 @@ class Waffle:
 
             ## post-process the mask
             if self.want_mask or self.want_sm:
-                mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+                mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=False).initialize()
                 if mask_dem.valid_p():
                     mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                      node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
@@ -2779,6 +2779,7 @@ class WafflesCUDEM(Waffle):
             ## reset pre_region for final grid
             if pre == 0:
                 pre_region = self.p_region.copy()
+                pre_region.wmin = pre_weight
 
             _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
             if self.verbose:
@@ -3887,11 +3888,14 @@ class WafflesUncertainty(Waffle):
         utils.echo_msg('loaded {} errors from {}'.format(len(s_dp), self.prox_errs))
         pre_ec_d = [0, .1, .2]
         
-        if len(s_dp) > 1:
-            pre_ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d)
-        else:
-            self.accumulate = True
+        # if len(s_dp) > 1:
+        #     pre_ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d)
+        # else:
+        #     self.accumulate = True
 
+        if len(s_dp) <= 1:
+            self.accumulate = True
+            
         utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
         utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
         if self.accumulate:
@@ -4060,7 +4064,7 @@ class WafflesUncertainty(Waffle):
 ## WaffleDEM(fn='module_output.tif')
 ## ==============================================
 class WaffleDEM:
-    def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {}, cache_dir: str = waffles_cache, verbose: bool = True, waffle: Waffle = None):
+    def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {}, cache_dir: str = waffles_cache, verbose: bool = True, waffle: Waffle = None, want_scan: bool = True):
         self.fn = fn # the dem filename
         self.ds_config = ds_config # a dem config dictionary (see gdalfun.gdal_infos)
         self.cache_dir = cache_dir
@@ -4068,13 +4072,14 @@ class WaffleDEM:
         #self.dem_ds = None # the dem as a gdal datasource
         self.dem_region = None # the dem regions.Region()
         self.waffle = waffle
+        self.want_scan = want_scan
 
     def initialize(self):
         if os.path.exists(self.fn):
             dem_ds = gdal.Open(self.fn, 1)
 
             if dem_ds is not None:
-                self.ds_config = gdalfun.gdal_infos(dem_ds, scan=True)
+                self.ds_config = gdalfun.gdal_infos(dem_ds, scan=self.want_scan)
                 self.dem_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
 
                 dem_ds = None

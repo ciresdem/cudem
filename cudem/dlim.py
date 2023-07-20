@@ -1261,6 +1261,7 @@ class ElevationDataset:
                 yield(out_arrays, this_srcwin, dst_gt)
 
     ## todo: properly mask supercede mode...
+    ## todo: 'separate mode': multi-band z?
     def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False, mask_only = False):
         """stack and mask incoming arrays (from `array_yield`) together
 
@@ -1342,8 +1343,8 @@ class ElevationDataset:
 
         ## parse each entry and process it
         for this_entry in self.parse_json():
-            bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
-            if not this_entry.metadata['name'] in bands.keys():
+            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
+            if not this_entry.metadata['name'] in m_bands.keys():
                 m_ds.AddBand()
                 m_band = m_ds.GetRasterBand(m_ds.RasterCount)
                 m_band.SetNoDataValue(0)
@@ -1356,12 +1357,11 @@ class ElevationDataset:
                 band_md['uncertainty'] = this_entry.uncertainty
                 m_band.SetMetadata(band_md)
             else:
-                m_band = m_ds.GetRasterBand(bands[this_entry.metadata['name']])
+                m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
             ## yield entry arrays for stacks
             for arrs, srcwin, gt in this_entry.yield_array():
                 #for arrs, srcwin, gt in array_yield:
-                #pbar.update()
 
                 ## update the mask
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
