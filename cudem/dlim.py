@@ -1432,8 +1432,13 @@ class ElevationDataset:
         ## "uncertainty" is the sum of variance*weight
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
-            
-        msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
+
+        if m_ds.GetRasterCount > 0:
+            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
+        else:
+            if self.verbose:
+                utils.echo_msg('no bands found for {}'.format(mask_fn))
+                               
         if not mask_only:
             if not supercede:
                 srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)

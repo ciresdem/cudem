@@ -405,12 +405,14 @@ class Waffle:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
                 mask_name = '{}_msk'.format(stack_name)
                 mask_fn = '{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt))
-                num_threads = 8
+
+                ## Threaded...no worky
+                # num_threads = 8
                 # try:
                 #     sk = dlim.stacks_ds(self.data, n_threads=num_threads, out_name=os.path.join(self.cache_dir, stack_name),
                 #                         supercede=self.supercede, want_mask=self.want_mask)
                 #     sk.daemon = True
-                
+                #
                 #     sk.start()
                 #     sk.join()                
                 # except (KeyboardInterrupt, SystemExit):
@@ -421,10 +423,11 @@ class Waffle:
                 #             sk.arr_q.get(False)
                 #         except Empty:
                 #             continue
-                        
+                #
                 #         sk.arr_q.task_done()                        
-
+                #
                 # self.stack = sk.out_file
+                
                 if not self.clobber and os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
                     self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 else:
@@ -438,9 +441,6 @@ class Waffle:
                 if self.keep_auxiliary:
                     self.aux_dems.append(self.stack)
 
-                #if self.want_mask or self.want_sm:
-                #    self.aux_dems.append('{}.{}'.format(os.path.join(self.cache_dir, mask_name), gdalfun.gdal_fext(self.fmt)))
-
                 if WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     self.run()
             else:
@@ -452,8 +452,6 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt)
-            #else:
-            #    return(None)
 
             ## post-process the mask
             if self.want_mask or self.want_sm:
@@ -468,7 +466,6 @@ class Waffle:
                             sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
 
                         sm_files = glob.glob('{}.*'.format(sm_layer))
-                        #sm_files = glob.glob('{}_sm.*'.format(os.path.join(self.cache_dir, mask_name)))
                         for sm_file in sm_files:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
             
@@ -985,7 +982,6 @@ class WafflesSciPy(Waffle):
     def grid_srcwin(self, srcwin):
         srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), self.chunk_buffer)
         points_array = self.points_array[srcwin_buff[1]:srcwin_buff[1]+srcwin_buff[3],srcwin_buff[0]:srcwin_buff[0]+srcwin_buff[2]]
-        #print(points_array)
         points_array[points_array == self.points_no_data] = np.nan
         point_indices = np.nonzero(~np.isnan(points_array))
         if np.count_nonzero(np.isnan(points_array)) == 0:
@@ -994,12 +990,10 @@ class WafflesSciPy(Waffle):
             y_size = y_origin + srcwin[3]
             x_size = x_origin + srcwin[2]
             points_array = points_array[y_origin:y_size,x_origin:x_size]
-            #self.interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
             return(points_array)
 
         elif len(point_indices[0]):
             point_values = points_array[point_indices]
-            #utils.echo_msg(point_values)
             xi, yi = np.mgrid[0:srcwin_buff[2],
                               0:srcwin_buff[3]]
             #try:
@@ -1021,8 +1015,6 @@ class WafflesSciPy(Waffle):
             y_size = y_origin + srcwin[3]
             x_size = x_origin + srcwin[2]
             interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-            #self.interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
-            #utils.echo_msg(interp_data)
             return(interp_data)
             #except Exception as e:
             #    return(points_array)
@@ -1071,21 +1063,17 @@ class WafflesSciPy(Waffle):
        
         for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, msg='generating {} grid'.format(self.method), verbose=self.verbose, step=n_step):
             chunk_buffer = self.chunk_buffer
-            #while True:
             srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
             points_array[points_array == points_no_data] = np.nan
             point_indices = np.nonzero(~np.isnan(points_array))
-            #point_indices = np.nonzero(points_array != points_no_data)
             if np.count_nonzero(np.isnan(points_array)) == 0:
-                #if not np.all(~np.nan(points_array)):
                 y_origin = srcwin[1]-srcwin_buff[1]
                 x_origin = srcwin[0]-srcwin_buff[0]
                 y_size = y_origin + srcwin[3]
                 x_size = x_origin + srcwin[2]
                 points_array = points_array[y_origin:y_size,x_origin:x_size]
                 interp_band.WriteArray(points_array, srcwin[0], srcwin[1])
-                #break
 
             elif len(point_indices[0]):
                 point_values = points_array[point_indices]
@@ -1097,26 +1085,12 @@ class WafflesSciPy(Waffle):
                         np.transpose(point_indices), point_values,
                         (xi, yi), method=self.method
                     )
-                    # while np.any(interp_data[np.isnan(interp_data)]):
-                    #     utils.echo_msg('nodata in {}'.format(srcwin))
-                    #     point_indices = np.nonzero(~np.isnan(interp_data))
-                    #     point_values = interp_data[point_indices]
-                    #     interp_data = interpolate.griddata(
-                    #         np.transpose(point_indices), point_values,
-                    #         (xi, yi), method=self.method
-                    #     )
-                    
                     y_origin = srcwin[1]-srcwin_buff[1]
                     x_origin = srcwin[0]-srcwin_buff[0]
                     y_size = y_origin + srcwin[3]
                     x_size = x_origin + srcwin[2]
                     interp_data = interp_data[y_origin:y_size,x_origin:x_size]
-                        
-                    #chunk_buffer *= 2
-                    #utils.echo_msg('chunk buffer to {}'.format(chunk_buffer))
-                    #else:
                     interp_band.WriteArray(interp_data, srcwin[0], srcwin[1])
-                    #break
                 except Exception as e:
                     continue
                 
@@ -1910,14 +1884,8 @@ class WafflesCoastline(Waffle):
         else:
             self.dst_srs = self.wgs_srs
 
-        #self.wgs_srs = osr.SpatialReference()
-        #self.wgs_srs.SetFromUserInput('epsg:4326')
-
         horz_epsg, vert_epsg = gdalfun.epsg_from_input(self.dst_srs)
-        self.cst_srs = horz_epsg
-        #self.cst_srs = osr.SpatialReference()
-        #self.cst_srs.SetFromUserInput('epsg:{}'.format(horz_epsg))
-        
+        self.cst_srs = horz_epsg        
         self._load_coast_mask()
 
         if self.want_gmrt:
@@ -1938,7 +1906,6 @@ class WafflesCoastline(Waffle):
         if self.want_wsf:
             self._load_wsf()
             
-        #if len(self.data) > 0:
         if self.want_stack:
             self._load_data()
 
@@ -2671,9 +2638,10 @@ class WafflesCUDEM(Waffle):
     poly_count (int) - the number of polygons (from largest to smallest) to extract from the landmask
     mode (str) - the waffles module to perform the initial pre-surface
     """
-    
+
+    ## todo: update mode to allow full module strings from cli.
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface:tension=1', filter_outliers = None, **kwargs):
+                 mode = 'gmt-surface:tension=.1', filter_outliers = None, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -2689,14 +2657,11 @@ class WafflesCUDEM(Waffle):
         self.pre_count = utils.int_or(pre_count, 1)
         self.landmask = landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
-        #self.poly_count = poly_count
         self.mode = mode
         if self.mode.split(':')[0] not in ['gmt-surface', 'IDW']:
             self.mode = 'IDW'
             
         self.filter_outliers = utils.int_or(filter_outliers)
-        #if self.filter_outliers is not None:
-        #    self.filter_outliers = 1 if self.filter_outliers > 9 or self.filter_outliers < 1 else self.filter_outliers
 
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
@@ -2709,7 +2674,6 @@ class WafflesCUDEM(Waffle):
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
         coastline.initialize()
-        #with tqdm(desc='generating coastline {}...'.format(cst_fn)) as pbar:
         coastline.generate()
 
         if coastline is not None:
@@ -2734,11 +2698,6 @@ class WafflesCUDEM(Waffle):
             gdalfun.gdal_filter_outliers2(
                 self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95)
             )
-        #os.replace('_tmp_fltr.tif', self.stack)
-        # demfun.mask_(w, n, '_tmp_w.tif', verbose=self.verbose)
-            # os.replace('_tmp_w.tif', w)
-            # demfun.mask_(c, n, '_tmp_c.tif', verbose=self.verbose)
-            # os.replace('_tmp_c.tif', c)
             
         ## initial data to pass through surface (stack)
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
@@ -2747,9 +2706,7 @@ class WafflesCUDEM(Waffle):
         if self.landmask:
             coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
             coastline = self.generate_coastline(pre_data=coast_data)
-            #if coastline is not None:
             pre_clip = coastline
-            #print(pre_clip)
         else:
             pre_clip = None
 
@@ -2797,6 +2754,7 @@ class WafflesCUDEM(Waffle):
             pre_surface.generate()
             pre -= 1
 
+        ## todo add option to flatten here...
         #os.replace(pre_surface.fn, self.fn)
         gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
         return(self)
@@ -3336,7 +3294,7 @@ class WafflesPatch(Waffle):
 class WafflesUncertainty(Waffle):
 
     def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
-                 max_sample = None, max_errors = 100000000, accumulate = True, **kwargs):
+                 max_sample = None, max_errors = 5000000, accumulate = False, **kwargs):
         """calculate cell-level interpolation uncertainty
 
         Args:
@@ -3356,11 +3314,6 @@ class WafflesUncertainty(Waffle):
             del kwargs[kpam]
             
         super().__init__(**kwargs)
-
-        # print(self.params)
-        # for kpam, kval in self.waffles_module_args.items():
-        #     print(kpam)
-        
         self.waffles_module = waffles_module
         self.percentile = percentile
         self.sims = sims
@@ -3520,8 +3473,6 @@ class WafflesUncertainty(Waffle):
         """
         
         sub_zones = {}
-        #dem_ds = gdal.Open(self.fn)
-        #msk_ds = gdal.Open(self.mask_fn)
         stack_ds = gdal.Open(self.stack)
         prox_ds = gdal.Open(self.prox)
         slp_ds = gdal.Open(self.slope)
@@ -3536,10 +3487,8 @@ class WafflesUncertainty(Waffle):
                 if s_sum == 0:
                     continue
 
-                #s_dc = gdalfun.gdal_infos(stack_ds, region=sub_region, scan=True)
                 p_perc = self._prox_analysis(prox_ds, region=sub_region)
                 slp_perc = self._prox_analysis(slp_ds, region=sub_region)
-                #utils.echo_msg('{} {} {} {} {}'.format(s_sum, s_g_max, s_perc, p_perc, slp_perc))
                 zone = None
                 ## assign the region to the zone based on the density/slope
                 if p_perc <= self.prox_perc_33:# or abs(p_perc - self.prox_perc_33) < 0.01:
@@ -3567,7 +3516,6 @@ class WafflesUncertainty(Waffle):
                 if zone is not None:
                     sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
             
-        #dem_ds = msk_ds =
         stack_ds = prox_ds = slp_ds = None
         return(sub_zones)
      
@@ -3576,15 +3524,11 @@ class WafflesUncertainty(Waffle):
         sims = max-simulations
         """
             
-        #sim = 0
         last_ec_d = None
         s_dp = []
-        #utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff\tp_diff\tpsum')            
-        #while True:
         status = 0
-        #sim += 1
         trains = self._regions_sort(trainers, verbose=False)
-        all_trains = [x for s in trains for x in s[:3]]
+        all_trains = [x for s in trains for x in s[:5]]
         tot_trains = len(all_trains)
         
         with tqdm(
@@ -3593,14 +3537,9 @@ class WafflesUncertainty(Waffle):
                 total=tot_trains
         ) as pbar:
             for n, sub_region in enumerate(all_trains):
-                #for z, train in enumerate(trains):
-                #train_h = train[:3] # 25
-                #ss_samp = perc
-
                 ## ==============================================
                 ## perform split-sample analysis on each training region.
                 ## ==============================================
-                #for n, sub_region in enumerate(train_h):
                 pbar.update()
                 ss_samp = perc
                 this_region = sub_region[0].copy()
@@ -3612,7 +3551,6 @@ class WafflesUncertainty(Waffle):
                 ## ==============================================
                 o_xyz = '{}_{}.xyz'.format(self.name, n)
                 with gdalfun.gdal_datasource(self.stack) as ds:
-                   #ds_config = gdalfun.gdal_infos(self.fn)
                    ds_config = gdalfun.gdal_infos(ds)
                    b_region = this_region.copy()
                    b_region.buffer(pct=20, x_inc=self.xinc, y_inc=self.yinc)
@@ -3632,36 +3570,31 @@ class WafflesUncertainty(Waffle):
                 ## ==============================================
                 s_inner, s_outer = self._select_split(o_xyz, this_region, 'sub_{}'.format(n))
                 if os.stat(s_inner).st_size == 0:
+                    utils.echo_warning_msg('no inner points, cont.')
+                    continue
+
+                if os.stat(s_outer).st_size == 0:
+                    utils.echo_warning_msg('no outer points, cont.')
                     continue
 
                 sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
                 ss_len = len(sub_xyz)
                 #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                #sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                sx_cnt = int(ss_len * (ss_samp / 100.))
-                sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
-                
-                #utils.echo_msg(sub_region)
-                #utils.echo_msg('split-sample sampling: {}'.format(ss_samp))
-                #utils.echo_msg('split-sample length: {}'.format(ss_len))
-                #utils.echo_msg('split-sample count: {}'.format(sx_cnt))
-
+                sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                ##sx_cnt = int(ss_len * (ss_samp / 100.))
+                ##sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
                 sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
                 np.random.shuffle(sub_xyz)
-                np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
+                np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
 
                 ## ==============================================
                 ## generate the random-sample DEM
                 ## ==============================================
-                #mod = self.params['mod']
-                #mod_args = self.params['mod_args']
                 this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
                 kwargs = self.params['kwargs']
                 kwargs['name'] = 'sub_{}'.format(n)
                 kwargs['data'] = [s_outer, sub_xyz_head]
                 kwargs['src_region'] = b_region
-                #kwargs['want_mask'] = True
-                #kwargs['keep_auxiliary'] = True # to keep mask
                 kwargs['want_uncertainty'] = False
                 kwargs['verbose'] = False
                 kwargs['clobber'] = True
@@ -3681,33 +3614,28 @@ class WafflesUncertainty(Waffle):
                 ## Calculate the random-sample errors
                 ## todo: account for source uncertainty (rms with xyz?)
                 ## ==============================================
-                sub_xyd = gdalfun.gdal_query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
+                sub_xyd = gdalfun.gdal_query(sub_xyz[:sx_cnt], wf.fn, 'xyd')
                 sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
                 utils.remove_glob('{}*'.format(sub_xyz_head))
+                
                 if sub_dp is not None and len(sub_dp) > 0:
                     try:
                         s_dp = np.vstack((s_dp, sub_dp))
                     except:
                         s_dp = sub_dp
 
-                    #with open(self.prox_errs, 'a') as prox_dat:
-                    #    np.savetxt(prox_dat, sub_dp, '%f', ' ')
-
                 utils.remove_glob('{}*'.format(wf.stack))
                 utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
-
                 s_dp_m = []
                 if s_dp is not None and len(s_dp) > 0:
                     err_count = len(s_dp)
                     ds = np.unique(s_dp[:,1])
-                    total_keep = 5000000
-
                     for d in ds:
                         arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
                         if arr.any():
                             arr_count = np.count_nonzero(arr)
                             err_perc = (arr_count / err_count)
-                            d_err_count = int(total_keep * err_perc)
+                            d_err_count = int(self.max_errors * err_perc)
                             err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
                             err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
                             err_sum = err_sum[np.nonzero(err_cnt)]
@@ -3719,58 +3647,7 @@ class WafflesUncertainty(Waffle):
                                 s_dp_m = np.array(dist_errs)
                             else:
                                 s_dp_m = np.vstack((s_dp_m, dist_errs))
-
-                s_dp = np.array(s_dp_m)
-
-                
-                # if s_dp is not None and len(s_dp) > 0:
-                #     d_max = self.region_info[self.name][4]
-                #     # s_dp = s_dp[s_dp[:,3] < max_dist,:]
-                #     # s_dp = s_dp[s_dp[:,3] >= 1,:]
-                #     # prox_err = s_dp[:,[2,3]]
-
-                #     # prox_err = s_dp[s_dp[:,1] < max_dist,:]
-                #     # prox_err = s_dp[s_dp[:,1] >= 1,:]
-
-                #     if last_ec_d is None:
-                #         #last_ec_d = [0, 0.1, 0.2]
-                #         last_ec_d = pre_ec_d
-
-                #     #else:
-                #     last_ec_diff = abs(last_ec_d[2] - last_ec_d[1])
-
-                #     ec_d = utils._err2coeff(s_dp, perc, coeff_guess=last_ec_d,
-                #                             dst_name=self.name + '_prox', xa='Distance to Nearest Measurement (cells)')
-                #     ec_diff = abs(ec_d[2] - ec_d[1])
-                #     ec_l_diff = abs(last_ec_diff - ec_diff)
-                #     utils.echo_msg('{}\t{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d, ec_l_diff, ec_d[0] + ec_d[1]))
-                #     #utils.echo_msg(ec_d[0] + ec_d[1])
-
-                #     ## continue if we got back the default err coeff
-                #     if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
-                #         last_ec_d = ec_d
-                #         continue
-
-                #     ## continue if we haven't reached max_sample
-                #     if len(s_dp) < self.max_sample:
-                #         last_ec_d = ec_d
-                #         continue
-
-                #     ## break if we gathered enough simulation errors
-                #     if sim >= int(self.sims): 
-                #         break
-
-                #     ## break if the err coeff doesn't change much
-                #     if abs(last_ec_diff - ec_diff) < 0.01:
-                #         break
-
-                #     last_ec_d = ec_d
-                # else:
-                #     utils.echo_msg('{}\t{}\t{}\t{}\t{}'.format(sim, len(s_dp), None, None, None, None))
-
-        #np.savetxt('prox_err.xyz', prox_err, '%f', ' ')
-
-        #return([ec_d])#, s_dp])
+        s_dp = np.array(s_dp_m)
         return(s_dp)
         
     def run(self):
@@ -3781,104 +3658,11 @@ class WafflesUncertainty(Waffle):
                  'mid-dens-low-slp', 'mid-dens-mid-slp', 'mid-dens-high-slp',
                  'high-dens-low-slp', 'high-dens-mid-slp', 'high-dens-low-slp']
         utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
-            
-        ## ==============================================
-        ## region and der. analysis
-        ## ==============================================
-        self.region_info = {}
-        with gdalfun.gdal_datasource(self.stack) as tmp_ds:
-            num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
-
-        #num_perc = 75
         if self.prox is None:
             self.prox = self._gen_prox('{}_u.tif'.format(self.name))
-            
-        self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
-        self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
-        self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
-        self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
 
         if self.slope is None:
             self.slope = self._gen_slope()
-            
-        self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
-        self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
-        self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
-        self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
-
-        print(self.prox_perc_33, self.prox_perc_66, self.prox_perc_100)
-        print(self.slp_perc_33, self.slp_perc_66, self.slp_perc_100)
-        
-        self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
-        for x in self.region_info.keys():
-            utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
-
-        ## ==============================================
-        ## chunk region into sub regions
-        ## ==============================================
-        chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
-        chnk_inc = chnk_inc if chnk_inc > 10 else 10
-
-        #chnk_inc = int(self.prox_percentile)
-        
-        utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
-        sub_regions = self.region.chunk(self.xinc, chnk_inc)
-        utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
-
-        ## ==============================================
-        ## sub-region analysis
-        ## ==============================================
-        sub_zones = self._sub_region_analysis(sub_regions)
-        #sub_zones.append(self._sub_region_analysis(sub_regions, prox_or_slp='slp'))
-
-        ## ==============================================
-        ## sub-region density and percentiles
-        ## ==============================================
-        s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
-        s_5perc = np.percentile(s_dens, 5)
-        s_dens = None
-
-        #utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
-        utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
-
-        ## ==============================================
-        ## zone analysis / generate training regions
-        ## ==============================================
-        trainers = []
-        t_perc = 95
-        s_perc = 50
-
-        for z, this_zone in enumerate(self._zones):
-            tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
-            if len(tile_set) > 0:
-                d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
-            else:
-                continue
-            
-            t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
-            utils.echo_msg(
-                'possible {} training zones: {} @ MAX {}'.format(
-                    self._zones[z].upper(), len(t_trainers), d_50perc
-                )
-            )
-            trainers.append(t_trainers)
-            
-        utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
-
-        ## ==============================================
-        ## split-sample simulations and error calculations
-        ## sims = max-simulations
-        ## ==============================================
-        if self.sims is None:
-            self.sims = int(len(sub_regions)/tot_trains)
-            
-            #self.sims = 12
-
-        if self.max_sample is None:
-            self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
-
-        utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
-        # ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
 
         if os.path.exists(self.prox_errs):
             s_dp = np.loadtxt(self.prox_errs)#, max_rows=self.max_errors)
@@ -3887,7 +3671,6 @@ class WafflesUncertainty(Waffle):
             
         utils.echo_msg('loaded {} errors from {}'.format(len(s_dp), self.prox_errs))
         pre_ec_d = [0, .1, .2]
-        
         # if len(s_dp) > 1:
         #     pre_ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d)
         # else:
@@ -3895,16 +3678,99 @@ class WafflesUncertainty(Waffle):
 
         if len(s_dp) <= 1:
             self.accumulate = True
+
+        if not self.accumulate:
+            ec_d = utils._err2coeff(
+                s_dp, self.percentile, coeff_guess=pre_ec_d,
+                dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)'
+            )
+        else:
+            ## ==============================================
+            ## region and der. analysis
+            ## ==============================================
+            self.region_info = {}
+            with gdalfun.gdal_datasource(self.stack) as tmp_ds:
+                num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
+
+            self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
+            self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
+            self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
+            self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
+
+            self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
+            self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
+            self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
+            self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
+
+            print(self.prox_perc_33, self.prox_perc_66, self.prox_perc_100)
+            print(self.slp_perc_33, self.slp_perc_66, self.slp_perc_100)
+
+            self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
+            for x in self.region_info.keys():
+                utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
+
+            ## ==============================================
+            ## chunk region into sub regions
+            ## ==============================================
+            chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+            chnk_inc = chnk_inc if chnk_inc > 10 else 10
+            utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
             
-        utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
-        utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
-        if self.accumulate:
+            sub_regions = self.region.chunk(self.xinc, chnk_inc)
+            utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
+
+            ## ==============================================
+            ## sub-region analysis
+            ## ==============================================
+            sub_zones = self._sub_region_analysis(sub_regions)
+
+            ## ==============================================
+            ## sub-region density and percentiles
+            ## ==============================================
+            s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
+            s_5perc = np.percentile(s_dens, 5)
+            s_dens = None
+            utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
+
+            ## ==============================================
+            ## zone analysis / generate training regions
+            ## ==============================================
+            trainers = []
+            t_perc = 95
+            s_perc = 50
+            for z, this_zone in enumerate(self._zones):
+                tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
+                if len(tile_set) > 0:
+                    d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
+                else:
+                    continue
+
+                t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
+                utils.echo_msg(
+                    'possible {} training zones: {} @ MAX {}'.format(
+                        self._zones[z].upper(), len(t_trainers), d_50perc
+                    )
+                )
+                trainers.append(t_trainers)
+
+            utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
+
+            ## ==============================================
+            ## split-sample simulations and error calculations
+            ## sims = max-simulations
+            ## ==============================================
+            if self.sims is None:
+                self.sims = int(len(sub_regions)/tot_trains)
+
+            if self.max_sample is None:
+                self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
+
+            utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
+            utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
+            utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
             max_dist = gdalfun.gdal_percentile(self.prox, 95)
             utils.echo_msg('max distance is {}'.format(max_dist))
-            #ec_d = self._split_sample(trainers, num_perc, chnk_inc/2, s_dp, pre_ec_d)[0]
-            #sample_dp =
             sim = 0
-            total_keep = 5000000
             utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
             while True:
                 sim += 1
@@ -3914,41 +3780,22 @@ class WafflesUncertainty(Waffle):
                 else:
                     #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
                     s_dp = np.vstack((s_dp, sample_dp))
-                
+
                 err_count = len(s_dp)
                 ds = np.unique(s_dp[:,1])
                 s_dp_m = None
-                
+
                 for d in ds:
                     arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
                     if arr.any():
-                        ##dm = np.mean(s_dp[:,0][arr])
                         arr_count = np.count_nonzero(arr)
                         err_perc = (arr_count / err_count)
-                        #err_perc = (arr_count / total_keep)
-                        #utils.echo_msg(err_perc)
-                        d_err_count = int(total_keep * err_perc)
-                        #utils.echo_msg('arr_count: {} ({})'.format(arr_count, d))
-                        #utils.echo_msg('err_count: {}'.format(err_count))
-                        #utils.echo_msg('err_perc: {}'.format(err_perc))
-                        #utils.echo_msg('d_err_count: {}'.format(d_err_count))
-                        #d_err_count = int(total_keep)
-
-                        #h, e = np.histogram(s_dp[:,0][arr], d_err_count)
-                        #d_errs = e[np.nonzero(h)]
+                        d_err_count = int(self.max_errors * err_perc)
                         err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
                         err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
                         err_sum = err_sum[np.nonzero(err_cnt)]
                         err_cnt = err_cnt[np.nonzero(err_cnt)]
                         d_errs = err_sum/err_cnt
-                        #d_mean = (np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0] / np.histogram(s_dp[:,0][arr], d_err_count)[0])
-                        #d_mean = d_mean[np.nonzero(h)]
-                        #print(d_mean)
-                        #print(d_mean.size)
-                        #print(d_errs.size)
-
-                        #d_dist = np.zeros((d_errs.size, 1))
-                        #d_dist[:] = d
                         d_dist = np.full((d_errs.size, 1), d)
                         dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
 
@@ -3959,16 +3806,19 @@ class WafflesUncertainty(Waffle):
 
                 s_dp = np.array(s_dp_m)
                 np.savetxt(self.prox_errs, s_dp, '%f', ' ')
-                
-                ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d)
-                pre_ec_d = ec_d
 
-                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
+                max_dist = np.nanpercentile(s_dp[:,1], 95)
+                utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
+                utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
                 
+                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
+                pre_ec_d = ec_d
+                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
+
                 ## continue if we got back the default err coeff
                 if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
                     continue
-                    
+
                 ## continue if we haven't reached max_sample
                 #if len(s_dp) < self.max_sample:
                 #    continue
@@ -3976,42 +3826,6 @@ class WafflesUncertainty(Waffle):
                 ## break if we gathered enough simulation errors
                 if sim >= int(self.sims): 
                     break
-                
-        else:
-            #prox_errs = np.loadtxt(self.prox_errs)#, max_rows=self.max_errors)
-            #np.random.shuffle(prox_errs)
-            #prox_errs = prox_errs[:self.max_sample]
-            ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d,
-                                    dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)')
-
-        # ## bin and save the errors
-        # if self.accumulate:
-        #     total_keep = 5000000
-        #     s_dp = np.loadtxt(self.prox_errs)
-        #     err_count = len(s_dp)
-        #     ds = np.unique(s_dp[:,1])
-        #     s_dp_m = None
-        #     for d in ds:
-        #         arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
-        #         if arr.any():
-        #             dm = np.mean(s_dp[:,0][arr])
-        #             arr_count = np.count_nonzero(arr)
-        #             err_perc = (arr_count / err_count)
-        #             d_err_count = int(total_keep * err_perc)
-
-        #             h, e = np.histogram(s_dp[:,0][arr], d_err_count)
-        #             d_errs = e[np.nonzero(h)]
-
-        #             d_dist = np.zeros((d_errs.size, 1))
-        #             d_dist[:] = d
-        #             dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
-
-        #             if s_dp_m is None:
-        #                 s_dp_m = np.array(dist_errs)
-        #             else:
-        #                 s_dp_m = np.vstack((s_dp_m, dist_errs))
-
-        #if s_dp_m is not None:
         
         ## ==============================================
         ## Save/Output results
@@ -4031,32 +3845,13 @@ class WafflesUncertainty(Waffle):
                 out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
                 out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
                 
-                #prox_arr = (ec_d[0] + ec_d[1]) * prox_arr**ec_d[2]
-                #prox_arr[prox_arr == pro
-
-        # utils.echo_msg('combining uncertainty grid {} with proximity uncertainty'.format(self.stack))
-        # with gdalfun.gdal_datasource(self.stack) as stack_ds:
-        #     unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
-        #     unc_band = stack_ds.GetRasterBand(4)
-        #     unc_arr = unc_band.ReadAsArray()
-        #     unc_arr[unc_arr == unc_inf['ndv']] = 0
-
-        #out_arr = prox_arr + unc_arr
         unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
-        #prox_band.SetNoDataValue(self.ndv)
-        #prox_band.WriteArray(out_arr)
-            
         if self.dst_srs is not None:
             status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
             
         utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
         utils.remove_glob(self.slope)
         utils.remove_glob(self.prox)
-
-        #unc_out['prox_unc'] = [self.prox, 'raster']
-        #unc_out['prox_bf'] = ['{}_prox_bf.png'.format(self.name), 'image']
-        #unc_out['prox_scatter'] = ['{}_prox_scatter.png'.format(self.name), 'image']
-
         return(unc_out, 0)
     
 ## ==============================================
@@ -4069,7 +3864,6 @@ class WaffleDEM:
         self.ds_config = ds_config # a dem config dictionary (see gdalfun.gdal_infos)
         self.cache_dir = cache_dir
         self.verbose = verbose # verbosity
-        #self.dem_ds = None # the dem as a gdal datasource
         self.dem_region = None # the dem regions.Region()
         self.waffle = waffle
         self.want_scan = want_scan

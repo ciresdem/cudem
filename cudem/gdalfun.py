@@ -547,13 +547,19 @@ def gdal_infos(src_gdal, region = None, scan = False, band = 1):
 
             if scan:
                 src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                src_arr[src_arr == ds_config['ndv']] = np.nan
-                #if not np.all(src_arr == ds_config['ndv']):
-                if not np.all(np.isnan(src_arr)):
-                    ds_config['zr'] = src_band.ComputeRasterMinMax()
-                else:
-                    utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
-                    ds_config['zr'] = [np.nan, np.nan]
+                try:
+                    src_arr[src_arr == ds_config['ndv']] = np.nan
+                    if not np.all(np.isnan(src_arr)):
+                        ds_config['zr'] = src_band.ComputeRasterMinMax()
+                    else:
+                        #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
+                        ds_config['zr'] = [np.nan, np.nan]
+                except:
+                    if not np.all(src_arr == ds_config['ndv']):
+                        ds_config['zr'] = src_band.ComputeRasterMinMax()
+                    else:
+                        #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
+                        ds_config['zr'] = [np.nan, np.nan]
                     
                 src_arr = src_band = None
 
@@ -718,23 +724,24 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
 
             in_bands = src_ds.RasterCount
             mem_ds = gdal_mem_ds(out_ds_config, bands=in_bands)
-            for band in range(1, in_bands+1):
-                this_band = mem_ds.GetRasterBand(band)
-                that_band = src_ds.GetRasterBand(band)
-                that_band_md = that_band.GetMetadata()
-                this_band_md = this_band.GetMetadata()
-                this_band.SetDescription(that_band.GetDescription())
-                
-                for key in that_band_md.keys():
-                    this_band_md[key] = that_band_md[key]
-                
-                this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
-                mem_ds.FlushCache()
+            if mem_ds is not None:
+                for band in range(1, in_bands+1):
+                    this_band = mem_ds.GetRasterBand(band)
+                    that_band = src_ds.GetRasterBand(band)
+                    that_band_md = that_band.GetMetadata()
+                    this_band_md = this_band.GetMetadata()
+                    this_band.SetDescription(that_band.GetDescription())
 
-            dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)                
-            return(dst_gdal, 0)
-        else:
-            return(None, -1)
+                    for key in that_band_md.keys():
+                        this_band_md[key] = that_band_md[key]
+
+                    this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
+                    mem_ds.FlushCache()
+
+                dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)                
+                return(dst_gdal, 0)
+
+    return(None, -1)
 
 ## doesn't work with multipolygons and -i
 def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True):
