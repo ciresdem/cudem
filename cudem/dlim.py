@@ -1433,7 +1433,7 @@ class ElevationDataset:
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
 
-        if m_ds.GetRasterCount > 0:
+        if m_ds.RasterCount > 0:
             msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
         else:
             if self.verbose:

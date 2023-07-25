@@ -3325,7 +3325,7 @@ class WafflesUncertainty(Waffle):
 
         if not os.path.exists(self.prox_errs):
             if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
-                self.prox_errs = os.path.join(self.cudem_data, self.prox_errs)
+                self.prox_errs = os.path.join(utils.cudem_data, self.prox_errs)
             else:
                 utils.touch(self.prox_errs)
                 self.accumulate = True
@@ -3671,161 +3671,162 @@ class WafflesUncertainty(Waffle):
             
         utils.echo_msg('loaded {} errors from {}'.format(len(s_dp), self.prox_errs))
         pre_ec_d = [0, .1, .2]
-        # if len(s_dp) > 1:
-        #     pre_ec_d = utils._err2coeff(s_dp, num_perc, coeff_guess=pre_ec_d)
-        # else:
-        #     self.accumulate = True
-
-        if len(s_dp) <= 1:
+        if len(s_dp) > 1:
+            pre_ec_d = utils._err2coeff(s_dp, self.percentile, coeff_guess=pre_ec_d)
+        else:
             self.accumulate = True
 
-        if not self.accumulate:
-            ec_d = utils._err2coeff(
-                s_dp, self.percentile, coeff_guess=pre_ec_d,
-                dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)'
-            )
-        else:
-            ## ==============================================
-            ## region and der. analysis
-            ## ==============================================
-            self.region_info = {}
-            with gdalfun.gdal_datasource(self.stack) as tmp_ds:
-                num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
+        # if len(s_dp) <= 1:
+        #     self.accumulate = True
 
-            self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
-            self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
-            self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
-            self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
+        # if not self.accumulate:
+        # ec_d = utils._err2coeff(
+        #     s_dp, self.percentile, coeff_guess=pre_ec_d,
+        #     dst_name=self.prox_errs[:-3], xa='Distance to Nearest Measurement (cells)'
+        # )
+        # else:
+        ## ==============================================
+        ## region and der. analysis
+        ## ==============================================
+        self.region_info = {}
+        with gdalfun.gdal_datasource(self.stack) as tmp_ds:
+            num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
 
-            self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
-            self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
-            self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
-            self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
+        self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
+        self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
+        self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
+        self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
 
-            print(self.prox_perc_33, self.prox_perc_66, self.prox_perc_100)
-            print(self.slp_perc_33, self.slp_perc_66, self.slp_perc_100)
+        self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
+        self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
+        self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
+        self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
 
-            self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
-            for x in self.region_info.keys():
-                utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
+        print(self.prox_perc_33, self.prox_perc_66, self.prox_perc_100)
+        print(self.slp_perc_33, self.slp_perc_66, self.slp_perc_100)
 
-            ## ==============================================
-            ## chunk region into sub regions
-            ## ==============================================
-            chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
-            chnk_inc = chnk_inc if chnk_inc > 10 else 10
-            utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
-            
-            sub_regions = self.region.chunk(self.xinc, chnk_inc)
-            utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
+        self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
+        for x in self.region_info.keys():
+            utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
 
-            ## ==============================================
-            ## sub-region analysis
-            ## ==============================================
-            sub_zones = self._sub_region_analysis(sub_regions)
+        ## ==============================================
+        ## chunk region into sub regions
+        ## ==============================================
+        chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+        chnk_inc = chnk_inc if chnk_inc > 10 else 10
+        utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
 
-            ## ==============================================
-            ## sub-region density and percentiles
-            ## ==============================================
-            s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
-            s_5perc = np.percentile(s_dens, 5)
-            s_dens = None
-            utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
+        sub_regions = self.region.chunk(self.xinc, chnk_inc)
+        utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
-            ## ==============================================
-            ## zone analysis / generate training regions
-            ## ==============================================
-            trainers = []
-            t_perc = 95
-            s_perc = 50
-            for z, this_zone in enumerate(self._zones):
-                tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
-                if len(tile_set) > 0:
-                    d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
-                else:
-                    continue
+        ## ==============================================
+        ## sub-region analysis
+        ## ==============================================
+        sub_zones = self._sub_region_analysis(sub_regions)
 
-                t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
-                utils.echo_msg(
-                    'possible {} training zones: {} @ MAX {}'.format(
-                        self._zones[z].upper(), len(t_trainers), d_50perc
-                    )
+        ## ==============================================
+        ## sub-region density and percentiles
+        ## ==============================================
+        s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
+        s_5perc = np.percentile(s_dens, 5)
+        s_dens = None
+        utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
+
+        ## ==============================================
+        ## zone analysis / generate training regions
+        ## ==============================================
+        trainers = []
+        t_perc = 95
+        s_perc = 50
+        for z, this_zone in enumerate(self._zones):
+            tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
+            if len(tile_set) > 0:
+                d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
+            else:
+                continue
+
+            t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
+            utils.echo_msg(
+                'possible {} training zones: {} @ MAX {}'.format(
+                    self._zones[z].upper(), len(t_trainers), d_50perc
                 )
-                trainers.append(t_trainers)
+            )
+            trainers.append(t_trainers)
 
-            utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
+        utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
 
-            ## ==============================================
-            ## split-sample simulations and error calculations
-            ## sims = max-simulations
-            ## ==============================================
-            if self.sims is None:
-                self.sims = int(len(sub_regions)/tot_trains)
+        ## ==============================================
+        ## split-sample simulations and error calculations
+        ## sims = max-simulations
+        ## ==============================================
+        if self.sims is None:
+            self.sims = int(len(sub_regions)/tot_trains)
 
-            if self.max_sample is None:
-                self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
+        if self.max_sample is None:
+            self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
 
-            utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
-            utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
-            utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
-            max_dist = gdalfun.gdal_percentile(self.prox, 95)
-            utils.echo_msg('max distance is {}'.format(max_dist))
-            sim = 0
-            utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
-            while True:
-                sim += 1
-                sample_dp = self._split_sample(trainers, num_perc)
-                if len(s_dp) == 0:
-                    s_dp = sample_dp
-                else:
-                    #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
-                    s_dp = np.vstack((s_dp, sample_dp))
+        utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
+        utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
+        utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
+        max_dist = gdalfun.gdal_percentile(self.prox, 95)
+        utils.echo_msg('max distance is {}'.format(max_dist))
+        sim = 0
+        utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
+        while True:
+            sim += 1
+            sample_dp = self._split_sample(trainers, num_perc)
+            if len(s_dp) == 0:
+                s_dp = sample_dp
+            else:
+                #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
+                s_dp = np.vstack((s_dp, sample_dp))
 
-                err_count = len(s_dp)
-                ds = np.unique(s_dp[:,1])
-                s_dp_m = None
+            err_count = len(s_dp)
+            ds = np.unique(s_dp[:,1])
+            s_dp_m = None
 
-                for d in ds:
-                    arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
-                    if arr.any():
-                        arr_count = np.count_nonzero(arr)
-                        err_perc = (arr_count / err_count)
-                        d_err_count = int(self.max_errors * err_perc)
-                        err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
-                        err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
-                        err_sum = err_sum[np.nonzero(err_cnt)]
-                        err_cnt = err_cnt[np.nonzero(err_cnt)]
-                        d_errs = err_sum/err_cnt
-                        d_dist = np.full((d_errs.size, 1), d)
-                        dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
+            for d in ds:
+                arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
+                if arr.any():
+                    arr_count = np.count_nonzero(arr)
+                    err_perc = (arr_count / err_count)
+                    d_err_count = int(self.max_errors * err_perc)
+                    err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
+                    err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
+                    err_sum = err_sum[np.nonzero(err_cnt)]
+                    err_cnt = err_cnt[np.nonzero(err_cnt)]
+                    d_errs = err_sum/err_cnt
+                    d_dist = np.full((d_errs.size, 1), d)
+                    dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
 
-                        if s_dp_m is None:
-                            s_dp_m = np.array(dist_errs)
-                        else:
-                            s_dp_m = np.vstack((s_dp_m, dist_errs))
+                    if s_dp_m is None:
+                        s_dp_m = np.array(dist_errs)
+                    else:
+                        s_dp_m = np.vstack((s_dp_m, dist_errs))
 
-                s_dp = np.array(s_dp_m)
+            s_dp = np.array(s_dp_m)
+            if self.accumulate:
                 np.savetxt(self.prox_errs, s_dp, '%f', ' ')
 
-                max_dist = np.nanpercentile(s_dp[:,1], 95)
-                utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
-                utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
-                
-                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
-                pre_ec_d = ec_d
-                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
+            max_dist = np.nanpercentile(s_dp[:,1], 95)
+            utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
+            utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
 
-                ## continue if we got back the default err coeff
-                if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
-                    continue
+            ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
+            pre_ec_d = ec_d
+            utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
 
-                ## continue if we haven't reached max_sample
-                #if len(s_dp) < self.max_sample:
-                #    continue
+            ## continue if we got back the default err coeff
+            if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
+                continue
 
-                ## break if we gathered enough simulation errors
-                if sim >= int(self.sims): 
-                    break
+            ## continue if we haven't reached max_sample
+            #if len(s_dp) < self.max_sample:
+            #    continue
+
+            ## break if we gathered enough simulation errors
+            if sim >= int(self.sims): 
+                break
         
         ## ==============================================
         ## Save/Output results
