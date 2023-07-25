@@ -467,11 +467,11 @@ class INF:
                     data = json.load(inf_ob)
             except ValueError:
                 try:
-                    data = MBSParser(fn=inf_fn).inf_parse().infos
+                    data = MBSParser(fn=inf_fn).inf_parse().infos.__dict__
                     #self.check_hash = False
                     mb_inf = True
                 except:
-                    raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
+                    raise ValueError('CUDEMFactory: Unable to read data from {} as mb-system inf'.format(inf_fn))
             except:
                 raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
 
@@ -2714,7 +2714,8 @@ class MBSParser(ElevationDataset):
         self.infos.minmax = [0,0,0,0,0,0]
         this_row = 0
         dims = []
-        with open('{}.inf'.format(self.fn)) as iob:
+        inf_fn = '{}.inf'.format(self.fn) if self.fn.split('.')[-1] != 'inf' else self.fn
+        with open(inf_fn) as iob:
             for il in iob:
                 til = il.split()
                 if len(til) > 1:
