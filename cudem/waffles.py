@@ -294,12 +294,15 @@ class Waffle:
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
                                    invert_region=False, cache_dir=self.cache_dir)
-        self.data.initialize()
-        if not self.want_weight:
-            self.data.weight = None
-            
-        if not self.want_uncertainty:
-            self.data.uncertainty = None
+        if self.data is not None:
+            self.data.initialize()
+            if not self.want_weight:
+                self.data.weight = None
+                
+            if not self.want_uncertainty:
+                self.data.uncertainty = None
+        else:
+            return(None)    
 
     def _init_incs(self):
         self.xinc = utils.str2inc(self.xinc)
@@ -355,6 +358,9 @@ class Waffle:
     def generate(self):
         """run and process the WAFFLES module"""
 
+        if self.data is None:
+            return(self)
+        
         if os.path.exists(self.fn):
             if not self.clobber:
                 utils.echo_warning_msg(
@@ -470,13 +476,13 @@ class Waffle:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
             
             ## calculate estimated uncertainty of the interpolation
-            # if self.want_uncertainty:
-            #     iu = WafflesUncertainty(
-            #         waffles_module=self.mod, percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, clobber=False
-            #     )
-            #     unc_out, unc_status = iu.run()
-            #     if unc_status == 0:
-            #         self.aux_dems.append(unc_out['prox_unc'][0])
+            if self.want_uncertainty:
+                iu = WafflesUncertainty(
+                    waffles_module=self.mod, percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, clobber=False
+                )
+                unc_out, unc_status = iu.run()
+                if unc_status == 0:
+                    self.aux_dems.append(unc_out['prox_unc'][0])
 
             ## post-process any auxiliary rasters
             for aux_dem in self.aux_dems:
@@ -2641,7 +2647,6 @@ class WafflesCUDEM(Waffle):
     mode (str) - the waffles module to perform the initial pre-surface
     """
 
-    ## todo: update mode to allow full module strings from cli.
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
                  mode = 'gmt-surface:tension=.1', filter_outliers = None, **kwargs):
         

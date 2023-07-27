@@ -166,7 +166,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, 
         return(this_datalist)
     
     except Exception as e:
-        utils.echo_error_msg('could not initialize data, {}'.format(e))
+        utils.echo_error_msg('could not initialize data, {}: {}'.format(data_list, e))
         return(None)
 
 ## ==============================================
