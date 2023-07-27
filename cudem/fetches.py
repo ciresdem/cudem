@@ -311,7 +311,12 @@ class WCS:
     
     def fetch_coverage(coverage, region = None):
         c_url = self._get_coverage_url(coverage, region)
-        return(Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data))
+        try:
+            status = Fetch(c_url, verbose=True).fetch_file('{}_{}.tif'.format(coverage, region.format('fn')), params=data)
+        except:
+            status = -1
+            
+        return(status)
 
 ## ==============================================
 ## ==============================================
@@ -1030,8 +1035,8 @@ https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
         
     def run(self):
         v_json = os.path.basename(self._fabdem_footprints_url)
-        status = Fetch(self._fabdem_footprints_url, verbose=self.verbose).fetch_file(v_json)
         try:
+            status = Fetch(self._fabdem_footprints_url, verbose=self.verbose).fetch_file(v_json)
             v_ds = ogr.Open(v_json)
         except:
             v_ds = None
@@ -1076,7 +1081,11 @@ class FABDEM_FRED(FetchModule):
     def update(self):
         self.FRED._open_ds()
         v_json = os.path.basename(self._fabdem_footprints_url)
-        status = Fetch(self._fabdem_footprints_url, verbose=self.verbose).fetch_file(v_json)
+        try:
+            status = Fetch(self._fabdem_footprints_url, verbose=self.verbose).fetch_file(v_json)
+        except:
+            status = -1
+            
         shp_regions = regions.gdal_ogr_regions(v_json)
         shp_region = regions.Region()
         for this_region in shp_regions:
@@ -1883,8 +1892,8 @@ https://www.nauticalcharts.noaa.gov/data/bluetopo.html
     def run(self):
         s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
         s3._request_signer.sign = (lambda *args, **kwargs: None)
-        status = Fetch(self._bluetopo_index_url, verbose=self.verbose).fetch_file(self._bluetopo_index)
         try:
+            status = Fetch(self._bluetopo_index_url, verbose=self.verbose).fetch_file(self._bluetopo_index)
             v_ds = ogr.Open(self._bluetopo_index)
         except:
             v_ds = None
@@ -2289,7 +2298,13 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                 #urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
                                 urllist_url = link['link'] + '/' + urllist
                                 while True:
-                                    if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
+                                    try:
+                                        status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
+                                    except:
+                                        status = -1
+                                        
+                                    if status != 0:
+                                        #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
                                         if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
                                             break
                                         
@@ -2303,10 +2318,15 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                             index_zipurl = line.strip()
                                             break
 
-                                utils.remove_glob(urllist)                            
-                                if Fetch(
+                                utils.remove_glob(urllist)
+                                try:
+                                    status = Fetch(
                                         index_zipurl, callback=self.callback, verbose=self.verbose
-                                ).fetch_file(index_zipfile) == 0:
+                                    ).fetch_file(index_zipfile)
+                                except:
+                                    status = -1
+                                    
+                                if status == 0:
                                     index_shps = utils.p_unzip(index_zipfile, ['shp', 'shx', 'dbf', 'prj'])
                                     index_shp = None
                                     for v in index_shps:
@@ -3006,7 +3026,11 @@ https://www.pgc.umn.edu/data/arcticdem/
     def update(self):
         self.FRED._open_ds()        
         v_zip = os.path.basename(self._arctic_dem_index_url)
-        status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+        try:
+            status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+        except:
+            status = -1
+            
         v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
 
         v_shp = None
@@ -3042,7 +3066,11 @@ https://www.pgc.umn.edu/data/arcticdem/
         #for surv in FRED._filter_FRED(self):
 
         v_zip = os.path.join(self._outdir, os.path.basename(self._arctic_dem_index_url))
-        status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+        try:
+            status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+        except:
+            status = -1
+            
         v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'], outdir=self._outdir)
         v_shp = None
         for v in v_shps:
@@ -3220,7 +3248,10 @@ https://github.com/microsoft/GlobalMLBuildingFootprints
         print(f"The input area spans {len(quad_keys)} tiles: {quad_keys}")
 
         bing_csv = os.path.basename(self._bing_bfp_csv)
-        Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
+        try:
+            status = Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
+        except:
+            status = -1
 
         with open(bing_csv, mode='r') as bc:
             reader = csv.reader(bc)
@@ -3286,8 +3317,13 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
                    'Connection': 'keep-alive',
                    'Pragma': 'no-cache',
                    'Cache-Control': 'no-cache'}
-    
-    if Fetch(_proj_vdatum_index, headers=cdn_headers, verbose=verbose).fetch_file(cdn_index, timeout=5, read_timeout=5) == 0:
+
+    try:
+        status = Fetch(_proj_vdatum_index, headers=cdn_headers, verbose=verbose).fetch_file(cdn_index, timeout=5, read_timeout=5)
+    except:
+        status = -1
+
+    if status == 0:
         cdn_driver = ogr.GetDriverByName('GeoJSON')
         cdn_ds = cdn_driver.Open(cdn_index, 0)
         cdn_layer = cdn_ds.GetLayer()
@@ -3431,8 +3467,13 @@ https://cdn.proj.org
             else:
                 vd_zip_url = '{}vdatum_{}.zip'.format(self._vdatum_data_url, vd)
                 v_inf = '{}.inf'.format(vd.lower())
+
+            try:
+                status = Fetch(vd_zip_url, verbose=True).fetch_file('{}.zip'.format(vd))
+            except:
+                status = -1
                 
-            if Fetch(vd_zip_url, verbose=True).fetch_file('{}.zip'.format(vd)) == 0:
+            if status == 0:
                 v_infs = utils.p_unzip('{}.zip'.format(vd), ['inf'])
                 v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
                 v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360)
@@ -3495,7 +3536,12 @@ https://cdn.proj.org
         for surv in self.FRED._filter(self.region, w, [self.name]):
             if self.gtx:
                 dst_zip = '{}.zip'.format(surv['ID'])
-                if Fetch(surv['DataLink'], callback=self.callback, verbose=self.verbose).fetch_file(dst_zip) == 0:
+                try:
+                    status = Fetch(surv['DataLink'], callback=self.callback, verbose=self.verbose).fetch_file(dst_zip)
+                except:
+                    status = -1
+                    
+                if status == 0:
                     v_gtxs = utils.p_f_unzip(dst_zip, [surv['Name']])
                     for v_gtx in v_gtxs:
                         os.replace(v_gtx, '{}.gtx'.format(surv['ID']))
@@ -3509,7 +3555,12 @@ https://cdn.proj.org
         ## world, including global transformations such as EGM
         ## ==============================================
         cdn_index = 'proj_cdn_files.geojson'
-        if Fetch(self._proj_vdatum_index, callback=self.callback, verbose=self.verbose).fetch_file(cdn_index) == 0:
+        try:
+            status = Fetch(self._proj_vdatum_index, callback=self.callback, verbose=self.verbose).fetch_file(cdn_index)
+        except:
+            status = -1
+            
+        if status == 0:
             cdn_driver = ogr.GetDriverByName('GeoJSON')
             cdn_ds = cdn_driver.Open(cdn_index, 0)
             cdn_layer = cdn_ds.GetLayer()

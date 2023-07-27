@@ -2222,7 +2222,11 @@ class WafflesCoastline(Waffle):
             
         utils.run_cmd(
             'ogr2ogr -dialect SQLITE -sql "SELECT * FROM {}_tmp_c WHERE DN=0{}" {}.shp {}_tmp_c.shp'.format(
-                os.path.basename(self.name), ' order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '', self.name, self.name),
+                os.path.basename(self.name),
+                ' order by ST_AREA(geometry) desc limit {}'.format(poly_count) if poly_count is not None else '',
+                self.name,
+                self.name
+            ),
             verbose=self.verbose
         )        
         utils.remove_glob('{}_tmp_c.*'.format(self.name))
@@ -2231,8 +2235,6 @@ class WafflesCoastline(Waffle):
                 os.path.basename(self.name), self.name),
             verbose=self.verbose
         )        
-        #print(self.dst_srs)
-        #print(self.cst_srs.ExportToProj4())
         gdalfun.osr_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
