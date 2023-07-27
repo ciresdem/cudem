@@ -2647,22 +2647,37 @@ class WafflesCUDEM(Waffle):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
+        tmp_coastline = WafflesCoastline()
         for kpam, kval in kwargs.items():
             if kpam not in tmp_waffles.__dict__:
-                self.coastline_args[kpam] = kval
+                if kpam in tmp_coastline.__dict__:
+                    self.coastline_args[kpam] = kval
 
         for kpam, kval in self.coastline_args.items():
             del kwargs[kpam]
 
+        self.mode = mode
+        self.mode_args = {}
+        if self.mode not in ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate']:
+            self.mode = 'IDW'
+
+        tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()
+        print(tmp_waffles_mode)
+
+        for kpam, kval in kwargs.items():
+            if kpam not in tmp_waffles.__dict__:
+                if kpam in tmp_waffles_mode.__dict__:
+                    self.mode_args[kpam] = kval
+
+        for kpam, kval in self.mode_args.items():
+            del kwargs[kpam]
+        
         super().__init__(**kwargs)
         self.min_weight = utils.float_or(min_weight)
         self.pre_count = utils.int_or(pre_count, 1)
         self.landmask = landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
-        self.mode = mode
-        if self.mode.split(':')[0] not in ['gmt-surface', 'IDW']:
-            self.mode = 'IDW'
-            
+        
         self.filter_outliers = utils.int_or(filter_outliers)
 
     ## todo: remove coastline after processing...
@@ -2743,9 +2758,10 @@ class WafflesCUDEM(Waffle):
             _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
-                
-            waffles_mod = self.mode if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
+
+            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             #'linear:chunk_step=None:chunk_buffer=10'
+
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
