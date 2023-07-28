@@ -475,15 +475,6 @@ class Waffle:
                         for sm_file in sm_files:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
             
-            ## calculate estimated uncertainty of the interpolation
-            if self.want_uncertainty:
-                iu = WafflesUncertainty(
-                    waffles_module=self.mod, percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, clobber=False
-                )
-                unc_out, unc_status = iu.run()
-                if unc_status == 0:
-                    self.aux_dems.append(unc_out['prox_unc'][0])
-
             ## post-process any auxiliary rasters
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
@@ -498,6 +489,21 @@ class Waffle:
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
+
+            ## calculate estimated uncertainty of the interpolation
+            if self.want_uncertainty:
+                iu = WaffleFactory(mod='uncertainty:percentile=95:accumulate=False:waffles_module={}'.format(self.params['mod']), **self.params['kwargs'])._acquire_module()
+                iu.name = '{}_u'.format(self.params['kwargs']['name'])
+                iu.stack = self.stack
+                #iu = WafflesUncertainty(
+                #    waffles_module=self.params['mod'], percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, **self.params['kwargs']
+                #)
+                iu.initialize()
+                #iu.generate()
+                unc_out, unc_status = iu.run()
+                #if unc_status == 0:
+                #    self.aux_dems.append(unc_out['prox_unc'][0])
+                
                         
         return(self)
 
@@ -847,9 +853,12 @@ def write_array_queue(wq, q, m):
         wq.task_done()
 
 def scipy_queue(q, wq, m, p):
+
+    #with tqdm(desc='gridding queue', total=q.qsize()) as p:
     while True:
         this_srcwin = q.get()
-        p.update(msg='gridding data to {}: {}'.format(m, q.qsize()))
+        #p.update(msg='gridding data to {}: {}'.format(m, q.qsize()))
+        p.update()
         try:
             interp_array = m.grid_srcwin(this_srcwin)
         except Exception as e:
@@ -869,9 +878,15 @@ class grid_scipy(threading.Thread):
         self.scipy_q = queue.Queue()
         self.grid_q = queue.Queue()
         self.n_threads = n_threads
-        self.pbar = utils.CliProgress('gridding data to {}'.format(self.mod))
         
     def run(self):
+        for this_srcwin in utils.yield_srcwin(
+                n_size=(self.mod.ycount, self.mod.xcount), n_chunk=self.mod.chunk_size,
+                step=self.mod.chunk_size, verbose=True
+        ):
+            self.scipy_q.put(this_srcwin)
+
+        self.pbar = tqdm(desc='gridding data to {}'.format(self.mod), total=self.scipy_q.qsize())
         for _ in range(1):
             tg = threading.Thread(target=write_array_queue, args=(self.grid_q, self.scipy_q, self.mod))
             tg.daemon = True
@@ -882,15 +897,8 @@ class grid_scipy(threading.Thread):
             t.daemon = True
             t.start()
 
-        for this_srcwin in utils.yield_srcwin(
-                n_size=(self.mod.ycount, self.mod.xcount), n_chunk=self.mod.chunk_size,
-                step=self.mod.chunk_size, verbose=True
-        ):
-            self.scipy_q.put(this_srcwin)
-
         self.grid_q.join()
         self.scipy_q.join()
-        self.pbar.end(0, 'gridded data to {}'.format(self.mod))
         
 class WafflesSciPy(Waffle):
     """Generate DEM using Scipy gridding interpolation
@@ -921,7 +929,7 @@ class WafflesSciPy(Waffle):
         self.chunk_buffer = utils.int_or(chunk_buffer)
         self.num_threads = utils.int_or(num_threads, 1)
 
-    def _run(self):
+    def run(self):
         self.open()
         #srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
         try:
@@ -1027,7 +1035,7 @@ class WafflesSciPy(Waffle):
                 
         return(None)
         
-    def run(self):
+    def _run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
                 '{} is not a valid interpolation method, options are {}'.format(
@@ -2648,7 +2656,7 @@ class WafflesCUDEM(Waffle):
     """
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface:tension=.1', filter_outliers = None, **kwargs):
+                 mode = 'gmt-surface', filter_outliers = None, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -3345,7 +3353,7 @@ class WafflesUncertainty(Waffle):
         self.accumulate = accumulate
         self.max_errors = max_errors
         
-        self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module)
+        self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
         self.prox_errs_local = self.prox_errs
         if not os.path.exists(self.prox_errs):
             if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
@@ -3360,8 +3368,6 @@ class WafflesUncertainty(Waffle):
         self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
         self.prox = None
         self.slope = None
-
-        utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
 
     def _mask_analysis(self, src_gdal, region = None):
         """
@@ -3716,7 +3722,7 @@ class WafflesUncertainty(Waffle):
     def run(self):
         s_dp = s_ds = None
         unc_out = {}
-
+        utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
         if self.prox is None:
             self.prox = self._gen_prox('{}_u.tif'.format(self.name))
 

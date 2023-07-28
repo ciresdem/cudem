@@ -977,11 +977,11 @@ class ElevationDataset:
                     out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), self.trans_fn)
                     out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
-                    if src_vert == '6360':
+                    if utils.str_or(src_vert) == '6360' or 'us-ft' in utils.str_or(src_vert, ''):
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_to_meter = True
 
-                    if dst_vert == '6360':
+                    if utils.str_or(dst_vert) == '6360' or 'us-ft' in utils.str_or(dst_vert, ''):
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_from_meter = True
                 else:
@@ -996,7 +996,7 @@ class ElevationDataset:
                 ## setup final OSR transformation objects
                 out_src_srs = src_srs.ExportToProj4()
                 out_dst_srs = dst_srs.ExportToProj4()
-  
+
             src_osr_srs = osr.SpatialReference()
             src_osr_srs.SetFromUserInput(out_src_srs)
             dst_osr_srs = osr.SpatialReference()
@@ -1822,7 +1822,7 @@ class LASFile(ElevationDataset):
     classes (str): a list of classes to parse, being a string with `/` seperator 
     """
 
-    def __init__(self, classes='0/2/29/40', **kwargs):
+    def __init__(self, classes='2/29/40', **kwargs):
         super().__init__(**kwargs)
         self.classes = [int(x) for x in classes.split('/')]
 
