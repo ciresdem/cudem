@@ -913,12 +913,15 @@ class WafflesSciPy(Waffle):
     method=[linear/cubic/nearest] - interpolation method to use
     chunk_size=[val] - size of chunks in pixels
     chunk_buffer=[val] - size of the chunk buffer in pixels
+    chunk_step=[val] - size of the chunk step in pixels
+    num_threads=[val] - number of threads to use in interpolation, 
+                        use None to process as a single thread
 
     < scipy:method=<method>:chunk_size=None:chunk_buffer=40 >
     """
     
     def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 10,
-                 chunk_step = None, num_threads = 1, **kwargs):
+                 chunk_step = None, num_threads = None, **kwargs):
         """generate a `scipy` dem"""
         
         super().__init__(**kwargs)
@@ -930,6 +933,9 @@ class WafflesSciPy(Waffle):
         self.num_threads = utils.int_or(num_threads, 1)
 
     def run(self):
+        if self.num_threads is None:
+            return(self._run())
+            
         self.open()
         #srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
         try:
