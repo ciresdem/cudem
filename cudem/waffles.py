@@ -264,7 +264,7 @@ class Waffle:
         if isinstance(self.region, list):
             self.region = regions.Region().from_list(self.region)
         elif not isinstance(self.region, regions.Region):
-            raise ValueError('could not parse region')
+            raise ValueError('could not parse region: {}'.format(self.region))
         
         if self.node == 'grid':
             self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
@@ -4542,11 +4542,33 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## set the datalists and names
     ## ==============================================
-    wg['data'] = dls    
+    wg['data'] = dls
+    if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
     name = wg['name']
 
     for i, this_region in enumerate(these_regions):
+
+        if this_region is None:
+            utils.echo_warning_msg('No input region specified, gathering region from input data...')
+            this_datalist = dlim.init_data(dls, region=this_region, dst_srs=wg['dst_srs'], want_verbose=wg['verbose'])
+            if this_datalist is not None and this_datalist.valid_p(
+                    fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
+            ):
+                this_datalist.initialize()
+                
+                ## get the region and warp it if necessary
+                this_inf = this_datalist.inf()
+                this_region = regions.Region().from_list(this_inf.minmax)
+                if wg['dst_srs'] is not None:
+                    if this_inf.src_srs is not None:
+                        this_region.src_srs = this_inf.src_srs
+                        this_region.warp(dst_srs)
+                        
+            utils.echo_msg('region is {}'.format(this_region))
+            if this_region is None:
+                break
+
         wg['src_region'] = this_region
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
