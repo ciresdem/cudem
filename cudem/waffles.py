@@ -930,7 +930,7 @@ class WafflesSciPy(Waffle):
         self.chunk_size = utils.int_or(chunk_size)
         self.chunk_step = chunk_step
         self.chunk_buffer = utils.int_or(chunk_buffer)
-        self.num_threads = utils.int_or(num_threads, 1)
+        self.num_threads = utils.int_or(num_threads)
 
     def run(self):
         if self.num_threads is None:
