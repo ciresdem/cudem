@@ -4253,7 +4253,7 @@ Options:
 Datalists and data formats:
   A datalist is a file that contains a number of datalist entries, 
   while an entry is a space-delineated line:
-  `path [format weight [name source date type resolution hdatum vdatum url]]`
+  `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
 
 Supported datalist formats: 
   {dl_formats}
