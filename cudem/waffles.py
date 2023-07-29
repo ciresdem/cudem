@@ -3367,9 +3367,6 @@ class WafflesUncertainty(Waffle):
             else:
                 utils.touch(self.prox_errs)
                 self.accumulate = True
-
-        if self.verbose:
-            utils.echo_msg('using {}; accumulate is {}'.format(self.prox_errs, self.accumulate))
         
         self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
         self.prox = None
@@ -3423,7 +3420,7 @@ class WafflesUncertainty(Waffle):
         """
         
         if out_prox is None:
-            out_prox = '{}_prox.tif'.format(self.params['mod_args']['waffles_module'])
+            out_prox = utils.make_temp_fn('{}_prox.tif'.format(self.params['mod_args']['waffles_module']))
             
         utils.echo_msg('generating proximity grid {}...'.format(out_prox))
         gdalfun.gdal_proximity(self.stack, out_prox, distunits='PIXEL')
@@ -3440,7 +3437,7 @@ class WafflesUncertainty(Waffle):
         """
 
         if out_slope is None:
-            out_slope = '{}_slope.tif'.format(self.params['mod_args']['waffles_module'])
+            out_slope = utils.make_temp_fn('{}_slope.tif'.format(self.params['mod_args']['waffles_module']))
             
         utils.echo_msg('generating slope grid {}...'.format(out_slope))
         gdalfun.gdal_slope(self.stack, out_slope)
@@ -3587,7 +3584,7 @@ class WafflesUncertainty(Waffle):
                 ## ==============================================
                 ## extract the xyz data for the region from the DEM
                 ## ==============================================
-                o_xyz = '{}_{}.xyz'.format(self.name, n)
+                o_xyz = utils.make_temp_fn('{}_{}.xyz'.format(self.name, n))
                 with gdalfun.gdal_datasource(self.stack) as ds:
                    ds_config = gdalfun.gdal_infos(ds)
                    b_region = this_region.copy()
@@ -3606,7 +3603,7 @@ class WafflesUncertainty(Waffle):
                 ## split the xyz data to inner/outer; outer is
                 ## the data buffer, inner will be randomly sampled
                 ## ==============================================
-                s_inner, s_outer = self._select_split(o_xyz, this_region, 'sub_{}'.format(n))
+                s_inner, s_outer = self._select_split(o_xyz, this_region, utils.make_temp_fn('sub_{}'.format(n)))
                 if os.stat(s_inner).st_size == 0:
                     utils.echo_warning_msg('no inner points, cont.')
                     continue
@@ -3621,7 +3618,7 @@ class WafflesUncertainty(Waffle):
                 sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
                 ##sx_cnt = int(ss_len * (ss_samp / 100.))
                 ##sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
-                sub_xyz_head = 'sub_{}_head_{}.xyz'.format(n, sx_cnt)
+                sub_xyz_head = utils.make_temp_fn('sub_{}_head_{}.xyz'.format(n, sx_cnt))
                 np.random.shuffle(sub_xyz)
                 np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
 
@@ -3630,7 +3627,7 @@ class WafflesUncertainty(Waffle):
                 ## ==============================================
                 this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
                 kwargs = self.params['kwargs']
-                kwargs['name'] = 'sub_{}'.format(n)
+                kwargs['name'] = utils.make_temp_fn('sub_{}'.format(n))
                 kwargs['data'] = [s_outer, sub_xyz_head]
                 kwargs['src_region'] = b_region
                 kwargs['want_uncertainty'] = False
@@ -3728,7 +3725,9 @@ class WafflesUncertainty(Waffle):
     def run(self):
         s_dp = s_ds = None
         unc_out = {}
-        utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
+        if self.verbose:
+            utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
+            utils.echo_msg('using {}; accumulate is {}'.format(self.prox_errs, self.accumulate))
         if self.prox is None:
             self.prox = self._gen_prox('{}_u.tif'.format(self.name))
 
@@ -4182,6 +4181,19 @@ class WaffleFactory(factory.CUDEMFactory):
 
     def _set_modules(self):
         pass
+
+## ==============================================
+## waffle queue for threads
+## ==============================================
+def waffle_queue(q):
+    """
+    waffles_args is [waffle_module]
+    """
+    
+    while True:
+        waffle_module = q.get()
+        waffle_module[0]()
+        q.task_done()
     
 ## ==============================================
 ## Command-line Interface (CLI)
@@ -4234,6 +4246,7 @@ Options:
 \t\t\t\tto retain the data, use the --keep-cache flag
   -N, --nodata\t\t\tNODATA value of output DEM
   -L, --limits\t\t\tLIMIT the output elevations values, append 'u<value>' for the upper limit or 'l<value' for lower limit
+  -H, --threads\t\tSet the number of threads (1)
 
   -f, --transform\t\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
@@ -4303,6 +4316,9 @@ def waffles_cli(argv = sys.argv):
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
 
+    waffle_q = queue.Queue()
+    n_threads = 2
+        
     ## todo: gather multiple -R options (do for all)
     while i < len(argv):
         arg = argv[i]
@@ -4412,7 +4428,11 @@ def waffles_cli(argv = sys.argv):
                 wg['upper_limit'] = utils.float_or(this_limit[1:])
             elif this_limit.startswith('l'):
                 wg['lower_limit'] = utils.float_or(this_limit[1:])
-        
+
+        elif arg == '-threads' or arg == '--threads' or arg == '-H':
+            num_threads = utils.int_or(argv[i + 1], 1)
+            i = i + 1
+                
         elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
             if wg['dst_srs'] is None:
@@ -4464,6 +4484,11 @@ def waffles_cli(argv = sys.argv):
         else: dls.append(arg)
         i += 1
 
+    for _ in range(n_threads):
+        t = threading.Thread(target=waffle_queue, args=([waffle_q]))
+        t.daemon = True
+        t.start()
+        
     ## ==============================================
     ## load the user wg json and run waffles with that.
     ## ==============================================
@@ -4599,7 +4624,8 @@ def waffles_cli(argv = sys.argv):
                 this_waffle_module = this_waffle._acquire_module()
                 #print(this_waffle_module)
                 if this_waffle_module is not None:
-                    this_waffle_module()
+                    waffle_q.put([this_waffle_module]) 
+                    ###this_waffle_module()
                     # with utils.CliProgress(
                     #         message='Generating: {}'.format(this_waffle),
                     #         verbose=wg['verbose'],
@@ -4617,7 +4643,9 @@ def waffles_cli(argv = sys.argv):
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
+
+    waffle_q.join()
                         
-        #if not keep_cache:
-        #    utils.remove_glob(wg['cache_dir'])
+    #if not keep_cache:
+    #    utils.remove_glob(wg['cache_dir'])
 ### End
