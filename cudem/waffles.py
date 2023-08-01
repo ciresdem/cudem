@@ -31,7 +31,7 @@
 ## Supported gridding modules include:
 ## gmt-surface (GMT), gmt-triangulate (GMT), gmt-nearneighbor (GMT), mbgrid (MB-System), IDW (CUDEM), num (CUDEM/GMT),
 ## coastline (CUDEM), cudem (CUDEM), stacks (CUDEM), gdal-inv-dst (GDAL), gdal-linear (GDAL), gdal-average (GDAL),
-## gdal-nearest (GDAL), scipy (SCIPY)
+## gdal-nearest (GDAL), linear (SCIPY), cubic (SCIPY), nearest (SCIPY), scratch (CUDEM)
 ##
 ## GMT, GDAL and MB-System are required for full functionality.
 ##
@@ -78,8 +78,10 @@ from cudem import gdalfun
 from cudem import vdatums
 from cudem import factory
 from cudem import fetches
-        
+
+## ==============================================
 ## Data cache directory, hold temp data, fetch data, etc here.
+## ==============================================
 waffles_cache = utils.cudem_cache()
 
 def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel'):
@@ -101,7 +103,9 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
     
     utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
     if os.path.exists(src_dem):
+        ## ==============================================
         ## Filter the DEM (1=blur, 2=grdfilter, 3=outliers)
+        ## ==============================================
         if int(fltr) == 1:
             out, status = gdalfun.gdal_blur(
                 src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
@@ -119,7 +123,9 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
         if status != 0:
             return(status)
 
+        ## ==============================================
         ## Split the filtered DEM by z-value
+        ## ==============================================
         split_val = utils.float_or(split_val)
         if split_val is not None:
             with gdalfun.gdal_datasource(src_dem) as src_ds:
@@ -148,13 +154,11 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
         return(-1)
 
 ## ==============================================
-##
 ## WAFFLES
 ##
 ## TODO
 ## add upper/lower limits to waffle class and
 ## remove from individual waffle modules.
-##
 ## ==============================================
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
@@ -176,7 +180,7 @@ class Waffle:
                  dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
-                 want_stack: bool = True, params: dict = {}):
+                 proximity_limit: int = None, size_limit: int = None, want_stack: bool = True, params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -203,9 +207,11 @@ class Waffle:
         self.archive = archive # archive the data used in this dem
         self.want_mask = want_mask # mask the incoming datalist
         self.supercede = supercede # higher weighted data supercedes lower weighted data
-        self.upper_limit = utils.float_or(upper_limit)
-        self.lower_limit = utils.float_or(lower_limit)
-        self.keep_auxiliary = keep_auxiliary
+        self.upper_limit = utils.float_or(upper_limit) # upper limit of z values in output
+        self.lower_limit = utils.float_or(lower_limit) # lower limit of z values in output
+        self.proximity_limit = utils.int_or(proximity_limit) # proximity limit of interpolation
+        self.size_limit = utils.int_or(size_limit) # size limit of interpolation
+        self.keep_auxiliary = keep_auxiliary # keep auxiliary outputs
         self.clobber = clobber # clobber the output dem file
         self.verbose = verbose # increase verbosity
         self.cache_dir = cache_dir # directory path to store cahced data
@@ -220,13 +226,6 @@ class Waffle:
         self.want_stack = want_stack # generate the stacked rasters
         self.stack = None # multi-banded stacked raster from cudem.dlim
         self.stack_ds = None # the stacked raster as a dlim dataset object
-        # if not self.params:
-        #     self.params['kwargs'] = self.__dict__.copy()
-        #     self.params['mod'] = 'Unkownn'
-        #     self.params['mod_name'] = 'Unknown'
-        #     self.params['mod_args'] = {}
-            
-        #factory._set_params(self) # set up the default factory parameters
         
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
@@ -235,7 +234,6 @@ class Waffle:
         return('<Waffles: {}>'.format(self.name))
     
     def initialize(self):
-        #factory._set_mod_params(self, mf=WaffleFactory) # set the module arguments, if any
         if self.verbose:
             utils.echo_msg('initializing waffles module < \033[1m{}\033[m >'.format(self.params['mod']))
             
@@ -243,15 +241,18 @@ class Waffle:
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
         self._init_regions() # initialize regions
         self._init_incs() # initialize increments
+        ## ==============================================
+        ## initialize data, setting set_incs to True will force dlim to process the data to the set increments
+        ## ==============================================
         if self.want_stack:
-            self._init_data(set_incs=True) # initialize data, setting set_incs to True will force dlim to process the data to the set increments
+            self._init_data(set_incs=True) 
             
         self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
         self.ds_config = gdalfun.gdal_set_infos(
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
         )
-        #self.cache_dir = os.path.join(os.path.dirname(self.name), '.cudem')
+        
         return(self)
     
     def __call__(self):
@@ -259,7 +260,14 @@ class Waffle:
         return(self.generate())
     
     def _init_regions(self):
-        """Initialize and set regions"""
+        """Initialize and set regions.
+        
+        regions set here include:
+        d_region: Distribution Region
+        p_region: Processing Region
+        c_region: Coastline Region
+        ps_region: Processing region for GMT/MB-System
+        """
         
         if isinstance(self.region, list):
             self.region = regions.Region().from_list(self.region)
@@ -305,13 +313,19 @@ class Waffle:
             return(None)    
 
     def _init_incs(self):
+        """Initialize increments
+        
+        xinc/yinc are the DEM increments, in native units.
+        xsample/ysample set the output DEM increments, in native units.
+        """
+        
         self.xinc = utils.str2inc(self.xinc)
         self.yinc = utils.str2inc(self.yinc)
         self.xsample = utils.str2inc(self.xsample)
         self.ysample = utils.str2inc(self.ysample)
         
     def _coast_region(self):
-        """processing region (extended by self.extend_proc)"""
+        """coastline region (extended by percentage self.extend_proc)"""
 
         cr = self.d_region.copy()
         return(cr.buffer(pct=self.extend_proc, x_inc=self.xinc, y_inc=self.yinc))
@@ -356,7 +370,10 @@ class Waffle:
             )
     
     def generate(self):
-        """run and process the WAFFLES module"""
+        """run and process the WAFFLES module.
+
+        Generate the data 'stack' and use that to run the waffles module and generate the DEM.
+        """
 
         if self.data is None:
             return(self)
@@ -372,41 +389,89 @@ class Waffle:
                 try:
                     os.makedirs(os.path.dirname(self.fn))
                 except: pass
-            
-        ## Generate in Chunks of self.chunk by self.chunk
+
         if self.chunk is not None:
-            #xcount, ycount, dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+            ## ==============================================
+            ## Generate in Chunks of self.chunk by self.chunk and
+            ## merge chunks into final DEM
+            ## ==============================================
             chunks = []
+            stack_chunks = []
+            mask_chunks = []
+            aux_chunks = []
             for srcwin in utils.yield_srcwin((self.ycount, self.xcount), self.chunk, verbose=self.verbose):
                 this_geo_x_origin, this_geo_y_origin = utils._pixel2geo(srcwin[0], srcwin[1], self.dst_gt)
                 this_geo_x_end, this_geo_y_end = utils._pixel2geo(srcwin[0]+srcwin[2], srcwin[1]+srcwin[3], self.dst_gt)
                 this_gt = [this_geo_x_origin, float(self.dst_gt[1]), 0.0, this_geo_y_origin, 0.0, float(self.dst_gt[5])]
-                #this_region = self.region.copy()
                 this_region = regions.Region()
                 this_region.from_geo_transform(geo_transform=this_gt, x_count=srcwin[2], y_count=srcwin[3])
                 this_region.buffer(pct=10, x_inc = self.xinc, y_inc = self.yinc)
-                ## update for **mod_args
                 this_params = self.params.copy()
                 this_params['kwargs']['src_region'] = this_region
                 this_params['kwargs']['chunk'] = None
                 this_params['kwargs']['name'] = utils.append_fn('_chunk', this_region, self.xinc, high_res=True)
-                #this_params['kwargs']['name'] = os.path.join(self.cache_dir, utils.append_fn('_chunk', this_region, self.xinc, high_res=True))
                 this_waffle = WaffleFactory().load_parameter_dict(this_params)
                 this_waffle_module = this_waffle._acquire_module()
                 this_waffle_module.initialize()
                 this_waffle_module.generate()
-                if this_waffle_module.valid_p():
+
+                ## ==============================================
+                ## append the chunk to the chunk list if the DEM generated ok
+                ## ==============================================
+                if WaffleDEM(this_waffle_module.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     chunks.append(this_waffle_module.fn)
 
-            ## todo combine aux_dems
+                if WaffleDEM(this_waffle_module.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
+                    stack_chunks.append(this_waffle_module.stack)
+                    
+                mask_name = '{}_msk'.format(this_waffle_module.name)
+                mask_fn = '{}.{}'.format(os.path.join(this_waffle_module.cache_dir, mask_name), gdalfun.gdal_fext(this_waffle_module.fmt))
+
+                mask_chunks.append(this_waffle_module.msk_fn)
+                aux_chunks.append(this_waffle_module.aux_dems)
+
+            ## ==============================================
+            ## combine DEM chunks
+            ## ==============================================
             if len(chunks) > 0:
-                g = gdal.Warp(self.fn, chunks, format='GTiff', resampleAlg='cubicspline',
+                g = gdal.Warp(self.fn, chunks, format=self.fmt, resampleAlg='cubicspline',
+                              options=["COMPRESS=LZW", "TILED=YES"])
+                g = None
+
+            ## ==============================================
+            ## combine STACK chunks
+            ## multi-band
+            ## ==============================================
+            if len(stack_chunks) > 0:
+                g = gdal.Warp(self.fn, stack_chunks, format=self.fmt, resampleAlg='cubicspline',
+                              options=["COMPRESS=LZW", "TILED=YES"])
+                g = None
+
+            ## ==============================================
+            ## combine MASK chunks
+            ## multi-band
+            ## ==============================================
+            if len(mask_chunks) > 0:
+                g = gdal.Warp(mask_fn, mask_chunks, format=self.fmt, resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
                 
+            ## ==============================================
+            ## combine AUXILIARY chunks
+            ## ==============================================
+            if len(aux_chunks) > 0:
+                for ac, aux_dem in enumerate(aux_chunks):
+                    g = gdal.Warp(aux_dem, aux_chunks[ac], format=self.fmt, resampleAlg='cubicspline',
+                                  options=["COMPRESS=LZW", "TILED=YES"])
+                    g = None
+                
             utils.remove_glob(*chunks)
+            for aux_chunk in aux_chunks:
+                utils.remove_glob(aux_chunk)
         else:
+            ## ==============================================
             ## stack the data and run the waffles module
+            ## ==============================================
             if self.want_stack:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
                 mask_name = '{}_msk'.format(stack_name)
@@ -433,7 +498,10 @@ class Waffle:
                 #         sk.arr_q.task_done()                        
                 #
                 # self.stack = sk.out_file
-                
+
+                ## ==============================================
+                ## generate the stack
+                ## ==============================================
                 if not self.clobber and os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
                     self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 else:
@@ -442,24 +510,32 @@ class Waffle:
                     
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
-                                              y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
-
+                                              y_inc=self.yinc, src_region=self.p_region, weight=1,
+                                              verbose=self.verbose).initialize()
                 if self.keep_auxiliary:
                     self.aux_dems.append(self.stack)
 
+                ## ==============================================
+                ## run the waffles module
+                ## ==============================================
                 if WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     self.run()
+                    
             else:
                 self.run()    
-            
+
+            ## ==============================================
             ## post-process the DEM(s)
+            ## ==============================================
             waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
             if waffle_dem.valid_p():
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                   node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, dst_srs=self.dst_srs,
-                                   dst_fmt=self.fmt)
+                                   node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
+                                   proximity_limit=self.proximity_limit, dst_srs=self.dst_srs, dst_fmt=self.fmt, stack_fn=self.stack)
 
+            ## ==============================================
             ## post-process the mask
+            ## ==============================================
             if self.want_mask or self.want_sm:
                 mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=False).initialize()
                 if mask_dem.valid_p():
@@ -474,8 +550,10 @@ class Waffle:
                         sm_files = glob.glob('{}.*'.format(sm_layer))
                         for sm_file in sm_files:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
-            
+                            
+            ## ==============================================
             ## post-process any auxiliary rasters
+            ## ==============================================
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
                 if aux_dem.valid_p():
@@ -483,28 +561,29 @@ class Waffle:
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
                                     set_metadata=False)
 
+            ## ==============================================
             ## reset the self.stack to new post-processed fn and ds
+            ## ==============================================
             if self.want_stack and self.keep_auxiliary:
                 self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
-                                              y_inc=self.yinc, src_region=self.p_region, weight=1, verbose=self.verbose).initialize()
+                                              y_inc=self.yinc, src_region=self.p_region, weight=1,
+                                              verbose=self.verbose).initialize()
 
+            ## ==============================================
             ## calculate estimated uncertainty of the interpolation
+            ## ==============================================
             if self.want_uncertainty:
-                iu = WaffleFactory(mod='uncertainty:percentile=95:accumulate=False:waffles_module={}'.format(self.params['mod']), **self.params['kwargs'])._acquire_module()
+                iu = WaffleFactory(
+                    mod='uncertainty:percentile=95:accumulate=False:waffles_module={}'.format(self.params['mod']),
+                    **self.params['kwargs']
+                )._acquire_module()
                 iu.name = '{}_u'.format(self.params['kwargs']['name'])
                 iu.stack = self.stack
-                #iu = WafflesUncertainty(
-                #    waffles_module=self.params['mod'], percentile=95, sims=2, chnk_lvl=None, max_sample=None, accumulate=False, **self.params['kwargs']
-                #)
                 iu.initialize()
-                #iu.generate()
                 unc_out, unc_status = iu.run()
-                #if unc_status == 0:
-                #    self.aux_dems.append(unc_out['prox_unc'][0])
                 
-                        
         return(self)
 
     def run(self):
@@ -513,28 +592,19 @@ class Waffle:
         raise(NotImplementedError)
 
 ## ==============================================
-##
 ## Waffles Raster Stacking
-##
 ## ==============================================
 class WafflesScratch(Waffle):
-    """STACK data into a DEM. 
+    """SCRATCH Module. 
     
-    Generate a DEM using a raster STACKing method. 
-    By default, will calculate the [weighted]-mean where overlapping cells occur. 
-    Set supercede to True to overwrite overlapping cells with higher weighted data.
-
-    stack data to generate DEM. No interpolation
-    occurs with this module. To guarantee a full DEM,
-    use a background DEM with a low weight, such as GMRT or GEBCO,
-    which will be stacked upon to create the final DEM.
+    Don't generate any DEMs, only auxiliary data, including the raster stack.
     
     -----------
     Parameters:
     
     min_count=[val] - only retain data cells if they contain `min_count` overlapping data
-    
-    < stacks:min_count=None >
+
+    < scratch:min_count=None >
     """
 
     ## todo: add parameters for specifying outputs...
@@ -582,13 +652,12 @@ class WafflesStacks(Waffle):
             arrs['z'][np.isnan(arrs['z'])] = self.ndv
             z_band.WriteArray(arrs['z'], srcwin[0], srcwin[1])
             
-        z_ds = None            
+        z_ds = None
+        utils.echo_msg('stacked data to {}'.format(self.fn))
         return(self)
 
 ## ==============================================
-##
 ## The Flattening
-##
 ## ==============================================
 class WafflesFlatten(Waffle):
     """Stack the data into a DEM and then hydro-flatten all the void areas.
@@ -609,13 +678,13 @@ class WafflesFlatten(Waffle):
         self.size_threshold = size_threshold
         
     def run(self):
-        gdalfun.gdal_hydro_flatten(self.stack, dst_dem=self.fn, band=1, size_threshold=self.size_threshold)
+        gdalfun.gdal_hydro_flatten(
+            self.stack, dst_dem=self.fn, band=1, size_threshold=self.size_threshold
+        )
         return(self)
     
 ## ==============================================
-##
 ## Waffles IDW
-##
 ## ==============================================
 class Invdisttree():
     """ inverse-distance-weighted interpolation using KDTree:
@@ -768,13 +837,15 @@ class WafflesIDW(Waffle):
         if self.chunk_size is None:
             n_chunk = int(self.ds_config['nx'] * .1)
             n_chunk = 10 if n_chunk < 10 else n_chunk
-        else: n_chunk = self.chunk_size
+        else:
+            n_chunk = self.chunk_size
+            
         if self.chunk_step is None:
             n_step = int(n_chunk/2)
-        else: n_step = self.chunk_step
+        else:
+            n_step = self.chunk_step
 
         stack_ds = gdal.Open(self.stack)
-        
         points_band = stack_ds.GetRasterBand(1)
         points_no_data = points_band.GetNoDataValue()
         weights_band = stack_ds.GetRasterBand(3)
@@ -838,32 +909,29 @@ class WafflesIDW(Waffle):
         return(self)    
     
 ## ==============================================
-##
 ## Scipy interpolate.griddata gridding (linear, cubic, nearest)
 ##
 ## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
-## TODO: rename this in some way
 ##
+## set 'num_threads' to int over 1 to generate in multiple threads...
 ## ==============================================
 def write_array_queue(wq, q, m):
     while True:
         wq_args = wq.get()
-        #utils.echo_msg('writing array to disk')
         m.interp_band.WriteArray(wq_args[0], wq_args[1][0], wq_args[1][1])
         wq.task_done()
 
 def scipy_queue(q, wq, m, p):
-
-    #with tqdm(desc='gridding queue', total=q.qsize()) as p:
     while True:
         this_srcwin = q.get()
-        #p.update(msg='gridding data to {}: {}'.format(m, q.qsize()))
         p.update()
         try:
             interp_array = m.grid_srcwin(this_srcwin)
         except Exception as e:
             utils.echo_msg(e)
-            utils.echo_warning_msg('failed to grid srcwin {}, placing back into queue'.format(this_srcwin))
+            utils.echo_warning_msg(
+                'failed to grid srcwin {}, placing back into queue'.format(this_srcwin)
+            )
             q.put(this_srcwin)
             q.task_done()
             continue
@@ -881,24 +949,36 @@ class grid_scipy(threading.Thread):
         
     def run(self):
         for this_srcwin in utils.yield_srcwin(
-                n_size=(self.mod.ycount, self.mod.xcount), n_chunk=self.mod.chunk_size,
-                step=self.mod.chunk_size, verbose=True
+                n_size=(self.mod.ycount, self.mod.xcount),
+                n_chunk=self.mod.chunk_size,
+                step=self.mod.chunk_size,
+                verbose=True
         ):
             self.scipy_q.put(this_srcwin)
 
-        self.pbar = tqdm(desc='gridding data to {}'.format(self.mod), total=self.scipy_q.qsize())
+        self.pbar = tqdm(
+            desc='gridding data to {}'.format(self.mod),
+            total=self.scipy_q.qsize()
+        )
         for _ in range(1):
-            tg = threading.Thread(target=write_array_queue, args=(self.grid_q, self.scipy_q, self.mod))
+            tg = threading.Thread(
+                target=write_array_queue,
+                args=(self.grid_q, self.scipy_q, self.mod)
+            )
             tg.daemon = True
             tg.start()
 
         for _ in range(self.n_threads):
-            t = threading.Thread(target=scipy_queue, args=(self.scipy_q, self.grid_q, self.mod, self.pbar))
+            t = threading.Thread(
+                target=scipy_queue,
+                args=(self.scipy_q, self.grid_q, self.mod, self.pbar)
+            )
             t.daemon = True
             t.start()
 
         self.grid_q.join()
         self.scipy_q.join()
+        self.pbar.close()
         
 class WafflesSciPy(Waffle):
     """Generate DEM using Scipy gridding interpolation
@@ -932,12 +1012,14 @@ class WafflesSciPy(Waffle):
         self.chunk_buffer = utils.int_or(chunk_buffer)
         self.num_threads = utils.int_or(num_threads)
 
-    def run(self):
+    ## ==============================================
+    ## this 'run' command runs the scipy module in a multiple threads
+    ## ==============================================
+    def _run(self):
         if self.num_threads is None:
             return(self._run())
             
         self.open()
-        #srcwins = utils.chunk_srcwin(n_size=(self.ycount, self.xcount), n_chunk=self.chunk_size, step=self.chunk_size, verbose=True)
         try:
             gs = grid_scipy(self, n_threads=self.num_threads)
             gs.daemon = True
@@ -1040,8 +1122,11 @@ class WafflesSciPy(Waffle):
             #    return(points_array)
                 
         return(None)
-        
-    def _run(self):
+
+    ## ==============================================
+    ## this 'run' command runs the scipy module in a single thread
+    ## ==============================================
+    def run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
                 '{} is not a valid interpolation method, options are {}'.format(
@@ -1081,7 +1166,13 @@ class WafflesSciPy(Waffle):
         if self.verbose:
             utils.echo_msg('buffering srcwin by {} pixels'.format(self.chunk_buffer))
        
-        for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk, msg='generating {} grid'.format(self.method), verbose=self.verbose, step=n_step):
+        for srcwin in utils.yield_srcwin(
+                (self.ycount, self.xcount),
+                n_chunk=n_chunk,
+                msg='generating {} grid'.format(self.method),
+                verbose=self.verbose,
+                step=n_step
+        ):
             chunk_buffer = self.chunk_buffer
             srcwin_buff = utils.buffer_srcwin(srcwin, (self.ycount, self.xcount), chunk_buffer)
             points_array = points_band.ReadAsArray(*srcwin_buff)
@@ -1149,11 +1240,11 @@ class WafflesCubic(WafflesSciPy):
 class WafflesNearest(WafflesSciPy):
     """NEAREST neighbor DEM
     
------------
-Parameters:
+    -----------
+    Parameters:
     
-chunk_size=[val] - size of chunks in pixels
-chunk_buffer=[val] - size of the chunk buffer in pixels
+    chunk_size=[val] - size of chunks in pixels
+    chunk_buffer=[val] - size of the chunk buffer in pixels
     """
     
     def __init__(self, **kwargs):
@@ -1161,11 +1252,9 @@ chunk_buffer=[val] - size of the chunk buffer in pixels
         self.method = 'nearest'
         
 ## ==============================================
-##
 ## GMT Surface
 ##
 ## TODO: update to use pygmt
-##
 ## ==============================================
 class GMTSurface(Waffle):
     """SPLINE DEM via GMT surface
@@ -1243,11 +1332,9 @@ class GMTSurface(Waffle):
         return(self)
 
 ## ==============================================
-##
 ## GMT Triangulate
 ##
 ## TODO: update to use pygmt
-##
 ## ==============================================
 class GMTTriangulate(Waffle):
     """TRIANGULATION DEM via GMT triangulate
@@ -1286,11 +1373,9 @@ class GMTTriangulate(Waffle):
         return(self)
 
 ## ==============================================
-##
 ## GMT Near Neighbor
 ##
 ## TODO: update to use pygmt
-##
 ## ==============================================
 class GMTNearNeighbor(Waffle):
     """NEARNEIGHBOR DEM via GMT nearneighbor
@@ -1339,9 +1424,7 @@ class GMTNearNeighbor(Waffle):
         return(self)
 
 ## ==============================================
-##
 ## MB-System mbgrid
-##
 ## ==============================================
 class WafflesMBGrid(Waffle):
     """SPLINE DEM via MB-System's mbgrid.
@@ -1481,9 +1564,7 @@ class WafflesMBGrid(Waffle):
         return(self)
 
 ## ==============================================
-##
 ## GDAL gridding (invdst, linear, nearest, average)
-##
 ## ==============================================
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
@@ -1662,11 +1743,9 @@ class GDALNearest(WafflesGDALGrid):
             .format(radius1, radius2, angle, nodata)
     
 ## ==============================================
-##
 ## Waffles 'num' - no interpolation
 ##
-## just use stacks...
-##
+## old module, just use stacks...
 ## ==============================================
 class WafflesNum(Waffle):
     """Uninterpolated DEM populated by <mode>.
@@ -1787,9 +1866,7 @@ class WafflesNum(Waffle):
         return(self)
     
 ## ==============================================
-##
 ## Waffles VDatum
-##
 ## ==============================================
 class WafflesVDatum(Waffle):
     """VDATUM transformation grid.
@@ -1817,9 +1894,7 @@ class WafflesVDatum(Waffle):
         return(self)
     
 ## ==============================================
-##
 ## Waffles Coastline/Landmask
-##
 ## ==============================================
 class WafflesCoastline(Waffle):
     """COASTLINE (land/etc-mask) generation
@@ -2235,7 +2310,9 @@ class WafflesCoastline(Waffle):
         )
         
         if tmp_ds is not None:
-            tmp_layer = tmp_ds.CreateLayer('{}_tmp_c'.format(os.path.basename(self.name)), None, ogr.wkbMultiPolygon)
+            tmp_layer = tmp_ds.CreateLayer(
+                '{}_tmp_c'.format(os.path.basename(self.name)), None, ogr.wkbMultiPolygon
+            )
             tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
             gdalfun.gdal_polygonize('{}.tif'.format(self.name), tmp_layer, verbose=self.verbose)
             tmp_ds = None
@@ -2258,9 +2335,7 @@ class WafflesCoastline(Waffle):
         gdalfun.osr_prj_file(self.name + '.prj', self.dst_srs)
 
 ## ==============================================
-##
 ## Waffles Lakes Bathymetry
-##
 ## ==============================================
 class WafflesLakes(Waffle):
     """Estimate lake bathymetry.
@@ -2470,18 +2545,24 @@ class WafflesLakes(Waffle):
         lk_ds = ogr.Open(lakes_shp, 1)
         lk_layer = lk_ds.GetLayer()
 
+        ## ==============================================
         ## filter layer to region
+        ## ==============================================
         filter_region = self.p_region.copy()
         lk_layer.SetSpatialFilter(filter_region.export_as_geom())
 
+        ## ==============================================
         ## filter by ID
+        ## ==============================================
         if self.max_id is not None:
             lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
             
         if self.min_id is not None:
             lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
 
+        ## ==============================================
         ## filter by Area
+        ## ==============================================
         if self.max_area is not None:
             lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
             
@@ -2492,8 +2573,10 @@ class WafflesLakes(Waffle):
         if lk_features == 0:
             utils.echo_error_msg('no lakes found in region')
             return(self)
-        
+
+        ## ==============================================
         ## get lake ids and globathy depths
+        ## ==============================================
         lk_ids = []
         [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
         utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
@@ -2516,7 +2599,9 @@ class WafflesLakes(Waffle):
             utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
             self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
 
+        ## ==============================================
         ## fetch and initialize the copernicus data
+        ## ==============================================
         if self.elevations == 'copernicus':
             cop_ds = self._fetch_copernicus(cop_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
@@ -2552,8 +2637,10 @@ class WafflesLakes(Waffle):
         else:
             cop_band = None
             cop_arr = None
-        
+
+        ## ==============================================
         ## initialize the tmp datasources
+        ## ==============================================
         prox_ds = gdalfun.gdal_mem_ds(self.ds_config, name='prox')
         msk_ds = gdalfun.gdal_mem_ds(self.ds_config, name='msk')
         msk_band = None
@@ -2564,13 +2651,17 @@ class WafflesLakes(Waffle):
         
         if self.depth == 'globathy':
             globd = self._fetch_globathy(ids=lk_ids[:])
+            ## ==============================================
             ## rasterize hydrolakes using id
+            ## ==============================================
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
             msk_band.SetNoDataValue(self.ds_config['ndv'])
 
+            ## ==============================================
             ## assign max depth from globathy
+            ## ==============================================
             msk_arr = msk_band.ReadAsArray()
             with tqdm(
                     total=len(lk_ids),
@@ -2596,8 +2687,10 @@ class WafflesLakes(Waffle):
             
         else:            
             msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
-            
+
+        ## ==============================================
         ## calculate proximity of lake cells to shore
+        ## ==============================================
         if msk_band is None:
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
@@ -2612,8 +2705,10 @@ class WafflesLakes(Waffle):
         if cop_band is not None:
             cop_arr = cop_band.ReadAsArray()
 
-        utils.echo_msg('Calculating simulated lake depths...')
+        ## ==============================================
         ## apply calculation from globathy
+        ## ==============================================
+        utils.echo_msg('Calculating simulated lake depths...')
         bathy_arr = self.apply_calculation(
             prox_arr,
             msk_arr,
@@ -2629,11 +2724,9 @@ class WafflesLakes(Waffle):
         return(self)
 
 ## ==============================================
-##
 ## Waffles 'CUDEM' gridding
 ##
 ## combined gridding method (stacks/surface/coastline/IDW)
-##
 ## ==============================================
 class WafflesCUDEM(Waffle):
     """CUDEM integrated DEM generation.
@@ -2729,16 +2822,23 @@ class WafflesCUDEM(Waffle):
         if self.verbose:
             utils.echo_msg('cudem min weight is: {}'.format(self.min_weight))
 
+        ## ==============================================
         ## Remove outliers from the stacked data
+        ## ==============================================
         if self.filter_outliers is not None:
             gdalfun.gdal_filter_outliers2(
                 self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95)
             )
-            
+
+        ## ==============================================
         ## initial data to pass through surface (stack)
+        ## ==============================================
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
         pre_data = [stack_data_entry]
+        
+        ## ==============================================
         ## generate coastline
+        ## ==============================================
         if self.landmask:
             coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
             coastline = self.generate_coastline(pre_data=coast_data)
@@ -2746,7 +2846,9 @@ class WafflesCUDEM(Waffle):
         else:
             pre_clip = None
 
+        ## ==============================================
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight
+        ## ==============================================
         while pre >= 0:
             pre_xinc = float(self.xinc * (3**pre))
             pre_yinc = float(self.yinc * (3**pre))
@@ -2757,8 +2859,10 @@ class WafflesCUDEM(Waffle):
                 
             if ysample == 0:
                 ysample = self.yinc
-                
+
+            ## ==============================================
             ## if not final output, setup the configuration for the pre-surface
+            ## ==============================================
             if pre != self.pre_count:
                 pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
                 if pre_weight == 0:
@@ -2769,7 +2873,9 @@ class WafflesCUDEM(Waffle):
                 pre_data = [stack_data_entry, pre_data_entry]
                 pre_region.wmin = pre_weight
 
+            ## ==============================================
             ## reset pre_region for final grid
+            ## ==============================================
             if pre == 0:
                 pre_region = self.p_region.copy()
                 pre_region.wmin = pre_weight
@@ -2778,6 +2884,7 @@ class WafflesCUDEM(Waffle):
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
 
+            ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
             waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             #'linear:chunk_step=None:chunk_buffer=10'
 
@@ -2791,15 +2898,590 @@ class WafflesCUDEM(Waffle):
             pre_surface.generate()
             pre -= 1
 
-        ## todo add option to flatten here...
+        ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
         gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
         return(self)
 
 ## ==============================================
-##
+## Waffles Uncertainty module
+## ==============================================
+class WafflesUncertainty(Waffle):
+    """Calculate cell-level interpolation uncertainty
+
+    -----------
+    Parameters:
+
+    waffles_module (str): waffles module string
+    percentile (int): max percentile
+    sims (int): number of split-sample simulations
+    chnk_lvl (int): the 'chunk-level'
+    """
+    
+    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
+                 max_sample = None, max_errors = 5000000, accumulate = False, **kwargs):
+
+        self.waffles_module_args = {}
+        tmp_waffles = Waffle()
+        for kpam, kval in kwargs.items():
+            if kpam not in tmp_waffles.__dict__:
+                self.waffles_module_args[kpam] = kval
+
+        for kpam, kval in self.waffles_module_args.items():
+            del kwargs[kpam]
+            
+        super().__init__(**kwargs)
+        self.waffles_module = waffles_module
+        self.percentile = percentile
+        self.sims = sims
+        self.max_sample = max_sample
+        self.chnk_lvl = chnk_lvl
+        self.accumulate = accumulate
+        self.max_errors = max_errors
+        
+        self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
+        self.prox_errs_local = self.prox_errs
+        if not os.path.exists(self.prox_errs):
+            if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
+                self.prox_errs = os.path.join(utils.cudem_data, self.prox_errs)
+            else:
+                utils.touch(self.prox_errs)
+                self.accumulate = True
+        
+        self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
+        self.prox = None
+        self.slope = None
+
+    def _mask_analysis(self, src_gdal, region = None):
+        """
+        returns the number of filled cells, the total number of cells 
+        and the percent of total cells filled.
+        """
+       
+        ds_config = gdalfun.gdal_infos(src_gdal)
+        if region is not None:
+            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+        else:
+            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+          
+        ds_arr = src_gdal.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        ds_arr[~np.isnan(ds_arr)] = 1
+        msk_sum = np.nansum(ds_arr)
+        msk_max = float(srcwin[2] * srcwin[3])
+        msk_perc = float((msk_sum / msk_max) * 100.)
+        dst_arr = None
+
+        return(msk_sum, msk_max, msk_perc)
+
+    def _prox_analysis(self, src_gdal, region = None, band = 1):
+        """
+        returns the percentile of values in the srcwin
+        """
+        
+        ds_config = gdalfun.gdal_infos(src_gdal)
+        if region is not None:
+            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+        else:
+            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
+            
+        ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin).astype(float)
+        ds_arr[ds_arr == ds_config['ndv']] = np.nan
+        prox_perc = np.nanpercentile(ds_arr, 95)
+        dst_arr = None
+
+        return(prox_perc)
+
+    def _gen_prox(self, out_prox = None):
+        """
+        generate a proximity grid from the data mask raster
+        
+        returns the output proximity grid's fn
+        """
+        
+        if out_prox is None:
+            out_prox = utils.make_temp_fn('{}_prox.tif'.format(self.params['mod_args']['waffles_module']))
+            
+        utils.echo_msg('generating proximity grid {}...'.format(out_prox))
+        gdalfun.gdal_proximity(self.stack, out_prox, distunits='PIXEL')
+        if self.dst_srs is not None:
+            gdalfun.gdal_set_srs(out_prox, self.dst_srs)
+
+        return(out_prox)
+
+    def _gen_slope(self, out_slope = None):
+        """
+        generate a slope grid from the elevation raster
+        
+        returns the output slope grid's fn
+        """
+
+        if out_slope is None:
+            out_slope = utils.make_temp_fn('{}_slope.tif'.format(self.params['mod_args']['waffles_module']))
+            
+        utils.echo_msg('generating slope grid {}...'.format(out_slope))
+        gdalfun.gdal_slope(self.stack, out_slope)
+        if self.dst_srs is not None:
+            gdalfun.gdal_set_srs(out_slope, self.dst_srs)
+
+        return(out_slope)
+
+    def _regions_sort(self, trainers, t_num = 25, verbose = False):
+        """sort regions (trainers is a list of regions) by distance; 
+        a region is a list: [xmin, xmax, ymin, ymax].
+        
+        returns the sorted region-list
+        """
+
+        train_sorted = []
+        for z, train in enumerate(trainers):
+            train_d = []
+            np.random.shuffle(train)
+            train_total = len(train)
+            while True:
+                if verbose:
+                    utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
+                    
+                if len(train) == 0:
+                    break
+                
+                this_center = train[0][0].center()
+                train_d.append(train[0])
+                train = train[1:]
+                if len(train_d) > t_num or len(train) == 0:
+                    break
+                
+                dsts = [utils.euc_dst(this_center, x[0].center()) for x in train]
+                min_dst = np.percentile(dsts, 50)
+                d_t = lambda t: utils.euc_dst(this_center, t[0].center()) > min_dst
+                np.random.shuffle(train)
+                train.sort(reverse=True, key=d_t)
+            #if verbose:
+            #    utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
+                
+            train_sorted.append(train_d)
+            
+        if verbose:
+            utils.echo_msg_inline('sorting training tiles [OK]\n')
+            
+        return(train_sorted)
+
+    def _select_split(self, o_xyz, sub_region, sub_bn, verbose = False):
+        """split an xyz file into an inner and outer region."""
+        
+        out_inner = '{}_inner.xyz'.format(sub_bn)
+        out_outer = '{}_outer.xyz'.format(sub_bn)
+        xyz_ds = dlim.XYZFile(fn=o_xyz, data_format=168, src_region=sub_region).initialize()
+        with open(out_inner, 'w') as sub_inner:
+            xyz_ds.dump_xyz_direct(dst_port=sub_inner)
+            
+        xyz_ds.invert_region = True
+        with open(out_outer, 'w') as sub_outer:
+            xyz_ds.dump_xyz_direct(dst_port=sub_outer)
+            
+        return([out_inner, out_outer])    
+
+    def _sub_region_analysis(self, sub_regions):
+        """sub-region analysis
+
+        return the sub-zones.
+        """
+        
+        sub_zones = {}
+        stack_ds = gdal.Open(self.stack)
+        prox_ds = gdal.Open(self.prox)
+        slp_ds = gdal.Open(self.slope)
+        with tqdm(
+                total=len(sub_regions),
+                desc='analyzing {} sub-regions'.format(len(sub_regions)),
+                leave=self.verbose
+        ) as pbar:
+            for sc, sub_region in enumerate(sub_regions):
+                pbar.update()
+                s_sum, s_g_max, s_perc = self._mask_analysis(stack_ds, region=sub_region)
+                if s_sum == 0:
+                    continue
+
+                p_perc = self._prox_analysis(prox_ds, region=sub_region)
+                slp_perc = self._prox_analysis(slp_ds, region=sub_region)
+                zone = None
+                ## ==============================================
+                ## assign the region to the zone based on the density/slope
+                ## ==============================================
+                if p_perc <= self.prox_perc_33:# or abs(p_perc - self.prox_perc_33) < 0.01:
+                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[6]
+                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[7]
+                    else:
+                        zone = self._zones[8]
+                elif p_perc <= self.prox_perc_66:# or abs(p_perc - self.prox_perc_66) < 0.01:
+                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[3]
+                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[4]
+                    else:
+                        zone = self._zones[5]
+                else:
+                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
+                        zone = self._zones[0]
+                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
+                        zone = self._zones[1]
+                    else:
+                        zone = self._zones[2]
+
+                if zone is not None:
+                    sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
+            
+        stack_ds = prox_ds = slp_ds = None
+        return(sub_zones)
+     
+    def _split_sample(self, trainers, perc):#, max_dist):#, s_dp, pre_ec_d):
+        """split-sample simulations and error calculations
+        sims = max-simulations
+        """
+            
+        last_ec_d = None
+        s_dp = []
+        status = 0
+        trains = self._regions_sort(trainers, verbose=False)
+        all_trains = [x for s in trains for x in s[:5]]
+        tot_trains = len(all_trains)
+        
+        with tqdm(
+                desc='performing SPLIT-SAMPLE simulation',
+                leave=False,
+                total=tot_trains
+        ) as pbar:
+            for n, sub_region in enumerate(all_trains):
+                ## ==============================================
+                ## perform split-sample analysis on each training region.
+                ## ==============================================
+                pbar.update()
+                ss_samp = perc
+                this_region = sub_region[0].copy()
+                if sub_region[3] < ss_samp:
+                   ss_samp = sub_region[3]
+
+                ## ==============================================
+                ## extract the xyz data for the region from the DEM
+                ## ==============================================
+                o_xyz = utils.make_temp_fn('{}_{}.xyz'.format(self.name, n))
+                with gdalfun.gdal_datasource(self.stack) as ds:
+                   ds_config = gdalfun.gdal_infos(ds)
+                   b_region = this_region.copy()
+                   b_region.buffer(pct=20, x_inc=self.xinc, y_inc=self.yinc)
+                   srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+
+                   ## TODO: extract weights here as well...
+                   with open(o_xyz, 'w') as o_fh:
+                       for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin):
+                           xyz.dump(dst_port=o_fh)
+
+                if os.stat(o_xyz).st_size == 0:
+                    continue
+
+                ## ==============================================
+                ## split the xyz data to inner/outer; outer is
+                ## the data buffer, inner will be randomly sampled
+                ## ==============================================
+                s_inner, s_outer = self._select_split(o_xyz, this_region, utils.make_temp_fn('sub_{}'.format(n)))
+                if os.stat(s_inner).st_size == 0:
+                    utils.echo_warning_msg('no inner points, cont.')
+                    continue
+
+                if os.stat(s_outer).st_size == 0:
+                    utils.echo_warning_msg('no outer points, cont.')
+                    continue
+
+                sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
+                ss_len = len(sub_xyz)
+                #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
+                sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
+                ##sx_cnt = int(ss_len * (ss_samp / 100.))
+                ##sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                sub_xyz_head = utils.make_temp_fn('sub_{}_head_{}.xyz'.format(n, sx_cnt))
+                np.random.shuffle(sub_xyz)
+                np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
+
+                ## ==============================================
+                ## generate the random-sample DEM
+                ## ==============================================
+                this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
+                kwargs = self.params['kwargs']
+                kwargs['name'] = utils.make_temp_fn('sub_{}'.format(n))
+                kwargs['data'] = [s_outer, sub_xyz_head]
+                kwargs['src_region'] = b_region
+                kwargs['want_uncertainty'] = False
+                kwargs['verbose'] = False
+                kwargs['clobber'] = True
+                this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
+                this_waffle.initialize()
+                wf = this_waffle.generate()
+                if not WaffleDEM(wf.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
+                    continue
+
+                ## ==============================================
+                ## generate the random-sample data PROX and SLOPE
+                ## ==============================================
+                sub_prox = '{}_prox.tif'.format(wf.name)
+                gdalfun.gdal_proximity(wf.stack, sub_prox, distunits='PIXEL')
+
+                ## ==============================================
+                ## Calculate the random-sample errors
+                ## todo: account for source uncertainty (rms with xyz?)
+                ## ==============================================
+                sub_xyd = gdalfun.gdal_query(sub_xyz[:sx_cnt], wf.fn, 'xyd')
+                sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
+                utils.remove_glob('{}*'.format(sub_xyz_head))
+                
+                if sub_dp is not None and len(sub_dp) > 0:
+                    try:
+                        s_dp = np.vstack((s_dp, sub_dp))
+                    except:
+                        s_dp = sub_dp
+
+                utils.remove_glob('{}*'.format(wf.stack), '{}*'.format(o_xyz), s_inner, s_outer, wf.fn)
+                s_dp_m = []
+                if s_dp is not None and len(s_dp) > 0:
+                    err_count = len(s_dp)
+                    ds = np.unique(s_dp[:,1])
+                    for d in ds:
+                        arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
+                        if arr.any():
+                            arr_count = np.count_nonzero(arr)
+                            err_perc = (arr_count / err_count)
+                            d_err_count = int(self.max_errors * err_perc)
+                            err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
+                            err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
+                            err_sum = err_sum[np.nonzero(err_cnt)]
+                            err_cnt = err_cnt[np.nonzero(err_cnt)]
+                            d_errs = err_sum/err_cnt
+                            d_dist = np.full((d_errs.size, 1), d)
+                            dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
+                            if len(s_dp_m) == 0:
+                                s_dp_m = np.array(dist_errs)
+                            else:
+                                s_dp_m = np.vstack((s_dp_m, dist_errs))
+        s_dp = np.array(s_dp_m)
+        return(s_dp)
+
+    def get_accumulated_coefficient(self):
+        s_dp = []        
+        if os.path.exists(self.prox_errs):
+            s_dp = np.loadtxt(self.prox_errs)
+            
+        utils.echo_msg('loaded {} errors from {}'.format(len(s_dp), self.prox_errs))
+        pre_ec_d = [0, .1, .2]
+        if len(s_dp) > 1:
+            max_dist = np.nanpercentile(s_dp[:,1], 95)
+            pre_ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], self.percentile, coeff_guess=pre_ec_d)
+
+        return(pre_ec_d, s_dp)
+        
+    def apply_coefficient(self, ec_d):
+        if self.prox is None:
+            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
+            
+        utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
+        with gdalfun.gdal_datasource(self.prox, update=True) as prox_ds:
+            prox_inf = gdalfun.gdal_infos(prox_ds)
+            prox_band = prox_ds.GetRasterBand(1)
+            prox_arr = prox_band.ReadAsArray().astype(float)
+            with gdalfun.gdal_datasource(self.stack) as stack_ds:
+                unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+                unc_band = stack_ds.GetRasterBand(4)
+                unc_arr = unc_band.ReadAsArray()
+                unc_arr[unc_arr == unc_inf['ndv']] = np.nan
+                out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
+                out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
+                
+        unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
+        if self.dst_srs is not None:
+            status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
+            
+        utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
+        return(unc_out)
+    
+    def run(self):
+        s_dp = s_ds = None
+        unc_out = {}
+        if self.verbose:
+            utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
+            utils.echo_msg('using {}; accumulate is {}'.format(self.prox_errs, self.accumulate))
+            
+        if self.prox is None:
+            self.prox = self._gen_prox()
+
+        if self.slope is None:
+            self.slope = self._gen_slope()
+
+        pre_ec_d, s_dp = self.get_accumulated_coefficient()            
+        if len(s_dp) <= 1:
+            self.accumulate = True
+
+        if not self.accumulate:
+            unc_out = self.apply_coefficient(pre_ec_d)
+            utils.remove_glob(self.slope)
+            utils.remove_glob(self.prox)
+            return(unc_out, 0)                        
+        else:
+            ## ==============================================
+            ## region and der. analysis
+            ## ==============================================
+            self.region_info = {}
+            with gdalfun.gdal_datasource(self.stack) as tmp_ds:
+                num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
+
+            self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
+            self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
+            self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
+            self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
+
+            self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
+            self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
+            self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
+            self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
+
+            self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
+            for x in self.region_info.keys():
+                utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
+
+            ## ==============================================
+            ## chunk region into sub regions
+            ## ==============================================
+            chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
+            chnk_inc = chnk_inc if chnk_inc > 10 else 10
+            utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
+
+            sub_regions = self.region.chunk(self.xinc, chnk_inc)
+            utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
+
+            ## ==============================================
+            ## sub-region analysis
+            ## ==============================================
+            sub_zones = self._sub_region_analysis(sub_regions)
+
+            ## ==============================================
+            ## sub-region density and percentiles
+            ## ==============================================
+            s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
+            s_5perc = np.percentile(s_dens, 5)
+            s_dens = None
+            utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
+
+            ## ==============================================
+            ## zone analysis / generate training regions
+            ## ==============================================
+            trainers = []
+            t_perc = 95
+            s_perc = 50
+            for z, this_zone in enumerate(self._zones):
+                tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
+                if len(tile_set) > 0:
+                    d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
+                else:
+                    continue
+
+                t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
+                utils.echo_msg(
+                    'possible {} training zones: {} @ MAX {}'.format(
+                        self._zones[z].upper(), len(t_trainers), d_50perc
+                    )
+                )
+                trainers.append(t_trainers)
+
+            utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
+
+            ## ==============================================
+            ## split-sample simulations and error calculations
+            ## sims = max-simulations
+            ## ==============================================
+            if self.sims is None:
+                self.sims = int(len(sub_regions)/tot_trains)
+
+            if self.max_sample is None:
+                self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
+
+            utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
+            utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
+            utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
+            max_dist = gdalfun.gdal_percentile(self.prox, 95)
+            utils.echo_msg('max distance is {}'.format(max_dist))
+            sim = 0
+            utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
+            while True:
+                sim += 1
+                sample_dp = self._split_sample(trainers, num_perc)
+                if len(s_dp) == 0:
+                    s_dp = sample_dp
+                else:
+                    #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
+                    s_dp = np.vstack((s_dp, sample_dp))
+
+                err_count = len(s_dp)
+                ds = np.unique(s_dp[:,1])
+                s_dp_m = None
+
+                for d in ds:
+                    arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
+                    if arr.any():
+                        arr_count = np.count_nonzero(arr)
+                        err_perc = (arr_count / err_count)
+                        d_err_count = int(self.max_errors * err_perc)
+                        err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
+                        err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
+                        err_sum = err_sum[np.nonzero(err_cnt)]
+                        err_cnt = err_cnt[np.nonzero(err_cnt)]
+                        d_errs = err_sum/err_cnt
+                        d_dist = np.full((d_errs.size, 1), d)
+                        dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
+
+                        if s_dp_m is None:
+                            s_dp_m = np.array(dist_errs)
+                        else:
+                            s_dp_m = np.vstack((s_dp_m, dist_errs))
+
+                s_dp = np.array(s_dp_m)
+                
+                #if self.accumulate:
+                np.savetxt(self.prox_errs_local, s_dp, '%f', ' ')
+
+                max_dist = np.nanpercentile(s_dp[:,1], 95)
+                utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
+                utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
+
+                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
+                pre_ec_d = ec_d
+                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
+
+                ## ==============================================
+                ## continue if we got back the default err coeff
+                ## ==============================================
+                if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
+                    continue
+
+                ## ==============================================
+                ## continue if we haven't reached max_sample
+                ## ==============================================
+                #if len(s_dp) < self.max_sample:
+                #    continue
+
+                ## ==============================================
+                ## break if we gathered enough simulation errors
+                ## ==============================================
+                if sim >= int(self.sims): 
+                    break
+
+            ## ==============================================
+            ## Save/Output results, apply error coefficient to full proximity grid
+            ## ==============================================
+            unc_out = self.apply_coefficient(ec_d)
+            utils.remove_glob(self.slope, self.prox)
+            return(unc_out, 0)
+
+## ==============================================
 ## Waffles TESTING
-##
 ## ==============================================
 class WafflesCUBE(Waffle):
     """
@@ -3257,12 +3939,13 @@ class WafflesPatch(Waffle):
         if not regions.regions_intersect_p(self.region, dem_region):
             utils.echo_error_msg('input region does not intersect with input DEM')
 
-
-        # grid the difference to array using query_dump / num
-        # polygonize the differences and add small buffer (1% or so)
-        # make zero array, inverse clipped to buffered polygonized diffs
-        # surface zero array and diffs...
-        # add surfaced diffs to self.dem
+        ## ==============================================
+        ## grid the difference to array using query_dump / num
+        ## polygonize the differences and add small buffer (1% or so)
+        ## make zero array, inverse clipped to buffered polygonized diffs
+        ## surface zero array and diffs...
+        ## add surfaced diffs to self.dem
+        ## ==============================================
                         
         # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
         #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
@@ -3322,609 +4005,22 @@ class WafflesPatch(Waffle):
         diff_ds = dem_ds = None
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
-
-## ==============================================
-##
-## Waffles Uncertainty module
-##
-## ==============================================
-class WafflesUncertainty(Waffle):
-
-    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
-                 max_sample = None, max_errors = 5000000, accumulate = False, **kwargs):
-        """calculate cell-level interpolation uncertainty
-
-        Args:
-          waffles_module (str): waffles module string
-          percentile (int): max percentile
-          sims (int): number of split-sample simulations
-          chnk_lvl (int): the 'chunk-level'
-        """
-
-        self.waffles_module_args = {}
-        tmp_waffles = Waffle()
-        for kpam, kval in kwargs.items():
-            if kpam not in tmp_waffles.__dict__:
-                self.waffles_module_args[kpam] = kval
-
-        for kpam, kval in self.waffles_module_args.items():
-            del kwargs[kpam]
-            
-        super().__init__(**kwargs)
-        self.waffles_module = waffles_module
-        self.percentile = percentile
-        self.sims = sims
-        self.max_sample = max_sample
-        self.chnk_lvl = chnk_lvl
-        self.accumulate = accumulate
-        self.max_errors = max_errors
         
-        self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
-        self.prox_errs_local = self.prox_errs
-        if not os.path.exists(self.prox_errs):
-            if os.path.exists(os.path.join(utils.cudem_data, self.prox_errs)):
-                self.prox_errs = os.path.join(utils.cudem_data, self.prox_errs)
-            else:
-                utils.touch(self.prox_errs)
-                self.accumulate = True
-        
-        self._zones = ['LD0','LD1','LD2','MD0','MD1','MD2','HD0', 'HD1', 'HD2']
-        self.prox = None
-        self.slope = None
-
-    def _mask_analysis(self, src_gdal, region = None):
-        """
-        returns the number of filled cells, the total number of cells 
-        and the percent of total cells filled.
-        """
-       
-        ds_config = gdalfun.gdal_infos(src_gdal)
-        if region is not None:
-            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
-        else:
-            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
-          
-        ds_arr = src_gdal.GetRasterBand(1).ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-        ds_arr[ds_arr == ds_config['ndv']] = np.nan
-        ds_arr[~np.isnan(ds_arr)] = 1
-        msk_sum = np.nansum(ds_arr)
-        msk_max = float(srcwin[2] * srcwin[3])
-        msk_perc = float((msk_sum / msk_max) * 100.)
-        dst_arr = None
-
-        return(msk_sum, msk_max, msk_perc)
-
-    def _prox_analysis(self, src_gdal, region = None, band = 1):
-        """
-        returns the percentile of values in the srcwin
-        """
-        
-        ds_config = gdalfun.gdal_infos(src_gdal)
-        if region is not None:
-            srcwin = region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
-        else:
-            srcwin = (0, 0, ds_config['nx'], ds_config['ny'])
-            
-        ds_arr = src_gdal.GetRasterBand(band).ReadAsArray(*srcwin).astype(float)
-        ds_arr[ds_arr == ds_config['ndv']] = np.nan
-        prox_perc = np.nanpercentile(ds_arr, 95)
-        dst_arr = None
-
-        return(prox_perc)
-
-    def _gen_prox(self, out_prox = None):
-        """
-        generate a proximity grid from the data mask raster
-        
-        returns the output proximity grid's fn
-        """
-        
-        if out_prox is None:
-            out_prox = utils.make_temp_fn('{}_prox.tif'.format(self.params['mod_args']['waffles_module']))
-            
-        utils.echo_msg('generating proximity grid {}...'.format(out_prox))
-        gdalfun.gdal_proximity(self.stack, out_prox, distunits='PIXEL')
-        if self.dst_srs is not None:
-            gdalfun.gdal_set_srs(out_prox, self.dst_srs)
-
-        return(out_prox)
-
-    def _gen_slope(self, out_slope = None):
-        """
-        generate a slope grid from the elevation raster
-        
-        returns the output slope grid's fn
-        """
-
-        if out_slope is None:
-            out_slope = utils.make_temp_fn('{}_slope.tif'.format(self.params['mod_args']['waffles_module']))
-            
-        utils.echo_msg('generating slope grid {}...'.format(out_slope))
-        gdalfun.gdal_slope(self.stack, out_slope)
-        if self.dst_srs is not None:
-            gdalfun.gdal_set_srs(out_slope, self.dst_srs)
-
-        return(out_slope)
-
-    def _regions_sort(self, trainers, t_num = 25, verbose = False):
-        """sort regions (trainers is a list of regions) by distance; 
-        a region is a list: [xmin, xmax, ymin, ymax].
-        
-        returns the sorted region-list
-        """
-
-        train_sorted = []
-        for z, train in enumerate(trainers):
-            train_d = []
-            np.random.shuffle(train)
-            train_total = len(train)
-            while True:
-                if verbose:
-                    utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
-                    
-                if len(train) == 0:
-                    break
-                
-                this_center = train[0][0].center()
-                train_d.append(train[0])
-                train = train[1:]
-                if len(train_d) > t_num or len(train) == 0:
-                    break
-                
-                dsts = [utils.euc_dst(this_center, x[0].center()) for x in train]
-                min_dst = np.percentile(dsts, 50)
-                d_t = lambda t: utils.euc_dst(this_center, t[0].center()) > min_dst
-                np.random.shuffle(train)
-                train.sort(reverse=True, key=d_t)
-            #if verbose:
-            #    utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
-                
-            train_sorted.append(train_d)
-            
-        if verbose:
-            utils.echo_msg_inline('sorting training tiles [OK]\n')
-            
-        return(train_sorted)
-
-    def _select_split(self, o_xyz, sub_region, sub_bn, verbose = False):
-        """split an xyz file into an inner and outer region."""
-        
-        out_inner = '{}_inner.xyz'.format(sub_bn)
-        out_outer = '{}_outer.xyz'.format(sub_bn)
-        xyz_ds = dlim.XYZFile(fn=o_xyz, data_format=168, src_region=sub_region).initialize()
-        with open(out_inner, 'w') as sub_inner:
-            xyz_ds.dump_xyz_direct(dst_port=sub_inner)
-            
-        xyz_ds.invert_region = True
-        with open(out_outer, 'w') as sub_outer:
-            xyz_ds.dump_xyz_direct(dst_port=sub_outer)
-            
-        return([out_inner, out_outer])    
-
-    def _sub_region_analysis(self, sub_regions):
-        """sub-region analysis
-
-        return the sub-zones.
-        """
-        
-        sub_zones = {}
-        stack_ds = gdal.Open(self.stack)
-        prox_ds = gdal.Open(self.prox)
-        slp_ds = gdal.Open(self.slope)
-        with tqdm(
-                total=len(sub_regions),
-                desc='analyzing {} sub-regions'.format(len(sub_regions)),
-                leave=self.verbose
-        ) as pbar:
-            for sc, sub_region in enumerate(sub_regions):
-                pbar.update()
-                s_sum, s_g_max, s_perc = self._mask_analysis(stack_ds, region=sub_region)
-                if s_sum == 0:
-                    continue
-
-                p_perc = self._prox_analysis(prox_ds, region=sub_region)
-                slp_perc = self._prox_analysis(slp_ds, region=sub_region)
-                zone = None
-                ## assign the region to the zone based on the density/slope
-                if p_perc <= self.prox_perc_33:# or abs(p_perc - self.prox_perc_33) < 0.01:
-                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
-                        zone = self._zones[6]
-                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
-                        zone = self._zones[7]
-                    else:
-                        zone = self._zones[8]
-                elif p_perc <= self.prox_perc_66:# or abs(p_perc - self.prox_perc_66) < 0.01:
-                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
-                        zone = self._zones[3]
-                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
-                        zone = self._zones[4]
-                    else:
-                        zone = self._zones[5]
-                else:
-                    if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
-                        zone = self._zones[0]
-                    elif slp_perc <= self.slp_perc_66:# or abs(slp_perc - self.slp_perc_66) < 0.01:
-                        zone = self._zones[1]
-                    else:
-                        zone = self._zones[2]
-
-                if zone is not None:
-                    sub_zones[sc + 1] = [sub_region, s_g_max, s_sum, s_perc, p_perc, zone]
-            
-        stack_ds = prox_ds = slp_ds = None
-        return(sub_zones)
-     
-    def _split_sample(self, trainers, perc):#, max_dist):#, s_dp, pre_ec_d):
-        """split-sample simulations and error calculations
-        sims = max-simulations
-        """
-            
-        last_ec_d = None
-        s_dp = []
-        status = 0
-        trains = self._regions_sort(trainers, verbose=False)
-        all_trains = [x for s in trains for x in s[:5]]
-        tot_trains = len(all_trains)
-        
-        with tqdm(
-                desc='performing SPLIT-SAMPLE simulation',
-                leave=False,
-                total=tot_trains
-        ) as pbar:
-            for n, sub_region in enumerate(all_trains):
-                ## ==============================================
-                ## perform split-sample analysis on each training region.
-                ## ==============================================
-                pbar.update()
-                ss_samp = perc
-                this_region = sub_region[0].copy()
-                if sub_region[3] < ss_samp:
-                   ss_samp = sub_region[3]
-
-                ## ==============================================
-                ## extract the xyz data for the region from the DEM
-                ## ==============================================
-                o_xyz = utils.make_temp_fn('{}_{}.xyz'.format(self.name, n))
-                with gdalfun.gdal_datasource(self.stack) as ds:
-                   ds_config = gdalfun.gdal_infos(ds)
-                   b_region = this_region.copy()
-                   b_region.buffer(pct=20, x_inc=self.xinc, y_inc=self.yinc)
-                   srcwin = b_region.srcwin(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
-
-                   ## TODO: extract weights here as well...
-                   with open(o_xyz, 'w') as o_fh:
-                       for xyz in gdalfun.gdal_parse(ds, srcwin=srcwin):
-                           xyz.dump(dst_port=o_fh)
-
-                if os.stat(o_xyz).st_size == 0:
-                    continue
-
-                ## ==============================================
-                ## split the xyz data to inner/outer; outer is
-                ## the data buffer, inner will be randomly sampled
-                ## ==============================================
-                s_inner, s_outer = self._select_split(o_xyz, this_region, utils.make_temp_fn('sub_{}'.format(n)))
-                if os.stat(s_inner).st_size == 0:
-                    utils.echo_warning_msg('no inner points, cont.')
-                    continue
-
-                if os.stat(s_outer).st_size == 0:
-                    utils.echo_warning_msg('no outer points, cont.')
-                    continue
-
-                sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
-                ss_len = len(sub_xyz)
-                #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
-                sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
-                ##sx_cnt = int(ss_len * (ss_samp / 100.))
-                ##sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
-                sub_xyz_head = utils.make_temp_fn('sub_{}_head_{}.xyz'.format(n, sx_cnt))
-                np.random.shuffle(sub_xyz)
-                np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
-
-                ## ==============================================
-                ## generate the random-sample DEM
-                ## ==============================================
-                this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
-                kwargs = self.params['kwargs']
-                kwargs['name'] = utils.make_temp_fn('sub_{}'.format(n))
-                kwargs['data'] = [s_outer, sub_xyz_head]
-                kwargs['src_region'] = b_region
-                kwargs['want_uncertainty'] = False
-                kwargs['verbose'] = False
-                kwargs['clobber'] = True
-                this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
-                this_waffle.initialize()
-                wf = this_waffle.generate()
-                if not WaffleDEM(wf.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
-                    continue
-
-                ## ==============================================
-                ## generate the random-sample data PROX and SLOPE
-                ## ==============================================
-                sub_prox = '{}_prox.tif'.format(wf.name)
-                gdalfun.gdal_proximity(wf.stack, sub_prox, distunits='PIXEL')
-
-                ## ==============================================
-                ## Calculate the random-sample errors
-                ## todo: account for source uncertainty (rms with xyz?)
-                ## ==============================================
-                sub_xyd = gdalfun.gdal_query(sub_xyz[:sx_cnt], wf.fn, 'xyd')
-                sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
-                utils.remove_glob('{}*'.format(sub_xyz_head))
-                
-                if sub_dp is not None and len(sub_dp) > 0:
-                    try:
-                        s_dp = np.vstack((s_dp, sub_dp))
-                    except:
-                        s_dp = sub_dp
-
-                utils.remove_glob('{}*'.format(wf.stack))
-                utils.remove_glob('{}*'.format(o_xyz), 'sub_{}*'.format(n))
-                s_dp_m = []
-                if s_dp is not None and len(s_dp) > 0:
-                    err_count = len(s_dp)
-                    ds = np.unique(s_dp[:,1])
-                    for d in ds:
-                        arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
-                        if arr.any():
-                            arr_count = np.count_nonzero(arr)
-                            err_perc = (arr_count / err_count)
-                            d_err_count = int(self.max_errors * err_perc)
-                            err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
-                            err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
-                            err_sum = err_sum[np.nonzero(err_cnt)]
-                            err_cnt = err_cnt[np.nonzero(err_cnt)]
-                            d_errs = err_sum/err_cnt
-                            d_dist = np.full((d_errs.size, 1), d)
-                            dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
-                            if len(s_dp_m) == 0:
-                                s_dp_m = np.array(dist_errs)
-                            else:
-                                s_dp_m = np.vstack((s_dp_m, dist_errs))
-        s_dp = np.array(s_dp_m)
-        return(s_dp)
-
-    def get_accumulated_coefficient(self):
-        s_dp = []        
-        if os.path.exists(self.prox_errs):
-            s_dp = np.loadtxt(self.prox_errs)
-            
-        utils.echo_msg('loaded {} errors from {}'.format(len(s_dp), self.prox_errs))
-        pre_ec_d = [0, .1, .2]
-        if len(s_dp) > 1:
-            max_dist = np.nanpercentile(s_dp[:,1], 95)
-            pre_ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], self.percentile, coeff_guess=pre_ec_d)
-
-        return(pre_ec_d, s_dp)
-        
-    def apply_coefficient(self, ec_d):
-        if self.prox is None:
-            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
-            
-        utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
-        with gdalfun.gdal_datasource(self.prox, update=True) as prox_ds:
-            prox_inf = gdalfun.gdal_infos(prox_ds)
-            prox_band = prox_ds.GetRasterBand(1)
-            prox_arr = prox_band.ReadAsArray().astype(float)
-            with gdalfun.gdal_datasource(self.stack) as stack_ds:
-                unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
-                unc_band = stack_ds.GetRasterBand(4)
-                unc_arr = unc_band.ReadAsArray()
-                unc_arr[unc_arr == unc_inf['ndv']] = np.nan
-                out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
-                out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
-                
-        unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
-        if self.dst_srs is not None:
-            status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
-            
-        utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
-        return(unc_out)
-    
-    def run(self):
-        s_dp = s_ds = None
-        unc_out = {}
-        if self.verbose:
-            utils.echo_msg('running UNCERTAINTY module using {}...'.format(self.params['mod_args']['waffles_module']))
-            utils.echo_msg('using {}; accumulate is {}'.format(self.prox_errs, self.accumulate))
-        if self.prox is None:
-            self.prox = self._gen_prox('{}_u.tif'.format(self.name))
-
-        if self.slope is None:
-            self.slope = self._gen_slope()
-
-        pre_ec_d, s_dp = self.get_accumulated_coefficient()            
-        if len(s_dp) <= 1:
-            self.accumulate = True
-
-        if not self.accumulate:
-            unc_out = self.apply_coefficient(pre_ec_d)
-            utils.remove_glob(self.slope)
-            utils.remove_glob(self.prox)
-            return(unc_out, 0)                        
-        else:
-            ## ==============================================
-            ## region and der. analysis
-            ## ==============================================
-            self.region_info = {}
-            with gdalfun.gdal_datasource(self.stack) as tmp_ds:
-                num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
-
-            self.prox_percentile = gdalfun.gdal_percentile(self.prox, self.percentile)
-            self.prox_perc_33 = gdalfun.gdal_percentile(self.prox, 25)
-            self.prox_perc_66 = gdalfun.gdal_percentile(self.prox, 75)
-            self.prox_perc_100 = gdalfun.gdal_percentile(self.prox, 100)
-
-            self.slp_percentile = gdalfun.gdal_percentile(self.slope, self.percentile)
-            self.slp_perc_33 = gdalfun.gdal_percentile(self.slope, 25)
-            self.slp_perc_66 = gdalfun.gdal_percentile(self.slope, 75)
-            self.slp_perc_100 = gdalfun.gdal_percentile(self.slope, 100)
-
-            self.region_info[self.name] = [self.region, g_max, num_sum, num_perc, self.prox_percentile]
-            for x in self.region_info.keys():
-                utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
-
-            ## ==============================================
-            ## chunk region into sub regions
-            ## ==============================================
-            chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
-            chnk_inc = chnk_inc if chnk_inc > 10 else 10
-            utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
-
-            sub_regions = self.region.chunk(self.xinc, chnk_inc)
-            utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
-
-            ## ==============================================
-            ## sub-region analysis
-            ## ==============================================
-            sub_zones = self._sub_region_analysis(sub_regions)
-
-            ## ==============================================
-            ## sub-region density and percentiles
-            ## ==============================================
-            s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
-            s_5perc = np.percentile(s_dens, 5)
-            s_dens = None
-            utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
-
-            ## ==============================================
-            ## zone analysis / generate training regions
-            ## ==============================================
-            trainers = []
-            t_perc = 95
-            s_perc = 50
-            for z, this_zone in enumerate(self._zones):
-                tile_set = [sub_zones[x] for x in sub_zones.keys() if sub_zones[x][5] == self._zones[z]]
-                if len(tile_set) > 0:
-                    d_50perc = np.percentile(np.array([x[3] for x in tile_set]), 50)
-                else:
-                    continue
-
-                t_trainers = [x for x in tile_set if x[3] < d_50perc or abs(x[3] - d_50perc) < 0.01]
-                utils.echo_msg(
-                    'possible {} training zones: {} @ MAX {}'.format(
-                        self._zones[z].upper(), len(t_trainers), d_50perc
-                    )
-                )
-                trainers.append(t_trainers)
-
-            utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
-
-            ## ==============================================
-            ## split-sample simulations and error calculations
-            ## sims = max-simulations
-            ## ==============================================
-            if self.sims is None:
-                self.sims = int(len(sub_regions)/tot_trains)
-
-            if self.max_sample is None:
-                self.max_sample = int((self.region_info[self.name][1] - self.region_info[self.name][2]) * .005)
-
-            utils.echo_msg('max sample is {}, max sims is {}'.format(self.max_sample, self.sims))
-            utils.echo_msg('pre ec_d is {}'.format(pre_ec_d))
-            utils.echo_msg('performing at least {} simulations, looking for {} errors'.format(self.sims, self.max_sample))
-            max_dist = gdalfun.gdal_percentile(self.prox, 95)
-            utils.echo_msg('max distance is {}'.format(max_dist))
-            sim = 0
-            utils.echo_msg('simulation\terrors\tmean-error\tproximity-coeff')            
-            while True:
-                sim += 1
-                sample_dp = self._split_sample(trainers, num_perc)
-                if len(s_dp) == 0:
-                    s_dp = sample_dp
-                else:
-                    #s_dp = np.vstack((s_dp, sample_dp[sample_dp[:,1] < max_dist]))
-                    s_dp = np.vstack((s_dp, sample_dp))
-
-                err_count = len(s_dp)
-                ds = np.unique(s_dp[:,1])
-                s_dp_m = None
-
-                for d in ds:
-                    arr=np.array([(True if x == d else False) for x in s_dp[:,1]])
-                    if arr.any():
-                        arr_count = np.count_nonzero(arr)
-                        err_perc = (arr_count / err_count)
-                        d_err_count = int(self.max_errors * err_perc)
-                        err_sum = np.histogram(s_dp[:,0][arr], d_err_count, weights=s_dp[:,0][arr])[0]
-                        err_cnt = np.histogram(s_dp[:,0][arr], d_err_count)[0]
-                        err_sum = err_sum[np.nonzero(err_cnt)]
-                        err_cnt = err_cnt[np.nonzero(err_cnt)]
-                        d_errs = err_sum/err_cnt
-                        d_dist = np.full((d_errs.size, 1), d)
-                        dist_errs = np.hstack((d_errs.reshape((d_errs.size, 1)), d_dist))
-
-                        if s_dp_m is None:
-                            s_dp_m = np.array(dist_errs)
-                        else:
-                            s_dp_m = np.vstack((s_dp_m, dist_errs))
-
-                s_dp = np.array(s_dp_m)
-                
-                #if self.accumulate:
-                np.savetxt(self.prox_errs_local, s_dp, '%f', ' ')
-
-                max_dist = np.nanpercentile(s_dp[:,1], 95)
-                utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
-                utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
-
-                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
-                pre_ec_d = ec_d
-                utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
-
-                ## continue if we got back the default err coeff
-                if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
-                    continue
-
-                ## continue if we haven't reached max_sample
-                #if len(s_dp) < self.max_sample:
-                #    continue
-
-                ## break if we gathered enough simulation errors
-                if sim >= int(self.sims): 
-                    break
-
-            ## ==============================================
-            ## Save/Output results
-            ## apply error coefficient to full proximity grid
-            ## ==============================================
-            unc_out = self.apply_coefficient(ec_d)
-            # utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
-            # with gdalfun.gdal_datasource(self.prox, update=True) as prox_ds:
-            #     prox_inf = gdalfun.gdal_infos(prox_ds)
-            #     prox_band = prox_ds.GetRasterBand(1)
-            #     prox_arr = prox_band.ReadAsArray().astype(float)
-            #     with gdalfun.gdal_datasource(self.stack) as stack_ds:
-            #         unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
-            #         unc_band = stack_ds.GetRasterBand(4)
-            #         unc_arr = unc_band.ReadAsArray()
-            #         unc_arr[unc_arr == unc_inf['ndv']] = np.nan
-            #         out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
-            #         out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
-
-            # unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
-            # if self.dst_srs is not None:
-            #     status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
-
-            utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
-            utils.remove_glob(self.slope)
-            utils.remove_glob(self.prox)
-            return(unc_out, 0)
-    
 ## ==============================================
 ## WaffleDEM which holds a gdal DEM to process
 ## WaffleDEM(fn='module_output.tif')
 ## ==============================================
 class WaffleDEM:
-    def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {}, cache_dir: str = waffles_cache, verbose: bool = True, waffle: Waffle = None, want_scan: bool = True):
+    def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {},
+                 cache_dir: str = waffles_cache, verbose: bool = True,
+                 waffle: Waffle = None, want_scan: bool = True):
         self.fn = fn # the dem filename
         self.ds_config = ds_config # a dem config dictionary (see gdalfun.gdal_infos)
-        self.cache_dir = cache_dir
+        self.cache_dir = cache_dir # cache dir for auxiliary data
         self.verbose = verbose # verbosity
         self.dem_region = None # the dem regions.Region()
-        self.waffle = waffle
-        self.want_scan = want_scan
+        self.waffle = waffle # the waffles module that generated the DEM
+        self.want_scan = want_scan # scan DEM for min/max values
 
     def initialize(self):
         if os.path.exists(self.fn):
@@ -3957,46 +4053,76 @@ class WaffleDEM:
         return(True)
         
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
-                clip_str = None, upper_limit = None, lower_limit = None, dst_srs = None, dst_fmt = None, dst_dir = None,
-                set_metadata = True):
+                clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
+                dst_srs = None, dst_fmt = None, dst_dir = None, set_metadata = True, stack_fn = None):
+        """Process the DEM using various optional functions.
+
+        set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
+        """
 
         if self.verbose:
             utils.echo_msg('post processing DEM {}...'.format(self.fn))
         
         if self.ds_config is None:
             self.initialize()
-
+            
+        ## ==============================================
+        ## set nodata value
+        ## ==============================================
         if ndv is not None:
             self.set_nodata(ndv)
         else:
             if self.ds_config['ndv'] is not None:
                 self.set_nodata(self.ds_config['ndv'])
 
+        ## ==============================================
+        ## set interpolation limits
+        ## ==============================================
+        self.set_interpolation_limits(stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit)
+
+        ## ==============================================
         ## filtering the DEM will change the weights/uncertainty
+        ## ==============================================
         if filter_ is not None:
             self.filter_(filter_)
 
+        ## ==============================================
         ## resamples all bands
+        ## ==============================================
         self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
 
+        ## ==============================================
         ## clip/cut
+        ## ==============================================
         self.clip(clip_str=clip_str)
         if region is not None:
             self.cut(region=region)
 
+        ## ==============================================
         ## setting limits will change the weights/uncertainty for flattened data
+        ## ==============================================
         self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
+
+        ## ==============================================
+        ## set projection, metadata, reformat and move to final location
+        ## ==============================================
         if dst_srs is not None:
             self.set_srs(dst_srs=dst_srs)
-            
+
         self.set_metadata(node=node)
         self.reformat(out_fmt=dst_fmt)
         self.move(out_dir=dst_dir)
+
+        if self.verbose:
+            utils.echo_msg('Processed DEM: {}'.format(self.fn))
             
     def set_nodata(self, ndv):
         if self.ds_config['ndv'] != ndv:
             gdalfun.gdal_set_ndv(self.fn, ndv=ndv, convert_array=True, verbose=self.verbose)
             self.ds_config['ndv'] = ndv
+
+            if self.verbose:
+                utils.echo_msg('set nodata value to {}.'.format(ndv))
 
     def filter_(self, fltr = []):
         if len(fltr) > 0:
@@ -4016,6 +4142,9 @@ class WaffleDEM:
                         fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                 ) == 0:
                     os.replace('__tmp_fltr.tif', fn)
+
+                if self.verbose:
+                    utils.echo_msg('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
@@ -4024,6 +4153,9 @@ class WaffleDEM:
                                    sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
                 os.replace(warp_fn, self.fn)
                 self.initialize()
+
+            if self.verbose:
+                utils.echo_msg('resampled data to {}/{} using {}.'.format(xsample, ysample, sample_alg))
 
     def clip(self, clip_str = None):
         ## todo: update for multi-band
@@ -4056,13 +4188,59 @@ class WaffleDEM:
                     
             else:
                 utils.echo_error_msg('could not find clip ogr source/clip keyword {}'.format(clip_args['src_ply']))
+
+            if self.verbose:
+                utils.echo_msg('clipped data with {}.'.format(clip_str))
                 
     def cut(self, region = None):
-        _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        
-        if cut_status == 0:
-            os.replace(_tmp_cut, self.fn)
-            self.initialize()
+        if region is not None:
+            _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        
+            if cut_status == 0:
+                os.replace(_tmp_cut, self.fn)
+                self.initialize()
 
+                if self.verbose:
+                    utils.echo_msg('cut data to {}...'.format(region))
+
+    def set_interpolation_limits(self, stack_fn = None,  size_limit = None, proximity_limit = None):
+        """set interpolation limits"""
+
+        if stack_fn is not None:
+            ## ==============================================
+            ## optionally mask nodata zones based on proximity
+            ## ==============================================
+            if proximity_limit is not None:
+                tmp_prox = gdalfun.gdal_proximity(stack_fn, utils.make_temp_fn('_prox.tif'), band=2)
+                mn = gdalfun.gdal_get_array(tmp_prox)[0]
+                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                    if src_ds is not None:
+                        src_config = gdalfun.gdal_infos(src_ds)
+                        src_band = src_ds.GetRasterBand(1)
+                        src_array = src_band.ReadAsArray()
+                        src_array[mn >= proximity_limit] = src_band.GetNoDataValue()
+                        src_band.WriteArray(src_array)
+
+                utils.remove_glob(tmp_prox)
+
+                if self.verbose:
+                    utils.echo_msg('set proximity interpolation limit to {}.'.format(proximity_limit))
+
+            ## ==============================================
+            ## optionally mask nodata zones based on size_threshold
+            ## ==============================================
+            if size_limit is not None:
+                mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
+                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                    if src_ds is not None:
+                        src_config = gdalfun.gdal_infos(src_ds)
+                        src_band = src_ds.GetRasterBand(1)
+                        src_array = src_band.ReadAsArray()
+                        src_array[mn >= size_limit] = src_band.GetNoDataValue()
+                        src_band.WriteArray(src_array)
+
+                if self.verbose:
+                    utils.echo_msg('set size interpolation limit to {}.'.format(size_limit))
+            
     def set_limits(self, upper_limit = None, lower_limit = None, band = 1):
         ## limit in other bands?? or chose band to limit??
         upper_limit = utils.float_or(upper_limit)
@@ -4074,16 +4252,14 @@ class WaffleDEM:
                 band_data = src_band.ReadAsArray()
 
                 if upper_limit is not None:
-                    if self.verbose:
-                        utils.echo_msg('setting upper_limit to {}'.format(upper_limit))
-
                     band_data[band_data > upper_limit] = upper_limit
+                    if self.verbose:
+                        utils.echo_msg('set upper limit to {}.'.format(upper_limit))
 
                 if lower_limit is not None:
-                    if self.verbose:
-                        utils.echo_msg('setting lower_limit to {}'.format(lower_limit))
-
                     band_data[band_data < lower_limit] = lower_limit
+                    if self.verbose:
+                        utils.echo_msg('set lower limit to {}.'.format(lower_limit))
 
                 src_band.WriteArray(band_data)
                 
@@ -4091,8 +4267,11 @@ class WaffleDEM:
                 self.initialize()
 
     def set_srs(self, dst_srs = None):
-        gdalfun.gdal_set_srs(self.fn, src_srs=dst_srs, verbose=self.verbose)
-        self.initialize()
+        if dst_srs is not None:
+            gdalfun.gdal_set_srs(self.fn, src_srs=dst_srs, verbose=self.verbose)
+            self.initialize()
+            if self.verbose:
+                utils.echo_msg('set SRS to {}...'.format(dst_srs))
 
     def reformat(self, out_fmt = None):
         if out_fmt is not None:
@@ -4104,12 +4283,18 @@ class WaffleDEM:
                     self.fn = out_fn
                     self.initialize()
 
+                    if self.verbose:
+                        utils.echo_msg('formatted data to {}.'.format(out_fmt))
+
     def move(self, out_dir = None):
         if out_dir is not None:
             out_fn = os.path.join(out_dir, os.path.basename(self.fn))
             os.replace(self.fn, out_fn)
             self.fn = out_fn
             self.initialize()
+
+            if self.verbose:
+                utils.echo_msg('moved output DEM to {}.'.format(out_dir))
                     
     def set_metadata(self, cudem = False, node = 'pixel'):
         """add metadata to the waffled raster
@@ -4146,12 +4331,17 @@ class WaffleDEM:
 
             dem_ds.SetMetadata(md)
             dem_ds = None
-            
+
+            if self.verbose:
+                utils.echo_msg('set DEM metadata: {}.'.format(md))
+
+## ==============================================
+## Waffles Factory Settings
+## ==============================================
 class WaffleFactory(factory.CUDEMFactory):
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
         'IDW': {'name': 'IDW', 'stack': True, 'call': WafflesIDW},
-        #'scipy': {'name': 'scipy', 'stack': True, 'call': WafflesSciPy},
         'linear': {'name': 'linear', 'stack': True, 'call': WafflesLinear},
         'cubic': {'name': 'cubic', 'stack': True, 'call': WafflesCubic},
         'nearest': {'name': 'nearest', 'stack': True, 'call': WafflesNearest},
@@ -4171,9 +4361,9 @@ class WaffleFactory(factory.CUDEMFactory):
         'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
         'flatten': {'name': 'flatten', 'stack': True, 'call': WafflesFlatten},
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
-        #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch},
-        #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE},
-        #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid},                
+        #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch}, # test
+        #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE}, # test
+        #'bgrid': {'name': 'bgrid', 'stack': True, 'call': WafflesBGrid}, # test            
     }
 
     def __init__(self, **kwargs):
@@ -4184,6 +4374,9 @@ class WaffleFactory(factory.CUDEMFactory):
 
 ## ==============================================
 ## waffle queue for threads
+##
+## waffles will run multiple input regions as
+## separate threads...
 ## ==============================================
 def waffle_queue(q):
     """
@@ -4214,19 +4407,16 @@ Options:
 \t\t\t\tIf a vector file is supplied, will use each region found therein.
   -E, --increment\t\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
 \t\t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
+  -M, --module\t\t\tDesired Waffles MODULE and options. (see available Modules below)
+\t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
   -S, --sample_alg\t\tReSAMPLE algorithm to use (from gdalwarp)
 \t\t\t\tSet as 'auto' to use 'average' when down-sampling and 'bilinear' when up-sampling
 \t\t\t\tThis switch controls resampling of input raster datasets as well as resampling
 \t\t\t\tthe final DEM if RESAMPLE-INCREMENT is set in -E
-  -F, --format\t\t\tOutput grid FORMAT. [GTiff]
-  -M, --module\t\t\tDesired Waffles MODULE and options. (see available Modules below)
-\t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
-  -O, --output-name\t\tBASENAME for all outputs.
-  -P, --t_srs\t\t\tProjection of REGION and output DEM.
   -X, --extend\t\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
 \t\t\t\tpercentage to extend the processing REGION.
 \t\t\t\tWhere EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
+\t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10
 \t\t\t\tpercent of the input REGION.
   -T, --filter\t\t\tFILTER the output DEM using one or multiple filters. 
 \t\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
@@ -4237,29 +4427,38 @@ Options:
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
 \t\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
+  -L, --limits\t\t\tLIMIT the output elevation or interpolation values, append 
+\t\t\t\t'u<value>' to set the upper elevation limit, 
+\t\t\t\t'l<value>' to set the lower elevation limit,
+\t\t\t\t'p<value>' to set an interpolation limit by proximity, or 
+\t\t\t\t's<value>' to set an interpolation limit by size.
+\t\t\t\te.g. -Lu0 to set all values above 0 to zero, or 
+\t\t\t\t-Ls100 to limit interpolation to nodata zones smaller than 100 pixels.
   -C, --clip\t\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
-  -K, --chunk\t\t\tGenerate the DEM in CHUNKs
+  -K, --chunk\t\t\tGenerate the DEM in CHUNKs.
+  -F, --format\t\t\tOutput grid FORMAT. [GTiff]
+  -O, --output-name\t\tBASENAME for all outputs.
+  -P, --t_srs\t\t\tProjection of REGION and output DEM.
+  -N, --nodata\t\t\tThe NODATA value of output DEM.
   -G, --wg-config\t\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\t\tGenerate a waffles_config JSON file using the --config flag.
+  -H, --threads\t\t\tSet the number of THREADS (1). Each input region will be run in up to THREADS threads. 
   -D, --cache-dir\t\tCACHE Directory for storing temp data.
-\t\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session
-\t\t\t\tto retain the data, use the --keep-cache flag
-  -N, --nodata\t\t\tNODATA value of output DEM
-  -L, --limits\t\t\tLIMIT the output elevations values, append 'u<value>' for the upper limit or 'l<value' for lower limit
-  -H, --threads\t\tSet the number of threads (1)
+\t\t\t\tDefault Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session.
+\t\t\t\tto retain the data, use the --keep-cache flag.
 
   -f, --transform\t\tTransform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix\t\t\tSet BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
 \t\t\t\tnote: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
 \t\t\t\tleave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
-  -r, --grid-node\t\tUse grid-node registration, default is pixel-node
+  -r, --grid-node\t\tUse grid-node registration, default is pixel-node.
   -w, --want-weight\t\tUse weights provided in the datalist to weight overlapping data.
   -u, --want-uncertainty\tGenerate/Use uncertainty either calculated or provided in the datalist.
   -m, --want-mask\t\tMask the processed datalist.
   -a, --archive\t\t\tARCHIVE the datalist to the given region.
   -k, --keep-cache\t\tKEEP the cache data intact after run
-  -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count)
-  -d, --supercede\t\thigher weighted data supercedes lower weighted data
+  -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
+  -d, --supercede\t\thigher weighted data supercedes lower weighted data.
   -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
   -c, --continue\t\tDon't clobber existing files.
   -q, --quiet\t\t\tLower verbosity to a quiet.
@@ -4286,13 +4485,13 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
            modules=factory._cudem_module_short_desc(WaffleFactory._modules),
            wf_version=cudem.__version__)
 
-## add upper/lower limit to cli (use same syntax as GMT, e.g. -Lu0 -Ll0
 def waffles_cli(argv = sys.argv):
     """run waffles from command-line
 
     See `waffles_cli_usage` for full cli options.
     """
-    
+
+    i = 1
     dls = []
     i_regions = []
     these_regions = []
@@ -4303,7 +4502,6 @@ def waffles_cli(argv = sys.argv):
     want_config = False
     keep_cache = False
     status = 0
-    i = 1
     wg = {}
     wg['verbose'] = True
     wg['sample'] = 'bilinear'
@@ -4317,9 +4515,8 @@ def waffles_cli(argv = sys.argv):
     wg['ndv'] = -9999
 
     waffle_q = queue.Queue()
-    n_threads = 2
+    n_threads = 1
         
-    ## todo: gather multiple -R options (do for all)
     while i < len(argv):
         arg = argv[i]
         if arg == '--region' or arg == '-R':
@@ -4408,11 +4605,11 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
             i = i + 1
-        elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(utils.str_or(argv[i + 1], os.path.expanduser('~')), '.cudem_cache')
+        elif arg[:2] == '-D': wg['cache_dir'] = os.path.join(utils.str_or(arg[2:], os.path.expanduser('~')), '.cudem_cache')
         elif arg == '--nodata' or arg == '-N' or arg == '-ndv':
             wg['ndv'] = utils.float_or(argv[i + 1], -9999)
             i = i + 1
-        elif arg[:2] == '-D': wg['ndv'] = utils.float_or(argv[i + 1], -9999)
+        elif arg[:2] == '-D': wg['ndv'] = utils.float_or(arg[2:], -9999)
 
         elif arg == '--limits' or arg == '-L':
             this_limit = argv[i + 1]
@@ -4420,18 +4617,29 @@ def waffles_cli(argv = sys.argv):
                 wg['upper_limit'] = utils.float_or(this_limit[1:])
             elif this_limit.startswith('l'):
                 wg['lower_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('p'):
+                wg['proximity_limit'] = utils.int_or(this_limit[1:])
+            elif this_limit.startswith('s'):
+                wg['size_limit'] = utils.int_or(this_limit[1:])
                 
             i = i + 1
         elif arg[:2] == '-L':
-            this_limit = argv[i + 1]
+            this_limit = arg[2:]
             if this_limit.startswith('u'):
                 wg['upper_limit'] = utils.float_or(this_limit[1:])
             elif this_limit.startswith('l'):
                 wg['lower_limit'] = utils.float_or(this_limit[1:])
-
+            elif this_limit.startswith('p'):
+                wg['proximity_limit'] = utils.int_or(this_limit[1:])
+            elif this_limit.startswith('s'):
+                wg['size_limit'] = utils.int_or(this_limit[1:])
+                
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
-            num_threads = utils.int_or(argv[i + 1], 1)
+            n_threads = utils.int_or(argv[i + 1], 1)
             i = i + 1
+
+        elif arg[:2] == '-H':
+            n_threads = utils.int_or(arg[2:], 1)
                 
         elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
@@ -4488,56 +4696,35 @@ def waffles_cli(argv = sys.argv):
         t = threading.Thread(target=waffle_queue, args=([waffle_q]))
         t.daemon = True
         t.start()
-        
+
     ## ==============================================
     ## load the user wg json and run waffles with that.
-    ## ==============================================
+    ## allow input of multiple config files with -G .. -G ..
+    ## ==============================================    
     if wg_user is not None:
         if os.path.exists(wg_user):
-            try:
-                with open(wg_user, 'r') as wgj:
-                    wg = json.load(wgj)
-                    if wg['kwargs']['src_region'] is not None:
-                        wg['kwargs']['src_region'] = regions.Region().from_list(
-                            wg['kwargs']['src_region']
-                        )
-            
-                this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
-                this_waffle_module = this_waffle._acquire_module()
-                #this_wg = this_waffle._export_config(parse_data=False)
-                with tqdm(
-                        desc='Generating: {}'.format(this_waffle),
-                        leave=wg['verbose']
-                ) as pbar:
-                    this_waffle_module.initialize()
-                    this_waffle_module.generate()
-            except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('user breakage...please wait while waffles exits...')
-                sys.exit(-1)
-            except Exception as e:
-                utils.echo_error_msg(e)
-                traceback.print_exc()
-                sys.exit(-1)
+            with open(wg_user, 'r') as wgj:
+                wg = json.load(wgj)
+                if wg['kwargs']['src_region'] is not None:
+                    wg['kwargs']['src_region'] = regions.Region().from_list(
+                        wg['kwargs']['src_region']
+                    )
 
-            sys.exit(0)
+            this_waffle = WaffleFactory(mod=wg['mod'], **wg['kwargs'])
+            this_waffle_module = this_waffle._acquire_module()
+            waffle_q.put([this_waffle_module])
         else:
             utils.echo_error_msg(
                 'specified waffles config file does not exist, {}'.format(wg_user)
             )
-            sys.stderr.write(waffles_cli_usage)
-            sys.exit(-1)
+
+        waffle_q.join()
+        sys.exit(0)
 
     ## ==============================================
     ## Otherwise run from cli options...
     ## set the dem module
-    ## ==============================================        
-    # if module is None:
-    #     # sys.stderr.write(waffles_cli_usage)
-    #     # utils.echo_error_msg(
-    #     #     '''must specify a waffles -M module.'''
-    #     # )
-    #     # sys.exit(-1)
-
+    ## ==============================================
     if module.split(':')[0] not in WaffleFactory()._modules.keys():
         utils.echo_error_msg(
             '''{} is not a valid waffles module, available modules are: {}'''.format(
@@ -4549,7 +4736,7 @@ def waffles_cli(argv = sys.argv):
     if WaffleFactory()._modules[module.split(':')[0]]['stack']:
         if len(dls) == 0:
             sys.stderr.write(waffles_cli_usage)
-            utils.echo_error_msg('''must specify a datalist/entry, try gmrt or srtm for global data.''')
+            utils.echo_error_msg('''must specify a datalist/entry, try `gmrt` or `srtm` for global data.''')
             sys.exit(-1)
     else:
         wg['want_stack'] = True if len(dls) > 0 else False
@@ -4569,7 +4756,7 @@ def waffles_cli(argv = sys.argv):
         sys.stderr.write(waffles_cli_usage)
         utils.echo_error_msg('''must specify a gridding increment.''')
         sys.exit(-1)      
-    
+
     ## ==============================================
     ## set the datalists and names
     ## ==============================================
@@ -4578,8 +4765,11 @@ def waffles_cli(argv = sys.argv):
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
     name = wg['name']
 
+    ## ==============================================
+    ## parse the regions and add them to the queue, or output as config file
+    ## ==============================================
     for i, this_region in enumerate(these_regions):
-
+        ## input region is None, so gather the region from the input data...
         if this_region is None:
             utils.echo_warning_msg('No input region specified, gathering region from input data...')
             this_datalist = dlim.init_data(dls, region=this_region, dst_srs=wg['dst_srs'], want_verbose=wg['verbose'])
@@ -4587,8 +4777,6 @@ def waffles_cli(argv = sys.argv):
                     fmts=dlim.DatasetFactory._modules[this_datalist.data_format]['fmts']
             ):
                 this_datalist.initialize()
-                
-                ## get the region and warp it if necessary
                 this_inf = this_datalist.inf()
                 this_region = regions.Region().from_list(this_inf.minmax)
                 if wg['dst_srs'] is not None:
@@ -4597,55 +4785,39 @@ def waffles_cli(argv = sys.argv):
                         this_region.warp(dst_srs)
                         
             utils.echo_msg('region is {}'.format(this_region))
-            if this_region is None:
+            if this_region is None: # couldn't gather a region from the data
                 break
 
         wg['src_region'] = this_region
+
+        ## ==============================================
+        ## set the output name, appending the region, etc. if wanted/needed
+        ## ==============================================
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
                 name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
             )
-        if want_config:
-            #wg['src_region'] = this_region.format('cudem')
+            
+        if want_config: # export the waffles module config file
             wg['src_region'] = this_region.export_as_list()
             this_waffle = WaffleFactory(mod=module, **wg)
-            print(this_waffle)
             this_waffle.write_parameter_file('{}.json'.format(this_waffle['kwargs']['name']))
-            #this_wg = this_waffle._export_config(parse_data=True)
-            #utils.echo_msg(json.dumps(this_wg, indent=4, sort_keys=True))
-            #with open('{}.json'.format(this_wg['name']), 'w') as wg_json:
-            #    utils.echo_msg('generating waffles config file: {}.json'.format(this_wg['name']))
-            #    wg_json.write(json.dumps(this_wg, indent=4, sort_keys=True))
-        else:
+        else: # get the waffle module and add it to the queue
             this_waffle = WaffleFactory(mod=module, **wg)
-            #print(this_waffle)
             if this_waffle is not None:
-                #this_wg = this_waffle._export_config(parse_data=False)
                 this_waffle_module = this_waffle._acquire_module()
-                #print(this_waffle_module)
                 if this_waffle_module is not None:
                     waffle_q.put([this_waffle_module]) 
-                    ###this_waffle_module()
-                    # with utils.CliProgress(
-                    #         message='Generating: {}'.format(this_waffle),
-                    #         verbose=wg['verbose'],
-                    # ) as pbar:
-                    #     try:
-                    #this_waffle_module.initialize()
-                    #this_waffle_module.generate()
-                    #this_waffle_module()
-                    # except (KeyboardInterrupt, SystemExit):
-                    #     utils.echo_error_msg('user breakage...please wait while waffles exits....')
-                    #     sys.exit(-1)
-                    # except Exception as e:
-                    #     utils.echo_error_msg(e)
-                    #     sys.exit(-1)
+                    ##this_waffle_module()
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
 
     waffle_q.join()
-                        
+
+    ## ==============================================
+    ## remove the cahce dir if not asked to keep
+    ## ==============================================
     #if not keep_cache:
     #    utils.remove_glob(wg['cache_dir'])
 ### End

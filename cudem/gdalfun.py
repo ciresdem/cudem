@@ -1,4 +1,4 @@
-### gdalfun.py - GDAL functions
+### gdalfun.py - OSGEO functions
 ##
 ## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
@@ -47,12 +47,22 @@ from cudem import xyzfun
 ## OSR/WKT/proj
 ## ==============================================
 def split_srs(srs, as_epsg = False):
+    """split an SRS into the horizontal and vertical elements.
+
+    -----------
+    Parameters:
+    srs (str): an srs for input into SetFromUserInput
+    as_epsg (bool): try to output EPSG codes if possible
+
+    --------
+    Returns:
+    list: [horz_srs, vert_srs]
+    """
+    
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(srs)
-    
     srs_wkt = src_srs.ExportToWkt()
     wkt_CRS = CRS.from_wkt(srs_wkt)
-
     if wkt_CRS.is_compound:
         horz = wkt_CRS.sub_crs_list[0]
         horz_epsg = horz.to_epsg()
@@ -78,11 +88,11 @@ def wkt2geom(wkt):
 
     -----------
     Parameters:
-      wkt (wkt): a wkt geometry
+    wkt (wkt): a wkt geometry
 
     --------
     Returns:
-      ogr-geom: the ogr geometry
+    ogr-geom: the ogr geometry
     """
     
     return(ogr.CreateGeometryFromWkt(wkt))
@@ -101,14 +111,34 @@ def osr_wkt(src_srs, esri=False):
         return(None)
 
 def osr_prj_file(dst_fn, src_srs):
-    """generate a .prj file given a src_srs"""
+    """generate a .prj file given a src_srs
+
+    -----------
+    Parameters:
+    dst_fn (str): the output filename
+    src_srs (srs): the output srs
+    """
     
     with open(dst_fn, 'w') as out:
         out.write(osr_wkt(src_srs, True))
-        
-    return(0)
+
+    if os.path.exists(dst_fn):
+        return(0)
+    else:
+        return(-1)
 
 def epsg_from_input(in_srs):
+    """get the epsg(s) from srs suitable as input to SetFromUserInput
+
+    -----------
+    Parameters:
+    in_srs (str): an srs as a string
+
+    -----------
+    Returns:
+    list: [horz_epsg, vert_epsg]
+    """
+    
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
 
@@ -136,14 +166,9 @@ def epsg_from_input(in_srs):
 
     return(src_horz, src_vert)
 
-# def osr_set_from_input(in_horz, in_vert=None):
-#     srs = osr.SpatialReference()
-#     srs.SetFromUserInput(in_horz)
-
-#     if in_vert is not None:
-#         srs.SetVertical(
-
 def osr_parse_srs(src_srs, return_vertcs = True):
+    """parse an OSR SRS object and return a proj string"""
+    
     if src_srs is not None:
         if src_srs.IsLocal() == 1:
             return(src_srs.ExportToWkt())
@@ -185,11 +210,13 @@ def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
     older versions of gdal can't do this, so fallback to known standards.
 
-    Args:
-      src_drv_name (str): a source OGR driver name
+    -----------
+    Parameters:
+    src_drv_name (str): a source OGR driver name
 
+    -----------
     Returns:
-      list: a list of known file extentions or None
+    list: a list of known file extentions or None
     """
     
     fexts = None
@@ -208,19 +235,10 @@ def ogr_fext(src_drv_name):
         else: fext = 'gdal'
         
         return(fext)
-
-
-def gdal_get_srs(src_gdal):
-    src_ds = gdal.Open(src_gdal)
-    src_srs = src_ds.GetSpatialRef()
-    src_ds = None
-    if src_srs is not None:
-        return(src_srs.ExportToWkt())
-    else:
-        return(None)
-    #return(osr_parse_srs(src_srs))
     
 def ogr_get_srs(src_ogr):
+    """get the srs (as wkt) from an ogr file"""
+    
     src_ds = ogr.Open(src_ogr, 0)
     src_srs = src_ds.GetLayer().GetSpatialRef()
     src_ds = None
@@ -228,10 +246,10 @@ def ogr_get_srs(src_ogr):
         return(src_srs.ExportToWkt())
     else:
         return(None)
-    #return(osr_parse_srs(src_srs))
     
 def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
-
+    """clip an ogr file to `dst_region`"""
+    
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
@@ -241,7 +259,8 @@ def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
     return(dst_ogr_fn)
 
 def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
-
+    """clip an ogr file to `dst_region`"""
+    
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
@@ -270,6 +289,8 @@ def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
     return(dst_ogr_fn)
 
 def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
+    """clip an ogr file to `dst_region`"""
+    
     driver = ogr.GetDriverByName(dn)
     ds = driver.Open(src_ogr, 0)
     layer = ds.GetLayer()
@@ -291,7 +312,9 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
     `src_field` holds a value of 0 or 1. optionally, specify
     an output layer defn for the unioned feature.
 
-    returns the output feature class
+    -----------
+    Returns:
+    the output feature class
     """
     
     if dst_defn is None:
@@ -317,6 +340,8 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
     return(out_feat)
 
 def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
+    """check if the OGR file is empty or not"""
+    
     driver = ogr.GetDriverByName(dn)
     ds = driver.Open(src_ogr, 0)
 
@@ -329,7 +354,24 @@ def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
         
     else: return(True)
     
-def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True):
+def ogr_polygonize_multibands(
+        src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True
+):
+    """polygonze a multi-band raster. 
+    for use in generating spatial metadata from a waffles mask.
+
+    -----------
+    Parameters:
+    src_ds (GDALDataset): the source multi-band raster as a gdal dataset object
+    dst_srs (str): the output srs
+    ogr_format (str): the output OGR format
+    verbose (bool): be verbose
+
+    -----------
+    Returns:
+    tuple: (dst_layer, ogr_format)
+    """
+    
     dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
     dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
     utils.remove_glob('{}.*'.format(dst_layer))
@@ -422,10 +464,10 @@ def ogr_polygonize_multibands(src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI 
 ## ==============================================
 class gdal_datasource:
     """
-
     use as:
     with gdal_datasource('input.tif') as src_ds:
         src_ds.do_things()
+
 
     where the input can be either a path-name to a gdal supported
     file or a gdal.Dataset object.
@@ -455,10 +497,22 @@ class gdal_datasource:
             self.src_ds.FlushCache()
             self.src_ds = None
 
-def gdal_multi_mask2single_mask(src_gdal):
-    gdt = gdal.GDT_Int32
-    out_mask = None
+def gdal_get_srs(src_gdal):
+    """get the srs (as wkt) from a gdal file"""
     
+    src_ds = gdal.Open(src_gdal)
+    src_srs = src_ds.GetSpatialRef()
+    src_ds = None
+    if src_srs is not None:
+        return(src_srs.ExportToWkt())
+    else:
+        return(None)
+            
+def gdal_multi_mask2single_mask(src_gdal):
+    """transformat a mult-banded mask into a single-banded mask"""
+    
+    gdt = gdal.GDT_Int32
+    out_mask = None    
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
@@ -482,11 +536,13 @@ def gdal_fext(src_drv_name):
     """find the common file extention given a GDAL driver name
     older versions of gdal can't do this, so fallback to known standards.
 
-    Args:
-      src_drv_name (str): a source GDAL driver name
+    -----------
+    Parameters:
+    src_drv_name (str): a source GDAL driver name
 
+    -----------
     Returns:
-      list: a list of known file extentions or None
+    list: a list of known file extentions or None
     """
     
     fexts = None
@@ -511,13 +567,31 @@ def gdal_fext(src_drv_name):
 def gdal_set_infos(nx, ny, nb, geoT, proj, dt, ndv, fmt, md, rc):
     """set a datasource config dictionary
 
-    returns gdal_config dict.
+    -----------
+    Parameters:
+    nx: x size
+    ny: y size
+    nb: cell count
+    geoT: geotransform
+    proj: projection
+    dt: data type
+    ndv: nodata value
+    fmt: format
+    metadata: metadata
+    raster_count: number of bands
+
+    -----------
+    Returns:
+    gdal_config dict
     """
     
     return({'nx': nx, 'ny': ny, 'nb': nb, 'geoT': geoT, 'proj': proj, 'dt': dt,
             'ndv': ndv, 'fmt': fmt, 'metadata': md, 'raster_count': rc})
     
 def gdal_infos(src_gdal, region = None, scan = False, band = 1):
+    """gather and return some info about a src_gdal file"""
+    
+    ds_config = {}
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             gt = src_ds.GetGeoTransform()
@@ -563,14 +637,14 @@ def gdal_infos(src_gdal, region = None, scan = False, band = 1):
                     
                 src_arr = src_band = None
 
-            return(ds_config)
-        else:
-            return({})
+    return(ds_config)
 
 def gdal_copy_infos(src_config):
     """copy src_config
 
-    returns copied src_config dict.
+    -----------
+    Returns:
+    copied src_config dict.
     """
     
     dst_config = {}
@@ -580,29 +654,36 @@ def gdal_copy_infos(src_config):
     return(dst_config)
         
 def gdal_set_srs(src_gdal, src_srs = 'epsg:4326', verbose = True):
+    """set the src_gdal srs"""
+    
+    status = None
     with gdal_datasource(src_gdal, update=True) as src_ds:    
         if src_ds is not None and src_srs is not None:
             try:
                 src_ds.SetProjection(osr_wkt(src_srs))
-                return(0)
+                status = 0
             except Exception as e:
                 if verbose:
                     utils.echo_warning_msg('could not set projection {}'.format(src_srs))
-                return(None)
+                status = None
         else:
-            return(None)    
+            status = None
+            
+    return(status)
 
 def gdal_get_ndv(src_gdal, band = 1):
+    """get the src_gdal nodata value"""
+
     with gdal_datasource(src_gdal) as src_ds:    
         if src_ds is not None:
             src_band = src_ds.GetRasterBand(band)
-            return(src_band.GetNoDataValue())
+        else:
+            return(None)
+        
+    return(src_band.GetNoDataValue())
 
 def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose = True):
-    """set the nodata value of gdal datasource
-
-    returns 0
-    """
+    """set the nodata value of gdal datasource"""
 
     with gdal_datasource(src_gdal, update=True) as src_ds:        
         if src_ds is not None:
@@ -627,11 +708,14 @@ def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose = True):
                         arr[arr == curr_nodata] = ndv
 
                     this_band.WriteArray(arr)            
-            return(0)
         else:
             return(None)
 
+    return(0)
+
 def gdal_has_ndv(src_gdal, band = 1):
+    """check if src_gdal file has a set nodata value"""
+    
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
@@ -663,9 +747,9 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
     return(mem_ds)
 
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = False):
-
-    band = utils.int_or(band, 1)
+    """extract a band from the src_gdal file"""
     
+    band = utils.int_or(band, 1)
     with gdal_datasource(src_gdal) as src_ds:        
         ds_config = gdal_infos(src_ds)
         ds_band = src_ds.GetRasterBand(band)
@@ -684,6 +768,8 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
     return(gdal_write(ds_array, dst_gdal, ds_config))
 
 def gdal_get_array(src_gdal, band = 1):
+    """get the associated array from the src_gdal file"""
+    
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
             infos = gdal_infos(src_ds)
@@ -709,10 +795,13 @@ def gdal_get_array(src_gdal, band = 1):
 def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
     """cut src_ds datasource to src_region and output dst_gdal file
 
-    returns [output-dem, status-code]
+    -----------
+    Returns:    
+    list: [output-dem, status-code]
     """
-
-    with gdal_datasource(src_gdal) as src_ds:        
+    
+    status = -1
+    with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             gt = ds_config['geoT']
@@ -738,16 +827,18 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
                     this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                     mem_ds.FlushCache()
 
-                dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)                
-                return(dst_gdal, 0)
+                dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)
+                status = 0
 
-    return(None, -1)
+    return(dst_gdal, status)
 
 ## doesn't work with multipolygons and -i
 def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True):
     """clip dem to polygon `src_ply`, optionally invert the clip.
 
-    returns [gdal_raserize-output, gdal_rasterize-return-code]
+    -----------
+    Returns:
+    list: [gdal_raserize-output, gdal_rasterize-return-code]
     """
 
     gi = gdal_infos(src_gdal)
@@ -771,6 +862,9 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
     return(out, status)
 
 def crop(src_gdal, dst_gdal):
+    """crop the src_gdal file to dst_gdal by nodata value"""
+    
+    status = -1
     with gdal_datasource(src_gdal) as src_ds: 
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
@@ -798,16 +892,19 @@ def crop(src_gdal, dst_gdal):
             ds_config['nx'] = int(lastcol - firstcol)
             ds_config['ny'] = int(lastrow - firstrow)
             ds_config['nb'] = int(ds_config['nx'] * ds_config['ny'])
-
-            return(gdal_write(dst_arr, dst_gdal, ds_config))
+            status = gdal_write(dst_arr, dst_gdal, ds_config)
         else:
-            return(None, -1)
+            return(None, status)
 
+    return(status)
+        
 def gdal_split(src_gdal, split_value = 0, band = 1):
     """split raster file `src_dem`into two files based on z value, 
     or if split_value is a filename, split raster by overlay, where upper is outside and lower is inside.
 
-    returns [upper_grid-fn, lower_grid-fn]
+    -----------
+    Returns:
+    list: [upper_grid-fn, lower_grid-fn]
     """
 
     def np_split(src_arr, sv = 0, nd = -9999):
@@ -836,17 +933,18 @@ def gdal_split(src_gdal, split_value = 0, band = 1):
             gdal_write(ua, dst_upper, dst_config)
             gdal_write(la, dst_lower, dst_config)
             ua = la = ds_arr = src_ds = None
-            return([dst_upper, dst_lower])
-        
-        else:
-            return(None)
+            
+    return([dst_upper, dst_lower])
         
 def gdal_percentile(src_gdal, perc = 95, band = 1):
     """calculate the `perc` percentile of src_gdal file.
 
-    return the calculated percentile
+    -----------
+    Returns:
+    the calculated percentile
     """
 
+    p = None
     with gdal_datasource(src_gdal) as src_ds:        
         if src_ds is not None:
             ds_array = src_ds.GetRasterBand(band).ReadAsArray().astype(float)
@@ -858,14 +956,15 @@ def gdal_percentile(src_gdal, perc = 95, band = 1):
                 p = np.nanpercentile(ds_array, perc)
                 #percentile = 2 if p < 2 else p
             else: p = 2
-            return(p)
-        else:
-            return(None)
+            
+    return(p)
 
 def gdal_slope(src_gdal, dst_gdal, s = 111120):
     """generate a slope grid with GDAL
 
-    return cmd output and status
+    -----------
+    Returns:
+    cmd output and status
     """
     
     gds_cmd = 'gdaldem slope {} {} {} -compute_edges'.format(src_gdal, dst_gdal, '' if s is None else '-s {}'.format(s))
@@ -874,7 +973,9 @@ def gdal_slope(src_gdal, dst_gdal, s = 111120):
 def gdal_proximity(src_gdal, dst_gdal, band = 1, distunits='pixel'):
     """compute a proximity grid via GDAL
 
-    return 0 if success else None
+    -----------
+    Returns:
+    0 if success else None
     """
 
     distunits = utils.str_or(distunits, 'PIXEL')
@@ -892,8 +993,6 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1, distunits='pixel'):
             src_arr[src_arr == ds_config['ndv']] = 0
             mem_band = mem_ds.GetRasterBand(1)
             mem_band.WriteArray(src_arr)
-        else:
-            return(None)
 
     drv = gdal.GetDriverByName('GTiff')
     dst_ds = drv.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Int32 if distunits == 'PIXEL' else gdal.GDT_Float32, [])
@@ -903,11 +1002,12 @@ def gdal_proximity(src_gdal, dst_gdal, band = 1, distunits='pixel'):
     dst_band.SetNoDataValue(ds_config['ndv'])
     gdal.ComputeProximity(mem_band, dst_band, ['VALUES=1', 'DISTUNITS={}'.format(distunits)], callback = prog_func)
     mem_ds = dst_ds = None
-    return(0)
+    return(dst_gdal)
         
 def gdal_polygonize(src_gdal, dst_layer, verbose = False):
     '''run gdal.Polygonize on src_ds and add polygon to dst_layer'''
 
+    status = -1
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             ds_arr = src_ds.GetRasterBand(1)
@@ -920,14 +1020,12 @@ def gdal_polygonize(src_gdal, dst_layer, verbose = False):
             )
             if verbose:
                 utils.echo_msg('polygonized {}'.format(src_gdal))
-                
-            return(0, 0)
-        
-        else:
-            return(-1, -1)
+
+    return(status, status)
 
 def gdal_mask(src_gdal, msk_gdal, out_gdal, msk_value = None, verbose = True):
-
+    """mask the src_gdal file with the msk_gdal file to out_gdal"""
+    
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             src_config = gdal_infos(src_ds)
@@ -978,6 +1076,7 @@ def gdal_blur(src_gdal, dst_gdal, sf = 1):
         out_array = np.convolve(padded_array, g, mode = 'valid')
         return(out_array)
 
+    status = -1
     with gdal_datasource(src_gdal) as src_ds:
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
@@ -996,10 +1095,11 @@ def gdal_blur(src_gdal, dst_gdal, sf = 1):
             smooth_array = smooth_array * msk_array
             mask_array = ds_array = None
             smooth_array[np.isnan(smooth_array)] = ds_config['ndv']
-            return(gdal_write(smooth_array, dst_gdal, ds_config))
-        
+            status = gdal_write(smooth_array, dst_gdal, ds_config)
         else:
-            return([], -1)
+            return([], status)
+
+    return(status)
 
 ## todo: min_weight parameter (only filter points below a weight threshhold)
 ## output a filter mask to show which cells were filtered out
@@ -1022,6 +1122,7 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
 
     max_percentile = percentile
     min_percentile = 100 - percentile
+    status = -1
     
     with gdal_datasource(src_gdal, update=True) as src_ds:
         if src_ds is not None:
@@ -1128,12 +1229,13 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
                         ds_band.WriteArray(band_data, srcwin[0], srcwin[1])
                     
             dst_ds = curv_ds = slp_ds = None
-            return(src_gdal, 0)
-        else:
-            return(None, -1)
+            status = 0
+
+    return(src_gdal, status)
 
 def get_outliers(in_array, percentile=75):
-
+    """get the outliers from in_array based on the percentile"""
+    
     if percentile <= 50: percentle = 51
     if percentile >= 100: percentile = 99
 
@@ -1359,11 +1461,35 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
         else:
             return(None, -1)
 
+def gdal_nodata_count_mask(src_dem, band = 1):
+    """Make a data mask of nodata zones.
+
+    output array will have the number of cells per nodata zone
+    """
+    
+    mn = None
+    with gdal_datasource(src_dem) as src_ds:
+        if src_ds is not None:
+            src_band = src_ds.GetRasterBand(band)
+            src_arr = src_band.ReadAsArray().astype(float)
+            src_config = gdal_infos(src_ds)
+            src_arr[src_arr == src_config['ndv']] = np.nan
+
+            ## generate the mask array
+            msk_arr = np.zeros((src_config['ny'], src_config['nx']))
+            msk_arr[np.isnan(src_arr)] = 1
+
+            ## group adjacent non-zero cells
+            l, n = scipy.ndimage.label(msk_arr)
+
+            ## get the total number of cells in each group
+            mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=l)
+    
+    return(mn)
+
 ## TODO: finish this function.
 def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
-    """
-    Flatten nodata areas larger than `size_threshhold`.
-    """
+    """Flatten nodata areas larger than `size_threshhold`"""
 
     def expand_for(arr, shiftx=1, shifty=1):
         arr_b = arr.copy().astype(bool)
@@ -1412,7 +1538,8 @@ def sample_warp(
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, tap=False, size=False, verbose=False
 ):
-
+    """sample and/or warp the src_dem"""
+    
     if size:
         xcount, ycount, dst_gt = src_region.geo_transform(
             x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
@@ -1457,7 +1584,9 @@ def sample_warp(
 def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):
     """write src_arr to gdal file dst_gdal using src_config
 
-    returns [output-gdal, status-code]
+    -----------
+    Returns:
+    list: [output-gdal, status-code]
     """
     
     driver = gdal.GetDriverByName(dst_fmt)
@@ -1502,7 +1631,10 @@ def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, v
 def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=True):
     """convert the gdal file to gdal using gdal
 
-    return output-gdal-fn"""
+    -----------
+    Returns:
+    output-gdal-fn
+    """
     
     if os.path.exists(src_dem):
         if dst_dem is None:
@@ -1567,7 +1699,9 @@ def gdal_yield_srcwin(src_gdal, n_chunk = 10, step = 5, verbose = False):
 def gdal_chunks(src_gdal, n_chunk, band = 1):
     """split `src_gdal` GDAL file into chunks with `n_chunk` cells squared.
 
-    returns a list of chunked filenames.
+    -----------
+    Returns:
+    list of chunked filenames.
     """
     
     o_chunks = []
@@ -1736,7 +1870,9 @@ def gdal_query(src_xyz, src_gdal, out_form, band = 1):
     """query a gdal-compatible grid file with xyz data.
     out_form dictates return values
 
-    returns array of values
+    -----------
+    Returns:
+    array of values
     """
     
     xyzl = []
