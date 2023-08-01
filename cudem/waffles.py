@@ -504,6 +504,9 @@ class Waffle:
                 ## ==============================================
                 if not self.clobber and os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
                     self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                    if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
+                        self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                                                       supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
                 else:
                     self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
                                                    supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
