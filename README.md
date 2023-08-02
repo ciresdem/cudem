@@ -283,11 +283,11 @@ gebcop15_n28x00_w079x50_2022v1_w.tif - final/stacks weight mask
 
 gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
-![](./media/gebcop15_n28x00_w079x50_2023v1_figure1.png)
+![](media/gebcop15_n28x00_w079x50_2023v1_figure1.png)
 
 **Figure 1.** Final DEM generated from CUDEM code example.
 
-![](./media/gebcop15_n28x00_w079x50_2023v1_w_figure1.png)
+![](media/gebcop15_n28x00_w079x50_2023v1_w_figure1.png)
 
 **Figure 2.** DEM data source mask.
 
@@ -304,18 +304,18 @@ gebcop15_n28x00_w079x50_2022v1_prox_scatter.png - uncertainty scatter
 
 gebcop15_n28x00_w079x50_2022v1_prox_unc.tif - uncertainty grid
 
-![](./media/image5.png)
+![](media/image5.png)
 
 **Figure 3.** Split-sample interpolation errors as a function of
 distance to the nearest measurement.
 
-![](./media/image4.png)
+![](media/image4.png)
 
 **Figure 4.** Best-fit interpolation uncertainty equation derived from
 the standard deviations of binned split-sample interpolation errors as a
 function of distance to the nearest measurement.
 
-![](./media/gebcop15_n28x00_w079x50_2022v1_prox_unc_hs.png)
+![](media/gebcop15_n28x00_w079x50_2022v1_prox_unc_hs.png)
 
 **Figure 5.** Interpolation uncertainty grid generated from the best-fit
 interpolation uncertainty equation applied to the distance to the
