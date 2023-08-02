@@ -4804,7 +4804,7 @@ def waffles_cli(argv = sys.argv):
         if want_config: # export the waffles module config file
             wg['src_region'] = this_region.export_as_list()
             this_waffle = WaffleFactory(mod=module, **wg)
-            this_waffle.write_parameter_file('{}.json'.format(this_waffle['kwargs']['name']))
+            this_waffle.write_parameter_file('{}.json'.format(wg['name']))
         else: # get the waffle module and add it to the queue
             this_waffle = WaffleFactory(mod=module, **wg)
             if this_waffle is not None:

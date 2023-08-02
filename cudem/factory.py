@@ -288,7 +288,7 @@ class CUDEMFactory:
     def write_parameter_file(self, param_file: str):
         try:
             with open(param_file, 'w') as outfile:
-                json.dump(self.__dict__, outfile)
+                json.dump(self.__dict__, outfile, indent=4)
                 utils.echo_msg('New CUDEMFactory file written to {}'.format(param_file))
                 
         except:
