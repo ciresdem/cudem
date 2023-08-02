@@ -101,7 +101,7 @@ Download and install git (If you have not already): [git installation](https://g
 | explode_bags.sh | extract all supergrids from a BAG |
 | vertical_datum_convert.py | transform the vertical datum of a DEM. |
 
-# Data Download, Processing, and DEM Generation
+# Usage: Data Download, Processing, and DEM Generation
 
 The open-access code includes command-line tools and a Python
 application programming interface (API) for automated data download,
@@ -216,7 +216,14 @@ interpolated elevations and then we derive a best-fit equation of
 interpolation uncertainty as a function of distance to the nearest
 measurement.
 
-# Code Example
+# Spatial Metadata
+
+We generate spatial metadata for our DEMs that document the data sources
+that went into the DEM generation process.
+
+# Example
+
+## DEM and Uncertainty for the Bahamas
 
 We provide an example of code to download and process depth and
 elevation data from the "gebco", "copernicus", and "mar_grav" data
