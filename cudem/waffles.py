@@ -656,7 +656,9 @@ class WafflesStacks(Waffle):
             z_band.WriteArray(arrs['z'], srcwin[0], srcwin[1])
             
         z_ds = None
-        utils.echo_msg('stacked data to {}'.format(self.fn))
+        if self.verbose:
+            utils.echo_msg('stacked data to {}'.format(self.fn))
+            
         return(self)
 
 ## ==============================================
@@ -2941,6 +2943,9 @@ class WafflesUncertainty(Waffle):
         self.chnk_lvl = chnk_lvl
         self.accumulate = accumulate
         self.max_errors = max_errors
+
+        if self.waffles_module.split(':')[0] in ['stacks', 'lakes', 'coastline', 'vdatum', 'scratch', 'uncertainty']:
+            return(self)
         
         self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
         self.prox_errs_local = self.prox_errs
@@ -3202,7 +3207,7 @@ class WafflesUncertainty(Waffle):
                 #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
                 sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
                 ##sx_cnt = int(ss_len * (ss_samp / 100.))
-                ##sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
+                sx_cnt = 1 if sx_cnt < 1 or sx_cnt >= ss_len else sx_cnt
                 sub_xyz_head = utils.make_temp_fn('sub_{}_head_{}.xyz'.format(n, sx_cnt))
                 np.random.shuffle(sub_xyz)
                 np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')

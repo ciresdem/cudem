@@ -55,17 +55,18 @@ Download and install git (If you have not already): [git installation](https://g
 | regions | process REGIONS |
 | fetches | fetch elevation data from a variety of public online sources |
 | vdatums | generate vertical transformation grids |
+| cudem   | run CUDEM cli programs and scripts |
 
 # Usage: Data Download, Processing, and DEM Generation
 
 The open-access code includes command-line tools and a Python
 application programming interface (API) for automated data download,
 processing, DEM gridding, and interpolation uncertainty grid generation
-with two main software tools: "fetches" and "waffles". "Fetches" is the
-data download tool for obtaining publicly available elevation data from
-a variety of sources and can optionally list, download or process the
-fetched data for use in DEM generation. We download a variety of data
-types, e.g., topographic-bathymetry lidar, multibeam swath sonar
+with three main software tools: "fetches", "waffles", and "dlim".
+"Fetches" is the data download tool for obtaining publicly available
+elevation data froma variety of sources and can optionally list, download or
+process thefetched data for use in DEM generation. We download a variety of
+data types, e.g., topographic-bathymetry lidar, multibeam swath sonar
 bathymetry, hydrographic soundings, compiled grids, etc., from a variety
 of sources, e.g., NOAA Office for Coastal Management (OCM) Digital
 Coast, NOAA NCEI NOS Hydro Surveys, NOAA NCEI Multibeam, USGS The
@@ -176,7 +177,7 @@ measurement.
 We generate spatial metadata for our DEMs that document the data sources
 that went into the DEM generation process.
 
-# Example
+# Examples
 
 ## DEM and Uncertainty for the Bahamas
 
@@ -282,11 +283,11 @@ gebcop15_n28x00_w079x50_2022v1_w.tif - final/stacks weight mask
 
 gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
-![](../media/gebcop15_n28x00_w079x50_2023v1_figure1.png)
+![](./media/gebcop15_n28x00_w079x50_2023v1_figure1.png)
 
 **Figure 1.** Final DEM generated from CUDEM code example.
 
-![](../media/gebcop15_n28x00_w079x50_2023v1_w_figure1.png)
+![](./media/gebcop15_n28x00_w079x50_2023v1_w_figure1.png)
 
 **Figure 2.** DEM data source mask.
 
@@ -303,18 +304,18 @@ gebcop15_n28x00_w079x50_2022v1_prox_scatter.png - uncertainty scatter
 
 gebcop15_n28x00_w079x50_2022v1_prox_unc.tif - uncertainty grid
 
-![](../media/image5.png)
+![](./media/image5.png)
 
 **Figure 3.** Split-sample interpolation errors as a function of
 distance to the nearest measurement.
 
-![](../media/image4.png)
+![](./media/image4.png)
 
 **Figure 4.** Best-fit interpolation uncertainty equation derived from
 the standard deviations of binned split-sample interpolation errors as a
 function of distance to the nearest measurement.
 
-![](../media/gebcop15_n28x00_w079x50_2022v1_prox_unc_hs.png)
+![](./media/gebcop15_n28x00_w079x50_2022v1_prox_unc_hs.png)
 
 **Figure 5.** Interpolation uncertainty grid generated from the best-fit
 interpolation uncertainty equation applied to the distance to the
