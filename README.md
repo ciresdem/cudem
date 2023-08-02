@@ -42,7 +42,7 @@ In this section, we provide user instructions to:
 -   Generate an integrated coastal bathymetric-topographic DEM
 -   Generate an interpolation uncertainty grid
 
-# Code Repository Install
+# Installation
 
 **Dependencies:**
 
@@ -68,6 +68,8 @@ Python libraries (installed with pip):
 -   laspy[laszip]
 -   h5py
 -   boto3
+-   tqdm
+-   pygmt
 
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
