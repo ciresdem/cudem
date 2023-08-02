@@ -3423,8 +3423,9 @@ class WafflesUncertainty(Waffle):
                     s_dp = np.vstack((s_dp, sample_dp))
 
                 err_count = len(s_dp)
-                utils.echo_msg(err_count)
-                utils.echo_msg(s_dp)
+                if err_count == 0:
+                    continue
+                
                 ds = np.unique(s_dp[:,1])
                 s_dp_m = None
 
