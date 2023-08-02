@@ -35,107 +35,16 @@ CUDEMs are a shift from project-based DEM specifications, to a
 comprehensive program that systematically and continuously develops and
 updates DEMs across all spatial scales.
 
-In this section, we provide user instructions to:
+# Installation and Setup
 
--   Install the CUDEM code and the open-source software dependencies
--   Download and process elevation and depth data from multiple publicly available sources
--   Generate an integrated coastal bathymetric-topographic DEM
--   Generate an interpolation uncertainty grid
+GDAL and GDAL-Python are required for use.
 
-# Installation
-
-**Dependencies:**
-
-Required:
--   Python \>= 3.0
--   GDAL
--   GDAL-Python
--   git
--   pip
-
-Optional:
--   GMT
--   MB-System
--   HTDP
--   VDatum
-
-Python libraries (installed with pip):
--   numpy
--   scipy
--   requests[security]
--   lxml
--   matplotlib
--   laspy[laszip]
--   h5py
--   boto3
--   tqdm
--   pygmt
+Other useful external programs needed for full functionality include:
+GMT, MB-System, HTDP and VDatum.
 
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
 `pip install git+https://github.com/ciresdem/cudem.git#egg=cudem`
-
-**Install CUDEM and dependencies from github using git (on
-Redhat/Fedora, for ubuntu use apt and package names may differ):**
-
-```
-sudo dnf update
-git config --global user.name "First Last"
-git config --global user.email "example@example.com"
-git clone https://github.com/ciresdem/cudem.git
-cd cudem
-python install_CUDEM.py --dependencies
-```
-
-**Update existing CUDEM installation via git:**
-
-`python install_CUDEM.py --pull`
-
-**Install Dependencies and CUDEM code Manually on Redhat/Fedora (package names will differ on other linux systems):**
-
-*Install GDAL:*
-
-`sudo dnf install gdal gdal-devel python3-gdal`
-
-*Install GMT:*
-
-`sudo dnf install GMT GMT-devel GMT-doc gshhg-gmt-nc4 gshhg-gmt-nc4-full gshhg-gmt-nc4-high`
-
-*Install MB-System:*
-
-> *https://www.mbari.org/products/research-software/mb-system/how-to-download-and-install-mb-system/#toggle-id-10*
-
-```
-sudo dnf install openmotif openmotif-devel fftw fftw-devel netcdf netcdf-devel proj proj-devel gdal-devel gmt gmt-devel boost boost-python3 glibc-devel mesa\* xorg-x11-fonts\* gcc-c++ libtirpc-devel
-git clone https://github.com/dwcaress/MB-System.git
-cd MB-System
-./configure --prefix \~/.local CFLAGS=\"-I/usr/include/tirpc\"
-CXXFLAGS=\"-I/usr/include/tirpc\"
-make
-make install
-```
-
-*Install HTDP:*
-
-```
-sudo dnf install gfortran
-wget https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip
-unzip HTDP-download.zip -d htdp_tmp
-gfortran htdp_tmp/htdp.f
-mv a.out ~/.local/bin/htdp
-```
-
-*Install CUDEM git:*
-
-```
-sudo dnf install python3-gdal python3-pip python3-wheel
-git clone https://github.com/ciresdem/cudem.git
-cd cudem
-./install_CUDEM.py
-# Add the following to \~/.bashrc
-export PATH=\~/.local/bin:\$PATH
-source \~/.bashrc
-```
 
 **Programs and scripts provided with CUDEM:**
 
