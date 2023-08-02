@@ -2935,7 +2935,7 @@ class WafflesUncertainty(Waffle):
             
         super().__init__(**kwargs)
         self.waffles_module = waffles_module
-        self.percentile = percentile
+        self.percentile = utils.float_or(percentile, 95)
         self.sims = sims
         self.max_sample = max_sample
         self.chnk_lvl = chnk_lvl
