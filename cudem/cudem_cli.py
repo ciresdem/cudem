@@ -1,6 +1,6 @@
 ### cudem_cli.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2022 Regents of the University of Colorado
+## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
 ## cudem_cli.py is part of CUDEM
 ##
@@ -32,9 +32,7 @@ from cudem import utils
 from cudem import waffles
 from cudem import dlim
 from cudem import regions
-from cudem import metadata
-from cudem import uncertainties
-import cudem.fetches.fetches as fetches
+from cudem import fetches
 
 class CUDEMFactory:
     _modules = {
@@ -50,13 +48,7 @@ class CUDEMFactory:
         'fetches': {
             'description': 'fetch elevation data'
         },
-        'spatial_metadata': {
-            'description': 'generate spatial metadata'
-        },
-        'uncertainties': {
-            'description': 'calculate DEM uncertainties'
-        },
-        'perspecto.sh': {
+        'perspecto': {
             'description': 'generate a hillshade from a DEM'
         },
         'vdatums': {
@@ -195,20 +187,17 @@ class CUDEMFactory:
         if self.mod == 'regions':
             return(regions.regions_cli(self.mod_args))
         
-        if self.mod == 'spatial_metadata':
-            return(metadata.spat_meta_cli(self.mod_args))
-
-        if self.mod == 'uncertainties':
-            return(uncertainties.uncertainties_cli(self.mod_args))
-        
         if self.mod == 'fetches':
             return(fetches.fetches_cli(self.mod_args))
 
-        if self.mod in self.mods.keys():
+        if self.mod == 'vdatums':
+            return(vdatums.vdatums_cli(self.mod_args))
+
+        if self.mod in self._modules.keys():
             return(utils.run_cmd(' '.join(self.mod_args), verbose=True))
 
 _cudem_module_short_desc = lambda: ', '.join(
-    ['{}'.format(key) for key in CUDEMFactory().mods])
+    ['{}'.format(key) for key in CUDEMFactory()._modules])
 
 _cudem_module_long_desc = lambda x: 'cudem commands:\n ' + ' '.join(
     ['\033[1m{:26}\033[0m{}\n'.format(key, x[key]['description']) for key in x])
@@ -230,7 +219,7 @@ cudem_cli_usage = """{cmd} ({c_version}): CUDEM; run CUDEM programs and scripts
 CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]), 
            c_version=cudem.__version__,
-           c_formats=_cudem_module_long_desc(CUDEMFactory.mods))
+           c_formats=_cudem_module_long_desc(CUDEMFactory._modules))
 
 def cudem_cli(argv=sys.argv):
     """run cudem programs and scripts
