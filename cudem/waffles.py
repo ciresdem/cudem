@@ -1020,7 +1020,7 @@ class WafflesSciPy(Waffle):
     < scipy:method=<method>:chunk_size=None:chunk_buffer=40 >
     """
     
-    def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 10,
+    def __init__(self, method = 'linear', chunk_size = None, chunk_buffer = 20,
                  chunk_step = None, num_threads = None, **kwargs):
         """generate a `scipy` dem"""
         
@@ -2894,7 +2894,7 @@ class WafflesCUDEM(Waffle):
                 )
                 pre_data = [stack_data_entry, pre_data_entry]
                 pre_region.wmin = pre_weight
-
+                
             ## ==============================================
             ## reset pre_region for final grid
             ## ==============================================
@@ -2907,15 +2907,17 @@ class WafflesCUDEM(Waffle):
                 utils.echo_msg('pre region: {}'.format(pre_region))
 
             ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
-            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             #'linear:chunk_step=None:chunk_buffer=10'
+            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
+            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'linear'
 
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=True if pre == 0 else self.supercede,
-                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False)._acquire_module()
+                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False,
+                                        proximity_limit=10 if pre == 0 else None)._acquire_module()
             pre_surface.initialize()
             pre_surface.generate()
             pre -= 1
@@ -2923,6 +2925,12 @@ class WafflesCUDEM(Waffle):
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
         gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
+
+        ## ==============================================
+        ## reset the stack for uncertainty
+        ## ==============================================
+        self.stack = pre_surface.stack
+        
         return(self)
 
 ## ==============================================
@@ -3329,7 +3337,9 @@ class WafflesUncertainty(Waffle):
 
         if self.waffles_module.split(':')[0] in ['stacks', 'lakes', 'coastline', 'vdatum', 'scratch', 'uncertainty', 'cudem']:
             utils.echo_warning_msg('cannot perform interpolation uncertainty estimation with {}'.format(self.waffles_module.split(':')[0]))
-            return(None)
+            utils.echo_msg('extracting uncertainty band from stack...')
+            gdalfun.gdal_extract_band(self.stack, self.fn, band=4)
+            return(self)
         
         s_dp = s_ds = None
         unc_out = {}
