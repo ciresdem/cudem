@@ -315,7 +315,7 @@ distance to the nearest measurement.
 the standard deviations of binned split-sample interpolation errors as a
 function of distance to the nearest measurement.
 
-![](media/gebcop15_n28x00_w079x50_2022v1_u_figure1.png)
+![](media/gebcop3_n28x00_w079x50_2022v1_u_figure1.png)
 
 **Figure 5.** Interpolation uncertainty grid generated from the best-fit
 interpolation uncertainty equation applied to the distance to the
