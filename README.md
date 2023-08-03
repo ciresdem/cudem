@@ -260,28 +260,16 @@ The contents of the generated config file configuration file
 
 Output:
 
-gebcop15_n28x00_w079x50_2022v1_cst.dbf - coast mask
+gebcop3_n28x00_w079x50_2023v1.json - json config file
 
-gebcop15_n28x00_w079x50_2022v1_cst.prj - coast mask
+gebcop3_n28x00_w079x50_2023v1_msk.tif - data mask
 
-gebcop15_n28x00_w079x50_2022v1_cst.shp - coast mask
-
-gebcop15_n28x00_w079x50_2022v1_cst.shx - coast mask
-
-gebcop15_n28x00_w079x50_2022v1_cst.tif - coast mask
-
-gebcop15_n28x00_w079x50_2022v1.json - json config file
-
-gebcop15_n28x00_w079x50_2022v1_m.tif - data mask
-
-gebcop15_n28x00_w079x50_2022v1_stack_c.tif - stacks \'count\' output
-
-gebcop15_n28x00_w079x50_2022v1_stack_s.tif - stacks data \'stacked\'
+gebcop3_n28x00_w079x50_2023v1_stack.tif - stacks data \'stacked\'
 output
 
-gebcop15_n28x00_w079x50_2022v1_w.tif - final/stacks weight mask
+gebcop3_n28x00_w079x50_2023v1_u.tif - uncertainty grid
 
-gebcop15_n28x00_w079x50_2022v1.tif - final DEM
+gebcop3_n28x00_w079x50_2023v1.tif - final DEM
 
 ![](media/gebcop3_n28x00_w079x50_2023v1_figure1.png)
 
