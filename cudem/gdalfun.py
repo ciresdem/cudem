@@ -1516,7 +1516,7 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
         
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-
+        #size_threshold = 
         for i in trange(0, n, desc='flattening data voids greater than {} cells'.format(size_threshold)):
             if mn[i] >= size_threshold:
                 i += 1

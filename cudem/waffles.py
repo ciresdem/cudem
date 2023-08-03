@@ -3335,8 +3335,15 @@ class WafflesUncertainty(Waffle):
     
     def run(self):
 
-        if self.waffles_module.split(':')[0] in ['stacks', 'lakes', 'coastline', 'vdatum', 'scratch', 'uncertainty', 'cudem']:
-            utils.echo_warning_msg('cannot perform interpolation uncertainty estimation with {}'.format(self.waffles_module.split(':')[0]))
+        if self.waffles_module.split(':')[0] not in ['IDW', 'linear', 'cubic', 'nearest', 'gmt-surface',
+                                                     'gmt-triangulate', 'gmt-nearneighbor', 'mbgrid',
+                                                     'gdal-linear', 'gdal-nearest', 'gdal-average',
+                                                     'gdal-invdst', 'flatten']:
+            utils.echo_warning_msg(
+                'cannot perform interpolation uncertainty estimation with {}'.format(
+                self.waffles_module.split(':')[0]
+                )
+            )
             utils.echo_msg('extracting uncertainty band from stack...')
             gdalfun.gdal_extract_band(self.stack, self.fn, band=4)
             return(self)
