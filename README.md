@@ -283,7 +283,7 @@ gebcop15_n28x00_w079x50_2022v1_w.tif - final/stacks weight mask
 
 gebcop15_n28x00_w079x50_2022v1.tif - final DEM
 
-![](media/gebcop15_n28x00_w079x50_2023v1_figure1.png)
+![](media/gebcop3_n28x00_w079x50_2023v1_figure1.png)
 
 **Figure 1.** Final DEM generated from CUDEM code example.
 
