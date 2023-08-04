@@ -558,26 +558,6 @@ class Waffle:
                             os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
-                            
-            ## ==============================================
-            ## post-process any auxiliary rasters
-            ## ==============================================
-            for aux_dem in self.aux_dems:
-                aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
-                if aux_dem.valid_p():
-                    aux_dem.process(ndv=None, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                    node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
-                                    set_metadata=False)
-
-            ## ==============================================
-            ## reset the self.stack to new post-processed fn and ds
-            ## ==============================================
-            if self.want_stack and self.keep_auxiliary:
-                self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
-                self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
-                                              data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
-                                              y_inc=self.yinc, src_region=self.p_region, weight=1,
-                                              verbose=self.verbose).initialize()
 
             ## ==============================================
             ## calculate estimated uncertainty of the interpolation
@@ -600,7 +580,27 @@ class Waffle:
                     unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                     dst_dir=os.path.dirname(self.fn))
-                
+
+                    
+            ## ==============================================
+            ## post-process any auxiliary rasters
+            ## ==============================================
+            for aux_dem in self.aux_dems:
+                aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+                if aux_dem.valid_p():
+                    aux_dem.process(ndv=None, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                    node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
+                                    set_metadata=False)
+
+            ## ==============================================
+            ## reset the self.stack to new post-processed fn and ds
+            ## ==============================================
+            if self.want_stack and self.keep_auxiliary:
+                self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
+                self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
+                                              data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
+                                              y_inc=self.yinc, src_region=self.p_region, weight=1,
+                                              verbose=self.verbose).initialize()
                 
         return(self)
 
