@@ -1643,11 +1643,12 @@ class WafflesGDALGrid(Waffle):
         return(ogr_ds)
         
     def run(self):
-        utils.echo_msg(
-            'running GDAL GRID {} algorithm @ {} and {}/{}...'.format(
-                self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
+        if self.verbose:
+            utils.echo_msg(
+                'running GDAL GRID {} algorithm @ {} and {}/{}...'.format(
+                    self.alg_str.split(':')[0], self.p_region.format('fn'), self.xcount, self.ycount
+                )
             )
-        )
         _prog = tqdm(desc='running GDAL GRID {} algorithm'.format(self.alg_str), leave=self.verbose)
         _prog_update = lambda x, y, z: _prog.update()
         ogr_ds = self._vectorize_stack()
