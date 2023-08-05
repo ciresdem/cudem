@@ -4442,7 +4442,12 @@ def waffle_queue(q):
     
     while True:
         waffle_module = q.get()
-        waffle_module[0]()
+        try:
+            waffle_module[0]()
+        except:
+            utils.echo_error_msg('failed to generate {}'.format(waffle_module))
+            pass
+        
         q.task_done()
     
 ## ==============================================
