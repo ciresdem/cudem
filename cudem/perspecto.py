@@ -140,9 +140,9 @@ class Perspecto:
         if self.cpt is None:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
             self.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
-        else:
-            if has_pygmt:
-                self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+        #else:
+        #    if has_pygmt:
+        #        self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
 
         
     def __call__(self):
@@ -519,6 +519,7 @@ camera {{
 
 ## ==============================================
 ## GMTImage
+## with pygmt
 ## ==============================================
 class GMTImage(Perspecto):
     def __init__(self, **kwargs):
@@ -530,7 +531,25 @@ class GMTImage(Perspecto):
         
         self.grid = pygmt.load_dataarray(self.src_dem)
         self.makecpt(self.cpt, output=None)
+
+class colorbar(GMTImage):
+    def __init__(self, colorbar_text = 'Elevation', width = 10, height = 2, **kwargs):
+        super().__init__(**kwargs)
+        self.colorbar_text=colorbar_text
+        self.width = utils.int_or(width)
+        self.height = utils.int_or(height)
         
+    def run(self):
+        fig = pygmt.Figure()
+        fig.colorbar(
+            region=[0,10,0,3],
+            projection="X10c/3c",
+            position='jTC+w{}c/{}c+h'.format(self.width, self.height),
+            frame=['x+l{}'.format(self.colorbar_text), 'y+1m']
+        )
+        fig.savefig('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
+        return('{}_cbar.png'.format(utils.fn_basename2(self.src_dem)))
+                
 class figure1(GMTImage):
     """Generate Figure 1
 
@@ -629,7 +648,8 @@ class PerspectoFactory(factory.CUDEMFactory):
             'hillshade': {'call': Hillshade},
             'perspective': {'call': perspective},
             'sphere': {'call': sphere},
-            'figure1': {'call': figure1},        
+            'figure1': {'call': figure1},
+            'colorbar': {'call': colorbar},
         }
     else:
         _modules = {
