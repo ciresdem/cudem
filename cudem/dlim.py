@@ -4008,22 +4008,24 @@ class GEBCOFetcher(Fetcher):
 
     
 class CopernicusFetcher(Fetcher):
-    def __init__(self, **kwargs):
+    def __init__(self, datatype=None, **kwargs):
         super().__init__(**kwargs)
         self.check_size=False
+        self.datatype=datatype
         
     def yield_ds(self, result):
-        src_cop_dems = utils.p_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
-            exts=['tif'],
-            outdir=self.fetch_module._outdir
-        )
-        for src_cop_dem in src_cop_dems:
-            gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
-            yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                 parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        if self.datatype is None or result[-1] == self.datatype:
+            src_cop_dems = utils.p_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                exts=['tif'],
+                outdir=self.fetch_module._outdir
+            )
+            for src_cop_dem in src_cop_dems:
+                gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
+                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                     parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                     cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class FABDEMFetcher(Fetcher):
     def __init__(self, **kwargs):
@@ -4062,8 +4064,19 @@ class MarGravFetcher(Fetcher):
             from cudem import waffles
             mar_grav_fn = utils.make_temp_fn('mar_grav')
             _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(os.path.join(self.fetch_module._outdir, result[1]))],
-                                            src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'),
+                                            src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'), upper_limit = self.upper_limit,
                                             name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()
+            if self.upper_limit is not None or self.lower_limit is not None:
+                ds = gdal.Open(_raster.fn)
+                ds_band = ds.GetRasterBand(1)
+                ds_arr = ds_band.ReadAsArray()
+                if self.upper_limit is not None:
+                    ds_arr[ds_arr >= self.upper_limit] = ds_band.GetNoDataValue()
+
+                if self.lower_limit is not None:
+                    ds_arr[ds_arr <= self.lower_limit] = ds_band.GetNoDataValue()
+                ds = None
+                
             yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),

@@ -121,12 +121,14 @@ def generate_etopo_cpt(gmin, gmax):
 ## ==============================================
 class Perspecto:
 
-    def __init__(self, mod=None, src_dem=None, cpt=None, callback=lambda: False,
-                 outdir=None, verbose=True, params={}):
+    def __init__(self, mod = None, src_dem = None, cpt = None, min_z = None, max_z = None, callback = lambda: False,
+                 outdir = None, verbose = True, params={}):
         self.mod = mod
         self.mod_args = {}
         self.src_dem = src_dem
         self.cpt = cpt
+        self.min_z = utils.float_or(min_z)
+        self.max_z = utils.float_or(max_z)
         self.outdir = outdir
         self.callback = callback
         self.verbose = verbose
@@ -139,7 +141,9 @@ class Perspecto:
         
         if self.cpt is None:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
-            self.cpt = generate_etopo_cpt(self.dem_infos['zr'][0], self.dem_infos['zr'][1])
+            min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
+            max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
+            self.cpt = generate_etopo_cpt(min_z, max_z)
         #else:
         #    if has_pygmt:
         #        self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
@@ -694,6 +698,8 @@ def perspecto_cli(argv = sys.argv):
     wg_user = None
     module = None
     src_cpt = None
+    min_z = None
+    max_z = None
     
     while i < len(argv):
         arg = argv[i]
@@ -707,7 +713,16 @@ def perspecto_cli(argv = sys.argv):
             src_cpt = str(argv[i + 1])
             i += 1
         elif arg[:2] == '-C':
-            src_cpt = str(arg[2:])            
+            src_cpt = str(arg[2:])
+
+        elif arg == '--min_z':
+            min_z = utils.float_or(argv[i + 1])
+            i += 1
+            
+        elif arg == '--max_z':
+            max_z = utils.float_or(argv[i + 1])
+            i += 1
+        
         elif arg == '--modules' or arg == '-m':
             factory.echo_modules(PerspectoFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
             sys.exit(0)            
@@ -776,7 +791,7 @@ def perspecto_cli(argv = sys.argv):
         )
         sys.exit(-1)
 
-    this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt)
+    this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt, min_z=min_z, max_z=max_z)
     if this_perspecto is not None:
         this_perspecto_module = this_perspecto._acquire_module()
         if this_perspecto_module is not None:

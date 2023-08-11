@@ -1256,7 +1256,8 @@ def get_outliers(in_array, percentile=75):
 def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
                           percentile = 75, replace = True, band = 1, weight_mask = None,
                           filter_above = None, filter_below = None, return_mask = False,
-                          elevation_weight = 10, curvature_weight = 2, slope_weight = 2):
+                          elevation_weight = 10, curvature_weight = 2, slope_weight = 2,
+                          cache_dir='./'):
     """scan a src_dem file for outliers and remove them
     
     aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
@@ -1275,7 +1276,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             ndv = ds_band.GetNoDataValue()
 
             ## to hold the mask data
-            tmp_mask = utils.make_temp_fn('fltr_mask.tif', './')
+            tmp_mask = utils.make_temp_fn('fltr_mask.tif', cache_dir)
             mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
             mask_mask_ds = driver.Create(tmp_mask, ds_config['nx'], ds_config['ny'], 1,
@@ -1287,7 +1288,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             mask_mask_band.FlushCache()
 
             ## to hold the count data
-            cnt_mask = utils.make_temp_fn('fltr_cnt.tif', './')
+            cnt_mask = utils.make_temp_fn('fltr_cnt.tif', cache_dir)
             count_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
             count_mask_ds = driver.Create(cnt_mask, ds_config['nx'], ds_config['ny'], 1,
@@ -1351,8 +1352,8 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                     srcwin_ds.FlushCache()
 
                     ## generate slope and curvature grids of the srcwin dem
-                    tmp_slp = utils.make_temp_fn('srcwin_slp.tif', './')
-                    tmp_curv = utils.make_temp_fn('srcwin_curv.tif', './')
+                    tmp_slp = utils.make_temp_fn('srcwin_slp.tif', cache_dir)
+                    tmp_curv = utils.make_temp_fn('srcwin_curv.tif', cache_dir)
                     slp_ds = gdal.DEMProcessing(tmp_slp, srcwin_ds, "slope", scale=111120, computeEdges=True)
                     curv_ds = gdal.DEMProcessing(tmp_curv, slp_ds, "slope", scale=111120, computeEdges=True)
                     srcwin_ds = None

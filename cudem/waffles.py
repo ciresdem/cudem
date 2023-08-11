@@ -2795,8 +2795,8 @@ class WafflesCUDEM(Waffle):
             self.mode = 'IDW'
 
         tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()
-        print(tmp_waffles_mode)
-
+        #print(tmp_waffles_mode)
+        
         for kpam, kval in kwargs.items():
             if kpam not in tmp_waffles.__dict__:
                 if kpam in tmp_waffles_mode.__dict__:
@@ -2847,10 +2847,14 @@ class WafflesCUDEM(Waffle):
         ## Remove outliers from the stacked data
         ## ==============================================
         if self.filter_outliers is not None:
-            gdalfun.gdal_filter_outliers2(
-                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95)
+            # gdalfun.gdal_filter_outliers2(
+            #     self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir
+            # )
+            gdalfun.gdal_filter_outliers(
+                self.stack, None, replace=False
             )
 
+            
         ## ==============================================
         ## initial data to pass through surface (stack)
         ## ==============================================
@@ -4164,6 +4168,8 @@ class WaffleDEM:
                 self.dem_region = regions.Region().from_geo_transform(self.ds_config['geoT'], self.ds_config['nx'], self.ds_config['ny'])
 
                 dem_ds = None
+            else:
+                utils.echo_warning_msg('could not open dem: {}'.format(self.fn))
             
         return(self)
 
@@ -4171,17 +4177,22 @@ class WaffleDEM:
         """check if the WAFFLES DEM appears to be valid"""
 
         if not os.path.exists(self.fn):
+            utils.echo_warning_msg('{} does not exist'.format(self.fn))
             return(False)
         
         self.initialize()
         if self.ds_config is None:
+            utils.echo_warning_msg('could not parse dem: {}'.format(self.fn))
             return(False)
         
         if not 'zr' in self.ds_config:
+            utils.echo_msg('dem {} has no z values?'.format(self.fn))
             return(False)
-            
-        if np.isnan(self.ds_config['zr'][0]):
-            return(False)
+
+        if self.ds_config['raster_count'] == 1:
+            if np.isnan(self.ds_config['zr'][0]):
+                utils.echo_warning_msg('dem {} is all nan'.format(self.fn))
+                return(False)
         
         return(True)
         
@@ -4271,17 +4282,19 @@ class WaffleDEM:
                     split_val= fltr_opts[2]
 
                 # fails if fltr_val in float
+                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cach_dir)
                 if waffles_filter(
-                        fn, '__tmp_fltr.tif', fltr=fltr, fltr_val=fltr_val, split_val=split_val,
+                        fn, filter_fn, fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                 ) == 0:
-                    os.replace('__tmp_fltr.tif', fn)
+                    os.replace(filter_fn, fn)
 
                 if self.verbose:
                     utils.echo_msg('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
-            warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
+            #warp_fn = os.path.join(self.cache_dir, '__tmp_sample.tif')
+            warp_fn = utils.make_temp_fn('__tmp_sample.tif', temp_dir = self.cache_dir)
             if gdalfun.sample_warp(self.fn, warp_fn, xsample, ysample, src_region=region,
                                    sample_alg=sample_alg, ndv=ndv, verbose=self.verbose)[1] == 0:
                 os.replace(warp_fn, self.fn)

@@ -2059,7 +2059,9 @@ https://tidesandcurrents.noaa.gov/
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
         super().__init__(name='tides', **kwargs)
-        self._stations_api_url = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+        #self._stations_api_url = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+        self._stations_api_url = 'https://mapservices.weather.noaa.gov/static/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+        #self._stations_api_url = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'
         self.s_datum = s_datum
         self.t_datum = t_datum
         self.units = units
