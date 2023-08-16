@@ -30,7 +30,7 @@ from osgeo import gdal
 import numpy as np
 from cudem import utils
 from cudem import regions
-from cudem import demfun
+from cudem import gdalfun
 
 _version = '0.1.10'
 _usage = '''gdal_null.py ({}): generate a null grid
@@ -52,7 +52,7 @@ def verbosePrint(xcount, ycount, extent, cellsize, outf):
 def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
     '''copy a gdal grid and make a nodata grid'''
     ds = gdal.Open(srcfile)
-    ds_config = demfun.gather_infos(ds)
+    ds_config = gdalfun.gdal_infos(ds)
     gt = ds_config['geoT']
 
     if nodata is None: nodata = ds_config['ndv']
@@ -67,7 +67,7 @@ def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
 def createGrid(outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
     '''create a nodata grid'''
     xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
-    ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326), gdal.GDT_Float32, nodata, outformat)
+    ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, gt, gdalfun.osr_wkt(4326), gdal.GDT_Float32, nodata, outformat, {}, 1)
     nullArray = np.zeros( (ycount, xcount) )
     nullArray[nullArray==0]=nodata
     utils.gdal_write(nullArray, outfile, ds_config)

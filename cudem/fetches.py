@@ -155,7 +155,7 @@ class iso_xml:
             if opoly[0][0] != opoly[-1][0] or opoly[0][1] != opoly[-1][1]:
                 opoly.append(opoly[0])
             if geom:
-                return(utils.wkt2geom(regions.create_wkt_polygon(opoly)))
+                return(gdalfun.wkt2geom(regions.create_wkt_polygon(opoly)))
             else:
                 return(opoly)
         else:
@@ -332,7 +332,7 @@ class Fetch:
         """fetch src_url and return the requests object"""
         
         if tries <= 0:
-            utils.echo_error_msg('max-tries exhausted')
+            utils.echo_error_msg('max-tries exhausted {}'.format(self.url))
             return(None)
             #raise ConnectionError('Maximum attempts at connecting have failed.')
         
@@ -720,6 +720,8 @@ https://www.gmrt.org
 
         self.data_format = 200
         self.src_srs = 'epsg:4326+3855'
+
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'}
         
     def run(self):
         '''Run the GMRT fetching module'''
@@ -1248,6 +1250,7 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
 
         self.data_format = '168:x_offset=REM:skip=1'
         self.src_srs = 'epsg:4326+3855'
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'}
         
     def run(self):
         '''Run the mar_grav fetching module.'''

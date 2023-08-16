@@ -28,7 +28,7 @@ import os
 import sys
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 
 _version = '0.0.6'
 _usage = '''gdal_clip.py ({}): clip a gdal grid using vector file.
@@ -83,6 +83,6 @@ if __name__ == '__main__':
         utils.echo_error_msg('you must enter a valid input vector file')
         sys.exit(1)
 
-    out, status = demfun.clip(elev, output_name, src_ply=src_ply, invert=want_invert)
+    out, status = gdalfun.gdal_clip(elev, output_name, src_ply=src_ply, invert=want_invert)
     
 ### End

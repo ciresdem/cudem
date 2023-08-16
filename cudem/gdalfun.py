@@ -843,7 +843,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
 
     gi = gdal_infos(src_gdal)
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
-    tmp_ply = '__tmp_clp_ply.shp'
+    tmp_ply = utils.make_temp_fn('__tmp_clp_ply.shp')
     
     out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
@@ -855,7 +855,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
         gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
             .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_gdal, ' -i' if invert else '')
         out, status = utils.run_cmd(gr_cmd, verbose=verbose)
-        utils.remove_glob('__tmp_clp_ply.*')
+        utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
     else:
         return(None, -1)
     
@@ -1141,7 +1141,7 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
 
             chunk_step = utils.int_or(chunk_step)
             n_step = chunk_step if chunk_step is not None else int(n_chunk)
-            n_step = n_chunk/4
+            #n_step = n_chunk/4
             
             src_slp, status = gdal_slope(src_gdal, '{}_slp.tif'.format(utils.fn_basename2(src_gdal)), s = 111120)
             src_curv, status = gdal_slope('{}_slp.tif'.format(utils.fn_basename2(src_gdal)), '{}_curv.tif'.format(utils.fn_basename2(src_gdal)), s = 111120)
@@ -1206,6 +1206,8 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
                     mask = (((band_data > elev_upper_limit) | (band_data < elev_lower_limit)) \
                             & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
                             #& ((slp_data > slp_upper_limit) | (slp_data < curv_lower_limit)))
+                    #mask = ((band_data > elev_upper_limit) & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
+                            
                     band_data[mask] = np.nan
 
                     ## fill nodata here if replace is true...

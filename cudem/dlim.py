@@ -1667,7 +1667,7 @@ class XYZFile(ElevationDataset):
 
     def __init__(self, delim = None, xpos = 0, ypos = 1, zpos = 2,
                  wpos = None, upos = None, skip = 0, x_scale = 1, y_scale = 1,
-                 z_scale = 1, x_offset = 0, y_offset = 0, **kwargs):
+                 z_scale = 1, x_offset = 0, y_offset = 0, mask = None, **kwargs):
         super().__init__(**kwargs)
         self.delim = delim # the file delimiter
         self.xpos = utils.int_or(xpos, 0) # the position of the x/lat value
@@ -1682,7 +1682,8 @@ class XYZFile(ElevationDataset):
         #self.x_offset = utils.int_or(x_offset, 0) # offset x by x_offset
         self.x_offset = x_offset # offset x by x_offset
         self.y_offset = utils.int_or(y_offset, 0) # offset y by y_offset
-        self.rem = False        
+        self.rem = False
+        self.mask = mask
 
     def init_ds(self):
         if self.delim is not None:
@@ -1867,6 +1868,12 @@ class XYZFile(ElevationDataset):
                     if self.rem:
                         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
+                    # if self.mask is not None:
+                    #     for g in gdalfun.gdal_query([this_xyz], self.mask, 'g'):
+                    #         if g 
+                            
+                    #     continue
+                        
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
                     if self.dst_trans is not None:
@@ -3059,6 +3066,7 @@ class OGRFile(ElevationDataset):
     Parameters:
 
     ogr_layer (str/int): the OGR layer containing elevation data
+    elev_field (str): the field containing the z values
     weight_field (str): the field containing weight values
     uncertainty_field (str): the field containing uncertainty_values
     """
@@ -3123,7 +3131,7 @@ class OGRFile(ElevationDataset):
                     for xyz in xyzs:                        
                         if not geom.Is3D():
                             if self.elev_field is None:
-                                self.elev_field = find_elevation_field(f)
+                                self.elev_field = self.find_elevation_field(f)
 
                             elev = utils.float_or(f.GetField(self.elev_field))
                             if elev is not None:
