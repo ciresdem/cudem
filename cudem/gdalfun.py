@@ -1204,8 +1204,8 @@ def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = Non
 
                     #& ((band_data < filter_below) | (band_data > filter_above))
                     mask = (((band_data > elev_upper_limit) | (band_data < elev_lower_limit)) \
-                            & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
-                            #& ((slp_data > slp_upper_limit) | (slp_data < curv_lower_limit)))
+                            & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0))
+                            & ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit) | (slp_data == 0)))
                     #mask = ((band_data > elev_upper_limit) & ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0)))
                             
                     band_data[mask] = np.nan
