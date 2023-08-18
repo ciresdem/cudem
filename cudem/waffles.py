@@ -4673,9 +4673,9 @@ def waffles_cli(argv = sys.argv):
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
 
-    #waffle_q = queue.Queue()
-    processes=[]
-    waffle_q = mp.Queue()
+    waffle_q = queue.Queue()
+    #processes=[]
+    #waffle_q = mp.Queue()
     n_threads = 1
         
     while i < len(argv):
@@ -4854,9 +4854,9 @@ def waffles_cli(argv = sys.argv):
         i += 1
 
     for _ in range(n_threads):
-        #t = threading.Thread(target=waffle_queue, args=([waffle_q]))
-        t = mp.Process(target=waffle_queue, args=([waffle_q]))
-        processes.append(t)
+        t = threading.Thread(target=waffle_queue, args=([waffle_q]))
+        #t = mp.Process(target=waffle_queue, args=([waffle_q]))
+        #processes.append(t)
         t.daemon = True
         t.start()
 
@@ -4977,8 +4977,8 @@ def waffles_cli(argv = sys.argv):
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
 
-    #waffle_q.join()
-    [t.join() for t in processes]
+    waffle_q.join()
+    #[t.join() for t in processes]
     ## ==============================================
     ## remove the cahce dir if not asked to keep
     ## ==============================================

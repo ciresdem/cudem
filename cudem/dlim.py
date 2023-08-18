@@ -1003,9 +1003,24 @@ class ElevationDataset:
                             desc='generating vertical transformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert),
                             leave=self.verbose
                     ) as pbar:
+                        vd_x_inc = utils.str2inc('3s')
+                        vd_y_inc = utils.str2inc('3s')
+                        
+                        xcount, ycount, dst_gt = vd_region.geo_transform(
+                            x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+                        )
+
+                        if xcount <= 1 or ycount <= 1:
+                            vd_x_inc = self.x_inc
+                            vd_y_inc = self.y_inc
+                            xcount, ycount, dst_gt = vd_region.geo_transform(
+                                x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+                            )
+                            
                         self.trans_fn = vdatums.VerticalTransform(
+                            vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
-                            vd_region, '3s', '3s', src_vert, dst_vert,
+                            #vd_region, '3s', '3s', src_vert, dst_vert,
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
@@ -1030,6 +1045,9 @@ class ElevationDataset:
                     if utils.str_or(dst_vert) == '6360' or 'us-ft' in utils.str_or(dst_vert, ''):
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_from_meter = True
+
+                    #utils.echo_msg(out_src_srs)
+                    #utils.echo_msg(out_dst_srs)
                 else:
                     utils.echo_error_msg(
                         'failed to generate vertical transformation grid between {} and {} for this region!'.format(
@@ -4137,26 +4155,26 @@ class HydroNOSFetcher(Fetcher):
             for bag_fn in bag_fns:
                 #if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                 if 'ellipsoid' not in bag_fn.lower():
-                    # #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
-                    # src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(bag_fn))
-                    # if src_vert is None:
-                    #     src_vert = '5866'
+                    #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
+                    src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(bag_fn))
+                    if src_vert is None:
+                        src_vert = '5866'
 
-                    # #print(src_horz)
-                    # #print(src_vert)
-                    # horz_srs = osr.SpatialReference()
-                    # horz_srs.SetFromUserInput(src_horz)
-                    # #print(horz_srs)
-                    # vert_srs = osr.SpatialReference()
-                    # vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
-                    # #print(vert_srs)
-                    # src_srs = osr.SpatialReference()
-                    # src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
-                    # #print(src_srs)
+                    #print(src_horz)
+                    #print(src_vert)
+                    horz_srs = osr.SpatialReference()
+                    horz_srs.SetFromUserInput(src_horz)
+                    #print(horz_srs)
+                    vert_srs = osr.SpatialReference()
+                    vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+                    #print(vert_srs)
+                    src_srs = osr.SpatialReference()
+                    src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
+                    #print(src_srs)
 
-                    # bag_srs = src_srs.ExportToWkt()
-                    # #print(bag_srs)
-                    yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
+                    bag_srs = src_srs.ExportToWkt()
+                    #print(bag_srs)
+                    yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=bag_srs, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
