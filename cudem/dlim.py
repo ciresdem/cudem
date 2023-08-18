@@ -1010,13 +1010,19 @@ class ElevationDataset:
                             x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                         )
 
-                        if xcount <= 1 or ycount <= 1:
-                            vd_x_inc = self.x_inc
-                            vd_y_inc = self.y_inc
+                        #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
+                        while (xcount <=10 or ycount <=10):
+                            
+                            #if xcount <= 1 or ycount <= 1:
+                            vd_x_inc /= 2
+                            vd_y_inc /= 2
+                            #vd_y_inc = self.y_inc
                             xcount, ycount, dst_gt = vd_region.geo_transform(
                                 x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                             )
-                            
+                            #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
+
+                        #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
                         self.trans_fn = vdatums.VerticalTransform(
                             vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
