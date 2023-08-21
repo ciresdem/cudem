@@ -486,8 +486,7 @@ class INF:
 
         this_ds = DatasetFactory(mod=self.name)
         this_ds_mod = this_ds._acquire_module()        
-        self.fmt = this_ds.mod_name
-            
+        self.fmt = this_ds.mod_name            
         
     def load_inf_file(self, inf_fn = None):
         valid_data = False
@@ -655,7 +654,7 @@ class ElevationDataset:
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
             self.set_transform()
-
+            
         return(self)
     
     def generate_inf(self, callback=lambda: False):
@@ -909,9 +908,9 @@ class ElevationDataset:
 
         if generate_inf:
             self.infos = self.generate_inf()
-
+            
             ## update this
-            if self.data_format != -3 and write_inf:
+            if self.data_format >= -1 and write_inf:
                 self.infos.write_inf_file()
 
             if recursive_check and self.parent is not None:
@@ -1088,9 +1087,9 @@ class ElevationDataset:
             ## ==============================================
             if self.region is not None: # and self.region.src_srs != self.src_srs:
                 self.trans_region = self.region.copy()
-                self.trans_region.src_srs = out_dst_srs
-                self.trans_region.warp(out_src_srs)
-                self.trans_region.src_srs = out_src_srs
+                self.trans_region.src_srs = dst_horz#out_dst_srs
+                self.trans_region.warp(src_horz)#out_src_srs)
+                self.trans_region.src_srs = src_horz#out_src_srs
             else:
                 if self.infos.wkt is not None:
                     self.trans_region = regions.Region().from_string(self.infos.wkt)
@@ -1100,7 +1099,7 @@ class ElevationDataset:
                     utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
                 
             src_osr_srs = dst_osr_srs = None
-            
+
     def parse_json(self):
         """
         parse the datasets from the datalist geojson file.
@@ -2264,6 +2263,22 @@ class GDALFile(ElevationDataset):
         
     def destroy_ds(self):
         self.src_ds = None
+
+    def init_srs(self):
+        if self.src_srs is None:
+            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
+            if src_vert is None:
+                src_vert = '5866'
+
+            horz_srs = osr.SpatialReference()
+            horz_srs.SetFromUserInput(src_horz)
+            vert_srs = osr.SpatialReference()
+            vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+            src_srs = osr.SpatialReference()
+            src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
+            return(src_srs.ExportToWkt())
+        else:
+            return(self.src_srs)
         
     def init_ds(self):
         """initialize the raster dataset
@@ -2285,11 +2300,13 @@ class GDALFile(ElevationDataset):
             self.open_options = None
 
         if self.valid_p() and self.src_srs is None:
-            self.src_srs = gdalfun.gdal_get_srs(self.fn)
+            #self.src_srs = gdalfun.gdal_get_srs(self.fn)
+            self.src_srs = self.init_srs()
 
         ## ==============================================
         ## set up any transformations and other options
         ## ==============================================
+
         self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
@@ -2421,7 +2438,12 @@ class GDALFile(ElevationDataset):
         return(self.src_ds)
 
     def generate_inf(self, callback=lambda: False):
-        self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+        if self.src_srs is None:
+            #self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
+            self.infos.src_srs = self.init_srs()
+        else:
+            self.infos.src_srs = self.src_srs
+            
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
                 ds_infos = gdalfun.gdal_infos(src_ds)
@@ -2775,35 +2797,31 @@ class BAGFile(ElevationDataset):
         self.explode = explode
         self.force_vr = force_vr
         self.vr_strategy = vr_strategy
-
-    def init_ds(self):
+        
+    def init_srs(self):
         if self.src_srs is None:
-            self.src_srs = gdalfun.gdal_get_srs(self.fn)
-            self.set_transform()
-
-    def generate_inf(self, callback=lambda: False):
-        if self.src_srs is None:
-            #self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
-            #if 'ellipsoid' not in bag_fn.lower():
-            #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
             src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
             if src_vert is None:
                 src_vert = '5866'
 
-            #print(src_horz)
-            #print(src_vert)
             horz_srs = osr.SpatialReference()
             horz_srs.SetFromUserInput(src_horz)
-            #print(horz_srs)
             vert_srs = osr.SpatialReference()
             vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
-            #print(vert_srs)
             src_srs = osr.SpatialReference()
             src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
-            #print(src_srs)
-
-            self.infos.src_srs = src_srs.ExportToWkt()
-            #print(bag_srs)
+            return(src_srs.ExportToWkt())
+        else:
+            return(self.src_srs)
+        
+    def init_ds(self):
+        if self.src_srs is None:
+            self.src_srs = self.init_srs()
+            self.set_transform()
+            
+    def generate_inf(self, callback=lambda: False):
+        if self.src_srs is None:
+            self.infos.src_srs = self.init_srs()
         else:
             self.infos.src_srs = self.src_srs
             
@@ -2882,6 +2900,7 @@ class BAGFile(ElevationDataset):
         self.init_ds()
         for ds in self.parse_():
             ds.initialize()
+            utils.echo_warning_msg(self.src_srs)
             for xyz in ds.yield_xyz():
                 yield(xyz)
 
@@ -3611,7 +3630,6 @@ class Datalist(ElevationDataset):
                                                       src_region=self.region, invert_region=self.invert_region, metadata=md,
                                                       src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                                                       sample_alg=self.sample_alg, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
-
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                             ):
@@ -4181,25 +4199,25 @@ class HydroNOSFetcher(Fetcher):
             for bag_fn in bag_fns:
                 #if 'ellipsoid' not in bag_fn.lower() and 'vb' not in bag_fn.lower():
                 if 'ellipsoid' not in bag_fn.lower():
-                    #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
-                    src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(bag_fn))
-                    if src_vert is None:
-                        src_vert = '5866'
+                    # #src_horz, src_vert = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(bag_fn))
+                    # src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(bag_fn))
+                    # if src_vert is None:
+                    #     src_vert = '5866'
 
-                    #print(src_horz)
-                    #print(src_vert)
-                    horz_srs = osr.SpatialReference()
-                    horz_srs.SetFromUserInput(src_horz)
-                    #print(horz_srs)
-                    vert_srs = osr.SpatialReference()
-                    vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
-                    #print(vert_srs)
-                    src_srs = osr.SpatialReference()
-                    src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
-                    #print(src_srs)
+                    # #print(src_horz)
+                    # #print(src_vert)
+                    # horz_srs = osr.SpatialReference()
+                    # horz_srs.SetFromUserInput(src_horz)
+                    # #print(horz_srs)
+                    # vert_srs = osr.SpatialReference()
+                    # vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+                    # #print(vert_srs)
+                    # src_srs = osr.SpatialReference()
+                    # src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
+                    # #print(src_srs)
 
-                    bag_srs = src_srs.ExportToWkt()
-                    #print(bag_srs)
+                    # bag_srs = src_srs.ExportToWkt()
+                    # #print(bag_srs)
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
