@@ -2791,7 +2791,7 @@ class WafflesCUDEM(Waffle):
 
         self.mode = mode
         self.mode_args = {}
-        if self.mode not in ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate']:
+        if self.mode not in ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']:
             self.mode = 'IDW'
 
         tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()
@@ -2834,7 +2834,6 @@ class WafflesCUDEM(Waffle):
     def run(self):
         pre = self.pre_count
         pre_weight = 0
-        final_region = self.d_region.copy()
         pre_region = self.p_region.copy()
         pre_region.wmin = None
         if self.min_weight is None:
@@ -2858,7 +2857,7 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## initial data to pass through surface (stack)
         ## ==============================================
-        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
+        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=near,1'.format(self.stack)
         pre_data = [stack_data_entry]
         
         ## ==============================================
@@ -2894,7 +2893,7 @@ class WafflesCUDEM(Waffle):
                     pre_weight = 1-e20
                     
                 _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
-                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
+                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=auto:check_path=True,{}'.format(
                     _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
                 )
                 pre_data = [stack_data_entry, pre_data_entry]
@@ -2914,7 +2913,7 @@ class WafflesCUDEM(Waffle):
             ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
             #'linear:chunk_step=None:chunk_buffer=10'
             #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
-            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'linear'
+            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
 
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,

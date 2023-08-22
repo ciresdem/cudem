@@ -2265,6 +2265,11 @@ class GDALFile(ElevationDataset):
         self.src_ds = None
 
     def init_srs(self):
+        """initialize the srs from the gdal file.
+
+        try to split the horizontal and vertical and them combine them...
+        """
+        
         if self.src_srs is None:
             src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
             if src_vert is None:
@@ -2275,7 +2280,7 @@ class GDALFile(ElevationDataset):
             vert_srs = osr.SpatialReference()
             vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
             src_srs = osr.SpatialReference()
-            src_srs.SetCompoundCS('BAG Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
+            src_srs.SetCompoundCS('Combined'.format(src_horz, src_vert), horz_srs, vert_srs)
             return(src_srs.ExportToWkt())
         else:
             return(self.src_srs)
