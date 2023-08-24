@@ -1310,8 +1310,8 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
             chunk_step = utils.int_or(chunk_step)
             n_step = chunk_step if chunk_step is not None else int(n_chunk)
-            n_step = n_chunk/4
-            #n_step = n_chunk
+            #n_step = n_chunk/4
+            n_step = n_chunk
 
             utils.echo_msg(
                 'scanning {} for outliers with {}@{} using {}...'.format(
@@ -1411,7 +1411,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                     #count_mask_data[(slp_mask)] += (slope_weight / srcwin_std) #** 2
                     #mask_mask_data[curv_mask] += (curvature_weight / srcwin_std) #** 2
                     #count_mask_data[(curv_mask)] += (curvature_weight / srcwin_std) #** 2
-                    mask_mask_data[(elev_mask & curv_mask)] += ((elevation_weight / srcwin_std) + (curvature_weight / srcwin_std)) #** 2
+                    mask_mask_data[(elev_mask & curv_mask)] += 1#((elevation_weight / srcwin_std) + (curvature_weight / srcwin_std)) #** 2
                     ## \test
 
                     count_mask_data[(elev_mask  & curv_mask)] += 1
@@ -1455,7 +1455,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
             utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
             src_data = ds_band.ReadAsArray()
-            src_data[mask_mask_data >= mask_upper_limit] = ds_config['ndv']
+            src_data[(mask_mask_data >= mask_upper_limit) | (mask_mask_data <= mask_lower_limit)] = ds_config['ndv']
             ds_band.WriteArray(src_data)
             dst_ds = curv_ds = slp_ds = slp_full = curv_full = tri_full = mask_mask_ds = count_mask_ds = None
             utils.remove_glob(tmp_mask)

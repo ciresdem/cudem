@@ -2893,7 +2893,7 @@ class WafflesCUDEM(Waffle):
                     pre_weight = 1-e20
                     
                 _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
-                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=auto:check_path=True,{}'.format(
+                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
                     _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
                 )
                 pre_data = [stack_data_entry, pre_data_entry]
@@ -4542,6 +4542,7 @@ def waffle_queue(q):
             waffle_module[0]()
         except Exception as e:
             utils.echo_error_msg('failed to generate {}, {}'.format(waffle_module, e))
+            print(traceback.format_exc())
             pass
         
         q.task_done()

@@ -580,7 +580,7 @@ class ElevationDataset:
     ]
 
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
-    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None,
+    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
                  dst_srs = 'epsg:4326', x_inc = None, y_inc = None, want_mask = False, want_sm = False,
                  sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
                  cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
@@ -591,6 +591,7 @@ class ElevationDataset:
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
         self.uncertainty = uncertainty # dataset uncertainty
+        self.mask = mask # dataset mask
         self.src_srs = src_srs # dataset source srs
         self.dst_srs = dst_srs # dataset target srs
         self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
@@ -2244,10 +2245,10 @@ class GDALFile(ElevationDataset):
     band_no: the band number of the elevation data
     """
     
-    def __init__(self, mask = None, weight_mask = None, uncertainty_mask = None,  open_options = None,
+    def __init__(self, weight_mask = None, uncertainty_mask = None,  open_options = None,
                  sample = None, resample = True, check_path = True, super_grid = False, band_no = 1, **kwargs):
         super().__init__(**kwargs)
-        self.mask = mask
+        #self.mask = mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
         self.open_options = open_options
@@ -2341,7 +2342,7 @@ class GDALFile(ElevationDataset):
                 if self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
                     self.sample_alg = 'bilinear'
                 else:
-                    self.sample_alg = 'average'
+                    self.sample_alg = 'near'
                 
             tmp_ds = self.fn
             if self.open_options is not None:
