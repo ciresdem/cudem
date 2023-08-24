@@ -2857,7 +2857,7 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## initial data to pass through surface (stack)
         ## ==============================================
-        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=near,1'.format(self.stack)
+        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
         pre_data = [stack_data_entry]
         
         ## ==============================================
