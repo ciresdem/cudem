@@ -1434,7 +1434,10 @@ class ElevationDataset:
 
                 band_md['weight'] = this_entry.weight
                 band_md['uncertainty'] = this_entry.uncertainty
-                print(band_md)
+                for key in band_md.keys():
+                    if band_md[key] is None:
+                        band_md[key] = 'None'
+                        
                 m_band.SetMetadata(band_md)
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
@@ -4055,6 +4058,12 @@ class GEBCOFetcher(Fetcher):
                             
                     gdalfun.gdal_write(tid_array, tmp_tid, tid_config)
                     utils.echo_msg(tmp_tid)
+                    utils.echo_warning_msg('mask: {}'.format(self.mask))
+                    if self.mask is not None:
+                        new_mask = utils.make_temp_fn('test_tmp_mask')
+                        gdalfun.gdal_mask(tmp_tid, self.mask, new_mask, msk_value = 1, verbose = True)
+                        os.replace(new_mask, tmp_tid)
+                        
                     yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid),
                                          src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                                          weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
