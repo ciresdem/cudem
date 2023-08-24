@@ -1437,7 +1437,8 @@ class ElevationDataset:
                 for key in band_md.keys():
                     if band_md[key] is None:
                         band_md[key] = 'None'
-                        
+
+                print(band_md)
                 m_band.SetMetadata(band_md)
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
@@ -1896,11 +1897,11 @@ class XYZFile(ElevationDataset):
                     if self.rem:
                         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
-                    # if self.mask is not None:
-                    #     for g in gdalfun.gdal_query([this_xyz], self.mask, 'g'):
-                    #         if g 
-                            
-                    #     continue
+                    if self.mask is not None:
+                        ndv = gdalfun.gdal_get_ndv(self.mask)
+                        for g in gdalfun.gdal_query([this_xyz], self.mask, 'g'):
+                            if g != ndv:
+                                continue
                         
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
@@ -3926,7 +3927,7 @@ class Fetcher(ElevationDataset):
     def yield_ds(self, result):
         yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                              parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                             uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
                              dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
 
     def yield_xyz(self):
@@ -3992,7 +3993,7 @@ class GMRTFetcher(Fetcher):
                         b.WriteArray(a)
                         gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
                     
-        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200',
+        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', mask=self.mask, 
                              src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
                              invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
@@ -4057,8 +4058,8 @@ class GEBCOFetcher(Fetcher):
                         tid_array[tid_array == tid_key] = self.fetch_module.tid_dic[tid_key][1]
                             
                     gdalfun.gdal_write(tid_array, tmp_tid, tid_config)
-                    utils.echo_msg(tmp_tid)
-                    utils.echo_warning_msg('mask: {}'.format(self.mask))
+                    #utils.echo_msg(tmp_tid)
+                    #utils.echo_warning_msg('mask: {}'.format(self.mask))
                     if self.mask is not None:
                         new_mask = utils.make_temp_fn('test_tmp_mask')
                         gdalfun.gdal_mask(tmp_tid, self.mask, new_mask, msk_value = 1, verbose = True)
@@ -4088,7 +4089,7 @@ class GEBCOFetcher(Fetcher):
             
             for gebco_fn in wanted_gebco_fns:
                 yield(DatasetFactory(mod=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region,
+                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region, mask=self.mask, 
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
@@ -4108,7 +4109,7 @@ class CopernicusFetcher(Fetcher):
             )
             for src_cop_dem in src_cop_dems:
                 gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
-                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, 
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -4125,7 +4126,7 @@ class FABDEMFetcher(Fetcher):
         )
         for src_fab_dem in src_fab_dems:
             gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
-            yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, 
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -4163,13 +4164,13 @@ class MarGravFetcher(Fetcher):
                     ds_arr[ds_arr <= self.lower_limit] = ds_band.GetNoDataValue()
                 ds = None
                 
-            yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+            yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         else:
             yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region,
+                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
@@ -4186,7 +4187,7 @@ class ChartsFetcher(Fetcher):
         for src_000 in src_000s:
             usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1", src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
             
@@ -4204,7 +4205,7 @@ class HydroNOSFetcher(Fetcher):
             for nos_fn in nos_fns:
                 yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                     parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                     parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         elif result[2] == 'bag':
             bag_fns = utils.p_unzip(
@@ -4236,7 +4237,7 @@ class HydroNOSFetcher(Fetcher):
                     # #print(bag_srs)
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                         parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                         parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class eHydroFetcher(Fetcher):
@@ -4260,7 +4261,7 @@ class eHydroFetcher(Fetcher):
             usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048",
                                       src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
 
@@ -4276,7 +4277,7 @@ class eHydroFetcher(Fetcher):
             src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
             for src_usace in src_usaces:
                 usace_ds = DatasetFactory(mod=src_usace, data_format='168:z_scale=.3048', src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None,
-                                          dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
+                                          dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, mask=self.mask, 
                                           src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                           cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 yield(usace_ds)
@@ -4296,12 +4297,17 @@ class BlueTopoFetcher(Fetcher):
                 band=3,
                 exclude=[0]
             )[0]
-        
+
+        if self.mask is not None:
+            new_mask = utils.make_temp_fn('test_tmp_mask')
+            gdalfun.gdal_mask(sid, self.mask, new_mask, msk_value = 1, verbose = True)
+            os.replace(new_mask, sid)
+            
         yield(
             DatasetFactory(
                 mod=os.path.join(self.fetch_module._outdir, result[1]),
                 data_format='200:band_no=1:mask={}:uncertainty_mask=2{}'.format(sid, ':weight_mask=2' if self.unc_weights else ''),
-                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, 
                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                 parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                 cache_dir = self.fetch_module._outdir, verbose=self.verbose
@@ -4331,7 +4337,7 @@ class NGSFetcher(Fetcher):
 
         yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class TidesFetcher(Fetcher):
@@ -4361,8 +4367,8 @@ class TidesFetcher(Fetcher):
                             xyz.dump(dst_port=tmp_ngs)
 
         yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, 
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class VDatumFetcher(Fetcher):
@@ -4375,7 +4381,7 @@ class VDatumFetcher(Fetcher):
         utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=self.verbose)
         yield(DatasetFactory(mod=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
 
 ## ==============================================
