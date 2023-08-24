@@ -1434,12 +1434,17 @@ class ElevationDataset:
 
                 band_md['weight'] = this_entry.weight
                 band_md['uncertainty'] = this_entry.uncertainty
-                for key in band_md.keys():
-                    if band_md[key] is None:
-                        band_md[key] = 'None'
-
-                print(band_md)
-                m_band.SetMetadata(band_md)
+                try:
+                    m_band.SetMetadata(band_md)
+                except:
+                    try:
+                        for key in band_md.keys():
+                            if band_md[key] is None:
+                                del band_md[key]
+                                
+                        m_band.SetMetadata(band_md)
+                    except:
+                        utils.echo_error_msg('could not set band metadata!')
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
