@@ -1434,6 +1434,7 @@ class ElevationDataset:
 
                 band_md['weight'] = this_entry.weight
                 band_md['uncertainty'] = this_entry.uncertainty
+                print(band_md)
                 m_band.SetMetadata(band_md)
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
