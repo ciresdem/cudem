@@ -2178,16 +2178,16 @@ class WafflesCoastline(Waffle):
                     verbose=self.verbose
                 )
 
-            utils.run_cmd(
-                'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
-                    self.p_region.format('te'),
-                    self.ds_config['nx'],
-                    self.ds_config['ny'],
-                ),
-                verbose=self.verbose
-            )
-
             try:
+                utils.run_cmd(
+                    'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                        self.p_region.format('te'),
+                        self.ds_config['nx'],
+                        self.ds_config['ny'],
+                    ),
+                    verbose=self.verbose
+                )
+
                 gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
             except:
                 tnm_ds = None
@@ -2864,9 +2864,12 @@ class WafflesCUDEM(Waffle):
         ## generate coastline
         ## ==============================================
         if self.landmask:
-            coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
-            coastline = self.generate_coastline(pre_data=coast_data)
-            pre_clip = coastline
+            if os.path.exists(self.landmask.split(':')[0]):
+                pre_clip = self.landkmask
+            else:   
+                coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
+                coastline = self.generate_coastline(pre_data=coast_data)
+                pre_clip = coastline
         else:
             pre_clip = None
 

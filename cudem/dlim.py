@@ -1443,8 +1443,8 @@ class ElevationDataset:
                                 del band_md[key]
                                 
                         m_band.SetMetadata(band_md)
-                    except:
-                        utils.echo_error_msg('could not set band metadata!')
+                    except Exception as e:
+                        utils.echo_error_msg('could not set band metadata: {}; {}'.format(band_md, e))
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
@@ -1903,10 +1903,24 @@ class XYZFile(ElevationDataset):
                         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
                     if self.mask is not None:
-                        ndv = gdalfun.gdal_get_ndv(self.mask)
-                        for g in gdalfun.gdal_query([this_xyz], self.mask, 'g'):
-                            if g != ndv:
-                                continue
+                        #ndv = gdalfun.gdal_get_ndv(self.mask)
+                        with gdalfun.gdal_datasource(self.mask) as src_ds:
+                            #print(src_ds)
+                            if src_ds is not None:
+                                ds_config = gdalfun.gdal_infos(src_ds)
+                                ds_band = src_ds.GetRasterBand(1)
+                                ds_gt = ds_config['geoT']
+                                ds_nd = ds_config['ndv']
+                                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                #print(tgrid)
+                                if tgrid is not None:
+                                    if tgrid[0][0] != ds_nd:
+                                        continue
+                        # for g in gdalfun.gdal_yield_query([this_xyz.export_as_list(include_z=True)], self.mask, 'g'):
+                        #     utils.echo_msg(g)
+                        #     if g != ndv:
+                        #         continue
                         
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
