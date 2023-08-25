@@ -494,7 +494,12 @@ class gdal_datasource:
         ## don't close src_ds if incoming was already open
         #print(exc_type, exc_value, exc_traceback)
         if not isinstance(self.src_gdal, gdal.Dataset):
-            self.src_ds.FlushCache()
+            if self.update:
+                try:
+                    self.src_ds.FlushCache()
+                except:
+                    pass
+                
             self.src_ds = None
 
 def gdal_get_srs(src_gdal):

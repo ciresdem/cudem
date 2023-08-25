@@ -2865,7 +2865,7 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         if self.landmask:
             if os.path.exists(self.landmask.split(':')[0]):
-                pre_clip = self.landkmask
+                pre_clip = self.landmask
             else:   
                 coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
                 coastline = self.generate_coastline(pre_data=coast_data)

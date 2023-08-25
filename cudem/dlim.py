@@ -1912,11 +1912,13 @@ class XYZFile(ElevationDataset):
                                 ds_gt = ds_config['geoT']
                                 ds_nd = ds_config['ndv']
                                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
-                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
-                                #print(tgrid)
-                                if tgrid is not None:
-                                    if tgrid[0][0] != ds_nd:
-                                        continue
+                                ## todo: check if x/y is within raster, else skip
+                                if xpos < ds_config['nx'] and ypos < ds_config['ny']:
+                                    tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                    #print(tgrid)
+                                    if tgrid is not None:
+                                        if tgrid[0][0] != ds_nd:
+                                            continue
                         # for g in gdalfun.gdal_yield_query([this_xyz.export_as_list(include_z=True)], self.mask, 'g'):
                         #     utils.echo_msg(g)
                         #     if g != ndv:
