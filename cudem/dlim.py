@@ -1755,7 +1755,7 @@ class XYZFile(ElevationDataset):
             usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
             dtype={'names': self.field_names, 'formats': self.field_formats}
         )
-        print(points)
+        #print(points)
         if self.region is not None  and self.region.valid_p():
             xyz_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
             print(xyz_region)
@@ -1913,7 +1913,7 @@ class XYZFile(ElevationDataset):
                                 ds_nd = ds_config['ndv']
                                 xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
                                 ## todo: check if x/y is within raster, else skip
-                                if xpos < ds_config['nx'] and ypos < ds_config['ny']:
+                                if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
                                     tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
                                     #print(tgrid)
                                     if tgrid is not None:
@@ -2368,7 +2368,7 @@ class GDALFile(ElevationDataset):
                 if self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
                     self.sample_alg = 'bilinear'
                 else:
-                    self.sample_alg = 'near'
+                    self.sample_alg = 'average'
                 
             tmp_ds = self.fn
             if self.open_options is not None:
