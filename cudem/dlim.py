@@ -146,25 +146,26 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, region=None, src_srs=None, dst_srs=None, xy_inc=(None, None), sample_alg='bilinear',
-              want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False, want_sm=False,
-              invert_region=False, cache_dir=None, dump_precision=4):
+def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid=None,xy_inc=(None, None),
+              sample_alg='bilinear', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
+              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
         xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
                                weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                               src_srs=src_srs, dst_srs=dst_srs, x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg,
-                               parent=None, src_region=region, invert_region=invert_region, cache_dir=cache_dir,
-                               want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+                               src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
+                               y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
+                               cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
                                dump_precision=dump_precision)._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
             this_datalist = Scratch(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
                                     uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                    x_inc=xy_inc[0], y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region,
-                                    invert_region=invert_region, cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm,
-                                    verbose=want_verbose, dump_precision=dump_precision)
+                                    src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
+                                    sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
+                                    cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+                                    dump_precision=dump_precision)
         else:
             this_datalist = xdls[0]
 
@@ -581,8 +582,8 @@ class ElevationDataset:
 
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
-                 dst_srs = 'epsg:4326', x_inc = None, y_inc = None, want_mask = False, want_sm = False,
-                 sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
+                 dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
+                 want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
                  cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
@@ -594,6 +595,8 @@ class ElevationDataset:
         self.mask = mask # dataset mask
         self.src_srs = src_srs # dataset source srs
         self.dst_srs = dst_srs # dataset target srs
+        self.src_geoid = src_geoid # dataset source geoid
+        self.dst_geoid = dst_geoid # dataset target geoid
         self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
         self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
         self.want_mask = want_mask # mask the data
@@ -639,7 +642,6 @@ class ElevationDataset:
         self.data_entries = [] # 
         self.data_lists = {} #
         self.cache_dir = utils.cudem_cache() if self.cache_dir is None else self.cache_dir # cache directory
-        
         if self.sample_alg not in self.gdal_sample_methods: 
             utils.echo_warning_msg(
                 '{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(
@@ -650,7 +652,7 @@ class ElevationDataset:
             
         if utils.fn_url_p(self.fn):
             self.remote = True
-                        
+
         if self.valid_p():
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
@@ -944,11 +946,21 @@ class ElevationDataset:
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
+            tmp_src_srs = self.src_srs.split('+geoid:')
+            self.src_srs = tmp_src_srs[0]
+            if len(tmp_src_srs) > 1:
+                self.src_geoid = tmp_src_srs[1]
+
+            tmp_dst_srs = self.dst_srs.split('+geoid:')
+            self.dst_srs = tmp_dst_srs[0]
+            if len(tmp_dst_srs) > 1:
+                self.dst_geoid = tmp_dst_srs[1]
+                
+            #utils.echo_msg_bold(self.dst_srs)
             ## ==============================================
             ## parse out the horizontal and vertical epsgs if they exist
             ## ==============================================
             src_horz, src_vert1 = gdalfun.split_srs(self.src_srs)
-            #dst_horz, dst_vert = gdalfun.split_srs(self.dst_srs)
             src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
             dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
             src_vert = src_vert1
@@ -967,6 +979,10 @@ class ElevationDataset:
             ## have to create a new one for every input file...!
             ## ==============================================
             if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
+                # if len(self.infos.minmax) == 0:
+                #     self.initialize()
+                #     self.inf()
+                    
                 vd_region = regions.Region(
                     src_srs=src_horz
                 ).from_list(
@@ -974,7 +990,7 @@ class ElevationDataset:
                 ).warp(
                     dst_horz
                 ) if self.region is None else self.region.copy()
-                
+
                 vd_region.zmin = None
                 vd_region.zmax = None
                 
@@ -1023,10 +1039,12 @@ class ElevationDataset:
                             #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
 
                         #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
+
                         self.trans_fn = vdatums.VerticalTransform(
                             vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
                             #vd_region, '3s', '3s', src_vert, dst_vert,
+                            geoid_in=self.src_geoid, geoid_out=self.dst_geoid,
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
@@ -1052,8 +1070,8 @@ class ElevationDataset:
                         out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_from_meter = True
 
-                    #utils.echo_msg(out_src_srs)
-                    #utils.echo_msg(out_dst_srs)
+                    #utils.echo_msg_bold(out_src_srs)
+                    #utils.echo_msg_bold(out_dst_srs)
                 else:
                     utils.echo_error_msg(
                         'failed to generate vertical transformation grid between {} and {} for this region!'.format(
@@ -1098,7 +1116,7 @@ class ElevationDataset:
                     self.trans_region.warp(self.dst_srs)
                 else:
                     utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
-                
+
             src_osr_srs = dst_osr_srs = None
 
     def parse_json(self):
@@ -1557,15 +1575,16 @@ class ElevationDataset:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
                                
         if not mask_only:
-            if not supercede:
-                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
-                ):
-                    for key in stacked_bands.keys():
-                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                        stacked_data[key][stacked_data[key] == ndv] = np.nan
+            #if not supercede:
+            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+            for y in range(
+                    srcwin[1], srcwin[1] + srcwin[3], 1
+            ):
+                for key in stacked_bands.keys():
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                    stacked_data[key][stacked_data[key] == ndv] = np.nan
 
+                if not supercede:
                     ## ==============================================
                     ## average the accumulated arrays for finalization
                     ## z and u are weighted sums, so divide by weights
@@ -1581,12 +1600,12 @@ class ElevationDataset:
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
-                    ## ==============================================
-                    ## write out final rasters
-                    ## ==============================================
-                    for key in stacked_bands.keys():
-                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+                ## ==============================================
+                ## write out final rasters
+                ## ==============================================
+                for key in stacked_bands.keys():
+                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
 
             ## ==============================================
             ## set the final output nodatavalue
@@ -2299,6 +2318,9 @@ class GDALFile(ElevationDataset):
         
         if self.src_srs is None:
             src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
+            if src_horz is None and src_vert is None:
+                return(None)
+            
             if src_vert is None:
                 src_vert = '5866'
 
@@ -2338,12 +2360,11 @@ class GDALFile(ElevationDataset):
         ## ==============================================
         ## set up any transformations and other options
         ## ==============================================
-
         self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
 
-        if self.x_inc is not None and self.y_inc is not None and self.resample:
+        if self.x_inc is not None and self.y_inc is not None:# and self.resample:
             self.resample_and_warp = True
         else:
             self.resample_and_warp = False
@@ -2387,6 +2408,9 @@ class GDALFile(ElevationDataset):
             self.src_ds = None
             if in_bands > 1:
                 self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                if self.verbose:
+                    utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
+
                 gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], inverse=False)
                 tmp_ds = self.tmp_elev_band
 
@@ -2406,7 +2430,7 @@ class GDALFile(ElevationDataset):
                     gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], inverse=False)
                     self.weight_mask = self.tmp_weight_band
 
-            warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc,
+            warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc if self.resample else None, self.y_inc if self.resample else None,
                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region, sample_alg=self.sample_alg,
                                         ndv=ndv, verbose=self.verbose)[0]
@@ -2556,7 +2580,8 @@ class GDALFile(ElevationDataset):
                     weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
+                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc if self.resample else self.dem_infos['geoT'][1],
+                                                         self.y_inc if self.resample else self.dem_infos['geoT'][5] * -1,
                                                          src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                                          src_region=self.warp_region, sample_alg=self.sample_alg,
                                                          ndv=ndv, verbose=self.verbose)[0]
@@ -2579,7 +2604,8 @@ class GDALFile(ElevationDataset):
                     uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
                 elif os.path.exists(self.uncertainty_mask):
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
+                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc if self.resample else self.dem_infos['geoT'][1],
+                                                              self.y_inc if self.resample else self.dem_infos['geoT'][5] * -1,
                                                               src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                                               src_region=self.warp_region, sample_alg=self.sample_alg,
                                                               ndv=ndv, verbose=self.verbose)[0]
@@ -2764,7 +2790,7 @@ class GDALFile(ElevationDataset):
                                               np.nan, 'GTiff', None, None)
                 this_srcwin = (srcwin[0], y, srcwin[2], 1)
                 yield(out_arrays, this_srcwin, this_gt)
-                                            
+
             band = mask_band = weight_band = src_weight = src_mask = self.src_ds = None
             # if self.tmp_elev_band is not None:
             #     utils.remove_glob(self.tmp_elev_band)
@@ -2784,6 +2810,7 @@ class GDALFile(ElevationDataset):
                 
     def yield_xyz(self):
         """yield the gdal file data as xyz"""
+        #self.resample = False # turn off resampling...
         for arrs, srcwin, gt in self.yield_array():
             z_array = arrs['z']
             w_array = arrs['weight']
@@ -2833,6 +2860,9 @@ class BAGFile(ElevationDataset):
     def init_srs(self):
         if self.src_srs is None:
             src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
+            if src_horz is None and src_vert is None:
+                return None
+            
             if src_vert is None:
                 src_vert = '5866'
 
@@ -2932,7 +2962,6 @@ class BAGFile(ElevationDataset):
         self.init_ds()
         for ds in self.parse_():
             ds.initialize()
-            utils.echo_warning_msg(self.src_srs)
             for xyz in ds.yield_xyz():
                 yield(xyz)
 
@@ -3063,6 +3092,7 @@ class MBSParser(ElevationDataset):
             mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
                               src_region=self.region, verbose=self.verbose)
+            mbs_ds.initialize()            
             yield(mbs_ds)
             utils.remove_glob('{}.tif*'.format(ofn))
         else:
@@ -4715,9 +4745,7 @@ class DatasetFactory(factory.CUDEMFactory):
                 utils.echo_msg('New DatasetFactory file written to {}'.format(param_file))
                 
         except:
-            raise ValueError('DatasetFactory: Unable to write new parameter file to {}'.format(param_file))
-
-            
+            raise ValueError('DatasetFactory: Unable to write new parameter file to {}'.format(param_file))            
 
 ## ==============================================
 ## Command-line Interface (CLI)

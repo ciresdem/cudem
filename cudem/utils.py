@@ -1150,7 +1150,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
       prefix (str): a prefix for the message
     """
 
-    msg = _init_msg(msg, len(prefix) + 9)
+    #msg = _init_msg(msg, len(prefix) + 9)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
@@ -1168,7 +1168,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
       prefix (str): a prefix for the message
     """
 
-    msg = _init_msg(msg, len(prefix) + 7)
+    #msg = _init_msg(msg, len(prefix) + 7)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
@@ -1186,8 +1186,8 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
       prefix (str): a prefix for the message
       nl (bool): append a newline to the message
     """
-
-    msg = _init_msg(msg, len(prefix))
+    
+    #msg = _init_msg(msg, len(prefix))
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
     if bold:

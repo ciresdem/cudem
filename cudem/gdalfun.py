@@ -58,6 +58,9 @@ def split_srs(srs, as_epsg = False):
     Returns:
     list: [horz_srs, vert_srs]
     """
+
+    if srs is None:
+        return(None, None)
     
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(srs)
@@ -1647,7 +1650,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
     if os.path.exists(src_dem):
         if dst_dem is None:
             #dst_dem = '{}.{}'.format(os.path.basename(src_dem).split('.')[0], gdal_fext(dst_fmt))
-            dst_dem = '{}.{}'.format(fn_basename2(src_dem), gdal_fext(dst_fmt))
+            dst_dem = '{}.{}'.format(utils.fn_basename2(src_dem), gdal_fext(dst_fmt))
             
         if dst_fmt != 'GTiff':
             co = False
@@ -1658,7 +1661,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
             '.format(src_dem, dst_dem, dst_fmt))
             
-        out, status = run_cmd(gdal2gdal_cmd, verbose=False)
+        out, status = utils.run_cmd(gdal2gdal_cmd, verbose=False)
         if status == 0:
             return(dst_dem)
         else:

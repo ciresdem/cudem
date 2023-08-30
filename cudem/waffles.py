@@ -2773,10 +2773,11 @@ class WafflesCUDEM(Waffle):
     pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
     poly_count (int) - the number of polygons (from largest to smallest) to extract from the landmask
     mode (str) - the waffles module to perform the initial pre-surface
+    supercede (bool) - supercede subsquent pre-surfaces
     """
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface', filter_outliers = None, **kwargs):
+                 mode = 'gmt-surface', filter_outliers = None, want_supercede = True, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -2812,6 +2813,8 @@ class WafflesCUDEM(Waffle):
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
         
         self.filter_outliers = utils.int_or(filter_outliers)
+        self.want_supercede = want_supercede
+        self.want_weight = True
 
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
@@ -2922,7 +2925,7 @@ class WafflesCUDEM(Waffle):
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
-                                        clip=pre_clip if pre !=0 else None, supercede=True if pre == 0 else self.supercede,
+                                        clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False,
                                         proximity_limit=10 if pre == 0 else None)._acquire_module()
             pre_surface.initialize()

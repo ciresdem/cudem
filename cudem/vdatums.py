@@ -174,7 +174,7 @@ _cdn_reference_frames = {
 
 ## todo: allow input/output geoids
 _geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
-_geoids = ['g2018']
+#_geoids = ['g2018']
 
 def get_vdatum_by_name(datum_name):
     ## tidal
@@ -207,12 +207,14 @@ def get_vdatum_by_name(datum_name):
 ## modules instead of gmt-surface
 ## ==============================================
 class VerticalTransform:    
-    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, verbose=True, cache_dir=None):
+    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, geoid_in=None, geoid_out='g2018', verbose=True, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
         self.epsg_in = self._datum_by_name(str(epsg_in))
         self.epsg_out = self._datum_by_name(str(epsg_out))
+        self.geoid_in = geoid_in
+        self.geoid_out = geoid_out
         self.cache_dir = _vdatum_cache if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
@@ -351,7 +353,7 @@ class VerticalTransform:
             else:
                 return(_trans_in_array - _trans_out_array, self._datum_by_name(vdatum_tidal_out))
             
-    def _cdn_transform(self, epsg=None, name=None, invert=False):
+    def _cdn_transform(self, epsg=None, name=None, geoid='g2018', invert=False):
         """create a cdn transofrmation grid"""
 
         epsg = 5703 if epsg == 6360 else epsg
@@ -370,12 +372,13 @@ class VerticalTransform:
             )
 
         for _result in cdn_results:
-            for g in _geoids:
-                if g in _result['name']:
-                    #print(g)
-                    #print(_result)
-                    cdn_results = [_result]
-                    break
+            #for g in _geoids:
+            #if g in _result['name']:
+            if geoid in _result['name']:
+                #utils.echo_msg_bold(geoid)
+                #utils.echo_msg_boldprint(_result)
+                cdn_results = [_result]
+                break
                     
         if len(cdn_results) > 0:
             for _result in cdn_results:
@@ -446,9 +449,15 @@ class VerticalTransform:
         return(out_grid, epsg_out)
     
     def _vertical_transform(self, epsg_in, epsg_out):
-
         trans_array = np.zeros( (self.ycount, self.xcount) )
         ## failure can cause endless loop
+        #utils.echo_msg_bold('{} {}'.format(self.geoid_in, self.geoid_out))
+        # while self.geoid_in != self.geoid_out:
+        #     tmp_trans, cv = self._cdn_transform(name='geoid', invert=False)
+        #     print(tmp_trans)
+        #     print(cv)
+        #     break
+            
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
             #print(ref_in, ref_out, epsg_in, epsg_out)
