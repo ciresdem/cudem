@@ -1575,16 +1575,15 @@ class ElevationDataset:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
                                
         if not mask_only:
-            #if not supercede:
-            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-            for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
-            ):
-                for key in stacked_bands.keys():
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    stacked_data[key][stacked_data[key] == ndv] = np.nan
+            if not supercede:
+                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    for key in stacked_bands.keys():
+                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                        stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                if not supercede:
                     ## ==============================================
                     ## average the accumulated arrays for finalization
                     ## z and u are weighted sums, so divide by weights
@@ -1600,12 +1599,12 @@ class ElevationDataset:
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
-                ## ==============================================
-                ## write out final rasters
-                ## ==============================================
-                for key in stacked_bands.keys():
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+                    ## ==============================================
+                    ## write out final rasters
+                    ## ==============================================
+                    for key in stacked_bands.keys():
+                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
 
             ## ==============================================
             ## set the final output nodatavalue
