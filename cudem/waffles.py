@@ -368,7 +368,7 @@ class Waffle:
             if supercede:
                 z_array[w_arr > w_array] = arr[w_arr > w_array]
                 w_array[w_arr > w_array] = w_arr[w_arr > w_array]
-                z_array[z_array == 0] = np.nan
+                z_array[w_array == 0] = np.nan
                 w_array[w_array == 0] = np.nan
                 
                 #u_array += w_arr * np.power((arr - (z_array / w_array)), 2)
