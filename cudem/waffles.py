@@ -2918,8 +2918,8 @@ class WafflesCUDEM(Waffle):
 
             ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
             #'linear:chunk_step=None:chunk_buffer=10'
-            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
-            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=10/2'
+            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=10/2'
 
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,

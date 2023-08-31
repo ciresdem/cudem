@@ -1126,8 +1126,8 @@ class ElevationDataset:
                 else:
                     if self.infos.wkt is not None:
                         self.trans_region = regions.Region().from_string(self.infos.wkt)
-                        self.trans_region.src_srs = src_srs
-                        self.trans_region.warp(dst_srs)
+                        self.trans_region.src_srs = src_horz
+                        self.trans_region.warp(dst_horz)
                     else:
                         utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
 
