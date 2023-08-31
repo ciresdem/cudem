@@ -2866,15 +2866,16 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## generate coastline
         ## ==============================================
-        if self.landmask:
-            if os.path.exists(self.landmask.split(':')[0]):
-                pre_clip = self.landmask
-            else:   
+        pre_clip = None
+        if self.landmask:            
+            if isinstance(self.landmask, str):
+                if os.path.exists(self.landmask.split(':')[0]):
+                    pre_clip = self.landmask
+
+            if pre_clip is None:
                 coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
                 coastline = self.generate_coastline(pre_data=coast_data)
                 pre_clip = coastline
-        else:
-            pre_clip = None
 
         ## ==============================================
         ## Grid/Stack the data `pre` times concluding in full resolution @ min_weight

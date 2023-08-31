@@ -432,25 +432,30 @@ class VerticalTransform:
     def _htdp_transform(self, epsg_in, epsg_out):
         """create an htdp transformation grid"""
 
-        htdp = htdpfun.HTDP(verbose=self.verbose)
-        if self.verbose:
-            utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
+        if utils.config_check()['HTDP'] is None:
+            utils.echo_error_msg('you must have HTDP installed to perform HTDP vertical transformations')            
+            return(np.zeros( (self.ycount, self.xcount) ), epsg_out)
+        else:
 
-        griddef = (self.src_region.xmax, self.src_region.ymax,
-                   self.src_region.xmin, self.src_region.ymin,
-                   self.xcount, self.ycount)
+            htdp = htdpfun.HTDP(verbose=self.verbose)
+            if self.verbose:
+                utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
 
-        grid = htdp._new_create_grid(griddef)
+            griddef = (self.src_region.xmax, self.src_region.ymax,
+                       self.src_region.xmin, self.src_region.ymin,
+                       self.xcount, self.ycount)
 
-        htdp._write_grid(grid, '_tmp_input.xyz')
-        htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz',
-                            _htdp_reference_frames[epsg_in]['htdp_id'], 2012.0,
-                            _htdp_reference_frames[epsg_out]['htdp_id'], 2012.0)
-        htdp.run('_tmp_control.txt')
+            grid = htdp._new_create_grid(griddef)
 
-        out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
-        utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
-        return(out_grid, epsg_out)
+            htdp._write_grid(grid, '_tmp_input.xyz')
+            htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz',
+                                _htdp_reference_frames[epsg_in]['htdp_id'], 2012.0,
+                                _htdp_reference_frames[epsg_out]['htdp_id'], 2012.0)
+            htdp.run('_tmp_control.txt')
+
+            out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
+            utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
+            return(out_grid, epsg_out)
     
     def _vertical_transform(self, epsg_in, epsg_out):
         trans_array = np.zeros( (self.ycount, self.xcount) )
