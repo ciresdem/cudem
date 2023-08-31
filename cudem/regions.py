@@ -599,7 +599,7 @@ class Region:
 
         pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
         pointA.Transform(dst_trans)
-
+        
         pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
         pointB.Transform(dst_trans)
 

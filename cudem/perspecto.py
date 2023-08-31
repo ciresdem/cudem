@@ -144,20 +144,22 @@ class Perspecto:
             min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
             max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
             self.cpt = generate_etopo_cpt(min_z, max_z)
-        #else:
-        #    if has_pygmt:
-        #        self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+        else:
+            if has_pygmt:
+                self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
 
         
     def __call__(self):
         return(self.run())
         
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
+        min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
+        max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
         pygmt.makecpt(
             cmap=cmap,
             color_model='{}'.format(color_model),
             output=output,
-            series=[self.dem_infos['zr'][0], self.dem_infos['zr'][1]],
+            series=[min_z, max_z],
             no_bg=True,
         )
         self.cpt = output

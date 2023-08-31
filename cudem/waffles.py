@@ -2918,8 +2918,8 @@ class WafflesCUDEM(Waffle):
 
             ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
             #'linear:chunk_step=None:chunk_buffer=10'
-            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW:radius=10'
             waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
+            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=10/2'
 
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
@@ -4543,16 +4543,23 @@ def waffle_queue(q):
     """
     
     while True:
-        waffle_module = q.get()
         try:
-            waffle_module[0]()
-        except Exception as e:
-            utils.echo_error_msg('failed to generate {}, {}'.format(waffle_module, e))
-            print(traceback.format_exc())
-            pass
+            waffle_module = q.get()
+        except q.Empty:
+            continue
+
+        if waffle_module is None:
+            break
+        else:
+            try:
+                waffle_module[0]()
+            except Exception as e:
+                utils.echo_error_msg('failed to generate {}, {}'.format(waffle_module, e))
+                print(traceback.format_exc())
+                pass
         
-        q.task_done()
-    
+        #q.task_done()
+        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
@@ -4679,9 +4686,9 @@ def waffles_cli(argv = sys.argv):
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
 
-    waffle_q = queue.Queue()
-    #processes=[]
-    #waffle_q = mp.Queue()
+    #waffle_q = queue.Queue()
+    processes=[]
+    waffle_q = mp.Queue()
     n_threads = 1
         
     while i < len(argv):
@@ -4860,9 +4867,9 @@ def waffles_cli(argv = sys.argv):
         i += 1
 
     for _ in range(n_threads):
-        t = threading.Thread(target=waffle_queue, args=([waffle_q]))
-        #t = mp.Process(target=waffle_queue, args=([waffle_q]))
-        #processes.append(t)
+        #t = threading.Thread(target=waffle_queue, args=([waffle_q]))
+        t = mp.Process(target=waffle_queue, args=([waffle_q]))
+        processes.append(t)
         t.daemon = True
         t.start()
 
@@ -4886,8 +4893,9 @@ def waffles_cli(argv = sys.argv):
             utils.echo_error_msg(
                 'specified waffles config file does not exist, {}'.format(wg_user)
             )
-
-        waffle_q.join()
+        waffle_q.put(None)
+        [t.join() for t in processes]
+        #waffle_q.join()
         sys.exit(0)
 
     ## ==============================================
@@ -4977,17 +4985,18 @@ def waffles_cli(argv = sys.argv):
                 this_waffle_module = this_waffle._acquire_module()
                 if this_waffle_module is not None:
                     waffle_q.put([this_waffle_module])
-
                     ##this_waffle_module()
                 else:
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
 
-    waffle_q.join()
-    #[t.join() for t in processes]
+    waffle_q.put(None)
+    #waffle_q.join()
+    [t.join() for t in processes]
     ## ==============================================
     ## remove the cahce dir if not asked to keep
     ## ==============================================
     #if not keep_cache:
     #    utils.remove_glob(wg['cache_dir'])
+
 ### End

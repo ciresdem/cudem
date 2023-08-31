@@ -231,7 +231,7 @@ class stacks_ds(threading.Thread):
             qq.put(idx)
 
         for i in range(self.n_threads):
-           qq.put(None)
+            qq.put(None)
             
         for i in range(self.n_threads):
             t = mp.Process(target=arr_queue, args=(i, qq, q, ds_list))
@@ -947,12 +947,12 @@ class ElevationDataset:
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             tmp_src_srs = self.src_srs.split('+geoid:')
-            self.src_srs = tmp_src_srs[0]
+            src_srs = tmp_src_srs[0]
             if len(tmp_src_srs) > 1:
                 self.src_geoid = tmp_src_srs[1]
 
             tmp_dst_srs = self.dst_srs.split('+geoid:')
-            self.dst_srs = tmp_dst_srs[0]
+            dst_srs = tmp_dst_srs[0]
             if len(tmp_dst_srs) > 1:
                 self.dst_geoid = tmp_dst_srs[1]
                 
@@ -960,9 +960,9 @@ class ElevationDataset:
             ## ==============================================
             ## parse out the horizontal and vertical epsgs if they exist
             ## ==============================================
-            src_horz, src_vert1 = gdalfun.split_srs(self.src_srs)
-            src_horz, src_vert = gdalfun.epsg_from_input(self.src_srs)
-            dst_horz, dst_vert = gdalfun.epsg_from_input(self.dst_srs)
+            src_horz, src_vert1 = gdalfun.split_srs(src_srs)
+            src_horz, src_vert = gdalfun.epsg_from_input(src_srs)
+            dst_horz, dst_vert = gdalfun.epsg_from_input(dst_srs)
             src_vert = src_vert1
 
             ## ==============================================
@@ -978,18 +978,26 @@ class ElevationDataset:
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
             ## ==============================================
-            if dst_vert is not None and src_vert is not None and dst_vert != src_vert:
+            #utils.echo_msg(self.src_geoid)
+            #utils.echo_msg(self.dst_geoid)
+            if (dst_vert is not None) and (src_vert is not None) and (str(dst_vert) != str(src_vert)) or \
+               self.src_geoid is not None and self.dst_geoid is not None and (self.src_geoid != self.dst_geoid):
                 # if len(self.infos.minmax) == 0:
-                #     self.initialize()
+                #     #self.initialize()
                 #     self.inf()
-                    
-                vd_region = regions.Region(
-                    src_srs=src_horz
-                ).from_list(
-                    self.infos.minmax
-                ).warp(
-                    dst_horz
-                ) if self.region is None else self.region.copy()
+
+                if self.region is None:
+                    vd_region = regions.Region(
+                        src_srs=src_horz
+                    ).from_list(
+                        self.infos.minmax
+                    ).warp(
+                        'epsg:4326'
+                    ) #if self.region is None else self.region.copy()
+                else:
+                    vd_region = self.region.copy()
+                    vd_region.src_srs = src_horz
+                    vd_region.warp('epsg:4326')
 
                 vd_region.zmin = None
                 vd_region.zmax = None
@@ -1009,7 +1017,7 @@ class ElevationDataset:
                         utils.inc2str(self.x_inc)
                     ))
                 else:
-                    self.trans_fn_full = self.trans_fn
+                    self.trans_fn_full = utils.make_temp_fn(self.trans_fn)
 
                 ## ==============================================
                 ## vertical transformation grid is generated in WGS84
@@ -1026,6 +1034,7 @@ class ElevationDataset:
                             x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                         )
 
+                        utils.echo_warning_msg(vd_region)
                         #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
                         while (xcount <=10 or ycount <=10):
                             
@@ -1048,36 +1057,40 @@ class ElevationDataset:
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
-                        assert os.path.exists(self.trans_fn)
+                        #assert os.path.exists(self.trans_fn)
                 else:
                     utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert))
 
-                if not os.path.exists(self.trans_fn_full):
-                    gdalfun.sample_warp(self.trans_fn, self.trans_fn_full, self.x_inc, self.y_inc,
-                                        src_region=self.region, src_srs='epsg:4326', dst_srs=self.dst_srs)
-                    
-                    assert os.path.exists(self.trans_fn_full)
-                    
-                if os.path.exists(self.trans_fn):
-                    out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), self.trans_fn)
-                    out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
+                if self.trans_fn is not None:
+                    if not os.path.exists(self.trans_fn_full):
+                        gdalfun.sample_warp(self.trans_fn, self.trans_fn_full, self.x_inc, self.y_inc,
+                                            src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
 
-                    if utils.str_or(src_vert) == '6360' or 'us-ft' in utils.str_or(src_vert, ''):
-                        out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
-                        self.trans_to_meter = True
+                        assert os.path.exists(self.trans_fn_full)
 
-                    if utils.str_or(dst_vert) == '6360' or 'us-ft' in utils.str_or(dst_vert, ''):
-                        out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
-                        self.trans_from_meter = True
+                    if os.path.exists(self.trans_fn):
+                        out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), self.trans_fn)
+                        out_dst_srs = '{}'.format(dst_srs.ExportToProj4())
 
-                    #utils.echo_msg_bold(out_src_srs)
-                    #utils.echo_msg_bold(out_dst_srs)
-                else:
-                    utils.echo_error_msg(
-                        'failed to generate vertical transformation grid between {} and {} for this region!'.format(
-                            src_vert, dst_vert
+                        if utils.str_or(src_vert) == '6360' or 'us-ft' in utils.str_or(src_vert, ''):
+                            out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+                            self.trans_to_meter = True
+
+                        if utils.str_or(dst_vert) == '6360' or 'us-ft' in utils.str_or(dst_vert, ''):
+                            out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
+                            self.trans_from_meter = True
+
+                        #utils.echo_msg_bold(out_src_srs)
+                        #utils.echo_msg_bold(out_dst_srs)
+                    else:
+                        utils.echo_error_msg(
+                            'failed to generate vertical transformation grid between {} and {} for this region!'.format(
+                                src_vert, dst_vert
+                            )
                         )
-                    )
+                else:
+                    out_src_srs = None
+                    out_dst_srs = None
 
             else:
                 ## ==============================================
@@ -1087,37 +1100,40 @@ class ElevationDataset:
                 out_src_srs = src_srs.ExportToProj4()
                 out_dst_srs = dst_srs.ExportToProj4()
 
-            src_osr_srs = osr.SpatialReference()
-            src_osr_srs.SetFromUserInput(out_src_srs)
-            dst_osr_srs = osr.SpatialReference()
-            dst_osr_srs.SetFromUserInput(out_dst_srs)
-            try:
-                src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-                dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            except:
-                pass
+            if out_src_srs is not None and out_dst_srs is not None:
+                src_osr_srs = osr.SpatialReference()
+                src_osr_srs.SetFromUserInput(out_src_srs)
+                dst_osr_srs = osr.SpatialReference()
+                dst_osr_srs.SetFromUserInput(out_dst_srs)
+                try:
+                    src_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                    dst_osr_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
+                except:
+                    pass
 
-            self.src_trans_srs = out_src_srs
-            self.dst_trans_srs = out_dst_srs
-            self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
+                self.src_trans_srs = out_src_srs
+                self.dst_trans_srs = out_dst_srs
+                self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
 
-            ## ==============================================
-            ## transform input region if necessary
-            ## ==============================================
-            if self.region is not None: # and self.region.src_srs != self.src_srs:
-                self.trans_region = self.region.copy()
-                self.trans_region.src_srs = dst_horz#out_dst_srs
-                self.trans_region.warp(src_horz)#out_src_srs)
-                self.trans_region.src_srs = src_horz#out_src_srs
-            else:
-                if self.infos.wkt is not None:
-                    self.trans_region = regions.Region().from_string(self.infos.wkt)
-                    self.trans_region.src_srs = self.src_srs
-                    self.trans_region.warp(self.dst_srs)
+                ## ==============================================
+                ## transform input region if necessary
+                ## ==============================================
+                if self.region is not None: # and self.region.src_srs != self.src_srs:
+                    self.trans_region = self.region.copy()
+                    self.trans_region.src_srs = src_horz#out_dst_srs
+                    self.trans_region.warp(src_horz)#out_src_srs)
+                    self.trans_region.src_srs = dst_horz#out_src_srs
                 else:
-                    utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
+                    if self.infos.wkt is not None:
+                        self.trans_region = regions.Region().from_string(self.infos.wkt)
+                        self.trans_region.src_srs = src_srs
+                        self.trans_region.warp(dst_srs)
+                    else:
+                        utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
 
-            src_osr_srs = dst_osr_srs = None
+                src_osr_srs = dst_osr_srs = None
+            else:
+                utils.echo_warning_msg('failed to generate transformation')
 
     def parse_json(self):
         """
@@ -2005,7 +2021,7 @@ class LASFile(ElevationDataset):
             self.src_srs = self.get_epsg()
             if self.src_srs is None:
                 self.src_srs = self.infos.src_srs
-            
+
             self.set_transform()
 
         self.las_region = None
@@ -3636,6 +3652,7 @@ class Datalist(ElevationDataset):
                     ## ==============================================
                     data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
+                    #utils.echo_msg_bold(self.src_srs)
                     data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
                                               invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                               x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,

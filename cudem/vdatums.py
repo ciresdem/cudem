@@ -237,6 +237,8 @@ class VerticalTransform:
             ref_out = 'cdn'
         else: ref_out = None
 
+        #utils.echo_msg_bold(ref_in)
+        #utils.echo_msg_bold(ref_out)
         return(ref_in, ref_out)
 
     def _datum_by_name(self, datum_name):
@@ -374,9 +376,11 @@ class VerticalTransform:
         for _result in cdn_results:
             #for g in _geoids:
             #if g in _result['name']:
+            #utils.echo_msg(geoid)
+            #utils.echo_msg(_result['name'])
             if geoid in _result['name']:
                 #utils.echo_msg_bold(geoid)
-                #utils.echo_msg_boldprint(_result)
+                #utils.echo_msg_bold(_result)
                 cdn_results = [_result]
                 break
                     
@@ -418,7 +422,7 @@ class VerticalTransform:
 
                             # if c_array is not None:
                             #     _tmp_array = _tmp_array * c_array
-                                
+                            #utils.echo_msg(_tmp_array)
                             return(_tmp_array, src_code)
 
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
@@ -452,11 +456,19 @@ class VerticalTransform:
         trans_array = np.zeros( (self.ycount, self.xcount) )
         ## failure can cause endless loop
         #utils.echo_msg_bold('{} {}'.format(self.geoid_in, self.geoid_out))
-        # while self.geoid_in != self.geoid_out:
-        #     tmp_trans, cv = self._cdn_transform(name='geoid', invert=False)
-        #     print(tmp_trans)
-        #     print(cv)
-        #     break
+        
+        #while self.geoid_in != self.geoid_out:
+        if self.geoid_in is not None:# and self.geoid_out is not None:
+            tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
+            #utils.echo_msg(tmp_trans_a)
+            #utils.echo_msg_bold(epsg_in)
+            #tmp_trans_out, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
+
+            #utils.echo_msg(tmp_trans_in)
+            #utils.echo_msg(tmp_trans_out)
+
+            #trans_array = tmp_trans_in - tmp_trans_out
+            #utils.echo_msg(trans_array)
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
@@ -466,23 +478,26 @@ class VerticalTransform:
                     #print(_tidal_frames)
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
-                else:
+                else: 
                     tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], 'tss')
-                    cg, cv = self._cdn_transform(name='geoid', invert=False)
+                    cg, cv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
                     tmp_trans = tg + cg
                     epsg_in = cv
             elif ref_in == 'htdp':
                 if ref_out == 'htdp':
                     tmp_trans, v = self._htdp_transform(epsg_in, epsg_out)
                     epsg_in = epsg_out
-                else:
+                else: 
                     cg, cv = self._cdn_transform(epsg=epsg_out, invert=True)
+                    gg, gv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=True)
                     hg, v = self._htdp_transform(epsg_in, cv)
                     tmp_trans = cg + hg
                     epsg_in = epsg_out
             elif ref_in == 'cdn':
                 if ref_out == 'cdn':
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
+                    cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
+                    tmp_trans = tmp_trans + cg
                     epsg_in = cv
                 elif ref_out == 'tidal':
                     tmp_trans, tv = self._tidal_transform('tss', _tidal_frames[self.epsg_out]['name'])
@@ -496,7 +511,7 @@ class VerticalTransform:
                 tmp_trans = np.zeros( (self.ycount, self.xcount) )
                 epsg_in = epsg_out
 
-            trans_array = trans_array + tmp_trans
+            trans_array = trans_array + tmp_trans + tmp_trans_a
             tmp_trans = None
             
         return(trans_array)
