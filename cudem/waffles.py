@@ -539,7 +539,7 @@ class Waffle:
                                    dst_fmt=self.fmt, stack_fn=self.stack, filter_=self.fltr)
 
             ## ==============================================
-            ## post-process the mask
+            ## post-process the mask, etc.
             ## ==============================================
             if self.want_mask or self.want_sm:
                 mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
@@ -4599,10 +4599,10 @@ def waffle_queue(q):
     """
     
     while True:
-        try:
-            waffle_module = q.get()
-        except q.Empty:
-            continue
+        #try:
+        waffle_module = q.get()
+        #except q.Empty:
+        #    continue
 
         if waffle_module is None:
             break
@@ -4613,9 +4613,7 @@ def waffle_queue(q):
                 utils.echo_error_msg('failed to generate {}, {}'.format(waffle_module, e))
                 print(traceback.format_exc())
                 pass
-        
-        #q.task_done()
-        
+                
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ waffles
@@ -5051,9 +5049,14 @@ def waffles_cli(argv = sys.argv):
                     if wg['verbose']:
                         utils.echo_error_msg('could not acquire waffles module {}'.format(module))
 
-    waffle_q.put(None)
+    for _ in range(n_threads):
+        waffle_q.put(None)
+        
     #waffle_q.join()
-    [t.join() for t in processes]
+    #[t.join() for t in processes]
+    for t in processes:
+        t.join()
+
     ## ==============================================
     ## remove the cahce dir if not asked to keep
     ## ==============================================
