@@ -1074,14 +1074,15 @@ def gdal_blur(src_gdal, dst_gdal, sf = 1):
         returns the blurred array
         """
 
-        #from scipy.signal import fftconvolve
+        from scipy.signal import fftconvolve
         #from scipy.signal import convolve
         padded_array = np.pad(in_array, size, 'symmetric')
         x, y = np.mgrid[-size:size + 1, -size:size + 1]
         g = np.exp(-(x**2 / float(size) + y**2 / float(size)))
         g = (g / g.sum()).astype(in_array.dtype)
         in_array = None
-        out_array = np.convolve(padded_array, g, mode = 'valid')
+        #out_array = np.convolve(padded_array, g, mode = 'valid')
+        out_array = fftconvolve(padded_array, g, mode = 'valid')
         return(out_array)
 
     status = -1

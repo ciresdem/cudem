@@ -4305,7 +4305,6 @@ class WaffleDEM:
                 fltr_opts = f.split(':')
                 fltr = fltr_opts[0]
                 if len(fltr_opts) > 1:
-                    utils.echo_msg(fltr_opts[1])
                     fltr_val = utils.int_or(fltr_opts[1])
 
                 if len(fltr_opts) > 2:

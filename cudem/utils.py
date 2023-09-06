@@ -355,7 +355,7 @@ def int_or(val, or_val=None):
     """
     
     try:
-        return(int(val))
+        return(int(float_or(val)))
     except: return(or_val)
 
 def float_or(val, or_val=None):
