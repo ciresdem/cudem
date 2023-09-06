@@ -4319,7 +4319,7 @@ class WaffleDEM:
                         os.replace(filter_fn, self.fn)
 
                     if self.verbose:
-                        utils.echo_msg_bold('filtered data using {}.'.format(f))
+                        utils.echo_msg('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
