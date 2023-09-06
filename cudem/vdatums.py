@@ -460,20 +460,9 @@ class VerticalTransform:
     def _vertical_transform(self, epsg_in, epsg_out):
         trans_array = np.zeros( (self.ycount, self.xcount) )
         ## failure can cause endless loop
-        #utils.echo_msg_bold('{} {}'.format(self.geoid_in, self.geoid_out))
         
-        #while self.geoid_in != self.geoid_out:
         if self.geoid_in is not None:# and self.geoid_out is not None:
             tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
-            #utils.echo_msg(tmp_trans_a)
-            #utils.echo_msg_bold(epsg_in)
-            #tmp_trans_out, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
-
-            #utils.echo_msg(tmp_trans_in)
-            #utils.echo_msg(tmp_trans_out)
-
-            #trans_array = tmp_trans_in - tmp_trans_out
-            #utils.echo_msg(trans_array)
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
@@ -492,7 +481,8 @@ class VerticalTransform:
                 if ref_out == 'htdp':
                     tmp_trans, v = self._htdp_transform(epsg_in, epsg_out)
                     epsg_in = epsg_out
-                else: 
+                else:
+                    ## todo: only do geoid transforms with 5703 (navd88)
                     cg, cv = self._cdn_transform(epsg=epsg_out, invert=True)
                     gg, gv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=True)
                     hg, v = self._htdp_transform(epsg_in, cv)
@@ -500,6 +490,7 @@ class VerticalTransform:
                     epsg_in = epsg_out
             elif ref_in == 'cdn':
                 if ref_out == 'cdn':
+                    ## todo: only do geoid transforms with 5703 (navd88)
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
                     cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
                     tmp_trans = tmp_trans + cg

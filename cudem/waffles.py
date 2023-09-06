@@ -180,7 +180,7 @@ class Waffle:
                  dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
-                 proximity_limit: int = None, size_limit: int = None, want_stack: bool = True, params: dict = {}):
+                 proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, want_stack: bool = True, params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -211,6 +211,7 @@ class Waffle:
         self.lower_limit = utils.float_or(lower_limit) # lower limit of z values in output
         self.proximity_limit = utils.int_or(proximity_limit) # proximity limit of interpolation
         self.size_limit = utils.int_or(size_limit) # size limit of interpolation
+        self.percentile_limit = utils.float_or(percentile_limit) # percentile limit of interpolation
         self.keep_auxiliary = keep_auxiliary # keep auxiliary outputs
         self.clobber = clobber # clobber the output dem file
         self.verbose = verbose # increase verbosity
@@ -534,7 +535,8 @@ class Waffle:
             if waffle_dem.valid_p():
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
-                                   proximity_limit=self.proximity_limit, dst_srs=self.dst_srs, dst_fmt=self.fmt, stack_fn=self.stack)
+                                   proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
+                                   dst_fmt=self.fmt, stack_fn=self.stack)
 
             ## ==============================================
             ## post-process the mask
@@ -2773,11 +2775,13 @@ class WafflesCUDEM(Waffle):
     pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
     poly_count (int) - the number of polygons (from largest to smallest) to extract from the landmask
     mode (str) - the waffles module to perform the initial pre-surface
-    supercede (bool) - supercede subsquent pre-surfaces
+    want_supercede (bool) - supercede subsquent pre-surfaces
+    flatten (float): the nodata-size percentile above which to flatten.
     """
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface', filter_outliers = None, want_supercede = False, **kwargs):
+                 mode = 'gmt-surface', filter_outliers = None, want_supercede = False, flatten = 95,
+                 **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -2814,6 +2818,7 @@ class WafflesCUDEM(Waffle):
         
         self.filter_outliers = utils.int_or(filter_outliers)
         self.want_supercede = want_supercede
+        self.flatten = utils.float_or(flatten)
         self.want_weight = True
 
     ## todo: remove coastline after processing...
@@ -2920,7 +2925,7 @@ class WafflesCUDEM(Waffle):
             ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
             #'linear:chunk_step=None:chunk_buffer=10'
             waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
-            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=10/2'
+            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=20/2'
 
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
                                         yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
@@ -2928,7 +2933,7 @@ class WafflesCUDEM(Waffle):
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False,
-                                        proximity_limit=10 if pre == 0 else None)._acquire_module()
+                                        percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
             pre_surface.initialize()
             pre_surface.generate()
             pre -= 1
@@ -4204,7 +4209,8 @@ class WaffleDEM:
         
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
-                dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None, set_metadata = True, stack_fn = None):
+                percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
+                set_metadata = True, stack_fn = None):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -4228,7 +4234,7 @@ class WaffleDEM:
         ## ==============================================
         ## set interpolation limits
         ## ==============================================
-        self.set_interpolation_limits(stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit)
+        self.set_interpolation_limits(stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit, percentile_limit=percentile_limit)
 
         ## ==============================================
         ## filtering the DEM will change the weights/uncertainty
@@ -4354,7 +4360,7 @@ class WaffleDEM:
                 if self.verbose:
                     utils.echo_msg('cut data to {}...'.format(region))
 
-    def set_interpolation_limits(self, stack_fn = None,  size_limit = None, proximity_limit = None):
+    def set_interpolation_limits(self, stack_fn = None,  size_limit = None, proximity_limit = None, percentile_limit = None):
         """set interpolation limits"""
 
         if stack_fn is not None:
@@ -4392,6 +4398,24 @@ class WaffleDEM:
 
                 if self.verbose:
                     utils.echo_msg('set size interpolation limit to {}.'.format(size_limit))
+
+            ## ==============================================
+            ## optionally mask nodata zones based on percentile_threshold
+            ## ==============================================
+            if percentile_limit is not None:
+                mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
+                mn[mn == 0] = np.nan
+                mn_percentile = np.nanpercentile(mn, percentile_limit)
+                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                    if src_ds is not None:
+                        src_config = gdalfun.gdal_infos(src_ds)
+                        src_band = src_ds.GetRasterBand(1)
+                        src_array = src_band.ReadAsArray()
+                        src_array[mn >= mn_percentile] = src_band.GetNoDataValue()
+                        src_band.WriteArray(src_array)
+
+                if self.verbose:
+                    utils.echo_msg('set percentile interpolation limit to {}.'.format(mn_percentile))
             
     def set_limits(self, upper_limit = None, lower_limit = None, band = 1):
         ## limit in other bands?? or chose band to limit??
@@ -4604,7 +4628,8 @@ Options:
 \t\t\t\t'u<value>' to set the upper elevation limit, 
 \t\t\t\t'l<value>' to set the lower elevation limit,
 \t\t\t\t'p<value>' to set an interpolation limit by proximity, or 
-\t\t\t\t's<value>' to set an interpolation limit by size.
+\t\t\t\t's<value>' to set an interpolation limit by size, or
+\t\t\t\t'c<value>' to set an interpolation limit by nodata-size percentile.
 \t\t\t\te.g. -Lu0 to set all values above 0 to zero, or 
 \t\t\t\t-Ls100 to limit interpolation to nodata zones smaller than 100 pixels.
   -C, --clip\t\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
@@ -4796,6 +4821,8 @@ def waffles_cli(argv = sys.argv):
                 wg['proximity_limit'] = utils.int_or(this_limit[1:])
             elif this_limit.startswith('s'):
                 wg['size_limit'] = utils.int_or(this_limit[1:])
+            elif this_limit.startswith('c'):
+                wg['percentile_limit'] = utils.float_or(this_limit[1:])
                 
             i = i + 1
         elif arg[:2] == '-L':
@@ -4808,6 +4835,8 @@ def waffles_cli(argv = sys.argv):
                 wg['proximity_limit'] = utils.int_or(this_limit[1:])
             elif this_limit.startswith('s'):
                 wg['size_limit'] = utils.int_or(this_limit[1:])
+            elif this_limit.startswith('c'):
+                wg['percentile_limit'] = utils.float_or(this_limit[1:])
                 
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             n_threads = utils.int_or(argv[i + 1], 1)
