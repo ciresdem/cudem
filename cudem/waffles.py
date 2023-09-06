@@ -4390,52 +4390,63 @@ class WaffleDEM:
             if proximity_limit is not None:
                 tmp_prox = gdalfun.gdal_proximity(stack_fn, utils.make_temp_fn('_prox.tif'), band=2)
                 mn = gdalfun.gdal_get_array(tmp_prox)[0]
-                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
-                    if src_ds is not None:
-                        src_config = gdalfun.gdal_infos(src_ds)
-                        src_band = src_ds.GetRasterBand(1)
-                        src_array = src_band.ReadAsArray()
-                        src_array[mn >= proximity_limit] = src_band.GetNoDataValue()
-                        src_band.WriteArray(src_array)
+                if mn is not None:
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= proximity_limit] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
 
-                utils.remove_glob(tmp_prox)
+                    utils.remove_glob(tmp_prox)
 
-                if self.verbose:
-                    utils.echo_msg('set proximity interpolation limit to {}.'.format(proximity_limit))
-
+                    if self.verbose:
+                        utils.echo_msg('set proximity interpolation limit to {}.'.format(proximity_limit))
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set proximity limit')
             ## ==============================================
             ## optionally mask nodata zones based on size_threshold
             ## ==============================================
             if size_limit is not None:
                 mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
-                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
-                    if src_ds is not None:
-                        src_config = gdalfun.gdal_infos(src_ds)
-                        src_band = src_ds.GetRasterBand(1)
-                        src_array = src_band.ReadAsArray()
-                        src_array[mn >= size_limit] = src_band.GetNoDataValue()
-                        src_band.WriteArray(src_array)
+                if mn is not None:
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= size_limit] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
 
-                if self.verbose:
-                    utils.echo_msg('set size interpolation limit to {}.'.format(size_limit))
-
+                    if self.verbose:
+                        utils.echo_msg('set size interpolation limit to {}.'.format(size_limit))
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set size limit')
+                        
             ## ==============================================
             ## optionally mask nodata zones based on percentile_threshold
             ## ==============================================
             if percentile_limit is not None:
                 mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
-                mn[mn == 0] = np.nan
-                mn_percentile = np.nanpercentile(mn, percentile_limit)
-                with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
-                    if src_ds is not None:
-                        src_config = gdalfun.gdal_infos(src_ds)
-                        src_band = src_ds.GetRasterBand(1)
-                        src_array = src_band.ReadAsArray()
-                        src_array[mn >= mn_percentile] = src_band.GetNoDataValue()
-                        src_band.WriteArray(src_array)
+                if mn is not None:
+                    mn[mn == 0] = np.nan
+                    mn_percentile = np.nanpercentile(mn, percentile_limit)
+                    with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
+                        if src_ds is not None:
+                            src_config = gdalfun.gdal_infos(src_ds)
+                            src_band = src_ds.GetRasterBand(1)
+                            src_array = src_band.ReadAsArray()
+                            src_array[mn >= mn_percentile] = src_band.GetNoDataValue()
+                            src_band.WriteArray(src_array)
 
-                if self.verbose:
-                    utils.echo_msg('set percentile interpolation limit to {}.'.format(mn_percentile))
+                    if self.verbose:
+                        utils.echo_msg('set percentile interpolation limit to {}.'.format(mn_percentile))
+                else:
+                    if self.verbose:
+                        utils.echo_warning_msg('could not set percentile limit')
             
     def set_limits(self, upper_limit = None, lower_limit = None, band = 1):
         ## limit in other bands?? or chose band to limit??
