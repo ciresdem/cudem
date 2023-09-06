@@ -2833,7 +2833,7 @@ class WafflesCUDEM(Waffle):
         self.pre_smoothing = utils.float_or(pre_smoothing)
         if self.pre_smoothing is not None:
             self.pre_smoothing = ['1:{}'.format(self.pre_smoothing)]
-            
+
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
 
@@ -2948,7 +2948,7 @@ class WafflesCUDEM(Waffle):
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
-                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre == 0 else None,
+                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
                                         percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
             pre_surface.initialize()
             pre_surface.generate()
@@ -4318,7 +4318,7 @@ class WaffleDEM:
                     os.replace(filter_fn, fn)
 
                 if self.verbose:
-                    utils.echo_msg('filtered data using {}.'.format(f))
+                    utils.echo_msg_bold('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:

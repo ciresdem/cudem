@@ -1461,7 +1461,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
             ## remove data from the source dem where the mask id is above the 75th percentile
             mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
-            utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
+            #utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
             src_data = ds_band.ReadAsArray()
             src_data[(mask_mask_data >= mask_upper_limit) | (mask_mask_data <= mask_lower_limit)] = ds_config['ndv']
             ds_band.WriteArray(src_data)
