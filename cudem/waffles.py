@@ -2752,22 +2752,24 @@ class WafflesLakes(Waffle):
 ## ==============================================
 ## Waffles 'CUDEM' gridding
 ##
-## combined gridding method (stacks/surface/coastline/IDW)
+## combined gridding method (stacks/surface/coastline/IDW/flatten)
 ## ==============================================
 class WafflesCUDEM(Waffle):
     """CUDEM integrated DEM generation.
     
     Generate an topo/bathy integrated DEM using a variety of data sources.
     Will iterate <pre_count> pre-surfaces at lower-resolutions.
-    Each pre-surface will be clipped to <landmask> if it exists and smoothed with <smoothing> factor.
+    Each pre-surface will be clipped to <landmask> if it exists and smoothed with <pre_smoothing> factor.
     Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight.
 
-    generate a DEM with `pre_surface`s which are generated
-    at lower resolution and with various weight threshholds.
+    generate a DEM with `pre_surface`s which are generated at lower resolution and with various weight threshholds.
 
     To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
-    Use a min_weight that excludes low-resolution bathymetry data from being used as input in the final
+    Use a <min_weight> that excludes low-resolution bathymetry data from being used as input in the final
     DEM generation. 
+
+    e.g.
+    cudem:mode=gmt-surface:tension=.65:geographic=True:landmask=True:polygonize=2:min_weight=1:pre_count=2:pre_upper_limit=-.1:pre_smoothing=2:flatten=95
 
     -----------
     Parameters:
@@ -2776,6 +2778,7 @@ class WafflesCUDEM(Waffle):
     min_weight (float): the minumum weight to include in the final DEM
     pre_count (int): number of pre-surface iterations to perform
     pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
+    pre_smoothing (float) - the smoothing (blur) factor to apply to the pre-surfaces
     mode (str) - the waffles module to perform the initial pre-surface
     want_supercede (bool) - supercede subsquent pre-surfaces
     flatten (float) - the nodata-size percentile above which to flatten.
@@ -2786,7 +2789,7 @@ class WafflesCUDEM(Waffle):
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
                  mode = 'gmt-surface', filter_outliers = None, want_supercede = False, flatten = 95,
-                 exclude_lakes = False, **kwargs):
+                 pre_smoothing = None, exclude_lakes = False, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -2800,8 +2803,8 @@ class WafflesCUDEM(Waffle):
             del kwargs[kpam]
 
         if exclude_lakes:
+            self.coastline_args['want_lakes'] = True
             self.coastline_args['invert_lakes'] = True
-            self.coastline_args['want_lakes'] = True            
             
         self.mode = mode
         self.mode_args = {}
@@ -2827,6 +2830,10 @@ class WafflesCUDEM(Waffle):
         
         self.filter_outliers = utils.int_or(filter_outliers)
         self.want_supercede = want_supercede
+        self.pre_smoothing = utils.float_or(pre_smoothing)
+        if self.pre_smoothing is not None:
+            self.pre_smoothing = ['1:{}'.format(self.pre_smoothing)]
+            
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
 
@@ -2941,7 +2948,7 @@ class WafflesCUDEM(Waffle):
                                         name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
-                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False,
+                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre == 0 else None,
                                         percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
             pre_surface.initialize()
             pre_surface.generate()
