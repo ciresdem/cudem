@@ -1934,6 +1934,7 @@ class WafflesCoastline(Waffle):
     want_copernicus=[True/False] - use COPERNICUS to fill background
     want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
     want_lakes=[True/False] - mask LAKES using HYDROLAKES
+    invert_lakes=[True/False] - invert the lake mask (invert=True to remove lakes from the waterbodies)
     want_buildings=[True/False] - mask BUILDINGS using OSM
     osm_tries=[val] - OSM max server attempts
     min_building_length=[val] - only use buildings larger than val
@@ -1950,6 +1951,7 @@ class WafflesCoastline(Waffle):
             want_copernicus=True,
             want_gmrt=False,
             want_lakes=False,
+            invert_lakes=False,
             want_buildings=False,
             min_building_length=None,
             want_osm_planet=False,
@@ -1981,6 +1983,7 @@ class WafflesCoastline(Waffle):
         self.want_gmrt = want_gmrt
         self.want_copernicus = want_copernicus
         self.want_lakes = want_lakes
+        self.invert_lakes = invert_lakes
         self.want_buildings = want_buildings
         self.want_wsf = want_wsf
         self.min_building_length = min_building_length
@@ -2205,7 +2208,7 @@ class WafflesCoastline(Waffle):
     def _load_lakes(self):
         """HydroLakes -- Global Lakes"""
         
-        this_lakes = fetchesHydroLakes(
+        this_lakes = fetches.HydroLakes(
             src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
         )
         this_lakes.run()        
@@ -2230,7 +2233,7 @@ class WafflesCoastline(Waffle):
             gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
             gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
             lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[lakes_ds_arr == -1] = 0
+            self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1
             lakes_ds = lk_ds = lakes_warp_ds = None
         else:
             utils.echo_error_msg('could not open {}'.format(lakes_shp))
@@ -2773,15 +2776,17 @@ class WafflesCUDEM(Waffle):
     min_weight (float): the minumum weight to include in the final DEM
     pre_count (int): number of pre-surface iterations to perform
     pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
-    poly_count (int) - the number of polygons (from largest to smallest) to extract from the landmask
     mode (str) - the waffles module to perform the initial pre-surface
     want_supercede (bool) - supercede subsquent pre-surfaces
-    flatten (float): the nodata-size percentile above which to flatten.
+    flatten (float) - the nodata-size percentile above which to flatten.
+    exclude_lakes (bool) - exclude lakes from the landmask
+    <mode-opts> - options for the waffles module specified in 'mode'
+    <coastline-opts> - options for the coastline module when generating the landmask
     """
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
                  mode = 'gmt-surface', filter_outliers = None, want_supercede = False, flatten = 95,
-                 **kwargs):
+                 exclude_lakes = False, **kwargs):
         
         self.coastline_args = {}
         tmp_waffles = Waffle()
@@ -2794,6 +2799,10 @@ class WafflesCUDEM(Waffle):
         for kpam, kval in self.coastline_args.items():
             del kwargs[kpam]
 
+        if exclude_lakes:
+            self.coastline_args['invert_lakes'] = True
+            self.coastline_args['want_lakes'] = True            
+            
         self.mode = mode
         self.mode_args = {}
         if self.mode not in ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']:
@@ -2946,6 +2955,7 @@ class WafflesCUDEM(Waffle):
         ## reset the stack for uncertainty
         ## ==============================================
         self.stack = pre_surface.stack
+        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 
@@ -4366,6 +4376,8 @@ class WaffleDEM:
         if stack_fn is not None:
             ## ==============================================
             ## optionally mask nodata zones based on proximity
+            ## todo: adjust proxmimity grid to only limit areas
+            ##       where all neighbors are below proximity limit...
             ## ==============================================
             if proximity_limit is not None:
                 tmp_prox = gdalfun.gdal_proximity(stack_fn, utils.make_temp_fn('_prox.tif'), band=2)

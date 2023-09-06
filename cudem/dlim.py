@@ -2807,14 +2807,14 @@ class GDALFile(ElevationDataset):
                 yield(out_arrays, this_srcwin, this_gt)
 
             band = mask_band = weight_band = src_weight = src_mask = self.src_ds = None
-            # if self.tmp_elev_band is not None:
-            #     utils.remove_glob(self.tmp_elev_band)
+            if self.tmp_elev_band is not None:
+                utils.remove_glob(self.tmp_elev_band)
                 
-            # if self.tmp_unc_band is not None:
-            #     utils.remove_glob(self.tmp_unc_band)
+            if self.tmp_unc_band is not None:
+                utils.remove_glob(self.tmp_unc_band)
 
-            # if self.tmp_weight_band is not None:
-            #     utils.remove_glob(self.tmp_weight_band)
+            if self.tmp_weight_band is not None:
+                utils.remove_glob(self.tmp_weight_band)
                 
             if self.verbose:
                 utils.echo_msg(
