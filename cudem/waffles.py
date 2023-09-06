@@ -536,7 +536,7 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
-                                   dst_fmt=self.fmt, stack_fn=self.stack)
+                                   dst_fmt=self.fmt, stack_fn=self.stack, filter_=self.fltr)
 
             ## ==============================================
             ## post-process the mask
@@ -4305,20 +4305,22 @@ class WaffleDEM:
                 fltr_opts = f.split(':')
                 fltr = fltr_opts[0]
                 if len(fltr_opts) > 1:
-                    fltr_val = fltr_opts[1]
+                    utils.echo_msg(fltr_opts[1])
+                    fltr_val = utils.int_or(fltr_opts[1])
 
                 if len(fltr_opts) > 2:
-                    split_val= fltr_opts[2]
+                    split_val = utils.float_or(fltr_opts[2], 0)
 
                 # fails if fltr_val in float
-                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cach_dir)
-                if waffles_filter(
-                        fn, filter_fn, fltr=fltr, fltr_val=fltr_val, split_val=split_val,
-                ) == 0:
-                    os.replace(filter_fn, fn)
+                if fltr_val is not None:
+                    filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
+                    if waffles_filter(
+                            self.fn, filter_fn, fltr=fltr, fltr_val=fltr_val, split_val=split_val,
+                    ) == 0:
+                        os.replace(filter_fn, self.fn)
 
-                if self.verbose:
-                    utils.echo_msg_bold('filtered data using {}.'.format(f))
+                    if self.verbose:
+                        utils.echo_msg_bold('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
