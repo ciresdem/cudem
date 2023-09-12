@@ -1941,6 +1941,7 @@ class WafflesCoastline(Waffle):
     want_wsf=[True/False] - mask BUILDINGS using WSF
     invert=[True/False] - invert the output results
     polygonize=[True/False] - polygonize the output
+    min_weight=[val] - weight applied to fetched coastal data
 
     < coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
     """
@@ -1959,6 +1960,7 @@ class WafflesCoastline(Waffle):
             polygonize=True, # float(True) is 1.0
             osm_tries=5,
             want_wsf=False,
+            min_weight=1,
             **kwargs
     ):
         """Generate a landmask from various sources.
@@ -1993,7 +1995,8 @@ class WafflesCoastline(Waffle):
         self.osm_tries = utils.int_or(osm_tries, 5)
         self.coast_array = None
         self.ds_config = None
-            
+        self.min_weight = utils.float_or(min_weight, 1)
+        
     def run(self):
         self.f_region = self.p_region.copy()
         self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
@@ -2029,7 +2032,7 @@ class WafflesCoastline(Waffle):
             
         if self.want_stack:
             self._load_data()
-
+            
         if self.verbose:
             utils.echo_msg(
                 'finanlizing array for region {} at {} {}...'.format(
@@ -2088,7 +2091,7 @@ class WafflesCoastline(Waffle):
         gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
         gmrt_ds_arr[gmrt_ds_arr > 0] = 1
         gmrt_ds_arr[gmrt_ds_arr < 0] = 0
-        self.coast_array += gmrt_ds_arr
+        self.coast_array += (gmrt_ds_arr * self.min_weight)
         gmrt_ds = gmrt_ds_arr = None
         
     def _load_copernicus(self):
@@ -2113,7 +2116,7 @@ class WafflesCoastline(Waffle):
             )
             cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
             cop_ds_arr[cop_ds_arr != 0] = 1
-            self.coast_array += cop_ds_arr
+            self.coast_array += (cop_ds_arr * self.min_weight)
             cop_ds = cop_ds_arr = None
 
     def _load_wsf(self):
@@ -2139,7 +2142,7 @@ class WafflesCoastline(Waffle):
             )
             wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
             wsf_ds_arr[wsf_ds_arr != 0 ] = -1
-            self.coast_array += wsf_ds_arr
+            self.coast_array += (wsf_ds_arr * self.min_weight)
             wsf_ds = wsf_ds_arr = None
             
     def _load_nhd(self):
@@ -2200,7 +2203,7 @@ class WafflesCoastline(Waffle):
             if tnm_ds is not None:
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                 tnm_ds_arr[tnm_ds_arr < 1] = 0
-                self.coast_array -= tnm_ds_arr
+                self.coast_array -= (tnm_ds_arr * self.min_weight)
                 tnm_ds = tnm_ds_arr = None
                 
             utils.remove_glob('nhdArea_merge.*')
@@ -2233,7 +2236,7 @@ class WafflesCoastline(Waffle):
             gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
             gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
             lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1
+            self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1 # update for weights
             lakes_ds = lk_ds = lakes_warp_ds = None
         else:
             utils.echo_error_msg('could not open {}'.format(lakes_shp))
@@ -2293,7 +2296,7 @@ class WafflesCoastline(Waffle):
                         bldg_ds = gdal.Open('bldg_osm.tif')
                         if bldg_ds is not None:
                             bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                            self.coast_array[bldg_ds_arr == -1] = 0
+                            self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
                             bldg_ds = bldg_ds_arr = None
 
                         bldg_ds = None
@@ -2307,12 +2310,14 @@ class WafflesCoastline(Waffle):
 
         for this_arr in self.stack_ds.yield_array():
             data_arr = this_arr[0]['z']
+            weight_arr = this_arr[0]['weight']
+            weight_arr[np.isnan(weight_arr)] = 0
             srcwin = this_arr[1]
             data_arr[np.isnan(data_arr)] = 0
             data_arr[data_arr > 0] = 1
             data_arr[data_arr < 0] = -1
             self.coast_array[srcwin[1]:srcwin[1]+srcwin[3],
-                             srcwin[0]:srcwin[0]+srcwin[2]] += data_arr
+                             srcwin[0]:srcwin[0]+srcwin[2]] += (data_arr*weight_arr)
 
     def _write_coast_array(self):
         """write coast_array to file"""
@@ -2844,7 +2849,7 @@ class WafflesCUDEM(Waffle):
         utils.echo_msg('coast region is: {}'.format(cst_region))
         cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
         this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
-        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region,
+        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True,
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
         coastline.initialize()
@@ -4359,14 +4364,15 @@ class WaffleDEM:
                     if gdalfun.gdal_clip(self.fn, tmp_clip, **clip_args)[1] == 0:
                         os.replace(tmp_clip, self.fn)
                         self.initialize()
+                        if self.verbose:
+                            utils.echo_msg('clipped data with {}.'.format(clip_str))
+                    else:
+                        utils.echo_error_msg('clip failed, {}'.format(clip_str))    
                 else:
                     utils.echo_error_msg('could not read {}'.format(clip_args['src_ply']))
                     
             else:
                 utils.echo_error_msg('could not find clip ogr source/clip keyword {}'.format(clip_args['src_ply']))
-
-            if self.verbose:
-                utils.echo_msg('clipped data with {}.'.format(clip_str))
                 
     def cut(self, region = None):
         if region is not None:

@@ -851,9 +851,9 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
 
     gi = gdal_infos(src_gdal)
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
-    tmp_ply = utils.make_temp_fn('__tmp_clp_ply.shp')
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp')
     
-    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
+    out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures -makevalid'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
         #if invert:
         #    gr_cmd = 'gdalwarp -cutline {} -cl {} {} {}'.format(tmp_ply, os.path.basename(tmp_ply).split('.')[0], src_dem, dst_dem)
@@ -863,7 +863,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
         gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
             .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_gdal, ' -i' if invert else '')
         out, status = utils.run_cmd(gr_cmd, verbose=verbose)
-        utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
+        #utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
     else:
         return(None, -1)
     
