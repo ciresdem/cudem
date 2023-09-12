@@ -2849,7 +2849,7 @@ class WafflesCUDEM(Waffle):
         utils.echo_msg('coast region is: {}'.format(cst_region))
         cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
         this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
-        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True,
+        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.min_weight,
                                   xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
                                   srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
         coastline.initialize()
