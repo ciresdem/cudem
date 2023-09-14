@@ -2793,9 +2793,10 @@ class WafflesCUDEM(Waffle):
     """
 
     def __init__(self, min_weight=None, pre_count = 1, pre_upper_limit = -0.1, landmask = False,
-                 mode = 'gmt-surface', filter_outliers = None, want_supercede = False, flatten = 95,
-                 pre_smoothing = None, exclude_lakes = False, **kwargs):
-        
+                 mode = 'gmt-surface', pre_smoothing = None, filter_outliers = None, want_supercede = False,
+                 flatten = 95, exclude_lakes = False, **kwargs):
+
+        self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
         self.coastline_args = {}
         tmp_waffles = Waffle()
         tmp_coastline = WafflesCoastline()
@@ -2813,7 +2814,7 @@ class WafflesCUDEM(Waffle):
             
         self.mode = mode
         self.mode_args = {}
-        if self.mode not in ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']:
+        if self.mode not in self.valid_modes:
             self.mode = 'IDW'
 
         tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()

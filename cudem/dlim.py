@@ -2299,21 +2299,19 @@ class GDALFile(ElevationDataset):
     otherwise will use a single value (uncertainty) from superclass.
     open_options: GDAL open_options for raster dataset
     sample: sample method to use in resamplinig
-    resample: resample the grid to `x_inc` and `y_inc` from superclass
     check_path: check to make sure path exists
     super_grid: Force processing of a supergrid (BAG files) (True/False)
     band_no: the band number of the elevation data
     """
     
     def __init__(self, weight_mask = None, uncertainty_mask = None,  open_options = None,
-                 sample = None, resample = True, check_path = True, super_grid = False, band_no = 1, **kwargs):
+                 sample = None, check_path = True, super_grid = False, band_no = 1, **kwargs):
         super().__init__(**kwargs)
         #self.mask = mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
         self.open_options = open_options
         self.sample = sample
-        self.resample = resample
         self.check_path = check_path
         self.super_grid = super_grid
         self.band_no = band_no
@@ -2379,7 +2377,7 @@ class GDALFile(ElevationDataset):
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
 
-        if self.x_inc is not None and self.y_inc is not None:# and self.resample:
+        if self.x_inc is not None and self.y_inc is not None:
             self.resample_and_warp = True
         else:
             self.resample_and_warp = False
@@ -2445,10 +2443,8 @@ class GDALFile(ElevationDataset):
                     gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], inverse=False)
                     self.weight_mask = self.tmp_weight_band
 
-            warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc if self.resample else None, self.y_inc if self.resample else None,
-                                        src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                        src_region=self.warp_region, sample_alg=self.sample_alg,
-                                        ndv=ndv, verbose=self.verbose)[0]
+            warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                        src_region=self.warp_region, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
 
             tmp_ds = None
             
@@ -2595,8 +2591,7 @@ class GDALFile(ElevationDataset):
                     weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc if self.resample else self.dem_infos['geoT'][1],
-                                                         self.y_inc if self.resample else self.dem_infos['geoT'][5] * -1,
+                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
                                                          src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                                          src_region=self.warp_region, sample_alg=self.sample_alg,
                                                          ndv=ndv, verbose=self.verbose)[0]
@@ -2619,8 +2614,7 @@ class GDALFile(ElevationDataset):
                     uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
                 elif os.path.exists(self.uncertainty_mask):
                     if self.x_inc is not None and self.y_inc is not None:
-                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc if self.resample else self.dem_infos['geoT'][1],
-                                                              self.y_inc if self.resample else self.dem_infos['geoT'][5] * -1,
+                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
                                                               src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                                               src_region=self.warp_region, sample_alg=self.sample_alg,
                                                               ndv=ndv, verbose=self.verbose)[0]
@@ -2825,7 +2819,7 @@ class GDALFile(ElevationDataset):
                 
     def yield_xyz(self):
         """yield the gdal file data as xyz"""
-        #self.resample = False # turn off resampling...
+        
         for arrs, srcwin, gt in self.yield_array():
             z_array = arrs['z']
             w_array = arrs['weight']
