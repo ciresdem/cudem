@@ -2580,7 +2580,7 @@ class GDALFile(ElevationDataset):
 
             band_data = count_data = weight_data = mask_data = None
             out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty':None, 'mask':None}
-
+            ## todo: always warp these to src_ds
             ## ==============================================
             ## weight mask, each cell should have the corresponding weight
             ## weight_mask can either be a seperate gdal file or a band number

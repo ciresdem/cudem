@@ -283,7 +283,7 @@ class Waffle:
         self.c_region = self._coast_region()
         self.ps_region = self.p_region.copy()
         self.ps_region = self.ps_region.buffer(
-            x_bv=self.xinc*-.5, y_bv=self.yinc*-.5, x_inc=self.xinc, y_inc=self.yinc
+            x_bv=self.xinc*.5, y_bv=self.yinc*.5, x_inc=self.xinc, y_inc=self.yinc
         )
 
         if self.verbose:
@@ -1466,7 +1466,7 @@ class WafflesMBGrid(Waffle):
     < mbgrid:dist='10/3':tension=35:use_datalists=False >
     """
     
-    def __init__(self, dist='10/3', tension=35, use_stack=True, nc=False, **kwargs):
+    def __init__(self, dist='10/3', tension=0, use_stack=True, nc=False, **kwargs):
         super().__init__(**kwargs)
         self.nc = nc
         self.dist = dist
@@ -1568,17 +1568,61 @@ class WafflesMBGrid(Waffle):
         
     def run(self):
         mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
+        self.mb_region = self.p_region.copy()
         out_name = os.path.join(self.cache_dir, self.name)
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0.1 -T{}'.format(
-            mb_datalist, self.p_region.format('gmt'), self.xcount, self.ycount, out_name, self.dist, self.tension
-        )
+        
+        # mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+        # utils.echo_msg_bold('{}'.format(self.mb_region))
+        # utils.echo_msg_bold('{} {}'.format(self.xcount, self.ycount))
+        # utils.echo_msg_bold('{} {}'.format(self.xinc, self.yinc))
 
+        # xdiff = self.mb_region.xmax - self.mb_region.xmin
+        # utils.echo_msg_bold('xmax - xmin: {}'.format(xdiff))
+        # ydiff = self.mb_region.ymax - self.mb_region.ymin
+        # utils.echo_msg_bold('ymax - ymin: {}'.format(ydiff))
+
+        # NXx = (mb_xcount + 0.0001) * self.xinc
+        # NYy = (mb_ycount + 0.0001) * self.yinc
+        # utils.echo_msg_bold('NX * xinc: {}'.format(NXx))
+        # utils.echo_msg_bold('NY * yinc: {}'.format(NYy))
+
+        # NXxdiff = abs(xdiff - NXx)
+        # NYydiff = abs(ydiff - NYy)
+        # utils.echo_msg_bold('NXxdiff: {}'.format(NXxdiff))
+        # utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
+
+        # while round(NXx,5) != round(xdiff,5) or round(NYy,5) != round(ydiff,5):
+        #     self.mb_region.buffer(pct=.1)
+        #     utils.echo_warning_msg('region adjusted to: {}'.format(self.mb_region))
+
+        #     mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+            
+        #     xdiff = self.mb_region.xmax - self.mb_region.xmin
+        #     utils.echo_msg_bold('xmax - xmin: {}'.format(xdiff))
+        #     ydiff = self.mb_region.ymax - self.mb_region.ymin
+        #     utils.echo_msg_bold('ymax - ymin: {}'.format(ydiff))
+            
+        #     NXx = (mb_xcount + 0.0001) * self.xinc
+        #     NYy = (mb_ycount + 0.0001) * self.yinc
+        #     utils.echo_msg_bold('NX * xinc: {}'.format(NXx))
+        #     utils.echo_msg_bold('NY * yinc: {}'.format(NYy))
+            
+        #     NXxdiff = abs(xdiff - NXx)
+        #     NYydiff = abs(ydiff - NYy)
+        #     utils.echo_msg_bold('NXxdiff: {}'.format(NXxdiff))
+        #     utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
+
+        mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+        utils.echo_msg_bold('mb_xcount, mb_ycount: {} {}'.format(mb_xcount, mb_ycount))
+        
+        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+            mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
+        )        
         out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
         if status == 0:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
             '.format('{}.grd'.format(out_name), self.fn, self.fmt))            
-            out, status = utils.run_cmd(gdal2gdal_cmd, verbose=self.verbose)
-            
+            out, status = utils.run_cmd(gdal2gdal_cmd, verbose=self.verbose)            
             
         # for out in utils.yield_cmd(mbgrid_cmd, verbose=self.verbose):
         #     sys.stderr.write('{}'.format(out))

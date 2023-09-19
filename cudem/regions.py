@@ -499,6 +499,12 @@ class Region:
             self.wkt = self.export_as_wkt()
         return(self)
 
+    def round(self, round_val=5):
+        self.xmin = round(self.xmin, round_val)
+        self.xmax = round(self.xmax, round_val)
+        self.ymin = round(self.ymin, round_val)
+        self.ymax = round(self.ymax, round_val)
+    
     def center(self):
         """find the center point of the xy region
 
