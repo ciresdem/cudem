@@ -3480,6 +3480,7 @@ https://cdn.proj.org
                 
             if status == 0:
                 v_infs = utils.p_unzip('{}.zip'.format(vd), ['inf'])
+                utils.echo_msg(v_infs)
                 v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
                 v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360)
 

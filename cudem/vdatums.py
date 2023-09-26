@@ -359,10 +359,13 @@ class VerticalTransform:
         """create a cdn transofrmation grid"""
 
         epsg = 5703 if epsg == 6360 else epsg
+        geoid = 'g2018' if geoid is None else geoid
         # c_array = None
         # if epsg == 6360:
         #     c_array = self._meters_to_feet()
         #     epsg = 5703
+
+        utils.echo_msg('epsg: {}, name: {}, geoid: {}'.format(epsg, name, geoid))
         
         if epsg is not None:
             cdn_results = fetches.search_proj_cdn(
@@ -373,16 +376,18 @@ class VerticalTransform:
                 self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
-        for _result in cdn_results:
-            #for g in _geoids:
-            #if g in _result['name']:
-            #utils.echo_msg(geoid)
-            #utils.echo_msg(_result['name'])
-            if geoid in _result['name']:
-                #utils.echo_msg_bold(geoid)
+        if len(cdn_results) > 0:
+            for _result in cdn_results:
                 #utils.echo_msg_bold(_result)
-                cdn_results = [_result]
-                break
+                #for g in _geoids:
+                #if g in _result['name']:
+                #utils.echo_msg(geoid)
+                #utils.echo_msg(_result['name'])
+                if geoid in _result['name']:
+                    #utils.echo_msg_bold(geoid)
+                    #utils.echo_msg_bold(_result)
+                    cdn_results = [_result]
+                    break
                     
         if len(cdn_results) > 0:
             for _result in cdn_results:
