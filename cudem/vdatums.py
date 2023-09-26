@@ -460,9 +460,17 @@ class VerticalTransform:
     def _vertical_transform(self, epsg_in, epsg_out):
         trans_array = np.zeros( (self.ycount, self.xcount) )
         ## failure can cause endless loop
+
+        utils.echo_msg_bold(epsg_in)
         
         if self.geoid_in is not None:# and self.geoid_out is not None:
             tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
+        else:
+            tmp_trans_a = np.zeros((self.ycount, self.xcount))
+        # elif self.epsg_in == 5703:
+        #     utils.echo_msg_bold('ok')
+        #     self.geoid_in = 'g2018'
+        #     tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
@@ -796,9 +804,12 @@ def vdatums_cli(argv = sys.argv):
         utils.echo_error_msg('Error: {} is not a valid file'.format(src_grid))
     else:
         src_infos = gdalfun.gdal_infos(src_grid)
-        
+
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
+        grid_srs = gdalfun.gdal_get_srs(src_grid)
+        #print(grid_srs)
         src_region.src_srs = gdalfun.gdal_get_srs(src_grid)
+        #print(src_region.src_srs)
 
         trans_region = src_region.copy()
         trans_region.warp()
@@ -822,6 +833,8 @@ def vdatums_cli(argv = sys.argv):
         
         if _trans_grid is not None:
 
+            print(src_grid)
+            print(gdalfun.gdal_get_srs(src_grid))
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
             utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(

@@ -1422,15 +1422,17 @@ class ElevationDataset:
         c_gdt = gdal.GDT_Int32
         driver = gdal.GetDriverByName(fmt)
         if os.path.exists(out_file):
-            driver.Delete(out_file)
-        
+            status = driver.Delete(out_file)
+            if status != 0:
+                utils.remove_glob('{}*'.format(out_file))
+
         dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if fmt != 'MEM' else [])
 
         if dst_ds is None:
             utils.echo_error_msg('failed to create stack grid...')
             sys.exit(-1)
-            
+
         dst_ds.SetGeoTransform(dst_gt)
         stacked_bands = {'z': dst_ds.GetRasterBand(1), 'count': dst_ds.GetRasterBand(2),
                          'weights': dst_ds.GetRasterBand(3), 'uncertainty': dst_ds.GetRasterBand(4),

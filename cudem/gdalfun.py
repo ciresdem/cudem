@@ -26,6 +26,7 @@
 ### Code:
 
 import os
+import sys
 import shutil
 from tqdm import tqdm
 from tqdm import trange
@@ -1500,7 +1501,7 @@ def gdal_nodata_count_mask(src_dem, band = 1):
     return(mn)
 
 ## TODO: finish this function.
-def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
+def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
     """Flatten nodata areas larger than `size_threshhold`"""
 
     def expand_for(arr, shiftx=1, shifty=1):
@@ -1529,7 +1530,10 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1):
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
         #size_threshold = 
-        for i in trange(0, n, desc='flattening data voids greater than {} cells'.format(size_threshold)):
+        for i in trange(0,
+                        n,
+                        desc='{}: flattening data voids greater than {} cells'.format(os.path.basename(sys.argv[0]), size_threshold),
+                        leave=verbose):
             if mn[i] >= size_threshold:
                 i += 1
                 ll = expand_for(l==i)

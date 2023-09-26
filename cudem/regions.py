@@ -75,7 +75,7 @@ class Region:
         self.wmax = utils.float_or(wmax)
         self.umin = utils.float_or(umin)
         self.umax = utils.float_or(umax)
-        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
+        self.src_srs = utils.str_or(src_srs, 'epsg:4326', False)
         self.wkt = wkt
 
     def __repr__(self):
@@ -113,7 +113,6 @@ class Region:
 
     def copy(self):
         """return a copy of the region."""
-        
         return(Region(xmin = self.xmin, xmax = self.xmax,
                       ymin = self.ymin, ymax = self.ymax,
                       zmin = self.zmin, zmax = self.zmax,
@@ -577,6 +576,8 @@ class Region:
         if dst_srs is None or self.src_srs is None: return(self)
         src_srs = osr.SpatialReference()
         src_srs.SetFromUserInput(self.src_srs)
+        #print(src_srs.ExportToWkt())
+        #src_srs.ImportFromWkt(osr.GetUserInputAsWKT(self.src_srs))
         dst_srs_ = osr.SpatialReference()
         dst_srs_.SetFromUserInput(dst_srs)
         

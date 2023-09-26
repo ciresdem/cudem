@@ -203,7 +203,7 @@ def str2inc(inc_str):
     except:
         return(None)
     
-    if inc_str is None or inc_str.lower() == 'none':
+    if inc_str is None or inc_str.lower() == 'none' or len(inc_str) == 0:
         return(None)
     
     units = inc_str[-1]
@@ -373,14 +373,17 @@ def float_or(val, or_val=None):
         return(float(val))
     except: return(or_val)
 
-def str_or(instr, or_val=None):
+def str_or(instr, or_val=None, replace_quote=True):
     """return instr if instr is a string, else or_val"""
 
     if instr is None:
         return(or_val)
     
     try:
-        return(str(instr).replace('"', ''))
+        if replace_quote:
+            return(str(instr).replace('"', ''))
+        else:
+            return(str(instr))
     except:
         return(or_val)
 
@@ -1253,7 +1256,6 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 ## ==============================================
 ##
 ## Progress indicator...
-## CAMPO
 ##
 ## ==============================================
 class CliProgress():
