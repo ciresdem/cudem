@@ -2950,7 +2950,7 @@ class BAGFile(ElevationDataset):
                 for sub_dataset in sub_datasets:
                     sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                       weight=self.weight, src_region=bag_region, x_inc=self.x_inc, y_inc=self.y_inc,
-                                      verbose=self.verbose, resample=resample, check_path=False, super_grid=True)
+                                      verbose=self.verbose, check_path=False, super_grid=True)
                     sub_ds.infos = {}
                     sub_ds.generate_inf()
                     yield(sub_ds)
@@ -2960,12 +2960,12 @@ class BAGFile(ElevationDataset):
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                   weight=self.weight, src_region=bag_region, x_inc=self.x_inc, y_inc=self.y_inc,
-                                  verbose=self.verbose, resample=resample, uncertainty_mask=2)
+                                  verbose=self.verbose, uncertainty_mask=2)
                 yield(sub_ds)
         else:
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-                              resample=resample, uncertainty_mask=2)
+                              uncertainty_mask=2)
 
             yield(sub_ds)
 
