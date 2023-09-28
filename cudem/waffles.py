@@ -3167,11 +3167,24 @@ class WafflesCUDEM(Waffle):
         if self.verbose:
             utils.echo_msg_bold('==============================================')
             utils.echo_msg('')
-            utils.echo_msg_bold('cudem pre-mode: {}'.format(self.pre_mode))
-            utils.echo_msg_bold('cudem pre-count: {}'.format(self.pre_count))
-            utils.echo_msg_bold('cudem weight levels: {}'.format(self.weight_levels))
-            utils.echo_msg_bold('cudem increment levels: {}'.format(self.inc_levels))
-            utils.echo_msg_bold('cudem using coastline: {}'.format(self.landmask))
+            #utils.echo_msg_bold('cudem pre-mode: {}'.format(self.pre_mode))
+                
+            utils.echo_msg_bold('cudem generating {} pre-surface(s):'.format(self.pre_count))
+            for i in range(len(self.inc_levels)-1, -1, -1):
+                utils.echo_msg_bold(
+                    '* {} {} <{}> @ {} using data with a minimum weight of {}'.format(
+                        'pre_surface' if i !=0 else 'final surface',
+                        i,
+                        self.pre_mode if i == self.pre_count else 'stacks' if i != 0 else 'IDW',
+                        self.inc_levels[i],
+                        self.weight_levels[i],
+                    )
+                )
+                
+            utils.echo_msg('')
+            if self.landmask:
+                utils.echo_msg_bold('cudem using coastline: {}'.format(self.landmask))
+                
             utils.echo_msg_bold('cudem flattening: {}'.format(self.flatten))
             utils.echo_msg_bold('cudem output DEM: {}'.format(self.name))
             utils.echo_msg('')
