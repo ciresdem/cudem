@@ -1576,7 +1576,7 @@ class WafflesMBGrid(Waffle):
         
     def run(self):
         mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
-        self.mb_region = self.p_region.copy()
+        self.mb_region = self.ps_region.copy()
         out_name = os.path.join(self.cache_dir, self.name)
         
         # mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
@@ -3123,6 +3123,7 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## set the weights if not already set correctly
         ## ==============================================
+        self.weight_levels.sort(reverse=True)
         if len(self.weight_levels) < self.pre_count+1:
             tmp_pre = self.pre_count - len(self.weight_levels)
             while tmp_pre >= 0:
@@ -3142,18 +3143,23 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## set the increments if not already set correctly
         ## ==============================================
+        self.inc_levels.sort()
         if len(self.inc_levels) < self.pre_count+1:
             tmp_pre = self.pre_count - len(self.inc_levels)
             if len(self.inc_levels) == 0:
                 tmp_xinc = self.xinc
                 self.inc_levels.append(tmp_xinc)
                 
-            while tmp_pre > 0:
-                tmp_xinc = float(self.inc_levels[-1] * (3**tmp_pre))
-                tmp_yinc = float(self.inc_levels[-1] * (3**tmp_pre))
+            #while tmp_pre > 0:
+            for t in range(1, tmp_pre+1):
+                #utils.echo_msg(tmp_pre)
+                tmp_xinc = float(self.inc_levels[-1] * (3**1))
+                tmp_yinc = float(self.inc_levels[-1] * (3**1))
+                #tmp_xinc = float(self.xinc * (3**t))
+                #tmp_yinc = float(self.xinc * (3**t))
                 self.inc_levels.append(tmp_xinc)
-                tmp_pre -= 1
-                
+                #tmp_pre -= 1
+
         if self.inc_levels[0] != self.xinc:
             self.inc_levels.insert(0, self.xinc)
             self.inc_levels = self.inc_levels[:self.pre_count+1]
@@ -3242,12 +3248,14 @@ class WafflesCUDEM(Waffle):
             ## if not final or initial output, setup the configuration for the pre-surface
             ## ==============================================
             if pre != self.pre_count:
-                pre_weight = self.weight_levels[pre]                    
+                pre_weight = self.weight_levels[pre]
                 _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
                 pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
                     _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
                 )
+                utils.echo_msg(pre_data_entry)
                 pre_data = [stack_data_entry, pre_data_entry]
+                #pre_data = [stack_data_entry]
                 pre_region.wmin = pre_weight
                 
             ## ==============================================
