@@ -3153,8 +3153,8 @@ class WafflesCUDEM(Waffle):
             #while tmp_pre > 0:
             for t in range(1, tmp_pre+1):
                 #utils.echo_msg(tmp_pre)
-                tmp_xinc = float(self.inc_levels[-1] * (3**1))
-                tmp_yinc = float(self.inc_levels[-1] * (3**1))
+                tmp_xinc = float(self.inc_levels[-1] * 3)
+                tmp_yinc = float(self.inc_levels[-1] * 3)
                 #tmp_xinc = float(self.xinc * (3**t))
                 #tmp_yinc = float(self.xinc * (3**t))
                 self.inc_levels.append(tmp_xinc)
