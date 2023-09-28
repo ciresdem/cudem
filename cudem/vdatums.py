@@ -40,6 +40,9 @@ from cudem import fetches
 
 _vdatums_cache = utils.cudem_cache()
 
+## ==============================================
+## vertical datum references
+## ==============================================
 _tidal_frames = {
     1089: {'name': 'mllw', 'description': 'Mean Lower Low Water'},
     5866: {'name': 'mllw', 'description': 'Mean Lower Low Water'},
@@ -54,19 +57,24 @@ _tidal_frames = {
 _htdp_reference_frames = {
     4269: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
-           'htdp_id': 1},
+           'htdp_id': 1,
+           'uncertainty': 2},
     6781: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
-           'htdp_id': 1},
+           'htdp_id': 1,
+           'uncertainty': 2},
     6319: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
-           'htdp_id': 1},
+           'htdp_id': 1,
+           'uncertainty': 2},
     6321: {'name': 'NAD_83(PA11/PACP00)',
            'description': '(Pacific plate fixed)',
-           'htdp_id': 2},
+           'htdp_id': 2,
+           'uncertainty': 2},
     6324: {'name': 'NAD_83(MA11/MARP00)',
            'description': '(Mariana plate fixed)',
-           'htdp_id': 3},
+           'htdp_id': 3,
+           'uncertainty': 2},
     4979: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
            'htdp_id': 4},
@@ -164,16 +172,33 @@ _cdn_reference_frames = {
     6647: {'name': 'CGVD2013(CGG2013) height',},
     3855: {'name': 'EGM2008 height',},
     5773: {'name': 'EGM96 height',},
-    5703: {'name': 'NAVD88 height',},
-    6360: {'name': 'NAVD88 height (usFt)',},
+    5703: {'name': 'NAVD88 height',
+           'uncertainty': 5.0},
+    6360: {'name': 'NAVD88 height (usFt)',
+           'uncertainty': 5.0},
     6644: {'name': 'GUVD04 height',},
     6641: {'name': 'PRVD02 height',},
     6643: {'name': 'ASVD02 height',},
     9279: {'name': 'SA LLD height',},
 }
 
+_geoids = {
+    'g2018': {'name': 'geoid 2018',
+              'uncertainty': 1.27},
+    'g2012b': {'name': 'geoid 2012b',
+               'uncertainty': 1.7},
+    'g2012a': {'name': 'geoid 2012a',
+               'uncertainty': 1.7},
+    'g1999': {'name': 'geoid 1999',
+              'uncertainty': 4.6},
+    'geoid09': {'name': 'geoid 2009',
+                'uncertainty': 5},
+    'geoid03': {'name': 'geoid 2003',
+                'uncertainty': 4.6},
+}
+
 ## todo: allow input/output geoids
-_geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
+#_geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
 #_geoids = ['g2018']
 
 def get_vdatum_by_name(datum_name):
@@ -203,11 +228,13 @@ def get_vdatum_by_name(datum_name):
 
 ## ==============================================
 ## vertical transformation grid
-## remove gmt dependence...maybe use IDW or cubic
-## modules instead of gmt-surface
+##
+## generate a vertical transformation grid based on input/output vertical epsg
+## also generate an associated uncertainty grid
 ## ==============================================
 class VerticalTransform:    
-    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out, geoid_in=None, geoid_out='g2018', verbose=True, cache_dir=None):
+    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
+                 geoid_in=None, geoid_out='g2018', verbose=True, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
@@ -227,7 +254,8 @@ class VerticalTransform:
             ref_in = 'htdp'
         elif epsg_in in _cdn_reference_frames.keys():
             ref_in = 'cdn'
-        else: ref_in = None
+        else:
+            ref_in = None
             
         if epsg_out in _tidal_frames.keys():
             ref_out = 'tidal'
@@ -235,10 +263,9 @@ class VerticalTransform:
             ref_out = 'htdp'
         elif epsg_out in _cdn_reference_frames.keys():
             ref_out = 'cdn'
-        else: ref_out = None
+        else:
+            ref_out = None
 
-        #utils.echo_msg_bold(ref_in)
-        #utils.echo_msg_bold(ref_out)
         return(ref_in, ref_out)
 
     def _datum_by_name(self, datum_name):
@@ -249,6 +276,7 @@ class VerticalTransform:
                     return(t)
         else:
             return(int(datum_name))
+        
         ## htdp
         if utils.int_or(datum_name) not in _htdp_reference_frames.keys():
             for t in _htdp_reference_frames.keys():
@@ -256,6 +284,7 @@ class VerticalTransform:
                     return(t)
         else:
             return(int(datum_name))
+        
         ## cdn
         if utils.int_or(datum_name) not in _cdn_reference_frames.keys():
             for t in _cdn_reference_frames.keys():
@@ -360,13 +389,10 @@ class VerticalTransform:
 
         epsg = 5703 if epsg == 6360 else epsg
         geoid = 'g2018' if geoid is None else geoid
-        # c_array = None
-        # if epsg == 6360:
-        #     c_array = self._meters_to_feet()
-        #     epsg = 5703
-
         utils.echo_msg('epsg: {}, name: {}, geoid: {}'.format(epsg, name, geoid))
-        
+
+        utils.echo_msg_bold(_geoids[geoid]['uncertainty'])
+        ## fetch the cdn transformation grids
         if epsg is not None:
             cdn_results = fetches.search_proj_cdn(
                 self.src_region, epsg=epsg, cache_dir=self.cache_dir, verbose=self.verbose
@@ -376,16 +402,10 @@ class VerticalTransform:
                 self.src_region, cache_dir=self.cache_dir, verbose=self.verbose
             )
 
+        ## get the proper cdn result based on the specified geoid
         if len(cdn_results) > 0:
             for _result in cdn_results:
-                #utils.echo_msg_bold(_result)
-                #for g in _geoids:
-                #if g in _result['name']:
-                #utils.echo_msg(geoid)
-                #utils.echo_msg(_result['name'])
                 if geoid in _result['name']:
-                    #utils.echo_msg_bold(geoid)
-                    #utils.echo_msg_bold(_result)
                     cdn_results = [_result]
                     break
                     
@@ -393,12 +413,10 @@ class VerticalTransform:
             for _result in cdn_results:
                 src_code = int(_result['source_crs_code'].split(':')[-1])
                 dst_code = int(_result['target_crs_code'].split(':')[-1])
-                #if epsg == dst_code or epsg == src_code or
-                #np.any([g in _result['name'] for g in self._geoids]):
-                
-                if epsg == dst_code or np.any([g in _result['name'] for g in _geoids]):
+                if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
+                        utils.echo_msg_bold(_result)
                         if fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
@@ -425,13 +443,9 @@ class VerticalTransform:
                             if invert:
                                 _tmp_array = _tmp_array * -1
 
-                            # if c_array is not None:
-                            #     _tmp_array = _tmp_array * c_array
-                            #utils.echo_msg(_tmp_array)
                             return(_tmp_array, src_code)
 
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
-            
         return(np.zeros( (self.ycount, self.xcount) ), epsg)
             
     def _htdp_transform(self, epsg_in, epsg_out):
@@ -441,7 +455,6 @@ class VerticalTransform:
             utils.echo_error_msg('you must have HTDP installed to perform HTDP vertical transformations')            
             return(np.zeros( (self.ycount, self.xcount) ), epsg_out)
         else:
-
             htdp = htdpfun.HTDP(verbose=self.verbose)
             if self.verbose:
                 utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
@@ -463,26 +476,19 @@ class VerticalTransform:
             return(out_grid, epsg_out)
     
     def _vertical_transform(self, epsg_in, epsg_out):
-        trans_array = np.zeros( (self.ycount, self.xcount) )
         ## failure can cause endless loop
-
-        utils.echo_msg_bold(epsg_in)
         
+        trans_array = np.zeros( (self.ycount, self.xcount) )
+        unc_array = np.zeros( (self.ycount, self.xcount) )
         if self.geoid_in is not None:# and self.geoid_out is not None:
-            tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
+            tmp_trans_geoid, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
         else:
-            tmp_trans_a = np.zeros((self.ycount, self.xcount))
-        # elif self.epsg_in == 5703:
-        #     utils.echo_msg_bold('ok')
-        #     self.geoid_in = 'g2018'
-        #     tmp_trans_a, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
+            tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            #print(ref_in, ref_out, epsg_in, epsg_out)
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
-                    #print(_tidal_frames)
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
                 else: 
@@ -520,7 +526,7 @@ class VerticalTransform:
                 tmp_trans = np.zeros( (self.ycount, self.xcount) )
                 epsg_in = epsg_out
 
-            trans_array = trans_array + tmp_trans + tmp_trans_a
+            trans_array = trans_array + tmp_trans + tmp_trans_geoid
             tmp_trans = None
             
         return(trans_array)

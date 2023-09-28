@@ -946,6 +946,7 @@ class ElevationDataset:
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
+            #utils.echo_msg('{} -> {}'.format(self.src_srs, self.dst_srs))
             tmp_src_srs = self.src_srs.split('+geoid:')
             src_srs = tmp_src_srs[0]
             if len(tmp_src_srs) > 1:

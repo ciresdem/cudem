@@ -2223,12 +2223,12 @@ class WafflesCoastline(Waffle):
                     ),
                     verbose=self.verbose
                 )
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
+                # utils.run_cmd(
+                #     'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
+                #         gdb, self.p_region.format('ul_lr')
+                #     ),
+                #     verbose=self.verbose
+                # )
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
                         gdb, self.p_region.format('ul_lr')
