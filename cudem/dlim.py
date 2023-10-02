@@ -1020,6 +1020,8 @@ class ElevationDataset:
                 else:
                     self.trans_fn_full = utils.make_temp_fn(self.trans_fn)
 
+                self.trans_fn_unc_full = '{}_unc.{}'.format(utils.fn_basename2(self.trans_fn_full), utils.fn_ext(self.trans_fn_full))
+
                 ## ==============================================
                 ## vertical transformation grid is generated in WGS84
                 ## ==============================================
@@ -1050,7 +1052,7 @@ class ElevationDataset:
 
                         #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
 
-                        self.trans_fn = vdatums.VerticalTransform(
+                        self.trans_fn, self.trans_unc_fn = vdatums.VerticalTransform(
                             vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
                             #vd_region, '3s', '3s', src_vert, dst_vert,
@@ -1068,6 +1070,9 @@ class ElevationDataset:
                                             src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
 
                         assert os.path.exists(self.trans_fn_full)
+
+                        gdalfun.sample_warp(self.trans_unc_fn, self.trans_fn_unc_full, self.x_inc, self.y_inc,
+                                            src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
 
                     if os.path.exists(self.trans_fn):
                         out_src_srs = '{} +geoidgrids={}'.format(src_srs.ExportToProj4(), self.trans_fn)

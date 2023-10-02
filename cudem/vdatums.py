@@ -44,14 +44,22 @@ _vdatums_cache = utils.cudem_cache()
 ## vertical datum references
 ## ==============================================
 _tidal_frames = {
-    1089: {'name': 'mllw', 'description': 'Mean Lower Low Water'},
-    5866: {'name': 'mllw', 'description': 'Mean Lower Low Water'},
-    1091: {'name': 'mlw',  'description': 'Mean Low Water'},
-    1090: {'name': 'mhhw', 'description': 'Mean Higher High Water'},
-    5869: {'name': 'mhhw', 'description': 'Mean Higher High Water'},
-    5868: {'name': 'mhw', 'description': 'Mean High Water'},
-    5714: {'name': 'msl', 'description': 'Mean Sea Level'},
-    5713: {'name': 'mtl', 'description': 'Mean Tide Level'},
+    1089: {'name': 'mllw', 'description': 'Mean Lower Low Water',
+           'uncertainty': 0},
+    5866: {'name': 'mllw', 'description': 'Mean Lower Low Water',
+           'uncertainty': 0},
+    1091: {'name': 'mlw',  'description': 'Mean Low Water',
+           'uncertainty': 0},
+    1090: {'name': 'mhhw', 'description': 'Mean Higher High Water',
+           'uncertainty': 0},
+    5869: {'name': 'mhhw', 'description': 'Mean Higher High Water',
+           'uncertainty': 0},
+    5868: {'name': 'mhw', 'description': 'Mean High Water',
+           'uncertainty': 0},
+    5714: {'name': 'msl', 'description': 'Mean Sea Level',
+           'uncertainty': 0},
+    5713: {'name': 'mtl', 'description': 'Mean Tide Level',
+           'uncertainty': 0},
 }
 
 _htdp_reference_frames = {
@@ -77,109 +85,147 @@ _htdp_reference_frames = {
            'uncertainty': 2},
     4979: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
-           'htdp_id': 4},
+           'htdp_id': 4,
+           'uncertainty': 0},
     7815: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
-           'htdp_id': 4},
+           'htdp_id': 4,
+           'uncertainty': 0},
     7816: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
-           'htdp_id': 4},
+           'htdp_id': 4,
+           'uncertainty': 0},
     7656: {'name': 'WGS_84(G730)',
            'description': '(ITRF91 used)',
-           'htdp_id': 5},
+           'htdp_id': 5,
+           'uncertainty': 0},
     7657: {'name': 'WGS_84(G730)',
            'description': '(ITRF91 used)',
-           'htdp_id': 5},
+           'htdp_id': 5,
+           'uncertainty': 0},
     7658: {'name': 'WGS_84(G873)',
            'description': '(ITRF94 used)',
-           'htdp_id': 6},
+           'htdp_id': 6,
+           'uncertainty': 0},
     7659: {'name': 'WGS_84(G873)',
            'description': '(ITRF94 used)',
-           'htdp_id': 6},
+           'htdp_id': 6,
+           'uncertainty': 0},
     7660: {'name': 'WGS_84(G1150)',
            'description': '(ITRF2000 used)',
-           'htdp_id': 7},
+           'htdp_id': 7,
+           'uncertainty': 0},
     7661: {'name': 'WGS_84(G1150)',
            'description': '(ITRF2000 used)',
-           'htdp_id': 7},
+           'htdp_id': 7,
+           'uncertainty': 0},
     7662: {'name': 'WGS_84(G1674)',
            'description': '(ITRF2008 used)',
-           'htdp_id': 8},
+           'htdp_id': 8,
+           'uncertainty': 0},
     7663: {'name': 'WGS_84(G1674)',
            'description': '(ITRF2008 used)',
-           'htdp_id': 8},
+           'htdp_id': 8,
+           'uncertainty': 0},
     7664: {'name': 'WGS_84(G1762)',
            'description': '(IGb08 used)',
-           'htdp_id': 9},
+           'htdp_id': 9,
+           'uncertainty': 0},
     7665: {'name': 'WGS_84(G1762)',
            'description': '(IGb08 used)',
-           'htdp_id': 9},
+           'htdp_id': 9,
+           'uncertainty': 0},
     7666: {'name': 'WGS_84(G2139)',
            'description': '(ITRF2014=IGS14=IGb14 used)',
-           'htdp_id': 10},
+           'htdp_id': 10,
+           'uncertainty': 0},
     7667: {'name': 'WGS_84(G2139)',
            'description': '(ITRF2014=IGS14=IGb14 used)',
-           'htdp_id': 10},
+           'htdp_id': 10,
+           'uncertainty': 0},
     4910: {'name': 'ITRF88',
            'description': '',
-           'htdp_id': 11},
+           'htdp_id': 11,
+           'uncertainty': 0},
     4911: {'name': 'ITRF89',
            'description': '',
-           'htdp_id': 12},
+           'htdp_id': 12,
+           'uncertainty': 0},
     7901: {'name': 'ITRF89',
            'description': '',
-           'htdp_id': 12},
+           'htdp_id': 12,
+           'uncertainty': 0},
     7902: {'name': 'ITRF90',
            'description': '(PNEOS90/NEOS90)',
-           'htdp_id': 13},
+           'htdp_id': 13,
+           'uncertainty': 0},
     7903: {'name': 'ITRF91',
            'description': '',
-           'htdp_id': 14},
+           'htdp_id': 14,
+           'uncertainty': 0},
     7904: {'name': 'ITRF92',
            'description': '',
-           'htdp_id': 15},
+           'htdp_id': 15,
+           'uncertainty': 0},
     7905: {'name': 'ITRF93',
            'description': '',
-           'htdp_id': 16},
+           'htdp_id': 16,
+           'uncertainty': 0},
     7906: {'name': 'ITRF94',
            'description': '',
-           'htdp_id': 17},
+           'htdp_id': 17,
+           'uncertainty': 0},
     7907: {'name': 'ITRF96',
            'description': '',
-           'htdp_id': 18},
+           'htdp_id': 18,
+           'uncertainty': 0},
     7908: {'name': 'ITRF97',
            'description': 'IGS97',
-           'htdp_id': 19},
+           'htdp_id': 19,
+           'uncertainty': 0},
     7909: {'name': 'ITRF2000',
            'description': 'IGS00/IGb00',
-           'htdp_id': 20},
+           'htdp_id': 20,
+           'uncertainty': 0},
     7910: {'name': 'ITRF2005',
            'description': 'IGS05',
-           'htdp_id': 21},
+           'htdp_id': 21,
+           'uncertainty': 0},
     7911: {'name': 'ITRF2008',
            'description': 'IGS08/IGb08',
-           'htdp_id': 22},
+           'htdp_id': 22,
+           'uncertainty': 0},
     7912: {'name': 'ITRF2014',
            'description': 'IGS14/IGb14',
-           'htdp_id': 23},
+           'htdp_id': 23,
+           'uncertainty': 0},
     7912: {'name': 'ELLIPSOID',
            'description': 'IGS14/IGb14/WGS84 Ellipsoid',
-           'htdp_id': 23},
+           'htdp_id': 23,
+           'uncertainty': 0},
 }
 
 _cdn_reference_frames = {
-    9245: {'name': 'CGVD2013(CGG2013a) height',},
-    6647: {'name': 'CGVD2013(CGG2013) height',},
-    3855: {'name': 'EGM2008 height',},
-    5773: {'name': 'EGM96 height',},
+    9245: {'name': 'CGVD2013(CGG2013a) height',
+           'uncertainty': 0},
+    6647: {'name': 'CGVD2013(CGG2013) height',
+           'uncertainty': 0},
+    3855: {'name': 'EGM2008 height',
+           'uncertainty': 0},
+    5773: {'name': 'EGM96 height',
+           'uncertainty': 0},
     5703: {'name': 'NAVD88 height',
            'uncertainty': 5.0},
     6360: {'name': 'NAVD88 height (usFt)',
            'uncertainty': 5.0},
-    6644: {'name': 'GUVD04 height',},
-    6641: {'name': 'PRVD02 height',},
-    6643: {'name': 'ASVD02 height',},
-    9279: {'name': 'SA LLD height',},
+    6644: {'name': 'GUVD04 height',
+           'uncertainty': 0},
+    6641: {'name': 'PRVD02 height',
+           'uncertainty': 0},
+    6643: {'name': 'ASVD02 height',
+           'uncertainty': 0},
+    9279: {'name': 'SA LLD height',
+           'uncertainty': 0},
 }
 
 _geoids = {
@@ -304,7 +350,10 @@ class VerticalTransform:
         c_array = np.zeros((self.ycount, self.xcount))
         c_array[:] = 3.28084
         return(c_array)
-    
+
+    ## ==============================================
+    ## tidal transformation (VDatum)
+    ## ==============================================
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
         """generate tidal transformation grid
 
@@ -383,15 +432,15 @@ class VerticalTransform:
                 return(_trans_in_array, self._datum_by_name(vdatum_tidal_out))
             else:
                 return(_trans_in_array - _trans_out_array, self._datum_by_name(vdatum_tidal_out))
-            
+
+    ## ==============================================
+    ## "CDN" transformation (proj)
+    ## ==============================================
     def _cdn_transform(self, epsg=None, name=None, geoid='g2018', invert=False):
         """create a cdn transofrmation grid"""
 
         epsg = 5703 if epsg == 6360 else epsg
         geoid = 'g2018' if geoid is None else geoid
-        utils.echo_msg('epsg: {}, name: {}, geoid: {}'.format(epsg, name, geoid))
-
-        utils.echo_msg_bold(_geoids[geoid]['uncertainty'])
         ## fetch the cdn transformation grids
         if epsg is not None:
             cdn_results = fetches.search_proj_cdn(
@@ -416,7 +465,7 @@ class VerticalTransform:
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
-                        utils.echo_msg_bold(_result)
+                        #utils.echo_msg_bold(_result)
                         if fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
@@ -447,7 +496,10 @@ class VerticalTransform:
 
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
         return(np.zeros( (self.ycount, self.xcount) ), epsg)
-            
+
+    ## ==============================================
+    ## HTDP transformation
+    ## ==============================================
     def _htdp_transform(self, epsg_in, epsg_out):
         """create an htdp transformation grid"""
 
@@ -474,13 +526,15 @@ class VerticalTransform:
             out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
             utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
             return(out_grid, epsg_out)
-    
+
+    ## ==============================================
+    ## Combined vertical transformation from epsg_in -> epsg_out
+    ## ==============================================
     def _vertical_transform(self, epsg_in, epsg_out):
-        ## failure can cause endless loop
-        
         trans_array = np.zeros( (self.ycount, self.xcount) )
         unc_array = np.zeros( (self.ycount, self.xcount) )
         if self.geoid_in is not None:# and self.geoid_out is not None:
+            unc_array = np.sqrt(unc_array**2 + _geoids[self.geoid_in]['uncertainty']**2)
             tmp_trans_geoid, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
@@ -498,16 +552,20 @@ class VerticalTransform:
                     epsg_in = cv
             elif ref_in == 'htdp':
                 if ref_out == 'htdp':
+                    unc_array = np.sqrt(unc_array**2 + float(_htdp_reference_frames[epsg_in]['uncertainty'] ** 2))
                     tmp_trans, v = self._htdp_transform(epsg_in, epsg_out)
                     epsg_in = epsg_out
                 else:
-                    ## todo: only do geoid transforms with 5703 (navd88)
+                    unc_array = np.sqrt(unc_array**2 + float(_htdp_reference_frames[epsg_in]['uncertainty'] ** 2))
+                    unc_array = np.sqrt(unc_array**2 + float(_cdn_reference_frames[epsg_out]['uncertainty'] ** 2))
                     cg, cv = self._cdn_transform(epsg=epsg_out, invert=True)
+                    unc_array = np.sqrt(unc_array**2 + float(_geoids[self.geoid_out]['uncertainty'] ** 2))
                     gg, gv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=True)
                     hg, v = self._htdp_transform(epsg_in, cv)
                     tmp_trans = cg + hg
                     epsg_in = epsg_out
             elif ref_in == 'cdn':
+
                 if ref_out == 'cdn':
                     ## todo: only do geoid transforms with 5703 (navd88)
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
@@ -526,10 +584,11 @@ class VerticalTransform:
                 tmp_trans = np.zeros( (self.ycount, self.xcount) )
                 epsg_in = epsg_out
 
+            #print(unc_array)
             trans_array = trans_array + tmp_trans + tmp_trans_geoid
             tmp_trans = None
             
-        return(trans_array)
+        return(trans_array, unc_array)
     
     def run(self, outfile=None):
         if outfile is None:
@@ -540,13 +599,15 @@ class VerticalTransform:
                 utils.echo_warning_msg('{} exists, skipping...'.format(outfile))
                 
             return(outfile)
+
+        unc_outfile = '{}_unc.{}'.format(utils.fn_basename2(outfile), utils.fn_ext(outfile))
         
         if self.epsg_in is None or self.epsg_out is None:
             utils.echo_error_msg('failed to parse vertical input or output, check inputs')
                 
             return(None)
         else:
-            trans_array = self._vertical_transform(self.epsg_in, self.epsg_out)
+            trans_array, unc_array = self._vertical_transform(self.epsg_in, self.epsg_out)
             trans_infos = gdalfun.gdal_set_infos(
                 self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff', None, None
             )
@@ -554,9 +615,10 @@ class VerticalTransform:
             if outfile is not None:
                 gdalfun.gdal_write(trans_array, outfile, trans_infos)
                 trans_array = None
-                return(outfile)
+                gdalfun.gdal_write(unc_array, unc_outfile, trans_infos)
+                return(outfile, unc_outfile)
             else:
-                return(trans_array, trans_infos)
+                return(trans_array, unc_array, trans_infos)
 
 ## ==============================================
 ## NOAA's VDATUM
