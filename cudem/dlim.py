@@ -633,6 +633,8 @@ class ElevationDataset:
         self.dst_trans = None # srs transformation obj
         self.trans_fn = None # vertical datum transformation grid
         self.trans_fn_full = None # full resolution vertical datum transformation grid
+        self.trans_fn_unc = None
+        self.trans_fn_unc_full = None
         self.trans_to_meter = False
         self.trans_from_meter = False
         self.trans_region = None # transformed region
@@ -750,6 +752,9 @@ class ElevationDataset:
         self.xyz_yield = self.yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
+        if self.region is None and self.x_inc is not None:
+            utils.echo_warning_msg('must enter a region to output in increment blocks...')
+
         if self.region is not None and self.x_inc is not None:
             self.x_inc = utils.str2inc(self.x_inc)
             if self.y_inc is None:
@@ -981,8 +986,12 @@ class ElevationDataset:
             ## ==============================================
             #utils.echo_msg(self.src_geoid)
             #utils.echo_msg(self.dst_geoid)
-            if (dst_vert is not None) and (src_vert is not None) and (str(dst_vert) != str(src_vert)) or \
-               self.src_geoid is not None and self.dst_geoid is not None and (self.src_geoid != self.dst_geoid):
+            # utils.echo_msg(src_vert)
+            # utils.echo_msg(dst_vert)
+            # utils.echo_msg(self.src_geoid)
+            # utils.echo_msg(self.dst_geoid)
+            if ((dst_vert is not None) and (src_vert is not None)) and ((str(dst_vert) != str(src_vert)) or \
+               (self.src_geoid is not None and self.dst_geoid is not None) and (self.src_geoid != self.dst_geoid)):
                 # if len(self.infos.minmax) == 0:
                 #     #self.initialize()
                 #     self.inf()
@@ -997,12 +1006,13 @@ class ElevationDataset:
                     ) #if self.region is None else self.region.copy()
                 else:
                     vd_region = self.region.copy()
-                    vd_region.src_srs = src_horz
+                    utils.echo_msg(vd_region)
+                    vd_region.src_srs = dst_horz
                     vd_region.warp('epsg:4326')
 
                 vd_region.zmin = None
                 vd_region.zmax = None
-                
+
                 vd_region.buffer(pct=5)
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
@@ -1010,16 +1020,17 @@ class ElevationDataset:
                     vd_region.format('fn')
                 ))
 
-                if self.x_inc is not None:
-                    self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
-                        src_vert,
-                        dst_vert,
-                        vd_region.format('fn'),
-                        utils.inc2str(self.x_inc)
-                    ))
-                else:
-                    self.trans_fn_full = utils.make_temp_fn(self.trans_fn)
-
+                #if self.x_inc is not None:
+                self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
+                    src_vert,
+                    dst_vert,
+                    vd_region.format('fn'),
+                    utils.inc2str(self.x_inc) if self.x_inc is not None else 'n'
+                ))
+                #else:
+                #    self.trans_fn_full = utils.make_temp_fn(self.trans_fn)
+                    
+                self.trans_fn_unc = '{}_unc.{}'.format(utils.fn_basename2(self.trans_fn), utils.fn_ext(self.trans_fn))
                 self.trans_fn_unc_full = '{}_unc.{}'.format(utils.fn_basename2(self.trans_fn_full), utils.fn_ext(self.trans_fn_full))
 
                 ## ==============================================
@@ -1037,7 +1048,7 @@ class ElevationDataset:
                             x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                         )
 
-                        utils.echo_warning_msg(vd_region)
+                        #utils.echo_warning_msg(vd_region)
                         #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
                         while (xcount <=10 or ycount <=10):
                             
@@ -1052,7 +1063,7 @@ class ElevationDataset:
 
                         #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
 
-                        self.trans_fn, self.trans_unc_fn = vdatums.VerticalTransform(
+                        self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
                             vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
                             #vd_region, '3s', '3s', src_vert, dst_vert,
@@ -1070,8 +1081,7 @@ class ElevationDataset:
                                             src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
 
                         assert os.path.exists(self.trans_fn_full)
-
-                        gdalfun.sample_warp(self.trans_unc_fn, self.trans_fn_unc_full, self.x_inc, self.y_inc,
+                        gdalfun.sample_warp(self.trans_fn_unc, self.trans_fn_unc_full, self.x_inc, self.y_inc,
                                             src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
 
                     if os.path.exists(self.trans_fn):
@@ -1126,9 +1136,9 @@ class ElevationDataset:
                 ## ==============================================
                 if self.region is not None: # and self.region.src_srs != self.src_srs:
                     self.trans_region = self.region.copy()
-                    self.trans_region.src_srs = src_horz#out_dst_srs
+                    self.trans_region.src_srs = dst_horz#out_dst_srs
                     self.trans_region.warp(src_horz)#out_src_srs)
-                    self.trans_region.src_srs = dst_horz#out_src_srs
+                    self.trans_region.src_srs = src_horz#out_src_srs
                 else:
                     if self.infos.wkt is not None:
                         self.trans_region = regions.Region().from_string(self.infos.wkt)
@@ -1637,7 +1647,7 @@ class ElevationDataset:
                 stacked_bands[key].DeleteNoDataValue()
             for key in stacked_bands.keys():
                 stacked_bands[key].SetNoDataValue(ndv)
-
+                
         ## ==============================================
         ## create a vector of the masks (spatial-metadata)
         ## ==============================================
@@ -2036,6 +2046,15 @@ class LASFile(ElevationDataset):
         ## todo: fix this for dst_trans!
         self.las_x_inc = self.x_inc
         self.las_y_inc = self.y_inc
+
+        # if self.region is None:
+        #     if self.trans_region is not None:
+        #         self.region = self.trans_region.copy()
+        #     else:
+        #         self.region = regions.Region().from_list(self.infos.minmax)
+        
+        #utils.echo_msg_bold(self.region)
+        #utils.echo_msg(self.trans_region)
         
         if self.region is not None  and self.region.valid_p():
             self.las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
@@ -2056,8 +2075,23 @@ class LASFile(ElevationDataset):
                     self.las_xcount, self.las_ycount, self.las_dst_gt = self.las_region.geo_transform(
                         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
                     )
-        #print(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt)
+        #utils.echo_msg('{} {} {} {}'.format(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt))
+        if self.trans_fn is not None:
+            aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+            aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+        else:
+            aux_src_trans_srs = self.src_trans_srs
+            aux_dst_trans_srs = self.dst_trans_srs
+                
+        if self.trans_fn is not None:
+            ## remove the vertical transformation grid, if it exists to warp the non elevation bands
+            self.las_trans_fn = gdalfun.sample_warp(self.trans_fn_unc, None, None, None,
+                                                    src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_dst_trans_srs,
+                                                    ndv=-9999, verbose=self.verbose)[0]
+        else:
+            self.las_trans_fn = None
 
+        
     def valid_p(self, fmts = ['scratch']):
         """check if self appears to be a valid dataset entry"""
 
@@ -2142,6 +2176,7 @@ class LASFile(ElevationDataset):
 
                     if len(points) > 0:
                         yield(points)
+                        
             except Exception as e:
                 utils.echo_warning_msg('could not read points from lasfile {}, {}'.format(self.fn, e))
     
@@ -2158,6 +2193,10 @@ class LASFile(ElevationDataset):
                 if self.dst_trans is not None:
                     this_xyz.transform(self.dst_trans)
 
+                if self.las_trans_fn is not None:
+                    u = gdalfun.gdal_query([this_xyz.export_as_list()], self.las_trans_fn, 'g')
+                    this_xyz.u = math.sqrt(this_xyz.u**2 + u[0][0]**2)
+                    
                 yield(this_xyz)
 
         if self.verbose:
@@ -2166,7 +2205,28 @@ class LASFile(ElevationDataset):
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
-                    
+
+    def _yield_xyz(self):
+        """LAS file parsing generator"""
+
+        for arrs, srcwin, gt in self.yield_array():
+            z_array = arrs['z']
+            w_array = arrs['weight']
+            u_array = arrs['uncertainty']
+            ycount, xcount = z_array.shape
+            for y in range(0, ycount):
+                for x in range(0, xcount):
+                    z = z_array[y,x]
+                    if not np.isnan(z):
+                        geo_x, geo_y = utils._pixel2geo(x, y, gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=w_array[y,x], u=u_array[y,x]
+                        )
+                        # if self.dst_trans is not None:
+                        #     out_xyz.transform(self.dst_trans)
+
+                        yield(out_xyz)
+
     def yield_array(self):
         out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
         count = 0
@@ -2238,25 +2298,25 @@ class LASFile(ElevationDataset):
             ## ==============================================
             ## apply the vertical transformation grid
             ## ==============================================
+
             if self.trans_fn is not None:
                 # tmp_trans_fn = utils.make_temp_fn(self.trans_fn, temp_dir=self.cache_dir)
 
-
                 # gdalfun.sample_warp(self.trans_fn, tmp_trans_fn, self.x_inc, self.y_inc,
                 #                     src_region=self.region, src_srs = 'epsg:4326', dst_srs=self.dst_srs)
-
                 with gdalfun.gdal_datasource(self.trans_fn_full) as tf:
                     tfi = gdalfun.gdal_infos(tf)
                     b = tf.GetRasterBand(1)
                     a = b.ReadAsArray(*this_srcwin)
+                    a[a == tfi['ndv']] = 0
                     out_z = out_z + a
-                    
+
                 if self.trans_to_meter:
                     out_z *= (1200/3937)
 
                 if self.trans_from_meter:
                     out_z *= 3.2808333333
-
+                    
                 #utils.remove_glob(tmp_trans_fn)
 
             out_arrays['z'] = out_z
@@ -2274,6 +2334,16 @@ class LASFile(ElevationDataset):
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] = u
             out_arrays['uncertainty'][np.isnan(out_z)] = np.nan
 
+            if self.trans_fn_unc is not None:
+                with gdalfun.gdal_datasource(self.trans_fn_unc_full) as tf:
+                    tfi = gdalfun.gdal_infos(tf)
+                    b = tf.GetRasterBand(1)
+                    a = b.ReadAsArray(*this_srcwin)
+                    a[a == tfi['ndv']] = 0
+                    out_arrays['uncertainty'] = np.sqrt(out_arrays['uncertainty']**2 + a**2)
+            
+            #if self.trans_fn_unc is not None:
+            #    pass
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
@@ -2588,6 +2658,15 @@ class GDALFile(ElevationDataset):
 
             band_data = count_data = weight_data = mask_data = None
             out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty':None, 'mask':None}
+
+            ## remove the vertical transformation grid, if it exists to warp the non elevation bands
+            if self.trans_fn is not None:
+                aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+            else:
+                aux_src_trans_srs = self.src_trans_srs
+                aux_dst_trans_srs = self.dst_trans_srs
+                
             ## todo: always warp these to src_ds
             ## ==============================================
             ## weight mask, each cell should have the corresponding weight
@@ -2600,7 +2679,7 @@ class GDALFile(ElevationDataset):
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
                     if self.x_inc is not None and self.y_inc is not None:
                         src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
-                                                         src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                                         src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
                                                          src_region=self.warp_region, sample_alg=self.sample_alg,
                                                          ndv=ndv, verbose=self.verbose)[0]
                     else:
@@ -2623,7 +2702,7 @@ class GDALFile(ElevationDataset):
                 elif os.path.exists(self.uncertainty_mask):
                     if self.x_inc is not None and self.y_inc is not None:
                         src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
-                                                              src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                                                              src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
                                                               src_region=self.warp_region, sample_alg=self.sample_alg,
                                                               ndv=ndv, verbose=self.verbose)[0]
                     else:
@@ -2633,6 +2712,26 @@ class GDALFile(ElevationDataset):
                 else:
                     utils.echo_warning_msg('could not load uncertainty mask {}'.format(self.uncertainty_mask))
                     uncertainty_band = None
+
+
+            if self.trans_fn_unc_full is not None:
+                if self.x_inc is not None and self.y_inc is not None:
+                    trans_uncertainty = gdal.Open(self.trans_fn_unc_full)
+                else:
+                    trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, self.dem_infos['geoT'][1], self.dem_infos['geoT'][5],
+                                                            src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_dst_trans_srs,
+                                                            src_region=self.warp_region, sample_alg=self.sample_alg,
+                                                            ndv=ndv, verbose=self.verbose)[0]
+                    
+                if uncertainty_band is not None:
+                    trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
+                    trans_uncertainty_arr = trans_uncertainty_band.ReadAsArray()
+                    uncertainty_arr = uncertainty_band.ReadAsArray()
+                    uncertainty_arr = np.sqrt(uncertainty_arr**2 + trans_uncertainty_arr**2)
+                    uncertainty_band.WriteArray(uncertainty_arr)
+                    trans_uncertainty_band = None
+                else:
+                    uncertainty_band = trans_uncertainty.GetRasterBand(1)
 
             ## ==============================================
             ## mask dataset
@@ -2652,7 +2751,7 @@ class GDALFile(ElevationDataset):
                     if self.x_inc is not None and self.y_inc is not None:
                         src_mask = gdalfun.sample_warp(
                             self.mask, None, self.x_inc, self.y_inc,
-                            src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
+                            src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
                             src_region=self.warp_region, sample_alg=self.sample_alg,
                             ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
                         )[0]
@@ -2688,6 +2787,9 @@ class GDALFile(ElevationDataset):
                     weight_ndv = float(weight_band.GetNoDataValue())
                     if not np.isnan(weight_ndv):
                         weight_data[weight_data==weight_ndv] = np.nan
+
+                    if self.weight:
+                        weight_data = weight_data * self.weight
                 else:
                     weight_data = np.ones(band_data.shape)
                     if self.weight:
@@ -2701,6 +2803,9 @@ class GDALFile(ElevationDataset):
                     uncertainty_ndv = float(uncertainty_band.GetNoDataValue())
                     if not np.isnan(uncertainty_ndv):
                         uncertainty_data[uncertainty_data==uncertainty_ndv] = np.nan
+
+                    if self.uncertainty:
+                        uncertainty_data = np.sqrt(uncertainty_data**2 + self.uncertainty**2)
                 else:
                     uncertainty_data = np.zeros(band_data.shape)
                     if self.uncertainty:
