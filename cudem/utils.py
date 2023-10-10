@@ -1085,7 +1085,8 @@ def config_check(chk_vdatum=False, verbose=False):
         ae = '.exe' if host_os == 'win32' else ''
 
         #if chk_vdatum: _waff_co['VDATUM'] = vdatum(verbose=verbose).vdatum_path
-        _waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal-config --version').decode()
+        #_waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal-config --version').decode()
+        _waff_co['GDAL'] = cmd_check('gdal_grid{}'.format(ae), 'gdal_translate --version').decode()
         _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
         _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
         _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
