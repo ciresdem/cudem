@@ -1090,7 +1090,7 @@ def config_check(chk_vdatum=False, verbose=False):
         _waff_co['GMT'] = cmd_check('gmt{}'.format(ae), 'gmt --version').decode()
         _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
         _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
-        _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
+        _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1' if host_os == 'win32' else 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
         _waff_co['CUDEM'] = str(cudem.__version__)
 
         for key in _waff_co.keys():
