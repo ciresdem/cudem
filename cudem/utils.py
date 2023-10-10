@@ -965,7 +965,7 @@ def run_cmd(cmd, data_fun=None, verbose=False):
 
         p = subprocess.Popen(
             cmd, shell=True, stdin=pipe_stdin, stdout=subprocess.PIPE, #encoding='utf-8',
-            stderr=subprocess.PIPE, close_fds=True#, universal_newlines=True, bufsize=1,
+            stderr=subprocess.PIPE, close_fds=True, universal_newlines=True, bufsize=1,
         )
 
         if data_fun is not None:
