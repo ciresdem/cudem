@@ -1947,11 +1947,12 @@ class WafflesVDatum(Waffle):
 
     -----------
     Parameters:
-    
+
+    mode=[waffle-module] - the waffles module to use to interpolate/extrapolate 
     vdatum_in=[vdatum] - input vertical datum
     vdatum_out=[vdatum] - output vertical datum
     
-    < vdatum:vdatum_in=None:vdatum_out=None >
+    < mode=gmt-surface:vdatum:vdatum_in=None:vdatum_out=None >
     """
 
     def __init__(self, mode='IDW', vdatum_in=None, vdatum_out=None, **kwargs):
