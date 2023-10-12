@@ -279,7 +279,7 @@ def get_vdatum_by_name(datum_name):
 ## also generate an associated uncertainty grid
 ## ==============================================
 class VerticalTransform:    
-    def __init__(self, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
+    def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
                  geoid_in=None, geoid_out='g2018', verbose=True, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
@@ -292,6 +292,7 @@ class VerticalTransform:
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
+        self.mode = mode
         
     def _frames(self, epsg_in, epsg_out):
         if epsg_in in _tidal_frames.keys():
@@ -380,7 +381,7 @@ class VerticalTransform:
             #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
-                _trans_in = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
+                _trans_in = waffles.WaffleFactory(mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
                                                   xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
                                                   cache_dir=self.cache_dir, dst_srs='epsg:4326', node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_in.initialize()
@@ -406,8 +407,7 @@ class VerticalTransform:
             #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
             if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
-
-                _trans_out = waffles.WaffleFactory(mod='IDW', data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
+                _trans_out = waffles.WaffleFactory(mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
                                                    xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
                                                    cache_dir=self.cache_dir, node='pixel', verbose=self.verbose)._acquire_module()
                 _trans_out.initialize()

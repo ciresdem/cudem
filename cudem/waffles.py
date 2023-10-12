@@ -1954,14 +1954,30 @@ class WafflesVDatum(Waffle):
     < vdatum:vdatum_in=None:vdatum_out=None >
     """
 
-    def __init__(self, vdatum_in=None, vdatum_out=None, **kwargs):
+    def __init__(self, mode='IDW', vdatum_in=None, vdatum_out=None, **kwargs):
+        self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
+        self.mode = mode
+        self.mode_args = {}
+        if self.mode not in self.valid_modes:
+            self.mode = 'IDW'
+            
+        tmp_waffles = Waffle()
+        tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()
+        for kpam, kval in kwargs.items():
+            if kpam not in tmp_waffles.__dict__:
+                if kpam in tmp_waffles_mode.__dict__:
+                    self.mode_args[kpam] = kval
+
+        for kpam, kval in self.mode_args.items():
+            del kwargs[kpam]
+
         super().__init__(**kwargs)
         self.vdatum_in = vdatum_in
         self.vdatum_out = vdatum_out        
 
     def run(self):
         vdatums.VerticalTransform(
-            self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out,
+            self.mode, self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out,
             cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
         return(self)
