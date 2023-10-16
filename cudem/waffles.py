@@ -249,6 +249,7 @@ class Waffle:
             self._init_data(set_incs=True) 
             
         self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
+        #print('waffles: {} {}'.format(self.xcount, self.ycount))
         self.ds_config = gdalfun.gdal_set_infos(
             self.xcount, self.ycount, (self.xcount*self.ycount), self.dst_gt, gdalfun.osr_wkt(self.dst_srs),
             gdal.GDT_Float32, self.ndv, self.fmt, None, None
@@ -1576,7 +1577,8 @@ class WafflesMBGrid(Waffle):
         
     def run(self):
         mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
-        self.mb_region = self.ps_region.copy()
+        #self.mb_region = self.ps_region.copy()
+        self.mb_region = self.p_region.copy()
         out_name = os.path.join(self.cache_dir, self.name)
         
         # mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
@@ -1620,9 +1622,13 @@ class WafflesMBGrid(Waffle):
         #     utils.echo_msg_bold('NXxdiff: {}'.format(NXxdiff))
         #     utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
 
-        mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-            mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
+        mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node=self.node)
+        #print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
+        #mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+        #    mb_datalist, self.p_region.format('gmt'), self.xcount, self.ycount, out_name, self.dist, self.tension
+        #)
+        mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+            mb_datalist, self.p_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
         )        
         out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
         if status == 0:
@@ -1979,7 +1985,7 @@ class WafflesVDatum(Waffle):
     def run(self):
         vdatums.VerticalTransform(
             self.mode, self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out,
-            cache_dir=waffles_cache
+            node=self.node, cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
         return(self)
     

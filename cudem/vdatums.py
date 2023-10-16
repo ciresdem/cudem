@@ -280,7 +280,7 @@ def get_vdatum_by_name(datum_name):
 ## ==============================================
 class VerticalTransform:    
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
-                 geoid_in=None, geoid_out='g2018', verbose=True, cache_dir=None):
+                 geoid_in=None, geoid_out='g2018', node='pixel', verbose=True, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
@@ -290,8 +290,10 @@ class VerticalTransform:
         self.geoid_out = geoid_out
         self.cache_dir = _vdatum_cache if cache_dir is None else cache_dir
         self.verbose = verbose
-        self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc)
+        self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid')
+        print('transform: {} {}'.format(self.xcount, self.ycount))
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
+        self.node = node
         self.mode = mode
         
     def _frames(self, epsg_in, epsg_out):
@@ -389,6 +391,7 @@ class VerticalTransform:
 
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
+                #print(_trans_in_array.shape)
                 if _trans_in_array is None:
                     _trans_in = None
                 else:
@@ -585,6 +588,9 @@ class VerticalTransform:
                 epsg_in = epsg_out
 
             #print(unc_array)
+            #print(trans_array.shape)
+            #print(tmp_trans.shape)
+            #print(tmp_trans_geoid.shape)
             trans_array = trans_array + tmp_trans + tmp_trans_geoid
             tmp_trans = None
             
@@ -906,8 +912,8 @@ def vdatums_cli(argv = sys.argv):
         
         if _trans_grid is not None:
 
-            print(src_grid)
-            print(gdalfun.gdal_get_srs(src_grid))
+            #print(src_grid)
+            #print(gdalfun.gdal_get_srs(src_grid))
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
             utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(
