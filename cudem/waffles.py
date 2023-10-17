@@ -4586,7 +4586,7 @@ class WaffleDEM:
         
         return(True)
         
-    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node= None,
+    def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
                 percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
                 set_metadata = True, stack_fn = None):
@@ -4631,7 +4631,7 @@ class WaffleDEM:
         ## ==============================================
         self.clip(clip_str=clip_str)
         if region is not None:
-            self.cut(region=region)
+            self.cut(region=region, node='pixel' if node == 'grid' else 'grid')
 
         ## ==============================================
         ## setting limits will change the weights/uncertainty for flattened data
@@ -4650,6 +4650,7 @@ class WaffleDEM:
 
         if self.verbose:
             utils.echo_msg('Processed DEM: {}'.format(self.fn))
+            utils.echo_msg('{}'.format(gdalfun.gdal_infos(self.fn)))
             
     def set_nodata(self, ndv):
         if self.ds_config['ndv'] != ndv:
@@ -4731,9 +4732,9 @@ class WaffleDEM:
             else:
                 utils.echo_error_msg('could not find clip ogr source/clip keyword {}'.format(clip_args['src_ply']))
                 
-    def cut(self, region = None):
+    def cut(self, region = None, node = 'grid'):
         if region is not None:
-            _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node='grid')        
+            _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node)
             if cut_status == 0:
                 os.replace(_tmp_cut, self.fn)
                 self.initialize()
