@@ -1064,7 +1064,7 @@ class ElevationDataset:
                         #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
 
                         self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
-                            vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
+                            'IDW', vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
                             #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
                             #vd_region, '3s', '3s', src_vert, dst_vert,
                             geoid_in=self.src_geoid, geoid_out=self.dst_geoid,

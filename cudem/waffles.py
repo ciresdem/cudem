@@ -276,8 +276,8 @@ class Waffle:
         elif not isinstance(self.region, regions.Region):
             raise ValueError('could not parse region: {}'.format(self.region))
         
-        if self.node == 'grid':
-            self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
+        # if self.node == 'grid':
+        #     self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
             
         self.d_region = self._dist_region()
         self.p_region = self._proc_region()
@@ -537,6 +537,9 @@ class Waffle:
             else:
                 self.run()    
 
+            # if self.node == 'grid':
+            #     self.region = self.region.buffer(x_bv=-self.xinc*.5, y_bv=-self.yinc*.5)
+                
             ## ==============================================
             ## post-process the DEM(s)
             ## ==============================================
@@ -4597,7 +4600,7 @@ class WaffleDEM:
 
         if self.verbose:
             utils.echo_msg('post processing DEM {}...'.format(self.fn))
-        
+            
         if self.ds_config is None:
             self.initialize()
             
@@ -4883,9 +4886,17 @@ class WaffleDEM:
         """
         
         dem_ds = gdal.Open(self.fn, 1)
-        if dem_ds is not None:        
+        if dem_ds is not None:
+            md = self.ds_config['metadata']
+            md['AREA_OR_POINT'] = 'Point'
+            dem_ds.SetMetadata(md)
+            dem_ds = None
+            
+        dem_ds = gdal.Open(self.fn, 1)
+        if dem_ds is not None:
             md = self.ds_config['metadata']
             md['TIFFTAG_DATETIME'] = '{}'.format(utils.this_date())
+
             if node == 'pixel':
                 md['AREA_OR_POINT'] = 'Area'
                 md['NC_GLOBAL#node_offset'] = '1'
@@ -4908,7 +4919,9 @@ class WaffleDEM:
                 vdatum=srs.GetAttrValue('vert_cs')
                 md['TIFFTAG_IMAGEDESCRIPTION'] = '{}; {}'.format(tb, '' if vdatum is None else vdatum)
 
-            dem_ds.SetMetadata(md)
+            if dem_ds.SetMetadata(md) != 0:
+                utils.echo_error_msg('failed to correctly set metadata')
+
             dem_ds = None
 
             if self.verbose:
