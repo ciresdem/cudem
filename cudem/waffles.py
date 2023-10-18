@@ -276,8 +276,8 @@ class Waffle:
         elif not isinstance(self.region, regions.Region):
             raise ValueError('could not parse region: {}'.format(self.region))
         
-        # if self.node == 'grid':
-        #     self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
+        if self.node == 'grid':
+            self.region = self.region.buffer(x_bv=self.xinc*.5, y_bv=self.yinc*.5)
             
         self.d_region = self._dist_region()
         self.p_region = self._proc_region()

@@ -2459,6 +2459,7 @@ class GDALFile(ElevationDataset):
             self.resample_and_warp = True
         else:
             self.resample_and_warp = False
+        self.resample_and_warp = True
 
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
@@ -2523,7 +2524,6 @@ class GDALFile(ElevationDataset):
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
-
             tmp_ds = None
             
             ## the following seems to be redundant...
@@ -2544,7 +2544,7 @@ class GDALFile(ElevationDataset):
                         this_band = self.src_ds.GetRasterBand(band)
                         this_band.WriteArray(warp_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                         self.src_ds.FlushCache()
-                    
+
                 warp_ds = warp_arr = None
                 utils.remove_glob(tmp_warp)
         else:
@@ -2558,6 +2558,8 @@ class GDALFile(ElevationDataset):
             else:
                 self.src_ds = gdal.Open(self.fn)
 
+        self.src_dem_infos = gdalfun.gdal_infos(self.src_ds)
+                
         if self.invert_region:
             src_ds_config = gdalfun.gdal_infos(self.src_ds)
             srcwin = self.warp_region.srcwin(src_ds_config['geoT'], src_ds_config['nx'], src_ds_config['ny'], node='grid')
@@ -2677,8 +2679,8 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.weight_mask) is not None:
                     weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
-                    if self.x_inc is not None and self.y_inc is not None:
-                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.x_inc, self.y_inc,
+                    if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],#self.x_inc, self.y_inc,
                                                          src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
                                                          src_region=self.warp_region, sample_alg=self.sample_alg,
                                                          ndv=ndv, verbose=self.verbose)[0]
@@ -2700,28 +2702,26 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.uncertainty_mask):
                     uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
                 elif os.path.exists(self.uncertainty_mask):
-                    if self.x_inc is not None and self.y_inc is not None:
-                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.x_inc, self.y_inc,
+                    if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
                                                               src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
                                                               src_region=self.warp_region, sample_alg=self.sample_alg,
                                                               ndv=ndv, verbose=self.verbose)[0]
                     else:
                         src_uncertainty = gdal.Open(self.uncertainty_mask)
-
                     uncertainty_band = src_uncertainty.GetRasterBand(1)
                 else:
                     utils.echo_warning_msg('could not load uncertainty mask {}'.format(self.uncertainty_mask))
                     uncertainty_band = None
-
-
+                    
             if self.trans_fn_unc_full is not None:
-                if self.x_inc is not None and self.y_inc is not None:
-                    trans_uncertainty = gdal.Open(self.trans_fn_unc_full)
-                else:
-                    trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, self.dem_infos['geoT'][1], self.dem_infos['geoT'][5],
-                                                            src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_dst_trans_srs,
+                if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                    trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
+                                                            src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_src_trans_srs,
                                                             src_region=self.warp_region, sample_alg=self.sample_alg,
                                                             ndv=ndv, verbose=self.verbose)[0]
+                else:
+                    trans_uncertainty = gdal.Open(self.trans_fn_unc_full)
                     
                 if uncertainty_band is not None:
                     trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
