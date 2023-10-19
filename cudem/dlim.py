@@ -146,7 +146,7 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
-def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid=None,xy_inc=(None, None),
+def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
               sample_alg='bilinear', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
               want_sm=False, invert_region=False, cache_dir=None, dump_precision=4):
     """initialize a datalist object from a list of supported dataset entries"""
