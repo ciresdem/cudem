@@ -75,7 +75,7 @@ class Region:
         self.wmax = utils.float_or(wmax)
         self.umin = utils.float_or(umin)
         self.umax = utils.float_or(umax)
-        self.src_srs = utils.str_or(src_srs, 'epsg:4326', False)
+        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
         self.wkt = wkt
 
     def __repr__(self):
@@ -587,7 +587,7 @@ class Region:
         except: pass
         
         dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
-        if dst_trans is None:
+        if dst_trans is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
             return(self)
 
@@ -600,7 +600,7 @@ class Region:
     def transform(self, dst_trans = None):
         """transform the region using dst_trans transformation."""
 
-        if dst_trans is None:
+        if dst_trans is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
             return(self)
 

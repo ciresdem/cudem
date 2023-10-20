@@ -681,7 +681,7 @@ class ElevationDataset:
         #     ...
         """
 
-        _region = self.region
+        _region = self.region.copy()
         self.region = None
         this_region = regions.Region()
         point_count = 0
@@ -710,7 +710,7 @@ class ElevationDataset:
             self.infos.wkt = this_region.export_as_wkt()
             
         self.infos.src_srs = self.src_srs
-        self.region = _region
+        self.region = _region.copy()
         return(self.infos)
     
     def yield_xyz(self):
@@ -1006,13 +1006,15 @@ class ElevationDataset:
                     ) #if self.region is None else self.region.copy()
                 else:
                     vd_region = self.region.copy()
-                    utils.echo_msg(vd_region)
                     vd_region.src_srs = dst_horz
                     vd_region.warp('epsg:4326')
 
+                if not vd_region.valid_p():
+                    utils.echo_warning_msg('failed to generate transformation')
+                    return
+                
                 vd_region.zmin = None
                 vd_region.zmax = None
-
                 vd_region.buffer(pct=5)
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
@@ -2451,7 +2453,7 @@ class GDALFile(ElevationDataset):
         ## ==============================================
         ## set up any transformations and other options
         ## ==============================================
-        self.set_transform()
+        #self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
 
@@ -2489,6 +2491,10 @@ class GDALFile(ElevationDataset):
             else:
                 self.src_ds = gdal.Open(self.fn)
 
+            if self.src_ds is None:
+                #utils.echo_error_msg('could not open input dataset {}'.format(self.fn))
+                return(None)
+                
             ## ==============================================
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
@@ -3001,7 +3007,7 @@ class BAGFile(ElevationDataset):
     def init_ds(self):
         if self.src_srs is None:
             self.src_srs = self.init_srs()
-            self.set_transform()
+            #self.set_transform()
             
     def generate_inf(self, callback=lambda: False):
         if self.src_srs is None:
@@ -3036,11 +3042,14 @@ class BAGFile(ElevationDataset):
             inf_region = regions.Region().from_list(self.infos.minmax)
             bag_region = regions.regions_reduce(bag_region, inf_region)
             bag_region.src_srs = self.infos.src_srs
-            
-            oo.append('MINX={}'.format(bag_region.xmin))
-            oo.append('MAXX={}'.format(bag_region.xmax))
-            oo.append('MINY={}'.format(bag_region.ymin))
-            oo.append('MAXY={}'.format(bag_region.ymax))
+
+            if bag_region.valid_p():
+                oo.append('MINX={}'.format(bag_region.xmin))
+                oo.append('MAXX={}'.format(bag_region.xmax))
+                oo.append('MINY={}'.format(bag_region.ymin))
+                oo.append('MAXY={}'.format(bag_region.ymax))
+            else:
+                bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
         else:
             bag_region = regions.Region().from_list(self.infos.minmax)
             bag_region.src_srs = self.infos.src_srs
