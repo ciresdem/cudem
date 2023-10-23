@@ -1555,20 +1555,25 @@ def sample_warp(
         ndv=-9999, tap=False, size=False, verbose=False
 ):
     """sample and/or warp the src_dem"""
+
+    xcount = ycount = None
     
-    if size:
+    if x_sample_inc is None and y_sample_inc is None:
+        src_infos = gdal_infos(src_dem)
+        xcount = src_infos['nx']
+        ycount = src_infos['ny']
+    
+    if size and (xcount is None and ycount is None):
         xcount, ycount, dst_gt = src_region.geo_transform(
             x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
         )
         x_sample_inc = y_sample_inc = None
-    else:
-        xcount = ycount = None
 
     if src_region is not None:
         out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
     else: 
         out_region = None
-
+        
     if verbose:
         utils.echo_msg(
             'warping DEM: {} :: R:{} E:{}/{} S{} P{} -> T{}'.format(

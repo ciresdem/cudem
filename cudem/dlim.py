@@ -1005,6 +1005,9 @@ class ElevationDataset:
                 vd_region.zmin = None
                 vd_region.zmax = None
                 vd_region.buffer(pct=5)
+                ## ==============================================
+                ## trans_fn is the transformation grid, used in gdalwarp
+                ## ==============================================
                 self.trans_fn = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                     src_vert,
                     dst_vert,
