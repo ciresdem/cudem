@@ -794,10 +794,10 @@ def gdal_get_array(src_gdal, band = 1):
         src_array = np.ndarray.astype(src_array, dtype=np.float32)
 
         if src_offset is not None:
-            src_array += offset
+            src_array += src_offset
 
         if src_scale is not None:
-            src_array *= scale
+            src_array *= src_scale
 
     return(src_array, infos)
 

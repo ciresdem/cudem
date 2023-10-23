@@ -1581,7 +1581,7 @@ class WafflesMBGrid(Waffle):
     def run(self):
         mb_datalist = self.stack2mbdatalist() if self.use_stack else self.data.fn
         #self.mb_region = self.ps_region.copy()
-        self.mb_region = self.p_region.copy()
+        self.mb_region = self.ps_region.copy()
         out_name = os.path.join(self.cache_dir, self.name)
         
         # mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
@@ -1626,13 +1626,13 @@ class WafflesMBGrid(Waffle):
         #     utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
 
         mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node=self.node)
-        #print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
-        #mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-        #    mb_datalist, self.p_region.format('gmt'), self.xcount, self.ycount, out_name, self.dist, self.tension
-        #)
-        mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-            mb_datalist, self.p_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
-        )        
+        print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
+        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+            mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
+        )
+        #mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+        #    mb_datalist, self.mb_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
+        #)        
         out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
         if status == 0:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
