@@ -911,8 +911,9 @@ class ElevationDataset:
         if check_hash:
             generate_inf = self.infos.generate_hash() != self.infos.file_hash
 
-        if self.remote:
-            generate_inf = False
+        ## this being set can break some modules (bags esp)
+        #if self.remote:
+        #    generate_inf = False
 
         if generate_inf:
             self.infos = self.generate_inf()
@@ -951,7 +952,6 @@ class ElevationDataset:
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
-            #utils.echo_msg('{} -> {}'.format(self.src_srs, self.dst_srs))
             tmp_src_srs = self.src_srs.split('+geoid:')
             src_srs = tmp_src_srs[0]
             if len(tmp_src_srs) > 1:
@@ -962,7 +962,6 @@ class ElevationDataset:
             if len(tmp_dst_srs) > 1:
                 self.dst_geoid = tmp_dst_srs[1]
                 
-            #utils.echo_msg_bold(self.dst_srs)
             ## ==============================================
             ## parse out the horizontal and vertical epsgs if they exist
             ## ==============================================
@@ -984,18 +983,8 @@ class ElevationDataset:
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
             ## ==============================================
-            #utils.echo_msg(self.src_geoid)
-            #utils.echo_msg(self.dst_geoid)
-            # utils.echo_msg(src_vert)
-            # utils.echo_msg(dst_vert)
-            # utils.echo_msg(self.src_geoid)
-            # utils.echo_msg(self.dst_geoid)
             if ((dst_vert is not None) and (src_vert is not None)) and ((str(dst_vert) != str(src_vert)) or \
                (self.src_geoid is not None and self.dst_geoid is not None) and (self.src_geoid != self.dst_geoid)):
-                # if len(self.infos.minmax) == 0:
-                #     #self.initialize()
-                #     self.inf()
-
                 if self.region is None:
                     vd_region = regions.Region(
                         src_srs=src_horz
@@ -1022,16 +1011,16 @@ class ElevationDataset:
                     vd_region.format('fn')
                 ))
 
-                #if self.x_inc is not None:
+                ## ==============================================
+                ## trans_fn_full is a transformation grid that has the same
+                ## dimensions as the input region/dims
+                ## ==============================================
                 self.trans_fn_full = os.path.join(self.cache_dir, '_vdatum_trans_{}_{}_{}_{}.tif'.format(
                     src_vert,
                     dst_vert,
                     vd_region.format('fn'),
                     utils.inc2str(self.x_inc) if self.x_inc is not None else 'n'
                 ))
-                #else:
-                #    self.trans_fn_full = utils.make_temp_fn(self.trans_fn)
-                    
                 self.trans_fn_unc = '{}_unc.{}'.format(utils.fn_basename2(self.trans_fn), utils.fn_ext(self.trans_fn))
                 self.trans_fn_unc_full = '{}_unc.{}'.format(utils.fn_basename2(self.trans_fn_full), utils.fn_ext(self.trans_fn_full))
 
@@ -1044,36 +1033,24 @@ class ElevationDataset:
                             leave=self.verbose
                     ) as pbar:
                         vd_x_inc = utils.str2inc('3s')
-                        vd_y_inc = utils.str2inc('3s')
-                        
+                        vd_y_inc = utils.str2inc('3s')                        
                         xcount, ycount, dst_gt = vd_region.geo_transform(
                             x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                         )
 
-                        #utils.echo_warning_msg(vd_region)
-                        #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
                         while (xcount <=10 or ycount <=10):
-                            
-                            #if xcount <= 1 or ycount <= 1:
                             vd_x_inc /= 2
                             vd_y_inc /= 2
-                            #vd_y_inc = self.y_inc
                             xcount, ycount, dst_gt = vd_region.geo_transform(
                                 x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
                             )
-                            #utils.echo_warning_msg('{} {}'.format(xcount, ycount))
-
-                        #utils.echo_warning_msg('{} {}'.format(vd_x_inc, vd_y_inc))
 
                         self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
                             'IDW', vd_region, vd_x_inc, vd_y_inc, src_vert, dst_vert,
-                            #vd_region, self.x_inc, self.y_inc, src_vert, dst_vert,
-                            #vd_region, '3s', '3s', src_vert, dst_vert,
                             geoid_in=self.src_geoid, geoid_out=self.dst_geoid,
                             cache_dir=self.cache_dir,
                             verbose=False
                         ).run(outfile=self.trans_fn)
-                        #assert os.path.exists(self.trans_fn)
                 else:
                     utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert))
 
@@ -1097,9 +1074,6 @@ class ElevationDataset:
                         if utils.str_or(dst_vert) == '6360' or 'us-ft' in utils.str_or(dst_vert, ''):
                             out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
                             self.trans_from_meter = True
-
-                        #utils.echo_msg_bold(out_src_srs)
-                        #utils.echo_msg_bold(out_dst_srs)
                     else:
                         utils.echo_error_msg(
                             'failed to generate vertical transformation grid between {} and {} for this region!'.format(
@@ -3042,14 +3016,14 @@ class BAGFile(ElevationDataset):
             inf_region = regions.Region().from_list(self.infos.minmax)
             bag_region = regions.regions_reduce(bag_region, inf_region)
             bag_region.src_srs = self.infos.src_srs
-
-            if bag_region.valid_p():
-                oo.append('MINX={}'.format(bag_region.xmin))
-                oo.append('MAXX={}'.format(bag_region.xmax))
-                oo.append('MINY={}'.format(bag_region.ymin))
-                oo.append('MAXY={}'.format(bag_region.ymax))
-            else:
+            
+            if not bag_region.valid_p():
                 bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            
+            oo.append('MINX={}'.format(bag_region.xmin))
+            oo.append('MAXX={}'.format(bag_region.xmax))
+            oo.append('MINY={}'.format(bag_region.ymin))
+            oo.append('MAXY={}'.format(bag_region.ymax))
         else:
             bag_region = regions.Region().from_list(self.infos.minmax)
             bag_region.src_srs = self.infos.src_srs
