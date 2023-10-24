@@ -543,7 +543,9 @@ class VerticalTransform:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
+            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
+            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
@@ -563,17 +565,18 @@ class VerticalTransform:
                     unc_array = np.sqrt(unc_array**2 + float(_cdn_reference_frames[epsg_out]['uncertainty'] ** 2))
                     cg, cv = self._cdn_transform(epsg=epsg_out, invert=True)
                     unc_array = np.sqrt(unc_array**2 + float(_geoids[self.geoid_out]['uncertainty'] ** 2))
-                    gg, gv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=True)
+                    #gg, gv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=True)
                     hg, v = self._htdp_transform(epsg_in, cv)
                     tmp_trans = cg + hg
                     epsg_in = epsg_out
             elif ref_in == 'cdn':
-
                 if ref_out == 'cdn':
                     ## todo: only do geoid transforms with 5703 (navd88)
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
-                    cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
-                    tmp_trans = tmp_trans + cg
+                    if epsg_in == 5703:
+                        cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
+                        tmp_trans = tmp_trans + cg
+                        
                     epsg_in = cv
                 elif ref_out == 'tidal':
                     tmp_trans, tv = self._tidal_transform('tss', _tidal_frames[self.epsg_out]['name'])
@@ -591,6 +594,10 @@ class VerticalTransform:
             #print(trans_array.shape)
             #print(tmp_trans.shape)
             #print(tmp_trans_geoid.shape)
+            #print(trans_array)
+            #print(tmp_trans)
+            #print(tmp_trans_geoid)
+            
             trans_array = trans_array + tmp_trans + tmp_trans_geoid
             tmp_trans = None
             
