@@ -681,8 +681,11 @@ class ElevationDataset:
         #     ...
         """
 
-        _region = self.region.copy()
-        self.region = None
+        _region = None
+        if self.region is not None:
+            _region = self.region.copy()
+            self.region = None
+            
         this_region = regions.Region()
         point_count = 0
         for point_count, point in enumerate(self.yield_xyz()):
@@ -710,7 +713,9 @@ class ElevationDataset:
             self.infos.wkt = this_region.export_as_wkt()
             
         self.infos.src_srs = self.src_srs
-        self.region = _region.copy()
+        if _region is not None:
+            self.region = _region.copy()
+            
         return(self.infos)
     
     def yield_xyz(self):

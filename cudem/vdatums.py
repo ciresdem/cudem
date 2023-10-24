@@ -291,7 +291,7 @@ class VerticalTransform:
         self.cache_dir = _vdatum_cache if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid')
-        print('transform: {} {}'.format(self.xcount, self.ycount))
+        #print('transform: {} {}'.format(self.xcount, self.ycount))
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         self.node = node
         self.mode = mode
