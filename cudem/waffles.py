@@ -1625,14 +1625,14 @@ class WafflesMBGrid(Waffle):
         #     utils.echo_msg_bold('NXxdiff: {}'.format(NXxdiff))
         #     utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
 
-        mb_xcount, mb_ycount, mb_gt = self.mb_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node=self.node)
+        mb_xcount, mb_ycount, mb_gt = self.ps_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node=self.node)
         print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
-        mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-            mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
-        )
-        #mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-        #    mb_datalist, self.mb_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
-        #)        
+        # mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+        #     mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
+        # )
+        mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
+           mb_datalist, self.mb_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
+        )        
         out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
         if status == 0:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
@@ -3154,7 +3154,8 @@ class WafflesCUDEM(Waffle):
             tmp_pre = self.pre_count - len(self.weight_levels)
             while tmp_pre >= 0:
                 if len(self.weight_levels) == 0:
-                    tmp_weight = gdalfun.gdal_percentile(self.stack, perc=75, band=3)
+                    tmp_weight = gdalfun.gdal_percentile(self.stack, perc=75, band=3) # self.stack isn't set yet!
+                    tmp_weight = utils.float_or(tmp_weight, 1)
                 else:
                     tmp_weight = self.weight_levels[-1]/(tmp_pre + 1)
                     if tmp_weight == 0:
@@ -3311,7 +3312,7 @@ class WafflesCUDEM(Waffle):
             waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
             utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=None, ysample=None,
-                                        name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
+                                        name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=False,#self.verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
@@ -4634,7 +4635,7 @@ class WaffleDEM:
         ## ==============================================
         self.clip(clip_str=clip_str)
         if region is not None:
-            self.cut(region=region, node='pixel' if node == 'grid' else 'grid')
+            self.cut(region=region, node='grid')#'pixel' if node == 'grid' else 'grid')
 
         ## ==============================================
         ## setting limits will change the weights/uncertainty for flattened data
