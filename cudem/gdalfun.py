@@ -765,6 +765,7 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
             ds_band = src_ds.GetRasterBand(band)
             ds_array = ds_band.ReadAsArray()
             if ds_array is None:
+                utils.echo_error_msg('could read data from datasource {}'.format(src_gdal))
                 return(None, -1)
         except:
             utils.echo_error_msg('could read data from datasource {}'.format(src_gdal))

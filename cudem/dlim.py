@@ -434,7 +434,6 @@ class stacks_ds(threading.Thread):
 ##
 ## containing information about datasets
 ## ==============================================
-
 class INF:
     def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
                  fmt = None, src_srs = None):
@@ -1489,14 +1488,17 @@ class ElevationDataset:
             ## ==============================================
             for arrs, srcwin, gt in this_entry.yield_array():
                 #for arrs, srcwin, gt in array_yield:
-
+                #utils.echo_msg(srcwin)
+                #utils.echo_msg(arrs['z'].shape)
                 ## ==============================================
                 ## update the mask
                 ## ==============================================
+                #utils.echo_msg('ok')
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                #utils.echo_msg_bold('read')
                 m_array[arrs['count'] != 0] = 1
                 m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-
+                #utils.echo_msg_bold('write')
                 if mask_only:
                     continue
 
@@ -2435,7 +2437,7 @@ class GDALFile(ElevationDataset):
         ## ==============================================
         ## set up any transformations and other options
         ## ==============================================
-        #self.set_transform()
+        self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
 
@@ -2474,7 +2476,6 @@ class GDALFile(ElevationDataset):
                 self.src_ds = gdal.Open(self.fn)
 
             if self.src_ds is None:
-                #utils.echo_error_msg('could not open input dataset {}'.format(self.fn))
                 return(None)
                 
             ## ==============================================
@@ -2912,7 +2913,7 @@ class GDALFile(ElevationDataset):
                 utils.remove_glob(self.tmp_weight_band)
                 
             if self.verbose:
-                utils.echo_msg(
+                utils.echo_msg_bold(
                     'parsed {} data records from {}{}'.format(
                         count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                     )
@@ -2989,7 +2990,7 @@ class BAGFile(ElevationDataset):
     def init_ds(self):
         if self.src_srs is None:
             self.src_srs = self.init_srs()
-            #self.set_transform()
+            self.set_transform()
             
     def generate_inf(self, callback=lambda: False):
         if self.src_srs is None:
@@ -3027,7 +3028,7 @@ class BAGFile(ElevationDataset):
             
             if not bag_region.valid_p():
                 bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-            
+
             oo.append('MINX={}'.format(bag_region.xmin))
             oo.append('MAXX={}'.format(bag_region.xmax))
             oo.append('MINY={}'.format(bag_region.ymin))
@@ -3051,7 +3052,7 @@ class BAGFile(ElevationDataset):
 
                 for sub_dataset in sub_datasets:
                     sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                      weight=self.weight, src_region=bag_region, x_inc=self.x_inc, y_inc=self.y_inc,
+                                      weight=self.weight, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
                                       verbose=self.verbose, check_path=False, super_grid=True)
                     sub_ds.infos = {}
                     sub_ds.generate_inf()
@@ -3061,7 +3062,7 @@ class BAGFile(ElevationDataset):
                 oo.append("MODE=RESAMPLED_GRID")
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                  weight=self.weight, src_region=bag_region, x_inc=self.x_inc, y_inc=self.y_inc,
+                                  weight=self.weight, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
                                   verbose=self.verbose, uncertainty_mask=2)
                 yield(sub_ds)
         else:
@@ -3528,7 +3529,7 @@ class Datalist(ElevationDataset):
         source datalist.
         """
 
-        #self.set_transform()
+        self.set_transform()
         self.dst_layer = '{}'.format(self.fn)
         self.dst_vector = self.dst_layer + '.json'
 
