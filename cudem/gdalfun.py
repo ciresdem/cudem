@@ -759,10 +759,16 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
     """extract a band from the src_gdal file"""
     
     band = utils.int_or(band, 1)
-    with gdal_datasource(src_gdal) as src_ds:        
-        ds_config = gdal_infos(src_ds)
-        ds_band = src_ds.GetRasterBand(band)
-        ds_array = ds_band.ReadAsArray()
+    with gdal_datasource(src_gdal) as src_ds:
+        try:
+            ds_config = gdal_infos(src_ds)
+            ds_band = src_ds.GetRasterBand(band)
+            ds_array = ds_band.ReadAsArray()
+            if ds_array is None:
+                return(None, -1)
+        except:
+            utils.echo_error_msg('could read data from datasource {}'.forat(src_gdal))
+            return(None, -1)
 
     if ds_config['ndv'] is None:
         ds_config['ndv'] = -9999
@@ -773,7 +779,7 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
 
     if inverse:
         ds_array = 1/ds_array
-            
+
     return(gdal_write(ds_array, dst_gdal, ds_config))
 
 def gdal_get_array(src_gdal, band = 1):
