@@ -767,7 +767,7 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
             if ds_array is None:
                 return(None, -1)
         except:
-            utils.echo_error_msg('could read data from datasource {}'.forat(src_gdal))
+            utils.echo_error_msg('could read data from datasource {}'.format(src_gdal))
             return(None, -1)
 
     if ds_config['ndv'] is None:
