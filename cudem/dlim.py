@@ -3108,7 +3108,7 @@ class MBSParser(ElevationDataset):
     mb_exclude=[]
     """
 
-    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False, **kwargs):
+    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = True, **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
