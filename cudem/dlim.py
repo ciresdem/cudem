@@ -684,7 +684,7 @@ class ElevationDataset:
         if self.region is not None:
             _region = self.region.copy()
             self.region = None
-            
+
         this_region = regions.Region()
         point_count = 0
         for point_count, point in enumerate(self.yield_xyz()):
@@ -3108,10 +3108,11 @@ class MBSParser(ElevationDataset):
     mb_exclude=[]
     """
 
-    def __init__(self, mb_fmt = None, mb_exclude = 'A', **kwargs):
+    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False, **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
+        self.want_mbgrid = want_mbgrid
              
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -3189,12 +3190,20 @@ class MBSParser(ElevationDataset):
         return(self)
 
     def parse_(self):
-        if self.x_inc is not None and self.y_inc is not None:        
+
+        if self.region is None and not regions.Region().from_list(self.infos.minmax).valid_p():
+            self.want_mbgrid = False
+        
+        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
             with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
                 tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
 
             ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-            mbgrid_region = self.region.copy()
+            if self.region is not None:
+                mbgrid_region = self.region.copy()
+            else:
+                mbgrid_region = regions.Region().from_list(self.infos.minmax)
+
             mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
             utils.run_cmd(
                 'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
@@ -3215,21 +3224,33 @@ class MBSParser(ElevationDataset):
     def yield_array(self):
         for ds in self.parse_():
             if ds is not None:
-                for arr in ds.yield_array():
-                    yield(arr)
+                for arrs in ds.yield_array():
+                    yield(arrs)
             else:
-                utils.echo_error_msg('could not parse MBS data {}'.format(self.fn))
+                for arrs in self.yield_block_array():
+                    yield(arrs)
+                #utils.echo_error_msg('could not parse MBS data {}'.format(self.fn))
 
     def yield_xyz(self):
         for ds in self.parse_():
             if ds is None:
+                count = 0
                 for line in utils.yield_cmd(
                         'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), self.fn),
                         verbose=True,
                 ):
                     this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
                     this_xyz.weight = self.weight
+                    count += 1
                     yield(this_xyz)
+
+                if self.verbose:
+                    utils.echo_msg_bold(
+                        'parsed {} data records from {}{}'.format(
+                            count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+                    
             else:
                 for xyz in ds.yield_xyz():
                     yield(xyz)
@@ -4033,6 +4054,8 @@ class ZIPlist(ElevationDataset):
 ## information, such as with Copernicus, whose nodata value is not
 ## specified in the geotiff files, it may be best to create a simple
 ## sub-class for it.
+##
+## todo: add multibeamFetcher
 ## ==============================================
 class Fetcher(ElevationDataset):
     """The generic fetches dataset type.

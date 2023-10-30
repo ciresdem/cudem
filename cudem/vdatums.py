@@ -31,6 +31,7 @@ import numpy as np
 
 from osgeo import gdal
 from osgeo import ogr
+from osgeo import osr
 
 from cudem import regions
 from cudem import gdalfun
@@ -892,15 +893,13 @@ def vdatums_cli(argv = sys.argv):
         src_infos = gdalfun.gdal_infos(src_grid)
 
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
-        grid_srs = gdalfun.gdal_get_srs(src_grid)
-        #print(grid_srs)
-        src_region.src_srs = gdalfun.gdal_get_srs(src_grid)
-        #print(src_region.src_srs)
-
+        src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(src_grid))
+        src_region.src_srs = src_horz
+        
         trans_region = src_region.copy()
+        trans_region.src_srs = src_horz
         trans_region.warp()
         trans_region.buffer(pct=2)
-
         trans_region._wgs_extremes()
         
         #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
@@ -910,8 +909,8 @@ def vdatums_cli(argv = sys.argv):
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
         
-        vt = VerticalTransform(trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
-        _trans_grid = vt.run()
+        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
+        _trans_grid, _trans_grid_unc = vt.run()
         out_trans_grid = utils.make_temp_fn('_trans_grid.tif')
         
         if os.path.exists(out_trans_grid):
@@ -951,7 +950,16 @@ def vdatums_cli(argv = sys.argv):
             gdc_cmd = 'gdal_calc.py -A {} -B {} --calc "A+B" --outfile {} --co COMPRESS=LZW --co TILED=YES --co PREDICTOR=3 --overwrite'.format(
                 src_grid.replace(' ', '\ '), out_trans_grid.replace(' ', '\ '), dst_grid.replace(' ', '\ '))
             os.system(gdc_cmd)
-                
+
+            out_horz_srs = osr.SpatialReference()
+            out_horz_srs.SetFromUserInput(src_horz)
+            out_vert_srs = osr.SpatialReference()
+            out_vert_srs.SetFromUserInput('epsg:{}'.format(vdatum_out))
+            out_src_srs = osr.SpatialReference()
+            out_src_srs.SetCompoundCS('Combined'.format(out_horz_srs, out_vert_srs), out_horz_srs, out_vert_srs)
+            
+            gdalfun.gdal_set_srs(dst_grid.replace(' ', '\ '), out_src_srs.ExportToWkt())
+            
         else:
             utils.echo_error_msg('could not parse input/output vertical datums: {} -> {}; check spelling, etc'.format(vdatum_in, vdatum_out))
 
