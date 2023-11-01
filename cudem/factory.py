@@ -232,6 +232,7 @@ class CUDEMFactory:
         
         if self.mod is not None:
             self._parse_mod(self.mod)
+
         #elif self.kwargs['fn'] is not None:
         #    self._parse_mod(self.kwargs['fn'])
 
@@ -266,8 +267,9 @@ class CUDEMFactory:
         #if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
         self.kwargs['params'] = self.__dict__
 
-        m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
-        return(m(self.mod_args, self.kwargs))
+        if self.mod_name is not None:
+            m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
+            return(m(self.mod_args, self.kwargs))
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))
 
     def load_parameter_dict(self, param_dict: dict):

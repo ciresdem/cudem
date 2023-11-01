@@ -95,6 +95,8 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
     split_val (float): an elevation value (only filter below this value)
     """
 
+    tmp_file = True
+    
     def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
         """filter `src_dem` using GMT grdfilter"""
 
@@ -114,8 +116,11 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
                 src_dem, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
                 node = node, verbose = True)
         elif int(fltr) == 3:
-            out, status = gdalfun.filter_outliers(
-                src_dem, 'tmp_fltr.tif', agg_level=fltr_val if fltr_val is not None else 5, replace=True)
+            out, status = gdalfun.gdal_filter_outliers2(
+                src_dem, None, replace=True, percentile=utils.float_or(fltr_val, 95)
+            )
+            tmp_file = False
+            
         else:
             utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
             out, status = gdalfun.gdal_blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
@@ -147,7 +152,8 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
 
                     utils.remove_glob('tmp_fltr.tif')
         else:
-            os.replace('tmp_fltr.tif', dst_dem)
+            if tmp_file:
+                os.replace('tmp_fltr.tif', dst_dem)
         return(0)
     
     else:
@@ -4683,7 +4689,8 @@ class WaffleDEM:
                     if waffles_filter(
                             self.fn, filter_fn, fltr=fltr, fltr_val=fltr_val, split_val=split_val,
                     ) == 0:
-                        os.replace(filter_fn, self.fn)
+                        if int(fltr) != 3:
+                            os.replace(filter_fn, self.fn)
 
                     if self.verbose:
                         utils.echo_msg('filtered data using {}.'.format(f))

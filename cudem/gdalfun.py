@@ -60,13 +60,29 @@ def split_srs(srs, as_epsg = False):
     list: [horz_srs, vert_srs]
     """
 
+    vert_epsg = None
+    vert_wkt = None
     if srs is None:
         return(None, None)
-    
+
+    if srs.split(':')[0] == 'ESRI':
+        esri_split = srs.split('+')
+        if len(esri_split) > 1:
+            vert_epsg = srs.split('+')[1]
+            vert_srs = osr.SpatialReference()
+            vert_srs.SetFromUserInput('EPSG:{}'.format(vert_epsg))
+            vert_wkt = vert_srs.ExportToWkt()
+            
+        srs = esri_split[0]
+        
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(srs)
+    #try:
     srs_wkt = src_srs.ExportToWkt()
     wkt_CRS = CRS.from_wkt(srs_wkt)
+    #except:
+    #    return(None, None)
+    
     if wkt_CRS.is_compound:
         horz = wkt_CRS.sub_crs_list[0]
         horz_epsg = horz.to_epsg()
@@ -78,9 +94,6 @@ def split_srs(srs, as_epsg = False):
         horz = wkt_CRS
         horz_epsg = horz.to_epsg()
         horz_wkt = horz.to_wkt()
-        vert = None
-        vert_epsg = None
-        vert_wkt = None
 
     if as_epsg:
         return(horz_epsg if horz_epsg is not None else horz_wkt, vert_epsg if vert_epsg is not None else vert_wkt)
@@ -142,6 +155,19 @@ def epsg_from_input(in_srs):
     Returns:
     list: [horz_epsg, vert_epsg]
     """
+
+    src_vert = None
+    if in_srs.split(':')[0] == 'ESRI':
+        esri_split = in_srs.split('+')
+        if len(esri_split) > 1:
+            vert_epsg = in_srs.split('+')[1]
+            vert_srs = osr.SpatialReference()
+            vert_srs.SetFromUserInput('EPSG:{}'.format(vert_epsg))
+            vert_wkt = vert_srs.ExportToWkt()
+
+            src_vert = vert_epsg
+            
+        in_srs = esri_split[0]
     
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
@@ -158,6 +184,8 @@ def epsg_from_input(in_srs):
 
     if src_horz is None:
         src_horz = src_srs.ExportToProj4()
+        if src_horz == '':
+            src_horz = src_srs.ExportToWkt()
     else:
         src_horz = '{}:{}'.format(an, src_horz)
         
@@ -165,8 +193,8 @@ def epsg_from_input(in_srs):
     if src_srs.IsVertical() == 1:
         csvtype = 'VERT_CS'
         src_vert = src_srs.GetAuthorityCode(csvtype)
-    else:
-        src_vert = None
+    #else:
+    #    src_vert = None
 
     return(src_horz, src_vert)
 

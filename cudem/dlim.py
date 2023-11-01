@@ -4099,16 +4099,17 @@ class Fetcher(ElevationDataset):
         for result in self.fetch_module.results:
             if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
                 for this_ds in self.yield_ds(result):
-                    f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
-                    if f_name == '.':
-                        f_name = this_ds.fn
-                        
-                    this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
-                    this_ds.remote = True
-                    this_ds.initialize()
-                    yield(this_ds)
-                    if not self.keep_fetched_data:
-                        utils.remove_glob(this_ds.fn)
+                    if this_ds is not None:
+                        f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
+                        if f_name == '.':
+                            f_name = this_ds.fn
+
+                        this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
+                        this_ds.remote = True
+                        this_ds.initialize()
+                        yield(this_ds)
+                        if not self.keep_fetched_data:
+                            utils.remove_glob(this_ds.fn)
             
         if not self.keep_fetched_data:
             utils.remove_glob(self.fn)
@@ -4860,7 +4861,7 @@ class DatasetFactory(factory.CUDEMFactory):
             entry.append(self.kwargs['metadata']['url'])
         else:
             self.kwargs['metadata']['url'] = entry[11]
-        
+
         return(self.mod_name, self.mod_args)
 
     def set_default_weight(self):
@@ -5128,11 +5129,11 @@ def datalists_cli(argv=sys.argv):
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
                     try:
-                       if want_separate: # process and dump each dataset independently
-                           for this_entry in this_datalist.parse():
-                               this_entry.dump_xyz()
-                       else: # process and dump the datalist as a whole
-                           this_datalist.dump_xyz()
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
                     except KeyboardInterrupt:
                        utils.echo_error_msg('Killed by user')
                        break
