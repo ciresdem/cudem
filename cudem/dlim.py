@@ -4183,7 +4183,7 @@ class GMRTFetcher(Fetcher):
                         b.WriteArray(a)
                         gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
                     
-        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', mask=self.mask, 
+        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', #mask=self.mask, 
                              src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
                              invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,

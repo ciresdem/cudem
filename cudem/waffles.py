@@ -5445,7 +5445,7 @@ def waffles_cli(argv = sys.argv):
     ## ==============================================
     ## remove the cahce dir if not asked to keep
     ## ==============================================
-    #if not keep_cache:
-    #    utils.remove_glob(wg['cache_dir'])
+    if not keep_cache:
+       utils.remove_glob(wg['cache_dir'])
 
 ### End

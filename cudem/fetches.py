@@ -337,13 +337,17 @@ class Fetch:
             #raise ConnectionError('Maximum attempts at connecting have failed.')
         
         try:
-            return(
-                requests.get(
-                    self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify
-                )
+            req = requests.get(
+                self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify
             )
         except:
-            return(self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10))
+            req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
+
+        if req.status_code != 200:
+            utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
+            req = None
+            
+        return(req)
             
     def fetch_html(self, timeout=2):
         """fetch src_url and return it as an HTML object"""
@@ -1708,6 +1712,7 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
         _data = {'where': self.where, 'outFields': '*', 'geometry': self.region.format('bbox'),
                  'inSR':4326, 'outSR':4326, 'f':'pjson', 'returnGeometry':'False'}
         _req = Fetch(self._nos_query_url, verbose=self.verbose).fetch_req(params=_data)
+
         if _req is not None:
             features = _req.json()
             for feature in features['features']:
