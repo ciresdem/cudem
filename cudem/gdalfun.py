@@ -783,7 +783,7 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
         
     return(mem_ds)
 
-def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = False):
+def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None, inverse = False):
     """extract a band from the src_gdal file"""
     
     band = utils.int_or(band, 1)
@@ -791,12 +791,16 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], inverse = Fals
         try:
             ds_config = gdal_infos(src_ds)
             ds_band = src_ds.GetRasterBand(band)
-            ds_array = ds_band.ReadAsArray()
+            if srcwin is not None:
+                ds_array = ds_band.ReadAsArray(*srcwin)
+            else:
+                ds_array = ds_band.ReadAsArray()
+                                
             if ds_array is None:
-                utils.echo_error_msg('could read data from datasource {}'.format(src_gdal))
+                utils.echo_error_msg('could not read data from datasource {}'.format(src_gdal))
                 return(None, -1)
         except:
-            utils.echo_error_msg('could read data from datasource {}'.format(src_gdal))
+            utils.echo_error_msg('could not read data from datasource {}'.format(src_gdal))
             return(None, -1)
 
     if ds_config['ndv'] is None:

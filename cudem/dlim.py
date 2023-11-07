@@ -2488,11 +2488,26 @@ class GDALFile(ElevationDataset):
             in_bands = self.src_ds.RasterCount
             self.src_ds = None
             if in_bands > 1:
+                ## the srcwin for to extract data
+                src_ds_config = gdalfun.gdal_infos(self.fn)
+                src_gt = src_ds_config['geoT']
+                if self.trans_region is not None:
+                    srcwin_region = self.trans_region.copy()
+                elif self.region is not None:
+                    srcwin_region = self.region.copy()
+                else:
+                    srcwin_region = None
+
+                if srcwin_region is not None:
+                    srcwin = srcwin_region.srcwin(src_gt, src_ds_config['nx'], src_ds_config['ny'], node='grid')
+                else:
+                    srcwin = None
+                
                 self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
                 if self.verbose:
                     utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
-
-                gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], inverse=False)
+                    
+                gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], srcwin=srcwin, inverse=False)
                 tmp_ds = self.tmp_elev_band
 
                 if utils.int_or(self.uncertainty_mask) is not None:
@@ -2500,7 +2515,7 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
                         
-                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], inverse=False)
+                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], srcwin=srcwin, inverse=False)
                     self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
@@ -2508,7 +2523,7 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
                         
-                    gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], inverse=False)
+                    gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], srcwin=srcwin, inverse=False)
                     self.weight_mask = self.tmp_weight_band
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,

@@ -343,7 +343,7 @@ class Fetch:
         except:
             req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
 
-        if req.status_code != 200:
+        if req is not None and req.status_code != 200:
             utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
             req = None
             
@@ -1844,13 +1844,14 @@ Fields:
         _req = Fetch(self._ehydro_query_url).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
-            for feature in features['features']:
-                fetch_fn = feature['attributes']['sourcedatalocation']
-                if self.survey_name is not None:
-                    if self.survey_name in fetch_fn:
+            if 'features' in features.keys():
+                for feature in features['features']:
+                    fetch_fn = feature['attributes']['sourcedatalocation']
+                    if self.survey_name is not None:
+                        if self.survey_name in fetch_fn:
+                            self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                    else:
                         self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
-                else:
-                    self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
 
