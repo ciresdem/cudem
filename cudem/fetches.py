@@ -1740,6 +1740,101 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                                 self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
 
 ## ==============================================
+## NOAA DEMs
+## doesn't really work well, use ncei_thredds or digital_coast instead...
+## ==============================================
+class DEMMosaic(FetchModule):
+    """
+Fields:
+
+    OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
+    Shape ( type: esriFieldTypeGeometry, alias: Shape )
+    Name ( type: esriFieldTypeString, alias: Name, length: 200 )
+    MinPS ( type: esriFieldTypeDouble, alias: MinPS )
+    MaxPS ( type: esriFieldTypeDouble, alias: MaxPS )
+    LowPS ( type: esriFieldTypeDouble, alias: LowPS )
+    HighPS ( type: esriFieldTypeDouble, alias: HighPS )
+    Category ( type: esriFieldTypeInteger, alias: Category , Coded Values: [0: Unknown] , [1: Primary] , [2: Overview] , ...6 more... )
+    Tag ( type: esriFieldTypeString, alias: Tag, length: 100 )
+    GroupName ( type: esriFieldTypeString, alias: GroupName, length: 100 )
+    ProductName ( type: esriFieldTypeString, alias: ProductName, length: 100 )
+    CenterX ( type: esriFieldTypeDouble, alias: CenterX )
+    CenterY ( type: esriFieldTypeDouble, alias: CenterY )
+    ZOrder ( type: esriFieldTypeInteger, alias: ZOrder )
+    Shape_Length ( type: esriFieldTypeDouble, alias: Shape_Length )
+    Shape_Area ( type: esriFieldTypeDouble, alias: Shape_Area )
+    ZOrder_1 ( type: esriFieldTypeInteger, alias: ZOrder_1 )
+    DEM_ID ( type: esriFieldTypeSmallInteger, alias: DEM_ID )
+    DateCompleted ( type: esriFieldTypeDate, alias: DateCompleted, length: 8 )
+    CellsizeArcseconds ( type: esriFieldTypeSingle, alias: CellsizeArcseconds )
+    DemName ( type: esriFieldTypeString, alias: DemName, length: 100 )
+    MetadataURL ( type: esriFieldTypeString, alias: MetadataURL, length: 250 )
+    VerticalDatum ( type: esriFieldTypeString, alias: VerticalDatum, length: 50 )
+
+    https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer
+
+    """
+    
+    def __init__(self, where='1=1', layer=1, index=False, **kwargs):
+        super().__init__(name='hydronos', **kwargs)
+        self._dem_mosaic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/ImageServer'
+        #self._dem_mosaic_query_url = '{0}/{1}/query?'.format(self._dem_mosaic_url, layer)
+        self._dem_mosaic_query_url = '{0}/query?'.format(self._dem_mosaic_url)
+        self.where = where
+        self.index = index
+        self.data_format = None # bag/xyz data are different, reset later
+        self.src_srs = None # dems vary, set later
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {'where': self.where, 'outFields': '*', 'geometry': self.region.format('bbox'),
+                 'inSR':4326, 'outSR':4326, 'f':'pjson', 'returnGeometry':'False',
+                 'geometryType':'esriGeometryEnvelope', 'spatialRel':'esriSpatialRelIntersects'}
+        _req = Fetch(self._dem_mosaic_query_url, verbose=self.verbose).fetch_req(params=_data)
+
+        if _req is not None:
+            #utils.echo_msg(_req.url)
+            features = _req.json()
+            for feature in features['features']:
+                if self.index:
+                    print(json.dumps(feature['attributes'], indent=4))
+                else:
+                    #utils.echo_msg(feature['attributes']['MetadataURL'])
+                    print(feature)
+                    Name = feature['attributes']['Name']
+                    ID = feature['attributes']['DEM_ID']
+                    link = feature['attributes']['MetadataURL']
+
+                    if link is not None:
+                        utils.echo_msg(Name)
+                        utils.echo_msg(ID)
+                        utils.echo_msg(link)
+
+                        page = Fetch(link).fetch_xml()
+                        print(page)
+                        sys.exit()
+                        
+                    # nos_dir = link.split('/')[-2]
+                    # data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
+
+                    # if self.datatype is None or 'bag' in self.datatype.lower():
+                    #     if feature['attributes']['BAGS_EXIST'] == 'TRUE':
+                    #         page = Fetch(data_link + 'BAG').fetch_html()
+                    #         bags = page.xpath('//a[contains(@href, ".bag")]/@href')
+                    #         #[self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join(self._outdir, 'bag', bag), 'bag']) for bag in bags]
+                    #         [self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join('bag', bag), 'bag']) for bag in bags]
+
+                    # if self.datatype is None or 'xyz' in self.datatype.lower():
+                    #     page = Fetch(data_link).fetch_html()
+                    #     if page is not None:
+                    #         geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
+                    #         if geodas:
+                    #             xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
+                    #             self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
+                                
+## ==============================================
 ## NOAA Trackline
 ## ==============================================
 class Trackline(FetchModule):
@@ -1753,6 +1848,7 @@ http://www.ngdc.noaa.gov/trackline/
         super().__init__(name='trackline', **kwargs)
         #self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_bathymetry/MapServer/0'
         self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_combined_dynamic/MapServer/1'
+        #self._trackline_url = 'https://services2.arcgis.com/C8EMgrsFcRFL6LrL/arcgis/rest/services/trackline_geophysics/FeatureServer/8'
         self._trackline_query_url = '{0}/query?'.format(self._trackline_url)
         self.where = where
         
@@ -1762,12 +1858,15 @@ http://www.ngdc.noaa.gov/trackline/
 
         _data = {'where': self.where, 'outFields': '*', 'geometry': self.region.format('bbox'),
                  'inSR':4326, 'outSR':4326, 'f':'pjson', 'returnGeometry':'False'}
+                 #'geometryType':'esriGeometryEnvelope', 'spatialRel':'esriSpatialRelIntersects'}
         _req = Fetch(self._trackline_query_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
             ids = []
             for feature in features['features']:
                 ids.append(feature['attributes']['SURVEY_ID'])
+                #data_link = feature['attributes']['DOWNLOAD_URL']
+                #utils.echo_msg(data_link)
 
             print('http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids)))
             #xyz_link = 'http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids))
@@ -2244,8 +2343,12 @@ https://coast.noaa.gov
     
 Use where=SQL_QUERY to query the MapServer to filter datasets
 
-< digital_coast:where=None:datatype=None >
-"""
+* For CUDEM tiles, use where="ID=8483" (1/9) or where="ID=8580" (1/3) or where="Name LIKE '%CUDEM%'" for all available.
+* For OCM SLR DEMs, use where="ID=6230" or where="Name LIKE '%Sea Level Rise%'"
+* For USGS CoNED DEMs, use where="ID=9181" or where="Name LIKE '%CoNED%'"
+* To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
+
+< digital_coast:where=None:datatype=None >"""
     
     def __init__(self, where='1=1', index=False, datatype=None, **kwargs):
         super().__init__(name='digital_coast', **kwargs)
