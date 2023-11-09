@@ -268,8 +268,11 @@ class CUDEMFactory:
         self.kwargs['params'] = self.__dict__
 
         if self.mod_name is not None:
-            m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
-            return(m(self.mod_args, self.kwargs))
+            try:
+                m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
+                return(m(self.mod_args, self.kwargs))
+            except Exception as e:
+                utils.echo_error_msg('could not acquire module, {}'.format(e))
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))
 
     def load_parameter_dict(self, param_dict: dict):
