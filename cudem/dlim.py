@@ -80,6 +80,7 @@ import laspy as lp
 import math
 from datetime import datetime
 from tqdm import tqdm
+import shlex
 
 import threading
 import multiprocessing as mp
@@ -4703,7 +4704,12 @@ class DatasetFactory(factory.CUDEMFactory):
         ## if fn is not a path, parse it as a datalist entry
 		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
         ## ==============================================
-        this_entry = re.findall(r'[^"\s]\S*|".+?"', self.kwargs['fn'].rstrip())        
+        #this_entry = re.findall(r'[^"\s]\S*|".+?"', self.kwargs['fn'].rstrip())
+        #this_entry = shlex.split(shlex.quote(self.kwargs['fn'].rstrip()))#.replace("'", "\'")))
+        #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
+        #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
+        this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \
@@ -4743,7 +4749,12 @@ class DatasetFactory(factory.CUDEMFactory):
             else:
                self.mod_args = {}
 
-        assert isinstance(utils.int_or(entry[1]), int)
+        try:
+            assert isinstance(utils.int_or(entry[1]), int)
+        except:
+            utils.echo_error_msg('could not parse datalist entry {}'.format(entry))
+            return(self)
+        
         self.kwargs['data_format'] = int(entry[1])
         self.mod_name = int(entry[1])
         
