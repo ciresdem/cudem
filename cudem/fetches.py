@@ -371,11 +371,29 @@ class Fetch:
 
     def fetch_file(
             self, dst_fn, params=None, datatype=None, overwrite=False,
-            timeout=5, read_timeout=100, tries=5, check_size=True
+            timeout=10, read_timeout=300, tries=5, check_size=True
     ):
         """fetch src_url and save to dst_fn"""
-    
+
+        def retry(resume=False):
+            if 'Range' in self.headers:
+                del self.headers['Range']
+
+            self.fetch_file(
+                dst_fn,
+                params=params,
+                datatype=datatype,
+                overwrite=overwrite,
+                timeout=timeout+5,
+                read_timeout=read_timeout+50,
+                tries=tries-1
+            )
+        
         status = 0
+        dst_fn_size = 0
+        if 'Range' in self.headers:
+            del self.headers['Range']
+
         req = None
         if not os.path.exists(os.path.dirname(dst_fn)):
             try:
@@ -384,11 +402,17 @@ class Fetch:
             
         try:
             try:
-                if not overwrite and not check_size and os.path.exists(dst_fn):
-                    raise UnboundLocalError('{} exists, '.format(dst_fn))
+                if not overwrite and os.path.exists(dst_fn):
+                    if not check_size:
+                        raise UnboundLocalError('{} exists, '.format(dst_fn))
+                    else:
+                        dst_fn_size = os.stat(dst_fn).st_size
+                        resume_byte_pos = dst_fn_size
+                        self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
             except OSError:
                 pass
-            
+
+            #utils.echo_msg(self.headers)
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
                 
@@ -401,7 +425,7 @@ class Fetch:
                 try:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
-                    elif req_s == -1:
+                    elif req_s == -1 or req_s == 0:
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                 except OSError:
                     pass
@@ -430,30 +454,58 @@ class Fetch:
                         read_timeout=read_timeout
                     )
 
-                elif req.status_code == 200:
+                elif req.status_code == 200 or req.status_code == 206:
                     curr_chunk = 0
-                    with open(dst_fn, 'wb') as local_file:
+                    total_size = int(req.headers.get('content-length', 0))
+                    with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
                         with tqdm(
                                 desc='fetching: {}'.format(self.url),
-                                total=int(req.headers.get('content-length', 0)),
+                                total=total_size,
+                                unit='iB',
+                                unit_scale=True
                         ) as pbar:
-                            #try:
-                            for chunk in req.iter_content(chunk_size = 8196):
-                                if self.callback():
-                                    break
+                            try:
+                                for chunk in req.iter_content(chunk_size = 8196):
+                                    if self.callback():
+                                        break
 
-                                pbar.update(len(chunk))
-                                if not chunk:
-                                    break
+                                    pbar.update(len(chunk))
+                                    if not chunk:
+                                        break
 
-                                local_file.write(chunk)
-                                local_file.flush()
-                                # if chunk:
-                                #     local_file.write(chunk)
+                                    local_file.write(chunk)
+                                    local_file.flush()
+                            except Exception as e:
+                                #utils.echo_warning_msg(e)
+                                if self.verbose:
+                                    utils.echo_warning_msg(
+                                        'server returned: {}, and an exception occured: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, e, tries)
+                                    )
+
+                                    time.sleep(2)
+                                    
+                                Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                                    dst_fn,
+                                    params=params,
+                                    datatype=datatype,
+                                    overwrite=overwrite,
+                                    timeout=timeout+5,
+                                    read_timeout=read_timeout+50,
+                                    tries=tries-1
+                                )
+                                self.verbose=False
+
+                            # if chunk:
+                            #     local_file.write(chunk)
                             # except TimeoutError as e:
                             #     timed_out = True
 
+                    if check_size and total_size != os.stat(dst_fn).st_size:
+                        raise UnboundLocalError('sizes do not match!')
+                        timed_out = True
+                        
                 elif req.status_code == 429 or req.status_code == 504 or timed_out:
+
                     #elif tries > 0:
                     # if self.verbose:
                     #     utils.echo_warning_msg('max tries exhausted...')
@@ -485,6 +537,9 @@ class Fetch:
                         raise UnboundLocalError(req.status_code)
                     status = -1
 
+        # except requests.exceptions.Timeout:
+        #     utils.echo_error_msg('Connection Timed Out!')
+            
         except UnboundLocalError as e:
             #utils.echo_error_msg(e)
             pass
