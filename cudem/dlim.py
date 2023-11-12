@@ -983,6 +983,23 @@ class ElevationDataset:
             dst_srs.SetFromUserInput(dst_horz)
 
             ## ==============================================
+            ## transform input region if necessary
+            ## ==============================================
+            if self.region is not None: # and self.region.src_srs != self.src_srs:
+                self.trans_region = self.region.copy()
+                self.trans_region.src_srs = dst_horz#out_dst_srs
+                self.trans_region.warp(src_horz)#out_src_srs)
+                self.trans_region.src_srs = src_horz#out_src_srs
+            else:
+                if self.infos.wkt is not None:
+                    self.trans_region = regions.Region().from_string(self.infos.wkt)
+                    self.trans_region.src_srs = src_horz
+                    self.trans_region.warp(dst_horz)
+                else:
+                    utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
+
+            
+            ## ==============================================
             ## generate the vertical transformation grids if called for
             ## check if transformation grid already exists, so we don't
             ## have to create a new one for every input file...!
@@ -1113,22 +1130,6 @@ class ElevationDataset:
                 self.src_trans_srs = out_src_srs
                 self.dst_trans_srs = out_dst_srs
                 self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
-
-                ## ==============================================
-                ## transform input region if necessary
-                ## ==============================================
-                if self.region is not None: # and self.region.src_srs != self.src_srs:
-                    self.trans_region = self.region.copy()
-                    self.trans_region.src_srs = dst_horz#out_dst_srs
-                    self.trans_region.warp(src_horz)#out_src_srs)
-                    self.trans_region.src_srs = src_horz#out_src_srs
-                else:
-                    if self.infos.wkt is not None:
-                        self.trans_region = regions.Region().from_string(self.infos.wkt)
-                        self.trans_region.src_srs = src_horz
-                        self.trans_region.warp(dst_horz)
-                    else:
-                        utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
 
                 src_osr_srs = dst_osr_srs = None
             else:
@@ -1424,6 +1425,11 @@ class ElevationDataset:
             status = driver.Delete(out_file)
             if status != 0:
                 utils.remove_glob('{}*'.format(out_file))
+                
+        if os.path.exists(mask_fn):
+            status = driver.Delete(mask_fn)
+            if status != 0:
+                utils.remove_glob('{}*'.format(mask_fn))
 
         dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if fmt != 'MEM' else [])
@@ -1493,15 +1499,13 @@ class ElevationDataset:
                 ## ==============================================
                 ## update the mask
                 ## ==============================================
-                #utils.echo_msg('ok')
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                #utils.echo_msg_bold('read')
                 m_array[arrs['count'] != 0] = 1
                 m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                #utils.echo_msg_bold('write')
                 if mask_only:
                     continue
-
+                
+                m_ds.FlushCache()
                 ## ==============================================
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 ## ==============================================
@@ -1589,11 +1593,35 @@ class ElevationDataset:
             utils.echo_msg('finalizing stacked raster bands...')
 
         if m_ds.RasterCount > 0:
-            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0)
+            #m_ds.FlushCache()
+            ## create a new mem ds to hold valid bands
+            driver = gdal.GetDriverByName('MEM')
+            mm_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
+            mm_ds.SetGeoTransform(dst_gt)
+            
+            for band_num in range(1, m_ds.RasterCount+1):
+                band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
+                if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
+                    m_band = m_ds.GetRasterBand(band_num)
+                    m_band_md = m_band.GetMetadata()
+                    mm_ds.AddBand()
+                    mm_band = mm_ds.GetRasterBand(mm_ds.RasterCount)
+                    mm_band.SetNoDataValue(0)
+                    mm_band.SetDescription(m_band.GetDescription())
+                    
+                    mm_band.SetMetadata(m_band_md)
+
+                    m_array = m_band.ReadAsArray()
+                    mm_band.WriteArray(m_array)
+                    
+                    mm_ds.FlushCache()
+                
+            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, mm_ds, 0)            
+            mm_ds = None
         else:
             if self.verbose:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
-                               
+
         if not mask_only:
             if not supercede:
                 srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
@@ -1830,7 +1858,7 @@ class XYZFile(ElevationDataset):
                 yield(this_xyz)
 
         if self.verbose:
-            utils.echo_msg(
+            utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -1894,7 +1922,7 @@ class XYZFile(ElevationDataset):
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
-            utils.echo_msg(
+            utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -1983,7 +2011,7 @@ class XYZFile(ElevationDataset):
             else: skip -= 1
 
         if self.verbose:
-            utils.echo_msg(
+            utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -2186,7 +2214,7 @@ class LASFile(ElevationDataset):
                 yield(this_xyz)
 
         if self.verbose:
-            utils.echo_msg(
+            utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -2333,7 +2361,7 @@ class LASFile(ElevationDataset):
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
-            utils.echo_msg(
+            utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -2499,15 +2527,15 @@ class GDALFile(ElevationDataset):
                     srcwin_region = None
 
                 if srcwin_region is not None:
-                    srcwin = srcwin_region.srcwin(src_gt, src_ds_config['nx'], src_ds_config['ny'], node='grid')
+                    srcwin = srcwin_region.srcwin(src_gt, src_ds_config['nx'], src_ds_config['ny'], node='pixel')
                 else:
                     srcwin = None
-                
+
                 self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
                 if self.verbose:
                     utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
                     
-                gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], srcwin=srcwin, inverse=False)
+                self.tmp_elev_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], srcwin=srcwin, inverse=False)
                 tmp_ds = self.tmp_elev_band
 
                 if utils.int_or(self.uncertainty_mask) is not None:
@@ -2515,7 +2543,7 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
                         
-                    gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], srcwin=srcwin, inverse=False)
+                    self.tmp_unc_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], srcwin=srcwin, inverse=False)
                     self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
@@ -2523,8 +2551,11 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
                         
-                    gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], srcwin=srcwin, inverse=False)
+                    self.tmp_weight_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], srcwin=srcwin, inverse=False)
                     self.weight_mask = self.tmp_weight_band
+
+            if tmp_ds is None:
+                return(None)
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
@@ -3426,7 +3457,7 @@ class OGRFile(ElevationDataset):
 
             ds_ogr = layer_s = None
             if self.verbose:
-                utils.echo_msg(
+                utils.echo_msg_bold(
                 'parsed {} data records from {}{}'.format(
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
@@ -3808,7 +3839,7 @@ class Datalist(ElevationDataset):
             ## generate one for future use...
             ## ==============================================
             utils.echo_warning_msg(
-                'could not load datalist-vector json {}.json, use falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
+                'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
             )
             for ds in self.parse():
                 yield(ds)
@@ -4130,10 +4161,28 @@ class Fetcher(ElevationDataset):
             utils.remove_glob(self.fn)
     
     def yield_ds(self, result):
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module())
+
+        ## try to get the SRS info from the result if it's a gdal file
+        try:
+            vdatum = self.fetch_module.vdatum
+            src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+            horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
+            if vert_epsg is None:
+                vert_epsg = vdatum
+
+            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+            if vert_epsg is not None:
+                self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
+            else:
+                self.fetch_module.src_srs = src_srs
+        except:
+            pass
+        
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+        yield(ds)
 
     def yield_xyz(self):
         for ds in self.parse():
@@ -4145,6 +4194,66 @@ class Fetcher(ElevationDataset):
             for arr in ds.yield_array():
                 yield(arr)
 
+class DAVFetcher_CoNED(Fetcher):
+    """CoNED from the digital coast 
+
+    This is a wrapper shortcut for fetching CoNED DEMs from the Digital Coast,
+    mainly so we can pull the vertical datum info from the DAV metadata since the
+    CoNED doesn't assign one to their DEMs.
+    """
+    
+    def __init__(self, keep_fetched_data = True, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+        ## try to get the SRS info from the result
+        try:
+            vdatum = self.fetch_module.vdatum
+            src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+            horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
+            if vert_epsg is None:
+                vert_epsg = vdatum
+
+            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+            if vert_epsg is not None:
+                self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
+            else:
+                self.fetch_module.src_srs = src_srs
+        except:
+            pass
+        
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+        yield(ds)
+
+class DAVFetcher_SLR(Fetcher):
+    """SLR DEM from the digital coast 
+
+    This is a wrapper shortcut for fetching SLR DEMs from the Digital Coast,
+    mainly so we can pull the remove the flattened ring around the actual data.
+    """
+    
+    def __init__(self, keep_fetched_data = True, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+
+        # with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update=True) as src_ds:
+        #     if src_ds is not None:
+        #         ds_config = gdalfun.gdal_infos(src_ds)
+        #         curr_nodata = ds_config['ndv']
+
+        ## this doesn't work in all cases, update to find and remove flattened areas
+        gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
+        
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+        yield(ds)
+                
 class GMRTFetcher(Fetcher):
     def __init__(self, swath_only = False, **kwargs):
         super().__init__(**kwargs)
@@ -4638,6 +4747,9 @@ class DatasetFactory(factory.CUDEMFactory):
         -207: {'name': 'digital_coast', 'fmts': ['digital_coast'], 'call': Fetcher},
         -208: {'name': 'ncei_thredds', 'fmts': ['ncei_thredds'], 'call': Fetcher},
         -209: {'name': 'tnm', 'fmts': ['tnm'], 'call': Fetcher},
+        -210: {'name': "CUDEM", 'fmts': ['CUDEM'], 'call': Fetcher},
+        -211: {'name': "CoNED", 'fmts': ['CoNED'], 'call': DAVFetcher_CoNED},
+        -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
         -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': Fetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
@@ -4708,6 +4820,7 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
         this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \
@@ -4732,10 +4845,12 @@ class DatasetFactory(factory.CUDEMFactory):
                 else:
                     se = entry[0].split('.')
                     see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
+
                 if see in self._modules[key]['fmts']:
                     entry.append(int(key))
                     break
-                
+
+            utils.echo_msg(entry)
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
                 return(self)
@@ -4746,7 +4861,7 @@ class DatasetFactory(factory.CUDEMFactory):
                 entry[1] = opts[0]
             else:
                self.mod_args = {}
-
+                                                       
         try:
             assert isinstance(utils.int_or(entry[1]), int)
         except:
@@ -5072,7 +5187,7 @@ def datalists_cli(argv=sys.argv):
         elif arg[0] == '-':
             print(datalists_usage)
             sys.exit(0)
-        else: dls.append(arg)
+        else: dls.append(arg)#'"{}"'.format(arg)) # FIX THIS!!!
         
         i = i + 1
 

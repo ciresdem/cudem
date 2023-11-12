@@ -737,6 +737,7 @@ def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose = True):
 
             if convert_array:
                 for band in range(1, src_ds.RasterCount+1):
+
                     this_band = src_ds.GetRasterBand(band)
                     arr = this_band.ReadAsArray()
                     if np.isnan(curr_nodata):
@@ -787,20 +788,26 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None,
     """extract a band from the src_gdal file"""
     
     band = utils.int_or(band, 1)
+    #srcwin = None
     with gdal_datasource(src_gdal) as src_ds:
         try:
             ds_config = gdal_infos(src_ds)
             ds_band = src_ds.GetRasterBand(band)
             if srcwin is not None:
                 ds_array = ds_band.ReadAsArray(*srcwin)
+                xy_origin = utils._pixel2geo(srcwin[0], srcwin[1], ds_config['geoT'], node='grid')
+                ds_config['geoT'] = (xy_origin[0], ds_config['geoT'][1], ds_config['geoT'][2], xy_origin[1], ds_config['geoT'][4], ds_config['geoT'][5])
+                ds_config['nx'] = srcwin[2]
+                ds_config['ny'] = srcwin[3]
+                ds_config['nb'] = srcwin[2] * srcwin[3]
             else:
                 ds_array = ds_band.ReadAsArray()
                                 
             if ds_array is None:
-                utils.echo_error_msg('could not read data from datasource {}'.format(src_gdal))
+                utils.echo_error_msg('could not read data array from datasource {}'.format(src_gdal))
                 return(None, -1)
-        except:
-            utils.echo_error_msg('could not read data from datasource {}'.format(src_gdal))
+        except Exception as e:
+            utils.echo_error_msg('could not read datasource {}, {}'.format(src_gdal, e))
             return(None, -1)
 
     if ds_config['ndv'] is None:
@@ -864,13 +871,16 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
             if mem_ds is not None:
                 for band in range(1, in_bands+1):
                     this_band = mem_ds.GetRasterBand(band)
+                    #this_band_md = this_band.GetMetadata()
+                    
                     that_band = src_ds.GetRasterBand(band)
-                    that_band_md = that_band.GetMetadata()
-                    this_band_md = this_band.GetMetadata()
+                    #that_band_md = that_band.GetMetadata()
+                    
                     this_band.SetDescription(that_band.GetDescription())
-
-                    for key in that_band_md.keys():
-                        this_band_md[key] = that_band_md[key]
+                    this_band.SetMetadata(that_band.GetMetadata())
+                    
+                    # for key in that_band_md.keys():
+                    #     this_band_md[key] = that_band_md[key]
 
                     this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                     mem_ds.FlushCache()
@@ -900,8 +910,13 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
         #    out, status = utils.run_cmd(gr_cmd, verbose=verbose)
         #else:
         shutil.copyfile(src_gdal, dst_gdal)
-        gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
-            .format(gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_gdal, ' -i' if invert else '')
+        band_count = 1
+        with gdaldatasource(src_gdal) as src_ds:
+            if src_ds is not None:
+                band_count = src_ds.RasterCount
+                
+        gr_cmd = 'gdal_rasterize -b {} -burn {} -l {} {} {}{}'\
+            .format(band_count, gi['ndv'], os.path.basename(tmp_ply).split('.')[0], tmp_ply, dst_gdal, ' -i' if invert else '')
         out, status = utils.run_cmd(gr_cmd, verbose=verbose)
         #utils.remove_glob('{}*'.format(utils.fn_basename2(tmp_ply)))#'__tmp_clp_ply.*')
     else:

@@ -407,25 +407,28 @@ class Fetch:
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                     else:
                         dst_fn_size = os.stat(dst_fn).st_size
+                        #utils.echo_msg_bold(dst_fn_size)
                         resume_byte_pos = dst_fn_size
                         self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
             except OSError:
                 pass
 
-            #utils.echo_msg(self.headers)
+            utils.echo_msg(self.headers)
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
-                
+
+                utils.echo_msg(req.url)
                 req_h = req.headers
                 if 'Content-Length' in req_h:
                     req_s = int(req_h['Content-Length'])
                 else:
                     req_s = -1
-                
+
+                #utils.echo_msg_bold(req_s)
                 try:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
-                    elif req_s == -1 or req_s == 0:
+                    elif req_s == -1 or req_s == 0 or req_s == 49:
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                 except OSError:
                     pass
@@ -2442,8 +2445,8 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                         if self.datatype.lower() != feature['attributes']['DataType'].lower():
                             continue
 
+                    self.vdatum = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])                        
                     links = json.loads(feature['attributes']['ExternalProviderLink'])
-
                     ept_infos = None
                     ## get ept link to gather datum infos...for lidar only apparently...
                     for link in links['links']:
@@ -2547,6 +2550,18 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                     utils.remove_glob(index_zipfile, *index_shps)
 
         return(self)
+
+class SLR(DAV):
+    def __init__(self, **kwargs):
+        super().__init__(where='ID=6230', **kwargs)
+
+class CoNED(DAV):
+    def __init__(self, **kwargs):
+        super().__init__(where="NAME LIKE '%CoNED%'", **kwargs)
+
+class CUDEM(DAV):
+    def __init__(self, **kwargs):
+        super().__init__(where="NAME LIKE '%CUDEM%'", **kwargs)
     
 ## ==============================================
 ## NCEI THREDDS Catalog
@@ -3488,7 +3503,7 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
                    'Cache-Control': 'no-cache'}
 
     try:
-        status = Fetch(_proj_vdatum_index, headers=cdn_headers, verbose=verbose).fetch_file(cdn_index, timeout=5, read_timeout=5)
+        status = Fetch(_proj_vdatum_index, headers=cdn_headers, verbose=verbose).fetch_file(cdn_index, timeout=5, read_timeout=5, check_size=False)
     except:
         status = -1
 
@@ -4818,6 +4833,9 @@ class FetchesFactory(factory.CUDEMFactory):
         'srtm_plus': {'call': SRTMPlus},
         'charts': {'call': NauticalCharts}, # 'Charts' isn't working! :(
 	    'digital_coast': {'call': DAV},
+        'SLR': {'call': SLR},
+        'CoNED': {'call': CoNED},
+        'CUDEM': {'call': CUDEM},
         'multibeam': {'call': Multibeam}, # MBDB isn't working!
         'gebco': {'call': GEBCO},
         'mgds': {'call': MGDS},

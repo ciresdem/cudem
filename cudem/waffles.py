@@ -4654,7 +4654,9 @@ class WaffleDEM:
         if dst_srs is not None:
             self.set_srs(dst_srs=dst_srs)
 
-        self.set_metadata(node=node)
+        if set_metadata:
+            self.set_metadata(node=node)
+            
         self.reformat(out_fmt=dst_fmt)
         self.move(out_fn=dst_fn, out_dir=dst_dir)
 
