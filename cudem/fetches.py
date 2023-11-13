@@ -1635,7 +1635,8 @@ https://data.ngdc.noaa.gov/platforms/
                 else:
                     these_surveys[survey] = {version: [[data_url.split(' ')[0], '/'.join([survey, dst_fn]), 'mb']]}
                     
-        else: utils.echo_error_msg('{}'.format(_req.reason))
+        else:
+            utils.echo_error_msg('failed to fetch multibeam request')
                     
         for key in these_surveys.keys():
             if self.processed_p:
