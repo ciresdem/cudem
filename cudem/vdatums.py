@@ -574,9 +574,9 @@ class VerticalTransform:
                 if ref_out == 'cdn':
                     ## todo: only do geoid transforms with 5703 (navd88)
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
-                    if epsg_in == 5703:
-                        cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
-                        tmp_trans = tmp_trans + cg
+                    #if epsg_in == 5703:
+                    #    cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
+                    #    tmp_trans = tmp_trans + cg
                         
                     epsg_in = cv
                 elif ref_out == 'tidal':
