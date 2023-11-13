@@ -911,7 +911,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
         #else:
         shutil.copyfile(src_gdal, dst_gdal)
         band_count = 1
-        with gdaldatasource(src_gdal) as src_ds:
+        with gdal_datasource(src_gdal) as src_ds:
             if src_ds is not None:
                 band_count = src_ds.RasterCount
                 
