@@ -562,12 +562,12 @@ class Waffle:
             if self.want_mask or self.want_sm:
                 mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
                 if mask_dem.valid_p():
-                    if self.want_mask:
-                        utils.echo_msg('processing mask')
-                        mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                         node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
-                                         dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
-                                         dst_dir=os.path.dirname(self.fn))
+                    #if self.want_mask:
+                    utils.echo_msg('processing mask')
+                    mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                                     dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
+                                     dst_dir=os.path.dirname(self.fn))
 
                     if self.want_sm:
                         with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
@@ -3498,8 +3498,8 @@ class WafflesUncertainty(Waffle):
             np.random.shuffle(train)
             train_total = len(train)
             while True:
-                if self.verbose:
-                    utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
+                #if self.verbose:
+                #    utils.echo_msg_inline('sorting training tiles [{}]'.format(len(train)))
                     
                 if len(train) == 0:
                     break
@@ -3524,8 +3524,8 @@ class WafflesUncertainty(Waffle):
                 
             train_sorted.append(train_d)
             
-        if verbose:
-            utils.echo_msg_inline('sorting training tiles [OK]\n')
+        #if self.verbose:
+        #    utils.echo_msg_inline('sorting training tiles [OK]\n')
             
         return(train_sorted)
 
@@ -3633,7 +3633,7 @@ class WafflesUncertainty(Waffle):
         last_ec_d = None
         s_dp = []
         status = 0
-        trains = self._regions_sort(trainers, verbose=False)
+        trains = self._regions_sort(trainers)
         all_trains = [x for s in trains for x in s[:5]]
         tot_trains = len(all_trains)
         

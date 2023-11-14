@@ -427,6 +427,9 @@ def ogr_polygonize_multibands(
         b_infos = gdal_infos(src_ds, scan=True, band=b)
         field_names = [field.name for field in layer.schema]
         for k in this_band_md.keys():
+            this_band_md[k.title()] = this_band_md.pop(k)
+            
+        for k in this_band_md.keys():
             if k[:9] not in field_names:
                 layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
 

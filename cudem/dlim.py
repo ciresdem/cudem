@@ -4820,7 +4820,7 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
         this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
-        #utils.echo_msg(this_entry)
+        utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \
