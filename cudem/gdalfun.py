@@ -238,6 +238,25 @@ def osr_parse_srs(src_srs, return_vertcs = True):
 ## ==============================================
 ## OGR
 ## ==============================================
+def ogr_or_gdal(osgeo_fn):
+    '''ogr file is 1, gdal file is 2, neither is -1'''
+    
+    try:
+        src_ds = ogr.Open(osgeo_fn)
+        if src_ds is not None:
+            src_ds = None
+            return(1)
+        else:
+            src_ds = gdal.Open(osgeo_fn)
+            if src_ds is not None:
+                src_ds = None
+                return(2)
+            else:
+                return(-1)
+    except:
+        utils.echo_error_msg('{} does not appear to be an osgeo (gdal/ogr) file')
+        return(-1)
+
 def ogr_fext(src_drv_name):
     """find the common file extention given a OGR driver name
     older versions of gdal can't do this, so fallback to known standards.
@@ -786,6 +805,20 @@ def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
             mem_band.SetNoDataValue(ds_config['ndv'])
         
     return(mem_ds)
+
+def gdal_nan(ds_config, outfile, nodata = None):
+    '''create a nodata grid'''
+
+    if nodata is None:
+        nodata = np.nan
+        
+    nullArray = np.zeros( (ds_config['ny'], ds_config['nx']) )
+    if nodata != 0:
+        nullArray[nullArray==0]=nodata
+
+    ds_config['ndv'] = nodata
+        
+    gdal_write(nullArray, outfile, ds_config)
 
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None, inverse = False):
     """extract a band from the src_gdal file"""

@@ -266,7 +266,12 @@ class CUDEMFactory:
         ## KeyError: '_factory'
         #if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
         self.kwargs['params'] = self.__dict__
-
+        for k in self.kwargs.keys():
+            if k in self.mod_args.keys():
+                self.kwargs[k] = self.mod_args[k]
+                del self.mod_args[k]
+                utils.echo_warning_msg('duplicate options!')
+                
         if self.mod_name is not None:
             try:
                 m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)

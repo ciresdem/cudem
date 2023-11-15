@@ -658,6 +658,43 @@ class ElevationDataset:
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
             self.set_transform()
+
+        if self.mask is not None:
+            ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask)
+            if ogr_or_gdal == 1: # mask is ogr, rasterize it
+                dst_fn = utils.make_temp_fn('{}.tif'.format(self.mask))
+                #dst_fn = os.path.join(self.cache_dir, 'tmp_mask.tif'
+                if os.path.exists(dst_fn):
+                    self.mask = dst_fn
+                else:
+                    # if os.path.isdir(self.mask):
+                    #     dst_layer = os.path.basename('/'.join(self.mask.split('/')[:-1])).split('.')[0]
+                    #msk_region = self.region if self.region is not None else regions.Region().from_list(self.infos.minmax)
+
+                    if self.region is not None:
+                        msk_region = self.region.copy()
+                        xcount, ycount, dst_gt = msk_region.geo_transform(
+                            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+                        )
+
+                        if xcount <= 0 or ycount <=0:
+                            utils.echo_error_msg(
+                                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                                    xcount, ycount, self.x_inc, self.y_inc, self.region
+                                )
+                            )
+                            sys.exit(-1)
+
+                        ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, self.dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
+                        gdalfun.gdal_nan(ds_config, dst_fn, nodata=0)
+
+                        invert=True
+                        gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
+                            .format(1, os.path.basename(utils.fn_basename2(self.mask)), self.mask, dst_fn, ' -i' if invert else '')
+                        utils.echo_msg(gr_cmd)
+                        out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
+
+                        self.mask = dst_fn
             
         return(self)
     
@@ -2172,6 +2209,7 @@ class LASFile(ElevationDataset):
                     points = points[(np.isin(points.classification, self.classes))]
                     if self.region is not None  and self.region.valid_p():
                         las_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                        
                         if self.invert_region:
                             points = points[((points.x > las_region.xmax) | (points.x < las_region.xmin)) | \
                                             ((points.y > las_region.ymax) | (points.y < las_region.ymin))]
@@ -2204,6 +2242,25 @@ class LASFile(ElevationDataset):
             for point in dataset:
                 this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
                                            w=self.weight, u=self.uncertainty)
+
+                if self.mask is not None:
+                    #ndv = gdalfun.gdal_get_ndv(self.mask)
+                    with gdalfun.gdal_datasource(self.mask) as src_ds:
+                        #print(src_ds)
+                        if src_ds is not None:
+                            ds_config = gdalfun.gdal_infos(src_ds)
+                            ds_band = src_ds.GetRasterBand(1)
+                            ds_gt = ds_config['geoT']
+                            ds_nd = ds_config['ndv']
+                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                            ## todo: check if x/y is within raster, else skip
+                            if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
+                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                #print(tgrid)
+                                if tgrid is not None:
+                                    if tgrid[0][0] != ds_nd:
+                                        continue
+
                 if self.dst_trans is not None:
                     this_xyz.transform(self.dst_trans)
 
@@ -2333,6 +2390,24 @@ class LASFile(ElevationDataset):
                     
                 #utils.remove_glob(tmp_trans_fn)
 
+            ## ==============================================
+            ## apply the mask
+            ## ==============================================
+            if self.mask is not None:
+                if self.region is not None:
+                    msk_infos = gdalfun.gdal_infos(self.mask)
+                    warp_msk = gdalfun.sample_warp(self.mask, None, None, None, src_region=self.region, dst_srs = self.dst_srs, ndv=msk_infos['ndv'])[0]
+                    msk_infos = gdalfun.gdal_infos(warp_msk)
+                    #with gdalfun.gdal_datasource(self.mask) as msk:
+                    msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
+                    #utils.echo_msg(msk_arr)
+                    #utils.echo_msg(msk_infos['ndv'])
+                    #utils.echo_msg(msk_arr != msk_infos['ndv'])
+                    #utils.echo_msg(msk_arr.shape)
+                    #utils.echo_msg(out_z.shape)
+                    out_z[msk_arr != msk_infos['ndv']] = np.nan
+                    warp_msk = None
+                    
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
@@ -3586,7 +3661,7 @@ class Datalist(ElevationDataset):
 
     def __init__(self, fmt=None, **kwargs):
         super().__init__(**kwargs)
-
+        
     def _init_datalist_vector(self):
         """initialize the datalist geojson vector.
 
@@ -3663,12 +3738,16 @@ class Datalist(ElevationDataset):
         ## if successful, fill it wil the datalist entries, using `parse`
         ## ==============================================
         if self._init_datalist_vector() == 0:
-            
             for entry in self.parse():
+                #utils.echo_msg_bold(entry.mask)
                 if self.verbose:
                     callback()
 
                 entry_minmax = entry.infos.minmax
+                #utils.echo_msg(entry.params)
+                if entry.mask is not None: ## add all duplicat params???
+                    entry.params['mod_args'] = {'mask': entry.mask}
+                    
                 ## ==============================================
                 ## entry has an srs and dst_srs is set, so lets transform the region to suit
                 ## ==============================================
@@ -3870,8 +3949,9 @@ class Datalist(ElevationDataset):
                             ## ==============================================
                             ## generate the dataset object to yield
                             ## ==============================================
+
                             data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
-                                                      src_region=self.region, invert_region=self.invert_region, metadata=md,
+                                                      src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
                                                       src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                                                       sample_alg=self.sample_alg, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
                             if data_set is not None and data_set.valid_p(
@@ -4820,7 +4900,7 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
         this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
-        utils.echo_msg(this_entry)
+        #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \
