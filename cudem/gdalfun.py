@@ -719,6 +719,8 @@ def gdal_set_srs(src_gdal, src_srs = 'epsg:4326', verbose = True):
     """set the src_gdal srs"""
     
     status = None
+    if '+geoid' in src_srs:
+        src_srs = '+'.join(src_srs.split('+')[:-1])
     with gdal_datasource(src_gdal, update=True) as src_ds:    
         if src_ds is not None and src_srs is not None:
             try:

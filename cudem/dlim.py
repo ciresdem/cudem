@@ -998,6 +998,9 @@ class ElevationDataset:
         ## dataset inf region
         #utils.echo_msg(self.infos)
         self.inf_region = regions.Region().from_string(self.infos.wkt)
+
+        self.aux_src_trans_srs = self.src_srs
+        self.aux_dst_trans_srs = self.dst_srs
         
         ## transformations and trans_regions
         if self.src_srs == '': self.src_srs = None
@@ -1044,7 +1047,6 @@ class ElevationDataset:
                     self.trans_region.warp(dst_horz)
                 else:
                     utils.echo_warning_msg('could not parse region for {}'.format(self.fn))
-
             
             ## ==============================================
             ## generate the vertical transformation grids if called for
@@ -1126,6 +1128,10 @@ class ElevationDataset:
                     utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert))
 
                 if self.trans_fn is not None:
+
+                    self.aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                    self.aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+                    
                     if not os.path.exists(self.trans_fn_full):
                         gdalfun.sample_warp(self.trans_fn, self.trans_fn_full, self.x_inc, self.y_inc,
                                             src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
@@ -1152,6 +1158,9 @@ class ElevationDataset:
                             )
                         )
                 else:
+                    self.aux_src_trans_srs = self.src_trans_srs
+                    self.aux_dst_trans_srs = self.dst_trans_srs
+
                     out_src_srs = None
                     out_dst_srs = None
 
@@ -2154,17 +2163,18 @@ class LASFile(ElevationDataset):
                         x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
                     )
         #utils.echo_msg('{} {} {} {}'.format(self.las_x_inc, self.las_y_inc, self.las_region, self.las_dst_gt))
-        if self.trans_fn is not None:
-            aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
-            aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
-        else:
-            aux_src_trans_srs = self.src_trans_srs
-            aux_dst_trans_srs = self.dst_trans_srs
+        # if self.trans_fn is not None:
+        #     aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+        #     aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+        # else:
+        #     aux_src_trans_srs = self.src_trans_srs
+        #     aux_dst_trans_srs = self.dst_trans_srs
                 
         if self.trans_fn is not None:
             ## remove the vertical transformation grid, if it exists to warp the non elevation bands
             self.las_trans_fn = gdalfun.sample_warp(self.trans_fn_unc, None, None, None,
-                                                    src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_dst_trans_srs,
+                                                    src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
+                                                    dst_srs=self.aux_dst_trans_srs,
                                                     ndv=-9999, verbose=self.verbose)[0]
         else:
             self.las_trans_fn = None
@@ -2425,18 +2435,17 @@ class LASFile(ElevationDataset):
                 if self.region is not None:
                     if gdalfun.ogr_or_gdal(self.mask) == 2:
 
-                        if self.trans_fn is not None:
-                            aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
-                            aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
-                        else:
-                            aux_src_trans_srs = self.src_trans_srs
-                            aux_dst_trans_srs = self.dst_trans_srs
-
+                        # if self.trans_fn is not None:
+                        #     aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                        #     aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+                        # else:
+                        #     aux_src_trans_srs = self.src_trans_srs
+                        #     aux_dst_trans_srs = self.dst_trans_srs
                         
                         msk_infos = gdalfun.gdal_infos(self.mask)
                         warp_msk = gdalfun.sample_warp(
                             self.mask, None, None, None,
-                            src_region=self.region, dst_srs=aux_dst_trans_srs,
+                            src_region=self.region, dst_srs=self.aux_dst_trans_srs,
                             ndv=msk_infos['ndv'])[0]
                         
                         msk_infos = gdalfun.gdal_infos(warp_msk)
@@ -2822,12 +2831,12 @@ class GDALFile(ElevationDataset):
             out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty':None, 'mask':None}
 
             ## remove the vertical transformation grid, if it exists to warp the non elevation bands
-            if self.trans_fn is not None:
-                aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
-                aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
-            else:
-                aux_src_trans_srs = self.src_trans_srs
-                aux_dst_trans_srs = self.dst_trans_srs
+            # if self.trans_fn is not None:
+            #     aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+            #     aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+            # else:
+            #     aux_src_trans_srs = self.src_trans_srs
+            #     aux_dst_trans_srs = self.dst_trans_srs
 
             src_dem_x_inc = self.src_dem_infos['geoT'][1]
             src_dem_y_inc = -1*self.src_dem_infos['geoT'][5]
@@ -2845,7 +2854,7 @@ class GDALFile(ElevationDataset):
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
                     # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
                     src_weight = gdalfun.sample_warp(self.weight_mask, None, src_dem_x_inc, src_dem_y_inc,
-                                                     src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                                                     src_srs=self.aux_src_trans_srs, dst_srs=self.aux_dst_trans_srs,
                                                      src_region=src_dem_region, sample_alg=self.sample_alg,
                                                      ndv=ndv, verbose=self.verbose)[0]
                     # else:
@@ -2868,7 +2877,7 @@ class GDALFile(ElevationDataset):
                 elif os.path.exists(self.uncertainty_mask):
                     # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
                     src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
-                                                          src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                                                          src_srs=self.aux_src_trans_srs, dst_srs=self.aux_dst_trans_srs,
                                                           src_region=src_dem_region, sample_alg=self.sample_alg,
                                                           ndv=ndv, verbose=self.verbose)[0]
                     # else:
@@ -2881,7 +2890,7 @@ class GDALFile(ElevationDataset):
             if self.trans_fn_unc_full is not None:
                 # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
                 trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
-                                                        src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_src_trans_srs,
+                                                        src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=self.aux_src_trans_srs,
                                                         src_region=src_dem_region, sample_alg=self.sample_alg,
                                                         ndv=ndv, verbose=self.verbose)[0]
                 # else:
@@ -2915,7 +2924,7 @@ class GDALFile(ElevationDataset):
                     #if self.resample_and_warp: #if self.x_inc is not None and self.y_inc is not None:
                     src_mask = gdalfun.sample_warp(
                         self.mask, None, src_dem_x_inc, src_dem_y_inc,
-                        src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                        src_srs=self.aux_src_trans_srs, dst_srs=self.aux_dst_trans_srs,
                         src_region=src_dem_region, sample_alg=self.sample_alg,
                         ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
                     )[0]
