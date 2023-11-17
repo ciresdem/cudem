@@ -958,8 +958,8 @@ class ElevationDataset:
             generate_inf = self.infos.generate_hash() != self.infos.file_hash
 
         ## this being set can break some modules (bags esp)
-        #if self.remote:
-        #    generate_inf = False
+        # if self.remote:
+        #     generate_inf = False
 
         if generate_inf:
             self.infos = self.generate_inf()
@@ -3378,9 +3378,9 @@ class MBSParser(ElevationDataset):
 
     def parse_(self):
 
-        if self.region is None or self.inf_region is None:
+        if self.region is None or self.data_region is None:
             self.want_mbgrid = False
-        
+
         if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
             with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
                 tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
@@ -4650,6 +4650,20 @@ class ChartsFetcher(Fetcher):
                                       parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
+
+class MBSFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+            
+        mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+
+        yield(ds)
             
 class HydroNOSFetcher(Fetcher):
     def __init__(self, **kwargs):
@@ -4884,7 +4898,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -106: {'name': 'mar_grav', 'fmts': ['mar_grav'], 'call': MarGravFetcher},
         -107: {'name': 'srtm_plus', 'fmts': ['srtm_plus'], 'call': Fetcher},
         -200: {'name': 'charts', 'fmts': ['charts'], 'call': ChartsFetcher},
-        -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': Fetcher},
+        -201: {'name': 'multibeam', 'fmts': ['multibeam'], 'call': MBSFetcher},
         -202: {'name': 'hydronos', 'fmts': ['hydronos'], 'call': HydroNOSFetcher},
         -203: {'name': 'ehydro', 'fmts': ['ehydro'], 'call': eHydroFetcher},
         -204: {'name': 'bluetopo', 'fmts': ['bluetopo'], 'call': BlueTopoFetcher},

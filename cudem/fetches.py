@@ -1695,7 +1695,7 @@ https://data.ngdc.noaa.gov/platforms/
     def echo_inf(self, entry):
         print(self.parse_entry_inf(entry))
         
-    def parse_entry_inf(self, entry, keep_inf=False):
+    def parse_entry_inf(self, entry, keep_inf=False, out_dir=None):
         src_data = os.path.basename(entry[1])
         if src_data[-3:] == 'fbt':
             src_mb = utils.fn_basename2(src_data)
@@ -1705,12 +1705,17 @@ https://data.ngdc.noaa.gov/platforms/
             src_mb = src_data
             
         survey = entry[0].split('/')[7]
-        if Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=False).fetch_file('{}.inf'.format(src_mb)) == 0:
-            mb_fmt = self.mb_inf_data_format('{}.inf'.format(src_mb))
-            mb_date = self.mb_inf_data_date('{}.inf'.format(src_mb))
-            mb_perc = self.mb_inf_perc_good('{}.inf'.format(src_mb))
+        #if out_dir is not None:
+            
+        src_inf = os.path.join(self._outdir, '{}.inf'.format(entry[1]))
+        utils.echo_msg(src_inf)
+        if Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=True).fetch_file(src_inf) == 0:
+            mb_fmt = self.mb_inf_data_format(src_inf)
+            mb_date = self.mb_inf_data_date(src_inf)
+            mb_perc = self.mb_inf_perc_good(src_inf)
             if not keep_inf:
-                utils.remove_glob('{}.inf'.format(src_mb))
+                utils.remove_glob(src_inf)
+                
             return(survey, src_data, mb_fmt, mb_perc, mb_date)
 
 ## ==============================================
