@@ -1194,8 +1194,8 @@ class ElevationDataset:
             self.data_region = self.inf_region.copy()
             self.data_region.src_srs = self.infos.src_srs
 
-        if self.dst_trans is not None:
-            self.data_region.warp(self.dst_srs)
+        # if self.dst_trans is not None:
+        #     self.data_region.warp(self.dst_srs)
 
         #utils.echo_msg_bold(self.data_region)
                 
@@ -2598,7 +2598,7 @@ class GDALFile(ElevationDataset):
                     self.sample_alg = 'bilinear'
                 else:
                     self.sample_alg = 'average'
-                
+
             tmp_ds = self.fn
             if self.open_options is not None:
                 self.src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
@@ -2607,7 +2607,7 @@ class GDALFile(ElevationDataset):
 
             if self.src_ds is None:
                 return(None)
-                
+
             ## ==============================================
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
@@ -2638,7 +2638,9 @@ class GDALFile(ElevationDataset):
                 if self.verbose:
                     utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
                     
-                self.tmp_elev_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], srcwin=srcwin, inverse=False)
+                self.tmp_elev_band, status = gdalfun.gdal_extract_band(
+                    self.fn, self.tmp_elev_band, band=self.band_no, exclude=[], srcwin=srcwin, inverse=False
+                )
                 tmp_ds = self.tmp_elev_band
 
                 if utils.int_or(self.uncertainty_mask) is not None:
@@ -2646,7 +2648,9 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
                         
-                    self.tmp_unc_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], srcwin=srcwin, inverse=False)
+                    self.tmp_unc_band, status = gdalfun.gdal_extract_band(
+                        self.fn, self.tmp_unc_band, band=self.uncertainty_mask, exclude=[], srcwin=srcwin, inverse=False
+                    )
                     self.uncertainty_mask = self.tmp_unc_band
 
                 if utils.int_or(self.weight_mask) is not None:
@@ -2654,14 +2658,17 @@ class GDALFile(ElevationDataset):
                     if self.verbose:
                         utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
                         
-                    self.tmp_weight_band, status = gdalfun.gdal_extract_band(self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], srcwin=srcwin, inverse=False)
+                    self.tmp_weight_band, status = gdalfun.gdal_extract_band(
+                        self.fn, self.tmp_weight_band, band=self.weight_mask, exclude=[], srcwin=srcwin, inverse=False
+                    )
                     self.weight_mask = self.tmp_weight_band
 
             if tmp_ds is None:
                 return(None)
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                        src_region=self.warp_region if (self.y_inc is not None and self.x_inc is not None) else None, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
+                                        src_region=self.warp_region if (self.y_inc is not None and self.x_inc is not None) else None,
+                                        sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
             tmp_ds = None
             
             ## the following seems to be redundant...
