@@ -413,7 +413,7 @@ class Fetch:
             except OSError:
                 pass
 
-            utils.echo_msg(self.headers)
+            #utils.echo_msg(self.headers)
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
 
