@@ -3710,6 +3710,7 @@ class WafflesUncertainty(Waffle):
                 kwargs['data'] = [s_outer, sub_xyz_head]
                 kwargs['src_region'] = b_region
                 kwargs['want_uncertainty'] = False
+                kwargs['want_sm'] = False
                 kwargs['verbose'] = False
                 kwargs['clobber'] = True
                 this_waffle = WaffleFactory(mod=this_mod, **kwargs)._acquire_module()
