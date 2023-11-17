@@ -637,6 +637,8 @@ class ElevationDataset:
         self.trans_to_meter = False
         self.trans_from_meter = False
         self.trans_region = None # transformed region
+        self.inf_region = None # inf.region of dataset
+        self.data_region = None # self.region and inf.region reduced
         self.src_trans_srs = None # source srs obj
         self.dst_trans_srs = None # target srs obj        
         self.archive_datalist = None # the datalist of the archived data
@@ -658,7 +660,8 @@ class ElevationDataset:
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
             self.set_transform()
-
+            
+        ## Mask the dataset, if the input mask is a vector, rasterize it.
         if self.mask is not None:
             ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask)
             if ogr_or_gdal == 1: # mask is ogr, rasterize it
@@ -671,7 +674,7 @@ class ElevationDataset:
                     #     dst_layer = os.path.basename('/'.join(self.mask.split('/')[:-1])).split('.')[0]
                     #msk_region = self.region if self.region is not None else regions.Region().from_list(self.infos.minmax)
 
-                    if self.region is not None:
+                    if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                         msk_region = self.region.copy()
                         xcount, ycount, dst_gt = msk_region.geo_transform(
                             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
@@ -695,6 +698,8 @@ class ElevationDataset:
                         out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
 
                         self.mask = dst_fn
+                    #else:
+                    #    self.mask = None
             
         return(self)
     
@@ -981,7 +986,7 @@ class ElevationDataset:
         return(self.infos)
 
     def set_transform(self):
-        """Set the transformation parameters for the dataset.
+        """Set the transformation parameters and regions for the dataset.
 
         this will set the osr transformation to be used in
         transforming all the data in this dataset, including vertical
@@ -990,6 +995,11 @@ class ElevationDataset:
         transformations are set based on src_srs and dst_srs
         """
 
+        ## dataset inf region
+        #utils.echo_msg(self.infos)
+        self.inf_region = regions.Region().from_string(self.infos.wkt)
+        
+        ## transformations and trans_regions
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
@@ -1172,6 +1182,23 @@ class ElevationDataset:
             else:
                 utils.echo_warning_msg('failed to generate transformation')
 
+        ## dataset region
+        if self.region is not None and self.region.valid_p():
+            self.data_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+            self.data_region = regions.regions_reduce(self.data_region, self.inf_region)
+            self.data_region.src_srs = self.infos.src_srs
+            
+            if not self.data_region.valid_p():
+                self.data_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+        else:
+            self.data_region = self.inf_region.copy()
+            self.data_region.src_srs = self.infos.src_srs
+
+        if self.dst_trans is not None:
+            self.data_region.warp(self.dst_srs)
+
+        #utils.echo_msg_bold(self.data_region)
+                
     def parse_json(self):
         """
         parse the datasets from the datalist geojson file.
@@ -2543,18 +2570,18 @@ class GDALFile(ElevationDataset):
         self.set_transform()
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
-
-        if self.x_inc is not None and self.y_inc is not None:
-            self.resample_and_warp = True
-        else:
-            self.resample_and_warp = False
         self.resample_and_warp = True
+        
+        if self.x_inc is None and self.y_inc is None and self.region is None:
+            self.resample_and_warp = False
+            
+        #self.resample_and_warp = True
 
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
             self.warp_region = self.region.copy()
         else:
-            self.warp_region = regions.Region().from_list(self.infos.minmax)
+            self.warp_region = self.inf_region.copy() #regions.Region().from_list(self.infos.minmax)
             if self.dst_trans is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
@@ -2594,6 +2621,7 @@ class GDALFile(ElevationDataset):
                 ## the srcwin for to extract data
                 src_ds_config = gdalfun.gdal_infos(self.fn)
                 src_gt = src_ds_config['geoT']
+
                 if self.trans_region is not None:
                     srcwin_region = self.trans_region.copy()
                 elif self.region is not None:
@@ -2633,7 +2661,7 @@ class GDALFile(ElevationDataset):
                 return(None)
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                        src_region=self.warp_region, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
+                                        src_region=self.warp_region if (self.y_inc is not None and self.x_inc is not None) else None, sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
             tmp_ds = None
             
             ## the following seems to be redundant...
@@ -2778,6 +2806,10 @@ class GDALFile(ElevationDataset):
             else:
                 aux_src_trans_srs = self.src_trans_srs
                 aux_dst_trans_srs = self.dst_trans_srs
+
+            src_dem_x_inc = self.src_dem_infos['geoT'][1]
+            src_dem_y_inc = -1*self.src_dem_infos['geoT'][5]
+            src_dem_region = regions.Region().from_geo_transform(self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny'])
                 
             ## todo: always warp these to src_ds
             ## ==============================================
@@ -2789,13 +2821,13 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.weight_mask) is not None:
                     weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
                 elif os.path.exists(self.weight_mask): # some numbers now return true here (file-descriptors), check for int first!
-                    if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
-                        src_weight = gdalfun.sample_warp(self.weight_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],#self.x_inc, self.y_inc,
-                                                         src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
-                                                         src_region=self.warp_region, sample_alg=self.sample_alg,
-                                                         ndv=ndv, verbose=self.verbose)[0]
-                    else:
-                        src_weight = gdal.Open(self.weight_mask)
+                    # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                    src_weight = gdalfun.sample_warp(self.weight_mask, None, src_dem_x_inc, src_dem_y_inc,
+                                                     src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                                                     src_region=src_dem_region, sample_alg=self.sample_alg,
+                                                     ndv=ndv, verbose=self.verbose)[0]
+                    # else:
+                    #     src_weight = gdal.Open(self.weight_mask)
 
                     weight_band = src_weight.GetRasterBand(1)
 
@@ -2812,26 +2844,26 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.uncertainty_mask):
                     uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
                 elif os.path.exists(self.uncertainty_mask):
-                    if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
-                        src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
-                                                              src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
-                                                              src_region=self.warp_region, sample_alg=self.sample_alg,
-                                                              ndv=ndv, verbose=self.verbose)[0]
-                    else:
-                        src_uncertainty = gdal.Open(self.uncertainty_mask)
+                    # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                    src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
+                                                          src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                                                          src_region=src_dem_region, sample_alg=self.sample_alg,
+                                                          ndv=ndv, verbose=self.verbose)[0]
+                    # else:
+                    #     src_uncertainty = gdal.Open(self.uncertainty_mask)
                     uncertainty_band = src_uncertainty.GetRasterBand(1)
                 else:
                     utils.echo_warning_msg('could not load uncertainty mask {}'.format(self.uncertainty_mask))
                     uncertainty_band = None
                     
             if self.trans_fn_unc_full is not None:
-                if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
-                    trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, self.src_dem_infos['geoT'][1], -1*self.src_dem_infos['geoT'][5],
-                                                            src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_src_trans_srs,
-                                                            src_region=self.warp_region, sample_alg=self.sample_alg,
-                                                            ndv=ndv, verbose=self.verbose)[0]
-                else:
-                    trans_uncertainty = gdal.Open(self.trans_fn_unc_full)
+                # if self.resample_and_warp:#self.x_inc is not None and self.y_inc is not None:
+                trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
+                                                        src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=aux_src_trans_srs,
+                                                        src_region=src_dem_region, sample_alg=self.sample_alg,
+                                                        ndv=ndv, verbose=self.verbose)[0]
+                # else:
+                #     trans_uncertainty = gdal.Open(self.trans_fn_unc_full)
                     
                 if uncertainty_band is not None:
                     trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)
@@ -2858,15 +2890,15 @@ class GDALFile(ElevationDataset):
                     mask_band = self.mask.GetRasterBand(1)
                 elif os.path.exists(self.mask):
                     utils.echo_msg('using mask dataset: {}'.format(self.mask))
-                    if self.x_inc is not None and self.y_inc is not None:
-                        src_mask = gdalfun.sample_warp(
-                            self.mask, None, self.x_inc, self.y_inc,
-                            src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
-                            src_region=self.warp_region, sample_alg=self.sample_alg,
-                            ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
-                        )[0]
-                    else:
-                        src_mask = gdal.Open(self.mask)
+                    #if self.resample_and_warp: #if self.x_inc is not None and self.y_inc is not None:
+                    src_mask = gdalfun.sample_warp(
+                        self.mask, None, src_dem_x_inc, src_dem_y_inc,
+                        src_srs=aux_src_trans_srs, dst_srs=aux_dst_trans_srs,
+                        src_region=src_dem_region, sample_alg=self.sample_alg,
+                        ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
+                    )[0]
+                    # else:
+                    #     src_mask = gdal.Open(self.mask)
                     
                     mask_band = src_mask.GetRasterBand(1)
                 elif utils.int_or(self.mask) is not None:
@@ -3141,25 +3173,31 @@ class BAGFile(ElevationDataset):
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         oo = []
 
-        if self.region is not None and self.region.valid_p():
-            bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
-            inf_region = regions.Region().from_list(self.infos.minmax)
-            bag_region = regions.regions_reduce(bag_region, inf_region)
-            bag_region.src_srs = self.infos.src_srs
+        if self.data_region is not None and self.data_region.valid_p():
+            oo.append('MINX={}'.format(self.data_region.xmin))
+            oo.append('MAXX={}'.format(self.data_region.xmax))
+            oo.append('MINY={}'.format(self.data_region.ymin))
+            oo.append('MAXY={}'.format(self.data_region.ymax))
             
-            if not bag_region.valid_p():
-                bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+        # if self.region is not None and self.region.valid_p():
+        #     bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+        #     inf_region = regions.Region().from_list(self.infos.minmax)
+        #     bag_region = regions.regions_reduce(bag_region, inf_region)
+        #     bag_region.src_srs = self.infos.src_srs
+            
+        #     if not bag_region.valid_p():
+        #         bag_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
 
-            oo.append('MINX={}'.format(bag_region.xmin))
-            oo.append('MAXX={}'.format(bag_region.xmax))
-            oo.append('MINY={}'.format(bag_region.ymin))
-            oo.append('MAXY={}'.format(bag_region.ymax))
-        else:
-            bag_region = regions.Region().from_list(self.infos.minmax)
-            bag_region.src_srs = self.infos.src_srs
+        #     oo.append('MINX={}'.format(bag_region.xmin))
+        #     oo.append('MAXX={}'.format(bag_region.xmax))
+        #     oo.append('MINY={}'.format(bag_region.ymin))
+        #     oo.append('MAXY={}'.format(bag_region.ymax))
+        # else:
+        #     bag_region = regions.Region().from_list(self.infos.minmax)
+        #     bag_region.src_srs = self.infos.src_srs
 
-        if self.dst_trans is not None:
-            bag_region.warp(self.dst_srs)
+        # if self.dst_trans is not None:
+        #     bag_region.warp(self.dst_srs)
             
         if ('HAS_SUPERGRIDS' in mt.keys() and mt['HAS_SUPERGRIDS'] == 'TRUE') \
            or self.force_vr \
@@ -3312,7 +3350,7 @@ class MBSParser(ElevationDataset):
 
     def parse_(self):
 
-        if self.region is None and not regions.Region().from_list(self.infos.minmax).valid_p():
+        if self.region is None or self.inf_region is None:
             self.want_mbgrid = False
         
         if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
@@ -3320,15 +3358,15 @@ class MBSParser(ElevationDataset):
                 tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
 
             ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-            if self.region is not None:
-                mbgrid_region = self.region.copy()
-            else:
-                mbgrid_region = regions.Region().from_list(self.infos.minmax)
+            # if self.region is not None:
+            #     mbgrid_region = self.region.copy()
+            # else:
+            #     mbgrid_region = regions.Region().from_list(self.infos.minmax)
 
-            mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
+            # mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
             utils.run_cmd(
                 'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                    mbgrid_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                    self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
             gdalfun.gdal2gdal('{}.grd'.format(ofn))
@@ -4930,7 +4968,7 @@ class DatasetFactory(factory.CUDEMFactory):
                     entry.append(int(key))
                     break
 
-            utils.echo_msg(entry)
+            #utils.echo_msg(entry)
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
                 return(self)

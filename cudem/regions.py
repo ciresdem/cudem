@@ -172,6 +172,10 @@ class Region:
         Returns:
           region-object: self
         """
+
+        region_str = utils.str_or(region_str)
+        if region_str is None:
+            return(self)
         
         if region_str[:2] == '-R':
             region_str = region_str[2:]
@@ -1083,6 +1087,7 @@ Options:
   -B, --buffer\t\tBUFFER the region with a buffer-value.
   -e, --echo\t\tECHO the <processed> region
   -n, --name\t\tPrint the region as a NAME
+  -m, --merge\t\tMERGE all regions into a single region
 
   --quiet\t\tLower the verbosity to a quiet
 
@@ -1110,6 +1115,7 @@ def regions_cli(argv = sys.argv):
     tile_set = None
     echo = False
     echo_fn = False
+    want_merge = False
     bv = None
     te = False
     
@@ -1143,6 +1149,8 @@ def regions_cli(argv = sys.argv):
             te = True
         elif arg == '-n' or arg == '--name':
             echo_fn = True
+        elif arg == '-m' or arg == '--merge':
+            want_merge = True
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
@@ -1169,7 +1177,15 @@ def regions_cli(argv = sys.argv):
             region_list_to_ogr(these_tiles, 'regions_tile_set.shp')
             
         these_regions = []
-            
+
+    if want_merge:
+        region_cnt = len(these_regions)
+        merged_region = these_regions[0].copy()
+        for r in range(1, region_cnt):
+            merged_region = regions_merge(merged_region, these_regions[r])
+
+        these_regions = [merged_region]
+        
     for rn, this_region in enumerate(these_regions):
         if src_srs is not None:
             this_region.src_srs = src_srs

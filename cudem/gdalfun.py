@@ -560,10 +560,13 @@ def gdal_get_srs(src_gdal):
     """get the srs (as wkt) from a gdal file"""
     
     src_ds = gdal.Open(src_gdal)
-    src_srs = src_ds.GetSpatialRef()
-    src_ds = None
-    if src_srs is not None:
-        return(src_srs.ExportToWkt())
+    if src_ds is not None:
+        src_srs = src_ds.GetSpatialRef()
+        src_ds = None
+        if src_srs is not None:
+            return(src_srs.ExportToWkt())
+        else:
+            return(None)
     else:
         return(None)
             

@@ -575,7 +575,11 @@ class Waffle:
 
                         sm_files = glob.glob('{}.*'.format(sm_layer))
                         for sm_file in sm_files:
-                            os.rename(sm_file, '{}_sm.{}'.format(self.name, sm_file[-3:]))
+                            out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
+                            if os.path.exists(out_sm):
+                                utils.remove_glob(out_sm)
+                                
+                            os.rename(sm_file, out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
 
@@ -1048,7 +1052,7 @@ class WafflesSciPy(Waffle):
         self.methods = ['linear', 'cubic', 'nearest']
         self.method = method
         self.chunk_size = utils.int_or(chunk_size)
-        self.chunk_step = chunk_step
+        self.chunk_step = utils.int_or(chunk_step)
         self.chunk_buffer = utils.int_or(chunk_buffer)
         self.num_threads = utils.int_or(num_threads)
 
