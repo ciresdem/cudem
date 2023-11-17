@@ -1002,8 +1002,8 @@ class ElevationDataset:
         ## transformations and trans_regions
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
-        #self.aux_src_trans_srs = self.src_srs
-        #self.aux_dst_trans_srs = self.dst_srs
+        self.aux_src_trans_srs = self.src_srs
+        self.aux_dst_trans_srs = self.dst_srs
         
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             tmp_src_srs = self.src_srs.split('+geoid:')
@@ -3694,13 +3694,13 @@ class Scratch(ElevationDataset):
     def yield_xyz(self):
         """parse the data from the data-list and yield as xyz"""
         
-        for this_entry in self.parse_json():
+        for this_entry in self.parse():#self.parse_json():
             for xyz in this_entry.yield_xyz():
                 yield(xyz)
 
     def yield_array(self):
         """parse the data from the data-list and yield as array-set"""
-        for this_entry in self.parse_json():
+        for this_entry in self.parse():#self.parse_json():
             for arr in this_entry.yield_array():
                 yield(arr)
                         
