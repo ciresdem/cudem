@@ -999,12 +999,12 @@ class ElevationDataset:
         #utils.echo_msg(self.infos)
         self.inf_region = regions.Region().from_string(self.infos.wkt)
 
-        self.aux_src_trans_srs = self.src_srs
-        self.aux_dst_trans_srs = self.dst_srs
-        
         ## transformations and trans_regions
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
+        #self.aux_src_trans_srs = self.src_srs
+        #self.aux_dst_trans_srs = self.dst_srs
+        
         if self.dst_srs is not None and self.src_srs is not None and self.src_srs != self.dst_srs:
             tmp_src_srs = self.src_srs.split('+geoid:')
             src_srs = tmp_src_srs[0]
@@ -1128,10 +1128,6 @@ class ElevationDataset:
                     utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, src_vert, dst_vert))
 
                 if self.trans_fn is not None:
-
-                    self.aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
-                    self.aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
-                    
                     if not os.path.exists(self.trans_fn_full):
                         gdalfun.sample_warp(self.trans_fn, self.trans_fn_full, self.x_inc, self.y_inc,
                                             src_region=self.region if self.x_inc is not None else None, src_srs='epsg:4326', dst_srs=self.dst_srs)
@@ -1158,9 +1154,6 @@ class ElevationDataset:
                             )
                         )
                 else:
-                    self.aux_src_trans_srs = self.src_trans_srs
-                    self.aux_dst_trans_srs = self.dst_trans_srs
-
                     out_src_srs = None
                     out_dst_srs = None
 
@@ -1187,6 +1180,9 @@ class ElevationDataset:
                 self.dst_trans_srs = out_dst_srs
                 self.dst_trans = osr.CoordinateTransformation(src_osr_srs, dst_osr_srs)
 
+                self.aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                self.aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                
                 src_osr_srs = dst_osr_srs = None
             else:
                 utils.echo_warning_msg('failed to generate transformation')
@@ -2441,7 +2437,8 @@ class LASFile(ElevationDataset):
                         # else:
                         #     aux_src_trans_srs = self.src_trans_srs
                         #     aux_dst_trans_srs = self.dst_trans_srs
-                        
+
+                        #utils.echo_msg_bold(self.aux_dst_trans_srs)
                         msk_infos = gdalfun.gdal_infos(self.mask)
                         warp_msk = gdalfun.sample_warp(
                             self.mask, None, None, None,
