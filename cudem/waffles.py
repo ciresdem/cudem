@@ -563,7 +563,7 @@ class Waffle:
                 mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
                 if mask_dem.valid_p():
                     #if self.want_mask:
-                    utils.echo_msg('processing mask')
+                    #utils.echo_msg('processing mask')
                     mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                      node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                      dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
