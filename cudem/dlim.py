@@ -2417,23 +2417,38 @@ class LASFile(ElevationDataset):
                     
                 #utils.remove_glob(tmp_trans_fn)
 
+
             ## ==============================================
             ## apply the mask
             ## ==============================================
             if self.mask is not None:
                 if self.region is not None:
-                    msk_infos = gdalfun.gdal_infos(self.mask)
-                    warp_msk = gdalfun.sample_warp(self.mask, None, None, None, src_region=self.region, dst_srs = self.dst_srs, ndv=msk_infos['ndv'])[0]
-                    msk_infos = gdalfun.gdal_infos(warp_msk)
-                    #with gdalfun.gdal_datasource(self.mask) as msk:
-                    msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
-                    #utils.echo_msg(msk_arr)
-                    #utils.echo_msg(msk_infos['ndv'])
-                    #utils.echo_msg(msk_arr != msk_infos['ndv'])
-                    #utils.echo_msg(msk_arr.shape)
-                    #utils.echo_msg(out_z.shape)
-                    out_z[msk_arr != msk_infos['ndv']] = np.nan
-                    warp_msk = None
+                    if gdalfun.ogr_or_gdal(self.mask) == 2:
+
+                        if self.trans_fn is not None:
+                            aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+                            aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+                        else:
+                            aux_src_trans_srs = self.src_trans_srs
+                            aux_dst_trans_srs = self.dst_trans_srs
+
+                        
+                        msk_infos = gdalfun.gdal_infos(self.mask)
+                        warp_msk = gdalfun.sample_warp(
+                            self.mask, None, None, None,
+                            src_region=self.region, dst_srs=aux_dst_trans_srs,
+                            ndv=msk_infos['ndv'])[0]
+                        
+                        msk_infos = gdalfun.gdal_infos(warp_msk)
+                        #with gdalfun.gdal_datasource(self.mask) as msk:
+                        msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
+                        #utils.echo_msg(msk_arr)
+                        #utils.echo_msg(msk_infos['ndv'])
+                        #utils.echo_msg(msk_arr != msk_infos['ndv'])
+                        #utils.echo_msg(msk_arr.shape)
+                        #utils.echo_msg(out_z.shape)
+                        out_z[msk_arr != msk_infos['ndv']] = np.nan
+                        warp_msk = None
                     
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
