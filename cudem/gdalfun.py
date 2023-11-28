@@ -539,7 +539,7 @@ class gdal_datasource:
         if isinstance(self.src_gdal, gdal.Dataset):
             self.src_ds = self.src_gdal
 
-        elif utils.str_or(self.src_gdal) is not None and os.path.exists(self.src_gdal):
+        elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal)):
             self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
 
         return(self.src_ds)
@@ -558,17 +558,17 @@ class gdal_datasource:
 
 def gdal_get_srs(src_gdal):
     """get the srs (as wkt) from a gdal file"""
-    
-    src_ds = gdal.Open(src_gdal)
-    if src_ds is not None:
-        src_srs = src_ds.GetSpatialRef()
-        src_ds = None
-        if src_srs is not None:
-            return(src_srs.ExportToWkt())
+
+    with gdal_datasource(src_gdal) as src_ds:
+        if src_ds is not None:
+            src_srs = src_ds.GetSpatialRef()
+            src_ds = None
+            if src_srs is not None:
+                return(src_srs.ExportToWkt())
+            else:
+                return(None)
         else:
             return(None)
-    else:
-        return(None)
             
 def gdal_multi_mask2single_mask(src_gdal):
     """transformat a mult-banded mask into a single-banded mask"""
@@ -1657,7 +1657,7 @@ def sample_warp(
         src_infos = gdal_infos(src_dem)
         xcount = src_infos['nx']
         ycount = src_infos['ny']
-    
+
     if size and (xcount is None and ycount is None):
         xcount, ycount, dst_gt = src_region.geo_transform(
             x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
@@ -1686,7 +1686,7 @@ def sample_warp(
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
                        resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=LZW", "TILED=YES"],
-                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=None)
+                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback = gdal.TermProgress if verbose else None)
 
 
     #utils.remove_glob(tmp_band)

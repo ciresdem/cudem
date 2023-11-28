@@ -67,7 +67,7 @@ import cudem
 #cudem_cache = os.path.join(os.path.expanduser('~'), '.cudem_cache')
 #cudem_cache = os.path.abspath('./.cudem_cache')
 this_dir, this_filename = os.path.split(__file__)
-cudem_cache = lambda: os.path.abspath('./.cudem_cache')
+cudem_cache = lambda: os.path.abspath('./.cudem_cache')#, datetime.datetime.now().strftime('%Y%m%H%M%S%f'))
 cudem_data = os.path.join(this_dir, 'data')
 
 ## heaps of thanks to https://github.com/fitnr/stateplane
@@ -153,12 +153,17 @@ def fn_ext(fn):
 def make_temp_fn(fn, temp_dir = cudem_cache()):
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
-    return(os.path.join(temp_dir, '_{}_{}{}'.format(fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'), '.{}'.format(fn_et) if fn_et is not None else '')))
+    return(os.path.join(
+        temp_dir,
+        '_{}_{}{}'.format(
+            fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
+            '.{}'.format(fn_et) if fn_et is not None else '')
+    ))
 
 def fn_url_p(fn):
     """check if fn is a url"""
     
-    url_sw = ['http://', 'https://', 'ftp://', 'ftps://']
+    url_sw = ['http://', 'https://', 'ftp://', 'ftps://', '/vsicurl']
     for u in url_sw:
         try:
             if fn.startswith(u):

@@ -694,7 +694,7 @@ class ElevationDataset:
                         invert=True
                         gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
                             .format(1, os.path.basename(utils.fn_basename2(self.mask)), self.mask, dst_fn, ' -i' if invert else '')
-                        utils.echo_msg(gr_cmd)
+                        #utils.echo_msg(gr_cmd)
                         out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
 
                         self.mask = dst_fn
@@ -2538,14 +2538,14 @@ class GDALFile(ElevationDataset):
     def destroy_ds(self):
         self.src_ds = None
 
-    def init_srs(self):
+    def init_srs(self, src_ds):
         """initialize the srs from the gdal file.
 
         try to split the horizontal and vertical and them combine them...
         """
         
         if self.src_srs is None:
-            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(self.fn))
+            src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(src_ds))
             if src_horz is None and src_vert is None:
                 return(None)
             
@@ -2582,8 +2582,10 @@ class GDALFile(ElevationDataset):
             self.open_options = None
 
         if self.valid_p() and self.src_srs is None:
-            #self.src_srs = gdalfun.gdal_get_srs(self.fn)
-            self.src_srs = self.init_srs()
+            if self.infos.src_srs is None:
+                self.src_srs = self.init_srs(self.fn)
+            else:
+                self.src_srs = self.infos.src_srs
 
         ## ==============================================
         ## set up any transformations and other options
@@ -2629,6 +2631,7 @@ class GDALFile(ElevationDataset):
             if self.src_ds is None:
                 return(None)
 
+            #utils.echo_msg(self.src_ds)
             ## ==============================================
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
@@ -2637,12 +2640,12 @@ class GDALFile(ElevationDataset):
             ## ==============================================
             tmp_warp = utils.make_temp_fn('{}'.format(tmp_ds), temp_dir=self.cache_dir)
             in_bands = self.src_ds.RasterCount
+            src_ds_config = gdalfun.gdal_infos(self.src_ds)
+            src_gt = src_ds_config['geoT']
+            #utils.echo_msg(src_ds_config)
             self.src_ds = None
             if in_bands > 1:
                 ## the srcwin for to extract data
-                src_ds_config = gdalfun.gdal_infos(self.fn)
-                src_gt = src_ds_config['geoT']
-
                 if self.trans_region is not None:
                     srcwin_region = self.trans_region.copy()
                 elif self.region is not None:
@@ -2751,14 +2754,15 @@ class GDALFile(ElevationDataset):
         return(self.src_ds)
 
     def generate_inf(self, callback=lambda: False):
-        if self.src_srs is None:
-            #self.infos.src_srs = gdalfun.gdal_get_srs(self.fn)
-            self.infos.src_srs = self.init_srs()
-        else:
-            self.infos.src_srs = self.src_srs
             
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
+
+                if self.src_srs is None:
+                    self.infos.src_srs = self.init_srs(src_ds)
+                else:
+                    self.infos.src_srs = self.src_srs
+                
                 ds_infos = gdalfun.gdal_infos(src_ds)
                 this_region = regions.Region(src_srs=self.src_srs).from_geo_transform(
                     geo_transform=ds_infos['geoT'],
@@ -2766,10 +2770,12 @@ class GDALFile(ElevationDataset):
                     y_count=ds_infos['ny']
                 )
 
-                zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
+                #if scan:
+                #    zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
                 
-        this_region.zmin, this_region.zmax = zr[0], zr[1]
-        self.infos.minmax = this_region.export_as_list(include_z=True)
+        #this_region.zmin, this_region.zmax = zr[0], zr[1]
+        #self.infos.minmax = this_region.export_as_list(include_z=True)
+        self.infos.minmax = this_region.export_as_list()
         self.infos.wkt = this_region.export_as_wkt()
         self.infos.numpts = ds_infos['nb']
 
@@ -4351,27 +4357,37 @@ class DAVFetcher_CoNED(Fetcher):
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(**kwargs)
 
+    def parse(self):
+        self.fetch_module.run()
+        for result in self.fetch_module.results:
+            for this_ds in self.yield_ds(result):
+                if this_ds is not None:
+                    this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
+                    #this_ds.remote = True
+                    this_ds.initialize()
+                    yield(this_ds)
+            
     def yield_ds(self, result):
-        ## try to get the SRS info from the result
-        try:
-            vdatum = self.fetch_module.vdatum
-            src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
-            horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
-            if vert_epsg is None:
-                vert_epsg = vdatum
+        # ## try to get the SRS info from the result
+        # try:
+        #     vdatum = self.fetch_module.vdatum
+        #     src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+        #     horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
+        #     if vert_epsg is None:
+        #         vert_epsg = vdatum
 
-            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
-            if vert_epsg is not None:
-                self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
-            else:
-                self.fetch_module.src_srs = src_srs
-        except:
-            pass
+        #     utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+        #     if vert_epsg is not None:
+        #         self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
+        #     else:
+        #         self.fetch_module.src_srs = src_srs
+        # except:
+        #     pass
         
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+        ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=None,#self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, check_path=False)._acquire_module()
         yield(ds)
 
 class DAVFetcher_SLR(Fetcher):
@@ -4998,36 +5014,44 @@ class DatasetFactory(factory.CUDEMFactory):
         ## guess format based on fn if not specified otherwise
         ## parse the format for dataset specific opts.
         ## ==============================================
+        #utils.echo_msg(entry)
         if len(entry) < 2:
-            for key in self._modules.keys():
-                if entry[0].startswith('http'):
-                    see = 'https'
-                else:
-                    se = entry[0].split('.')
-                    see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
+            if self.kwargs['data_format'] is not None:
+                entry.append(self.kwargs['data_format'])
+            else:
+                for key in self._modules.keys():
+                    if entry[0].startswith('http'):
+                        see = 'https'
+                    else:
+                        se = entry[0].split('.')
+                        see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
 
-                if see in self._modules[key]['fmts']:
-                    entry.append(int(key))
-                    break
+                    if see in self._modules[key]['fmts']:
+                        entry.append(int(key))
+                        break
 
             #utils.echo_msg(entry)
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
                 return(self)
+        #else:
+        opts = str(entry[1]).split(':')
+        if len(opts) > 1:
+            self.mod_args = utils.args2dict(list(opts[1:]), {})
+            entry[1] = int(opts[0])
         else:
-            opts = entry[1].split(':')
-            if len(opts) > 1:
-                self.mod_args = utils.args2dict(list(opts[1:]), {})
-                entry[1] = opts[0]
-            else:
-               self.mod_args = {}
+            self.mod_args = {}
                                                        
         try:
             assert isinstance(utils.int_or(entry[1]), int)
         except:
             utils.echo_error_msg('could not parse datalist entry {}'.format(entry))
             return(self)
+
+        if entry[0].startswith('http') and int(entry[1]) == 200:
+            entry[0] = '/vsicurl/{}'.format(entry[0])
         
+        #utils.echo_msg(entry)
         self.kwargs['data_format'] = int(entry[1])
         self.mod_name = int(entry[1])
         
@@ -5427,18 +5451,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                       utils.echo_error_msg('Killed by user')
-                       break
-                    except BrokenPipeError:
-                       utils.echo_error_msg('Pipe Broken')
-                       break
-                    except Exception as e:
-                       utils.echo_error_msg(e)
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #    utils.echo_error_msg('Killed by user')
+                    #    break
+                    # except BrokenPipeError:
+                    #    utils.echo_error_msg('Pipe Broken')
+                    #    break
+                    # except Exception as e:
+                    #    utils.echo_error_msg(e)
 ### End

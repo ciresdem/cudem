@@ -393,7 +393,8 @@ class Waffle:
 
         if self.data is None:
             return(self)
-        
+
+        ## todo: move to init
         if os.path.exists(self.fn):
             if not self.clobber:
                 utils.echo_warning_msg(
@@ -3201,6 +3202,26 @@ class WafflesCUDEM(Waffle):
             self.inc_levels.insert(0, self.xinc)
             self.inc_levels = self.inc_levels[:self.pre_count+1]
                 
+    ## todo: remove coastline after processing...
+    def generate_coastline(self, pre_data=None):
+        cst_region = self.p_region.copy()
+        cst_region.wmin = self.weight_levels[0]
+        utils.echo_msg('coast region is: {}'.format(cst_region))
+        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
+        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
+        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.weight_levels[0],
+                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
+                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
+        coastline.initialize()
+        coastline.generate()
+
+        if coastline is not None:
+            return('{}.shp:invert=True'.format(coastline.name))
+        else:
+            return(None)
+            
+    def run(self):
+
         if self.verbose:
             utils.echo_msg_bold('==============================================')
             utils.echo_msg('')
@@ -3226,27 +3247,7 @@ class WafflesCUDEM(Waffle):
             utils.echo_msg_bold('cudem output DEM: {}'.format(self.name))
             utils.echo_msg('')
             utils.echo_msg_bold('==============================================')
-
         
-    ## todo: remove coastline after processing...
-    def generate_coastline(self, pre_data=None):
-        cst_region = self.p_region.copy()
-        cst_region.wmin = self.weight_levels[0]
-        utils.echo_msg('coast region is: {}'.format(cst_region))
-        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
-        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
-        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.weight_levels[0],
-                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=False)._acquire_module()
-        coastline.initialize()
-        coastline.generate()
-
-        if coastline is not None:
-            return('{}.shp:invert=True'.format(coastline.name))
-        else:
-            return(None)
-            
-    def run(self):
         pre = self.pre_count
         pre_weight = 0 # initial run will use all data weights
         pre_region = self.p_region.copy()
@@ -4938,7 +4939,6 @@ class WaffleDEM:
                 utils.echo_error_msg('failed to correctly set metadata')
 
             dem_ds = None
-
             if self.verbose:
                 utils.echo_msg('set DEM metadata: {}.'.format(md))
 
@@ -4967,6 +4967,7 @@ class WaffleFactory(factory.CUDEMFactory):
         'uncertainty': {'name': 'uncertainty', 'stack': True, 'call': WafflesUncertainty},
         'scratch': {'name': 'scratch', 'stack': True, 'call': WafflesScratch},
         'flatten': {'name': 'flatten', 'stack': True, 'call': WafflesFlatten},
+        ## testing
         #'num': {'name': 'num', 'stack': True, 'call': WafflesNum}, # defunct
         #'patch': {'name': 'patch', 'stack': True, 'call': WafflesPatch}, # test
         #'cube': {'name': 'cube', 'stack': True, 'call': WafflesCUBE}, # test
@@ -4991,11 +4992,7 @@ def waffle_queue(q):
     """
     
     while True:
-        #try:
         waffle_module = q.get()
-        #except q.Empty:
-        #    continue
-
         if waffle_module is None:
             break
         else:
@@ -5444,8 +5441,6 @@ def waffles_cli(argv = sys.argv):
     for _ in range(n_threads):
         waffle_q.put(None)
         
-    #waffle_q.join()
-    #[t.join() for t in processes]
     for t in processes:
         t.join()
 
