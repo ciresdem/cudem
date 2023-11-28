@@ -2,7 +2,7 @@
 ##
 ## Copyright (c) 2010 - 2023 Regents of the University of Colorado
 ##
-## demfun.py is part of CUDEM
+## gdalfun.py is part of CUDEM
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -821,8 +821,7 @@ def gdal_nan(ds_config, outfile, nodata = None):
     if nodata != 0:
         nullArray[nullArray==0]=nodata
 
-    ds_config['ndv'] = nodata
-        
+    ds_config['ndv'] = nodata        
     gdal_write(nullArray, outfile, ds_config)
 
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None, inverse = False):

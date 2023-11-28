@@ -4368,25 +4368,26 @@ class DAVFetcher_CoNED(Fetcher):
                     yield(this_ds)
             
     def yield_ds(self, result):
-        # ## try to get the SRS info from the result
-        # try:
-        #     vdatum = self.fetch_module.vdatum
-        #     src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
-        #     horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
-        #     if vert_epsg is None:
-        #         vert_epsg = vdatum
+        ## try to get the SRS info from the result
+        try:
+            vdatum = self.fetch_module.vdatum
+            #src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+            src_srs = gdalfun.gdal_get_srs(result[0])
+            horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
+            if vert_epsg is None:
+                vert_epsg = vdatum
 
-        #     utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
-        #     if vert_epsg is not None:
-        #         self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
-        #     else:
-        #         self.fetch_module.src_srs = src_srs
-        # except:
-        #     pass
+            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+            if vert_epsg is not None:
+                self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
+            else:
+                self.fetch_module.src_srs = src_srs
+        except:
+            pass
         
         ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=None,#self.fetch_module.src_srs,
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, check_path=False)._acquire_module()
         yield(ds)
 
