@@ -2261,6 +2261,38 @@ https://tidesandcurrents.noaa.gov/
         return(self)
 
 ## ==============================================
+## WaterServices (USGS)
+## ==============================================
+class WaterServices(FetchModule):
+    """WaterServices station information from USGS
+
+https://waterservices.usgs.gov/
+
+< waterservices >"""
+
+    
+    def __init__(self, **kwargs):
+        super().__init__(name='waterservices', **kwargs)
+        self._water_services_api_url = 'https://waterservices.usgs.gov/nwis/iv/?'
+        
+    def run(self):
+        '''Run the WATERSERVICES fetching module'''
+        
+        if self.region is None:
+            return([])
+        
+        _data = {
+            'bBox': self.region.format('bbox'),
+            'siteStatus': 'active',
+            'format':'json',
+        }
+        _req = Fetch(self._water_services_api_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            self.results.append([_req.url, 'water_services_results_{}.json'.format(self.region.format('fn')), 'waterservices'])
+            
+        return(self)
+    
+## ==============================================
 ## buoys 
 ## ==============================================
 class BUOYS(FetchModule):
@@ -4870,6 +4902,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'hydrolakes': {'call': HydroLakes},
         'https': {'call': HttpDataset},
         'bing_bfp': {'call': BingBFP},
+        'waterservices': {'call': WaterServices},
     }
 
     def __init__(self, **kwargs):

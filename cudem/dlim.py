@@ -4242,7 +4242,7 @@ class ZIPlist(ElevationDataset):
 ## datasets
 ##
 ## If a fetch module needs special processing define a sub-class
-## of Fetcher and redefine the set_ds(self, result) function which returns a
+## of Fetcher and redefine the yield_ds(self, result) function which yields a
 ## list of dlim dataset objects, where result is an item from the fetch result list.
 ## Otherwise, this Fetcher class can be used as default if the fetched data comes
 ## in a normal sort of way.
@@ -4253,7 +4253,8 @@ class ZIPlist(ElevationDataset):
 ## specified in the geotiff files, it may be best to create a simple
 ## sub-class for it.
 ##
-## todo: add multibeamFetcher
+## todo:
+##   cudem fetcher (digital_coast)
 ## ==============================================
 class Fetcher(ElevationDataset):
     """The generic fetches dataset type.
@@ -4354,12 +4355,19 @@ class DAVFetcher_CoNED(Fetcher):
     CoNED doesn't assign one to their DEMs.
     """
     
-    def __init__(self, keep_fetched_data = True, **kwargs):
+    def __init__(self, keep_fetched_data = True, cog = True, **kwargs):
         super().__init__(**kwargs)
+        self.keep_fetched_data = keep_fetched_data
+        self.cog = cog
 
     def parse(self):
         self.fetch_module.run()
         for result in self.fetch_module.results:
+            if not self.cog:
+                status = self.fetch_module.fetch(result, check_size=self.check_size)
+                if status != 0:
+                    break
+                
             for this_ds in self.yield_ds(result):
                 if this_ds is not None:
                     this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
@@ -4371,8 +4379,11 @@ class DAVFetcher_CoNED(Fetcher):
         ## try to get the SRS info from the result
         try:
             vdatum = self.fetch_module.vdatum
-            #src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
-            src_srs = gdalfun.gdal_get_srs(result[0])
+            if not self.cog:
+                src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+            else:
+                src_srs = gdalfun.gdal_get_srs(result[0])
+                
             horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
             if vert_epsg is None:
                 vert_epsg = vdatum
@@ -4384,11 +4395,17 @@ class DAVFetcher_CoNED(Fetcher):
                 self.fetch_module.src_srs = src_srs
         except:
             pass
-        
-        ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, check_path=False)._acquire_module()
+
+        if not self.cog:
+            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                                parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                                dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+        else:
+            ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
+                                parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+                                dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, check_path=False)._acquire_module()
         yield(ds)
 
 class DAVFetcher_SLR(Fetcher):
@@ -4416,6 +4433,32 @@ class DAVFetcher_SLR(Fetcher):
                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
         yield(ds)
+
+# class DAVFetcher_CUDEM(Fetcher):
+#     """CUDEM from the digital coast 
+
+#     This is a wrapper shortcut for fetching CUDEMs from the Digital Coast,
+#     mainly so we can pull the remove the flattened ring around the actual data.
+#     """
+    
+#     def __init__(self, keep_fetched_data = True, **kwargs):
+#         super().__init__(**kwargs)
+
+#     def yield_ds(self, result):
+
+#         # with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update=True) as src_ds:
+#         #     if src_ds is not None:
+#         #         ds_config = gdalfun.gdal_infos(src_ds)
+#         #         curr_nodata = ds_config['ndv']
+
+#         ## this doesn't work in all cases, update to find and remove flattened areas
+#         gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
+        
+#         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+#                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+#                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
+#                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+#         yield(ds)        
                 
 class GMRTFetcher(Fetcher):
     def __init__(self, swath_only = False, **kwargs):
@@ -4862,6 +4905,45 @@ class TidesFetcher(Fetcher):
                              parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+class WaterServicesFetcher(Fetcher):
+    """
+
+    site_codes:
+      00065 - Gate Height
+      00060 - StreamFlow
+      63160 - Stream water level elevation above NAVD 1988
+      62611 - Groundwater level above NAVD 1988
+      72019 - Depth to water level, units below land surface
+    """
+    
+    def __init__(self, site_code='00065', units='m', **kwargs):
+        super().__init__(**kwargs)
+        self.units = units
+        self.site_code = site_code
+        
+    def yield_ds(self, result):
+        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
+            r = json.load(json_file)
+            if len(r) > 0:
+                with open(os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'), 'w') as tmp_ws:
+                    features = r['value']['timeSeries']
+                    for feature in features:
+                        if feature['variable']['variableCode'][0]['value'] == self.site_code:
+                            lon = float(feature['sourceInfo']['geoLocation']['geogLocation']['longitude'])
+                            lat = float(feature['sourceInfo']['geoLocation']['geogLocation']['latitude'])
+                            z = float(feature['values'][0]['value'][0]['value'])
+
+                            if self.units == 'm':
+                                z = z * 0.3048
+                            
+                            xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
+                            xyz.dump(dst_port=tmp_ws)
+                        
+        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, 
+                             parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
+                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
 class VDatumFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -4927,6 +5009,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -210: {'name': "CUDEM", 'fmts': ['CUDEM'], 'call': Fetcher},
         -211: {'name': "CoNED", 'fmts': ['CoNED'], 'call': DAVFetcher_CoNED},
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
+        -213: {'name': 'waterservies', 'fmts': ['waterservices'], 'call': WaterServicesFetcher},
         -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': Fetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
