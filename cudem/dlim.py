@@ -2534,6 +2534,9 @@ class GDALFile(ElevationDataset):
         self.tmp_unc_band = None
         self.tmp_weight_band = None
         self.src_ds = None
+
+        if self.fn.startswith('http') or self.fn.startswith('/vsicurl/'):
+            self.check_path = False
         
     def destroy_ds(self):
         self.src_ds = None
@@ -2691,7 +2694,7 @@ class GDALFile(ElevationDataset):
                 return(None)
 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
-                                        src_region=self.warp_region if (self.y_inc is not None and self.x_inc is not None) else None,
+                                        src_region=self.warp_region,#if (self.y_inc is not None and self.x_inc is not None) else None,
                                         sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
             tmp_ds = None
             
@@ -5104,7 +5107,7 @@ class DatasetFactory(factory.CUDEMFactory):
                 entry.append(self.kwargs['data_format'])
             else:
                 for key in self._modules.keys():
-                    if entry[0].startswith('http'):
+                    if entry[0].startswith('http') or entry[0].startswith('/vsicurl/'):
                         see = 'https'
                     else:
                         se = entry[0].split('.')

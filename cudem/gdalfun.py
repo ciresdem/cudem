@@ -1651,27 +1651,36 @@ def sample_warp(
     """sample and/or warp the src_dem"""
 
     xcount = ycount = None
-    
-    if x_sample_inc is None and y_sample_inc is None:
-        src_infos = gdal_infos(src_dem)
-        xcount = src_infos['nx']
-        ycount = src_infos['ny']
-
-    if size and (xcount is None and ycount is None):
-        xcount, ycount, dst_gt = src_region.geo_transform(
-            x_inc=x_sample_inc, y_inc=y_sample_inc, node='pixel'
-        )
-        x_sample_inc = y_sample_inc = None
-
+    out_region = None
     if src_region is not None:
-        out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]
-    else: 
-        out_region = None
+        out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]        
+        if src_srs is not None and dst_srs is not None:
+            trans_region = src_region.copy()
+            trans_region.src_srs = dst_srs
+            trans_region.warp(src_srs)
+        else:
+            trans_region = src_region
+
+        if x_sample_inc is None and y_sample_inc is None:
+            src_infos = gdal_infos(src_dem)
+            #xcount = src_infos['nx']
+            #ycount = src_infos['ny']
+            #dem_region = regions.Region().from_geo_transform(src_infos['geoT'], xcount, ycount)
+
+            xcount, ycount, dst_gt = trans_region.geo_transform(
+                x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5]*-1, node='grid'
+            )
+        
+        if size and (xcount is None and ycount is None):
+            xcount, ycount, dst_gt = src_region.geo_transform(
+                x_inc=x_sample_inc, y_inc=y_sample_inc, node='grid'
+            )
+            x_sample_inc = y_sample_inc = None
         
     if verbose:
         utils.echo_msg(
-            'warping DEM: {} :: R:{} E:{}/{} S{} P{} -> T{}'.format(
-                os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, sample_alg, src_srs, dst_srs
+            'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+                os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
             )
         )
         
@@ -1680,13 +1689,15 @@ def sample_warp(
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
-            
-    dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
-                       dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-                       resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=LZW", "TILED=YES"],
-                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback = gdal.TermProgress if verbose else None)
 
+    with tqdm(desc='warping...', total=100) as pbar:
+        pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
+        #pbar_update = lambda a,b,c: utils.echo_msg(a)
+        dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
+                           xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
+                           dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
+                           resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=LZW", "TILED=YES"],
+                           srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback = pbar_update if verbose else None)
 
     #utils.remove_glob(tmp_band)
     
@@ -1694,6 +1705,7 @@ def sample_warp(
         return(dst_ds, 0)
     else:
         dst_ds = None
+        #utils.echo_msg(gdal_infos(dst_dem))
         return(dst_dem, 0)    
     
 def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):
