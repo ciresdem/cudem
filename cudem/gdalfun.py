@@ -1594,6 +1594,38 @@ def gdal_nodata_count_mask(src_dem, band = 1):
     
     return(mn)
 
+def gdal_flat_to_nan(src_dem, dst_dem = None, band = 1, size_threshold = None, verbose = True):
+    """Discover flat zones"""
+    
+    with gdal_datasource(src_dem, update = True if dst_dem is None else False) as src_ds:
+        if src_ds is not None:
+            src_band = src_ds.GetRasterBand(band)
+            src_arr = src_band.ReadAsArray().astype(float)
+            src_config = gdal_infos(src_ds)
+            
+            uv, uv_counts = np.unique(src_arr, return_counts=True)
+            if size_threshold is None:
+                size_threshold = get_outliers(uv_counts, 99)[0]
+                
+            uv_ = uv[uv_counts > size_threshold]
+            for i in trange(0,
+                            len(uv_),
+                            desc='{}: removing flattened data greater than {} cells'.format(
+                                os.path.basename(sys.argv[0]), size_threshold
+                            ),
+                            leave=verbose):
+
+                src_arr[src_arr == uv_[i]] = src_config['ndv']
+        
+            if dst_dem is None:
+                src_band.WriteArray(src_arr)
+                src_ds.FlushCache()
+                #return(src_ds)
+            else:
+                gdal_write(src_arr, dst_dem, src_config)
+
+    return(dst_dem if dst_dem is not None else src_dem, 0)
+            
 ## TODO: finish this function.
 def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
     """Flatten nodata areas larger than `size_threshhold`"""
@@ -1625,7 +1657,9 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1, ve
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
         for i in trange(0,
                         n,
-                        desc='{}: flattening data voids greater than {} cells'.format(os.path.basename(sys.argv[0]), size_threshold),
+                        desc='{}: flattening data voids greater than {} cells'.format(
+                            os.path.basename(sys.argv[0]), size_threshold
+                        ),
                         leave=verbose):
             if mn[i] >= size_threshold:
                 i += 1
@@ -1636,7 +1670,7 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1, ve
         src_arr[np.isnan(src_arr)] = src_config['ndv']
         
         if dst_dem is None:
-            src_ds.GetRasterBand(1).WriteArray(src_arr)
+            src_ds.GetRasterBand(band).WriteArray(src_arr)
         else:
             gdal_write(src_arr, dst_dem, src_config)
 

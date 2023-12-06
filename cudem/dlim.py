@@ -996,11 +996,14 @@ class ElevationDataset:
         transformations are set based on src_srs and dst_srs
         """
 
+        ## ==============================================
         ## dataset inf region
-        #utils.echo_msg(self.infos)
+        ## ==============================================
         self.inf_region = regions.Region().from_string(self.infos.wkt)
 
+        ## ==============================================
         ## transformations and trans_regions
+        ## ==============================================
         if self.src_srs == '': self.src_srs = None
         if self.dst_srs == '': self.dst_srs = None
         self.aux_src_trans_srs = self.src_srs
@@ -2521,7 +2524,8 @@ class GDALFile(ElevationDataset):
     """
     
     def __init__(self, weight_mask = None, uncertainty_mask = None,  open_options = None,
-                 sample = None, check_path = True, super_grid = False, band_no = 1, **kwargs):
+                 sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
+                 **kwargs):
         super().__init__(**kwargs)
         #self.mask = mask
         self.weight_mask = weight_mask
@@ -2535,7 +2539,8 @@ class GDALFile(ElevationDataset):
         self.tmp_unc_band = None
         self.tmp_weight_band = None
         self.src_ds = None
-
+        self.remove_flat = remove_flat
+        
         if self.fn.startswith('http') or self.fn.startswith('/vsicurl/'):
             self.check_path = False
         
@@ -2694,6 +2699,11 @@ class GDALFile(ElevationDataset):
             if tmp_ds is None:
                 return(None)
 
+            if self.remove_flat:
+                tmp_noflat = utils.make_temp_fn('tmp_flat.tif', temp_dir=self.cache_dir)
+                tmp_ds = gdalfun.gdal_flat_to_nan(tmp_ds, dst_dem=tmp_noflat, verbose=self.verbose)[0]
+                #gdalfun.gdal_flat_to_nan(tmp_ds, verbose=self.verbose)[0]
+            
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,
                                         src_region=self.warp_region,#if (self.y_inc is not None and self.x_inc is not None) else None,
                                         sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
@@ -4423,19 +4433,13 @@ class DAVFetcher_SLR(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-
-        # with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update=True) as src_ds:
-        #     if src_ds is not None:
-        #         ds_config = gdalfun.gdal_infos(src_ds)
-        #         curr_nodata = ds_config['ndv']
-
         ## this doesn't work in all cases, update to find and remove flattened areas
-        gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
+        #gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
         
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True, remove_flat=True)._acquire_module()
         yield(ds)
 
 # class DAVFetcher_CUDEM(Fetcher):
