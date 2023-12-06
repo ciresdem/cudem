@@ -1623,7 +1623,6 @@ def gdal_hydro_flatten(src_dem, dst_dem = None, band = 1, size_threshold = 1, ve
         
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
-        #size_threshold = 
         for i in trange(0,
                         n,
                         desc='{}: flattening data voids greater than {} cells'.format(os.path.basename(sys.argv[0]), size_threshold),
@@ -1663,10 +1662,6 @@ def sample_warp(
 
         if x_sample_inc is None and y_sample_inc is None:
             src_infos = gdal_infos(src_dem)
-            #xcount = src_infos['nx']
-            #ycount = src_infos['ny']
-            #dem_region = regions.Region().from_geo_transform(src_infos['geoT'], xcount, ycount)
-
             xcount, ycount, dst_gt = trans_region.geo_transform(
                 x_inc=src_infos['geoT'][1], y_inc=src_infos['geoT'][5]*-1, node='grid'
             )
@@ -1682,30 +1677,24 @@ def sample_warp(
             'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
                 os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
             )
-        )
-        
+        )        
     #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
-    
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
 
     with tqdm(desc='warping...', total=100) as pbar:
         pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
-        #pbar_update = lambda a,b,c: utils.echo_msg(a)
         dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                            xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                            dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
                            resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=LZW", "TILED=YES"],
                            srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback = pbar_update if verbose else None)
 
-    #utils.remove_glob(tmp_band)
-    
     if dst_dem is None:
         return(dst_ds, 0)
     else:
         dst_ds = None
-        #utils.echo_msg(gdal_infos(dst_dem))
         return(dst_dem, 0)    
     
 def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):

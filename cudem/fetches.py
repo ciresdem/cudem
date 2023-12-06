@@ -628,8 +628,9 @@ def fetch_queue(q, m, p=False, c=True):
                             verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                         ).fetch_file(fetch_args[1], check_size=c)
                     except:
-                        utils.echo_warning_msg('fetch of {} failed, adding to end of queue...'.format(fetch_args[0]))
-                        q.put(fetch_args)
+                        utils.echo_warning_msg('fetch of {} failed...'.format(fetch_args[0]))
+                        #utils.echo_warning_msg('fetch of {} failed, adding to end of queue...'.format(fetch_args[0]))
+                        #q.put(fetch_args)
                         
             else:
                 if m.region is not None:
@@ -1709,7 +1710,13 @@ https://data.ngdc.noaa.gov/platforms/
             
         src_inf = os.path.join(self._outdir, '{}.inf'.format(entry[1]))
         utils.echo_msg(src_inf)
-        if Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=True).fetch_file(src_inf) == 0:
+        try:
+            status = Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=True).fetch_file(src_inf)
+        except:
+            utils.echo_warning_msg('failed to fetch inf file: {}.inf'.format(inf_url))
+            status = -1
+            
+        if status == 0:
             mb_fmt = self.mb_inf_data_format(src_inf)
             mb_date = self.mb_inf_data_date(src_inf)
             mb_perc = self.mb_inf_perc_good(src_inf)

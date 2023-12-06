@@ -940,8 +940,9 @@ class ElevationDataset:
                 
             except ValueError:
                 generate_inf = True
+                utils.remove_glob(inf_path)
                 if self.verbose:
-                    utils.echo_error_msg(
+                    utils.echo_warning_msg(
                         'failed to parse inf {}'.format(inf_path)
                     )
         else:

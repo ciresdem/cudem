@@ -126,7 +126,8 @@ setuptools.setup(
         'scripts/dem_update.sh',
         'scripts/xyz_vs_dem.sh',
         'scripts/dem_set_metadata.py',
-        'scripts/dem_patch.sh'
+        'scripts/dem_patch.sh',
+        'scripts/xyz2shp.py'
     ],
     python_requires = '>=3.0',
     project_urls = {

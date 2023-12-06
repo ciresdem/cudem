@@ -2252,6 +2252,9 @@ class WafflesCoastline(Waffle):
         if len(this_tnm.results) > 0:
             for i, tnm_result in enumerate(this_tnm.results):
                 tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
+                if not os.path.exists(tnm_zip):
+                    break
+                
                 tnm_zips = utils.unzip(tnm_zip, self.cache_dir)
                 gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
