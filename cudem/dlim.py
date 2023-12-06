@@ -2701,7 +2701,7 @@ class GDALFile(ElevationDataset):
 
             if self.remove_flat:
                 tmp_noflat = utils.make_temp_fn('tmp_flat.tif', temp_dir=self.cache_dir)
-                tmp_ds = gdalfun.gdal_flat_to_nan(tmp_ds, dst_dem=tmp_noflat, verbose=self.verbose)[0]
+                tmp_ds = gdalfun.gdal_remove_flats(tmp_ds, dst_dem=tmp_noflat, verbose=self.verbose)[0]
                 #gdalfun.gdal_flat_to_nan(tmp_ds, verbose=self.verbose)[0]
             
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_trans_srs, dst_srs=self.dst_trans_srs,

@@ -1594,7 +1594,7 @@ def gdal_nodata_count_mask(src_dem, band = 1):
     
     return(mn)
 
-def gdal_flat_to_nan(src_dem, dst_dem = None, band = 1, size_threshold = None, verbose = True):
+def gdal_remove_flats(src_dem, dst_dem = None, band = 1, size_threshold = None, verbose = True):
     """Discover flat zones"""
     
     with gdal_datasource(src_dem, update = True if dst_dem is None else False) as src_ds:
@@ -1608,6 +1608,7 @@ def gdal_flat_to_nan(src_dem, dst_dem = None, band = 1, size_threshold = None, v
                 size_threshold = get_outliers(uv_counts, 99)[0]
                 
             uv_ = uv[uv_counts > size_threshold]
+            utils.echo_msg(len(uv_))
             for i in trange(0,
                             len(uv_),
                             desc='{}: removing flattened data greater than {} cells'.format(

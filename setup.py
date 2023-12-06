@@ -88,6 +88,7 @@ setuptools.setup(
         'scripts/gdal_mask.py',
         'scripts/gdal_polygonize_mask.py',
         'scripts/gdal_hydro_flatten.py',
+        'scripts/gdal_remove_flats.py',
         'scripts/ddms.py',
         'scripts/has_nulls.py',
         'scripts/all_ndv.py',
