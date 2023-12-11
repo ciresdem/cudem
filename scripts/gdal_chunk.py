@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_chunk.py
 ##
-## Copyright (c) 2019 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2019 - 2023 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -27,9 +27,9 @@
 import os
 import sys
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 
-_version = '0.0.5'
+_version = '0.0.6'
 _usage = '''gdal_chunk.py ({}): chunk a gdal grid
 
 usage: gdal_chunk.py [ file ]
@@ -80,5 +80,5 @@ if __name__ == '__main__':
     if not os.path.exists(src_fn):
         utils.echo_error_msg('{} is not valid'.format(src_fn))
     else:
-        demfun.chunks(src_fn, n_chunk=chunk_value)
+        gdalfun.chunks(src_fn, n_chunk=chunk_value)
 ### End

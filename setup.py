@@ -56,6 +56,13 @@ setuptools.setup(
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar
         'mercantile', # for MS building footprints
+        # 'earthaccess', # for earthdata access
+        # 'utm', # for cshelph
+        # 'pandas', # for cshelph
+        # 'geopandas', # for cshelph
+        # 'fiona', # for cshelph
+        # 'zarr', # for cshelph
+        # 'fsspec', # for cshelph
         #'windows-curses', # for windows
     ], 
     entry_points = {

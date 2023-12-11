@@ -95,6 +95,7 @@ import lxml.etree
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+import h5py as h5
 
 import cudem
 from cudem import utils
@@ -3140,7 +3141,97 @@ class GDALFile(ElevationDataset):
                             out_xyz.transform(self.dst_trans)
 
                         yield(out_xyz)
-            
+
+class ATLFile(ElevationDataset):
+    def __init__(self, short_name='ATL03', **kwargs):
+        super().__init__(**kwargs)
+        self.short_name = short_name
+
+    def init_ds(self):
+        dataset = None        
+        if self.short_name.lower() == 'atl03':
+            for i in range(1, 4):
+                dataset = self.read_atl03('{}'.format(i))
+                yield(np.column_stack((dataset[1], dataset[0], dataset[2])))
+
+    def read_atl03(self, laser_num):
+        """from 'cshelph' https://github.com/nmt28/C-SHELPh.git
+
+        laser_num is 1, 2 or 3
+        """
+        
+        # Read File
+        f = h5.File(self.fn, 'r')
+
+        # Select a laser
+        orientation = f['/orbit_info/sc_orient'][0]
+
+        # selects the strong beams only [we can include weak beams later on]
+        orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + orientDict[orientation]
+
+        # Read in the required photon level data
+        photon_h = f['/' + laser + '/heights/h_ph'][...,]
+        latitude = f['/' + laser + '/heights/lat_ph'][...,]
+        longitude = f['/' + laser + '/heights/lon_ph'][...,]
+        conf = f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+
+        # params needed for refraction correction
+
+        ref_elev = f['/' + laser + '/geolocation/ref_elev'][...,]
+        ref_azimuth = f['/' + laser + '/geolocation/ref_azimuth'][...,]
+        ph_index_beg = f['/' + laser + '/geolocation/ph_index_beg'][...,]
+        segment_id = f['/' + laser + '/geolocation/segment_id'][...,]
+        altitude_sc = f['/' + laser + '/geolocation/altitude_sc'][...,]
+        seg_ph_count = f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+
+        return(latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+
+    def yield_points(self):
+        for dataset in self.init_ds():        
+            points = np.rec.fromrecords(dataset, names='x, y, z')
+            if self.region is not None  and self.region.valid_p():
+                xyz_region = self.region.copy() if self.dst_trans is None else self.trans_region.copy()
+                if self.invert_region:
+                    points = points[((points['x'] > xyz_region.xmax) | (points['x'] < xyz_region.xmin)) | \
+                                    ((points['y'] > xyz_region.ymax) | (points['y'] < xyz_region.ymin))]
+                    if xyz_region.zmin is not None:
+                        points =  points[(points['z'] < xyz_region.zmin)]
+                        if xyz_region.zmax is not None:
+                            points =  points[(points['z'] > xyz_region.zmax)]
+                else:
+                    points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
+                                    ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
+                    if xyz_region.zmin is not None:
+                        points =  points[(points['z'] > xyz_region.zmin)]
+
+                    if xyz_region.zmax is not None:
+                        points =  points[(points['z'] < xyz_region.zmax)]
+
+            if len(points) > 0:
+                yield(points)
+
+    def yield_xyz(self):
+        count = 0
+        for dataset in self.yield_points():
+            #print(dataset)
+            count += len(dataset)
+            for point in dataset:
+                this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
+                                       w=self.weight, u=self.uncertainty)
+                
+                if self.dst_trans is not None:
+                    this_xyz.transform(self.dst_trans)
+
+                yield(this_xyz)
+
+        if self.verbose:
+            utils.echo_msg_bold(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+    
 ## ==============================================
 ## BAG Raster File.
 ## Uses GDAL
@@ -4442,6 +4533,18 @@ class DAVFetcher_SLR(Fetcher):
                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True, remove_flat=True)._acquire_module()
         yield(ds)
 
+class IceSatFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def yield_ds(self, result):
+        
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, src_srs=self.fetch_module.src_srs,
+                            dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
+                            src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                            cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+        yield(ds)
+        
 # class DAVFetcher_CUDEM(Fetcher):
 #     """CUDEM from the digital coast 
 
@@ -4620,8 +4723,7 @@ class GEBCOFetcher(Fetcher):
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region, mask=self.mask, 
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
-
-    
+                
 class CopernicusFetcher(Fetcher):
     def __init__(self, datatype=None, **kwargs):
         super().__init__(**kwargs)
@@ -4992,6 +5094,7 @@ class DatasetFactory(factory.CUDEMFactory):
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
+        202: {'name': 'atl', 'fmts': ['h5'], 'call': ATLFile},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
         301: {'name': 'mbs', 'fmts': ['fbt'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'], 'call': OGRFile},
@@ -5018,6 +5121,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -211: {'name': "CoNED", 'fmts': ['CoNED'], 'call': DAVFetcher_CoNED},
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
         -213: {'name': 'waterservies', 'fmts': ['waterservices'], 'call': WaterServicesFetcher},
+        -214: {'name': "icesat", 'fmts': ['icesat'], 'call': IceSatFetcher},
         -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': Fetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
@@ -5088,7 +5192,6 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
         this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
-        #utils.echo_msg(this_entry)
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \

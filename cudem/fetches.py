@@ -55,6 +55,29 @@ from cudem import FRED
 from cudem import vdatums
 from cudem import gdalfun
 
+## Earthdata
+import base64
+import getopt
+import itertools
+import json
+import math
+import netrc
+import os.path
+import ssl
+import sys
+import time
+
+try:
+    from urllib.parse import urlparse
+    from urllib.request import urlopen, Request, build_opener, HTTPCookieProcessor
+    from urllib.error import HTTPError, URLError
+except ImportError:
+    from urlparse import urlparse
+    from urllib2 import urlopen, Request, HTTPError, URLError, build_opener, HTTPCookieProcessor
+
+import numpy as np
+from getpass import getpass
+
 #r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 r_headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
 namespaces = {
@@ -3906,30 +3929,9 @@ https://cmr.earthdata.nasa.gov
 
 < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
 
-    import base64
-    import getopt
-    import itertools
-    import json
-    import math
-    import netrc
-    import os.path
-    import ssl
-    import sys
-    import time
-    from getpass import getpass
-
-    try:
-        from urllib.parse import urlparse
-        from urllib.request import urlopen, Request, build_opener, HTTPCookieProcessor
-        from urllib.error import HTTPError, URLError
-    except ImportError:
-        from urlparse import urlparse
-        from urllib2 import urlopen, Request, HTTPError, URLError, build_opener, HTTPCookieProcessor
-
-    import numpy as np
-
     def __init__(self, short_name = 'ATL08', provider = None, version = None, time_start = '',
                  time_end = '', filename_filter = '', name = None, **kwargs):
+        
         super().__init__(name='earthdata', **kwargs)
         self.CMR_URL = 'https://cmr.earthdata.nasa.gov'
         self.URS_URL = 'https://urs.earthdata.nasa.gov'
@@ -3969,12 +3971,24 @@ https://cmr.earthdata.nasa.gov
         )
 
         for url in url_list:
-            if self.name is not None:
-                if self.name in url:
+            if url.endswith('h5'):
+                if self.name is not None:
+                    if self.name in url:
+                        self.results.append([url, url.split('/')[-1], 'earthdata'])
+                else:
                     self.results.append([url, url.split('/')[-1], 'earthdata'])
-            else:
-                self.results.append([url, url.split('/')[-1], 'earthdata'])
 
+class IceSat(EarthData):
+    def __init__(self, short_name='ATL03', **kwargs):
+        icesat_short_names = ['ATL03', 'ATL05', 'ATL06']
+        
+        if short_name not in icesat_short_names:
+            utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
+        else:
+            super().__init__(short_name='ATL03', **kwargs)
+            
+        self.data_format = 202
+                    
 ## ==============================================
 ## nsidc_download.py from Mike McFerrin
 ## run nsidc.py directly to use non-fetches CLI
@@ -4904,6 +4918,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'vdatum': {'call': VDATUM},
         'buoys': {'call': BUOYS},
         'earthdata': {'call': EarthData},
+        'icesat': {'call': IceSat},
         'usiei': {'call': USIEI},
         'wsf': {'call': WSF},
         'hydrolakes': {'call': HydroLakes},
