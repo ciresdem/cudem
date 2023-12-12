@@ -28,6 +28,7 @@
 import os
 import sys
 import shutil
+import math
 from tqdm import tqdm
 from tqdm import trange
 
@@ -542,6 +543,10 @@ class gdal_datasource:
         elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal)):
             self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
 
+        ## remove overviews in update mode
+        if self.update:
+            self.src_ds.BuildOverviews('AVERAGE', [])
+            
         return(self.src_ds)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
@@ -1594,37 +1599,50 @@ def gdal_nodata_count_mask(src_dem, band = 1):
     
     return(mn)
 
-def gdal_remove_flats(src_dem, dst_dem = None, band = 1, size_threshold = None, verbose = True):
-    """Discover flat zones"""
+def gdal_remove_flats(src_dem, dst_dem = None, band = 1, size_threshold = None, n_chunk = None, verbose = True):
+    """Discover and remove flat zones"""
     
     with gdal_datasource(src_dem, update = True if dst_dem is None else False) as src_ds:
         if src_ds is not None:
-            src_band = src_ds.GetRasterBand(band)
-            src_arr = src_band.ReadAsArray().astype(float)
             src_config = gdal_infos(src_ds)
-            
-            uv, uv_counts = np.unique(src_arr, return_counts=True)
-            if size_threshold is None:
-                size_threshold = get_outliers(uv_counts, 99)[0]
+            src_band = src_ds.GetRasterBand(band)
+            if dst_dem is not None:
+                gdal_write(None, dst_dem, src_config)
+                dst_ds = gdal.Open(dst_dem, 1)
+                dst_band = dst_ds.GetRasterBand(1)
                 
-            uv_ = uv[uv_counts > size_threshold]
-            utils.echo_msg(len(uv_))
-            for i in trange(0,
-                            len(uv_),
-                            desc='{}: removing flattened data greater than {} cells'.format(
-                                os.path.basename(sys.argv[0]), size_threshold
-                            ),
-                            leave=verbose):
+            if n_chunk is None:
+                n_chunk = src_config['nb']
+                
+            for srcwin in gdal_yield_srcwin(src_ds, n_chunk=n_chunk, step=n_chunk, verbose=True):
+                src_arr = src_band.ReadAsArray(*srcwin).astype(float)
+                #src_arr[src_arr == src_config['ndv']] = np.nan
 
-                src_arr[src_arr == uv_[i]] = src_config['ndv']
-        
-            if dst_dem is None:
-                src_band.WriteArray(src_arr)
-                src_ds.FlushCache()
-                #return(src_ds)
-            else:
-                gdal_write(src_arr, dst_dem, src_config)
+                uv, uv_counts = np.unique(src_arr, return_counts=True)
+                if size_threshold is None:
+                    _size_threshold = get_outliers(uv_counts, 99)[0]
+                else:
+                    _size_threshold = size_threshold
 
+                uv_ = uv[uv_counts > _size_threshold]
+                if len(uv_) > 0:
+                    for i in trange(0,
+                                    len(uv_),
+                                    desc='{}: removing flattened data greater than {} cells'.format(
+                                        os.path.basename(sys.argv[0]), _size_threshold
+                                    ),
+                                    leave=verbose):
+
+                        src_arr[src_arr == uv_[i]] = src_config['ndv']
+                    
+                if dst_dem is None:
+                    #src_arr[np.isnan(src_arr)] = src_config['ndv']
+                    src_band.WriteArray(src_arr, srcwin[0], srcwin[1])
+                    src_ds.FlushCache()
+                else:
+                    dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
+
+    dst_ds = dst_band = None
     return(dst_dem if dst_dem is not None else src_dem, 0)
             
 ## TODO: finish this function.
@@ -1773,7 +1791,9 @@ def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, v
                 echo_warning_msg('could not set projection {}'.format(ds_config['proj']))
             else: pass
         ds.GetRasterBand(1).SetNoDataValue(ds_config['ndv'])
-        ds.GetRasterBand(1).WriteArray(src_arr)
+        if src_arr is not None:
+            ds.GetRasterBand(1).WriteArray(src_arr)
+            
         ds = src_arr = None        
         return(dst_gdal, 0)
     else:
@@ -1819,10 +1839,12 @@ def gdal_yield_srcwin(src_gdal, n_chunk = 10, step = 5, verbose = False):
     i_chunk = 0
     x_i_chunk = 0
     
-    with tqdm(total=ds_config['nb']/step, desc='chunking srcwin') as pbar:
+    with tqdm(total=math.ceil(ds_config['ny']/step) * math.ceil(ds_config['nx']/step), desc='chunking {}'.format(src_gdal)) as pbar:
         while True:
+            #pbar.update()                    
             y_chunk = n_chunk
             while True:
+                pbar.update()
                 this_x_chunk = ds_config['nx'] if x_chunk > ds_config['nx'] else x_chunk
                 this_y_chunk = ds_config['ny'] if y_chunk > ds_config['ny'] else y_chunk
                 this_x_origin = x_chunk - n_chunk
@@ -1839,8 +1861,8 @@ def gdal_yield_srcwin(src_gdal, n_chunk = 10, step = 5, verbose = False):
                     y_chunk += step
                     i_chunk += 1
                     
-                pbar.update(step)
-                    
+                #pbar.update(1)
+                #pbar.update()
             if x_chunk > ds_config['nx']:
                 break
             else:
@@ -1880,7 +1902,7 @@ def gdal_chunks(src_gdal, n_chunk, band = 1):
                     o_chunk = '{}_chnk{}.tif'.format(os.path.basename(src_gdal).split('.')[0], c_n)
                     dst_fn = os.path.join(os.path.dirname(src_gdal), o_chunk)
                     o_chunks.append(dst_fn)
-                    utils.gdal_write(band_data, dst_fn, dst_config)
+                    gdal_write(band_data, dst_fn, dst_config)
                     c_n += 1                
         return(o_chunks)
 

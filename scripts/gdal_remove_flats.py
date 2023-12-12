@@ -20,6 +20,7 @@ usage: gdal_remove_flats.py [ src_dem [dst_dem opts] ]
 
   --band\t\tThe input raster band (1)
   --size_threshold\tThe minimum size (in cells) to flatten
+  --chunks\t\tProcess in chunks (n_chunksXn_chunks cells)
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
 
@@ -36,6 +37,7 @@ if __name__ == "__main__":
     dst_dem = None
     band = 1
     size_threshold = None
+    n_chunks = None
     verbose = False
     
     i = 1
@@ -43,6 +45,9 @@ if __name__ == "__main__":
         arg = sys.argv[i]
         if arg == '--size_threshold':
             size_threshold = utils.int_or(sys.argv[i+1], None)
+            i += 1
+        elif arg == '--chunks':
+            n_chunks = utils.int_or(sys.argv[i+1], None)
             i += 1
         elif arg == '--band':
             band = utils.int_or(sys.argv[i+1], 1)
@@ -62,6 +67,6 @@ if __name__ == "__main__":
         sys.stderr.write(_usage)
         sys.exit(1)
 
-    gdalfun.gdal_remove_flats(src_dem, dst_dem=dst_dem, band=band, size_threshold=size_threshold)
+    gdalfun.gdal_remove_flats(src_dem, dst_dem=dst_dem, band=band, size_threshold=size_threshold, n_chunk=n_chunks)
 
 #--END
