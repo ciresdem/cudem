@@ -3154,6 +3154,16 @@ class ATLFile(ElevationDataset):
                 dataset = self.read_atl03('{}'.format(i))
                 yield(np.column_stack((dataset[1], dataset[0], dataset[2])))
 
+        elif self.short_name.lower() == 'atl06':
+            for i in range(1, 4):
+                dataset = self.read_atl06('{}'.format(i))
+                yield(np.column_stack((dataset[1], dataset[0], dataset[2]))) 
+                
+        elif self.short_name.lower() == 'atl08':
+            for i in range(1, 4):
+                dataset = self.read_atl08('{}'.format(i))
+                yield(np.column_stack((dataset[1], dataset[0], dataset[2]))) 
+
     def read_atl03(self, laser_num):
         """from 'cshelph' https://github.com/nmt28/C-SHELPh.git
 
@@ -3187,6 +3197,34 @@ class ATLFile(ElevationDataset):
 
         return(latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
+    def read_atl06(self, laser_num):
+        """
+        laser_num is 1, 2 or 3
+        """
+        
+        f = h5.File(self.fn, 'r')
+        orientation = f['/orbit_info/sc_orient'][0]
+        orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + orientDict[orientation]
+        photon_h = f['/' + laser + '/land_ice_segments/dem/geoid_h'][...,]
+        latitude = f['/' + laser + '/land_ice_segments/latitude'][...,]
+        longitude = f['/' + laser + '/land_ice_segments/longitude'][...,]
+        return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+    
+    def read_atl08(self, laser_num):
+        """
+        laser_num is 1, 2 or 3
+        """
+        
+        f = h5.File(self.fn, 'r')
+        orientation = f['/orbit_info/sc_orient'][0]
+        orientDict = {0:'l', 1:'r', 21:'error'}
+        laser = 'gt' + laser_num + orientDict[orientation]
+        photon_h = f['/' + laser + '/land_segments/dem_h'][...,]
+        latitude = f['/' + laser + '/land_segments/latitude'][...,]
+        longitude = f['/' + laser + '/land_segments/longitude'][...,]
+        return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+    
     def yield_points(self):
         for dataset in self.init_ds():        
             points = np.rec.fromrecords(dataset, names='x, y, z')
@@ -4539,7 +4577,7 @@ class IceSatFetcher(Fetcher):
 
     def yield_ds(self, result):
         
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, src_srs=self.fetch_module.src_srs,
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='{}:short_name={}'.format(self.fetch_module.data_format, result[-1]), src_srs=self.fetch_module.src_srs,
                             dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
                             src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()

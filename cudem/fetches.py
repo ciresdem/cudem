@@ -3979,14 +3979,20 @@ https://cmr.earthdata.nasa.gov
                 self.results.append([url, url.split('/')[-1], 'earthdata'])
 
 class IceSat(EarthData):
+    """Access IceSat2 data.
+
+    By default access all ATL* data, specify 'short_name' to fetch specific ATL data.
+   
+< icesat:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
+    
     def __init__(self, short_name=None, **kwargs):
         self.icesat_short_names = ['ATL03', 'ATL05', 'ATL06', 'ATL08']
         if short_name is not None:
             if short_name.upper() in self.icesat_short_names:
                 self.icesat_short_names = [short_name.upper()]
+            else:
+                utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
 
-        #    utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
-        #else:
         #super().__init__(short_name=short_name.upper(), **kwargs)
         super().__init__(**kwargs)
             
@@ -4011,9 +4017,9 @@ class IceSat(EarthData):
                 if url.endswith('h5'):
                     if self.name is not None:
                         if self.name in url:
-                            self.results.append([url, url.split('/')[-1], 'icesat'])
+                            self.results.append([url, url.split('/')[-1], short_name])
                     else:
-                        self.results.append([url, url.split('/')[-1], 'icesat'])
+                        self.results.append([url, url.split('/')[-1], short_name])
         
 ## ==============================================
 ## nsidc_download.py from Mike McFerrin
