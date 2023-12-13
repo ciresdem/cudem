@@ -3971,24 +3971,50 @@ https://cmr.earthdata.nasa.gov
         )
 
         for url in url_list:
-            if url.endswith('h5'):
-                if self.name is not None:
-                    if self.name in url:
-                        self.results.append([url, url.split('/')[-1], 'earthdata'])
-                else:
+            #if url.endswith('h5'):
+            if self.name is not None:
+                if self.name in url:
                     self.results.append([url, url.split('/')[-1], 'earthdata'])
+            else:
+                self.results.append([url, url.split('/')[-1], 'earthdata'])
 
 class IceSat(EarthData):
-    def __init__(self, short_name='ATL03', **kwargs):
-        icesat_short_names = ['ATL03', 'ATL05', 'ATL06']
-        
-        if short_name not in icesat_short_names:
-            utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
-        else:
-            super().__init__(short_name='ATL03', **kwargs)
+    def __init__(self, short_name=None, **kwargs):
+        self.icesat_short_names = ['ATL03', 'ATL05', 'ATL06', 'ATL08']
+        if short_name is not None:
+            if short_name.upper() in self.icesat_short_names:
+                self.icesat_short_names = [short_name.upper()]
+
+        #    utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
+        #else:
+        #super().__init__(short_name=short_name.upper(), **kwargs)
+        super().__init__(**kwargs)
             
         self.data_format = 202
-                    
+
+    def run(self):
+        
+        for short_name in self.icesat_short_names:
+            url_list = cmr_search(
+                short_name,
+                self.provider,
+                self.version,
+                self.time_start,
+                self.time_end,
+                bounding_box=self.region.format('bbox'),
+                polygon=self.polygon,
+                filename_filter=self.filename_filter,
+                quiet=self.quiet
+            )
+
+            for url in url_list:
+                if url.endswith('h5'):
+                    if self.name is not None:
+                        if self.name in url:
+                            self.results.append([url, url.split('/')[-1], 'icesat'])
+                    else:
+                        self.results.append([url, url.split('/')[-1], 'icesat'])
+        
 ## ==============================================
 ## nsidc_download.py from Mike McFerrin
 ## run nsidc.py directly to use non-fetches CLI

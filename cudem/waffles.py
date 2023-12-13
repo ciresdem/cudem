@@ -3088,6 +3088,7 @@ class WafflesCUDEM(Waffle):
     want_supercede (bool) - supercede subsquent pre-surfaces
     flatten (float) - the nodata-size percentile above which to flatten
     exclude_lakes (bool) - exclude lakes from the landmask
+    filter_outliers (float) - percentile at which to filter outliers
     <mode-opts> - options for the waffles module specified in 'mode'
     <coastline-opts> - options for the coastline module when generating the landmask
     """
