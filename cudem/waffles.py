@@ -1637,12 +1637,12 @@ class WafflesMBGrid(Waffle):
         #     utils.echo_msg_bold('NYydiff: {}'.format(NYydiff))
 
         mb_xcount, mb_ycount, mb_gt = self.ps_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node=self.node)
-        print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
+        #print('mbcount: {} {}'.format(mb_xcount, mb_ycount))
         # mbgrid_cmd = 'mbgrid -I{} {} -D{}/{} -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
         #     mb_datalist, self.mb_region.format('gmt'), mb_xcount, mb_ycount, out_name, self.dist, self.tension
         # )
         mbgrid_cmd = 'mbgrid -I{} {} -E{}/{}/degrees -O{} -A2 -F1 -N -C{} -S0 -X0 -T{}'.format(
-           mb_datalist, self.mb_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
+          mb_datalist, self.mb_region.format('gmt'), self.xinc, self.yinc, out_name, self.dist, self.tension
         )        
         out, status = utils.run_cmd(mbgrid_cmd, verbose=self.verbose)
         if status == 0:

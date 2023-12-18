@@ -107,6 +107,13 @@ from cudem import vdatums
 from cudem import fetches
 from cudem import FRED
 
+# # cshelph
+# import pandas as pd
+# import geopandas
+# from pyproj import Proj
+# from pyproj import Transformer
+# from cudem import cshelph
+
 ## ==============================================
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
@@ -3143,6 +3150,11 @@ class GDALFile(ElevationDataset):
                         yield(out_xyz)
 
 class ATLFile(ElevationDataset):
+    """ATL* h5 file parsing.
+
+    set 'short_name' to either atl03, atl06 or atl08 to properly parse.
+    """
+    
     def __init__(self, short_name='ATL03', **kwargs):
         super().__init__(**kwargs)
         self.short_name = short_name
@@ -3152,6 +3164,7 @@ class ATLFile(ElevationDataset):
         if self.short_name.lower() == 'atl03':
             for i in range(1, 4):
                 dataset = self.read_atl03('{}'.format(i))
+                #dataset = self.atl03_extract_bathymetry(i, thresh=10)
                 yield(np.column_stack((dataset[1], dataset[0], dataset[2])))
 
         elif self.short_name.lower() == 'atl06':
@@ -3164,6 +3177,50 @@ class ATLFile(ElevationDataset):
                 dataset = self.read_atl08('{}'.format(i))
                 yield(np.column_stack((dataset[1], dataset[0], dataset[2]))) 
 
+    def generate_inf(self, callback=lambda: False):
+        """generate an inf file for a lidar dataset."""
+
+        dataset = None
+        #dataset_region = regions.Region()
+        self.infos.numpts = 0
+        if self.short_name.lower() == 'atl03':
+            this_region = None
+            for i in range(1, 4):
+                dataset = self.read_atl03('{}'.format(i))
+                self.infos.numpts += len(dataset[2])
+                dataset_region = regions.Region().from_list([dataset[1].min(), dataset[1].max(), dataset[0].min(), dataset[0].max()])
+                if this_region is None:
+                    this_region = dataset_region.copy()
+                else:
+                    this_region = regions.regions_merge(this_region, dataset_region)
+            
+        elif self.short_name.lower() == 'atl06':
+            this_region = None
+            for i in range(1, 4):
+                dataset = self.read_atl06('{}'.format(i))
+                self.infos.numpts += len(dataset[2])
+                dataset_region = regions.Region().from_list([dataset[1].min(), dataset[1].max(), dataset[0].min(), dataset[0].max()])
+                if this_region is None:
+                    this_region = dataset_region.copy()
+                else:
+                    this_region = regions.regions_merge(this_region, dataset_region)
+                    
+        elif self.short_name.lower() == 'atl08':
+            this_region = None
+            for i in range(1, 4):
+                dataset = self.read_atl08('{}'.format(i))
+                self.infos.numpts += len(dataset[2])
+                dataset_region = regions.Region().from_list([dataset[1].min(), dataset[1].max(), dataset[0].min(), dataset[0].max()])
+                if this_region is None:
+                    this_region = dataset_region.copy()
+                else:
+                    this_region = regions.regions_merge(this_region, dataset_region)
+                
+        self.infos.minmax = this_region.export_as_list()
+        self.infos.wkt = this_region.export_as_wkt()                
+        self.infos.src_srs = self.src_srs if self.src_srs is not None else 'epsg:4326'
+        return(self.infos)
+                
     def read_atl03(self, laser_num):
         """from 'cshelph' https://github.com/nmt28/C-SHELPh.git
 
@@ -3224,6 +3281,140 @@ class ATLFile(ElevationDataset):
         latitude = f['/' + laser + '/land_segments/latitude'][...,]
         longitude = f['/' + laser + '/land_segments/longitude'][...,]
         return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+
+    def atl03_extract_bathymetry(self, laser, thresh = None, min_buffer = -40, max_buffer = 5, start_lat = False, end_lat = False, lat_res = 10 , h_res = .5, surface_buffer = -.5):
+        # Read in the data
+        latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count = self.read_atl03(str(laser))
+
+        # Find the epsg code
+        epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
+        epsg_num = int(epsg_code.split(':')[-1])
+        
+        # Orthometrically correct the data using the epsg code
+        lat_utm, lon_utm, photon_h = cshelph.orthometric_correction(latitude, longitude, photon_h, epsg_code)
+        
+        # count number of photons in each segment: DEpRECATED
+        #ph_num_per_seg = count_ph_per_seg(ph_index_beg, photon_h)
+        ph_num_per_seg = seg_ph_count[ph_index_beg>0]
+        
+        # Cast as an int
+        ph_num_per_seg = ph_num_per_seg.astype(np.int64)
+
+        # count_ph_per_seg() function removes zeros from ph_index_beg
+        # These 0s are nodata vals in other params (ref_elev etc)
+        # Thus no pre-processing is needed as it will map correctly given the nodata values are eliminated
+        ph_ref_elev = cshelph.ref_linear_interp(ph_num_per_seg, ref_elev[ph_index_beg>0])
+        ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
+        ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
+
+        # Aggregate data into dataframe
+        dataset_sea = pd.DataFrame(
+            {'latitude': lat_utm,
+             'longitude': lon_utm,
+             'photon_height': photon_h,
+             'confidence':conf,
+             'ref_elevation':ph_ref_elev,
+             'ref_azminuth':ph_ref_azimuth,
+             'ref_sat_alt':ph_sat_alt},
+            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt']
+        )
+
+        # Filter data that should not be analyzed
+        # Filter for quality flags
+        utils.echo_msg('filter quality flags')
+        if min_buffer == -40:
+            min_buffer = -40
+        else:
+            min_buffer = min_buffer
+
+        if max_buffer == 5:
+            max_buffer = 5
+        else:
+            max_buffer = max_buffer
+
+        dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
+        
+        # Filter for elevation range
+        dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
+
+        # Focus on specific latitude
+        #if start_lat is not None:
+        #    dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > start_lat) & (dataset_sea1['latitude'] < end_lat)]
+
+        # Bin dataset
+        #utils.echo_msg(dataset_sea1.head())
+        binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
+
+        # Find mean sea height
+        if surface_buffer==-0.5:
+            surface_buffer = -0.5
+        else:
+            surface_buffer = surface_buffer
+
+        sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
+
+        # Set sea height
+        med_water_surface_h = np.nanmedian(sea_height)
+
+        # Calculate sea temperature
+        #if args.water_temp is not None:
+        #    water_temp = args.water_temp
+        #else:
+        try:
+            water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
+        except Exception as e:
+            utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
+            water_temp = 20
+
+        utils.echo_msg("water temp: {}".format(water_temp))
+
+        # Correct for refraction 
+        utils.echo_msg('refrac correction')
+        ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height, dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt)
+
+        # Find bathy depth
+        depth = med_water_surface_h - ref_z
+
+        # Create new dataframe with refraction corrected data
+        dataset_bath = pd.DataFrame({'latitude': raw_y,
+                                     'longitude': raw_x,
+                                     'cor_latitude':ref_y,
+                                     'cor_longitude':ref_x,
+                                     'cor_photon_height':ref_z,
+                                     'photon_height': raw_z,
+                                     'confidence':ref_conf,
+                                     'depth':depth},
+                                    columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude', 'cor_photon_height', 'confidence', 'depth'])
+
+        # Bin dataset again for bathymetry
+        binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
+
+        utils.echo_msg("Locating bathymetric photons...")
+        #if isinstance(thresh, int) == True:
+        # Find bathymetry
+        bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
+
+        transformer = Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+        #print(transformer)
+        lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
+        
+        geo_df['lon_wgs84'] = lon_wgs84
+        geo_df['lat_wgs84'] = lat_wgs84
+        
+        geodf = geopandas.GeoDataFrame(geo_df, geometry=geopandas.points_from_xy(geo_df.lon_wgs84,geo_df.lat_wgs84))
+
+        #print(geo_df)
+        #print(bath_height)
+        #print(geo_df['lat_wgs84'])
+        #print(geo_df['lon_wgs84'])
+        return(geo_df['lat_wgs84'], geo_df['lon_wgs84'], geo_df['depth']*-1)
+        #print(bath_height, geo_df)
+        #print(ref_x, ref_y)
+        #print(raw_x, raw_y)
+        #print(geo_df.longitude)
+        #print(geo_df.latitude)
+        #print(geo_df.depth)
+        #sys.exit()
     
     def yield_points(self):
         for dataset in self.init_ds():        
@@ -3269,7 +3460,132 @@ class ATLFile(ElevationDataset):
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )
-    
+
+    def yield_array(self):
+        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
+        count = 0
+        for points in self.yield_points():            
+            xcount, ycount, dst_gt = self.region.geo_transform(
+                x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+            )
+            ## ==============================================
+            ## convert the coordinates to pixels and determine the srcwin (no transforms!)
+            ## ==============================================
+            pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
+            pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
+            pixel_z = np.array(points['z'])
+
+            ## ==============================================
+            ## remove pixels that will break the srcwin
+            ## ==============================================
+            out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))
+            
+            pixel_x = np.delete(pixel_x, out_idx)
+            pixel_y = np.delete(pixel_y, out_idx)
+            pixel_z = np.delete(pixel_z, out_idx)
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+            count += len(pixel_x)
+
+            ## ==============================================
+            ## adjust pixels to srcwin and stack together
+            ## ==============================================
+            pixel_x = pixel_x - this_srcwin[0]
+            pixel_y = pixel_y - this_srcwin[1]
+            pixel_xy = np.vstack((pixel_y, pixel_x)).T
+
+            ## ==============================================
+            ## find the non-unique x/y points and mean their z values together
+            ## ==============================================
+            unq, unq_idx, unq_inv, unq_cnt = np.unique(
+                pixel_xy, axis=0, return_inverse=True, return_index=True, return_counts=True
+            )
+            cnt_msk = unq_cnt > 1
+            cnt_idx, = np.nonzero(cnt_msk)
+            idx_msk = np.in1d(unq_inv, cnt_idx)
+            idx_idx, = np.nonzero(idx_msk)
+            srt_idx = np.argsort(unq_inv[idx_msk])
+            dup_idx = np.split(idx_idx[srt_idx], np.cumsum(unq_cnt[cnt_msk])[:-1])
+            #zz = points.z[unq_idx]
+            zz = pixel_z[unq_idx]
+            u = np.zeros(zz.shape)
+            dup_means = [np.mean(pixel_z[dup]) for dup in dup_idx]
+            dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+            zz[cnt_msk] = dup_means
+            u[cnt_msk] = dup_stds
+
+            ## ==============================================
+            ## make the output arrays to yield
+            ## ==============================================
+            out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_z[unq[:,0], unq[:,1]] = zz
+            out_z[out_z == 0] = np.nan
+
+            ## ==============================================
+            ## apply the vertical transformation grid
+            ## ==============================================
+            if self.trans_fn is not None:
+                with gdalfun.gdal_datasource(self.trans_fn_full) as tf:
+                    tfi = gdalfun.gdal_infos(tf)
+                    b = tf.GetRasterBand(1)
+                    a = b.ReadAsArray(*this_srcwin)
+                    a[a == tfi['ndv']] = 0
+                    out_z = out_z + a
+
+                if self.trans_to_meter:
+                    out_z *= (1200/3937)
+
+                if self.trans_from_meter:
+                    out_z *= 3.2808333333
+                    
+            ## ==============================================
+            ## apply the mask
+            ## ==============================================
+            if self.mask is not None:
+                if self.region is not None:
+                    if gdalfun.ogr_or_gdal(self.mask) == 2:
+                        msk_infos = gdalfun.gdal_infos(self.mask)
+                        warp_msk = gdalfun.sample_warp(
+                            self.mask, None, None, None,
+                            src_region=self.region, dst_srs=self.aux_dst_trans_srs,
+                            ndv=msk_infos['ndv'])[0]
+                        
+                        msk_infos = gdalfun.gdal_infos(warp_msk)
+                        msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
+                        out_z[msk_arr != msk_infos['ndv']] = np.nan
+                        warp_msk = None
+                    
+            out_arrays['z'] = out_z
+            out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+            
+            out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
+            if self.weight is not None:
+                out_arrays['weight'][unq[:,0], unq[:,1]] = self.weight
+
+            out_arrays['weight'] = out_arrays['weight'] * out_arrays['count']
+            out_arrays['weight'][np.isnan(out_z)] = np.nan
+                
+            out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_arrays['uncertainty'][unq[:,0], unq[:,1]] = u
+            out_arrays['uncertainty'][np.isnan(out_z)] = np.nan
+
+            if self.trans_fn_unc is not None:
+                with gdalfun.gdal_datasource(self.trans_fn_unc_full) as tf:
+                    tfi = gdalfun.gdal_infos(tf)
+                    b = tf.GetRasterBand(1)
+                    a = b.ReadAsArray(*this_srcwin)
+                    a[a == tfi['ndv']] = 0
+                    out_arrays['uncertainty'] = np.sqrt(out_arrays['uncertainty']**2 + a**2)
+            
+            yield(out_arrays, this_srcwin, dst_gt)
+
+        if self.verbose:
+            utils.echo_msg_bold(
+                'parsed {} data records from {}{}'.format(
+                    count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
+                )
+            )
+            
 ## ==============================================
 ## BAG Raster File.
 ## Uses GDAL
@@ -3541,19 +3857,23 @@ class MBSParser(ElevationDataset):
             #     mbgrid_region = regions.Region().from_list(self.infos.minmax)
 
             # mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
-            utils.run_cmd(
-                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                    self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                ), verbose=True
-            )
-            gdalfun.gdal2gdal('{}.grd'.format(ofn))
-            utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-            mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                              weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-                              src_region=self.region, verbose=self.verbose)
-            mbs_ds.initialize()            
-            yield(mbs_ds)
-            utils.remove_glob('{}.tif*'.format(ofn))
+            try:
+                utils.run_cmd(
+                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                    ), verbose=True
+                )
+                
+                gdalfun.gdal2gdal('{}.grd'.format(ofn))
+                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+                                  src_region=self.region, verbose=self.verbose)
+                mbs_ds.initialize()            
+                yield(mbs_ds)
+                utils.remove_glob('{}.tif*'.format(ofn))
+            except:
+                yield(None)
         else:
             yield(None)
             
