@@ -5098,8 +5098,6 @@ Supported datalist formats:
 
 Modules (see waffles --modules <module-name> for more info):
   {modules}
-
-CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
            dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
            modules=factory._cudem_module_short_desc(WaffleFactory._modules),

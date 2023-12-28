@@ -29,7 +29,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '2.1.8',
+    version = '2.1.9',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -56,14 +56,16 @@ setuptools.setup(
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar
         'mercantile', # for MS building footprints
+        'utm', # for cshelph
+        'pandas', # for cshelph
         # 'earthaccess', # for earthdata access
-        # 'utm', # for cshelph
-        # 'pandas', # for cshelph
         # 'geopandas', # for cshelph
         # 'fiona', # for cshelph
         # 'zarr', # for cshelph
         # 'fsspec', # for cshelph
-        #'windows-curses', # for windows
+        # 'windows-curses', # for windows
+        # 'pydap',
+        # 'zarr-eosdis-store',
     ], 
     entry_points = {
         'console_scripts': [

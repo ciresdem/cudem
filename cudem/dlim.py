@@ -107,12 +107,10 @@ from cudem import vdatums
 from cudem import fetches
 from cudem import FRED
 
-# # cshelph
-# import pandas as pd
-# import geopandas
-# from pyproj import Proj
-# from pyproj import Transformer
-# from cudem import cshelph
+# cshelph
+import pandas as pd
+from pyproj import Transformer
+from cudem import cshelph
 
 ## ==============================================
 ## Datalist convenience functions
@@ -3163,9 +3161,12 @@ class ATLFile(ElevationDataset):
         dataset = None        
         if self.short_name.lower() == 'atl03':
             for i in range(1, 4):
-                dataset = self.read_atl03('{}'.format(i))
-                #dataset = self.atl03_extract_bathymetry(i, thresh=10)
-                yield(np.column_stack((dataset[1], dataset[0], dataset[2])))
+                #dataset = self.read_atl03('{}'.format(i))
+                dataset = self.atl03_extract_bathymetry(i, thresh=30)
+                #print(dataset)
+                if dataset is not None:
+                    
+                    yield(np.column_stack((dataset[1], dataset[0], dataset[2])))
 
         elif self.short_name.lower() == 'atl06':
             for i in range(1, 4):
@@ -3226,13 +3227,9 @@ class ATLFile(ElevationDataset):
 
         laser_num is 1, 2 or 3
         """
-        
-        # Read File
+
         f = h5.File(self.fn, 'r')
-
-        # Select a laser
         orientation = f['/orbit_info/sc_orient'][0]
-
         # selects the strong beams only [we can include weak beams later on]
         orientDict = {0:'l', 1:'r', 21:'error'}
         laser = 'gt' + laser_num + orientDict[orientation]
@@ -3242,17 +3239,39 @@ class ATLFile(ElevationDataset):
         latitude = f['/' + laser + '/heights/lat_ph'][...,]
         longitude = f['/' + laser + '/heights/lon_ph'][...,]
         conf = f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+        dist_ph_along = f['/' + laser + '/heights/dist_ph_along'][...,]
+        this_N = latitude.shape[0]
 
-        # params needed for refraction correction
-
+        # Read in the geolocation level data
+        segment_ph_cnt = f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        segment_id = f['/' + laser + '/geolocation/segment_id'][...,]
+        segment_dist_x = f['/' + laser + '/geolocation/segment_dist_x'][...,]
+        seg_ph_count = f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         ref_elev = f['/' + laser + '/geolocation/ref_elev'][...,]
         ref_azimuth = f['/' + laser + '/geolocation/ref_azimuth'][...,]
         ph_index_beg = f['/' + laser + '/geolocation/ph_index_beg'][...,]
-        segment_id = f['/' + laser + '/geolocation/segment_id'][...,]
         altitude_sc = f['/' + laser + '/geolocation/altitude_sc'][...,]
-        seg_ph_count = f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        
+        # Read in the geoid data
+        photon_geoid = f['/' + laser + '/geophys_corr/geoid'][...,]
+        photon_geoid_f2m = f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
+        
+        # Create a dictionary with (segment_id --> index into ATL03 photons) lookup pairs, for the starting photon of each segment
+        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
+        segment_index_dict = dict(zip(segment_id, segment_indices))
+        
+        # Compute the total along-track distances.
+        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
 
-        return(latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+        # Determine where in the array each segment index needs to look.
+        ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, this_N, 1))-1]
+        ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids)))
+        dist_x = ph_segment_dist_x + dist_ph_along
+        h_geoid_dict = dict(zip(segment_id, photon_geoid))
+        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))
+        photon_h_geoid = photon_h - ph_h_geoid
+
+        return(latitude, longitude, photon_h_geoid, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
     def read_atl06(self, laser_num):
         """
@@ -3282,7 +3301,13 @@ class ATLFile(ElevationDataset):
         longitude = f['/' + laser + '/land_segments/longitude'][...,]
         return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
-    def atl03_extract_bathymetry(self, laser, thresh = None, min_buffer = -40, max_buffer = 5, start_lat = False, end_lat = False, lat_res = 10 , h_res = .5, surface_buffer = -.5):
+    def atl03_extract_bathymetry(
+            self, laser, thresh = None, min_buffer = -40, max_buffer = 5,
+            start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
+            surface_buffer = -.5, water_temp = None
+    ):
+        
+        water_temp = utils.float_or(water_temp)
         # Read in the data
         latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count = self.read_atl03(str(laser))
 
@@ -3294,7 +3319,6 @@ class ATLFile(ElevationDataset):
         lat_utm, lon_utm, photon_h = cshelph.orthometric_correction(latitude, longitude, photon_h, epsg_code)
         
         # count number of photons in each segment: DEpRECATED
-        #ph_num_per_seg = count_ph_per_seg(ph_index_beg, photon_h)
         ph_num_per_seg = seg_ph_count[ph_index_beg>0]
         
         # Cast as an int
@@ -3318,103 +3342,39 @@ class ATLFile(ElevationDataset):
              'ref_sat_alt':ph_sat_alt},
             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt']
         )
-
-        # Filter data that should not be analyzed
-        # Filter for quality flags
-        utils.echo_msg('filter quality flags')
-        if min_buffer == -40:
-            min_buffer = -40
-        else:
-            min_buffer = min_buffer
-
-        if max_buffer == 5:
-            max_buffer = 5
-        else:
-            max_buffer = max_buffer
-
         dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
-        
-        # Filter for elevation range
         dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
+        if self.region is not None:
+            xyz_region = self.region.copy()
+            xyz_region.epsg = 'epsg:4326'
+            xyz_region.warp('epsg:{}'.format(epsg_num))
+            dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > xyz_region.ymin) & (dataset_sea1['latitude'] < xyz_region.ymax)]
+            dataset_sea1 = dataset_sea1[(dataset_sea1['longitude'] > xyz_region.xmin) & (dataset_sea1['longitude'] < xyz_region.xmax)]
 
-        # Focus on specific latitude
-        #if start_lat is not None:
-        #    dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > start_lat) & (dataset_sea1['latitude'] < end_lat)]
-
-        # Bin dataset
-        #utils.echo_msg(dataset_sea1.head())
+        if len(dataset_sea1) == 0:
+            return(None)
+        
         binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
-
-        # Find mean sea height
-        if surface_buffer==-0.5:
-            surface_buffer = -0.5
-        else:
-            surface_buffer = surface_buffer
+        if water_temp is None:
+            try:
+                ## not working!
+                water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
+            except Exception as e:
+                utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
+                water_temp = 20
 
         sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
-
-        # Set sea height
         med_water_surface_h = np.nanmedian(sea_height)
 
-        # Calculate sea temperature
-        #if args.water_temp is not None:
-        #    water_temp = args.water_temp
-        #else:
-        try:
-            water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
-        except Exception as e:
-            utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
-            water_temp = 20
-
-        utils.echo_msg("water temp: {}".format(water_temp))
-
-        # Correct for refraction 
-        utils.echo_msg('refrac correction')
-        ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height, dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt)
-
-        # Find bathy depth
+        # Correct for refraction
+        ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
+            water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height,
+            dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
+        )        
         depth = med_water_surface_h - ref_z
-
-        # Create new dataframe with refraction corrected data
-        dataset_bath = pd.DataFrame({'latitude': raw_y,
-                                     'longitude': raw_x,
-                                     'cor_latitude':ref_y,
-                                     'cor_longitude':ref_x,
-                                     'cor_photon_height':ref_z,
-                                     'photon_height': raw_z,
-                                     'confidence':ref_conf,
-                                     'depth':depth},
-                                    columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude', 'cor_photon_height', 'confidence', 'depth'])
-
-        # Bin dataset again for bathymetry
-        binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
-
-        utils.echo_msg("Locating bathymetric photons...")
-        #if isinstance(thresh, int) == True:
-        # Find bathymetry
-        bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
-
         transformer = Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-        #print(transformer)
-        lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
-        
-        geo_df['lon_wgs84'] = lon_wgs84
-        geo_df['lat_wgs84'] = lat_wgs84
-        
-        geodf = geopandas.GeoDataFrame(geo_df, geometry=geopandas.points_from_xy(geo_df.lon_wgs84,geo_df.lat_wgs84))
-
-        #print(geo_df)
-        #print(bath_height)
-        #print(geo_df['lat_wgs84'])
-        #print(geo_df['lon_wgs84'])
-        return(geo_df['lat_wgs84'], geo_df['lon_wgs84'], geo_df['depth']*-1)
-        #print(bath_height, geo_df)
-        #print(ref_x, ref_y)
-        #print(raw_x, raw_y)
-        #print(geo_df.longitude)
-        #print(geo_df.latitude)
-        #print(geo_df.depth)
-        #sys.exit()
+        lon_wgs84, lat_wgs84 = transformer.transform(ref_x, ref_y)
+        return(lat_wgs84, lon_wgs84, depth*-1)
     
     def yield_points(self):
         for dataset in self.init_ds():        
@@ -4896,12 +4856,12 @@ class IceSatFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='{}:short_name={}'.format(self.fetch_module.data_format, result[-1]), src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
-                            src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                            cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-        yield(ds)
+        if result[1].endswith('h5'):
+            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='{}:short_name={}'.format(self.fetch_module.data_format, result[-1]), src_srs=self.fetch_module.src_srs,
+                                dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
+                                src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+            yield(ds)
         
 # class DAVFetcher_CUDEM(Fetcher):
 #     """CUDEM from the digital coast 
@@ -5811,8 +5771,6 @@ Examples:
   % {cmd} my_data.datalist -R -90/-89/30/31
   % {cmd} -R-90/-89/30/31/-100/100 *.tif -l -w > tifs_in_region.datalist
   % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
-
-CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>\
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
            dl_formats=utils._cudem_module_name_short_desc(DatasetFactory._modules))
@@ -6004,18 +5962,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #    utils.echo_error_msg('Killed by user')
-                    #    break
-                    # except BrokenPipeError:
-                    #    utils.echo_error_msg('Pipe Broken')
-                    #    break
-                    # except Exception as e:
-                    #    utils.echo_error_msg(e)
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                       utils.echo_error_msg('Killed by user')
+                       break
+                    except BrokenPipeError:
+                       utils.echo_error_msg('Pipe Broken')
+                       break
+                    except Exception as e:
+                       utils.echo_error_msg(e)
 ### End

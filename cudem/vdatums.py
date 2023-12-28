@@ -200,8 +200,12 @@ _htdp_reference_frames = {
            'description': 'IGS14/IGb14',
            'htdp_id': 23,
            'uncertainty': 0},
+    1322: {'name': 'ITRF2020',
+           'description': 'IGS20',
+           'htdp_id': 24,
+           'uncertainty': 0},
     7912: {'name': 'ELLIPSOID',
-           'description': 'IGS14/IGb14/WGS84 Ellipsoid',
+           'description': 'IGS14/IGb14/WGS84/ITRF2014 Ellipsoid',
            'htdp_id': 23,
            'uncertainty': 0},
 }
@@ -828,8 +832,6 @@ usage: {cmd} [OPTIONS] input_grid output_grid
 
  Examples:
  % {cmd} my_dem_navd88.tif my_dem_wgs84_1674.tif --vdatum_in 5703 --vdatum_out 7662
-
-CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(version=_version, cmd=os.path.basename(sys.argv[0]))
         
 def vdatums_cli(argv = sys.argv):

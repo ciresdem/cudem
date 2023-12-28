@@ -230,6 +230,7 @@ class Region:
             t = 'te': xmin ymin xmax ymax
             t = 'ul_lr': xmin ymax xmax ymin
             t = 'fn': ymax_xmin
+            t = 'polygon': xmin,ymin,xmin,ymax,xmax,ymax,xmax,ymin,xmin,ymin
 
         Returns:
           str: the formatted region as str or None if region is invalid
@@ -277,6 +278,11 @@ class Region:
                     ew_mn, abs(int(self.xmin)), abs(self.xmin * 100) % 100,
                     ns_mn, abs(int(self.ymin)), abs(self.ymin * 100) % 100,
                     ew_mx, abs(int(self.xmax)), abs(self.xmax * 100) % 100))
+            elif t == 'polygon': return(
+                    '{xmin},{ymin},{xmax},{ymin},{xmax},{ymax},{xmin},{ymax},{xmin},{ymin}'.format(
+                        xmin=self.xmin, ymin=self.ymin, xmax=self.xmax, ymax=self.ymax
+                    )
+            )
             elif t == 'inf':
                 return(' '.join([str(x) for x in self.region]))
             else:
@@ -929,6 +935,29 @@ def create_wkt_polygon(coords, xpos=1, ypos=0):
     poly = None
     
     return(poly_wkt)
+
+def write_shapefile(geom, out_shp):
+    driver = ogr.GetDriverByName('Esri Shapefile')
+    ds = driver.CreateDataSource(out_shp)
+    layer = ds.CreateLayer('', None, ogr.wkbPolygon)
+    
+    # Add one attribute
+    layer.CreateField(ogr.FieldDefn('id', ogr.OFTInteger))
+    defn = layer.GetLayerDefn()
+
+    # Create a new feature (attribute and geometry)
+    feat = ogr.Feature(defn)
+    feat.SetField('id', 123)
+
+    # Make a geometry, from Shapely object
+    #geom = ogr.CreateGeometryFromWkb(poly.wkb)
+    feat.SetGeometry(geom)
+
+    layer.CreateFeature(feat)
+    feat = geom = None  # destroy these
+
+    # Save and close everything
+    ds = layer = feat = geom = None
 
 def ogr_wkts(src_ds):
     """return the wkt(s) of the ogr dataset"""

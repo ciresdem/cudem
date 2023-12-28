@@ -44,8 +44,8 @@ import curses
 import io
 import json
 import traceback
-from tqdm import tqdm
 
+from tqdm import tqdm
 import threading
 try:
     import Queue as queue
@@ -464,7 +464,26 @@ def touch(fname, times = None):
         os.utime(fname, times)
         
     return(fname)
-        
+
+def get_username():
+    username = ''
+
+    # For Python 2/3 compatibility:
+    try:
+        do_input = raw_input  # noqa
+    except NameError:
+        do_input = input
+
+    while not username:
+        username = do_input('username: ')
+    return username
+
+def get_password():
+    password = ''
+    while not password:
+        password = getpass('password: ')
+    return password
+
 ## ==============================================
 ##
 ## Geotransform functions
@@ -599,7 +618,6 @@ def x360(x):
 ## Archives (zip/gzip/etc.)
 ##
 ## ==============================================
-
 def unbz2(bz2_file, outdir='./', overwrite=False):
 
     newfilepath = '.'.join(bz2_file.split('.')[:-1])

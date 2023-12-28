@@ -688,8 +688,6 @@ Options:
 
 Supported PERSPECTO modules (see perspecto --modules <module-name> for more info): 
   {d_formats}
-
-CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 """.format(cmd=os.path.basename(sys.argv[0]),
            d_formats=factory._cudem_module_short_desc(PerspectoFactory._modules))
         
