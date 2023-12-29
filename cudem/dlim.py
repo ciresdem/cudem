@@ -3276,8 +3276,8 @@ class ATLFile(ElevationDataset):
 
         photon_h_geoid = photon_h - ph_h_geoid
         photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
-
-        return(latitude, longitude, photon_h_meantide if surface='mean_tide' else photon_h_geoid if surface='geoid' else photon_h,
+        #if surface='mean_tide' else photon_h_geoid if surface='geoid' else photon_h,
+        return(latitude, longitude, photon_h_meantide, 
                conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
     def read_atl06(self, laser_num):

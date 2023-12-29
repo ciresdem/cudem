@@ -3887,14 +3887,15 @@ https://cmr.earthdata.nasa.gov
         if _req is not None:
             features = _req.json()['feed']['entry']
             for feature in features:
-                if 'polygons' in feature.keys():
-                    poly = feature['polygons'][0][0]
-                    cc = [float(x) for x in poly.split()]
-                    gg = [x for x in zip(cc[::2], cc[1::2])]
-                    ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
-                    #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
-                else:
-                    ogr_geom = self.region.export_as_geom()
+                # the polygons key is not reliable atm (awaiting NASA response)
+                # if 'polygons' in feature.keys():
+                #     poly = feature['polygons'][0][0]
+                #     cc = [float(x) for x in poly.split()]
+                #     gg = [x for x in zip(cc[::2], cc[1::2])]
+                #     ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
+                #     #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
+                # else:
+                ogr_geom = self.region.export_as_geom()
 
                 if self.region.export_as_geom().Intersects(ogr_geom):
                     links = feature['links']
