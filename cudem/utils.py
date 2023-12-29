@@ -52,10 +52,6 @@ try:
 except: import queue as queue
 
 import numpy as np
-from osgeo import gdal
-from osgeo import ogr
-from osgeo import osr
-
 import cudem
 
 ## ==============================================

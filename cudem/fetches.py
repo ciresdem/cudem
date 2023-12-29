@@ -3889,20 +3889,20 @@ https://cmr.earthdata.nasa.gov
             for feature in features:
                 
                 # the polygons key is not reliable atm (awaiting NASA fix)
-                # if 'polygons' in feature.keys():
-                #     poly = feature['polygons'][0][0]
-                #     cc = [float(x) for x in poly.split()]
-                #     gg = [x for x in zip(cc[::2], cc[1::2])]
-                #     ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
-                #     #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
-                # if 'orbit' in feature.keys():
-                #     start_lat = utils.float_or(feature['orbit']['start_lat']. 0)
-                #     end_lat = utils.float_or(feature['orbit']['end_lat'], 0)
-
-                #     l = [start_lat, end_lat]
-                #     ogr_geom = ogr.CreateGeometryFromWkt(''.format(start_lat, end_lat))
-                # else:
-                ogr_geom = self.region.export_as_geom()
+                if 'polygons' in feature.keys():
+                    poly = feature['polygons'][0][0]
+                    cc = [float(x) for x in poly.split()]
+                    gg = [x for x in zip(cc[::2], cc[1::2])]
+                    ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
+                    #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
+                    # if 'orbit' in feature.keys():
+                    #     start_lat = utils.float_or(feature['orbit']['start_lat']. 0)
+                    #     end_lat = utils.float_or(feature['orbit']['end_lat'], 0)
+                    
+                    #     l = [start_lat, end_lat]
+                    #     ogr_geom = ogr.CreateGeometryFromWkt(''.format(start_lat, end_lat))
+                else:
+                    ogr_geom = self.region.export_as_geom()
 
                 if self.region.export_as_geom().Intersects(ogr_geom):
                     links = feature['links']
