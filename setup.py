@@ -56,6 +56,7 @@ setuptools.setup(
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar
         'mercantile', # for MS building footprints
+        'cshelph',
         'utm', # for cshelph
         'pandas', # for cshelph
         # 'earthaccess', # for earthdata access
