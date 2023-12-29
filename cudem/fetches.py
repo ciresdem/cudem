@@ -3922,22 +3922,39 @@ https://cmr.earthdata.nasa.gov
 class IceSat(EarthData):
     """Access IceSat2 data.
 
-    By default access all ATL* data, specify 'short_name' to fetch specific ATL data.
+    By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
     Currently supported short_name(s): 'ATL03', 'ATL05', 'ATL06', 'ATL08'
    
 < icesat:short_name=ATL08:time_start='':time_end='' >"""
     
-    def __init__(self, short_name=None, **kwargs):
+    def __init__(self, short_name='ATL03', **kwargs):
         self.icesat_short_names = ['ATL03', 'ATL05', 'ATL06', 'ATL08']
         if short_name is not None:
             if short_name.upper() in self.icesat_short_names:
                 self.icesat_short_names = [short_name.upper()]
             else:
-                utils.echo_error_msg('{} is not a valid icesat short_name'.format(short_name))
-
-        super().__init__(short_name=short_name, **kwargs)            
+                utils.echo_error_msg('{} is not a valid icesat short_name, using ATL03'.format(short_name))
+                short_name = 'ATL03'
+                
+        super().__init__(short_name=short_name, **kwargs)   
         self.data_format = 202
-                                
+
+
+## ==============================================
+## SST from EarthData
+##
+## This module allows us to use SST data in dlim/waffles
+##
+## ==============================================
+class MUR_SST(EarthData):
+    """Access SST data.
+
+< mur_sst:time_start='':time_end='' >"""
+    
+    def __init__(self, **kwargs):
+        super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
+        #self.data_format = '202:extract_bathymetry={}'.format(extract_bathymetry)
+        
 ## ==============================================
 ## USIEI
 ## ==============================================
@@ -4214,6 +4231,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'buoys': {'call': BUOYS},
         'earthdata': {'call': EarthData},
         'icesat': {'call': IceSat},
+        'mur_sst': {'call': MUR_SST},
         'usiei': {'call': USIEI},
         'wsf': {'call': WSF},
         'hydrolakes': {'call': HydroLakes},

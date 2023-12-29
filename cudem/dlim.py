@@ -4851,15 +4851,17 @@ class DAVFetcher_SLR(Fetcher):
         yield(ds)
 
 class IceSatFetcher(Fetcher):
-    def __init__(self, **kwargs):
+    def __init__(self, extract_bathymetry=False, **kwargs):
         super().__init__(**kwargs)
+        self.extract_bathymetry = extract_bathymetry
 
     def yield_ds(self, result):
         if result[1].endswith('h5'):
-            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='{}'.format(self.fetch_module.data_format), src_srs=self.fetch_module.src_srs,
-                                dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty,
-                                src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]),
+                                data_format='{}:extract_bathymetry={}'.format(self.fetch_module.data_format, self.extract_bathymetry),
+                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
+                                uncertainty=self.uncertainty, src_region=self.region, parent=self, invert_region = self.invert_region,
+                                metadata = copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(ds)
         
 # class DAVFetcher_CUDEM(Fetcher):
