@@ -2523,7 +2523,7 @@ class GDALFile(ElevationDataset):
     uncertainty_mask: raster dataset to use as uncertainty (per-cell) OR a band number
     otherwise will use a single value (uncertainty) from superclass.
     open_options: GDAL open_options for raster dataset
-    sample: sample method to use in resamplinig
+   sample: sample method to use in resamplinig
     check_path: check to make sure path exists
     super_grid: Force processing of a supergrid (BAG files) (True/False)
     band_no: the band number of the elevation data
@@ -3222,10 +3222,11 @@ class ATLFile(ElevationDataset):
         self.infos.src_srs = self.src_srs if self.src_srs is not None else 'epsg:4326'
         return(self.infos)
                 
-    def read_atl03(self, laser_num):
+    def read_atl03(self, laser_num, surface='mean_tide'):
         """from 'cshelph' https://github.com/nmt28/C-SHELPh.git
 
         laser_num is 1, 2 or 3
+        surface is 'mean_tide', 'geoid' or 'ellipsoid'
         """
 
         f = h5.File(self.fn, 'r')
@@ -3269,9 +3270,15 @@ class ATLFile(ElevationDataset):
         dist_x = ph_segment_dist_x + dist_ph_along
         h_geoid_dict = dict(zip(segment_id, photon_geoid))
         ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))
-        photon_h_geoid = photon_h - ph_h_geoid
 
-        return(latitude, longitude, photon_h_geoid, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
+        h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
+        ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
+
+        photon_h_geoid = photon_h - ph_h_geoid
+        photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
+
+        return(latitude, longitude, photon_h_meantide if surface='mean_tide' else photon_h_geoid if surface='geoid' else photon_h,
+               conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
     def read_atl06(self, laser_num):
         """
