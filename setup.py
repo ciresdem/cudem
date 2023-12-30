@@ -56,17 +56,18 @@ setuptools.setup(
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar
         'mercantile', # for MS building footprints
-        'cshelph',
+        'xarray',
+        'zarr',
+        'zarr-eosdis-store',
+        'cshelph', # icesat bathymetry extraction
         'utm', # for cshelph
         'pandas', # for cshelph
-        # 'earthaccess', # for earthdata access
+        # 'h5netcdf', # for cshelph sst
+        # 'dask', # for cshelph sst
+        # 'earthaccess', # for earthdata access sst
         # 'geopandas', # for cshelph
-        # 'fiona', # for cshelph
-        # 'zarr', # for cshelph
-        # 'fsspec', # for cshelph
         # 'windows-curses', # for windows
         # 'pydap',
-        # 'zarr-eosdis-store',
     ], 
     entry_points = {
         'console_scripts': [

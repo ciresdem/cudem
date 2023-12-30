@@ -3295,6 +3295,33 @@ class ATLFile(ElevationDataset):
         longitude = f['/' + laser + '/land_segments/longitude'][...,]
         return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
+    def get_water_temp(self):
+        import xarray as xr
+        from eosdis_store import EosdisStore
+
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+            
+        time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
+        time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
+        this_sst = fetches.MUR_SST(src_region = this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
+        this_sst.run()
+        
+        datasets = [xr.open_zarr(EosdisStore(x[0]), consolidated=False) for x in this_sst.results]
+        if len(datasets) > 1:
+            ds = xr.concat(datasets, 'time')
+        else:
+            ds = datasets[0]
+
+        lats = slice(this_region.ymin, this_region.ymax)
+        lons = slice(this_region.xmin, this_region.xmax)
+        sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
+        sst = round(np.nanmedian(sea_temp.values)-273,2)
+        
+        return(sst)
+    
     def atl03_extract_bathymetry(
             self, laser, thresh = None, min_buffer = -40, max_buffer = 5,
             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
@@ -3303,29 +3330,16 @@ class ATLFile(ElevationDataset):
         """Extract bathymetry from an ATL03 file. 
 
         This uses C-Shelph to locate, extract and process bathymetric photons.
-        This function is modified from the C-Shelph CLI
+        This function is adapted from the C-Shelph CLI
         """
         
         water_temp = utils.float_or(water_temp)
-        # Read in the data
         latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count = self.read_atl03(str(laser))
-
-        # Find the epsg code
         epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
         epsg_num = int(epsg_code.split(':')[-1])
-        
-        # Orthometrically correct the data using the epsg code
         lat_utm, lon_utm, photon_h = cshelph.orthometric_correction(latitude, longitude, photon_h, epsg_code)
-        
-        # count number of photons in each segment: DEpRECATED
         ph_num_per_seg = seg_ph_count[ph_index_beg>0]
-        
-        # Cast as an int
         ph_num_per_seg = ph_num_per_seg.astype(np.int64)
-
-        # count_ph_per_seg() function removes zeros from ph_index_beg
-        # These 0s are nodata vals in other params (ref_elev etc)
-        # Thus no pre-processing is needed as it will map correctly given the nodata values are eliminated
         ph_ref_elev = cshelph.ref_linear_interp(ph_num_per_seg, ref_elev[ph_index_beg>0])
         ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
         ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
@@ -3355,13 +3369,15 @@ class ATLFile(ElevationDataset):
         
         binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
         if water_temp is None:
-            try:
-                ## not working!
-                water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
-            except Exception as e:
-                utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
-                water_temp = 20
-
+            #try:
+            #water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
+            ## water_temp via fetches instead of earthaccess
+            water_temp = self.get_water_temp()
+            #except Exception as e:
+            #    utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
+            #    water_temp = 20
+                
+        utils.echo_msg('water temp is {}'.format(water_temp))        
         sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
         med_water_surface_h = np.nanmedian(sea_height)
 
@@ -3369,7 +3385,7 @@ class ATLFile(ElevationDataset):
         ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
             water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height,
             dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
-        )        
+        )
         depth = med_water_surface_h - ref_z
         transformer = Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
         lon_wgs84, lat_wgs84 = transformer.transform(ref_x, ref_y)
