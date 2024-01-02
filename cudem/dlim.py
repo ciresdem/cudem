@@ -4054,6 +4054,9 @@ class OGRFile(ElevationDataset):
             yield(arrs)
 
 class Scratch(ElevationDataset):
+    """Scratch Dataset
+    """
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.metadata['name'] = 'scratch'
@@ -5137,6 +5140,14 @@ class CopernicusFetcher(Fetcher):
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class FABDEMFetcher(Fetcher):
+    """FABDEM Gridded data
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <fabdem> - {}'''.format(__doc__, fetches.FABDEM.__doc__)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -5154,6 +5165,14 @@ class FABDEMFetcher(Fetcher):
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class MarGravFetcher(Fetcher):
+    """Marine Gravity Bathymetry
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
+    
     def __init__(self, rasterize=False, bathy_only=False, upper_limit=None, lower_limit=None, **kwargs):
         super().__init__(**kwargs)
         self.rasterize = rasterize
@@ -5197,6 +5216,15 @@ class MarGravFetcher(Fetcher):
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class ChartsFetcher(Fetcher):
+    """NOAA ENC Charts Fetcher
+
+Digital Soundings
+    """
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -5214,6 +5242,14 @@ class ChartsFetcher(Fetcher):
             yield(usace_ds)
 
 class MBSFetcher(Fetcher):
+    """NOAA Multibeam Fetcher
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -5228,6 +5264,14 @@ class MBSFetcher(Fetcher):
         yield(ds)
             
 class HydroNOSFetcher(Fetcher):
+    """NOAA HydroNOS Data Fetcher
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.HydroNOS.__doc__)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -5277,6 +5321,14 @@ class HydroNOSFetcher(Fetcher):
                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class eHydroFetcher(Fetcher):
+    """USACE eHydro soundings
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
+        
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -5319,6 +5371,20 @@ class eHydroFetcher(Fetcher):
                 yield(usace_ds)
         
 class BlueTopoFetcher(Fetcher):
+    """BlueTopo Gridded bathymetric data Fetcher
+
+    -----------
+    Parameters:
+    
+    want_interpolation: True/False to include interpolated cells
+    unc_weights: use the uncertainty mask as weights
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <bluetopo> - {}'''.format(__doc__, fetches.BlueTopo.__doc__)
+
     def __init__(self, want_interpolation=False, unc_weights=False, **kwargs):
         super().__init__(**kwargs)
         self.want_interpolation = want_interpolation
@@ -5351,6 +5417,14 @@ class BlueTopoFetcher(Fetcher):
         ) 
 
 class NGSFetcher(Fetcher):
+    """NGS Monument data
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.NGS.__doc__)
+    
     def __init__(self, datum = 'geoidHt', **kwargs):
         super().__init__(**kwargs)
         self.datum = datum
@@ -5377,6 +5451,14 @@ class NGSFetcher(Fetcher):
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class TidesFetcher(Fetcher):
+    """NOS Tide Station data
+    """
+
+    __doc__ = '''{}
+        
+    -----------
+    Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
+
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
         super().__init__(**kwargs)
         self.s_datum = s_datum
@@ -5410,13 +5492,24 @@ class TidesFetcher(Fetcher):
 class WaterServicesFetcher(Fetcher):
     """USGS Water Services
 
-    site_codes:
-      00065 - Gate Height
-      00060 - StreamFlow
-      63160 - Stream water level elevation above NAVD 1988
-      62611 - Groundwater level above NAVD 1988
-      72019 - Depth to water level, units below land surface
+    -----------
+    Parameters:
+    
+    site_code: the site code to fetch
+    units: 'm' for meters
+
+site_codes:
+    00065 - Gate Height
+    00060 - StreamFlow
+    63160 - Stream water level elevation above NAVD 1988
+    62611 - Groundwater level above NAVD 1988
+    72019 - Depth to water level, units below land surface
     """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <waterservices> - {}'''.format(__doc__, fetches.WaterServices.__doc__)
     
     def __init__(self, site_code='00065', units='m', **kwargs):
         super().__init__(**kwargs)
@@ -5447,6 +5540,14 @@ class WaterServicesFetcher(Fetcher):
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class VDatumFetcher(Fetcher):
+    """VDatum transformation grids
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.VDATUM.__doc__)
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -5465,6 +5566,9 @@ class VDatumFetcher(Fetcher):
 ## see: https://www.esri.com/arcgis-blog/products/arcgis-pro/3d-gis/hydro-flattening-of-river-shorelines-in-lidar-based-dem-production/
 ## ==============================================
 class HydroLakesFetcher(Fetcher):
+    """HydroLakes lake bathymetric data
+    """
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
