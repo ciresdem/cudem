@@ -62,10 +62,10 @@ setuptools.setup(
         'cshelph', # icesat bathymetry extraction
         'utm', # for cshelph
         'pandas', # for cshelph
-        # 'h5netcdf', # for cshelph sst
-        # 'dask', # for cshelph sst
-        # 'earthaccess', # for earthdata access sst
-        # 'geopandas', # for cshelph
+        'h5netcdf', # for cshelph sst
+        'dask', # for cshelph sst
+        'earthaccess', # for earthdata access sst
+        'geopandas', # for cshelph
         # 'windows-curses', # for windows
         # 'pydap',
     ], 
