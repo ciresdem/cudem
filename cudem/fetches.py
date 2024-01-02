@@ -699,7 +699,7 @@ Data is assumed instantaneous MSL (5773?)
 
 https://www.gmrt.org
 
-< gmrt:res=max:fmt=geotiff:bathy_only=False:layer=topo >
+< gmrt:res=max:fmt=geotiff:layer=topo >
     """
     
     def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', want_swath = False, **kwargs):

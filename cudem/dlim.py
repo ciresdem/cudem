@@ -2523,7 +2523,7 @@ class GDALFile(ElevationDataset):
     uncertainty_mask: raster dataset to use as uncertainty (per-cell) OR a band number
     otherwise will use a single value (uncertainty) from superclass.
     open_options: GDAL open_options for raster dataset
-   sample: sample method to use in resamplinig
+    sample: sample method to use in resamplinig
     check_path: check to make sure path exists
     super_grid: Force processing of a supergrid (BAG files) (True/False)
     band_no: the band number of the elevation data
@@ -4695,14 +4695,14 @@ class ZIPlist(ElevationDataset):
 ##   cudem fetcher (digital_coast)
 ## ==============================================
 class Fetcher(ElevationDataset):
-    """The generic fetches dataset type.
+    """The default fetches dataset type.
 
     This is used in waffles/dlim for on-the-fly remote data
     parsing and processing.
     
     See `fetches` for more information.
     """
-    
+
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(remote=True, **kwargs)
 
@@ -4792,6 +4792,12 @@ class DAVFetcher_CoNED(Fetcher):
     mainly so we can pull the vertical datum info from the DAV metadata since the
     CoNED doesn't assign one to their DEMs.
     """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <CoNED> - {}'''.format(__doc__, fetches.CoNED.__doc__)
+    
     
     def __init__(self, keep_fetched_data = True, cog = True, **kwargs):
         super().__init__(**kwargs)
@@ -4852,6 +4858,11 @@ class DAVFetcher_SLR(Fetcher):
     This is a wrapper shortcut for fetching SLR DEMs from the Digital Coast,
     mainly so we can pull the remove the flattened ring around the actual data.
     """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <SLR> - {}'''.format(__doc__, fetches.SLR.__doc__)
     
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(**kwargs)
@@ -4867,6 +4878,21 @@ class DAVFetcher_SLR(Fetcher):
         yield(ds)
 
 class IceSatFetcher(Fetcher):
+    """IceSat data from NASA
+
+    See `fetches --modules icesat` for fetching parameters
+
+    -----------
+    Parameters:
+    
+    extract_bathymetry: Extract bathymetric photons from ATL03
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
+    
     def __init__(self, extract_bathymetry=False, **kwargs):
         super().__init__(**kwargs)
         self.extract_bathymetry = extract_bathymetry
@@ -4907,6 +4933,19 @@ class IceSatFetcher(Fetcher):
 #         yield(ds)        
                 
 class GMRTFetcher(Fetcher):
+    """GMRT Gridded data.
+
+    -----------
+    Parameters:
+    
+    swath_only: onlt return MB swath data
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <gmrt> - {}'''.format(__doc__, fetches.GMRT.__doc__)
+    
     def __init__(self, swath_only = False, **kwargs):
         super().__init__(**kwargs)
         self.swath_only = swath_only
@@ -4966,6 +5005,16 @@ class GMRTFetcher(Fetcher):
                              verbose=self.verbose)._acquire_module())
         
 class GEBCOFetcher(Fetcher):
+    """GEBCO Gridded data
+
+Note: Fetches entire zip file.
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <gebco> - {}'''.format(__doc__, fetches.GEBCO.__doc__)
+        
     def __init__(self, exclude_tid = None, **kwargs):
         super().__init__(**kwargs)
         self.exclude_tid = []
@@ -5060,6 +5109,14 @@ class GEBCOFetcher(Fetcher):
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
                 
 class CopernicusFetcher(Fetcher):
+    """Gridded Copernicus sattelite data.
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <copernicus> - {}'''.format(__doc__, fetches.CopernicusDEM.__doc__)
+    
     def __init__(self, datatype=None, **kwargs):
         super().__init__(**kwargs)
         self.check_size=False
@@ -5351,7 +5408,7 @@ class TidesFetcher(Fetcher):
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class WaterServicesFetcher(Fetcher):
-    """
+    """USGS Water Services
 
     site_codes:
       00065 - Gate Height
@@ -5420,8 +5477,7 @@ class HydroLakesFetcher(Fetcher):
 ## Parse a datalist entry and return the dataset
 ## object
 ## ==============================================
-class DatasetFactory(factory.CUDEMFactory):
-    
+class DatasetFactory(factory.CUDEMFactory):    
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
@@ -5560,7 +5616,6 @@ class DatasetFactory(factory.CUDEMFactory):
                         entry.append(int(key))
                         break
 
-            #utils.echo_msg(entry)
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
                 return(self)
@@ -5581,7 +5636,6 @@ class DatasetFactory(factory.CUDEMFactory):
         if entry[0].startswith('http') and int(entry[1]) == 200:
             entry[0] = '/vsicurl/{}'.format(entry[0])
         
-        #utils.echo_msg(entry)
         self.kwargs['data_format'] = int(entry[1])
         self.mod_name = int(entry[1])
         
