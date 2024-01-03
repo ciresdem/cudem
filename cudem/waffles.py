@@ -3084,6 +3084,7 @@ class WafflesCUDEM(Waffle):
     inc_levels () -  the increments for each of the pre-surface iterations
     pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
     pre_smoothing (float) - the smoothing (blur) factor to apply to the pre-surfaces
+    pre_verbose (bool) - increase the verbosity of pre-surface generation
     landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
     want_supercede (bool) - supercede subsquent pre-surfaces
     flatten (float) - the nodata-size percentile above which to flatten
@@ -3096,7 +3097,7 @@ class WafflesCUDEM(Waffle):
     def __init__(self, pre_mode = 'gmt-surface', pre_count = 1, pre_upper_limit = -0.1, pre_smoothing = None,
                  weight_levels = None, inc_levels = None, landmask = False, filter_outliers = None,
                  want_supercede = False, flatten = 95, exclude_lakes = False, mode = None, min_weight = None,
-                 **kwargs):
+                 pre_verbose = False, **kwargs):
 
         self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
         self.coastline_args = {}
@@ -3160,7 +3161,8 @@ class WafflesCUDEM(Waffle):
 
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
-
+        self.pre_verbose = pre_verbose
+        
         ## ==============================================
         ## set the weights if not already set correctly
         ## ==============================================
@@ -3282,7 +3284,7 @@ class WafflesCUDEM(Waffle):
         if self.landmask:            
             if isinstance(self.landmask, str):
                 if os.path.exists(self.landmask.split(':')[0]):
-                    pre_clip = self.landmask
+                    pre_clip = '{}:invert=True'.format(self.landmask) # todo: update to make 'invert' an option
 
             if pre_clip is None:
                 coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
@@ -3296,8 +3298,8 @@ class WafflesCUDEM(Waffle):
         for pre in range(self.pre_count, -1, -1):
             pre_xinc = self.inc_levels[pre]
             pre_yinc = self.inc_levels[pre]
-            #xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
-            #ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
+            xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
+            ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
             
             ## ==============================================
             ## if not final or initial output, setup the configuration for the pre-surface
@@ -3326,9 +3328,9 @@ class WafflesCUDEM(Waffle):
 
             waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
             utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))
-            pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=None, ysample=None,
+            pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=xsample, ysample=ysample,#xsample=None, ysample=None,
                                         name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
-                                        dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=False,#self.verbose,
+                                        dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.pre_verbose,
                                         clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
                                         percentile_limit=self.flatten if pre == 0 else None)._acquire_module()

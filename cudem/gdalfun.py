@@ -514,6 +514,44 @@ def ogr_polygonize_multibands(
     ds = None
     return(dst_layer, ogr_format)
 
+def ogr2gdal_mask(
+        mask_fn, region = None, x_inc = None, y_inc = None, dst_srs = 'epsg:4326',
+        invert = True, verbose = True, temp_dir = utils.cudem_cache()
+):
+    dst_fn = utils.make_temp_fn('{}.tif'.format(mask_fn, temp_dir=temp_dir))
+    #dst_fn = os.path.join(self.cache_dir, 'tmp_mask.tif'
+    if os.path.exists(dst_fn):
+        return(dst_fn)
+    else:
+        # if os.path.isdir(self.mask):
+        #     dst_layer = os.path.basename('/'.join(self.mask.split('/')[:-1])).split('.')[0]
+        #msk_region = self.region if self.region is not None else regions.Region().from_list(self.infos.minmax)
+
+        if region is not None and x_inc is not None and y_inc is not None:
+            msk_region = region.copy()
+            xcount, ycount, dst_gt = msk_region.geo_transform(
+                x_inc=x_inc, y_inc=y_inc, node='grid'
+            )
+            if xcount <= 0 or ycount <=0:
+                utils.echo_error_msg(
+                    'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                        xcount, ycount, x_inc, y_inc, region
+                    )
+                )
+                sys.exit(-1)
+
+            ds_config = gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
+            gdal_nan(ds_config, dst_fn, nodata=0)
+
+            gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
+                .format(1, os.path.basename(utils.fn_basename2(mask_fn)), mask_fn, dst_fn, ' -i' if invert else '')
+            #utils.echo_msg(gr_cmd)
+            out, status = utils.run_cmd(gr_cmd, verbose=verbose)
+            return(dst_fn)
+
+        #else:
+        #    self.mask = None
+
 ## ==============================================
 ## GDAL
 ## ==============================================

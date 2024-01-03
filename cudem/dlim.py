@@ -667,45 +667,15 @@ class ElevationDataset:
             self.set_yield()
             self.set_transform()
             
-        ## Mask the dataset, if the input mask is a vector, rasterize it.
+        ## Dataset Mask, if the input mask is a vector, rasterize it.
+        ## todo: invert mask option...
         if self.mask is not None:
             ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask)
             if ogr_or_gdal == 1: # mask is ogr, rasterize it
-                dst_fn = utils.make_temp_fn('{}.tif'.format(self.mask))
-                #dst_fn = os.path.join(self.cache_dir, 'tmp_mask.tif'
-                if os.path.exists(dst_fn):
-                    self.mask = dst_fn
-                else:
-                    # if os.path.isdir(self.mask):
-                    #     dst_layer = os.path.basename('/'.join(self.mask.split('/')[:-1])).split('.')[0]
-                    #msk_region = self.region if self.region is not None else regions.Region().from_list(self.infos.minmax)
-
-                    if self.region is not None and self.x_inc is not None and self.y_inc is not None:
-                        msk_region = self.region.copy()
-                        xcount, ycount, dst_gt = msk_region.geo_transform(
-                            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-                        )
-
-                        if xcount <= 0 or ycount <=0:
-                            utils.echo_error_msg(
-                                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
-                                    xcount, ycount, self.x_inc, self.y_inc, self.region
-                                )
-                            )
-                            sys.exit(-1)
-
-                        ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, self.dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
-                        gdalfun.gdal_nan(ds_config, dst_fn, nodata=0)
-
-                        invert=True
-                        gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
-                            .format(1, os.path.basename(utils.fn_basename2(self.mask)), self.mask, dst_fn, ' -i' if invert else '')
-                        #utils.echo_msg(gr_cmd)
-                        out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
-
-                        self.mask = dst_fn
-                    #else:
-                    #    self.mask = None
+                self.mask = gdalfun.ogr2gdal_mask(
+                    self.mask, region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
+                    invert=True, verbose=self.verbose, temp_dir=self.cache_dir
+                )
             
         return(self)
     
@@ -3369,13 +3339,13 @@ class ATLFile(ElevationDataset):
         
         binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
         if water_temp is None:
-            #try:
-            #water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
-            ## water_temp via fetches instead of earthaccess
-            water_temp = self.get_water_temp()
-            #except Exception as e:
-            #    utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
-            #    water_temp = 20
+            try:
+                #water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
+                ## water_temp via fetches instead of earthaccess
+                water_temp = self.get_water_temp()
+            except Exception as e:
+                utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
+                water_temp = 20
                 
         utils.echo_msg('water temp is {}'.format(water_temp))        
         sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
