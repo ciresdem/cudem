@@ -3247,7 +3247,14 @@ class WafflesCUDEM(Waffle):
                 
             utils.echo_msg('')
             if self.landmask:
-                utils.echo_msg_bold('cudem using coastline: {}'.format(self.landmask))
+                if isinstance(self.landmask, str):
+                    if os.path.exists(self.landmask.split(':')[0]):
+                        utils.echo_msg_bold('cudem using coastline: {}'.format(self.landmask))
+                    else:
+                        self.landmask = True
+                        
+                if isinstance(self.landmask, bool):
+                    utils.echo_msg_bold('cudem using coastline: Waffles COASTLINE module')
                 
             utils.echo_msg_bold('cudem flattening: {}'.format(self.flatten))
             utils.echo_msg_bold('cudem output DEM: {}'.format(self.name))
