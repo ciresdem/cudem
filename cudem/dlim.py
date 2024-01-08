@@ -1,6 +1,6 @@
 ### dlim.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## dlim.py is part of CUDEM
 ##
@@ -1718,8 +1718,8 @@ class ElevationDataset:
             gdalfun.ogr_polygonize_multibands(msk_ds)
 
         m_ds = msk_ds = dst_ds = None
-        return(out_file)
-
+        return(out_file)        
+    
     def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
         """yield the result of `_stacks` as xyz"""
         

@@ -41,6 +41,8 @@ import numpy as np
 import scipy
 import scipy.ndimage
 
+import h5py as h5
+
 from cudem import utils
 from cudem import regions
 from cudem import xyzfun
@@ -2099,5 +2101,111 @@ def gdal_query(src_xyz, src_gdal, out_form, band = 1):
         xyzl.append(np.array(out_q))
         
     return(np.array(xyzl))
+
+def stack2hd5(in_stack, out_h5):
+    f = h5.File(out_h5, 'w')
+
+    # stack groups are:
+    #- 'DEM'
+    #  - 'dem_h'
+    # 'Stack'
+    #  - 'z'
+    #  - 'count'
+    #  - 'weight'
+    #  - 'uncertainty'
+    #  - 'source uncertainty'
+    # 'Mask'
+    #  - 'mask_name'
+    #  - '...'
+
+    #geo_grp = f.create_group('geolocation')
+    stack_grp = f.create_group('stack')
+    #stack_z = stack_grp.create_group('z')
+    #stack_c = stack_grp.create_group('c')
+    #stack_w = stack_grp.create_group('weight')
+    #stack_u = stack_grp.create_group('uncertainty')
+    #stack_su = stack_grp.create_group('src_uncertainty')
+
+    mask_grp = f.create_group('mask')
+
+    in_mask = '{}_msk.tif'.format(utils.fn_basename2(in_stack))
+
+    stack_infos = gdal_infos(in_stack)
+    nx = stack_infos['nx']
+    ny = stack_infos['ny']
+
+    ## pixel-node
+    lon_start = stack_infos['geoT'][0] + (stack_infos['geoT'][1] / 2)
+    lat_start = stack_infos['geoT'][3] + (stack_infos['geoT'][5] / 2)
+
+    ## grid-node
+    #lon_start = stack_infos['geoT'][0]
+    #lat_start = stack_infos['geoT'][3]
     
+    lon_end = stack_infos['geoT'][0] + stack_infos['geoT'][1] * nx
+    lat_end = stack_infos['geoT'][3] + stack_infos['geoT'][5] * ny
+    lon_inc = stack_infos['geoT'][1]
+    lat_inc = stack_infos['geoT'][5]
+
+    #print(stack_infos)
+    
+    vlen = h5.special_dtype (vlen = str)
+    
+    with gdal_datasource(in_stack) as stack_ds:
+        stack_z_band = stack_ds.GetRasterBand(1)
+        stack_z_arr = stack_z_band.ReadAsArray()
+        z_dset = stack_grp.create_dataset('z', data=stack_z_arr)
+        stack_z_arr = None
+        z_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+        
+        stack_c_band = stack_ds.GetRasterBand(2)
+        stack_c_arr = stack_c_band.ReadAsArray()
+        c_dset = stack_grp.create_dataset('count', data=stack_c_arr)
+        stack_c_arr = None
+        c_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+        
+        #stack_c.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+                
+        stack_w_band = stack_ds.GetRasterBand(3)
+        stack_w_arr = stack_w_band.ReadAsArray()
+        w_dset = stack_grp.create_dataset('weight', data=stack_w_arr)
+        stack_w_arr = None
+        w_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+        
+        #stack_w.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+                
+        stack_u_band = stack_ds.GetRasterBand(4)
+        stack_u_arr = stack_u_band.ReadAsArray()
+        u_dset = stack_grp.create_dataset('uncertainty', data=stack_u_arr)
+        stack_u_arr = None
+        u_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+        
+        #stack_u.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+                
+        stack_su_band = stack_ds.GetRasterBand(5)
+        stack_su_arr = stack_su_band.ReadAsArray()
+        su_dset = stack_grp.create_dataset('src_uncertainty', data=stack_su_arr)
+        stack_su_arr = None
+        su_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
+        
+        #stack_su.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen) 
+        
+    # ************  LATITUDE  ************
+    print(lat_start, lat_end, lat_inc)
+    lat_array = np.arange(lat_start, lat_end, lat_inc)
+    lat_dset = f.create_dataset ('lat', data = lat_array) 
+    lat_dset.attrs["long_name"] = "latitude"
+    lat_dset.attrs["units"] = "degrees_north"
+    lat_dset.attrs["standard_name"] = "latitude"
+
+
+    # ************  LONGITUDE  ***********
+    lon_array = np.arange(lon_start, lon_end, lon_inc)
+    lon_dset = f.create_dataset ('lon', data = lon_array)
+    lon_dset.attrs["long_name"] = "longitude"
+    lon_dset.attrs["units"] = "degrees_east" 
+    lon_dset.attrs["standard_name"]= "longitude"
+        
+    f.close()
+        
 ### End

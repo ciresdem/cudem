@@ -1,6 +1,6 @@
 ### fetches.py
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## fetches.py is part of CUDEM
 ##
@@ -2393,6 +2393,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
 * For OCM SLR DEMs, use where="ID=6230" or where="Name LIKE '%Sea Level Rise%'"
 * For USGS CoNED DEMs, use where="ID=9181" or where="Name LIKE '%CoNED%'"
 * To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
+* datatype is either 'lidar', 'dem' or 'sm'
 
 < digital_coast:where=None:datatype=None >"""
     
@@ -2431,7 +2432,8 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                 for feature in features['features']:
                     if self.datatype is not None:
                         if self.datatype.lower() != feature['attributes']['DataType'].lower():
-                            continue
+                            if self.datatype.lower() != 'sm':
+                                continue
 
                     self.vdatum = vdatums.get_vdatum_by_name(feature['attributes']['NativeVdatum'])                        
                     links = json.loads(feature['attributes']['ExternalProviderLink'])
@@ -2449,7 +2451,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                         utils.echo_msg(json.dumps(feature['attributes'], indent=4))
                     else:
                         for link in links['links']:
-                            if link['serviceID'] == 46:
+                            if link['serviceID'] == 46 and (self.datatype == 'lidar' or self.datatype == 'dem' or self.datatype is None):
                                 urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
                                 surv_name = '_'.join(link['link'].split('/')[-1].split('_')[:-1])
                                 #index_zipfile = 'tileindex.zip'
@@ -2532,10 +2534,19 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                                 [tile_url,
                                                  os.path.join('{}/{}'.format(feature['attributes']['ID'], tile_url.split('/')[-1])),
                                                  this_epsg,
-                                                 feature['attributes']['DataType']])
+                                                 feature['attributes']['DataType']]
+                                            )
 
                                     index_ds = index_layer = None
                                     utils.remove_glob(index_zipfile, *index_shps)
+                            elif link['serviceID'] == 166 and self.datatype == 'sm': # spatial_metadata
+                                self.results.append(
+                                    [link['link'],
+                                     os.path.join('{}/{}'.format(feature['attributes']['ID'], link['link'].split('/')[-1])),
+                                     None,
+                                     link['label']
+                                    ]
+                                )
 
         return(self)
 

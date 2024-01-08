@@ -1747,5 +1747,5 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
            echo_error_msg('unable to generate error plots, please check configs.')
 
     return(out)
-
+    
 ### End
