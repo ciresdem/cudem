@@ -510,7 +510,8 @@ class Fetch:
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             #utils.echo_error_msg('data not fetched...')
             status = -1
-            raise UnboundLocalError('data not fetched')
+            if check_size:
+                raise UnboundLocalError('data not fetched')
             #status = -1
                         
         return(status)

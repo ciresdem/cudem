@@ -1,6 +1,6 @@
 ### xyzfun.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## xyzfun.py is part of CUDEM
 ##
@@ -157,7 +157,7 @@ class XYZPoint:
             return('POINT ({} {} {})'.format(self.x, self.y, self.z))
         else:
             return('POINT ({} {})'.format(self.x, self.y))
-    
+
     def dump(self, delim=' ', include_z = True, include_w = False, include_u = False,
              encode = False, dst_port = sys.stdout, precision = 6):
         """dump xyz as a string to dst_port

@@ -1,6 +1,6 @@
 ### setup.py
 ##
-## Copyright (c) 2020 - 2023 Regents of the University of Colorado
+## Copyright (c) 2020 - 2024 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -29,7 +29,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '2.1.9',
+    version = '2.1.10',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -56,16 +56,16 @@ setuptools.setup(
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar
         'mercantile', # for MS building footprints
-        'xarray',
-        'zarr',
-        'zarr-eosdis-store',
-        'cshelph', # icesat bathymetry extraction
         'utm', # for cshelph
         'pandas', # for cshelph
-        'h5netcdf', # for cshelph sst
-        'dask', # for cshelph sst
-        'earthaccess', # for earthdata access sst
-        'geopandas', # for cshelph
+        #'xarray', # for cshelph
+        #'geopandas', # for cshelph
+        #'cshelph', # icesat bathymetry extraction
+        #'h5netcdf', # for cshelph sst
+        #'dask', # for cshelph sst
+        #'earthaccess', # for earthdata access sst
+        #'zarr',
+        #'zarr-eosdis-store',
         # 'windows-curses', # for windows
         # 'pydap',
     ], 

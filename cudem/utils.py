@@ -1,6 +1,6 @@
 ### utils.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## utils.py is part of CUDEM
 ##

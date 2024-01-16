@@ -1,6 +1,6 @@
 ### waffles.py
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## waffles.py is part of CUDEM
 ##
@@ -56,6 +56,7 @@ import traceback
 from tqdm import tqdm
 
 import numpy as np
+import h5py as h5
 from scipy import interpolate
 from scipy import spatial
 from scipy import ndimage
@@ -546,7 +547,31 @@ class Waffle:
 
             # if self.node == 'grid':
             #     self.region = self.region.buffer(x_bv=-self.xinc*.5, y_bv=-self.yinc*.5)
-                
+
+            ## ==============================================
+            ## calculate estimated uncertainty of the interpolation
+            ## ==============================================
+            unc_fn = None
+            if self.want_uncertainty:
+                iu = WaffleFactory(
+                    mod='uncertainty:percentile=95:accumulate=False:waffles_module={}'.format(self.params['mod']),
+                    **self.params['kwargs']
+                )._acquire_module()
+                iu.name = '{}_u'.format(self.params['kwargs']['name'])
+                iu.want_uncertainty = False
+                iu.want_mask = False
+                iu.stack = self.stack
+                iu.initialize()
+                iu.run()
+
+                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
+                if unc_dem.valid_p():
+                    utils.echo_msg('processing uncertainty grid')
+                    unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                    node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                                    dst_dir=os.path.dirname(self.fn))
+                unc_fn = iu.fn
+            
             ## ==============================================
             ## post-process the DEM(s)
             ## ==============================================
@@ -555,7 +580,7 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
-                                   dst_fmt=self.fmt, stack_fn=self.stack, filter_=self.fltr)
+                                   dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr)
 
             ## ==============================================
             ## post-process the mask, etc.
@@ -583,29 +608,6 @@ class Waffle:
                             os.rename(sm_file, out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
-
-            ## ==============================================
-            ## calculate estimated uncertainty of the interpolation
-            ## ==============================================
-            if self.want_uncertainty:
-                iu = WaffleFactory(
-                    mod='uncertainty:percentile=95:accumulate=False:waffles_module={}'.format(self.params['mod']),
-                    **self.params['kwargs']
-                )._acquire_module()
-                iu.name = '{}_u'.format(self.params['kwargs']['name'])
-                iu.want_uncertainty = False
-                iu.want_mask = False
-                iu.stack = self.stack
-                iu.initialize()
-                iu.run()
-
-                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
-                if unc_dem.valid_p():
-                    utils.echo_msg('processing uncertainty grid')
-                    unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                    node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
-                                    dst_dir=os.path.dirname(self.fn))
-
                     
             ## ==============================================
             ## post-process any auxiliary rasters
@@ -2346,6 +2348,7 @@ class WafflesCoastline(Waffle):
         this_osm.run()
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        utils.echo_msg(this_osm.results)
         with tqdm(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
@@ -3260,7 +3263,8 @@ class WafflesCUDEM(Waffle):
             utils.echo_msg_bold('cudem output DEM: {}'.format(self.name))
             utils.echo_msg('')
             utils.echo_msg_bold('==============================================')
-        
+
+        orig_stack = self.stack
         pre = self.pre_count
         pre_weight = 0 # initial run will use all data weights
         pre_region = self.p_region.copy()
@@ -3351,7 +3355,8 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## reset the stack for uncertainty
         ## ==============================================
-        self.stack = pre_surface.stack
+        #self.stack = pre_surface.stack
+        self.stack = orig_stack
         #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
@@ -4618,7 +4623,7 @@ class WaffleDEM:
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
                 percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
-                set_metadata = True, stack_fn = None):
+                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -4642,7 +4647,9 @@ class WaffleDEM:
         ## ==============================================
         ## set interpolation limits
         ## ==============================================
-        self.set_interpolation_limits(stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit, percentile_limit=percentile_limit)
+        self.set_interpolation_limits(
+            stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit, percentile_limit=percentile_limit
+        )
 
         ## ==============================================
         ## filtering the DEM will change the weights/uncertainty
@@ -4656,17 +4663,23 @@ class WaffleDEM:
         self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
 
         ## ==============================================
+        ## setting limits will change the weights/uncertainty for flattened data
+        ## ==============================================
+        self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
+
+        ## ==============================================
+        ## put everything in a hdf5
+        ## ==============================================
+        # if stack_fn is not None:
+        #     self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
+
+        ## ==============================================
         ## clip/cut
         ## ==============================================
         self.clip(clip_str=clip_str)
         if region is not None:
             self.cut(region=region, node='grid')#'pixel' if node == 'grid' else 'grid')
-
-        ## ==============================================
-        ## setting limits will change the weights/uncertainty for flattened data
-        ## ==============================================
-        self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
-
+            
         ## ==============================================
         ## set projection, metadata, reformat and move to final location
         ## ==============================================
@@ -4675,7 +4688,10 @@ class WaffleDEM:
 
         if set_metadata:
             self.set_metadata(node=node)
-            
+
+        ## ==============================================
+        ## reformat and move final output
+        ## ==============================================            
         self.reformat(out_fmt=dst_fmt)
         self.move(out_fn=dst_fn, out_dir=dst_dir)
 
@@ -4955,6 +4971,97 @@ class WaffleDEM:
             if self.verbose:
                 utils.echo_msg('set DEM metadata: {}.'.format(md))
 
+    def stack2hd5(self, stack_fn = None, mask_fn = None, unc_fn = None, node='pixel'):
+        """put all the data into an hdf5 file"""
+        
+        f = h5.File(os.path.join(os.path.dirname(self.fn), '{}.h5'.format(os.path.basename(utils.fn_basename2(self.fn)))), 'w')
+        
+        dem_grp = f.create_group('dem')
+        dem_infos = gdalfun.gdal_infos(self.fn)
+        
+        if stack_fn is not None:
+            stack_grp = f.create_group('stack')
+            stack_infos = gdalfun.gdal_infos(stack_fn)
+
+        if mask_fn is not None:
+            mask_grp = f.create_group('mask')
+        
+        nx = dem_infos['nx']
+        ny = dem_infos['ny']
+        geoT = dem_infos['geoT']
+
+        if node == 'pixel': # pixel-node
+            lon_start = geoT[0] + (geoT[1] / 2)
+            lat_start = geoT[3] + (geoT[5] / 2)
+        else: # grid-node
+            lon_start = geoT[0]
+            lat_start = geoT[3]
+
+        lon_end = geoT[0] + geoT[1] * nx
+        lat_end = geoT[3] + geoT[5] * ny
+        lon_inc = geoT[1]
+        lat_inc = geoT[5]
+
+        # ************  LATITUDE  ************
+        lat_array = np.arange(lat_start, lat_end, lat_inc)
+        lat_dset = f.create_dataset ('lat', data = lat_array)
+        lat_dset.make_scale('latitude')
+        lat_dset.attrs["long_name"] = "latitude"
+        lat_dset.attrs["units"] = "degrees_north"
+        lat_dset.attrs["standard_name"] = "latitude"
+        #lat_dset.attrs[''] = ''
+
+
+        # ************  LONGITUDE  ***********
+        lon_array = np.arange(lon_start, lon_end, lon_inc)
+        lon_dset = f.create_dataset ('lon', data = lon_array)
+        lon_dset.make_scale('longitude')
+        lon_dset.attrs["long_name"] = "longitude"
+        lon_dset.attrs["units"] = "degrees_east" 
+        lon_dset.attrs["standard_name"]= "longitude"
+
+        ## dem
+        with gdalfun.gdal_datasource(self.fn) as dem_ds:
+            dem_band = dem_ds.GetRasterBand(1)
+            dem_dset = dem_grp.create_dataset('dem_h', data=dem_band.ReadAsArray())
+            dem_dset.attrs['units'] = 'meters'
+            dem_dset.dims[0].attach_scale(lat_dset)
+            dem_dset.dims[1].attach_scale(lon_dset)
+
+        ## uncertainty
+        if unc_fn is not None:
+            with gdalfun.gdal_datasource(unc_fn) as unc_ds:
+                unc_band = unc_ds.GetRasterBand(1)
+                unc_dset = dem_grp.create_dataset('uncertainty', data=unc_band.ReadAsArray())
+                unc_dset.attrs['units'] = 'meters'
+                unc_dset.dims[0].attach_scale(lat_dset)
+                unc_dset.dims[1].attach_scale(lon_dset)
+            
+        ## mask
+        if mask_fn is not None:
+            with gdalfun.gdal_datasource(mask_fn) as mask_ds:
+                for b in range(1, mask_ds.RasterCount+1):
+                    mask_band = mask_ds.GetRasterBand(b)
+                    mask_dset = mask_grp.create_dataset(mask_band.GetDescription(), data=mask_band.ReadAsArray())
+                    this_band_md = mask_band.GetMetadata()
+                    for k in this_band_md.keys():
+                        mask_dset.attrs[k] = this_band_md[k]
+
+                    mask_dset.dims[0].attach_scale(lat_dset)
+                    mask_dset.dims[1].attach_scale(lon_dset)            
+            
+        ## stacks
+        if stack_fn is not None:
+            with gdalfun.gdal_datasource(stack_fn) as stack_ds:
+                for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty']):
+                    this_band = stack_ds.GetRasterBand(b+1)
+                    this_dset = stack_grp.create_dataset(n, data=this_band.ReadAsArray())
+                    this_dset.dims[0].attach_scale(lat_dset)
+                    this_dset.dims[1].attach_scale(lon_dset)
+                    this_dset.attrs['short_name'] = n
+        f.close()
+
+                
 ## ==============================================
 ## Waffles Factory Settings
 ## ==============================================

@@ -1,6 +1,6 @@
 ### regions.py
 ##
-## Copyright (c) 2010 - 2023 CIRES Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 CIRES Regents of the University of Colorado
 ##
 ## regions.py is part of CUDEM
 ##

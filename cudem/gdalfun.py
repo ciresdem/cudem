@@ -1,6 +1,6 @@
 ### gdalfun.py - OSGEO functions
 ##
-## Copyright (c) 2010 - 2023 Regents of the University of Colorado
+## Copyright (c) 2010 - 2024 Regents of the University of Colorado
 ##
 ## gdalfun.py is part of CUDEM
 ##
@@ -40,8 +40,6 @@ from pyproj import CRS
 import numpy as np
 import scipy
 import scipy.ndimage
-
-import h5py as h5
 
 from cudem import utils
 from cudem import regions
@@ -308,7 +306,7 @@ def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
     if not os.path.exists(dst_ogr_fn) or overwrite:
-        run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
+        utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
                 
     return(dst_ogr_fn)
 
@@ -338,7 +336,7 @@ def ogr_clip2(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
         ogr.Layer.Clip(src_layer, region_layer, dst_layer)
 
         src_ds = region_ds = dst_ds = None
-        remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
+        utils.remove_glob('{}.*'.format('.'.join(region_ogr.split('.')[:-1])))
         
     return(dst_ogr_fn)
 
@@ -361,7 +359,7 @@ def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
     layer.Clip(c_layer, dst_layer)
     ds = c_ds = dst_ds = None
 
-def ogr_mask_union(src_layer, src_field, dst_defn=None):
+def ogr_mask_union(src_layer, src_field=None, dst_defn=None):
     """`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
     an output layer defn for the unioned feature.
@@ -375,7 +373,9 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
         dst_defn = src_layer.GetLayerDefn()
         
     multi = ogr.Geometry(ogr.wkbMultiPolygon)
-    src_layer.SetAttributeFilter("{} = 1".format(src_field))
+    if src_field is not None:
+        src_layer.SetAttributeFilter("{} = 1".format(src_field))
+        
     feats = len(src_layer)
     
     if feats > 0:
@@ -383,7 +383,7 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
             for n, f in enumerate(src_layer):
                 pbar.update()
                 f_geom = f.geometry()
-                f_geom_valid = f_geom
+                f_geom_valid = f_geom.Buffer(0)
                 multi.AddGeometry(f_geom_valid)
             
     utils.echo_msg('setting geometry to unioned feature...')
@@ -392,6 +392,20 @@ def ogr_mask_union(src_layer, src_field, dst_defn=None):
     union = multi = None
     
     return(out_feat)
+
+def ogr_union_geom(src_layer):
+        
+    multi = ogr.Geometry(ogr.wkbMultiPolygon)
+    feats = len(src_layer)
+    if feats > 0:
+        with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
+            for n, f in enumerate(src_layer):
+                pbar.update()
+                f_geom = f.geometry()
+                f_geom_valid = f_geom
+                multi.AddGeometry(f_geom_valid)
+
+    return(multi)
 
 def ogr_empty_p(src_ogr, dn='ESRI Shapefile'):
     """check if the OGR file is empty or not"""
@@ -544,9 +558,11 @@ def ogr2gdal_mask(
 
             ds_config = gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
             gdal_nan(ds_config, dst_fn, nodata=0)
-
+            clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
+            mask_fn = ogr_clip(mask_fn, dst_region=region, layer=clip_layer)
+            
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
-                .format(1, os.path.basename(utils.fn_basename2(mask_fn)), mask_fn, dst_fn, ' -i' if invert else '')
+                .format(1, clip_layer, mask_fn, dst_fn, ' -i' if invert else '')
             #utils.echo_msg(gr_cmd)
             out, status = utils.run_cmd(gr_cmd, verbose=verbose)
             return(dst_fn)
@@ -2101,111 +2117,5 @@ def gdal_query(src_xyz, src_gdal, out_form, band = 1):
         xyzl.append(np.array(out_q))
         
     return(np.array(xyzl))
-
-def stack2hd5(in_stack, out_h5):
-    f = h5.File(out_h5, 'w')
-
-    # stack groups are:
-    #- 'DEM'
-    #  - 'dem_h'
-    # 'Stack'
-    #  - 'z'
-    #  - 'count'
-    #  - 'weight'
-    #  - 'uncertainty'
-    #  - 'source uncertainty'
-    # 'Mask'
-    #  - 'mask_name'
-    #  - '...'
-
-    #geo_grp = f.create_group('geolocation')
-    stack_grp = f.create_group('stack')
-    #stack_z = stack_grp.create_group('z')
-    #stack_c = stack_grp.create_group('c')
-    #stack_w = stack_grp.create_group('weight')
-    #stack_u = stack_grp.create_group('uncertainty')
-    #stack_su = stack_grp.create_group('src_uncertainty')
-
-    mask_grp = f.create_group('mask')
-
-    in_mask = '{}_msk.tif'.format(utils.fn_basename2(in_stack))
-
-    stack_infos = gdal_infos(in_stack)
-    nx = stack_infos['nx']
-    ny = stack_infos['ny']
-
-    ## pixel-node
-    lon_start = stack_infos['geoT'][0] + (stack_infos['geoT'][1] / 2)
-    lat_start = stack_infos['geoT'][3] + (stack_infos['geoT'][5] / 2)
-
-    ## grid-node
-    #lon_start = stack_infos['geoT'][0]
-    #lat_start = stack_infos['geoT'][3]
-    
-    lon_end = stack_infos['geoT'][0] + stack_infos['geoT'][1] * nx
-    lat_end = stack_infos['geoT'][3] + stack_infos['geoT'][5] * ny
-    lon_inc = stack_infos['geoT'][1]
-    lat_inc = stack_infos['geoT'][5]
-
-    #print(stack_infos)
-    
-    vlen = h5.special_dtype (vlen = str)
-    
-    with gdal_datasource(in_stack) as stack_ds:
-        stack_z_band = stack_ds.GetRasterBand(1)
-        stack_z_arr = stack_z_band.ReadAsArray()
-        z_dset = stack_grp.create_dataset('z', data=stack_z_arr)
-        stack_z_arr = None
-        z_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-        
-        stack_c_band = stack_ds.GetRasterBand(2)
-        stack_c_arr = stack_c_band.ReadAsArray()
-        c_dset = stack_grp.create_dataset('count', data=stack_c_arr)
-        stack_c_arr = None
-        c_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-        
-        #stack_c.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-                
-        stack_w_band = stack_ds.GetRasterBand(3)
-        stack_w_arr = stack_w_band.ReadAsArray()
-        w_dset = stack_grp.create_dataset('weight', data=stack_w_arr)
-        stack_w_arr = None
-        w_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-        
-        #stack_w.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-                
-        stack_u_band = stack_ds.GetRasterBand(4)
-        stack_u_arr = stack_u_band.ReadAsArray()
-        u_dset = stack_grp.create_dataset('uncertainty', data=stack_u_arr)
-        stack_u_arr = None
-        u_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-        
-        #stack_u.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-                
-        stack_su_band = stack_ds.GetRasterBand(5)
-        stack_su_arr = stack_su_band.ReadAsArray()
-        su_dset = stack_grp.create_dataset('src_uncertainty', data=stack_su_arr)
-        stack_su_arr = None
-        su_dset.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen)
-        
-        #stack_su.attrs.create ('coordinates', data = ['lat', 'lon'], dtype=vlen) 
-        
-    # ************  LATITUDE  ************
-    print(lat_start, lat_end, lat_inc)
-    lat_array = np.arange(lat_start, lat_end, lat_inc)
-    lat_dset = f.create_dataset ('lat', data = lat_array) 
-    lat_dset.attrs["long_name"] = "latitude"
-    lat_dset.attrs["units"] = "degrees_north"
-    lat_dset.attrs["standard_name"] = "latitude"
-
-
-    # ************  LONGITUDE  ***********
-    lon_array = np.arange(lon_start, lon_end, lon_inc)
-    lon_dset = f.create_dataset ('lon', data = lon_array)
-    lon_dset.attrs["long_name"] = "longitude"
-    lon_dset.attrs["units"] = "degrees_east" 
-    lon_dset.attrs["standard_name"]= "longitude"
-        
-    f.close()
         
 ### End

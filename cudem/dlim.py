@@ -110,7 +110,7 @@ from cudem import FRED
 # cshelph
 import pandas as pd
 from pyproj import Transformer
-import cshelph
+from cudem import cshelph
 
 ## ==============================================
 ## Datalist convenience functions
@@ -562,6 +562,7 @@ class ElevationDataset:
     data_format: dataset format
     weight: dataset weight
     uncertainty: dataset uncertainty
+    mask: mask the dataset
     src_srs: dataset source srs
     dst_srs: dataset target srs
     x_inc: target dataset x/lat increment
@@ -586,18 +587,19 @@ class ElevationDataset:
     ]
 
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
-    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
+    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
                  cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
-                             'vdatum':None, 'url':None}):
+                             'vdatum':None, 'url':None}, **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
         self.uncertainty = uncertainty # dataset uncertainty
-        self.mask = mask # dataset mask
+        self.mask = mask #{'mask': mask, 'invert': False}#mask # dataset mask
+        #self.invert_mask = invert_mask
         self.src_srs = src_srs # dataset source srs
         self.dst_srs = dst_srs # dataset target srs
         self.src_geoid = src_geoid # dataset source geoid
@@ -615,7 +617,31 @@ class ElevationDataset:
         self.verbose = verbose # be verbose
         self.remote = remote # dataset is remote
         self.dump_precision = dump_precision
+        #self.kwargs = kwargs
+
+        self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal']
+        if self.mask is not None:
+            if isinstance(self.mask, str):
+                self.mask = {'mask': self.mask}
+                
+            for kpam, kval in kwargs.items():
+                if kpam not in self.__dict__:
+                    #if kpam in ['invert']:
+                    self.mask[kpam] = kval
+
+            for kpam, kval in self.mask.items():
+                if kpam in kwargs:
+                    del kwargs[kpam]
+
+            self.mask['ogr_or_gdal'] = gdalfun.ogr_or_gdal(self.mask['mask'])
+            #utils.echo_msg(self.mask)
+
+            for key in self.mask_keys:
+                if key not in self.mask.keys():
+                    self.mask[key] = None
+            
         self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
+            
         self.params = params # the factory parameters
         if not self.params:
             self.params['kwargs'] = self.__dict__.copy()
@@ -661,21 +687,21 @@ class ElevationDataset:
             
         if utils.fn_url_p(self.fn):
             self.remote = True
-
+            
+        ## Dataset Mask, if the input mask is a vector, rasterize it if possible.
+        if self.mask is not None:
+            if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
+                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+                    self.mask['mask'] = gdalfun.ogr2gdal_mask(
+                        self.mask['mask'], region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
+                        invert=True, verbose=self.verbose, temp_dir=self.cache_dir
+                    )
+                    self.mask['ogr_or_gdal'] = 0
+                       
         if self.valid_p():
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             self.set_yield()
             self.set_transform()
-            
-        ## Dataset Mask, if the input mask is a vector, rasterize it.
-        ## todo: invert mask option...
-        if self.mask is not None:
-            ogr_or_gdal = gdalfun.ogr_or_gdal(self.mask)
-            if ogr_or_gdal == 1: # mask is ogr, rasterize it
-                self.mask = gdalfun.ogr2gdal_mask(
-                    self.mask, region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
-                    invert=True, verbose=self.verbose, temp_dir=self.cache_dir
-                )
             
         return(self)
     
@@ -770,8 +796,8 @@ class ElevationDataset:
         otherwise, data will yield directly from `self.yield_xyz` and `self.yield_array`
         """
 
-        #self.array_yield = self.yield_array()
-        self.xyz_yield = self.yield_xyz()
+        self.array_yield = self.mask_and_yield_array()
+        self.xyz_yield = self.mask_and_yield_xyz()
         #if self.want_archive: # archive only works when yielding xyz data.
         #    self.xyz_yield = self.archive_xyz()
         if self.region is None and self.x_inc is not None:
@@ -784,19 +810,98 @@ class ElevationDataset:
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
 
-            # out_name = os.path.join(self.cache_dir, '{}_{}'.format(
-            #     utils.fn_basename2(os.path.basename(utils.str_or(self.fn, '_dlim_list'))),
-            #     utils.append_fn('dlim_stacks', self.region, self.x_inc)))
-
             out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
             self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff', want_mask=self.want_mask)
+            
+    def mask_and_yield_array(self):
+        mask_band = None
+        mask_infos = None
+        if self.mask is not None:
+            if os.path.exists(self.mask['mask']):            
+                utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
+                if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+                    src_mask = gdalfun.sample_warp(
+                        self.mask['mask'], None, self.x_inc, self.y_inc,
+                        src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
+                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose
+                    )[0]
+                else:
+                    src_mask = gdal.Open(self.mask['mask'])
+                    
+                mask_band = src_mask.GetRasterBand(1)
+                mask_infos = gdalfun.gdal_infos(src_mask)
+            else:
+                utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
+                    
+        for out_arrays, this_srcwin, this_gt in self.yield_array():
+            if mask_band is not None:
+                ycount, xcount = out_arrays['z'].shape
+                this_region = regions.Region().from_geo_transform(this_gt, xcount, ycount)
+                mask_data = mask_band.ReadAsArray(*this_srcwin)
+                if not np.isnan(mask_infos['ndv']):
+                    mask_data[mask_data==mask_infos['ndv']] = np.nan
+                        
+                for arr in out_arrays.keys():
+                    if out_arrays[arr] is not None:
+                        if self.mask['invert_mask']:
+                            out_arrays[arr][~np.isnan(mask_data)] = np.nan
+                        else:
+                            out_arrays[arr][np.isnan(mask_data)] = np.nan
 
+            yield(out_arrays, this_srcwin, this_gt)
+
+    def mask_and_yield_xyz(self):
+        for this_entry in self.parse():
+            if this_entry.mask is None:
+                for this_xyz in this_entry.yield_xyz():
+                    yield(this_xyz)
+            else:
+                utils.echo_msg('using mask dataset: {}'.format(this_entry.mask['mask']))
+                if this_entry.mask['ogr_or_gdal'] == 0:
+                    src_ds = gdal.Open(this_entry.mask['mask'])
+                    if src_ds is not None:
+                        ds_config = gdalfun.gdal_infos(src_ds)
+                        ds_band = src_ds.GetRasterBand(1)
+                        ds_gt = ds_config['geoT']
+                        ds_nd = ds_config['ndv']
+                    
+                        for this_xyz in this_entry.yield_xyz():
+                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                            if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
+                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                                if tgrid is not None:
+                                    if tgrid[0][0] == ds_nd:
+                                        if this_entry.mask['invert_mask']:
+                                            yield(this_xyz)
+                                    else:
+                                        if not this_entry.mask['invert_mask']:
+                                            yield(this_xyz)                                            
+                else:
+                    ## this is very slow! find another way.
+                    src_ds = ogr.Open(this_entry.mask['mask'])
+                    layer = src_ds.GetLayer()
+                    utils.echo_msg(len(layer))
+
+                    geomcol = gdalfun.ogr_union_geom(layer)
+                    if not geomcol.IsValid():
+                        geomcol = geomcol.Buffer(0)
+                    
+                    for this_xyz in this_entry.yield_xyz():
+                        this_wkt = this_xyz.export_as_wkt()
+                        this_point = ogr.CreateGeometryFromWkt(this_wkt)
+                        if this_point.Within(geomcol):
+                            if not this_entry.mask['invert_mask']:
+                                yield(this_xyz)
+                        else:
+                            if not this_entry.mask['invert_mask']:
+                                yield(this_xyz)
+            
     def dump_xyz(self, dst_port=sys.stdout, encode=False):
         """dump the XYZ data from the dataset.
 
         data gets parsed through `self.xyz_yield`. See `set_yield` for more info.
         """
-        
+
         for this_xyz in self.xyz_yield:
             this_xyz.dump(
                 include_w=True if self.weight is not None else False,
@@ -1508,8 +1613,12 @@ class ElevationDataset:
         m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
         m_ds.SetGeoTransform(dst_gt)
 
+        ## initialize data mask
+        
+        
         ## ==============================================
         ## parse each entry and process it
+        ## todo: mask here instead of in each dataset module
         ## ==============================================
         for this_entry in self.parse_json():
             m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
@@ -1541,7 +1650,8 @@ class ElevationDataset:
             ## ==============================================
             ## yield entry arrays for stacks
             ## ==============================================
-            for arrs, srcwin, gt in this_entry.yield_array():
+            #for arrs, srcwin, gt in this_entry.yield_array():
+            for arrs, srcwin, gt in this_entry.array_yield:
                 #for arrs, srcwin, gt in array_yield:
                 #utils.echo_msg(srcwin)
                 #utils.echo_msg(arrs['z'].shape)
@@ -1722,7 +1832,8 @@ class ElevationDataset:
     
     def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
         """yield the result of `_stacks` as xyz"""
-        
+
+        #utils.echo_msg(self)
         stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt, want_mask=want_mask)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
@@ -1781,7 +1892,15 @@ class ElevationDataset:
             layer.CreateFeature(f)
             
         return(ogr_ds)
-                        
+
+
+## ==============================================
+## scattered points (xyz, las/z, etc.)
+## ==============================================
+class Points(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
 ## ==============================================
 ## XYZ dataset.
 ## file or stdin...
@@ -1816,7 +1935,7 @@ class XYZFile(ElevationDataset):
 
     def __init__(self, delim = None, xpos = 0, ypos = 1, zpos = 2,
                  wpos = None, upos = None, skip = 0, x_scale = 1, y_scale = 1,
-                 z_scale = 1, x_offset = 0, y_offset = 0, mask = None, **kwargs):
+                 z_scale = 1, x_offset = 0, y_offset = 0, **kwargs):
         super().__init__(**kwargs)
         self.delim = delim # the file delimiter
         self.xpos = utils.int_or(xpos, 0) # the position of the x/lat value
@@ -1832,7 +1951,7 @@ class XYZFile(ElevationDataset):
         self.x_offset = x_offset # offset x by x_offset
         self.y_offset = utils.int_or(y_offset, 0) # offset y by y_offset
         self.rem = False
-        self.mask = mask
+        #self.mask = mask
 
     def init_ds(self):
         if self.delim is not None:
@@ -2017,27 +2136,27 @@ class XYZFile(ElevationDataset):
                     if self.rem:
                         this_xyz.x = math.fmod(this_xyz.x+180,360)-180 
 
-                    if self.mask is not None:
-                        #ndv = gdalfun.gdal_get_ndv(self.mask)
-                        with gdalfun.gdal_datasource(self.mask) as src_ds:
-                            #print(src_ds)
-                            if src_ds is not None:
-                                ds_config = gdalfun.gdal_infos(src_ds)
-                                ds_band = src_ds.GetRasterBand(1)
-                                ds_gt = ds_config['geoT']
-                                ds_nd = ds_config['ndv']
-                                xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
-                                ## todo: check if x/y is within raster, else skip
-                                if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
-                                    tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
-                                    #print(tgrid)
-                                    if tgrid is not None:
-                                        if tgrid[0][0] != ds_nd:
-                                            continue
-                        # for g in gdalfun.gdal_yield_query([this_xyz.export_as_list(include_z=True)], self.mask, 'g'):
-                        #     utils.echo_msg(g)
-                        #     if g != ndv:
-                        #         continue
+                    # if self.mask is not None:
+                    #     #ndv = gdalfun.gdal_get_ndv(self.mask)
+                    #     with gdalfun.gdal_datasource(self.mask) as src_ds:
+                    #         #print(src_ds)
+                    #         if src_ds is not None:
+                    #             ds_config = gdalfun.gdal_infos(src_ds)
+                    #             ds_band = src_ds.GetRasterBand(1)
+                    #             ds_gt = ds_config['geoT']
+                    #             ds_nd = ds_config['ndv']
+                    #             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                    #             ## todo: check if x/y is within raster, else skip
+                    #             if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
+                    #                 tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                    #                 #print(tgrid)
+                    #                 if tgrid is not None:
+                    #                     if tgrid[0][0] != ds_nd:
+                    #                         continue
+                    #     # for g in gdalfun.gdal_yield_query([this_xyz.export_as_list(include_z=True)], self.mask, 'g'):
+                    #     #     utils.echo_msg(g)
+                    #     #     if g != ndv:
+                    #     #         continue
                         
                     this_xyz.w = w if self.weight is None else self.weight * w
                     this_xyz.u = u if self.uncertainty is None else math.sqrt(self.uncertainty**2 + u**2)
@@ -2256,23 +2375,23 @@ class LASFile(ElevationDataset):
                 this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
                                            w=self.weight, u=self.uncertainty)
 
-                if self.mask is not None:
-                    #ndv = gdalfun.gdal_get_ndv(self.mask)
-                    with gdalfun.gdal_datasource(self.mask) as src_ds:
-                        #print(src_ds)
-                        if src_ds is not None:
-                            ds_config = gdalfun.gdal_infos(src_ds)
-                            ds_band = src_ds.GetRasterBand(1)
-                            ds_gt = ds_config['geoT']
-                            ds_nd = ds_config['ndv']
-                            xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
-                            ## todo: check if x/y is within raster, else skip
-                            if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
-                                tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
-                                #print(tgrid)
-                                if tgrid is not None:
-                                    if tgrid[0][0] != ds_nd:
-                                        continue
+                # if self.mask is not None:
+                #     #ndv = gdalfun.gdal_get_ndv(self.mask)
+                #     with gdalfun.gdal_datasource(self.mask) as src_ds:
+                #         #print(src_ds)
+                #         if src_ds is not None:
+                #             ds_config = gdalfun.gdal_infos(src_ds)
+                #             ds_band = src_ds.GetRasterBand(1)
+                #             ds_gt = ds_config['geoT']
+                #             ds_nd = ds_config['ndv']
+                #             xpos, ypos = utils._geo2pixel(this_xyz.x, this_xyz.y, ds_gt, node='pixel')
+                #             ## todo: check if x/y is within raster, else skip
+                #             if xpos < ds_config['nx'] and ypos < ds_config['ny'] and xpos >=0 and ypos >=0:
+                #                 tgrid = ds_band.ReadAsArray(xpos, ypos, 1, 1)
+                #                 #print(tgrid)
+                #                 if tgrid is not None:
+                #                     if tgrid[0][0] != ds_nd:
+                #                         continue
 
                 if self.dst_trans is not None:
                     this_xyz.transform(self.dst_trans)
@@ -2407,34 +2526,34 @@ class LASFile(ElevationDataset):
             ## ==============================================
             ## apply the mask
             ## ==============================================
-            if self.mask is not None:
-                if self.region is not None:
-                    if gdalfun.ogr_or_gdal(self.mask) == 2:
+            # if self.mask is not None:
+            #     if self.region is not None:
+            #         if gdalfun.ogr_or_gdal(self.mask) == 2:
 
-                        # if self.trans_fn is not None:
-                        #     aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
-                        #     aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
-                        # else:
-                        #     aux_src_trans_srs = self.src_trans_srs
-                        #     aux_dst_trans_srs = self.dst_trans_srs
+            #             # if self.trans_fn is not None:
+            #             #     aux_src_trans_srs = self.src_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')
+            #             #     aux_dst_trans_srs = self.dst_trans_srs.replace('+geoidgrids={}'.format(self.trans_fn), '')                    
+            #             # else:
+            #             #     aux_src_trans_srs = self.src_trans_srs
+            #             #     aux_dst_trans_srs = self.dst_trans_srs
 
-                        #utils.echo_msg_bold(self.aux_dst_trans_srs)
-                        msk_infos = gdalfun.gdal_infos(self.mask)
-                        warp_msk = gdalfun.sample_warp(
-                            self.mask, None, None, None,
-                            src_region=self.region, dst_srs=self.aux_dst_trans_srs,
-                            ndv=msk_infos['ndv'])[0]
+            #             #utils.echo_msg_bold(self.aux_dst_trans_srs)
+            #             msk_infos = gdalfun.gdal_infos(self.mask)
+            #             warp_msk = gdalfun.sample_warp(
+            #                 self.mask, None, None, None,
+            #                 src_region=self.region, dst_srs=self.aux_dst_trans_srs,
+            #                 ndv=msk_infos['ndv'])[0]
                         
-                        msk_infos = gdalfun.gdal_infos(warp_msk)
-                        #with gdalfun.gdal_datasource(self.mask) as msk:
-                        msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
-                        #utils.echo_msg(msk_arr)
-                        #utils.echo_msg(msk_infos['ndv'])
-                        #utils.echo_msg(msk_arr != msk_infos['ndv'])
-                        #utils.echo_msg(msk_arr.shape)
-                        #utils.echo_msg(out_z.shape)
-                        out_z[msk_arr != msk_infos['ndv']] = np.nan
-                        warp_msk = None
+            #             msk_infos = gdalfun.gdal_infos(warp_msk)
+            #             #with gdalfun.gdal_datasource(self.mask) as msk:
+            #             msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
+            #             #utils.echo_msg(msk_arr)
+            #             #utils.echo_msg(msk_infos['ndv'])
+            #             #utils.echo_msg(msk_arr != msk_infos['ndv'])
+            #             #utils.echo_msg(msk_arr.shape)
+            #             #utils.echo_msg(out_z.shape)
+            #             out_z[msk_arr != msk_infos['ndv']] = np.nan
+            #             warp_msk = None
                     
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -2503,7 +2622,7 @@ class GDALFile(ElevationDataset):
                  sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
                  **kwargs):
         super().__init__(**kwargs)
-        #self.mask = mask
+        #self.mask = mask # this is now set in super class
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
         self.open_options = open_options
@@ -2739,7 +2858,7 @@ class GDALFile(ElevationDataset):
             ## within the input region, this over-rides the input mask data,
             ## update this so as to not do that...
             ## ==============================================
-            self.mask = mem_ds
+            ## self.mask = mem_ds
             
         return(self.src_ds)
 
@@ -2905,31 +3024,31 @@ class GDALFile(ElevationDataset):
             ## mask can either be a seperate gdal file or a band number
             ## correspinding to the appropriate band in src_ds
             ## ==============================================
-            if self.mask is not None:
-                if self.invert_region:
-                    ## ==============================================
-                    ## if invert_region is set, self.mask was re-defined to mask
-                    ## out the entire input region...
-                    ## ==============================================
-                    mask_band = self.mask.GetRasterBand(1)
-                elif os.path.exists(self.mask):
-                    utils.echo_msg('using mask dataset: {}'.format(self.mask))
-                    #if self.resample_and_warp: #if self.x_inc is not None and self.y_inc is not None:
-                    src_mask = gdalfun.sample_warp(
-                        self.mask, None, src_dem_x_inc, src_dem_y_inc,
-                        src_srs=self.aux_src_trans_srs, dst_srs=self.aux_dst_trans_srs,
-                        src_region=src_dem_region, sample_alg=self.sample_alg,
-                        ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
-                    )[0]
-                    # else:
-                    #     src_mask = gdal.Open(self.mask)
+            # if self.mask is not None:
+            #     if self.invert_region:
+            #         ## ==============================================
+            #         ## if invert_region is set, self.mask was re-defined to mask
+            #         ## out the entire input region...
+            #         ## ==============================================
+            #         mask_band = self.mask.GetRasterBand(1)
+            #     elif os.path.exists(self.mask):
+            #         utils.echo_msg('using mask dataset: {}'.format(self.mask))
+            #         #if self.resample_and_warp: #if self.x_inc is not None and self.y_inc is not None:
+            #         src_mask = gdalfun.sample_warp(
+            #             self.mask, None, src_dem_x_inc, src_dem_y_inc,
+            #             src_srs=self.aux_src_trans_srs, dst_srs=self.aux_dst_trans_srs,
+            #             src_region=src_dem_region, sample_alg=self.sample_alg,
+            #             ndv=gdalfun.gdal_get_ndv(self.mask), verbose=self.verbose
+            #         )[0]
+            #         # else:
+            #         #     src_mask = gdal.Open(self.mask)
                     
-                    mask_band = src_mask.GetRasterBand(1)
-                elif utils.int_or(self.mask) is not None:
-                    mask_band = self.src_ds.GetRasterBand(self.mask)
-                else:
-                    utils.echo_warning_msg('could not load mask {}'.format(self.mask))
-                    mask_band = None
+            #         mask_band = src_mask.GetRasterBand(1)
+            #     elif utils.int_or(self.mask) is not None:
+            #         mask_band = self.src_ds.GetRasterBand(self.mask)
+            #     else:
+            #         utils.echo_warning_msg('could not load mask {}'.format(self.mask))
+            #         mask_band = None
 
             ## ==============================================
             ## parse through the data
@@ -2980,28 +3099,28 @@ class GDALFile(ElevationDataset):
                 ## ==============================================
                 ## mask
                 ## ==============================================
-                if mask_band is not None:
-                    mask_data = mask_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    mask_ndv = mask_band.GetNoDataValue()
-                    if not np.isnan(mask_ndv):
-                        mask_data[mask_data==mask_ndv] = np.nan
+                # if mask_band is not None:
+                #     mask_data = mask_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                #     mask_ndv = mask_band.GetNoDataValue()
+                #     if not np.isnan(mask_ndv):
+                #         mask_data[mask_data==mask_ndv] = np.nan
 
-                    ## ==============================================
-                    ## mask the band data
-                    ## ==============================================
-                    band_data[np.isnan(mask_data)] = np.nan
+                #     ## ==============================================
+                #     ## mask the band data
+                #     ## ==============================================
+                #     band_data[np.isnan(mask_data)] = np.nan
                     
-                    ## ==============================================
-                    ## mask the weight
-                    ## ==============================================
-                    if weight_band is not None:                    
-                        weight_data[np.isnan(mask_data)] = np.nan
+                #     ## ==============================================
+                #     ## mask the weight
+                #     ## ==============================================
+                #     if weight_band is not None:                    
+                #         weight_data[np.isnan(mask_data)] = np.nan
 
-                    ## ==============================================
-                    ## mask the uncertainty
-                    ## ==============================================
-                    if uncertainty_band is not None:                    
-                        uncertainty_data[np.isnan(mask_data)] = np.nan
+                #     ## ==============================================
+                #     ## mask the uncertainty
+                #     ## ==============================================
+                #     if uncertainty_band is not None:                    
+                #         uncertainty_data[np.isnan(mask_data)] = np.nan
                     
                 if self.region is not None and self.region.valid_p():
                     ## ==============================================
@@ -3117,6 +3236,28 @@ class GDALFile(ElevationDataset):
 
                         yield(out_xyz)
 
+class hdf5File(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.f = h5.File(self.fn, 'r')
+        if 'short_name' not in self.f.attrs.keys():
+            utils.echo_error_msg('this file does not appear to be an ATL file')
+            self.f.close()
+            return(None)
+        
+        self.short_name = self.f.attrs['short_name']
+        self.extract_bathymetry = extract_bathymetry
+        self.surface = surface
+        if self.surface not in ['mean_tide', 'geoid', 'ellipsoid']:
+            self.surface = 'mean_tide'
+
+        if self.extract_bathymetry and self.short_name != b'ATL03':
+            utils.echo_warning_msg('we can only extract bathymetry from ATL03 files, this is a {} file'.format(self.short_name))
+
+    def _close_file(self):
+        self.f.close()
+        
 class ATLFile(ElevationDataset):
     """ATL* h5 file parsing.
 
@@ -3266,8 +3407,8 @@ class ATLFile(ElevationDataset):
         return(latitude, longitude, photon_h)#, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count)
 
     def get_water_temp(self):
-        import xarray as xr
-        from eosdis_store import EosdisStore
+        #import xarray as xr
+        #from eosdis_store import EosdisStore
 
         if self.region is not None:
             this_region = self.region.copy()
@@ -3278,19 +3419,21 @@ class ATLFile(ElevationDataset):
         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
         this_sst = fetches.MUR_SST(src_region = this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
         this_sst.run()
-        
-        datasets = [xr.open_zarr(EosdisStore(x[0]), consolidated=False) for x in this_sst.results]
-        if len(datasets) > 1:
-            ds = xr.concat(datasets, 'time')
-        else:
-            ds = datasets[0]
 
-        lats = slice(this_region.ymin, this_region.ymax)
-        lons = slice(this_region.xmin, this_region.xmax)
-        sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
-        sst = round(np.nanmedian(sea_temp.values)-273,2)
+        return(20)
+        ## todo do this wityout eosdis-store!
+        # datasets = [xr.open_zarr(EosdisStore(x[0]), consolidated=False) for x in this_sst.results]
+        # if len(datasets) > 1:
+        #     ds = xr.concat(datasets, 'time')
+        # else:
+        #     ds = datasets[0]
+
+        # lats = slice(this_region.ymin, this_region.ymax)
+        # lons = slice(this_region.xmin, this_region.xmax)
+        # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
+        # sst = round(np.nanmedian(sea_temp.values)-273,2)
         
-        return(sst)
+        # return(sst)
     
     def atl03_extract_bathymetry(
             self, laser, thresh = None, min_buffer = -40, max_buffer = 5,
@@ -3485,19 +3628,19 @@ class ATLFile(ElevationDataset):
             ## ==============================================
             ## apply the mask
             ## ==============================================
-            if self.mask is not None:
-                if self.region is not None:
-                    if gdalfun.ogr_or_gdal(self.mask) == 2:
-                        msk_infos = gdalfun.gdal_infos(self.mask)
-                        warp_msk = gdalfun.sample_warp(
-                            self.mask, None, None, None,
-                            src_region=self.region, dst_srs=self.aux_dst_trans_srs,
-                            ndv=msk_infos['ndv'])[0]
+            # if self.mask is not None:
+            #     if self.region is not None:
+            #         if gdalfun.ogr_or_gdal(self.mask) == 2:
+            #             msk_infos = gdalfun.gdal_infos(self.mask)
+            #             warp_msk = gdalfun.sample_warp(
+            #                 self.mask, None, None, None,
+            #                 src_region=self.region, dst_srs=self.aux_dst_trans_srs,
+            #                 ndv=msk_infos['ndv'])[0]
                         
-                        msk_infos = gdalfun.gdal_infos(warp_msk)
-                        msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
-                        out_z[msk_arr != msk_infos['ndv']] = np.nan
-                        warp_msk = None
+            #             msk_infos = gdalfun.gdal_infos(warp_msk)
+            #             msk_arr = warp_msk.GetRasterBand(1).ReadAsArray(*this_srcwin)
+            #             out_z[msk_arr != msk_infos['ndv']] = np.nan
+            #             warp_msk = None
                     
             out_arrays['z'] = out_z
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -4305,7 +4448,7 @@ class Datalist(ElevationDataset):
         ## check for the datalist-vector geojson
         status = 0
         count = 0
-
+        
         ## ==============================================
         ## user input to re-gerenate json...?
         ## ==============================================
@@ -4365,6 +4508,10 @@ class Datalist(ElevationDataset):
                     try:
                         ds_args = feat.GetField('mod_args')
                         data_set_args = utils.args2dict(list(ds_args.split(':')), {})
+                        for kpam, kval in data_set_args.items():
+                            if kpam in self.__dict__:
+                                self.__dict__[kpam] = kval
+                                del data_set_args[kpam]
                     except:
                         data_set_args = {}
 
@@ -4382,7 +4529,7 @@ class Datalist(ElevationDataset):
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
                     #utils.echo_msg_bold(self.src_srs)
                     data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                                              invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                              invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
                                               x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
                                               verbose=self.verbose, **data_set_args)._acquire_module()
                     if data_set is not None and data_set.valid_p(
@@ -4597,7 +4744,7 @@ class ZIPlist(ElevationDataset):
         for this_data in datalist:
             this_line = utils.p_f_unzip(self.fn, [this_data])[0]
             data_set = DatasetFactory(mod=this_line, data_format=None, weight=self.weight, uncertainty=self.uncertainty, parent=self,
-                                      src_region=self.region, invert_region=self.invert_region, x_inc=self.x_inc,
+                                      src_region=self.region, invert_region=self.invert_region, x_inc=self.x_inc, mask=self.mask,
                                       y_inc=self.y_inc, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs,
                                       dst_srs=self.dst_srs, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
             if data_set is not None and data_set.valid_p(
@@ -4678,7 +4825,6 @@ class Fetcher(ElevationDataset):
 
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(remote=True, **kwargs)
-
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.cache_dir
         )._acquire_module()
@@ -4694,6 +4840,7 @@ class Fetcher(ElevationDataset):
         # self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
         #                  'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
         #                  'vdatum':src_vert, 'url':None}
+
         
     def generate_inf(self, callback=lambda: False):
         """generate a infos dictionary from the Fetches dataset"""
@@ -4725,7 +4872,6 @@ class Fetcher(ElevationDataset):
             utils.remove_glob(self.fn)
     
     def yield_ds(self, result):
-
         ## try to get the SRS info from the result if it's a gdal file
         try:
             vdatum = self.fetch_module.vdatum
@@ -4744,8 +4890,9 @@ class Fetcher(ElevationDataset):
         
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                            remote=True)._acquire_module()
         yield(ds)
 
     def yield_xyz(self):
@@ -4816,13 +4963,15 @@ class DAVFetcher_CoNED(Fetcher):
         if not self.cog:
             ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                                 parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                                dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                                remote=True)._acquire_module()
         else:
             ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
                                 parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                                dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, check_path=False)._acquire_module()
+                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                                check_path=False)._acquire_module()
         yield(ds)
 
 class DAVFetcher_SLR(Fetcher):
@@ -4846,8 +4995,9 @@ class DAVFetcher_SLR(Fetcher):
         
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True, remove_flat=True)._acquire_module()
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                            remote=True, remove_flat=True)._acquire_module()
         yield(ds)
 
 class IceSatFetcher(Fetcher):
@@ -4874,9 +5024,10 @@ class IceSatFetcher(Fetcher):
         if result[1].endswith('h5'):
             ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]),
                                 data_format='{}:extract_bathymetry={}'.format(self.fetch_module.data_format, self.extract_bathymetry),
-                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
-                                uncertainty=self.uncertainty, src_region=self.region, parent=self, invert_region = self.invert_region,
-                                metadata = copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+                                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
+                                verbose=self.verbose)._acquire_module()
             yield(ds)
         
 # class DAVFetcher_CUDEM(Fetcher):
@@ -4942,36 +5093,39 @@ class GMRTFetcher(Fetcher):
                     exts=['shp', 'shx', 'prj', 'dbf'],
                     outdir=self.cache_dir
                 )
-                swath_shp = None
-                swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
+                #swath_shp = None
+                #swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
                 
                 for v in swath_shps:
                     if '.shp' in v:
-                        swath_shp = v
+                        #swath_shp = v
+                        swath_mask = {'mask': v, 'invert_mask': True}
                         break
                     
-                if not os.path.exists(swath_shp):
+                if not os.path.exists(swath_mask['mask']):
                     utils.echo_error_msg('could not find gmrt swath polygons...')
                     self.swath_only = False
-                else:
-                    import shutil
-                    tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
-                    shutil.copyfile(gmrt_fn, tmp_gmrt)
+                    swath_mask = None
+                # else:
+                #     import shutil
+                #     tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
+                #     shutil.copyfile(gmrt_fn, tmp_gmrt)
                     
-                    gi = gdalfun.gdal_infos(gmrt_fn)
-                    gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
-                        .format(gi['ndv'], os.path.basename(swath_shp).split('.')[0], swath_shp, tmp_gmrt)
-                    out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
+                #     gi = gdalfun.gdal_infos(gmrt_fn)
+                #     gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
+                #         .format(gi['ndv'], os.path.basename(swath_shp).split('.')[0], swath_shp, tmp_gmrt)
+                #     out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
 
-                    with gdalfun.gdal_datasource(tmp_gmrt, update=True) as tmp_ds:
-                        b = tmp_ds.GetRasterBand(1)
-                        a = b.ReadAsArray()
-                        a[a != gi['ndv']] = 0
-                        a[a == gi['ndv']] = 1
-                        b.WriteArray(a)
-                        gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
-                    
-        yield(DatasetFactory(mod=gmrt_fn, data_format='200:mask={}'.format(tmp_gmrt) if self.swath_only else '200', #mask=self.mask, 
+                #     with gdalfun.gdal_datasource(tmp_gmrt, update=True) as tmp_ds:
+                #         b = tmp_ds.GetRasterBand(1)
+                #         a = b.ReadAsArray()
+                #         a[a != gi['ndv']] = 0
+                #         a[a == gi['ndv']] = 1
+                #         b.WriteArray(a)
+                #         gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
+
+        yield(DatasetFactory(mod=gmrt_fn, data_format=200, mask=swath_mask,
+                             #data_format='200:mask={}'.format(swath_mask) if self.swath_only else '200', #mask=self.mask, invert_mask=self.invert_mask,
                              src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
                              invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
@@ -5050,7 +5204,7 @@ Note: Fetches entire zip file.
                     #utils.echo_warning_msg('mask: {}'.format(self.mask))
                     if self.mask is not None:
                         new_mask = utils.make_temp_fn('test_tmp_mask')
-                        gdalfun.gdal_mask(tmp_tid, self.mask, new_mask, msk_value = 1, verbose = True)
+                        gdalfun.gdal_mask(tmp_tid, self.mask['mask'], new_mask, msk_value = 1, verbose = True)
                         os.replace(new_mask, tmp_tid)
                         
                     yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid),
@@ -5078,7 +5232,7 @@ Note: Fetches entire zip file.
             for gebco_fn in wanted_gebco_fns:
                 yield(DatasetFactory(mod=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region, mask=self.mask, 
-                                     parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
+                                     parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
                 
 class CopernicusFetcher(Fetcher):
@@ -5104,7 +5258,7 @@ class CopernicusFetcher(Fetcher):
             )
             for src_cop_dem in src_cop_dems:
                 gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
-                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, 
+                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -5129,7 +5283,7 @@ class FABDEMFetcher(Fetcher):
         )
         for src_fab_dem in src_fab_dems:
             gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
-            yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask, 
+            yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
                                  x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                  parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
@@ -5207,8 +5361,8 @@ Digital Soundings
         for src_000 in src_000s:
             usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1", src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
-                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                                      parent=self, invert_region=self.invert_region, metadata = copy.deepcopy(self.metadata), mask=self.mask, 
+                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
 
 class MBSFetcher(Fetcher):
@@ -5228,8 +5382,9 @@ class MBSFetcher(Fetcher):
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-                            dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                            remote=True)._acquire_module()
 
         yield(ds)
             
@@ -5336,8 +5491,8 @@ class eHydroFetcher(Fetcher):
             for src_usace in src_usaces:
                 usace_ds = DatasetFactory(mod=src_usace, data_format='168:z_scale=.3048', src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None,
                                           dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, mask=self.mask, 
-                                          src_region=self.region, parent=self, invert_region = self.invert_region, metadata = copy.deepcopy(self.metadata),
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                                          src_region=self.region, parent=self, invert_region = self.invert_region,
+                                          metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 yield(usace_ds)
         
 class BlueTopoFetcher(Fetcher):
@@ -5372,7 +5527,7 @@ class BlueTopoFetcher(Fetcher):
 
         if self.mask is not None:
             new_mask = utils.make_temp_fn('test_tmp_mask')
-            gdalfun.gdal_mask(sid, self.mask, new_mask, msk_value = 1, verbose = True)
+            gdalfun.gdal_mask(sid, self.mask['mask'], new_mask, msk_value = 1, verbose = True)
             os.replace(new_mask, sid)
             
         yield(
@@ -6114,11 +6269,11 @@ def datalists_cli(argv=sys.argv):
                         else: # process and dump the datalist as a whole
                             this_datalist.dump_xyz()
                     except KeyboardInterrupt:
-                       utils.echo_error_msg('Killed by user')
-                       break
+                      utils.echo_error_msg('Killed by user')
+                      break
                     except BrokenPipeError:
-                       utils.echo_error_msg('Pipe Broken')
-                       break
+                      utils.echo_error_msg('Pipe Broken')
+                      break
                     except Exception as e:
-                       utils.echo_error_msg(e)
+                      utils.echo_error_msg(e) 
 ### End
