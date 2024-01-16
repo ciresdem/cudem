@@ -490,6 +490,7 @@ class Waffle:
             ## ==============================================
             ## stack the data and run the waffles module
             ## ==============================================
+            mask_fn = None
             if self.want_stack:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
                 mask_name = '{}_msk'.format(stack_name)

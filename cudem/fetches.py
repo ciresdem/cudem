@@ -3083,8 +3083,8 @@ https://open.canada.ca
     def __init__(self, **kwargs):
         super().__init__(name='chs', **kwargs)
         self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
-        self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
-        #self._chs_url_new = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?'
+        #self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
+        self._chs_url = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?' # new
         
     def run(self):
         """Run the CHS fetching module"""
@@ -3110,14 +3110,15 @@ https://open.canada.ca
         resy = (uc[0] - lc[0]) / hl[1]
 
         if regions.regions_intersect_ogr_p(self.region, ds_region):
-            _wcs_data = {'request': 'GetCoverage', 'version': '2.0.1', 'CoverageID': 'nonna:NONNA 10 Coverage',
+            _wcs_data = {'request': 'GetCoverage', 'version': '2.0.1', 'CoverageID': 'nonna__NONNA 10 Coverage',
                          'service': 'WCS', 'crs': '4326', 'bbox': self.region.format('bbox'),
                          'resx': resx, 'resy': resy}
 
+            utils.echo_msg(_wcs_data)
             _wcs_req = Fetch(self._chs_url).fetch_req(params=_wcs_data)
             #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&format=BAG&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
-            chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
-                                  .format(self._chs_url, self.region.format('bbox'), resx, resy)
+            #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
+            #                 .format(self._chs_url, self.region.format('bbox'), resx, resy)
             outf = 'chs_{}.tif'.format(self.region.format('fn'))
             self.results.append([_wcs_req.url, outf, 'chs'])
         return(self)

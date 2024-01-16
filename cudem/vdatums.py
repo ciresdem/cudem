@@ -913,7 +913,7 @@ def vdatums_cli(argv = sys.argv):
         
         vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()
-        out_trans_grid = utils.make_temp_fn('_trans_grid.tif')
+        out_trans_grid = utils.make_temp_fn('_trans_grid.tif', cache_dir)
         
         if os.path.exists(out_trans_grid):
             utils.remove_glob(out_trans_grid)
