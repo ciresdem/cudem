@@ -1473,7 +1473,7 @@ class ElevationDataset:
                                 archive_keys.append(sub_dirname)
                                 sub_dlf.write('{} -1 1 0\n'.format(os.path.relpath(sub_sub_dlf_path, this_dir)))
 
-                            sub_sub_dlf.write('{} 168 1 0\n'.format(os.path.basename(sub_xyz_path)))
+                            sub_sub_dlf.write('{} 168 1 0\n'.format(os.path.relpath(this_xyz_path, os.path.dirname(sub_sub_dlf_path))))
                             with open(this_xyz_path, 'w') as xp:
                                 for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                                     #yield(this_xyz) # don't need to yield data here.
