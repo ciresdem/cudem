@@ -1579,6 +1579,8 @@ class ElevationDataset:
             status = driver.Delete(out_file)
             if status != 0:
                 utils.remove_glob('{}*'.format(out_file))
+        else:
+            pass
                 
         if os.path.exists(mask_fn):
             status = driver.Delete(mask_fn)

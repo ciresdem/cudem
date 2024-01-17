@@ -1356,7 +1356,7 @@ https://www.charts.noaa.gov/
 < charts:want_rnc=False >"""
 
     def __init__(self, where='', want_rnc = False, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='charts', **kwargs)
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
         self._rnc_data_catalog = 'https://charts.noaa.gov/RNCs/RNCProdCat_19115.xml'
@@ -1504,13 +1504,13 @@ https://data.ngdc.noaa.gov/platforms/
 
     
     def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, make_datalist=False, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(name='multibeam', **kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
         self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
         self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
         self._mb_html = "https://www.ngdc.noaa.gov/"
-        self._outdir = os.path.join(os.getcwd(), 'mb')
+        #self._outdir = os.path.join(os.getcwd(), 'mb')
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
         self.name = 'multibeam'
         self.processed_p = processed

@@ -105,6 +105,10 @@ def set_cache(cache_dir: str):
     if not os.path.exists(cache_dir):
         os.makedirs(cache_dir)
 
+def remove_cache(cache_dir: str):
+    if os.path.exists(cache_dir):
+        remove_glob(cache_dir)
+        
 def append_fn(fn, src_region, inc, version=None, year=None, res=None, high_res=False):
     """append the src_region, inc and version to a string filename"""
     
