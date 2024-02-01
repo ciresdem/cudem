@@ -254,7 +254,7 @@ class Waffle:
         ## ==============================================
         if self.want_stack:
             self._init_data(set_incs=True) 
-            
+
         self.xcount, self.ycount, self.dst_gt = self.p_region.geo_transform(x_inc=self.xinc, y_inc=self.yinc, node='grid')
         #print('waffles: {} {}'.format(self.xcount, self.ycount))
         self.ds_config = gdalfun.gdal_set_infos(
@@ -306,11 +306,12 @@ class Waffle:
         set `set_incs` to True to block/sample datasets to given increment
         this function sets `self.data` to a list of dataset objects.
         """
-        
+
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
                                    invert_region=False, cache_dir=self.cache_dir)
+
         if self.data is not None:
             self.data.initialize()
             if not self.want_weight:
@@ -319,7 +320,7 @@ class Waffle:
             if not self.want_uncertainty:
                 self.data.uncertainty = None
         else:
-            return(None)    
+            return(None)
 
     def _init_incs(self):
         """Initialize increments
@@ -402,6 +403,12 @@ class Waffle:
                     'DEM {} already exists, skipping...'.format(self.fn)
                 )
                 return(self)
+            else:
+                utils.echo_warning_msg('DEM {} exists and will be clobbered.'.format(self.fn))
+                status = gdal.GetDriverByName(self.fmt).Delete(self.fn)
+                if status != 0:
+                    utils.remove_glob('{}*'.format(self.fn))
+
         else:
             if not os.path.exists(os.path.dirname(self.fn)):
                 try:
@@ -521,13 +528,17 @@ class Waffle:
                 ## ==============================================
                 ## generate the stack
                 ## ==============================================
-                if not self.clobber and os.path.exists(os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
-                    self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                stack_fn = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                stack_bn = utils.fn_basename2(stack_fn)
+
+                if not self.clobber and os.path.exists(stack_fn): #os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
+                    #self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                    self.stack = stack_fn
                     if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
-                        self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                        self.stack = self.data._stacks(out_name=stack_bn, #os.path.join(self.cache_dir, stack_name),
                                                        supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
                 else:
-                    self.stack = self.data._stacks(out_name=os.path.join(self.cache_dir, stack_name),
+                    self.stack = self.data._stacks(out_name=stack_bn, #os.path.join(self.cache_dir, stack_name),
                                                    supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
                     
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
@@ -2349,7 +2360,6 @@ class WafflesCoastline(Waffle):
         this_osm.run()
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
-        utils.echo_msg(this_osm.results)
         with tqdm(
                 total=len(this_osm.results),
                 desc='processing OSM buildings',
@@ -4614,10 +4624,26 @@ class WaffleDEM:
             utils.echo_msg('dem {} has no z values?'.format(self.fn))
             return(False)
 
-        if self.ds_config['raster_count'] == 1:
-            if np.isnan(self.ds_config['zr'][0]):
+        if self.ds_config['raster_count'] == 0:
+            utils.echo_warning_msg('dem {} has no bands'.format(self.fn))
+            return(False)
+        else:
+            band_check = []
+            for band_num in range(1, self.ds_config['raster_count']+1):
+                #band_infos = gdalfun.gdal_infos(self.fn, scan=True, band=band_num)
+                if np.isnan(self.ds_config['zr'][0]) or np.isnan(self.ds_config['zr'][1]):
+                    band_check.append(0)
+                else:
+                    band_check.append(1)
+
+            if not np.any(band_check):
                 utils.echo_warning_msg('dem {} is all nan'.format(self.fn))
                 return(False)
+                
+        # if self.ds_config['raster_count'] == 1:
+        #     if np.isnan(self.ds_config['zr'][0]):
+        #         utils.echo_warning_msg('dem {} is all nan'.format(self.fn))
+        #         return(False)
         
         return(True)
         

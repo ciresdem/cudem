@@ -1,6 +1,6 @@
 ### vdatums.py
 ##
-## Copyright (c) 2021 - 2023 Regents of the University of Colorado
+## Copyright (c) 2021 - 2024 Regents of the University of Colorado
 ##
 ## vdatums.py is part of CUDEM
 ##

@@ -1157,8 +1157,8 @@ def get_terminal_size_stderr(fallback=(80, 24)):
         
     return(size)
     
-def _init_msg(msg, prefix_len):
-    width = int(_terminal_width()) - (prefix_len+6)
+def _init_msg(msg, prefix_len, buff_len=6):
+    width = int(_terminal_width()) - (prefix_len+buff_len)
     try:
         if len(msg) > width:
             return('{}...'.format(msg[:width]))

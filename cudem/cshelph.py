@@ -49,16 +49,16 @@ def convert_wgs_to_utm(lat, lon):
 		
 	return epsg
 
-def orthometric_correction(lat, lon, Z, epsg):
-    # transform ellipsod (WGS84) height to orthometric height
-    transformerh = Transformer.from_crs("epsg:4326", "epsg:3855", always_xy=True)
-    X_egm08, Y_egm08, Z_egm08 = transformerh.transform(lon, lat, Z)
+# def orthometric_correction(lat, lon, Z, epsg):
+#     # transform ellipsod (WGS84) height to orthometric height
+#     transformerh = Transformer.from_crs("epsg:4326", "epsg:3855", always_xy=True)
+#     X_egm08, Y_egm08, Z_egm08 = transformerh.transform(lon, lat, Z)
     
-    # transform WGS84 proj to local UTM
-    myproj = Proj(epsg)
-    X_utm, Y_utm = myproj(lon, lat)
+#     # transform WGS84 proj to local UTM
+#     myproj = Proj(epsg)
+#     X_utm, Y_utm = myproj(lon, lat)
     
-    return Y_utm, X_utm, Z_egm08
+#     return Y_utm, X_utm, Z_egm08
 
     
 def count_ph_per_seg(ph_index_beg, photon_h): # DEpRECATED
@@ -119,13 +119,21 @@ def bin_data(dataset, lat_res, height_res):
     dataset1 = dataset
     
     # Cut lat bins
-    lat_bins = pd.cut(dataset['latitude'], lat_bin_number, labels = np.array(range(lat_bin_number)))
+    try:
+        lat_bins = pd.cut(dataset['latitude'], lat_bin_number, labels = np.array(range(lat_bin_number)))
+    except Exception as e:
+        print('bin error, {}'.format(e))
+        return(None)
     
     # Add bins to dataframe
     dataset1['lat_bins'] = lat_bins
     
     # Cut height bins
-    height_bins = pd.cut(dataset['photon_height'], height_bin_number, labels = np.round(np.linspace(dataset['photon_height'].min(), dataset['photon_height'].max(), num=height_bin_number), decimals = 1))
+    try:
+        height_bins = pd.cut(dataset['photon_height'], height_bin_number, labels = np.round(np.linspace(dataset['photon_height'].min(), dataset['photon_height'].max(), num=height_bin_number), decimals = 1))
+    except Exception as e:
+        print('height bin error, {}'.format(e))
+        return(None)
     
     # Add height bins to dataframe
     dataset1['height_bins'] = height_bins
@@ -163,6 +171,9 @@ def get_sea_height(binned_data, surface_buffer=-0.5):
         del new_df
         
     # Filter out sea height bin values outside 2 SD of mean.
+    if np.all(np.isnan(sea_height)):
+        return(None)
+    
     mean = np.nanmean(sea_height, axis=0)
     sd = np.nanstd(sea_height, axis=0)
     sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
@@ -306,7 +317,10 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
         else:
             bath_height.append(np.nan)
             del new_df
-            
+
+    if len(geo_longitude) == 0 or len(geo_latitude) == 0:
+        return(None, None)
+    
     geo_longitude_list = np.concatenate(geo_longitude).ravel().tolist()
     geo_latitude_list = np.concatenate(geo_latitude).ravel().tolist()
     geo_photon_list = np.concatenate(geo_photon_height).ravel().tolist()

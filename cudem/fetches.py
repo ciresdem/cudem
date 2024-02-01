@@ -363,24 +363,19 @@ class Fetch:
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                     else:
                         dst_fn_size = os.stat(dst_fn).st_size
-                        #utils.echo_msg_bold(dst_fn_size)
                         resume_byte_pos = dst_fn_size
                         self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
             except OSError:
                 pass
 
-            #utils.echo_msg(self.headers)
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
-
-                #utils.echo_msg(req.url)
                 req_h = req.headers
                 if 'Content-Length' in req_h:
                     req_s = int(req_h['Content-Length'])
                 else:
                     req_s = -1
 
-                #utils.echo_msg_bold(req_s)
                 try:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
@@ -418,7 +413,7 @@ class Fetch:
                     total_size = int(req.headers.get('content-length', 0))
                     with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
                         with tqdm(
-                                desc='fetching: {}'.format(self.url),
+                                desc='fetching: {}'.format(utils._init_msg(self.url, len('fetching: '), 40)),
                                 total=total_size,
                                 unit='iB',
                                 unit_scale=True
@@ -2716,6 +2711,7 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
 
 ## ==============================================
 ## The National Map
+## update is broken! fix this.
 ## ==============================================
 class TheNationalMap(FetchModule):
     """USGS' The National Map
@@ -2744,10 +2740,7 @@ http://tnmaccess.nationalmap.gov/
                          'National Hydrography Dataset Plus High Resolution (NHDPlus HR)', 'National Hydrography Dataset (NHD) Best Resolution',
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
-        # if self.outdir is None:
-        #     self._outdir = os.path.join(os.getcwd(), 'tnm')
-            
-        #self.where = where
+
         self.where = [where] if len(where) > 0 else []        
         self._urls = [self._tnm_api_url]
         
@@ -3870,7 +3863,7 @@ https://cmr.earthdata.nasa.gov
 
 < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
 
-    def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter='', **kwargs):
+    def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter=None, **kwargs):
         super().__init__(name='cmr', **kwargs)
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
         self.short_name = short_name
@@ -3882,6 +3875,15 @@ https://cmr.earthdata.nasa.gov
 
         credentials = get_credentials(None)
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
+
+    def add_wildcards_to_str(self, in_str):
+        if not in_str.startswith('*'):
+            in_str = '*' + in_str
+            
+        if not in_str.endswith('*'):
+            in_str = in_str + '*'
+            
+        return(in_str)
         
     def run(self):
         if self.region is None:
@@ -3894,25 +3896,29 @@ https://cmr.earthdata.nasa.gov
             'temporal': f'{self.time_start}, {self.time_end}',
             'page_size': 2000,
         }
+
+        if '*' in self.short_name:
+            _data['options[short_name][pattern]'] = 'true'
         
+        if self.filename_filter is not None:
+            _data['options[producer_granule_id][pattern]'] = 'true'
+            filename_filters = self.filename_filter.split(',')
+            for filename_filter in filename_filters:
+                _data['producer_granule_id'] = self.add_wildcards_to_str(filename_filter)
+                
         _req = Fetch(self._cmr_url).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()['feed']['entry']
             for feature in features:
-                
-                # the polygons key is not reliable atm (awaiting NASA fix)
                 if 'polygons' in feature.keys():
                     poly = feature['polygons'][0][0]
                     cc = [float(x) for x in poly.split()]
                     gg = [x for x in zip(cc[::2], cc[1::2])]
                     ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
+                    ## ==============================================
+                    ## uncomment below to output shapefiles of the feature polygons
+                    ## ==============================================
                     #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
-                    # if 'orbit' in feature.keys():
-                    #     start_lat = utils.float_or(feature['orbit']['start_lat']. 0)
-                    #     end_lat = utils.float_or(feature['orbit']['end_lat'], 0)
-                    
-                    #     l = [start_lat, end_lat]
-                    #     ogr_geom = ogr.CreateGeometryFromWkt(''.format(start_lat, end_lat))
                 else:
                     ogr_geom = self.region.export_as_geom()
 
@@ -3922,7 +3928,6 @@ https://cmr.earthdata.nasa.gov
                         if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
                             if not any([link['href'].split('/')[-1] in res for res in self.results]):
                                 self.results.append([link['href'], link['href'].split('/')[-1], self.short_name])
-
 
 ## ==============================================
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
@@ -3947,6 +3952,7 @@ class IceSat(EarthData):
                 
         super().__init__(short_name=short_name, **kwargs)   
         self.data_format = 202
+        self.src_srs = 'epsg:4326+3855'
 
 ## ==============================================
 ## SST from EarthData
@@ -3961,7 +3967,6 @@ class MUR_SST(EarthData):
     
     def __init__(self, **kwargs):
         super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
-        #self.data_format = '202:extract_bathymetry={}'.format(extract_bathymetry)
         
 ## ==============================================
 ## USIEI

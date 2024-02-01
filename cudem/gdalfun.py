@@ -100,6 +100,20 @@ def split_srs(srs, as_epsg = False):
         return(horz_epsg if horz_epsg is not None else horz_wkt, vert_epsg if vert_epsg is not None else vert_wkt)
     else:
         return(horz_wkt, vert_epsg)
+
+def combine_epsgs(src_horz, src_vert, name='Combined'):
+    """combine src_horz and src_vert into a CompoundCS"""
+    
+    if src_horz is None or src_vert is None:
+        return(None)
+    
+    horz_srs = osr.SpatialReference()
+    horz_srs.SetFromUserInput(src_horz)
+    vert_srs = osr.SpatialReference()
+    vert_srs.SetFromUserInput('epsg:{}'.format(src_vert))
+    src_srs = osr.SpatialReference()
+    src_srs.SetCompoundCS('{}'.format(name, src_horz, src_vert), horz_srs, vert_srs)
+    return(src_srs.ExportToWkt())
     
 def wkt2geom(wkt):
     """transform a wkt to an ogr geometry
@@ -907,6 +921,7 @@ def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None,
             if ds_array is None:
                 utils.echo_error_msg('could not read data array from datasource {}'.format(src_gdal))
                 return(None, -1)
+            
         except Exception as e:
             utils.echo_error_msg('could not read datasource {}, {}'.format(src_gdal, e))
             return(None, -1)
@@ -1781,19 +1796,22 @@ def sample_warp(
             )
             x_sample_inc = y_sample_inc = None
         
-    if verbose:
-        utils.echo_msg(
-            'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
-                os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
-            )
-        )        
+    # if verbose:
+    #     utils.echo_msg(
+    #         'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+    #             os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
+    #         )
+    #     )        
     #utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
 
     if verbose:
-        pbar = tqdm(desc='warping...', total=100, leave=verbose)
+        desc = 'warping DEM: {} :: R:{} E:{}/{}:{}/{} S{} P{} -> T{}'.format(
+            os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
+        )
+        pbar = tqdm(desc=desc, total=100, leave=True)
         pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)
     else:
         pbar_update = None
@@ -1808,6 +1826,9 @@ def sample_warp(
     if verbose:
         pbar.close()
 
+    if dst_srs is not None:
+        gdal_set_srs(dst_ds, dst_srs)
+        
     if dst_dem is None:
         return(dst_ds, 0)
     else:

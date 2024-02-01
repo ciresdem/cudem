@@ -28,8 +28,9 @@
 import os
 import sys
 
+import pyproj
+
 from osgeo import ogr
-from osgeo import osr
 
 import cudem
 from cudem import utils
@@ -579,68 +580,35 @@ class Region:
 
         return(o_chunks)
 
-    def warp(self, dst_srs = 'epsg:4326'):
-        """warp the region from self.epsg to dst_epsg"""
+    def warp(self, dst_crs = 'epsg:4326'):
+        in_crs = pyproj.CRS.from_user_input(self.src_srs)
+        out_crs = pyproj.CRS.from_user_input(dst_crs)
 
-        dst_srs = utils.str_or(dst_srs)
-        if dst_srs is None or self.src_srs is None: return(self)
-        src_srs = osr.SpatialReference()
-        src_srs.SetFromUserInput(self.src_srs)
-        #print(src_srs.ExportToWkt())
-        #src_srs.ImportFromWkt(osr.GetUserInputAsWKT(self.src_srs))
-        dst_srs_ = osr.SpatialReference()
-        dst_srs_.SetFromUserInput(dst_srs)
-        
-        try:
-            src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-            dst_srs_.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
-        except: pass
-        
-        dst_trans = osr.CoordinateTransformation(src_srs, dst_srs_)
-        if dst_trans is None or not self.valid_p():
+        transformer = pyproj.Transformer.from_crs(in_crs, out_crs, always_xy=True)
+
+        if transformer is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
             return(self)
-
-        self.src_srs = dst_srs
+        
+        self.src_srs = dst_crs
         self.wkt = None
-
-        src_srs = dst_srs_ = None
-        return(self.transform(dst_trans))
-
-    def transform(self, dst_trans = None):
-        """transform the region using dst_trans transformation."""
-
-        if dst_trans is None or not self.valid_p():
+        
+        return(self.transform(transformer))
+        
+    def transform(self, transformer = None):
+        if transformer is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
             return(self)
 
-        pointA = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymin))
-        pointA.Transform(dst_trans)
-        
-        pointB = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymax))
-        pointB.Transform(dst_trans)
+        if self.zmin is not None and self.zmax is not None:
+            self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
+            self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
+        else:
+            self.xmin, self.ymin = transformer.transform(self.xmin, self.ymin)
+            self.xmax, self.ymax = transformer.transform(self.xmax, self.ymax)
 
-        pointC = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmin, self.ymax))
-        pointC.Transform(dst_trans)
-
-        pointD = ogr.CreateGeometryFromWkt('POINT ({} {} 0)'.format(self.xmax, self.ymin))
-        pointD.Transform(dst_trans)
-        
-        try:
-            if not 'inf' in pointA.ExportToWkt() and not 'inf' in pointB.ExportToWkt():
-                xs = [pointA.GetX(), pointB.GetX(), pointC.GetX(), pointD.GetX()]
-                ys = [pointA.GetY(), pointB.GetY(), pointC.GetY(), pointD.GetY()]
-                self.xmin = min(xs)
-                self.xmax = max(xs)
-                self.ymin = min(ys)
-                self.ymax = max(ys)
-            
-        except Exception as e:
-            sys.stderr.write('transform error: {}\n'.format(str(e)))
-
-        dst_trans = pointA = pointB = None
         return(self)
-    
+         
 ## ==============================================
 ## do things to and with regions...
 ## various region related functions
