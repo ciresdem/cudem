@@ -48,34 +48,6 @@ def convert_wgs_to_utm(lat, lon):
 		print('Error Finding UTM')
 		
 	return epsg
-
-# def orthometric_correction(lat, lon, Z, epsg):
-#     # transform ellipsod (WGS84) height to orthometric height
-#     transformerh = Transformer.from_crs("epsg:4326", "epsg:3855", always_xy=True)
-#     X_egm08, Y_egm08, Z_egm08 = transformerh.transform(lon, lat, Z)
-    
-#     # transform WGS84 proj to local UTM
-#     myproj = Proj(epsg)
-#     X_utm, Y_utm = myproj(lon, lat)
-    
-#     return Y_utm, X_utm, Z_egm08
-
-    
-def count_ph_per_seg(ph_index_beg, photon_h): # DEpRECATED
-    
-    ph_index_beg = ph_index_beg[ph_index_beg!=0]
-    
-    # add an extra val at the end of array for upper bounds
-    ph_index_beg = np.hstack((ph_index_beg, len(photon_h)+1))-1
-    
-    photon_id = []
-    #iterate over the photon indexes (ph_index_beg)
-    for i, num in enumerate(np.arange(0, len(ph_index_beg)-1, 1)):
-        photon_id.append(len(photon_h[ph_index_beg[i]:ph_index_beg[i+1]]))
-    photon_id = np.array(photon_id)
-    
-    return photon_id
-
     
 def ref_linear_interp(photon_count, ref_elev):
 
@@ -114,32 +86,32 @@ def bin_data(dataset, lat_res, height_res):
     # Calculate number of bins required both vertically and horizontally with resolution size
     lat_bin_number = round(abs(dataset['latitude'].min() - dataset['latitude'].max())/lat_res)
     height_bin_number = round(abs(dataset['photon_height'].min() - dataset['photon_height'].max())/height_res)
-    
-     # Duplicate dataframe
-    dataset1 = dataset
-    
-    # Cut lat bins
-    try:
-        lat_bins = pd.cut(dataset['latitude'], lat_bin_number, labels = np.array(range(lat_bin_number)))
-    except Exception as e:
-        print('bin error, {}'.format(e))
-        return(None)
-    
-    # Add bins to dataframe
-    dataset1['lat_bins'] = lat_bins
-    
-    # Cut height bins
-    try:
-        height_bins = pd.cut(dataset['photon_height'], height_bin_number, labels = np.round(np.linspace(dataset['photon_height'].min(), dataset['photon_height'].max(), num=height_bin_number), decimals = 1))
-    except Exception as e:
-        print('height bin error, {}'.format(e))
-        return(None)
-    
-    # Add height bins to dataframe
-    dataset1['height_bins'] = height_bins
-    dataset1 = dataset1.reset_index(drop=True)
 
-    return dataset1
+    if (lat_bin_number > 0 and height_bin_number > 0):    
+         # Duplicate dataframe
+        dataset1 = dataset
+
+        # Cut lat bins
+        lat_bins = pd.cut(dataset['latitude'], lat_bin_number, labels = np.array(range(lat_bin_number)))
+
+        # Add bins to dataframe
+        dataset1['lat_bins'] = lat_bins
+
+        # Cut height bins
+        height_bins = pd.cut(
+            dataset['photon_height'], height_bin_number, labels = np.round(
+                np.linspace(dataset['photon_height'].min(), dataset['photon_height'].max(), num=height_bin_number),
+                decimals = 1
+            )
+        )
+
+        # Add height bins to dataframe
+        dataset1['height_bins'] = height_bins
+        dataset1 = dataset1.reset_index(drop=True)
+
+        return dataset1
+
+    return None
 
 def get_sea_height(binned_data, surface_buffer=-0.5):
     '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
@@ -291,6 +263,7 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     # Group data by latitude
     # Filter out surface data that are two bins below median surface value calculated above
     binned_data_bath = binned_data[(binned_data['photon_height'] < WSHeight - (height_resolution * 2))]
+        
     grouped_data = binned_data_bath.groupby(['lat_bins'], group_keys=True)
     data_groups = dict(list(grouped_data))
     
@@ -325,8 +298,62 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     geo_latitude_list = np.concatenate(geo_latitude).ravel().tolist()
     geo_photon_list = np.concatenate(geo_photon_height).ravel().tolist()
     geo_depth = WSHeight - geo_photon_list
+        
     geo_df = pd.DataFrame({'longitude': geo_longitude_list, 'latitude':geo_latitude_list, 'photon_height': geo_photon_list, 'depth':geo_depth})
     
     del geo_longitude_list, geo_latitude_list, geo_photon_list
     
     return bath_height, geo_df
+
+def get_bin_height(binned_data, percentile, surface_buffer=-0.5):
+    '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
+    
+    # Create sea height list
+    sea_height = []
+    bin_lat = []
+    bin_lon = []
+    
+    # Group data by latitude
+    binned_data_sea = binned_data[(binned_data['photon_height'] > surface_buffer)] # Filter out subsurface data
+    grouped_data = binned_data_sea.groupby(['lat_bins'], group_keys=True)
+    data_groups = dict(list(grouped_data))
+
+    # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+    count_threshold = np.percentile(binned_data.groupby(['lat_bins', 'height_bins']).size().reset_index().groupby('lat_bins')[[0]].max(), percentile)
+
+    # Loop through groups and return average sea height
+    for k,v in data_groups.items():
+        # Create new dataframe based on occurance of photons per height bin
+        new_df = pd.DataFrame(v.groupby('height_bins').count())
+
+        # Return the bin with the highest count
+        largest_h_bin = new_df['latitude'].argmax()
+
+        # Select the index of the bin with the highest count
+        largest_h = new_df.index[largest_h_bin]
+        
+        # Set threshold of photon counts per bin
+        if new_df.iloc[largest_h_bin]['latitude'] >= count_threshold:        
+            
+            # Calculate the median value of all values within this bin
+            lat_bin_sea_median = v.loc[v['height_bins']==largest_h, 'photon_height'].median()
+            lat_bin_median = v.loc[v['height_bins']==largest_h, 'latitude'].median()
+            lon_bin_median = v.loc[v['height_bins']==largest_h, 'longitude'].median()
+
+            # Append to sea height list
+            sea_height.append(lat_bin_sea_median)
+            bin_lat.append(lat_bin_median)
+            bin_lon.append(lon_bin_median)
+            del new_df
+        else:
+            del new_df
+        
+    # Filter out sea height bin values outside 2 SD of mean.
+    if np.all(np.isnan(sea_height)):
+        return(None)
+    
+    mean = np.nanmean(sea_height, axis=0)
+    sd = np.nanstd(sea_height, axis=0)
+    sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
+    
+    return bin_lat, bin_lon, sea_height_1

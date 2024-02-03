@@ -4697,8 +4697,8 @@ class WaffleDEM:
         ## ==============================================
         ## put everything in a hdf5
         ## ==============================================
-        # if stack_fn is not None:
-        #     self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
+        if stack_fn is not None:
+            self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
 
         ## ==============================================
         ## clip/cut

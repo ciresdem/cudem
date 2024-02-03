@@ -3941,7 +3941,7 @@ class IceSat(EarthData):
 
     By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
    
-< icesat:short_name=ATL08:time_start='':time_end='' >"""
+< icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >"""
     
     def __init__(self, short_name='ATL03', **kwargs):
         if short_name is not None:
@@ -3963,7 +3963,7 @@ class IceSat(EarthData):
 class MUR_SST(EarthData):
     """Access SST data.
 
-< mur_sst:time_start='':time_end='' >"""
+< mur_sst:time_start='':time_end='':filename_filter='' >"""
     
     def __init__(self, **kwargs):
         super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
