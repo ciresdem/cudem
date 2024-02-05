@@ -1762,7 +1762,7 @@ class ElevationDataset:
 
 ## ==============================================
 ## XYZ File
-## ==============================================            
+## ==============================================
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
@@ -1790,7 +1790,7 @@ class XYZFile(ElevationDataset):
     x_offset: offset the x value
     y_offset: offset the y value    
     """
-
+            
     def __init__(self, delim = None, xpos = 0, ypos = 1, zpos = 2,
                  wpos = None, upos = None, skip = 0, x_scale = 1, y_scale = 1,
                  z_scale = 1, x_offset = 0, y_offset = 0, use_numpy = True,
@@ -1978,6 +1978,10 @@ class XYZFile(ElevationDataset):
             except:
                 pass
 
+class YXZFile(XYZFile):
+    def __init__(self, **kwargs):
+        super().__init__(xpos = 1, ypos = 0, zpos = 2, **kwargs)
+            
 ## ==============================================
 ## LAS/LAZ Dataset.
 ## ==============================================
@@ -3639,7 +3643,7 @@ class IceSatFetcher(Fetcher):
     -----------
     Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
     
-    def __init__(self, want_be=False, want_topo=True, water_surface='mean_tide', bathy_thresh = 50, topo_thresh = 30, **kwargs):
+    def __init__(self, want_bathy=True, want_topo=False, water_surface='mean_tide', bathy_thresh = 50, topo_thresh = 30, **kwargs):
         super().__init__(**kwargs)
         self.want_topo = want_topo
         self.want_bathy = want_bathy
@@ -4710,7 +4714,8 @@ class DatasetFactory(factory.CUDEMFactory):
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
-        -3: {'name': 'scratch  ', 'fmts': [''], 'call': Scratch },
+        -3: {'name': 'scratch', 'fmts': [''], 'call': Scratch },
+        167: {'name': 'yxz', 'fmts': ['yxz'], 'call': YXZFile},
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
