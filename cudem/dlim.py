@@ -1831,39 +1831,23 @@ class XYZFile(ElevationDataset):
                              if x is not None]
         self.field_formats = [float for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None]
 
-        ## todo: use xyzfun
         if self.use_numpy:
             if self.delim is None:
                 self.guess_delim()
-                
-            # cur_row = 0
-            # #with open(self.fn, 'r') as src_data:
-            # while True:
-            #     try:
-            #         points = np.loadtxt(
-            #             self.fn, delimiter=self.delim, comments='#', skiprows=self.skip + cur_row, ndmin = 1,
-            #             usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
-            #             dtype={'names': self.field_names, 'formats': self.field_formats}, max_rows=1000000
-            #         )
-            #         cur_row += 1000000
-            #     except StopIteration:
-            #         break
 
-            #     yield(points)
+            # with open(self.fn, "rb") as f:
+            #     num_lines = sum(1 for _ in f)
 
-            with open(self.fn, "rb") as f:
-                num_lines = sum(1 for _ in f)
-
-            if num_lines < self.iter_rows:
-                self.iter_rows = None
+            # if num_lines < self.iter_rows:
+            #     self.iter_rows = None
 
             with open(self.fn, 'r') as src_data:
-                if self.skip > 0:
-                    while True:
-                        for line in src_data:
-                            self.skip -= 1
-                            if self.skip <= 0:
-                                break
+                #if self.skip > 0:
+                while self.skip > 0:
+                    for line in src_data:
+                        self.skip -= 1
+                        if self.skip <= 0:
+                            break
                     
                 while True:
                     points = np.loadtxt(
@@ -1871,7 +1855,6 @@ class XYZFile(ElevationDataset):
                         usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
                         dtype={'names': self.field_names, 'formats': self.field_formats}, max_rows=self.iter_rows
                     )
-
                     if self.scoff:
                         points['x'] = (points['x'] + self.x_offset) * self.x_scale
                         points['y'] = (points['y'] + self.y_offset) * self.y_scale
@@ -2488,7 +2471,7 @@ class GDALFile(ElevationDataset):
             dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
-            
+
             yield(points)
 
 ## ==============================================
@@ -2556,7 +2539,7 @@ class BAGFile(ElevationDataset):
         self.infos.minmax = this_region.export_as_list(include_z=True)
         self.infos.wkt = this_region.export_as_wkt()
         self.infos.numpts = ds_infos['nb']
-        utils.echo_msg(self.infos)
+        #utils.echo_msg(self.infos)
         return(self.infos)
 
     def parse(self, resample=True):
@@ -2603,7 +2586,6 @@ class BAGFile(ElevationDataset):
                               uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
                               uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
             self.data_entries.append(sub_ds)
-            #utils.echo_msg(self.data_entries)
             sub_ds.initialize()
             yield(sub_ds)
                                             
@@ -2629,11 +2611,12 @@ class MBSParser(ElevationDataset):
     mb_exclude=[]
     """
 
-    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False, **kwargs):
+    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False, want_binned = False, **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
         self.want_mbgrid = want_mbgrid
+        self.want_binned = want_binned
              
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -2690,6 +2673,7 @@ class MBSParser(ElevationDataset):
             ds.SetGeoTransform(ds_config['geoT'])
             if ds_config['proj'] is not None:
                 ds.SetProjection(ds_config['proj'])
+                
             ds_band = ds.GetRasterBand(1)
             ds_band.SetNoDataValue(ds_config['ndv'])
             ds_band.WriteArray(cm_array)
@@ -2702,6 +2686,7 @@ class MBSParser(ElevationDataset):
                 feat.geometry().CloseRings()
                 wkt = feat.geometry().ExportToWkt()
                 multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+                
             wkt = multi.ExportToWkt()
             tmp_ds = ds = None
         else:
@@ -2710,58 +2695,212 @@ class MBSParser(ElevationDataset):
         self.infos.wkt = wkt
         return(self)
 
-    def parse(self):
+    # def parse(self):
 
-        if self.region is None or self.data_region is None:
-            self.want_mbgrid = False
+    #     # if self.region is None or self.data_region is None:
+    #     #     self.want_mbgrid = False
 
-        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
-            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
-                tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
+    #     # if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
+    #     #     with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
+    #     #         tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
 
-            ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-            # if self.region is not None:
-            #     mbgrid_region = self.region.copy()
-            # else:
-            #     mbgrid_region = regions.Region().from_list(self.infos.minmax)
+    #     #     ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
+    #     #     # if self.region is not None:
+    #     #     #     mbgrid_region = self.region.copy()
+    #     #     # else:
+    #     #     #     mbgrid_region = regions.Region().from_list(self.infos.minmax)
 
-            # mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
-            try:
-                utils.run_cmd(
-                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                    ), verbose=True
-                )
+    #     #     # mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
+    #     #     try:
+    #     #         utils.run_cmd(
+    #     #             'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+    #     #                 self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
+    #     #             ), verbose=True
+    #     #         )
                 
-                gdalfun.gdal2gdal('{}.grd'.format(ofn))
-                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-                                  src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+    #     #         gdalfun.gdal2gdal('{}.grd'.format(ofn))
+    #     #         utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+    #     #         mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+    #     #                           weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+    #     #                           src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
 
-                yield(mbs_ds)
-                utils.remove_glob('{}.tif*'.format(ofn))
-            except:
-                yield(None)
-        else:
-            this_xyz_path = '{}.xyz'.format(utils.fn_basename2(self.fn))
-            with open(this_xyz_path, 'w') as xp:
-                for line in utils.yield_cmd(
-                        'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), self.fn),
-                        verbose=True,
-                ):
-                    this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-                    this_xyz.weight = self.weight
-                    this_xyz.dump(include_w=True if self.weight is not None else False,
-                                  include_u=True if self.uncertainty is not None else False,
-                                  dst_port=xp, encode=False)
+    #     #         yield(mbs_ds)
+    #     #         utils.remove_glob('{}.tif*'.format(ofn))
+    #     #     except:
+    #     #         yield(None)
+    #     # else:
+    #     #     this_xyz_path = '{}.xyz'.format(utils.fn_basename2(self.fn))
+    #     #     with open(this_xyz_path, 'w') as xp:
+    #     #         for line in utils.yield_cmd(
+    #     #                 'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), self.fn),
+    #     #                 verbose=True,
+    #     #         ):
+    #     #             this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+    #     #             this_xyz.weight = self.weight
+    #     #             this_xyz.dump(include_w=True if self.weight is not None else False,
+    #     #                           include_u=True if self.uncertainty is not None else False,
+    #     #                           dst_port=xp, encode=False)
                     
-            mbs_ds = XYZFile(fn=this_xyz_path, data_format=168, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                             weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, src_region=self.region,
-                             verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+    #     #     mbs_ds = XYZFile(fn=this_xyz_path, data_format=168, src_srs=self.src_srs, dst_srs=self.dst_srs,
+    #     #                      weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, src_region=self.region,
+    #     #                      verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
             
-            mbs_ds.initialize()
-            yield(mbs_ds)
+    #     #     mbs_ds.initialize()
+    #     #     yield(mbs_ds)
+    def yield_ds(self):
+        
+        mb_fn = os.path.join(self.fn)
+        xs = []
+        ys = []
+        zs = []
+        ws = []
+
+        for line in utils.yield_cmd(
+                'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), mb_fn),
+                verbose=False,
+        ):
+            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+            xs.append(this_xyz.x)
+            ys.append(this_xyz.y)
+            zs.append(this_xyz.z)
+
+        if len(xs) > 0:
+            mb_points = np.column_stack((xs, ys, zs))
+            mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+
+            if self.want_binned:
+                mb_points = self.bin_z_points(mb_points)
+                
+            if mb_points is not None:
+                yield(mb_points)
+
+    def bin_points(self, points, y_res, z_res):
+        '''Bin data along vertical and horizontal scales for later segmentation'''
+        
+        ## ==============================================
+        ## Calculate number of bins required both vertically and
+        ## horizontally with resolution size
+        ## ==============================================
+        y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
+        z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
+
+        if (y_bin_number > 0 and z_bin_number > 0):    
+            points1 = points
+            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
+            points['y_bins'] = y_bins
+            z_bins = pd.cut(
+                points['z'], z_bin_number, labels = np.round(
+                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
+                    decimals = 1
+                )
+            )
+            points1['z_bins'] = z_bins
+            points1 = points1.reset_index(drop=True)
+
+            return(points1)
+
+        return(None)
+
+    def convert_wgs_to_utm(self, lat, lon):
+        easting, northing, num, letter = utm.from_latlon(lat, lon)
+        if letter >= 'N':
+            epsg = 'epsg:326' + str(num)
+        elif letter < 'N':
+            epsg = 'epsg:327' + str(num)
+        else:
+            print('Error Finding UTM')
+
+        return(epsg)
+
+    def get_bin_height(self, binned_data, percentile=30):
+        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
+
+        # Create sea height list
+        sea_height = []
+        bin_lat = []
+        bin_lon = []
+
+        # Group data by latitude
+        binned_data_sea = binned_data
+        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
+        data_groups = dict(list(grouped_data))
+
+        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
+
+        # Loop through groups and return average sea height
+        for k,v in data_groups.items():
+            # Create new dataframe based on occurance of photons per height bin
+            new_df = pd.DataFrame(v.groupby('z_bins').count())
+
+            # Return the bin with the highest count
+            largest_h_bin = new_df['y'].argmax()
+
+            # Select the index of the bin with the highest count
+            largest_h = new_df.index[largest_h_bin]
+
+            # Set threshold of photon counts per bin
+            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:        
+
+                # Calculate the median value of all values within this bin
+                lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
+                lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
+                lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
+
+                # Append to sea height list
+                sea_height.append(lat_bin_sea_median)
+                bin_lat.append(lat_bin_median)
+                bin_lon.append(lon_bin_median)
+                del new_df
+            else:
+                del new_df
+
+        # Filter out sea height bin values outside 2 SD of mean.
+        if np.all(np.isnan(sea_height)):
+            return(None)
+
+        mean = np.nanmean(sea_height, axis=0)
+        sd = np.nanstd(sea_height, axis=0)
+        sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
+
+        return(bin_lat, bin_lon, sea_height_1)
+    
+    def bin_z_points(self, points, y_res=3, z_res=.5):
+        epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
+        epsg_num = int(epsg_code.split(':')[-1])
+        utm_proj = pyproj.Proj(epsg_code)
+        x_utm, y_utm = utm_proj(points['x'], points['y'])
+
+        points_1 = pd.DataFrame(
+            {'y': y_utm,
+             'x': x_utm,
+             'z': points['z']},
+            columns=['y', 'x', 'z']
+        )
+
+        points_1 = points_1[(points_1['z'] < 0)]
+        if len(points_1) > 0:
+            binned_points = self.bin_points(points_1, y_res, z_res)
+
+            if binned_points is not None:
+                #print(binned_points)
+                ys, xs, zs = self.get_bin_height(binned_points)
+
+                bin_ds = np.column_stack((xs, ys, zs))
+                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
+                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
+                med_surface_h = np.nanmedian(bin_ds['z'])
+                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
+                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
+
+                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
+                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
+                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
+
+                return(bin_points)
+            
+        return(None)
             
 ## ==============================================
 ## OGR vector data such as S-57 dataset (.000)
@@ -3483,7 +3622,6 @@ class Fetcher(ElevationDataset):
 
         self.metadata['name'] = self.fn
         self.check_size=True
-        #self.cache_dir=self.fetch_module._outdir
         self.keep_fetched_data = keep_fetched_data
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
@@ -3503,36 +3641,34 @@ class Fetcher(ElevationDataset):
 
     def parse(self):
         self.fetch_module.run()
-        for result in self.fetch_module.results:
-            if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
-                for this_ds in self.set_ds(result):
-                    if this_ds is not None:
-                        f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
-                        if f_name == '.':
-                            f_name = this_ds.fn
-
-                        this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
-                        this_ds.remote = True
-                        this_ds.initialize()
-                        yield(this_ds)
-                        if not self.keep_fetched_data:
-                            utils.remove_glob(this_ds.fn)
-            
-        if not self.keep_fetched_data:
-            utils.remove_glob(self.fn)
-
-    def fetch_and_yield_results(self, fetch_data = True):
-        for result in self.fetch_module.results:
-            if fetch_data:
+        with tqdm(
+                total=len(self.fetch_module.results),
+                desc='parsing datasets from datalist fetches {} @ {}'.format(self.fetch_module, self.weight),
+            leave=self.verbose
+        ) as pbar:
+            for result in self.fetch_module.results:
                 if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
-                    yield(result)
-                #else:
-                #    self.fetch_module.results.append(result)
-            else:
-                yield(result)    
+                    for this_ds in self.set_ds(result):
+                        if this_ds is not None:
+                            f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
+                            if f_name == '.':
+                                f_name = this_ds.fn
+
+                            this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
+                            this_ds.remote = True
+                            this_ds.initialize()
+                            for ds in this_ds.parse():
+                                yield(ds)
+                                if not self.keep_fetched_data:
+                                    utils.remove_glob(this_ds.fn)
+                pbar.update()
+                
+        if not self.keep_fetched_data:
+            utils.remove_glob(self.fn)    
             
     def set_ds(self, result):
         ## try to get the SRS info from the result if it's a gdal file
+        ## fix this.
         try:
             vdatum = self.fetch_module.vdatum
             src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
@@ -3718,7 +3854,17 @@ class IceSatFetcher(Fetcher):
                 self.atl_08_f.close()
         else:
             self.atl_08_f = None
-                        
+
+    def fetch_and_yield_results(self, fetch_data = True):
+        for result in self.fetch_module.results:
+            if fetch_data:
+                if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
+                    yield(result)
+                else:
+                    self.fetch_module.results.append(result)
+            else:
+                yield(result)
+            
     def yield_ds(self):
         with tqdm(
                 total=len(self.fetch_module.results),
@@ -3850,7 +3996,8 @@ class IceSatFetcher(Fetcher):
 
         photon_h_geoid = photon_h - ph_h_geoid
         photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
-        
+
+        ph_h_classed = np.zeros(photon_h.shape)
         ## ==============================================
         ## Read in the atl08 data
         ## ==============================================
@@ -3859,9 +4006,9 @@ class IceSatFetcher(Fetcher):
             atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,]
             atl_08_classed_pc_indx = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
 
-            atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,]
-            atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,]
-            atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
+            # atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,]
+            # atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,]
+            # atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
             
             # Type codes:
             # -1 : uncoded
@@ -3870,10 +4017,24 @@ class IceSatFetcher(Fetcher):
             #  2 : canopy
             #  3 : top of canopy
 
-            h_classed_dict = dict(zip(segment_id, atl_08_classed_pc_flag))
-            ph_h_classed = np.array(list(map((lambda pid: h_classed_dict[pid]), ph_segment_ids)))
-        else:
-            ph_h_classed = np.zeros(photon_h.shape)
+            dict_success = False
+            while not dict_success:
+                try:
+                    atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id)))
+                except KeyError as e:
+                    # One of the atl08_ph_segment_id entries does not exist in the atl03 granule, which
+                    # causes problems here. Eliminate it from the list and try again.
+                    problematic_id = e.args[0]
+                    good_atl08_mask = (atl_08_ph_segment_id != problematic_id)
+                    atl_08_classed_pc_flag = atl_08_classed_pc_flag[good_atl08_mask]
+                    atl_08_ph_segment_id = atl_08_ph_segment_id[good_atl08_mask]
+                    atl_08_classed_pc_indx = atl_08_classed_pc_indx[good_atl08_mask]
+                    # Then, try the loop again.
+                    continue
+                dict_success = True
+
+            atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
+            ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag
             
         return(latitude, longitude, photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
                conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count, ph_h_classed)
@@ -4419,179 +4580,16 @@ class MBSFetcher(Fetcher):
         super().__init__(**kwargs)
         self.mb_exclude = mb_exclude
 
-    # def set_ds(self, result):            
-    #     mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
-    #     ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-    #                         parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-    #                         mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
-    #                         src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-    #                         remote=True)._acquire_module()
+    def set_ds(self, result):            
+        mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
+        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                            remote=True)._acquire_module()
 
-    #     yield(ds)
-
-    def parse(self):
-        self.fetch_module.run()
-        yield(self)
+        yield(ds)
                 
-    def yield_ds(self):
-        with tqdm(
-                total=len(self.fetch_module.results),
-                desc='parsing datasets from datalist fetches {} @ {}'.format(self.fetch_module, self.weight),
-                leave=self.verbose
-        ) as pbar:
-            for result in self.fetch_and_yield_results(fetch_data=True):
-                mb_fn = os.path.join(self.fetch_module._outdir, result[1])
-                xs = []
-                ys = []
-                zs = []
-                ws = []
-                
-                for line in utils.yield_cmd(
-                        'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), mb_fn),
-                        verbose=True,
-                ):
-                    this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-                    xs.append(this_xyz.x)
-                    ys.append(this_xyz.y)
-                    zs.append(this_xyz.z)
-
-                if len(xs) > 0:
-                    mb_points = np.column_stack((xs, ys, zs))
-                    mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
-
-                    mb_points = self.bin_z_points(mb_points)
-                    if mb_points is not None:
-                        yield(mb_points)
-                        
-                pbar.update()
-        
-    def bin_points(self, points, y_res, z_res):
-        '''Bin data along vertical and horizontal scales for later segmentation'''
-        
-        ## ==============================================
-        ## Calculate number of bins required both vertically and
-        ## horizontally with resolution size
-        ## ==============================================
-        y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
-        z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
-
-        if (y_bin_number > 0 and z_bin_number > 0):    
-            points1 = points
-            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
-            points['y_bins'] = y_bins
-            z_bins = pd.cut(
-                points['z'], z_bin_number, labels = np.round(
-                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
-                    decimals = 1
-                )
-            )
-            points1['z_bins'] = z_bins
-            points1 = points1.reset_index(drop=True)
-
-            return(points1)
-
-        return(points)
-
-    def convert_wgs_to_utm(self, lat, lon):
-        easting, northing, num, letter = utm.from_latlon(lat, lon)
-        if letter >= 'N':
-            epsg = 'epsg:326' + str(num)
-        elif letter < 'N':
-            epsg = 'epsg:327' + str(num)
-        else:
-            print('Error Finding UTM')
-
-        return(epsg)
-
-    def get_bin_height(self, binned_data, percentile=30):
-        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
-
-        # Create sea height list
-        sea_height = []
-        bin_lat = []
-        bin_lon = []
-
-        # Group data by latitude
-        binned_data_sea = binned_data
-        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
-        data_groups = dict(list(grouped_data))
-
-        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
-        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-
-        # Loop through groups and return average sea height
-        for k,v in data_groups.items():
-            # Create new dataframe based on occurance of photons per height bin
-            new_df = pd.DataFrame(v.groupby('z_bins').count())
-
-            # Return the bin with the highest count
-            largest_h_bin = new_df['y'].argmax()
-
-            # Select the index of the bin with the highest count
-            largest_h = new_df.index[largest_h_bin]
-
-            # Set threshold of photon counts per bin
-            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:        
-
-                # Calculate the median value of all values within this bin
-                lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
-                lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
-                lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
-
-                # Append to sea height list
-                sea_height.append(lat_bin_sea_median)
-                bin_lat.append(lat_bin_median)
-                bin_lon.append(lon_bin_median)
-                del new_df
-            else:
-                del new_df
-
-        # Filter out sea height bin values outside 2 SD of mean.
-        if np.all(np.isnan(sea_height)):
-            return(None)
-
-        mean = np.nanmean(sea_height, axis=0)
-        sd = np.nanstd(sea_height, axis=0)
-        sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
-
-        return(bin_lat, bin_lon, sea_height_1)
-    
-    def bin_z_points(self, points, y_res=3, z_res=.5):
-        epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
-        epsg_num = int(epsg_code.split(':')[-1])
-        utm_proj = pyproj.Proj(epsg_code)
-        x_utm, y_utm = utm_proj(points['x'], points['y'])
-
-        points_1 = pd.DataFrame(
-            {'y': y_utm,
-             'x': x_utm,
-             'z': points['z']},
-            columns=['y', 'x', 'z']
-        )
-
-        points_1 = points_1[(points_1['z'] < 0)]
-        if len(points_1) > 0:
-            binned_points = self.bin_points(points_1, y_res, z_res)
-
-            if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points)
-
-                bin_ds = np.column_stack((xs, ys, zs))
-                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
-                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
-                med_surface_h = np.nanmedian(bin_ds['z'])
-                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
-                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
-
-                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
-                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
-                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
-
-                return(bin_points)
-            
-        return(None)
-        
 class HydroNOSFetcher(Fetcher):
     """NOAA HydroNOS Data Fetcher
     """
@@ -4614,8 +4612,8 @@ class HydroNOSFetcher(Fetcher):
             for nos_fn in nos_fns:
                 yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                     parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                     cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                                     parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
+                                     cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         elif result[2] == 'bag':
             bag_fns = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
@@ -4626,8 +4624,8 @@ class HydroNOSFetcher(Fetcher):
                 if 'ellipsoid' not in bag_fn.lower():
                     yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                         parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                         cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                                         parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
+                                         cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
@@ -5419,6 +5417,7 @@ def datalists_cli(argv=sys.argv):
                 want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
                 dump_precision=z_precision
             )
+
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory._modules[this_datalist.data_format]['fmts']
             ):
