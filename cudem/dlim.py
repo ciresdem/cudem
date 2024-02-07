@@ -855,7 +855,10 @@ class ElevationDataset:
                 in_crs_list = in_crs.sub_crs_list
                 in_horizontal_crs = in_crs_list[0]
                 in_vertical_crs = in_crs_list[1]
+                in_vertical_name = in_vertical_crs.name
                 in_vertical_epsg = in_vertical_crs.to_epsg()
+                if in_vertical_epsg is None:
+                    in_vertical_epsg = in_vertical_name
             else:
                 in_horizontal_crs = in_crs
                 want_vertical=False
@@ -2115,7 +2118,7 @@ class GDALFile(ElevationDataset):
                 self.src_srs = self.init_srs(self.fn)
             else:
                 self.src_srs = self.infos.src_srs
-            
+
     def destroy_ds(self):
         self.src_ds = None
 
