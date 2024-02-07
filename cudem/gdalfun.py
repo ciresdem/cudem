@@ -1283,6 +1283,7 @@ def gdal_blur(src_gdal, dst_gdal, sf = 1):
 
 ## todo: min_weight parameter (only filter points below a weight threshhold)
 ## output a filter mask to show which cells were filtered out
+## count threshold...
 def gdal_filter_outliers(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
                          agg_level = 1, replace = True, band = 1, weight_mask = None,
                          filter_above = None, filter_below = None, return_mask = False):
@@ -1826,8 +1827,8 @@ def sample_warp(
     if verbose:
         pbar.close()
 
-    if dst_srs is not None:
-        gdal_set_srs(dst_ds, dst_srs)
+    # if dst_srs is not None:
+    #     gdal_set_srs(dst_ds, dst_srs)
         
     if dst_dem is None:
         return(dst_ds, 0)

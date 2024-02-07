@@ -3939,7 +3939,15 @@ https://cmr.earthdata.nasa.gov
 class IceSat(EarthData):
     """Access IceSat2 data.
 
-    By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
+By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
+
+If you wish, you may store your Earthdata username/password in a .netrc
+file in your $HOME directory and the script will automatically attempt to
+read this file. The .netrc file should have the following format:
+   machine urs.earthdata.nasa.gov login myusername password mypassword
+where 'myusername' and 'mypassword' are your Earthdata credentials.
+
+you might need to `chmod 0600 ~/.netrc`
    
 < icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >"""
     
