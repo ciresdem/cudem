@@ -1642,9 +1642,8 @@ class ElevationDataset:
             
             dataset = np.vstack((points['x'], points['y'], points['z'], points_w, points_u)).transpose()
             count += len(dataset)
+            points = None
             for point in dataset:
-                # this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2],
-                #                            w=self.weight, u=self.uncertainty)
                 this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2], w=point[3], u=point[4])
                 yield(this_xyz)
 
@@ -1693,6 +1692,7 @@ class ElevationDataset:
             except:
                 pixel_u = np.zeros(pixel_z.shape) 
 
+            points = None
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
                 
@@ -2665,38 +2665,38 @@ class MBSParser(ElevationDataset):
         mbs_region = regions.Region().from_list(self.infos.minmax)
         xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
         yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
-        if abs(xinc) > 0 and abs(yinc) > 0:
-            xcount, ycount, dst_gt = mbs_region.geo_transform(
-                x_inc=xinc, y_inc=yinc
-            )
-            ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
-                         'geoT': dst_gt, 'proj': gdalfun.osr_wkt(self.src_srs),
-                         'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
-            driver = gdal.GetDriverByName('MEM')
-            ds = driver.Create(
-                'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
-            )
-            ds.SetGeoTransform(ds_config['geoT'])
-            if ds_config['proj'] is not None:
-                ds.SetProjection(ds_config['proj'])
+        # if abs(xinc) > 0 and abs(yinc) > 0:
+        #     xcount, ycount, dst_gt = mbs_region.geo_transform(
+        #         x_inc=xinc, y_inc=yinc
+        #     )
+        #     ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
+        #                  'geoT': dst_gt, 'proj': gdalfun.osr_wkt(self.src_srs),
+        #                  'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
+        #     driver = gdal.GetDriverByName('MEM')
+        #     ds = driver.Create(
+        #         'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
+        #     )
+        #     ds.SetGeoTransform(ds_config['geoT'])
+        #     if ds_config['proj'] is not None:
+        #         ds.SetProjection(ds_config['proj'])
                 
-            ds_band = ds.GetRasterBand(1)
-            ds_band.SetNoDataValue(ds_config['ndv'])
-            ds_band.WriteArray(cm_array)
-            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
-            tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
-            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-            gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
-            multi = ogr.Geometry(ogr.wkbMultiPolygon)
-            for feat in tmp_layer:
-                feat.geometry().CloseRings()
-                wkt = feat.geometry().ExportToWkt()
-                multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+        #     ds_band = ds.GetRasterBand(1)
+        #     ds_band.SetNoDataValue(ds_config['ndv'])
+        #     ds_band.WriteArray(cm_array)
+        #     tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
+        #     tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
+        #     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+        #     gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
+        #     multi = ogr.Geometry(ogr.wkbMultiPolygon)
+        #     for feat in tmp_layer:
+        #         feat.geometry().CloseRings()
+        #         wkt = feat.geometry().ExportToWkt()
+        #         multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
                 
-            wkt = multi.ExportToWkt()
-            tmp_ds = ds = None
-        else:
-            wkt = mbs_region.export_as_wkt()
+        #     wkt = multi.ExportToWkt()
+        #     tmp_ds = ds = None
+        # else:
+        wkt = mbs_region.export_as_wkt()
 
         self.infos.wkt = wkt
         return(self)
@@ -2761,8 +2761,14 @@ class MBSParser(ElevationDataset):
         zs = []
         ws = []
 
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=25)
+        else:
+            mb_region = None
+        
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), mb_fn),
+                'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(mb_region.format('gmt') if mb_region is not None else ''), mb_fn),
                 verbose=False,
         ):
             this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')

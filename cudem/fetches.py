@@ -1458,9 +1458,10 @@ class MBDB(FetchModule):
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='multibeam', **kwargs)
-        self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
-        self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
+        #self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
+        #self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
         #self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
+        self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/multibeam_footprints/MapServer/0'
         self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
         self.where = where
         
@@ -1479,10 +1480,12 @@ class MBDB(FetchModule):
         }
         _req = Fetch(self._mb_query_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            print(_req.text)
+            #print(_req.text)
+            #print(_req.url)
             features = _req.json()
             for feature in features['features']:
-                pass
+                #pass
+                print(feature)
 
 class Multibeam(FetchModule):
     """NOAA MULTIBEAM bathymetric data.
@@ -1550,8 +1553,13 @@ https://data.ngdc.noaa.gov/platforms/
     def run(self):
         these_surveys = {}
         these_versions = {}
-        if self.region is None: return([])
-        _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': self.region.format('bbox')}, timeout=20)
+        if self.region is None:
+            return([])
+        else:
+            fetch_region = self.region.copy()
+            fetch_region.buffer(pct=25)
+            
+        _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': fetch_region.format('bbox')}, timeout=20)
         if _req is not None and _req.status_code == 200:
             survey_list = _req.text.split('\n')[:-1]
             for r in survey_list:
