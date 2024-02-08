@@ -1655,7 +1655,7 @@ https://data.ngdc.noaa.gov/platforms/
         #if out_dir is not None:
             
         src_inf = os.path.join(self._outdir, '{}.inf'.format(entry[1]))
-        utils.echo_msg(src_inf)
+        #utils.echo_msg(src_inf)
         try:
             status = Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=True).fetch_file(src_inf)
         except:

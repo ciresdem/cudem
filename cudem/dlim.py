@@ -83,7 +83,8 @@ import json
 import math
 # from datetime import datetime
 from tqdm import tqdm
-
+import warnings
+        
 # import threading
 # import multiprocessing as mp
 # mp.set_start_method('spawn')
@@ -440,7 +441,10 @@ class ElevationDataset:
                        
         if self.valid_p():
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
-            self.set_transform()
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                self.set_transform()
+                
             self.set_yield()
             
         return(self)
@@ -2778,6 +2782,7 @@ class MBSParser(ElevationDataset):
 
         if len(xs) > 0:
             mb_points = np.column_stack((xs, ys, zs))
+            xs = ys = zs = None
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
 
             if self.want_binned:
@@ -2814,17 +2819,19 @@ class MBSParser(ElevationDataset):
         return(None)
 
     def convert_wgs_to_utm(self, lat, lon):
-        easting, northing, num, letter = utm.from_latlon(lat, lon)
-        if letter >= 'N':
-            epsg = 'epsg:326' + str(num)
-        elif letter < 'N':
-            epsg = 'epsg:327' + str(num)
-        else:
-            print('Error Finding UTM')
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            easting, northing, num, letter = utm.from_latlon(lat, lon)
+            if letter >= 'N':
+                epsg = 'epsg:326' + str(num)
+            elif letter < 'N':
+                epsg = 'epsg:327' + str(num)
+            else:
+                print('Error Finding UTM')
 
-        return(epsg)
+            return(epsg)
 
-    def get_bin_height(self, binned_data, percentile=30):
+    def get_bin_height(self, binned_data, percentile=50):
         '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
 
         # Create sea height list
@@ -2846,7 +2853,7 @@ class MBSParser(ElevationDataset):
             new_df = pd.DataFrame(v.groupby('z_bins').count())
 
             # Return the bin with the highest count
-            largest_h_bin = new_df['y'].argmax()
+            largest_h_bin = new_df['z'].argmax()
 
             # Select the index of the bin with the highest count
             largest_h = new_df.index[largest_h_bin]
@@ -2877,7 +2884,7 @@ class MBSParser(ElevationDataset):
 
         return(bin_lat, bin_lon, sea_height_1)
     
-    def bin_z_points(self, points, y_res=3, z_res=.5):
+    def bin_z_points(self, points, y_res=1, z_res=.5):
         epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
         epsg_num = int(epsg_code.split(':')[-1])
         utm_proj = pyproj.Proj(epsg_code)
@@ -4588,15 +4595,16 @@ class MBSFetcher(Fetcher):
     -----------
     Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
 
-    def __init__(self, mb_exclude = 'A', **kwargs):
+    def __init__(self, mb_exclude = 'A', want_binned = False, **kwargs):
         super().__init__(**kwargs)
         self.mb_exclude = mb_exclude
+        self.want_binned = want_binned
 
     def set_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, want_binned=self.want_binned,
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True)._acquire_module()
 
