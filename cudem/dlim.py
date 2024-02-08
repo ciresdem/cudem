@@ -2314,7 +2314,7 @@ class GDALFile(ElevationDataset):
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_proj4, dst_srs=self.dst_proj4,
                                         src_region=self.warp_region,#if (self.y_inc is not None and self.x_inc is not None) else None,
                                         sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
-            tmp_ds = None
+            tmp_ds = warp_ = None
             
             ## the following seems to be redundant...
             warp_ds = gdal.Open(tmp_warp)
@@ -2335,7 +2335,7 @@ class GDALFile(ElevationDataset):
                         this_band.WriteArray(warp_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                         self.src_ds.FlushCache()
 
-                warp_ds = warp_arr = None
+                warp_ds = None
                 utils.remove_glob(tmp_warp)
         else:
             if self.open_options:
@@ -2474,9 +2474,12 @@ class GDALFile(ElevationDataset):
             dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
-
+            dataset = band_data = weight_data = uncertainty_data = None
+            
             yield(points)
-
+            
+        src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None
+        
 ## ==============================================
 ## BAG Raster File.
 ## Uses GDAL
