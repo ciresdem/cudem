@@ -2621,7 +2621,10 @@ class MBSParser(ElevationDataset):
     mb_exclude=[]
     """
 
-    def __init__(self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False, want_binned = False, **kwargs):
+    def __init__(
+            self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False,
+            want_binned = False, **kwargs
+    ):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
@@ -2669,127 +2672,109 @@ class MBSParser(ElevationDataset):
         mbs_region = regions.Region().from_list(self.infos.minmax)
         xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
         yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
-        # if abs(xinc) > 0 and abs(yinc) > 0:
-        #     xcount, ycount, dst_gt = mbs_region.geo_transform(
-        #         x_inc=xinc, y_inc=yinc
-        #     )
-        #     ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
-        #                  'geoT': dst_gt, 'proj': gdalfun.osr_wkt(self.src_srs),
-        #                  'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
-        #     driver = gdal.GetDriverByName('MEM')
-        #     ds = driver.Create(
-        #         'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
-        #     )
-        #     ds.SetGeoTransform(ds_config['geoT'])
-        #     if ds_config['proj'] is not None:
-        #         ds.SetProjection(ds_config['proj'])
+        if abs(xinc) > 0 and abs(yinc) > 0:
+            xcount, ycount, dst_gt = mbs_region.geo_transform(
+                x_inc=xinc, y_inc=yinc
+            )
+            ds_config = {'nx': dims[0], 'ny': dims[1], 'nb': dims[1] * dims[0],
+                         'geoT': dst_gt, 'proj': gdalfun.osr_wkt(self.src_srs),
+                         'dt': gdal.GDT_Float32, 'ndv': 0, 'fmt': 'GTiff'}
+            driver = gdal.GetDriverByName('MEM')
+            ds = driver.Create(
+                'tmp', ds_config['nx'], ds_config['ny'], 1, ds_config['dt']
+            )
+            ds.SetGeoTransform(ds_config['geoT'])
+            if ds_config['proj'] is not None:
+                ds.SetProjection(ds_config['proj'])
                 
-        #     ds_band = ds.GetRasterBand(1)
-        #     ds_band.SetNoDataValue(ds_config['ndv'])
-        #     ds_band.WriteArray(cm_array)
-        #     tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
-        #     tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
-        #     tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-        #     gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
-        #     multi = ogr.Geometry(ogr.wkbMultiPolygon)
-        #     for feat in tmp_layer:
-        #         feat.geometry().CloseRings()
-        #         wkt = feat.geometry().ExportToWkt()
-        #         multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
+            ds_band = ds.GetRasterBand(1)
+            ds_band.SetNoDataValue(ds_config['ndv'])
+            ds_band.WriteArray(cm_array)
+            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource('tmp_poly')
+            tmp_layer = tmp_ds.CreateLayer('tmp_poly', None, ogr.wkbMultiPolygon)
+            tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+            gdal.Polygonize(ds_band, ds_band, tmp_layer, 0)
+            multi = ogr.Geometry(ogr.wkbMultiPolygon)
+            for feat in tmp_layer:
+                feat.geometry().CloseRings()
+                wkt = feat.geometry().ExportToWkt()
+                multi.AddGeometryDirectly(ogr.CreateGeometryFromWkt(wkt))
                 
-        #     wkt = multi.ExportToWkt()
-        #     tmp_ds = ds = None
-        # else:
-        wkt = mbs_region.export_as_wkt()
+            wkt = multi.ExportToWkt()
+            tmp_ds = ds = None
+        else:
+            wkt = mbs_region.export_as_wkt()
 
         self.infos.wkt = wkt
         return(self)
 
-    # def parse(self):
-
-    #     # if self.region is None or self.data_region is None:
-    #     #     self.want_mbgrid = False
-
-    #     # if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
-    #     #     with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
-    #     #         tmp_dl.write('{} {} {}\n'.format(self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''))
-
-    #     #     ofn = '_'.join(os.path.basename(self.fn).split('.')[:-1])
-    #     #     # if self.region is not None:
-    #     #     #     mbgrid_region = self.region.copy()
-    #     #     # else:
-    #     #     #     mbgrid_region = regions.Region().from_list(self.infos.minmax)
-
-    #     #     # mbgrid_region = mbgrid_region.buffer(pct=2, x_inc=self.x_inc, y_inc=self.y_inc)
-    #     #     try:
-    #     #         utils.run_cmd(
-    #     #             'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-    #     #                 self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
-    #     #             ), verbose=True
-    #     #         )
-                
-    #     #         gdalfun.gdal2gdal('{}.grd'.format(ofn))
-    #     #         utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-    #     #         mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-    #     #                           weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-    #     #                           src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
-
-    #     #         yield(mbs_ds)
-    #     #         utils.remove_glob('{}.tif*'.format(ofn))
-    #     #     except:
-    #     #         yield(None)
-    #     # else:
-    #     #     this_xyz_path = '{}.xyz'.format(utils.fn_basename2(self.fn))
-    #     #     with open(this_xyz_path, 'w') as xp:
-    #     #         for line in utils.yield_cmd(
-    #     #                 'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(self.region.format('gmt') if self.region is not None else ''), self.fn),
-    #     #                 verbose=True,
-    #     #         ):
-    #     #             this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-    #     #             this_xyz.weight = self.weight
-    #     #             this_xyz.dump(include_w=True if self.weight is not None else False,
-    #     #                           include_u=True if self.uncertainty is not None else False,
-    #     #                           dst_port=xp, encode=False)
-                    
-    #     #     mbs_ds = XYZFile(fn=this_xyz_path, data_format=168, src_srs=self.src_srs, dst_srs=self.dst_srs,
-    #     #                      weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, src_region=self.region,
-    #     #                      verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
-            
-    #     #     mbs_ds.initialize()
-    #     #     yield(mbs_ds)
-    def yield_ds(self):
-        
+    def yield_ds(self):        
         mb_fn = os.path.join(self.fn)
-        xs = []
-        ys = []
-        zs = []
-        ws = []
+        if self.region is None or self.data_region is None:
+            self.want_mbgrid = False
 
-        if self.region is not None:
-            mb_region = self.region.copy()
-            mb_region.buffer(pct=25)
-        else:
-            mb_region = None
-        
-        for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZ -I{}'.format(self.mb_exclude, ' {}'.format(mb_region.format('gmt') if mb_region is not None else ''), mb_fn),
-                verbose=False,
-        ):
-            this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-            xs.append(this_xyz.x)
-            ys.append(this_xyz.y)
-            zs.append(this_xyz.z)
+        ## update want_mbgrid to output points!
+        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None): 
+            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
+                tmp_dl.write(
+                    '{} {} {}\n'.format(
+                        self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''
+                    )
+                )
 
-        if len(xs) > 0:
-            mb_points = np.column_stack((xs, ys, zs))
-            xs = ys = zs = None
-            mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
-
-            if self.want_binned:
-                mb_points = self.bin_z_points(mb_points)
+            ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
+            try:
+                utils.run_cmd(
+                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                    ), verbose=True
+                )
                 
-            if mb_points is not None:
-                yield(mb_points)
+                gdalfun.gdal2gdal('{}.grd'.format(ofn))
+                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+                                  src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+
+                yield(mbs_ds)
+                utils.remove_glob('{}.tif*'.format(ofn))
+            except:
+                pass
+        else:        
+            xs = []
+            ys = []
+            zs = []
+            ws = []
+
+            if self.region is not None:
+                mb_region = self.region.copy()
+                mb_region.buffer(pct=25)
+            else:
+                mb_region = None
+
+            for line in utils.yield_cmd(
+                    'mblist -M{}{} -OXYZ -I{}'.format(
+                        self.mb_exclude, ' {}'.format(
+                            mb_region.format('gmt') if mb_region is not None else ''
+                        ), mb_fn
+                    ),
+                    verbose=False,
+            ):
+                this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+                xs.append(this_xyz.x)
+                ys.append(this_xyz.y)
+                zs.append(this_xyz.z)
+
+            if len(xs) > 0:
+                mb_points = np.column_stack((xs, ys, zs))
+                xs = ys = zs = None
+                mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+
+                if self.want_binned:
+                    mb_points = self.bin_z_points(mb_points)
+
+                if mb_points is not None:
+                    yield(mb_points)
 
     def bin_points(self, points, y_res, z_res):
         '''Bin data along vertical and horizontal scales for later segmentation'''

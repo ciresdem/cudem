@@ -5185,7 +5185,7 @@ Options:
 \t\t\t\tAvailable FILTERS:
 \t\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
 \t\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-\t\t\t\t3: perform an Outlier Filter at -T3:<aggression<1-9>>.
+\t\t\t\t3: perform an Outlier Filter at -T3:<percentile>.
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
 \t\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
