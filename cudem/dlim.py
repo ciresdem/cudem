@@ -1269,7 +1269,7 @@ class ElevationDataset:
                 utils.remove_glob('{}*'.format(mask_fn))
 
         dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
-                               options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'] if fmt != 'MEM' else [])
+                               options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else [])
 
         if dst_ds is None:
             utils.echo_error_msg('failed to create stack grid...')
