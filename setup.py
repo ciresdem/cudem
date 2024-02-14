@@ -58,6 +58,7 @@ setuptools.setup(
         'mercantile', # for MS building footprints
         'utm', # for cshelph
         'pandas', # for cshelph
+        # 'shapely',
         #'xarray', # for cshelph
         #'geopandas', # for cshelph
         #'cshelph', # icesat bathymetry extraction

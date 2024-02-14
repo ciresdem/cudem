@@ -29,6 +29,7 @@ import os
 import sys
 
 import pyproj
+#import shapely
 
 from osgeo import ogr
 
@@ -188,6 +189,7 @@ class Region:
         elif region_str.split()[0] == "POLYGON" or region_str.split()[0] == "MULTIPOLYGON":
             self.wkt = region_str
             self.from_list(ogr.CreateGeometryFromWkt(region_str).GetEnvelope())
+            #self.from_list(shapely.from_wkt(region_str).GetEnvelope())
         return(self)
     
     def from_geo_transform(self, geo_transform=None, x_count=None, y_count=None):

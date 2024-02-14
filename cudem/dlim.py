@@ -1694,30 +1694,35 @@ class ElevationDataset:
             try:
                 pixel_u = np.array(points['u'])
             except:
-                pixel_u = np.zeros(pixel_z.shape) 
-
+                pixel_u = np.zeros(pixel_z.shape)
+                
+            ## ==============================================
+            ## remove pixels that will break the srcwin
+            ## ==============================================
+            out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))            
+            pixel_x = np.delete(pixel_x, out_idx)
+            pixel_y = np.delete(pixel_y, out_idx)
+            pixel_z = np.delete(pixel_z, out_idx)
+            pixel_w = np.delete(pixel_w, out_idx)
+            pixel_u = np.delete(pixel_u, out_idx)
+                
             points = None
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
-                
-            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
-                           int(max(pixel_x) - min(pixel_x))+1,
-                           int(max(pixel_y) - min(pixel_y))+1)
+
+            ## ==============================================
+            ## set the srcwin of the incoming points
+            ## ==============================================
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
 
-            if this_srcwin[0] + this_srcwin[2] > xcount:
-                utils.echo_warning_msg('bag x srcwin')
-                
-            if this_srcwin[1] + this_srcwin[3] > ycount:
-                utils.echo_warning_msg('bad y srcwin')
-            
             ## ==============================================
             ## adjust the pixels to the srcwin and stack together
             ## ==============================================
             pixel_x = pixel_x - this_srcwin[0]
             pixel_y = pixel_y - this_srcwin[1]
             pixel_xy = np.vstack((pixel_y, pixel_x)).T
-
+            
             ## ==============================================
             ## find the non-unique x/y points and mean their z values together
             ## while calculating the std for uncertainty
@@ -1847,21 +1852,24 @@ class XYZFile(ElevationDataset):
 
             # if num_lines < self.iter_rows:
             #     self.iter_rows = None
-
+            skip_ = self.skip
+            
             with open(self.fn, 'r') as src_data:
-                #if self.skip > 0:
-                while self.skip > 0:
-                    for line in src_data:
-                        self.skip -= 1
-                        if self.skip <= 0:
-                            break
+                # if self.skip > 0:
+                #     #while self.skip > 0:
+                #     for line in src_data:
+                #         self.skip -= 1
+                #         if self.skip <= 0:
+                #             break
                     
                 while True:
                     points = np.loadtxt(
-                        src_data, delimiter=self.delim, comments='#', ndmin = 1,
+                        src_data, delimiter=self.delim, comments='#', ndmin = 1, skiprows=skip_,
                         usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
                         dtype={'names': self.field_names, 'formats': self.field_formats}, max_rows=self.iter_rows
                     )
+                    skip_ = 0
+                        
                     if self.scoff:
                         points['x'] = (points['x'] + self.x_offset) * self.x_scale
                         points['y'] = (points['y'] + self.y_offset) * self.y_scale
@@ -3663,8 +3671,9 @@ class Fetcher(ElevationDataset):
                             this_ds.initialize()
                             for ds in this_ds.parse():
                                 yield(ds)
-                                if not self.keep_fetched_data:
-                                    utils.remove_glob(this_ds.fn)
+                                
+                            if not self.keep_fetched_data:
+                                utils.remove_glob(this_ds.fn)
                 pbar.update()
                 
         if not self.keep_fetched_data:
@@ -4615,10 +4624,11 @@ class HydroNOSFetcher(Fetcher):
                 outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
             )
             for nos_fn in nos_fns:
-                yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
+                yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
         elif result[2] == 'bag':
             bag_fns = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),

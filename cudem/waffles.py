@@ -598,26 +598,27 @@ class Waffle:
             ## post-process the mask, etc.
             ## ==============================================
             if self.want_mask or self.want_sm:
-                mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
-                if mask_dem.valid_p():
-                    #if self.want_mask:
-                    #utils.echo_msg('processing mask')
-                    mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
-                                     dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
-                                     dst_dir=os.path.dirname(self.fn))
+                if mask_fn is not None:
+                    mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
+                    if mask_dem.valid_p():
+                        #if self.want_mask:
+                        #utils.echo_msg('processing mask')
+                        mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                                         node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                                         dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
+                                         dst_dir=os.path.dirname(self.fn))
 
-                    if self.want_sm:
-                        with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                            sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
+                        if self.want_sm:
+                            with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
+                                sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
 
-                        sm_files = glob.glob('{}.*'.format(sm_layer))
-                        for sm_file in sm_files:
-                            out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
-                            if os.path.exists(out_sm):
-                                utils.remove_glob(out_sm)
-                                
-                            os.rename(sm_file, out_sm)
+                            sm_files = glob.glob('{}.*'.format(sm_layer))
+                            for sm_file in sm_files:
+                                out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
+                                if os.path.exists(out_sm):
+                                    utils.remove_glob(out_sm)
+
+                                os.rename(sm_file, out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
                     
@@ -4611,7 +4612,7 @@ class WaffleDEM:
     def valid_p(self):
         """check if the WAFFLES DEM appears to be valid"""
 
-        if not os.path.exists(self.fn):
+        if self.fn is None or not os.path.exists(self.fn):
             utils.echo_warning_msg('{} does not exist'.format(self.fn))
             return(False)
         
