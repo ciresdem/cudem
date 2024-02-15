@@ -30,21 +30,21 @@ requirements:
     - pip
   run:
     - python
-    - gdal
-    - gmt
-    - numpy #x.x
-    - scipy # waffles/convex hulls
-    - requests[security] # fetches/nsidc
-    - lxml # fetches xml parsing
-    - matplotlib # uncertainty plots
-    - laspy # dlim/lasfile support
-    - pyproj
-    - h5py # nsidc
-    - boto3 # for amazon/bluetopo
-    - tqdm # progress bar
-    - mercantile # for MS building footprints
-    - utm # for cshelph
-    - pandas # for cshelph
+    # - gdal
+    # - gmt
+    # - numpy #x.x
+    # - scipy # waffles/convex hulls
+    # - requests[security] # fetches/nsidc
+    # - lxml # fetches xml parsing
+    # - matplotlib # uncertainty plots
+    # - laspy # dlim/lasfile support
+    # - pyproj
+    # - h5py # nsidc
+    # - boto3 # for amazon/bluetopo
+    # - tqdm # progress bar
+    # - mercantile # for MS building footprints
+    # - utm # for cshelph
+    # - pandas # for cshelph
 
 about:
   home: https://github.com/ciresdem/cudem
