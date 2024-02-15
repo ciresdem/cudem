@@ -2477,8 +2477,11 @@ class GDALFile(ElevationDataset):
             else:
                 uncertainty_data = np.zeros(band_data.shape)
 
+            ## ==============================================
+            ## convert grid array to points
+            ## ==============================================
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node='pixel')
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')        
+            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
             geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
             lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
             lat_array = np.zeros((lon_array.shape))
@@ -2486,7 +2489,7 @@ class GDALFile(ElevationDataset):
             dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
-            dataset = band_data = weight_data = uncertainty_data = None
+            dataset = band_data = weight_data = uncertainty_data = lat_array = lon_array = None
             
             yield(points)
             

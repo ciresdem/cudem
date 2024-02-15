@@ -1,0 +1,56 @@
+{% set version = "2.2.1" %}
+
+package:
+  name: cudem
+  version: {{ version }}
+
+source:
+  git_url: https://github.com/ciresdem/cudem.git
+  path: ./
+  #git_rev: 2.2.1
+  #git_depth: 1
+
+build:
+  noarch: python
+  number: 0
+  script: python -m pip install --no-deps --ignore-installed .
+  #script: python setup.py install --single-version-externally-managed --record=record.txt
+  entry_points:
+  - regions = cudem.regions:regions_cli
+  - dlim = cudem.dlim:datalists_cli
+  - waffles = cudem.waffles:waffles_cli
+  - fetches = cudem.fetches:fetches_cli
+  - perspecto = cudem.perspecto:perspecto_cli
+  - vdatums = cudem.vdatums:vdatums_cli
+  - cudem = cudem.cudem_cli:cudem_cli
+
+requirements:
+  host:
+    - python
+    - pip
+  run:
+    - python
+    - gdal
+    - numpy #x.x
+    - scipy # waffles/convex hulls
+    - requests[security] # fetches/nsidc
+    - lxml # fetches xml parsing
+    - matplotlib # uncertainty plots
+    - laspy # dlim/lasfile support
+    - pyproj
+    - h5py # nsidc
+    - boto3 # for amazon/bluetopo
+    - tqdm # progress bar
+    - mercantile # for MS building footprints
+    - utm # for cshelph
+    - pandas # for cshelph
+
+about:
+  home: https://github.com/ciresdem/cudem
+  license: MIT
+  summary: 'Elevation Data'
+  description: |
+    This module provides DEM generation.
+  dev_url: https://github.com/ciresdem/cudem
+  doc_url: https://pypi.python.org/pypi/cuem
+  doc_source_url: https://github.com/ciresdem/cudem/blob/maain/README.md
