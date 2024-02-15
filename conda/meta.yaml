@@ -31,6 +31,7 @@ requirements:
   run:
     - python
     - gdal
+    - gmt
     - numpy #x.x
     - scipy # waffles/convex hulls
     - requests[security] # fetches/nsidc
