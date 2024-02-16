@@ -37,6 +37,7 @@ updates DEMs across all spatial scales.
 
 # Installation and Setup
 
+## pip
 GDAL and GDAL-Python are required for use.
 
 Other useful external programs needed for full functionality include:
@@ -45,6 +46,16 @@ GMT, MB-System, HTDP and VDatum.
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
 `pip install git+https://github.com/ciresdem/cudem.git#egg=cudem`
+
+## conda
+- Setup a conda environment and isntall the dependencies:
+conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile
+
+- install HTDP and MB-System
+System dependent
+
+- Install cudem with pip ignoring the dependencies
+pip install --no-deps git+https://github.com/ciresdem/cudem.git
 
 **Main Console Programs provided with CUDEM:**
 
@@ -55,6 +66,7 @@ Download and install git (If you have not already): [git installation](https://g
 | regions | process REGIONS |
 | fetches | fetch elevation data from a variety of public online sources |
 | vdatums | generate vertical transformation grids |
+| perspecto | generate images of DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
 # Usage: Data Download, Processing, and DEM Generation
@@ -116,6 +128,7 @@ between adjacent DEM tiles.
 | usiei | US Interagency Elevation Inventory | https://coast.noaa.gov/inventory/ |
 | wsf | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
+| icesat | IceSat2 granules from NASA (requires NASA credentials) | https://cmr.earthdata.nasa.gov |
 
 
 "Waffles" is the data gridding tool for DEM generation using various
@@ -178,6 +191,26 @@ We generate spatial metadata for our DEMs that document the data sources
 that went into the DEM generation process.
 
 # Examples
+
+## Coarse Coastal Releif Model (CRM) at 1 arc-second DEM off the coast of Malibu
+
+Generate a CRM of the Point Mugu area of Malibu using remote datalists provided from fetches.
+Datasets included in this example are Marine Gravity (mar_grav), Nautical Charts (charts),
+NOS Soundings (hydronos:datatype=xyz), Copernicus (copernicus), USACE surveys (ehydro) and
+NOS BAG surveys (hydronos:datatype=bag)
+
+```
+waffles -R -119.25/-119/34/34.25 -E 1s -M cudem:pre_count=1:filter_outliers=85:min_weight=.6 -O mugu_crm_test -P epsg:4326+5703 -w -X0:5 mar_grav,-106:bathy_only=True,.001 charts,-200,.01 hydronos:datatype=xyz,-202,.1 copernicus,-103,.6 ehydro,-203,.6 hydronos:datatype=bag,-202,.75
+```
+
+Generate a hillshade of the generated DEM:
+
+```
+perspecto -M hillshade mugu_crm_test.tif
+```
+
+![](media/mugu_crm_test_hs.png)
+**Figure 1.** DEM hillshade generated from CUDEM code example.
 
 ## DEM and Uncertainty for the Bahamas
 
