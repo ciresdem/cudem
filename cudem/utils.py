@@ -157,7 +157,7 @@ def make_temp_fn(fn, temp_dir = cudem_cache()):
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
     if not os.path.exists(temp_dir):
-        os.makedirs(os.path.dirname(fn))
+        os.makedirs(os.path.dirname(temp_dir))
                     
     return(os.path.join(
         temp_dir,
