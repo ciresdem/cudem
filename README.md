@@ -45,19 +45,26 @@ GMT, MB-System, HTDP and VDatum.
 
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
-`pip install git+https://github.com/ciresdem/cudem.git#egg=cudem`
+```
+pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
+```
 
 ## conda
 - Setup a conda environment and isntall the dependencies:
 
-`conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile`
+```
+conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile
+```
 
 - install HTDP and MB-System
+
 System dependent
 
 - Install cudem with pip ignoring the dependencies
 
-`pip install --no-deps git+https://github.com/ciresdem/cudem.git`
+```
+pip install --no-deps git+https://github.com/ciresdem/cudem.git
+```
 
 **Main Console Programs provided with CUDEM:**
 
