@@ -682,6 +682,9 @@ Options:
   -M, --module\t\tDesired perspecto MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 
+  --min_z\t\tMinimum z value to use in CPT
+  --max_z\t\tMaximum z value to use in CPT
+
   --help\t\tPrint the usage text
   --modules\t\tDisplay the module descriptions and usage
   --version\t\tPrint the version information

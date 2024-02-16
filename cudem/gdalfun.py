@@ -549,7 +549,6 @@ def ogr2gdal_mask(
         invert = True, verbose = True, temp_dir = utils.cudem_cache()
 ):
     dst_fn = utils.make_temp_fn('{}.tif'.format(mask_fn, temp_dir=temp_dir))
-    #dst_fn = os.path.join(self.cache_dir, 'tmp_mask.tif'
     if os.path.exists(dst_fn):
         return(dst_fn)
     else:
@@ -1007,7 +1006,7 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
     return(dst_gdal, status)
 
 ## doesn't work with multipolygons and -i
-def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True):
+def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True, cache_dir = None):
     """clip dem to polygon `src_ply`, optionally invert the clip.
 
     -----------
@@ -1017,7 +1016,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
 
     gi = gdal_infos(src_gdal)
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
-    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp')
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', cache_dir=cache_dir)
     
     out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures -makevalid'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:

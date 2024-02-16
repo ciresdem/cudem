@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_clip.py
 ##
-## Copyright (c) 2018 - 2021 CIRES Coastal DEM Team
+## Copyright (c) 2018 - 2024 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -30,7 +30,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import gdalfun
 
-_version = '0.0.6'
+_version = '0.0.7'
 _usage = '''gdal_clip.py ({}): clip a gdal grid using vector file.
 
 usage: gdal_clip.py [ src_gdal src_ogr [ OPTIONS ] ]

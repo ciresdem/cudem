@@ -151,8 +151,14 @@ def fn_ext(fn):
     return(ext)
 
 def make_temp_fn(fn, temp_dir = cudem_cache()):
+    if temp_dir is None:
+        temp_dir = cudem_cache()
+        
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
+    if not os.path.exists(temp_dir):
+        os.makedirs(os.path.dirname(fn))
+                    
     return(os.path.join(
         temp_dir,
         '_{}_{}{}'.format(
@@ -321,7 +327,9 @@ def remove_glob(*args):
                     remove_glob('{}/*'.format(g))
                     remove_glob('{}/.*'.format(g))
                     os.removedirs(g)
-                else: os.remove(g)
+                else:
+                    os.remove(g)
+                    
         except Exception as e:
             echo_error_msg(e)
             return(-1)
@@ -476,6 +484,7 @@ def get_username():
 
     while not username:
         username = do_input('username: ')
+        
     return username
 
 def get_password():

@@ -2263,8 +2263,8 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs)
         if len(this_tnm.results) > 0:
+            tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs)
             for i, tnm_result in enumerate(this_tnm.results):
                 tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
                 if not os.path.exists(tnm_zip):
@@ -5596,4 +5596,5 @@ def waffles_cli(argv = sys.argv):
     if not keep_cache:
        utils.remove_glob(wg['cache_dir'])
 
+    return(0)
 ### End
