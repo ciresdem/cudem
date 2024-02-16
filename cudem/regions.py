@@ -1153,7 +1153,7 @@ def regions_cli(argv = sys.argv):
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
         elif arg == '--help' or arg == '-h':
-            print(datalists_usage)
+            print(regions_usage)
             sys.exit(1)
         elif arg == '--version' or arg == '-v':
             print('{}, version {}'.format(os.path.basename(sys.argv[0]), cudem.__version__))
