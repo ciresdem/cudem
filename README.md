@@ -43,6 +43,8 @@ GDAL and GDAL-Python are required for use.
 Other useful external programs needed for full functionality include:
 GMT, MB-System, HTDP and VDatum.
 
+Installation of the above programs are system dependent. Only GDAL and GDAL-Python are required.
+
 Download and install git (If you have not already): [git installation](https://git-scm.com/book/en/v2/Getting-Started-Installing-Git)
 
 ```
@@ -50,7 +52,7 @@ pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 ```
 
 ## conda
-- Setup a conda environment and isntall the dependencies:
+- Setup a conda environment and install the dependencies:
 
 ```
 conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile
@@ -58,7 +60,7 @@ conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxm
 
 - install HTDP and MB-System
 
-System dependent
+Installation of HTDP and MB-System are system dependent, see their respective installation instructions for your system.
 
 - Install cudem with pip ignoring the dependencies
 
@@ -201,7 +203,7 @@ that went into the DEM generation process.
 
 # Examples
 
-## Coarse Coastal Releif Model (CRM) at 1 arc-second DEM off the coast of Malibu
+## Coastal Releif Model (CRM) at 1 arc-second DEM off the coast of Malibu
 
 Generate a CRM of the Point Mugu area of Malibu using remote datalists provided from fetches.
 Datasets included in this example are Marine Gravity (mar_grav), Nautical Charts (charts),
