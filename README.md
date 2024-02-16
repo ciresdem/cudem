@@ -212,11 +212,19 @@ NOS BAG surveys (hydronos:datatype=bag)
 waffles -R -119.25/-119/34/34.25 -E 1s -M cudem:pre_count=1:filter_outliers=85:min_weight=.6 -O mugu_crm_test -P epsg:4326+5703 -w -X0:5 mar_grav,-106:bathy_only=True,.001 charts,-200,.01 hydronos:datatype=xyz,-202,.1 copernicus,-103,.6 ehydro,-203,.6 hydronos:datatype=bag,-202,.75
 ```
 
+Output:
+
+mugu_crm_test.tif
+
 Generate a hillshade of the generated DEM:
 
 ```
 perspecto -M hillshade mugu_crm_test.tif
 ```
+
+Output:
+
+mugu_crm_test_hs.tif
 
 ![](media/mugu_crm_test_hs.png)
 **Figure 1.** DEM hillshade generated from CUDEM code example.
@@ -298,7 +306,9 @@ The contents of the generated config file configuration file
 
 **To generate the DEM, execute the following command:**
 
-`waffles -G gebcop15_n28x00_w079x50_2023v1.json`
+```
+waffles -G gebcop15_n28x00_w079x50_2023v1.json
+```
 
 Output:
 
@@ -315,11 +325,11 @@ gebcop3_n28x00_w079x50_2023v1.tif - final DEM
 
 ![](media/gebcop3_n28x00_w079x50_2023v1_figure1.png)
 
-**Figure 1.** Final DEM generated from CUDEM code example.
+**Figure 2.** Final DEM generated from CUDEM code example.
 
 ![](media/gebcop3_n28x00_w079x50_2023v1_u_figure1.png)
 
-**Figure 2.** Interpolation uncertainty grid generated from the best-fit
+**Figure 3.** Interpolation uncertainty grid generated from the best-fit
 interpolation uncertainty equation applied to the distance to the
 nearest measurement raster.
 
