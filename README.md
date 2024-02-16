@@ -49,6 +49,7 @@ Download and install git (If you have not already): [git installation](https://g
 
 ## conda
 - Setup a conda environment and isntall the dependencies:
+
 conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile
 
 - install HTDP and MB-System
