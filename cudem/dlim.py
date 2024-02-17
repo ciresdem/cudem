@@ -5080,7 +5080,8 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['fn'] = entry[0]
             self.kwargs['parent'] = None
         else:
-            if entry[1] >= -2:
+            tmp_fmt = utils.int_or(str(entry[1]).split(':')[0], -4)
+            if tmp_fmt >= -2:
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
                 )
