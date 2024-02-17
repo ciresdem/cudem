@@ -5075,14 +5075,17 @@ class DatasetFactory(factory.CUDEMFactory):
         ## ==============================================
         if 'parent' not in self.kwargs:
             self.kwargs['parent'] = None
-        
+
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
             self.kwargs['parent'] = None
         else:
-            self.kwargs['fn'] = os.path.join(
-                os.path.dirname(self.kwargs['parent'].fn), entry[0]
-            )
+            if entry[1] >= -2:
+                self.kwargs['fn'] = os.path.join(
+                    os.path.dirname(self.kwargs['parent'].fn), entry[0]
+                )
+            else:
+                self.kwargs['fn'] = entry[0]
             
         ## ==============================================
         ## weight - entry[2]
