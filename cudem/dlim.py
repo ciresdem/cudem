@@ -5072,6 +5072,8 @@ class DatasetFactory(factory.CUDEMFactory):
         ## ==============================================
         ## file-name (or fetches module name) - entry[0]
         ## set to relative path from parent
+        ## don't set relative path if 'fn' is a
+        ## fetches module (entry[1] < -3)
         ## ==============================================
         if 'parent' not in self.kwargs:
             self.kwargs['parent'] = None
@@ -5080,8 +5082,10 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['fn'] = entry[0]
             self.kwargs['parent'] = None
         else:
-            tmp_fmt = utils.int_or(str(entry[1]).split(':')[0], -4)
-            if tmp_fmt >= -2:
+            #utils.echo_msg(entry[1])
+            #tmp_fmt = utils.int_or(str(entry[1]).split(':')[0], -4)
+            #if tmp_fmt >= -2:
+            if self.mod_name >= -2:
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
                 )
