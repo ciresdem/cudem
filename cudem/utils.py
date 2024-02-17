@@ -159,7 +159,9 @@ def make_temp_fn(fn, temp_dir = cudem_cache()):
     if not os.path.exists(temp_dir):
         try:
             os.makedirs(os.path.dirname(temp_dir))
-        except:
+        except FileExistsError:
+            pass
+        except Exception as e:
             temp_dir = './'
                     
     return(os.path.join(
