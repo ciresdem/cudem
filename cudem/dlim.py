@@ -1468,6 +1468,51 @@ class ElevationDataset:
 
         if not mask_only:
             if not supercede:
+                # for srcwin in utils.yield_srcwin(
+                #         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+                # ):
+                #     for key in stacked_bands.keys():
+                #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
+                #         stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+                #     ## ==============================================
+                #     ## average the accumulated arrays for finalization
+                #     ## z and u are weighted sums, so divide by weights
+                #     ## ==============================================
+                #     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                #     #utils.echo_msg(stacked_data['count'])
+                #     stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                #     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+
+                #     ## ==============================================
+                #     ## apply the source uncertainty with the sub-cell variance uncertainty
+                #     ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                #     ## ==============================================
+                #     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                #     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+
+                #     ## ==============================================
+                #     ## testing
+                #     ## ==============================================
+                #     unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
+                #     utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
+                    
+                #     stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                #     stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                #     stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                #     stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                #     stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                #     ## ==============================================
+                #     ## /testing
+                #     ## ==============================================
+                    
+                #     ## ==============================================
+                #     ## write out final rasters
+                #     ## ==============================================
+                #     for key in stacked_bands.keys():
+                #         stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                #         stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
+                
                 srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
                 for y in range(
                         srcwin[1], srcwin[1] + srcwin[3], 1
@@ -1495,16 +1540,14 @@ class ElevationDataset:
                     ## ==============================================
                     ## testing
                     ## ==============================================
-                    # unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
-                    # cnt_perc = np.nanpercentile(stacked_data['count'], 75)
-                    # utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
-                    # utils.echo_msg_bold('cnt percentile is: {}'.format(cnt_perc))
+                    unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
+                    utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
                     
-                    # stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
                     ## ==============================================
                     ## /testing
                     ## ==============================================

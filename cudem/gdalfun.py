@@ -1596,7 +1596,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
                     count_mask_data[(elev_mask  & curv_mask)] += 1
                     mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
-`                    mask_mask_ds.FlushCache()
+                    mask_mask_ds.FlushCache()
                     count_mask_band.WriteArray(count_mask_data, srcwin[0], srcwin[1])
                     count_mask_ds.FlushCache()
                                         
