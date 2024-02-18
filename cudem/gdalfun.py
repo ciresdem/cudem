@@ -1016,7 +1016,7 @@ def gdal_clip(src_gdal, dst_gdal, src_ply = None, invert = False, verbose = True
 
     gi = gdal_infos(src_gdal)
     g_region = regions.Region().from_geo_transform(geo_transform=gi['geoT'], x_count=gi['nx'], y_count=gi['ny'])
-    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', cache_dir=cache_dir)
+    tmp_ply = utils.make_temp_fn('tmp_clp_ply.shp', temp_dir=cache_dir)
     
     out, status = utils.run_cmd('ogr2ogr {} {} -clipsrc {} -nlt MULTIPOLYGON -skipfailures -makevalid'.format(tmp_ply, src_ply, g_region.format('ul_lr')), verbose=verbose)
     if gi is not None and src_ply is not None:
@@ -1596,7 +1596,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
                     count_mask_data[(elev_mask  & curv_mask)] += 1
                     mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
-                    mask_mask_ds.FlushCache()
+`                    mask_mask_ds.FlushCache()
                     count_mask_band.WriteArray(count_mask_data, srcwin[0], srcwin[1])
                     count_mask_ds.FlushCache()
                                         

@@ -1493,6 +1493,23 @@ class ElevationDataset:
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
                     ## ==============================================
+                    ## testing
+                    ## ==============================================
+                    # unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
+                    # cnt_perc = np.nanpercentile(stacked_data['count'], 75)
+                    # utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
+                    # utils.echo_msg_bold('cnt percentile is: {}'.format(cnt_perc))
+                    
+                    # stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    ## ==============================================
+                    ## /testing
+                    ## ==============================================
+                    
+                    ## ==============================================
                     ## write out final rasters
                     ## ==============================================
                     for key in stacked_bands.keys():
@@ -1504,6 +1521,7 @@ class ElevationDataset:
             ## ==============================================
             for key in stacked_bands.keys():
                 stacked_bands[key].DeleteNoDataValue()
+                
             for key in stacked_bands.keys():
                 stacked_bands[key].SetNoDataValue(ndv)
                 
@@ -5082,9 +5100,6 @@ class DatasetFactory(factory.CUDEMFactory):
             self.kwargs['fn'] = entry[0]
             self.kwargs['parent'] = None
         else:
-            #utils.echo_msg(entry[1])
-            #tmp_fmt = utils.int_or(str(entry[1]).split(':')[0], -4)
-            #if tmp_fmt >= -2:
             if self.mod_name >= -2:
                 self.kwargs['fn'] = os.path.join(
                     os.path.dirname(self.kwargs['parent'].fn), entry[0]
