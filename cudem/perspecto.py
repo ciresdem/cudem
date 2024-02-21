@@ -782,7 +782,7 @@ def perspecto_cli(argv = sys.argv):
             except:
                 src_dem = wg_user
         else:
-            sys.stderr.write(waffles_cli_usage)
+            sys.stderr.write(perspecto_cli_usage)
             utils.echo_error_msg(
                 'specified waffles config file/DEM does not exist, {}'.format(wg_user)
             )

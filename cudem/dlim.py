@@ -1468,57 +1468,25 @@ class ElevationDataset:
 
         if not mask_only:
             if not supercede:
-                # for srcwin in utils.yield_srcwin(
-                #         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+
+                ## by scan-line
+                # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                # for y in range(
+                #         srcwin[1], srcwin[1] + srcwin[3], 1
                 # ):
                 #     for key in stacked_bands.keys():
-                #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
+                #         stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                 #         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                #     ## ==============================================
-                #     ## average the accumulated arrays for finalization
-                #     ## z and u are weighted sums, so divide by weights
-                #     ## ==============================================
-                #     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                #     #utils.echo_msg(stacked_data['count'])
-                #     stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
-                #     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
-
-                #     ## ==============================================
-                #     ## apply the source uncertainty with the sub-cell variance uncertainty
-                #     ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
-                #     ## ==============================================
-                #     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                #     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
-
-                #     ## ==============================================
-                #     ## testing
-                #     ## ==============================================
-                #     unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
-                #     utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
-                    
-                #     stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                #     stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                #     stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                #     stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                #     stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                #     ## ==============================================
-                #     ## /testing
-                #     ## ==============================================
-                    
-                #     ## ==============================================
-                #     ## write out final rasters
-                #     ## ==============================================
-                #     for key in stacked_bands.keys():
-                #         stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                #         stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
-                
-                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ## by moving window
+                n_chunk = int(xcount)
+                n_step = n_chunk
+                for srcwin in utils.yield_srcwin(
+                        (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
                 ):
+                    y = srcwin[1]
                     for key in stacked_bands.keys():
-                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                        stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
                         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
                     ## ==============================================
@@ -1540,14 +1508,24 @@ class ElevationDataset:
                     ## ==============================================
                     ## testing
                     ## ==============================================
-                    unc_perc = np.nanpercentile(stacked_data['uncertainty'], 75)
-                    utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
+                    # #unc_perc = np.nanpercentile(stacked_data['uncertainty'], 15)
+                    # #utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
+
+                    # median_uncertainty = np.nanmedian(stacked_data['uncertainty'])
+                    # std_uncertainty = np.nanstd(stacked_data['uncertainty'])
+
+                    # # Choose a multiplier for the standard deviation to set the threshold
+                    # threshold_multiplier = .15  # You can adjust this based on your requirements
+
+                    # # Calculate the optimal percentile threshold
+                    # unc_perc = np.nanpercentile(stacked_data['uncertainty'], 100 - (100 * np.exp(-threshold_multiplier)))
+                    # utils.echo_msg(unc_perc)
                     
-                    stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
+                    # stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
                     ## ==============================================
                     ## /testing
                     ## ==============================================
@@ -1558,7 +1536,7 @@ class ElevationDataset:
                     for key in stacked_bands.keys():
                         stacked_data[key][np.isnan(stacked_data[key])] = ndv
                         stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
-
+                
             ## ==============================================
             ## set the final output nodatavalue
             ## ==============================================
@@ -2817,6 +2795,7 @@ class MBSParser(ElevationDataset):
             ys = []
             zs = []
             ws = []
+            us = []
 
             if self.region is not None:
                 mb_region = self.region.copy()
@@ -2825,22 +2804,45 @@ class MBSParser(ElevationDataset):
                 mb_region = None
 
             for line in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZ -I{}'.format(
+                    'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') if mb_region is not None else ''
                         ), mb_fn
                     ),
                     verbose=False,
             ):
-                this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-                xs.append(this_xyz.x)
-                ys.append(this_xyz.y)
-                zs.append(this_xyz.z)
+                this_line = [float(x) for x in line.strip().split('\t')]
+                x = this_line[0]
+                y = this_line[1]
+                z = this_line[2]
+                crosstrack_distance = this_line[3]
+                crosstrack_slope = this_line[4]
+                flat_bottom_grazing_angle = this_line[5]
+                seafloor_grrazing_angle = this_line[6]
+                beamflag = this_line[7]
+                pitch = this_line[8]
+                draft = this_line[9]
+                roll = this_line[10]
+                heave = this_line[11]
+                speed = this_line[12]
+                
+                #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+                if int(beamflag) == 0:# and abs(this_line[4]) < .15:
+                    u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    ## u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                    u_cd = 0
+                    u = math.sqrt(u_depth**2 + u_cd**2)
+                    #if u < 50:
+                    xs.append(x)
+                    ys.append(y)
+                    zs.append(z)
+                    ws.append(1)
+                    us.append(u)
 
             if len(xs) > 0:
-                mb_points = np.column_stack((xs, ys, zs))
-                xs = ys = zs = None
-                mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+                mb_points = np.column_stack((xs, ys, zs, ws, us))
+                xs = ys = zs = ws = us = None
+                mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
 
                 if self.want_binned:
                     mb_points = self.bin_z_points(mb_points)
@@ -3730,10 +3732,15 @@ class Fetcher(ElevationDataset):
                             if f_name == '.':
                                 f_name = this_ds.fn
 
-                            this_ds.metadata['name'] = utils.fn_basename2(f_name)                        
+                            mod_name = os.path.dirname(utils.fn_basename2(f_name))
+                            if mod_name == '':
+                                mod_name = self.fetch_module.name
+                                
+                            this_ds.metadata['name'] = mod_name
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
+                                #ds.metadata['name'] = os.path.basename(ds.fn).split('.')[0]
                                 yield(ds)
                                 
                             if not self.keep_fetched_data:
@@ -5208,7 +5215,7 @@ class DatasetFactory(factory.CUDEMFactory):
 
         if self.kwargs['metadata']['name'] is None:
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
-            
+
         ## ==============================================
         ## source - entry[5]
         ## ==============================================
