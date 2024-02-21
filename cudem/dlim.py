@@ -1468,25 +1468,24 @@ class ElevationDataset:
 
         if not mask_only:
             if not supercede:
-
-                ## by scan-line
-                # srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                # for y in range(
-                #         srcwin[1], srcwin[1] + srcwin[3], 1
+                # ## by moving window
+                # n_chunk = int(xcount)
+                # n_step = n_chunk
+                # for srcwin in utils.yield_srcwin(
+                #         (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
                 # ):
+                #     y = srcwin[1]
                 #     for key in stacked_bands.keys():
-                #         stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
                 #         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                ## by moving window
-                n_chunk = int(xcount)
-                n_step = n_chunk
-                for srcwin in utils.yield_srcwin(
-                        (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
+                ## by scan-line
+                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
                 ):
-                    y = srcwin[1]
                     for key in stacked_bands.keys():
-                        stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
+                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
                     ## ==============================================
@@ -1505,6 +1504,12 @@ class ElevationDataset:
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
 
+                    ## ==============================================
+                    ## density
+                    ## ==============================================
+                    # density_per_cell = stacked_data['count'] / (self.x_inc * self.y_inc)
+                    # stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['uncertainty'], 2) + density_per_cell
+                    
                     ## ==============================================
                     ## testing
                     ## ==============================================
@@ -2829,6 +2834,7 @@ class MBSParser(ElevationDataset):
                 #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
                 if int(beamflag) == 0:# and abs(this_line[4]) < .15:
                     u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
                     ## u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                     u_cd = 0
                     u = math.sqrt(u_depth**2 + u_cd**2)
