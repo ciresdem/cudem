@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_percentile.py
 ##
-## Copyright (c) 2021 CIRES Coastal DEM Team
+## Copyright (c) 2021 - 2024 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -25,10 +25,10 @@
 ### Code:
 
 import sys
-from cudem import demfun
+from cudem import gdalfun
 from cudem import utils
 
-_version = '0.0.1'
+_version = '0.1.0'
 _usage = '''gdal_percentile.py ({}): get a percentile from a gdal DEM
 
 usage: gdal_percentile.py [ file ]
@@ -74,6 +74,6 @@ if __name__ == "__main__":
         utils.echo_error_msg('you must enter an input file')
         sys.exit(1)
   
-    print(demfun.percentile(elev, perc=perc))
+    print(gdalfun.gdal_percentile(elev, perc=perc))
 
 ### End

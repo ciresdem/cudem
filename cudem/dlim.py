@@ -1207,6 +1207,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
+    ## add weighted mean of x/y values to stack
     def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False, mask_only = False):
         """stack and mask incoming arrays (from `array_yield`) together
 
@@ -1224,6 +1225,8 @@ class ElevationDataset:
         Returns:
         output-file-name{_msk} of a multi-band raster with a band for each dataset.
         output-file-name of a multi-band raster with the following bands:
+          x
+          y
           z
           weights
           count
@@ -1268,7 +1271,7 @@ class ElevationDataset:
             if status != 0:
                 utils.remove_glob('{}*'.format(mask_fn))
 
-        dst_ds = driver.Create(out_file, xcount, ycount, 5, gdt,
+        dst_ds = driver.Create(out_file, xcount, ycount, 7, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else [])
 
         if dst_ds is None:
@@ -1278,8 +1281,8 @@ class ElevationDataset:
         dst_ds.SetGeoTransform(dst_gt)
         stacked_bands = {'z': dst_ds.GetRasterBand(1), 'count': dst_ds.GetRasterBand(2),
                          'weights': dst_ds.GetRasterBand(3), 'uncertainty': dst_ds.GetRasterBand(4),
-                         'src_uncertainty': dst_ds.GetRasterBand(5) }        
-        stacked_data = {'z': None, 'count': None, 'weights': None, 'uncertainty': None, 'src_uncertainty': None}
+                         'src_uncertainty': dst_ds.GetRasterBand(5), 'x': dst_ds.GetRasterBand(6), 'y': dst_ds.GetRasterBand(7) }
+        stacked_data = {'z': None, 'count': None, 'weights': None, 'uncertainty': None, 'src_uncertainty': None, 'x': None, 'y': None}
         
         for key in stacked_bands.keys():
             stacked_bands[key].SetNoDataValue(np.nan)
@@ -1360,6 +1363,8 @@ class ElevationDataset:
                 ## ==============================================
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                #arrs['x'][np.isnan(arrs['x'])] = 0
+                #arrs['y'][np.isnan(arrs['y'])] = 0
                 arrs['z'][np.isnan(arrs['z'])] = 0
                 for arr_key in arrs:
                     if arrs[arr_key] is not None:
@@ -1379,6 +1384,8 @@ class ElevationDataset:
                     ## higher weight supercedes lower weight (first come first served atm)
                     ## ==============================================
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
+                    #stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
+                    #stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
                     #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
@@ -1398,6 +1405,8 @@ class ElevationDataset:
                     ## accumulate incoming z*weight and uu*weight
                     ## ==============================================
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    #stacked_data['x'] += (arrs['x'] * arrs['weight'])
+                    #stacked_data['y'] += (arrs['y'] * arrs['weight'])
                     stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
 
                     ## ==============================================
@@ -1495,6 +1504,8 @@ class ElevationDataset:
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
                     #utils.echo_msg(stacked_data['count'])
                     stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
                     ## ==============================================
@@ -1569,6 +1580,8 @@ class ElevationDataset:
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
         sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
         sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
+        #sds_x_band = sds.GetRasterBand(5) # the uncertainty band from stacks
+        #sds_y_band = sds.GetRasterBand(6) # the uncertainty band from stacks
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
@@ -2833,12 +2846,13 @@ class MBSParser(ElevationDataset):
                 
                 #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
                 if int(beamflag) == 0:# and abs(this_line[4]) < .15:
-                    u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    #u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    u_depth = 0
                     #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                    #u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                     ## u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                     u_cd = 0
                     u = math.sqrt(u_depth**2 + u_cd**2)
-                    #if u < 50:
                     xs.append(x)
                     ys.append(y)
                     zs.append(z)
@@ -2911,7 +2925,7 @@ class MBSParser(ElevationDataset):
 
         # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
         count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-
+        
         # Loop through groups and return average sea height
         for k,v in data_groups.items():
             # Create new dataframe based on occurance of photons per height bin
@@ -2965,13 +2979,15 @@ class MBSParser(ElevationDataset):
         points_1 = points_1[(points_1['z'] < 0)]
         if len(points_1) > 0:
             binned_points = self.bin_points(points_1, y_res, z_res)
-
+            points_1 = None
+            
             if binned_points is not None:
-                #print(binned_points)
                 ys, xs, zs = self.get_bin_height(binned_points)
-
+                binned_points = None
+                
                 bin_ds = np.column_stack((xs, ys, zs))
                 bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
+                xs = ys = zs = None
                 bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
                 med_surface_h = np.nanmedian(bin_ds['z'])
                 #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
@@ -2980,6 +2996,7 @@ class MBSParser(ElevationDataset):
                 transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
                 lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
                 bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
+                lon_wgs84 = lat_wgs84 = bin_ds = None
                 bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
 
                 return(bin_points)

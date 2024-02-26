@@ -44,6 +44,7 @@ import curses
 import io
 import json
 import traceback
+import getpass
 
 from tqdm import tqdm
 import threading
@@ -873,18 +874,23 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     
     if step is None:
         step = n_chunk
+        
     #x_chunk = n_chunk
     x_chunk = step
     y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
-
+    
     with tqdm(
-            total=(n_size[0]*n_size[1])/step,
+            #total=(n_size[0]*n_size[1])/step,
+            #total=math.ceil(n_size[0]/step) * math.ceil(n_size[1]/step),
+            #total=(((n_size[0]/step)**2)/n_chunk) * (((n_size[1]/step)**2)/n_chunk),
+            total=n_size[0]+1,
             desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
             leave=verbose
     ) as pbar:
         while True:
+            pbar.update()
             #y_chunk = n_chunk
             y_chunk = step
             while True:
@@ -896,21 +902,19 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
                 this_y_origin = 0 if this_y_origin < 0 else this_y_origin
                 this_x_size = int(this_x_chunk - this_x_origin)
                 this_y_size = int(this_y_chunk - this_y_origin)
-                if this_x_size == 0 or this_y_size == 0:
+                if this_x_size <= 0 or this_y_size <= 0:
                     break
 
                 srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
                 yield(srcwin)
-
-                if y_chunk > n_size[0]:
+                
+                if y_chunk > (n_size[0]*step):
                     break
                 else:
                     y_chunk += step
                     i_chunk += 1
 
-                pbar.update(step)
-
-            if x_chunk > n_size[1]:
+            if x_chunk > (n_size[1]*step):
                 break
             else:
                 x_chunk += step

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_outliers.py
 ##
-## Copyright (c) 2021 CIRES Coastal DEM Team
+## Copyright (c) 2021 - 2024 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -25,10 +25,10 @@
 ### Code:
 
 import sys
-from cudem import demfun
+from cudem import gdalfun
 from cudem import utils
 
-_version = '0.1.0'
+_version = '0.2.0'
 _usage = '''gdal_outliers.py ({}): filter z outliers in a DEM
 
 usage: gdal_outliers.py [ file ]
@@ -38,7 +38,7 @@ usage: gdal_outliers.py [ file ]
 
   --size\t\tThe size in pixels of the moving filter window
   --step\t\tThe step size of the moving filter window
-  --agg_level\tAggression level (1-5)
+  --percentile\tfilter percentile
 
   --help\tPrint the usage text
   --version\tPrint the version information
@@ -54,8 +54,9 @@ if __name__ == "__main__":
     elev = None
     chunk_step = None
     chunk_size = None
-    agg_level = 3
+    percentile = 75
     replace = False
+    unc_mask = None
     i = 1
     
     argv = sys.argv
@@ -67,11 +68,14 @@ if __name__ == "__main__":
         elif arg == '-step' or arg == '--step' or arg == '-s':
             chunk_step = utils.int_or(argv[i + 1])
             i = i + 1
-        elif arg == '-agg_level' or arg == '--agg_level' or arg == '-a':
-            agg_level = utils.int_or(argv[i + 1])
+        elif arg == '-percentile' or arg == '--percentile' or arg == '-p':
+            percentile = utils.int_or(argv[i + 1])
             i = i + 1
         elif arg == '-replace' or arg == '--replace' or arg == '-r':
             replace = True
+        elif arg == '-uncertainty' or arg == '--uncertainty' or arg == '-u':
+            unc_mask = argv[i + 1]
+            i = i + 1
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
@@ -91,6 +95,6 @@ if __name__ == "__main__":
   
     dst_gdal = elev.split('.')[0] + '_fltr.tif'
     utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
-    demfun.filter_outliers_slp(elev, dst_gdal, chunk_size=chunk_size, chunk_step=chunk_step, agg_level=agg_level, replace=replace)
+    gdalfun.gdal_filter_outliers2(elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile, replace=replace)
 
 ### End
