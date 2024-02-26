@@ -36,9 +36,10 @@ usage: gdal_outliers.py [ file ]
  Options:
   file\t\tThe input DEM file-name
 
-  --size\t\tThe size in pixels of the moving filter window
-  --step\t\tThe step size of the moving filter window
-  --percentile\tfilter percentile
+  --size\tThe size in pixels of the moving filter window
+  --step\tThe step size of the moving filter window
+  --percentile\tfilter percentile to identify outliers
+  --uncertainty\tassociated uncertainty grid
 
   --help\tPrint the usage text
   --version\tPrint the version information
