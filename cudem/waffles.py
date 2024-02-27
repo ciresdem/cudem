@@ -3287,7 +3287,8 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         if self.filter_outliers is not None:
             gdalfun.gdal_filter_outliers2(
-                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir
+                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
+                unc_mask = 4
             )
             # gdalfun.gdal_filter_outliers(
             #     self.stack, None, replace=False

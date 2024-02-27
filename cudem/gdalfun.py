@@ -1439,7 +1439,7 @@ def get_outliers(in_array, percentile=75):
 def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
                           percentile = 75, replace = True, band = 1, weight_mask = None,
                           unc_mask = None, filter_above = None, filter_below = None, return_mask = False,
-                          elevation_weight = 1, curvature_weight = 1, slope_weight = 1, unc_weight = 1,
+                          elevation_weight = 1, curvature_weight = 1, slope_weight = 1, unc_weight = 1, rough_weight = 1,
                           cache_dir='./'):
     """scan a src_dem file for outliers and remove them
     
@@ -1618,22 +1618,22 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
                     ## apply elevation outliers
                     mask_mask_data[(band_data > elev_upper_limit)] = np.sqrt(np.power(mask_mask_data[(band_data > elev_upper_limit)], 2) +
-                                                                             np.power(band_data[band_data > elev_upper_limit] / elev_upper_limit, 2))
+                                                                             np.power(elevation_weight * (band_data[band_data > elev_upper_limit] / elev_upper_limit), 2))
                     mask_mask_data[(band_data < elev_lower_limit)] = np.sqrt(np.power(mask_mask_data[(band_data < elev_lower_limit)], 2) +
-                                                                             np.power(elev_lower_limit / band_data[band_data < elev_lower_limit], 2))
+                                                                             np.power(elevation_weight * (band_data[band_data < elev_lower_limit] / elev_lower_limit), 2))
 
                     ## apply curvature outliers
                     mask_mask_data[(curv_data == 0)] = np.sqrt(np.power(mask_mask_data[(curv_data == 0)], 2) +
                                                                np.power(curvature_weight * srcwin_curv_std, 2))
                     curv_data[curv_data == 0] = np.nan
                     mask_mask_data[(curv_data > curv_upper_limit)] = np.sqrt(np.power(mask_mask_data[(curv_data > curv_upper_limit)], 2) +
-                                                                             np.power(curv_data[curv_data > curv_upper_limit] / curv_upper_limit, 2))
+                                                                             np.power(curvature_weight * (curv_data[curv_data > curv_upper_limit] / curv_upper_limit), 2))
                     mask_mask_data[(curv_data < curv_lower_limit)] = np.sqrt(np.power(mask_mask_data[(curv_data < curv_lower_limit)], 2) +
-                                                                             np.power(curv_lower_limit / curv_data[curv_data < curv_lower_limit], 2))
+                                                                             np.power(curvature_weight * (curv_data[curv_data < curv_lower_limit] / curv_lower_limit), 2))
 
                     ## apply roughness outliers
                     mask_mask_data[(rough_data > rough_upper_limit)] = np.sqrt(np.power(mask_mask_data[(rough_data > rough_upper_limit)], 2) +
-                                                                               np.power(rough_data[rough_data > rough_upper_limit] / rough_upper_limit, 2))
+                                                                               np.power(rough_weight * (rough_data[rough_data > rough_upper_limit] / rough_upper_limit), 2))
 
                     ## apply uncertainty outliers
                     if unc_data is not None:
@@ -1650,7 +1650,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                         unc_upper_limit = np.nanpercentile(unc_data, percentile)
                         unc_mask = (unc_data > unc_upper_limit)
                         mask_mask_data[unc_mask] = np.sqrt(np.power(mask_mask_data[unc_mask], 2) +
-                                                           np.power(unc_data[unc_mask], 2))
+                                                           np.power(unc_weight * unc_data[unc_mask], 2))
                     
                     utils.remove_glob(tmp_curv)
                     utils.remove_glob(tmp_slp)
