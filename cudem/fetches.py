@@ -3041,36 +3041,44 @@ https://portal.emodnet-bathymetry.eu/
 
 < emodnet >"""
 
-    def __init__(self, **kwargs):
-        super().__init__(name='emodnet', **kwargs) 
+    def __init__(self, want_erddap=False, **kwargs):
+        super().__init__(name='emodnet', **kwargs)
+        self.want_erddap = want_erddap
         self._emodnet_grid_url = 'https://ows.emodnet-bathymetry.eu/wcs?'
-
+        self._emodnet_grid_url_erddap = 'https://erddap.emodnet.eu/erddap/griddap/dtm_2020_v2_e0bf_e7e4_5b8f.csv?'
+        
+        #elevation%5B(15.000520833333335):1:(89.99947916665815)%5D%5B(-35.99947916666667):1:(42.999479166657686)%5D
+        
     def run(self):
         """Run the EMODNET fetching module"""
         
         if self.region is None: return([])
 
-        _data = {'request': 'DescribeCoverage', 'version': '2.0.1',
-                 'CoverageID': 'emodnet:mean', 'service': 'WCS'}
-        _req = Fetch(self._emodnet_grid_url).fetch_req(params=_data)
-        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
-        g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=namespaces)[0]
-        hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
+        if self.want_erddap:
+            pass
+            
+        else:
+            _data = {'request': 'DescribeCoverage', 'version': '2.0.1',
+                     'CoverageID': 'emodnet:mean', 'service': 'WCS'}
+            _req = Fetch(self._emodnet_grid_url).fetch_req(params=_data)
+            _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
+            g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=namespaces)[0]
+            hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
 
-        g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
-        lc = [float(x) for x in  g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
-        uc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}upperCorner').text.split()]
-        
-        ds_region = regions.Region().from_list(
-            [lc[1], uc[1], lc[0], uc[0]]
-        )
-        resx = (uc[1] - lc[1]) / hl[0]
-        resy = (uc[0] - lc[0]) / hl[1]
-        if regions.regions_intersect_ogr_p(self.region, ds_region):
-            emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
-                                      .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
-            outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-            self.results.append([emodnet_wcs, outf, 'emodnet'])
+            g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
+            lc = [float(x) for x in  g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
+            uc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}upperCorner').text.split()]
+
+            ds_region = regions.Region().from_list(
+                [lc[1], uc[1], lc[0], uc[0]]
+            )
+            resx = (uc[1] - lc[1]) / hl[0]
+            resy = (uc[0] - lc[0]) / hl[1]
+            if regions.regions_intersect_ogr_p(self.region, ds_region):
+                emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
+                                          .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
+                outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
+                self.results.append([emodnet_wcs, outf, 'emodnet'])
             
         return(self)
 

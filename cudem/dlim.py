@@ -951,8 +951,8 @@ class ElevationDataset:
                             'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
                             geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=False
                         ).run(outfile=self.trans_fn)
-                else:
-                    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
+                #else:
+                #    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
 
                 if self.trans_fn is not None and os.path.exists(self.trans_fn):
                     out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
@@ -1522,31 +1522,6 @@ class ElevationDataset:
                     # stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['uncertainty'], 2) + density_per_cell
                     
                     ## ==============================================
-                    ## testing
-                    ## ==============================================
-                    # #unc_perc = np.nanpercentile(stacked_data['uncertainty'], 15)
-                    # #utils.echo_msg_bold('uncertainty percentile is: {}'.format(unc_perc))
-
-                    # median_uncertainty = np.nanmedian(stacked_data['uncertainty'])
-                    # std_uncertainty = np.nanstd(stacked_data['uncertainty'])
-
-                    # # Choose a multiplier for the standard deviation to set the threshold
-                    # threshold_multiplier = .15  # You can adjust this based on your requirements
-
-                    # # Calculate the optimal percentile threshold
-                    # unc_perc = np.nanpercentile(stacked_data['uncertainty'], 100 - (100 * np.exp(-threshold_multiplier)))
-                    # utils.echo_msg(unc_perc)
-                    
-                    # stacked_data['z'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['weights'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['count'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['src_uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    # stacked_data['uncertainty'][stacked_data['uncertainty'] > unc_perc] = np.nan
-                    ## ==============================================
-                    ## /testing
-                    ## ==============================================
-                    
-                    ## ==============================================
                     ## write out final rasters
                     ## ==============================================
                     for key in stacked_bands.keys():
@@ -1668,6 +1643,7 @@ class ElevationDataset:
                         
             if len(points) > 0:
                 yield(points)
+        self.transformer = None
             
     def yield_xyz(self):
         """Yield the data as xyz points

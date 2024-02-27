@@ -1454,7 +1454,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
         unc_is_fn = False
         if utils.int_or(unc_mask) is not None:
             unc_is_band = True
-            unc_mask(utils.int_or(unc_mask))            
+            unc_mask = utils.int_or(unc_mask)
         elif os.path.exists(unc_mask):
             unc_is_fn = True
         else:
@@ -1499,9 +1499,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                 n_chunk = chunk_size
 
             chunk_step = utils.int_or(chunk_step)
-            n_step = chunk_step if chunk_step is not None else int(n_chunk)
-            #n_step = n_chunk/10
-            #n_step = n_chunk
+            n_step = (n_chunk / 10) if chunk_step is not None else int(n_chunk)
 
             utils.echo_msg(
                 'scanning {} for outliers with {}@{} using {}...'.format(
@@ -1511,9 +1509,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             for srcwin in utils.yield_srcwin(
                     (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
             ):
-                #srcwin = utils.buffer_srcwin(srcwin, (src_ds.RasterYSize, src_ds.RasterXSize), 20)
                 band_data = ds_band.ReadAsArray(*srcwin)
-
                 if np.all(band_data == ds_config['ndv']):
                     continue
                 
@@ -1612,41 +1608,41 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                         break
                     
                     elev_mask = ((band_data > elev_upper_limit) | (band_data < elev_lower_limit))
-                    curv_mask = ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit) | (curv_data == 0))
+                    curv_mask = ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit))# | (curv_data == 0))
                     #slp_mask = ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit) | (slp_data == 0))
                     rough_mask = ((rough_data > rough_upper_limit) | (rough_data < rough_lower_limit))
 
                     ## apply elevation outliers
-                    mask_mask_data[(band_data > elev_upper_limit)] = np.sqrt(np.power(mask_mask_data[(band_data > elev_upper_limit)], 2) +
-                                                                             np.power(elevation_weight * (band_data[band_data > elev_upper_limit] / elev_upper_limit), 2))
-                    mask_mask_data[(band_data < elev_lower_limit)] = np.sqrt(np.power(mask_mask_data[(band_data < elev_lower_limit)], 2) +
-                                                                             np.power(elevation_weight * (band_data[band_data < elev_lower_limit] / elev_lower_limit), 2))
+                    mask_mask_data[(band_data > elev_upper_limit)] = np.sqrt(
+                        np.power(mask_mask_data[(band_data > elev_upper_limit)], 2) +
+                        np.power(elevation_weight * (band_data[band_data > elev_upper_limit] / elev_upper_limit), 2)
+                    )
+                    mask_mask_data[(band_data < elev_lower_limit)] = np.sqrt(
+                        np.power(mask_mask_data[(band_data < elev_lower_limit)], 2) +
+                        np.power(elevation_weight * (band_data[band_data < elev_lower_limit] / elev_lower_limit), 2)
+                    )
 
                     ## apply curvature outliers
-                    mask_mask_data[(curv_data == 0)] = np.sqrt(np.power(mask_mask_data[(curv_data == 0)], 2) +
-                                                               np.power(curvature_weight * srcwin_curv_std, 2))
+                    #mask_mask_data[(curv_data == 0)] = np.sqrt(np.power(mask_mask_data[(curv_data == 0)], 2) +
+                    #                                           np.power(curvature_weight * srcwin_curv_std, 2))
                     curv_data[curv_data == 0] = np.nan
-                    mask_mask_data[(curv_data > curv_upper_limit)] = np.sqrt(np.power(mask_mask_data[(curv_data > curv_upper_limit)], 2) +
-                                                                             np.power(curvature_weight * (curv_data[curv_data > curv_upper_limit] / curv_upper_limit), 2))
-                    mask_mask_data[(curv_data < curv_lower_limit)] = np.sqrt(np.power(mask_mask_data[(curv_data < curv_lower_limit)], 2) +
-                                                                             np.power(curvature_weight * (curv_data[curv_data < curv_lower_limit] / curv_lower_limit), 2))
+                    mask_mask_data[(curv_data > curv_upper_limit)] = np.sqrt(
+                        np.power(mask_mask_data[(curv_data > curv_upper_limit)], 2) +
+                        np.power(curvature_weight * (curv_data[curv_data > curv_upper_limit] / curv_upper_limit), 2)
+                    )
+                    mask_mask_data[(curv_data < curv_lower_limit)] = np.sqrt(
+                        np.power(mask_mask_data[(curv_data < curv_lower_limit)], 2) +
+                        np.power(curvature_weight * (curv_data[curv_data < curv_lower_limit] / curv_lower_limit), 2)
+                    )
 
                     ## apply roughness outliers
-                    mask_mask_data[(rough_data > rough_upper_limit)] = np.sqrt(np.power(mask_mask_data[(rough_data > rough_upper_limit)], 2) +
-                                                                               np.power(rough_weight * (rough_data[rough_data > rough_upper_limit] / rough_upper_limit), 2))
+                    mask_mask_data[(rough_data > rough_upper_limit)] = np.sqrt(
+                        np.power(mask_mask_data[(rough_data > rough_upper_limit)], 2) +
+                        np.power(rough_weight * (rough_data[rough_data > rough_upper_limit] / rough_upper_limit), 2)
+                    )
 
                     ## apply uncertainty outliers
                     if unc_data is not None:
-                        # median_uncertainty = np.nanmedian(unc_data)
-                        # std_uncertainty = np.nanstd(unc_data)
-
-                        # # Choose a multiplier for the standard deviation to set the threshold
-                        # threshold_multiplier = 2  # You can adjust this based on your requirements
-
-                        # # Calculate the optimal percentile threshold
-                        # unc_perc = np.nanpercentile(unc_data, 100 - (100 * np.exp(-threshold_multiplier)))
-                        
-                        #unc_upper_limit, unc_lower_limit = get_outliers(unc_data, percentile)
                         unc_upper_limit = np.nanpercentile(unc_data, percentile)
                         unc_mask = (unc_data > unc_upper_limit)
                         mask_mask_data[unc_mask] = np.sqrt(np.power(mask_mask_data[unc_mask], 2) +
@@ -1656,7 +1652,6 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                     utils.remove_glob(tmp_slp)
                     utils.remove_glob(tmp_rough)
 
-                    #mask_mask_data[(elev_mask & curv_mask)] += 1
                     mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
                     mask_mask_ds.FlushCache()
                                         
