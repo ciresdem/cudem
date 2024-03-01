@@ -34,7 +34,7 @@ _usage = '''gdal_outliers.py ({}): filter z outliers in a DEM
 usage: gdal_outliers.py [ file ]
 
  Options:
-  file\t\tThe input DEM file-name
+  file\t\t\tThe input DEM file-name
 
   --size\t\tThe size in pixels of the moving filter window
   --step\t\tThe step size of the moving filter window
@@ -47,8 +47,10 @@ usage: gdal_outliers.py [ file ]
   --tpi_weight\t\tWeight of the tpi outliers
   --uncertainty_weight\tWeight of uncertainty outliers
 
-  --help\tPrint the usage text
-  --version\tPrint the version information
+  --aggressive\t\tBe more aggressive in data removal
+
+  --help\t\tPrint the usage text
+  --version\t\tPrint the version information
 
  Examples:
  % gdal_outliers.py input.tif -size 10 -step 2
@@ -71,6 +73,7 @@ if __name__ == "__main__":
     roughness_weight = 1
     tpi_weight = 1
     uncertainty_weight = 1
+    aggressive = False
     
     argv = sys.argv
     while i < len(sys.argv):
@@ -104,6 +107,8 @@ if __name__ == "__main__":
         elif arg == '-uncertainty' or arg == '--uncertainty' or arg == '-u':
             unc_mask = argv[i + 1]
             i = i + 1
+        elif arg == '-aggressive' or arg == '--aggressive' or arg == '-a':
+            aggressive = True
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)

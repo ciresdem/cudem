@@ -1440,7 +1440,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                           percentile = 75, replace = True, band = 1, weight_mask = None,
                           unc_mask = None, filter_above = None, filter_below = None, return_mask = False,
                           elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1,
-                          cache_dir='./'):
+                          aggressive = False, cache_dir='./'):
     """scan a src_dem file for outliers and remove them
     
     aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
@@ -1620,7 +1620,9 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
 
             mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
             utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
-            mask_upper_limit = np.nanpercentile(mask_mask_data, percentile)
+            if aggressive:
+                mask_upper_limit = np.nanpercentile(mask_mask_data, percentile)
+                
             utils.echo_msg(mask_upper_limit)
             src_data = ds_band.ReadAsArray()
             src_data[(mask_mask_data > mask_upper_limit)] = ds_config['ndv']
