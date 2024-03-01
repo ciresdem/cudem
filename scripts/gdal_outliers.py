@@ -36,10 +36,16 @@ usage: gdal_outliers.py [ file ]
  Options:
   file\t\tThe input DEM file-name
 
-  --size\tThe size in pixels of the moving filter window
-  --step\tThe step size of the moving filter window
-  --percentile\tfilter percentile to identify outliers
-  --uncertainty\tassociated uncertainty grid
+  --size\t\tThe size in pixels of the moving filter window
+  --step\t\tThe step size of the moving filter window
+  --percentile\t\tfilter percentile to identify outliers
+  --uncertainty\t\tThe associated uncertainty grid
+
+  --elevation_weight\tWeight of elevation outliers
+  --curvature_weight\tWeight of curvature outliers
+  --roughness_weight\tWeight of roughness outliers
+  --tpi_weight\t\tWeight of the tpi outliers
+  --uncertainty_weight\tWeight of uncertainty outliers
 
   --help\tPrint the usage text
   --version\tPrint the version information
@@ -59,6 +65,12 @@ if __name__ == "__main__":
     replace = False
     unc_mask = None
     i = 1
+
+    elevation_weight = 1
+    curvature_weight = 1
+    roughness_weight = 1
+    tpi_weight = 1
+    uncertainty_weight = 1
     
     argv = sys.argv
     while i < len(sys.argv):
@@ -74,6 +86,21 @@ if __name__ == "__main__":
             i = i + 1
         elif arg == '-replace' or arg == '--replace' or arg == '-r':
             replace = True
+        elif arg == '-elevation_weight' or arg == '--elevation_weight' or arg == '-ew':
+            elevation_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
+        elif arg == '-curvature_weight' or arg == '--curvature_weight' or arg == '-cw':
+            curvature_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
+        elif arg == '-uncertainty_weight' or arg == '--uncertainty_weight' or arg == '-uw':
+            uncertainty_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
+        elif arg == '-roughness_weight' or arg == '--roughness_weight' or arg == '-rw':
+            roughness_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
+        elif arg == '-tpi_weight' or arg == '--tpi_weight' or arg == '-tw':
+            tpi_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
         elif arg == '-uncertainty' or arg == '--uncertainty' or arg == '-u':
             unc_mask = argv[i + 1]
             i = i + 1
@@ -85,6 +112,7 @@ if __name__ == "__main__":
             sys.exit(1)
         elif elev is None: elev = arg
         else:
+            utils.echo_warning_msg(arg)
             sys.stderr.write(_usage)
             sys.exit(1)
         i = i + 1
@@ -95,7 +123,11 @@ if __name__ == "__main__":
         sys.exit(1)
   
     dst_gdal = elev.split('.')[0] + '_fltr.tif'
-    utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
-    gdalfun.gdal_filter_outliers2(elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile, replace=replace)
+    #utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
+    gdalfun.gdal_filter_outliers2(
+        elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
+        elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
+        unc_weight=uncertainty_weight, tpi_weight=tpi_weight, replace=replace
+    )
 
 ### End

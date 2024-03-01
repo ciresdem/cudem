@@ -41,6 +41,7 @@ import numpy as np
 import scipy
 import scipy.ndimage
 from scipy import interpolate
+from scipy import spatial
 
 from cudem import utils
 from cudem import regions
@@ -1433,22 +1434,37 @@ def get_outliers(in_array, percentile=75):
 
     return(upper_limit, lower_limit)
     
-        
 ## todo: min_weight parameter (only filter points below a weight threshhold)
 ## output a filter mask to show which cells were filtered out
 def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
                           percentile = 75, replace = True, band = 1, weight_mask = None,
                           unc_mask = None, filter_above = None, filter_below = None, return_mask = False,
-                          elevation_weight = 1, curvature_weight = 1, slope_weight = 1, unc_weight = 1, rough_weight = 1,
+                          elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1,
                           cache_dir='./'):
     """scan a src_dem file for outliers and remove them
     
     aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
     for statistical outlier discovery, 55/45 will be more aggressive, etc. Using a large chunk size 
     will filter more cells and find potentially more or less outliers depending on the data.
-    agg_level is 1 to 9
     """
 
+    def mask_outliers(src_data=None, mask_data=None, percentile=75, upper_only=False, src_weight=1):
+        if src_data is not None and mask_data is not None:
+            upper_limit, lower_limit = get_outliers(src_data, percentile)
+            std = np.nanstd(src_data)
+            if std <= 0:
+                std = 1e-19
+
+            mask_data[(src_data > upper_limit)] = np.sqrt(
+                np.power(mask_data[(src_data > upper_limit)], 2) +
+                np.power(src_weight * (src_data[src_data > upper_limit] / upper_limit), 2)
+            )
+            if not upper_only:
+                mask_data[(src_data < lower_limit)] = np.sqrt(
+                    np.power(mask_data[(src_data < lower_limit)], 2) +
+                    np.power(src_weight * (src_data[src_data < lower_limit] / lower_limit), 2)
+                )
+    
     if unc_mask is not None:
         unc_is_band = False
         unc_is_fn = False
@@ -1459,7 +1475,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
             unc_is_fn = True
         else:
             unc_mask = None
-    
+
     with gdal_datasource(src_gdal, update=True) as src_ds:
         if src_ds is not None:
             tnd = 0        
@@ -1479,7 +1495,8 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                     unc_band = src_ds.GetRasterBand(unc_mask)
             
             ## to hold the mask data
-            tmp_mask = utils.make_temp_fn('fltr_mask.tif', cache_dir)
+            #tmp_mask = utils.make_temp_fn('fltr_mask.tif', cache_dir)
+            tmp_mask = '{}{}'.format(utils.fn_basename2(src_gdal), '_outliers.tif')
             mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
             mask_mask_ds = driver.Create(tmp_mask, ds_config['nx'], ds_config['ny'], 1,
@@ -1499,15 +1516,11 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                 n_chunk = chunk_size
 
             chunk_step = utils.int_or(chunk_step)
-            n_step = (n_chunk / 10) if chunk_step is not None else int(n_chunk)
+            n_step = chunk_step if chunk_step is not None else int(n_chunk/4)
 
-            utils.echo_msg(
-                'scanning {} for outliers with {}@{} using {}...'.format(
-                    src_gdal, n_chunk, n_step, percentile
-                )
-            )
             for srcwin in utils.yield_srcwin(
-                    (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk = n_chunk, step = n_step, verbose=True
+                    (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=n_chunk,
+                    step=n_step, verbose=True, msg='scanning for outliers ({})'.format(percentile)
             ):
                 band_data = ds_band.ReadAsArray(*srcwin)
                 if np.all(band_data == ds_config['ndv']):
@@ -1518,167 +1531,103 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = No
                 else:
                     unc_data = None
                     
-                attempt = 0
-                while True:
-                    attempt += 1
-                    # if np.any(np.isnan(band_data)):
-                    #     point_indices = np.nonzero(~np.isnan(band_data))
-                    #     if len(point_indices[0]):
-                    #         point_values = band_data[point_indices]
-                    #         xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
-                            
-                    #         #try:
-                    #         band_data = scipy.interpolate.griddata(
-                    #             np.transpose(point_indices), point_values,
-                    #             (xi, yi), method='linear'
-                    #         )
-                    #         #except:
-                    #         #    pass
-                    
-                    mask_mask_data = mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
+                #while True:
+                tmp_band_data = band_data
+                tmp_band_data[tmp_band_data == ds_config['ndv']] = np.nan
+                if np.all(np.isnan(tmp_band_data)):
+                    break
 
-                    ## generate a mem datasource to feed into gdal.DEMProcessing
-                    dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
-                    srcwin_config = gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, src_ds.GetProjectionRef(),
-                                                   ds_band.DataType, -9999, 'GTiff', {}, 1)
+                if np.any(np.isnan(band_data)):                        
+                    point_indices = np.nonzero(~np.isnan(tmp_band_data))
+                    if len(point_indices[0]):
+                        point_values = tmp_band_data[point_indices]
+                        xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
 
-                    srcwin_ds = gdal_mem_ds(srcwin_config, name = 'MEM', bands = 1, src_srs = None)
-                    srcwin_band = srcwin_ds.GetRasterBand(1)
-                    srcwin_band.SetNoDataValue(ds_config['ndv'])
-                    srcwin_band.WriteArray(band_data)
-                    srcwin_ds.FlushCache()
+                        try:
+                            tmp_band_data = scipy.interpolate.griddata(
+                                np.transpose(point_indices), point_values,
+                                (xi, yi), method='linear'
+                            )
+                        except:
+                            pass
 
-                    ## generate slope and curvature grids of the srcwin dem
-                    tmp_slp = utils.make_temp_fn('srcwin_slp.tif', cache_dir)
-                    tmp_curv = utils.make_temp_fn('srcwin_curv.tif', cache_dir)
-                    tmp_rough = utils.make_temp_fn('srcwin_rough.tif', cache_dir)
-                    slp_ds = gdal.DEMProcessing(tmp_slp, srcwin_ds, "slope", scale=111120, computeEdges=True)
-                    curv_ds = gdal.DEMProcessing(tmp_curv, slp_ds, "slope", scale=111120, computeEdges=True)
-                    rough_ds = gdal.DEMProcessing(tmp_rough, srcwin_ds, "roughness", computeEdges=True)
-                    srcwin_ds = None
+                tmp_band_data[np.isnan(tmp_band_data)] = ds_config['ndv']
+                mask_mask_data = mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
 
-                    ## set band data ndv to nan for np processing
-                    band_data[band_data == ds_config['ndv']] = np.nan
+                ## generate a mem datasource to feed into gdal.DEMProcessing
+                dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
+                srcwin_config = gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, src_ds.GetProjectionRef(),
+                                               ds_band.DataType, -9999, 'GTiff', {}, 1)
 
-                    ## break the loop if the srcwin data is all nan
-                    if np.all(np.isnan(band_data)):
-                        utils.remove_glob(tmp_curv)
-                        utils.remove_glob(tmp_slp)
-                        utils.remove_glob(tmp_rough)
-                        break
-                                            
-                    ## load curvature and slope data for the srcwin
-                    curv_band = curv_ds.GetRasterBand(1)
-                    curv_data = curv_band.ReadAsArray()
-                    curv_data[curv_data == ds_config['ndv']] = np.nan
-                    curv_ds = None
+                srcwin_ds = gdal_mem_ds(srcwin_config, name = 'MEM', bands = 1, src_srs = None)
+                srcwin_band = srcwin_ds.GetRasterBand(1)
+                srcwin_band.SetNoDataValue(ds_config['ndv'])
+                srcwin_band.WriteArray(tmp_band_data)
+                srcwin_ds.FlushCache()
+                tmp_band_data = None
 
-                    ## load roughness data for the srcwin
-                    rough_band = rough_ds.GetRasterBand(1)
-                    rough_data = rough_band.ReadAsArray()
-                    rough_data[rough_data == ds_config['ndv']] = np.nan
-                    rough_ds = None
+                ## generate slope and curvature grids of the srcwin dem
+                tmp_slp = utils.make_temp_fn('srcwin_slp.tif', cache_dir)
+                slp_ds = gdal.DEMProcessing(tmp_slp, srcwin_ds, "slope", scale=111120, computeEdges=True)
 
-                    ## get the std of the srcwin data
-                    ## high std implies high slope/curvature while low
-                    ## std implies relatively flat terrain...
-                    srcwin_std = np.nanstd(band_data)
-                    if srcwin_std <= 0:
-                        srcwin_std = 1e-19
-                    
-                    srcwin_curv_std = np.nanstd(curv_data)
-                    if srcwin_curv_std <= 0 or np.isnan(srcwin_curv_std):
-                        srcwin_curv_std = 1e-19
+                tmp_curv = utils.make_temp_fn('srcwin_curv.tif', cache_dir)
+                curv_ds = gdal.DEMProcessing(tmp_curv, slp_ds, "slope", scale=111120, computeEdges=True)
+                slp_ds = None
+                utils.remove_glob(tmp_slp)
 
-                    #utils.echo_msg(srcwin_curv_std)
-                    # slp_band = slp_ds.GetRasterBand(1)
-                    # slp_data = slp_band.ReadAsArray()
-                    # slp_data[slp_data == ds_config['ndv']] = np.nan
-                    # slp_ds = None
+                tmp_rough = utils.make_temp_fn('srcwin_rough.tif', cache_dir)
+                rough_ds = gdal.DEMProcessing(tmp_rough, srcwin_ds, "TRI", computeEdges=True)
 
-                    elev_upper_limit, elev_lower_limit = get_outliers(band_data, percentile)
-                    #slp_upper_limit, slp_lower_limit = get_outliers(slp_data, percentile)
-                    curv_upper_limit, curv_lower_limit = get_outliers(curv_data, percentile)
-                    rough_upper_limit, rough_lower_limit = get_outliers(rough_data, percentile)
-                        
-                    if np.isnan(curv_upper_limit) or curv_upper_limit == 0 or rough_upper_limit == 0:
-                        utils.remove_glob(tmp_curv)
-                        utils.remove_glob(tmp_slp)
-                        utils.remove_glob(tmp_rough)
-                        break
-                    
-                    elev_mask = ((band_data > elev_upper_limit) | (band_data < elev_lower_limit))
-                    curv_mask = ((curv_data > curv_upper_limit) | (curv_data < curv_lower_limit))# | (curv_data == 0))
-                    #slp_mask = ((slp_data > slp_upper_limit) | (slp_data < slp_lower_limit) | (slp_data == 0))
-                    rough_mask = ((rough_data > rough_upper_limit) | (rough_data < rough_lower_limit))
+                tmp_tpi = utils.make_temp_fn('srcwin_tpi.tif', cache_dir)
+                tpi_ds = gdal.DEMProcessing(tmp_tpi, srcwin_ds, "TPI", computeEdges=True)
+                srcwin_ds = None
 
-                    ## apply elevation outliers
-                    mask_mask_data[(band_data > elev_upper_limit)] = np.sqrt(
-                        np.power(mask_mask_data[(band_data > elev_upper_limit)], 2) +
-                        np.power(elevation_weight * (band_data[band_data > elev_upper_limit] / elev_upper_limit), 2)
-                    )
-                    mask_mask_data[(band_data < elev_lower_limit)] = np.sqrt(
-                        np.power(mask_mask_data[(band_data < elev_lower_limit)], 2) +
-                        np.power(elevation_weight * (band_data[band_data < elev_lower_limit] / elev_lower_limit), 2)
-                    )
+                ## apply the elevation outliers
+                band_data[band_data == ds_config['ndv']] = np.nan
+                mask_outliers(src_data=band_data, mask_data=mask_mask_data, percentile=percentile, src_weight=elevation_weight)
 
-                    ## apply curvature outliers
-                    #mask_mask_data[(curv_data == 0)] = np.sqrt(np.power(mask_mask_data[(curv_data == 0)], 2) +
-                    #                                           np.power(curvature_weight * srcwin_curv_std, 2))
-                    curv_data[curv_data == 0] = np.nan
-                    mask_mask_data[(curv_data > curv_upper_limit)] = np.sqrt(
-                        np.power(mask_mask_data[(curv_data > curv_upper_limit)], 2) +
-                        np.power(curvature_weight * (curv_data[curv_data > curv_upper_limit] / curv_upper_limit), 2)
-                    )
-                    mask_mask_data[(curv_data < curv_lower_limit)] = np.sqrt(
-                        np.power(mask_mask_data[(curv_data < curv_lower_limit)], 2) +
-                        np.power(curvature_weight * (curv_data[curv_data < curv_lower_limit] / curv_lower_limit), 2)
-                    )
+                ## apply curvature outliers
+                curv_data = curv_ds.GetRasterBand(1).ReadAsArray()
+                curv_ds = None
+                utils.remove_glob(tmp_curv)
+                curv_data[((np.isnan(band_data)) | (curv_data == ds_config['ndv']) | (curv_data == 0))] = np.nan
+                mask_outliers(src_data=curv_data, mask_data=mask_mask_data, percentile=percentile, src_weight=curvature_weight)
 
-                    ## apply roughness outliers
-                    mask_mask_data[(rough_data > rough_upper_limit)] = np.sqrt(
-                        np.power(mask_mask_data[(rough_data > rough_upper_limit)], 2) +
-                        np.power(rough_weight * (rough_data[rough_data > rough_upper_limit] / rough_upper_limit), 2)
-                    )
+                ## apply roughness outliers
+                rough_data = rough_ds.GetRasterBand(1).ReadAsArray()
+                rough_ds = None
+                utils.remove_glob(tmp_rough)
+                rough_data[((np.isnan(band_data)) | (rough_data == ds_config['ndv']))] = np.nan
+                mask_outliers(src_data=rough_data, mask_data=mask_mask_data, percentile=percentile, upper_only=True, src_weight=rough_weight)
 
-                    ## apply uncertainty outliers
-                    if unc_data is not None:
-                        unc_upper_limit = np.nanpercentile(unc_data, percentile)
-                        unc_mask = (unc_data > unc_upper_limit)
-                        mask_mask_data[unc_mask] = np.sqrt(np.power(mask_mask_data[unc_mask], 2) +
-                                                           np.power(unc_weight * unc_data[unc_mask], 2))
-                    
-                    utils.remove_glob(tmp_curv)
-                    utils.remove_glob(tmp_slp)
-                    utils.remove_glob(tmp_rough)
+                ## apply TPI outliers
+                tpi_data = tpi_ds.GetRasterBand(1).ReadAsArray()
+                tpi_ds = None
+                utils.remove_glob(tmp_tpi)
+                tpi_data[((np.isnan(band_data)) | (tpi_data == ds_config['ndv']))] = np.nan                
+                mask_outliers(src_data=tpi_data, mask_data=mask_mask_data, percentile=percentile, src_weight=tpi_weight)
 
-                    mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
-                    mask_mask_ds.FlushCache()
-                                        
-                    ## break the loop if no outliers were found
-                    ## remove the combined outlier cells from the srcwin data
-                    ## if data was removed, will re-enter the loop with the adjusted
-                    ## srcwin data to find newly created outliers...
-                    if not np.any((elev_mask & curv_mask & rough_mask)):
-                        break
-                    else:                        
-                        band_data[np.isnan(band_data)] == ds_config['ndv']
-                        band_data[(elev_mask & curv_mask & rough_mask)] = ds_config['ndv']
-                        if unc_data is not None:
-                            unc_data[(elev_mask & curv_mask & rough_mask)] = 0
+                ## apply uncertainty outliers
+                if unc_data is not None:
+                    mask_outliers(src_data=unc_data, mask_data=mask_mask_data, percentile=percentile, upper_only=True, src_weight=unc_weight)
+
+                ## write the mask data to file
+                mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
+                mask_mask_ds.FlushCache()
 
             mask_mask_data = mask_mask_band.ReadAsArray()
             mask_mask_data[mask_mask_data == 0] = np.nan
 
-            ## remove data from the source dem where the mask id is above the 75th percentile
             mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
-            #mask_upper_limit = np.nanpercentile(mask_mask_data, 10)
+            utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
+            mask_upper_limit = np.nanpercentile(mask_mask_data, percentile)
+            utils.echo_msg(mask_upper_limit)
             src_data = ds_band.ReadAsArray()
             src_data[(mask_mask_data > mask_upper_limit)] = ds_config['ndv']
             ds_band.WriteArray(src_data)
             
             dst_ds = curv_ds = slp_ds = rough_ds = slp_full = curv_full = tri_full = mask_mask_ds = None
-            utils.remove_glob(tmp_mask)
+            #utils.remove_glob(tmp_mask)
             return(src_gdal, 0)
         else:
             return(None, -1)

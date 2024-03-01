@@ -1503,23 +1503,18 @@ class ElevationDataset:
                     ## ==============================================
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
                     #utils.echo_msg(stacked_data['count'])
-                    stacked_data['src_uncertainty'] = (stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
                     ## ==============================================
                     ## apply the source uncertainty with the sub-cell variance uncertainty
-                    ## point density (count/cellsize) effects uncertainty? higer density should have lower unertainty perhaps...
+                    ## caclulate the standard error (sqrt( uncertainty / count))
                     ## ==============================================
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
-
-                    ## ==============================================
-                    ## density
-                    ## ==============================================
-                    # density_per_cell = stacked_data['count'] / (self.x_inc * self.y_inc)
-                    # stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['uncertainty'], 2) + density_per_cell
+                    #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
                     
                     ## ==============================================
                     ## write out final rasters
@@ -1643,6 +1638,7 @@ class ElevationDataset:
                         
             if len(points) > 0:
                 yield(points)
+                
         self.transformer = None
             
     def yield_xyz(self):
@@ -2812,7 +2808,7 @@ class MBSParser(ElevationDataset):
                 crosstrack_distance = this_line[3]
                 crosstrack_slope = this_line[4]
                 flat_bottom_grazing_angle = this_line[5]
-                seafloor_grrazing_angle = this_line[6]
+                seafloor_grazing_angle = this_line[6]
                 beamflag = this_line[7]
                 pitch = this_line[8]
                 draft = this_line[9]
@@ -2826,7 +2822,7 @@ class MBSParser(ElevationDataset):
                     u_depth = 0
                     #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
                     #u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                    ## u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                     u_cd = 0
                     u = math.sqrt(u_depth**2 + u_cd**2)
                     xs.append(x)
@@ -3759,7 +3755,7 @@ class Fetcher(ElevationDataset):
             if vert_epsg is None:
                 vert_epsg = vdatum
 
-            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+            #utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
             if vert_epsg is not None:
                 self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
             else:
