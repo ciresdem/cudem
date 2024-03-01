@@ -1436,24 +1436,38 @@ def get_outliers(in_array, percentile=75):
     
 ## todo: min_weight parameter (only filter points below a weight threshhold)
 ## output a filter mask to show which cells were filtered out
-def gdal_filter_outliers2(src_gdal, dst_gdal, chunk_size = None, chunk_step = None,
-                          percentile = 75, replace = True, band = 1, weight_mask = None,
-                          unc_mask = None, filter_above = None, filter_below = None, return_mask = False,
-                          elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1,
-                          aggressive = False, cache_dir='./'):
-    """scan a src_dem file for outliers and remove them
+def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk_step = None,
+                          percentile = 75, weight_mask = None, unc_mask = None, return_mask = False,
+                          elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
+                          rough_weight = 1, aggressive = False, cache_dir='./'):
+    """Scan a src_gdal file for outliers and remove them.
+
+    This will over-write/update the `src_gdal` file.
     
-    aggressiveness depends on the outlier percentiles and the chunk_size/step; 75/25 is default 
-    for statistical outlier discovery, 55/45 will be more aggressive, etc. Using a large chunk size 
-    will filter more cells and find potentially more or less outliers depending on the data.
+    -----------
+    Parameters:
+    src_gdal (str): The source GDAL file to scan.
+    band (int): The band number of src_gdal to scan.
+    chunk_size (int): The size of the moving srcwin.
+    chunk_step (int): The step of the moving srcwin.
+    percentile (float): The percentile to use to calculate the outliers. Should be between 50 and 100.
+    weight_mask (str/int): The GDAL file containing weight data, or a band number related to src_gdal.
+    unc_mask (str/int): The GDAL file containing uncertainty data, or a band number related to src_gdal.
+    return_mask (bool): Output a <>_outliers.tif file representing the outlier mask data.
+    elevation_weight (float): The weight to assign elevation outliers.
+    curvature_weight (float): The weight to assign curvature outliers.
+    tpi_weight (float): The weight to assign TPI outliers.
+    rough_weight (float): The weight to assign roughness outliers.
+    unc_weight (float): The weight to assign uncertainty outliers (used only if `unc_mask` is set.
+    aggressive (bool): If True, remove data with outliers masked above `percentile` rather than outliers of the outliers.
     """
 
     def mask_outliers(src_data=None, mask_data=None, percentile=75, upper_only=False, src_weight=1):
         if src_data is not None and mask_data is not None:
             upper_limit, lower_limit = get_outliers(src_data, percentile)
-            std = np.nanstd(src_data)
-            if std <= 0:
-                std = 1e-19
+            # std = np.nanstd(src_data)
+            # if std <= 0:
+            #     std = 1e-19
 
             mask_data[(src_data > upper_limit)] = np.sqrt(
                 np.power(mask_data[(src_data > upper_limit)], 2) +
