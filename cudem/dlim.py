@@ -1363,8 +1363,8 @@ class ElevationDataset:
                 ## ==============================================
                 arrs['weight'][np.isnan(arrs['z'])] = 0
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                #arrs['x'][np.isnan(arrs['x'])] = 0
-                #arrs['y'][np.isnan(arrs['y'])] = 0
+                arrs['x'][np.isnan(arrs['x'])] = 0
+                arrs['y'][np.isnan(arrs['y'])] = 0
                 arrs['z'][np.isnan(arrs['z'])] = 0
                 for arr_key in arrs:
                     if arrs[arr_key] is not None:
@@ -1384,8 +1384,8 @@ class ElevationDataset:
                     ## higher weight supercedes lower weight (first come first served atm)
                     ## ==============================================
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
-                    #stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
-                    #stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
                     #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
@@ -1405,17 +1405,16 @@ class ElevationDataset:
                     ## accumulate incoming z*weight and uu*weight
                     ## ==============================================
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
-                    #stacked_data['x'] += (arrs['x'] * arrs['weight'])
-                    #stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    stacked_data['x'] += (arrs['x'] * arrs['weight'])
+                    stacked_data['y'] += (arrs['y'] * arrs['weight'])
                     stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
 
                     ## ==============================================
                     ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
                     ## ==============================================
-                    #utils.echo_msg(stacked_data['weights'])
                     stacked_data['weights'] += arrs['weight']
-                    #utils.echo_msg(stacked_data['weights'])
                     stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    
                     ## ==============================================
                     ## accumulate variance * weight
                     ## ==============================================
@@ -1499,11 +1498,10 @@ class ElevationDataset:
 
                     ## ==============================================
                     ## average the accumulated arrays for finalization
-                    ## z and u are weighted sums, so divide by weights
+                    ## x, y, z and u are weighted sums, so divide by weights
                     ## ==============================================
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
                     #utils.echo_msg(stacked_data['count'])
-                    stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
@@ -1512,6 +1510,7 @@ class ElevationDataset:
                     ## apply the source uncertainty with the sub-cell variance uncertainty
                     ## caclulate the standard error (sqrt( uncertainty / count))
                     ## ==============================================
+                    stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
                     #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
@@ -1550,8 +1549,8 @@ class ElevationDataset:
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
         sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
         sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
-        #sds_x_band = sds.GetRasterBand(5) # the uncertainty band from stacks
-        #sds_y_band = sds.GetRasterBand(6) # the uncertainty band from stacks
+        #sds_x_band = sds.GetRasterBand(5) # the x band from stacks
+        #sds_y_band = sds.GetRasterBand(6) # the y band from stacks
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
@@ -1701,7 +1700,7 @@ class ElevationDataset:
         will be caluculated by `np.sqrt(u**2 + self.uncertainty**2)`
         """
         
-        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None}
+        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None, 'x': None, 'y': None }
         count = 0
         for points in self.yield_points():
             xcount, ycount, dst_gt = self.region.geo_transform(
@@ -1714,6 +1713,12 @@ class ElevationDataset:
             ## ==============================================
             pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
             pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
+            # points_x = dst_gt[0] + (pixel_x+0.5) * dst_gt[1] + (pixel_y+0.5) * dst_gt[2]
+            # points_y = dst_gt[3] + (pixel_x+0.5) * dst_gt[4] + (pixel_y+0.5) * dst_gt[5]
+
+            points_x = np.array(points['x'])
+            points_y = np.array(points['y'])
+            
             pixel_z = np.array(points['z'])
             try:
                 pixel_w = np.array(points['w'])
@@ -1734,7 +1739,9 @@ class ElevationDataset:
             pixel_z = np.delete(pixel_z, out_idx)
             pixel_w = np.delete(pixel_w, out_idx)
             pixel_u = np.delete(pixel_u, out_idx)
-                
+            points_x = np.delete(points_x, out_idx)
+            points_y = np.delete(points_y, out_idx)
+            
             points = None
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
@@ -1768,29 +1775,45 @@ class ElevationDataset:
             zz = pixel_z[unq_idx]
             ww = pixel_w[unq_idx]
             uu = pixel_u[unq_idx]
+            xx = points_x[unq_idx]
+            yy = points_y[unq_idx]
             #u = np.zeros(zz.shape)
             if np.any([len(dup) for dup in dup_idx]):
                 dup_means = [np.mean(pixel_z[dup]) for dup in dup_idx]
+                dup_means_x = [np.mean(points_x[dup]) for dup in dup_idx]
+                dup_means_y = [np.mean(points_y[dup]) for dup in dup_idx]
                 dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
                 zz[cnt_msk] = dup_means
                 uu[cnt_msk] = dup_stds
-
+                
             ## ==============================================
             ## make the output arrays to yield
             ## ==============================================
+            out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_x[unq[:,0], unq[:,1]] = xx
+            out_x[out_x == 0] = np.nan
+            out_arrays['x'] = out_x
+
+            out_y = np.zeros((this_srcwin[3], this_srcwin[2]))
+            out_y[unq[:,0], unq[:,1]] = yy
+            out_y[out_y == 0] = np.nan
+            out_arrays['y'] = out_y
+            
             out_z = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_z[unq[:,0], unq[:,1]] = zz
             out_z[out_z == 0] = np.nan
             out_arrays['z'] = out_z
+            
             out_arrays['count'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_arrays['count'][unq[:,0], unq[:,1]] = unq_cnt
+            
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][:] = self.weight if self.weight is not None else 1
             out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
+            
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
-            #utils.echo_msg(uu)
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] = np.sqrt(uu**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
             
             yield(out_arrays, this_srcwin, dst_gt)

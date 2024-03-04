@@ -132,7 +132,7 @@ if __name__ == "__main__":
     gdalfun.gdal_filter_outliers2(
         elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
         elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
-        unc_weight=uncertainty_weight, tpi_weight=tpi_weight, replace=replace
+        unc_weight=uncertainty_weight, tpi_weight=tpi_weight
     )
 
 ### End
