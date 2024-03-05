@@ -50,19 +50,24 @@ if __name__ == "__main__":
 
     elev = None
     perc = 95
+    want_outliers = False
     i = 1
+    
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg == '-p' or arg == '-perc' or arg == '--perc':
             perc = float(sys.argv[i+1])
             i += 1
+        elif arg == '-outliers' or arg == '--outliers' or arg == '-o':
+            want_outliers = True            
         elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
             sys.stderr.write('{}\n'.format(_version))
             sys.exit(1)
-        elif elev is None: elev = arg
+        elif elev is None:
+            elev = arg
         else:
             print(arg)
             sys.stderr.write(_usage)
@@ -73,7 +78,16 @@ if __name__ == "__main__":
         sys.stderr.write(_usage)
         utils.echo_error_msg('you must enter an input file')
         sys.exit(1)
-  
-    print(gdalfun.gdal_percentile(elev, perc=perc))
+
+    if want_outliers:
+        import numpy as np
+        with gdalfun.gdal_datasource(elev) as src_ds:
+            ds_config = gdalfun.gdal_infos(src_ds)
+            ds_band = src_ds.GetRasterBand(1)
+            ds_array = ds_band.ReadAsArray()
+            ds_array[ds_array == ds_config['ndv']] = np.nan
+            print(gdalfun.get_outliers(ds_array, percentile=perc))
+    else:
+        print(gdalfun.gdal_percentile(elev, perc=perc))
 
 ### End
