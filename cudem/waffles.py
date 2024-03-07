@@ -3111,7 +3111,7 @@ class WafflesCUDEM(Waffle):
 
     def __init__(self, pre_mode = 'gmt-surface', pre_count = 1, pre_upper_limit = -0.1, pre_smoothing = None,
                  weight_levels = None, inc_levels = None, landmask = False, filter_outliers = None,
-                 want_supercede = False, flatten = 95, exclude_lakes = False, mode = None, min_weight = None,
+                 want_supercede = False, flatten = None, exclude_lakes = False, mode = None, min_weight = None,
                  pre_verbose = False, **kwargs):
 
         self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
@@ -3287,8 +3287,8 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         if self.filter_outliers is not None:
             gdalfun.gdal_filter_outliers2(
-                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
-                unc_mask = 4
+                self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
+                unc_mask = 4, chunk_size = 25, chunk_step = 25
             )
             # gdalfun.gdal_filter_outliers(
             #     self.stack, None, replace=False
@@ -3349,6 +3349,7 @@ class WafflesCUDEM(Waffle):
             _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
             if self.verbose:
                 utils.echo_msg('pre region: {}'.format(pre_region))
+                utils.echo_msg('pre data: {}'.format(pre_data))
 
             waffles_mod = '{}:{}'.format(self.pre_mode, factory.dict2args(self.pre_mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
             utils.echo_msg('cudem gridding surface {} @ {} {}/{} using {}...'.format(pre, pre_region, pre_xinc, pre_yinc, waffles_mod))

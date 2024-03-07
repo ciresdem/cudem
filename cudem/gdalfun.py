@@ -1466,17 +1466,17 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
         if src_data is not None and mask_data is not None:
             upper_limit, lower_limit = get_outliers(src_data, percentile)
             if upper_limit != 0:
-                mask_data[(src_data > upper_limit)] = np.sqrt(
+                mask_data[(src_data > upper_limit)] = np.round(np.sqrt(
                     np.power(mask_data[(src_data > upper_limit)], 2) +
                     np.power(src_weight * (src_data[src_data > upper_limit] / upper_limit), 2)
-                )
+                ), 4)
                 
             if not upper_only:
                 if lower_limit != 0:
-                    mask_data[(src_data < lower_limit)] = np.sqrt(
+                    mask_data[(src_data < lower_limit)] = np.round(np.sqrt(
                         np.power(mask_data[(src_data < lower_limit)], 2) +
                         np.power(src_weight * (src_data[src_data < lower_limit] / lower_limit), 2)
-                    )
+                    ), 4)
 
     ## setup the parameters for yield_srcwin
     if chunk_size is None:
@@ -1527,7 +1527,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
             mask_mask_band.SetNoDataValue(0)
             mask_mask_band.WriteArray(mask_mask)
             mask_mask = None
-            mask_mask_band.FlushCache()
+            #mask_mask_band.FlushCache()
 
             for srcwin in utils.yield_srcwin(
                     (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=n_chunk,
@@ -1637,7 +1637,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
 
                 ## write the mask data to file
                 mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
-                mask_mask_ds.FlushCache()
+                #mask_mask_ds.FlushCache()
 
             mask_mask_data = mask_mask_band.ReadAsArray()
             mask_mask_data[mask_mask_data == 0] = np.nan
@@ -1654,7 +1654,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
             ds_band.WriteArray(src_data)
             
             dst_ds = mask_mask_ds = unc_ds = None
-            utils.remove_glob(tmp_mask)
+            #utils.remove_glob(tmp_mask)
             return(src_gdal, 0)
         else:
             return(None, -1)
