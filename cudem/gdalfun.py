@@ -1439,7 +1439,8 @@ def get_outliers(in_array, percentile=75):
 def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk_step = None,
                           percentile = 75, weight_mask = None, unc_mask = None, return_mask = False,
                           elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
-                          rough_weight = 1, tri_weight = 1, aggressive = False, cache_dir='./'):
+                          rough_weight = 1, tri_weight = 1, aggressive = False, interpolation='linear',
+                          cache_dir='./'):
     """Scan a src_gdal file for outliers and remove them.
 
     This will over-write/update the `src_gdal` file.
@@ -1457,36 +1458,30 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
     elevation_weight (float): The weight to assign elevation outliers.
     curvature_weight (float): The weight to assign curvature outliers.
     tpi_weight (float): The weight to assign TPI outliers.
+    tri_weight (float): The weight to assign TRI outliers.
     rough_weight (float): The weight to assign roughness outliers.
     unc_weight (float): The weight to assign uncertainty outliers (used only if `unc_mask` is set.
     aggressive (bool): If True, remove data with outliers masked above `percentile` rather than outliers of the outliers.
+    interpolation (str): The interpolation method to use to fill nodata values (linear, cubic, nearest)
     """
 
-    def mask_outliers(src_data=None, mask_data=None, percentile=75, upper_only=False, src_weight=1):
+    def mask_outliers(src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False, src_weight=1):
         if src_data is not None and mask_data is not None:
             upper_limit, lower_limit = get_outliers(src_data, percentile)
             if upper_limit != 0:
-                mask_data[(src_data > upper_limit)] = np.round(np.sqrt(
-                    np.power(mask_data[(src_data > upper_limit)], 2) +
-                    np.power(src_weight * (src_data[src_data > upper_limit] / upper_limit), 2)
-                ), 4)
+                mask_data[(src_data > upper_limit)] = np.sqrt(
+                    (np.power(mask_data[(src_data > upper_limit)], 2) +
+                     np.power(src_weight * (src_data[src_data > upper_limit] / upper_limit), 2))
+                )
+                count_data[(src_data > upper_limit)] += 1
                 
             if not upper_only:
                 if lower_limit != 0:
-                    mask_data[(src_data < lower_limit)] = np.round(np.sqrt(
-                        np.power(mask_data[(src_data < lower_limit)], 2) +
-                        np.power(src_weight * (src_data[src_data < lower_limit] / lower_limit), 2)
-                    ), 4)
-
-    ## setup the parameters for yield_srcwin
-    if chunk_size is None:
-        n_chunk = int(ds_config['nx'] * .1)
-        n_chunk = 10 if n_chunk < 10 else n_chunk
-    else:
-        n_chunk = chunk_size
-
-    chunk_step = utils.int_or(chunk_step)
-    n_step = chunk_step if chunk_step is not None else int(n_chunk)
+                    mask_data[(src_data < lower_limit)] = np.sqrt(
+                        (np.power(mask_data[(src_data < lower_limit)], 2) +
+                         np.power(src_weight * (src_data[src_data < lower_limit] / lower_limit), 2))
+                    )
+                    count_data[(src_data < lower_limit)] += 1
 
     ## setup the uncertainty data if wanted
     if unc_mask is not None:
@@ -1520,15 +1515,27 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
             tmp_mask = '{}{}'.format(utils.fn_basename2(src_gdal), '_outliers.tif')
             mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
             driver = gdal.GetDriverByName('GTiff')
-            mask_mask_ds = driver.Create(tmp_mask, ds_config['nx'], ds_config['ny'], 1, gdal.GDT_Float32,
+            mask_mask_ds = driver.Create(tmp_mask, ds_config['nx'], ds_config['ny'], 2, gdal.GDT_Float32,
                                          options=['COMPRESS=DEFLATE', 'PREDICTOR=1', 'TILED=YES', 'BIGTIFF=YES'])
             mask_mask_ds.SetGeoTransform(ds_config['geoT'])
             mask_mask_band = mask_mask_ds.GetRasterBand(1)
+            mask_count_band = mask_mask_ds.GetRasterBand(2)
             mask_mask_band.SetNoDataValue(0)
             mask_mask_band.WriteArray(mask_mask)
+            mask_count_band.WriteArray(mask_mask)
             mask_mask = None
             #mask_mask_band.FlushCache()
 
+            ## setup the parameters for yield_srcwin
+            if chunk_size is None:
+                n_chunk = int(ds_config['nx'] * .25)
+                n_chunk = 10 if n_chunk < 10 else n_chunk
+            else:
+                n_chunk = chunk_size
+
+            chunk_step = utils.int_or(chunk_step)
+            n_step = chunk_step if chunk_step is not None else int(n_chunk*.1)
+            
             for srcwin in utils.yield_srcwin(
                     (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=n_chunk,
                     step=n_step, verbose=True, msg='scanning for outliers ({})'.format(percentile)
@@ -1552,7 +1559,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                         try:
                             tmp_band_data = scipy.interpolate.griddata(
                                 np.transpose(point_indices), point_values,
-                                (xi, yi), method='linear'
+                                (xi, yi), method='cubic'
                             )
                         except:
                             pass
@@ -1571,11 +1578,12 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
 
                 ## read in the mask data for the srcwin
                 mask_mask_data = mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
+                mask_count_data = mask_count_band.ReadAsArray(*srcwin) # read in the mask id data
                 
                 ## apply the elevation outliers
                 band_data[band_data == ds_config['ndv']] = np.nan
                 mask_outliers(
-                    src_data=band_data, mask_data=mask_mask_data, percentile=percentile, src_weight=elevation_weight
+                    src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, src_weight=elevation_weight
                 )
 
                 ## apply curvature outliers
@@ -1587,7 +1595,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                 #curv_data[((np.isnan(band_data)) | (curv_data == ds_config['ndv']) | (curv_data == 0))] = np.nan
                 curv_data[((np.isnan(band_data)) | (curv_data == ds_config['ndv']))] = np.nan
                 mask_outliers(
-                    src_data=curv_data, mask_data=mask_mask_data, percentile=percentile, src_weight=curvature_weight
+                    src_data=curv_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, src_weight=curvature_weight
                 )
                 curv_ds = slp_ds = curv_data = None
                 utils.remove_glob(tmp_curv, tmp_slp)
@@ -1598,7 +1606,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                 rough_data = rough_ds.GetRasterBand(1).ReadAsArray()
                 rough_data[((np.isnan(band_data)) | (rough_data == ds_config['ndv']))] = np.nan
                 mask_outliers(
-                    src_data=rough_data, mask_data=mask_mask_data, percentile=percentile, upper_only=False, src_weight=rough_weight
+                    src_data=rough_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, upper_only=False, src_weight=rough_weight
                 )
                 rough_ds = rough_data = None
                 utils.remove_glob(tmp_rough)
@@ -1609,7 +1617,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                 tri_data = tri_ds.GetRasterBand(1).ReadAsArray()
                 tri_data[((np.isnan(band_data)) | (tri_data == ds_config['ndv']))] = np.nan
                 mask_outliers(
-                    src_data=tri_data, mask_data=mask_mask_data, percentile=percentile, upper_only=False, src_weight=tri_weight
+                    src_data=tri_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, upper_only=False, src_weight=tri_weight
                 )
                 tri_ds = tri_data = None
                 utils.remove_glob(tmp_tri)
@@ -1620,7 +1628,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                 tpi_data = tpi_ds.GetRasterBand(1).ReadAsArray()
                 tpi_data[((np.isnan(band_data)) | (tpi_data == ds_config['ndv']))] = np.nan                
                 mask_outliers(
-                    src_data=tpi_data, mask_data=mask_mask_data, percentile=percentile, src_weight=tpi_weight
+                    src_data=tpi_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, upper_only=False, src_weight=tpi_weight
                 )
                 tpi_ds = tpi_data = None
                 utils.remove_glob(tmp_tpi)
@@ -1632,25 +1640,35 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk
                     unc_data = unc_band.ReadAsArray(*srcwin)
                     unc_data[(np.isnan(band_data) | (unc_data == ds_config['ndv']) | (unc_data == 0))] = np.nan
                     mask_outliers(
-                        src_data=unc_data, mask_data=mask_mask_data, percentile=percentile, upper_only=True, src_weight=unc_weight
+                        src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=percentile, upper_only=True, src_weight=unc_weight
                     )
 
                 ## write the mask data to file
                 mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
+                mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
                 #mask_mask_ds.FlushCache()
 
             mask_mask_data = mask_mask_band.ReadAsArray()
+            mask_count_data = mask_count_band.ReadAsArray()
             mask_mask_data[mask_mask_data == 0] = np.nan
+            mask_count_data[mask_count_data == 0] = np.nan
 
+            #mask_mask_data *= mask_count_data
+            
             if aggressive:
                 mask_upper_limit = np.nanpercentile(mask_mask_data, percentile)
+                count_upper_limit = np.nanpercentile(mask_count_data, percentile)
                 utils.echo_msg('{}'.format(mask_upper_limit))
             else:
                 mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
-                utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))                
-                
+                count_upper_limit, count_lower_limit = get_outliers(mask_count_data, percentile)
+                utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
+
+            utils.echo_msg('{}'.format(count_upper_limit))
+            
             src_data = ds_band.ReadAsArray()
-            src_data[(mask_mask_data > mask_upper_limit)] = ds_config['ndv']
+            #src_data[(mask_mask_data > mask_upper_limit)] = ds_config['ndv']
+            src_data[(mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit)] = ds_config['ndv']
             ds_band.WriteArray(src_data)
             
             dst_ds = mask_mask_ds = unc_ds = None
