@@ -2844,9 +2844,9 @@ class MBSParser(ElevationDataset):
                     #u_depth = ((2+(0.02*(z*-1)))*0.51)
                     u_depth = 0
                     #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                    #u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                     #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                    u_cd = 0
+                    #u_cd = 0
                     u = math.sqrt(u_depth**2 + u_cd**2)
                     xs.append(x)
                     ys.append(y)

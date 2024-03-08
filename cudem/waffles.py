@@ -3282,14 +3282,26 @@ class WafflesCUDEM(Waffle):
         pre_region = self.p_region.copy()
         pre_region.wmin = None
 
+        stack_elev = utils.make_temp_fn('{}_elev.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        stack_weight = utils.make_temp_fn('{}_weight.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        stack_unc = utils.make_temp_fn('{}_unc.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        gdalfun.gdal_extract_band(self.stack, stack_elev, band=1) # band 4 is the elevation band in stacks
+        gdalfun.gdal_extract_band(self.stack, stack_weight, band=3) # band 3 is the weight band in stacks
+        gdalfun.gdal_extract_band(self.stack, stack_unc, band=4) # band 4 is the uncertainty band in stacks            
+        
         ## ==============================================
         ## Remove outliers from the stacked data
         ## ==============================================
         if self.filter_outliers is not None:
+            
             gdalfun.gdal_filter_outliers2(
-                self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
-                unc_mask = 4, chunk_size = 25, chunk_step = 25
+                stack_elev, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
+                unc_mask = stack_unc, chunk_size = 85, chunk_step = 20
             )
+            # gdalfun.gdal_filter_outliers2(
+            #     self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
+            #     unc_mask = 4, chunk_size = 85, chunk_step = 20
+            # )
             # gdalfun.gdal_filter_outliers(
             #     self.stack, None, replace=False
             # )
@@ -3298,7 +3310,8 @@ class WafflesCUDEM(Waffle):
         ## ==============================================
         ## initial data to pass through surface (stack)
         ## ==============================================
-        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
+        #stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
+        stack_data_entry = '{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=average,1'.format(stack_elev, stack_weight, stack_unc)
         pre_data = [stack_data_entry]
         
         ## ==============================================
@@ -3311,7 +3324,7 @@ class WafflesCUDEM(Waffle):
                     pre_clip = '{}:invert=True'.format(self.landmask) # todo: update to make 'invert' an option
 
             if pre_clip is None:
-                coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
+                coast_data = ['{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=cubicspline,1'.format(stack_elev, stack_weight, stack_unc)]
                 coastline = self.generate_coastline(pre_data=coast_data)
                 pre_clip = coastline
 

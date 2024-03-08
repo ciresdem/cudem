@@ -1668,7 +1668,11 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = 100, chunk_
             src_data = ds_band.ReadAsArray()
             #src_data[(mask_mask_data > mask_upper_limit)] = ds_config['ndv']
             src_data[(mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit)] = ds_config['ndv']
-            ds_band.WriteArray(src_data)
+
+            if dst_gdal is not None:
+                status = gdal_write(src_data, dst_gdal, ds_config)
+            else:
+                ds_band.WriteArray(src_data)
             
             dst_ds = mask_mask_ds = unc_ds = None
             #utils.remove_glob(tmp_mask)
