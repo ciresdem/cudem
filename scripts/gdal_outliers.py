@@ -28,13 +28,14 @@ import sys
 from cudem import gdalfun
 from cudem import utils
 
-_version = '0.2.0'
+_version = '0.2.1'
 _usage = '''gdal_outliers.py ({}): filter z outliers in a DEM
 
-usage: gdal_outliers.py [ file ]
+usage: gdal_outliers.py [ file [dst_dem opts] ]
 
  Options:
   file\t\t\tThe input DEM file-name
+  dst_dem\t\tThe output DEM file-name
 
   --size\t\tThe size in pixels of the moving filter window
   --step\t\tThe step size of the moving filter window
@@ -45,7 +46,9 @@ usage: gdal_outliers.py [ file ]
   --curvature_weight\tWeight of curvature outliers
   --roughness_weight\tWeight of roughness outliers
   --tpi_weight\t\tWeight of the tpi outliers
+  --tri_weight\t\tWeight of the tri outliers
   --uncertainty_weight\tWeight of uncertainty outliers
+  --interpolation\tInterpolation method to fill nodata cells (cubic, linear, nearest)
 
   --aggressive\t\tBe more aggressive in data removal
 
@@ -61,6 +64,7 @@ CIRES DEM home page: <http://ciresgroups.colorado.edu/coastalDEM>
 if __name__ == "__main__":
 
     elev = None
+    dst_gdal = None
     chunk_step = None
     chunk_size = None
     percentile = 75
@@ -71,8 +75,10 @@ if __name__ == "__main__":
     elevation_weight = 1
     curvature_weight = 1
     roughness_weight = 1
+    tri_weight = 1
     tpi_weight = 1
     uncertainty_weight = 1
+    interpolation = 'cubic'
     aggressive = False
     
     argv = sys.argv
@@ -101,11 +107,17 @@ if __name__ == "__main__":
         elif arg == '-roughness_weight' or arg == '--roughness_weight' or arg == '-rw':
             roughness_weight = utils.float_or(argv[i + 1], 1)
             i = i + 1
+        elif arg == '-tri_weight' or arg == '--tri_weight' or arg == '-trw':
+            tri_weight = utils.float_or(argv[i + 1], 1)
+            i = i + 1
         elif arg == '-tpi_weight' or arg == '--tpi_weight' or arg == '-tw':
             tpi_weight = utils.float_or(argv[i + 1], 1)
             i = i + 1
         elif arg == '-uncertainty' or arg == '--uncertainty' or arg == '-u':
             unc_mask = argv[i + 1]
+            i = i + 1
+        elif arg == '-interpolation' or arg == '--interpolation' or arg == '-i':
+            interpolation = argv[i + 1]
             i = i + 1
         elif arg == '-aggressive' or arg == '--aggressive' or arg == '-a':
             aggressive = True
@@ -115,7 +127,10 @@ if __name__ == "__main__":
         elif arg == '-version' or arg == '--version':
             sys.stderr.write('{}\n'.format(_version))
             sys.exit(1)
-        elif elev is None: elev = arg
+        elif elev is None:
+            elev = arg
+        elif dst_gdal is None:
+            dst_gdal = arg
         else:
             utils.echo_warning_msg(arg)
             sys.stderr.write(_usage)
@@ -126,13 +141,15 @@ if __name__ == "__main__":
         sys.stderr.write(_usage)
         utils.echo_error_msg('you must enter an input file')
         sys.exit(1)
-  
-    dst_gdal = elev.split('.')[0] + '_fltr.tif'
+
+    if dst_gdal is None:
+        dst_gdal = elev.split('.')[0] + '_fltr.tif'
+        
     #utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
     gdalfun.gdal_filter_outliers2(
         elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
         elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
-        unc_weight=uncertainty_weight, tpi_weight=tpi_weight
+        unc_weight=uncertainty_weight, tpi_weight=tpi_weight, tri_weight=tri_weight, interpolation=interpolation
     )
 
 ### End

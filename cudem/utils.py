@@ -881,7 +881,7 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     i_chunk = 0
     x_i_chunk = 0
     with tqdm(
-            total=(math.floor((n_size[0] + n_chunk) / step) * math.floor((n_size[1] +  n_chunk) / step)),
+            total=(math.ceil((n_size[0] + (n_chunk-step)) / step) * math.ceil((n_size[1] +  (n_chunk-step)) / step)),
             desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
             leave=verbose
     ) as pbar:
