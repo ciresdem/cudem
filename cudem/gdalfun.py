@@ -609,14 +609,21 @@ class gdal_datasource:
     ## todo: create new datasource if src_gdal is path, but doesn't exists...
     def __enter__(self):
         if isinstance(self.src_gdal, gdal.Dataset):
-            self.src_ds = self.src_gdal
+            try:
+                self.src_ds = self.src_gdal
+            except:
+                self.src_ds = None
 
         elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal)):
-            self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
+            try:
+                self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
+            except:
+                self.src_ds = None
 
         ## remove overviews in update mode
-        if self.update:
-            self.src_ds.BuildOverviews('AVERAGE', [])
+        if self.src_ds is not None:
+            if self.update:
+                self.src_ds.BuildOverviews('AVERAGE', [])
             
         return(self.src_ds)
 
@@ -1495,7 +1502,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = 100, chunk_
         else:
             unc_mask = None
 
-    with gdal_datasource(src_gdal, update=True) as src_ds:
+    with gdal_datasource(src_gdal, update=True if dst_gdal is None else False) as src_ds:
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             ds_band = src_ds.GetRasterBand(band)

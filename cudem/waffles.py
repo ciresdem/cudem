@@ -3168,7 +3168,7 @@ class WafflesCUDEM(Waffle):
         self.landmask = landmask
         self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
         
-        self.filter_outliers = utils.int_or(filter_outliers)
+        self.filter_outliers = filter_outliers
         self.want_supercede = want_supercede
         self.pre_smoothing = utils.float_or(pre_smoothing)
         if self.pre_smoothing is not None:
@@ -3293,10 +3293,13 @@ class WafflesCUDEM(Waffle):
         ## Remove outliers from the stacked data
         ## ==============================================
         if self.filter_outliers is not None:
+
+            outlier_opts = [utils.float_or(x) for x in self.filter_outliers.split('/')]
+            
             
             gdalfun.gdal_filter_outliers2(
-                stack_elev, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
-                unc_mask = stack_unc, chunk_size = 85, chunk_step = 20
+                stack_elev, None, percentile=outlier_opts[0], cache_dir=self.cache_dir,
+                unc_mask = stack_unc, chunk_size = outlier_opts[1], chunk_step = outlier_opts[2]
             )
             # gdalfun.gdal_filter_outliers2(
             #     self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,

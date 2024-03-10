@@ -2642,7 +2642,8 @@ class BAGFile(ElevationDataset):
                                       metadata=copy.deepcopy(self.metadata))
                     sub_ds.infos = {}
                     sub_ds.generate_inf()
-                    yield(sub_ds)
+                    for gdal_ds in sub_ds.parse():
+                        yield(gdal_ds)
 
             else:
                 oo.append("MODE=RESAMPLED_GRID")
@@ -2653,14 +2654,16 @@ class BAGFile(ElevationDataset):
                 self.data_entries.append(sub_ds)
                 #utils.echo_msg(gdalfun.gdal_infos(self.fn))
                 sub_ds.initialize()
-                yield(sub_ds)
+                for gdal_ds in sub_ds.parse():
+                    yield(gdal_ds)
         else:
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
                               uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
-            yield(sub_ds)
+            for gdal_ds in sub_ds.parse():
+                yield(gdal_ds)
                                             
 ## ==============================================
 ## Multibeam Data.
