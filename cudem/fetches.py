@@ -386,7 +386,7 @@ class Fetch:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                     elif req_s == -1 or req_s == 0 or req_s == 49:
-                        overwrite = True
+                        raise UnboundLocalError('ivalid req_s {}, '.format(req_s))
                         
                 except OSError:
                     pass
@@ -501,7 +501,7 @@ class Fetch:
         #     utils.echo_error_msg('Connection Timed Out!')
             
         except UnboundLocalError as e:
-            utils.echo_error_msg(e)
+            #utils.echo_error_msg(e)
             pass
             
         except Exception as e:

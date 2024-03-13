@@ -3747,7 +3747,6 @@ class Fetcher(ElevationDataset):
         ) as pbar:
             for result in self.fetch_module.results:
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
-                utils.echo_msg(status)
                 if status == 0:
                     for this_ds in self.set_ds(result):
                         if this_ds is not None:
@@ -4746,7 +4745,7 @@ class EMODNetFetcher(Fetcher):
     Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
 
     def __init__(self, **kwargs):
-        super().__init__(check_size=False, **kwargs)
+        super().__init__(**kwargs)
 
     def set_ds(self, result):
         if result[2] == 'csv':
