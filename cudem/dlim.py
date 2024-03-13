@@ -3710,7 +3710,7 @@ class Fetcher(ElevationDataset):
     See `fetches` for more information.
     """
 
-    def __init__(self, keep_fetched_data = True, outdir = None, **kwargs):
+    def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, **kwargs):
         super().__init__(remote=True, **kwargs)        
         self.outdir = outdir if outdir is not None else self.cache_dir
         self.fetch_module = fetches.FetchesFactory(
@@ -3720,7 +3720,7 @@ class Fetcher(ElevationDataset):
             pass
 
         self.metadata['name'] = self.fn
-        self.check_size=True
+        self.check_size = check_size
         self.keep_fetched_data = keep_fetched_data
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
@@ -3746,7 +3746,9 @@ class Fetcher(ElevationDataset):
             leave=self.verbose
         ) as pbar:
             for result in self.fetch_module.results:
-                if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
+                status = self.fetch_module.fetch(result, check_size=self.check_size)
+                utils.echo_msg(status)
+                if status == 0:
                     for this_ds in self.set_ds(result):
                         if this_ds is not None:
                             f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
@@ -4744,19 +4746,21 @@ class EMODNetFetcher(Fetcher):
     Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(check_size=False, **kwargs)
 
     def set_ds(self, result):
         if result[2] == 'csv':
             yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,',
                                  src_srs='epsg:4326', dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
-                                 uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask, parent=self, invert_region = self.invert_region,
+                                 uncertainty=self.uncertainty, src_region=self.region, mask=self.mask, parent=self, invert_region = self.invert_region,
+                                 metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
+        elif result[2] == 'nc':
+            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=200,
+                                 src_srs='epsg:4326', dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
+                                 uncertainty=self.uncertainty, src_region=self.region, mask=self.mask, parent=self, invert_region = self.invert_region,
                                  metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
             
-            yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                 parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                 cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
@@ -5056,7 +5060,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
         -213: {'name': 'waterservies', 'fmts': ['waterservices'], 'call': WaterServicesFetcher},
         -214: {'name': "icesat", 'fmts': ['icesat'], 'call': IceSatFetcher},
-        -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': Fetcher},
+        -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': EMODNetFetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},
         -303: {'name': 'arcticdem', 'fmts': ['arcticdem'], 'call': Fetcher},

@@ -361,7 +361,7 @@ class Fetch:
             try:
                 os.makedirs(os.path.dirname(dst_fn))
             except: pass
-            
+
         try:
             try:
                 if not overwrite and os.path.exists(dst_fn):
@@ -386,7 +386,8 @@ class Fetch:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                     elif req_s == -1 or req_s == 0 or req_s == 49:
-                        raise UnboundLocalError('{} exists, '.format(dst_fn))
+                        overwrite = True
+                        
                 except OSError:
                     pass
 
@@ -500,7 +501,7 @@ class Fetch:
         #     utils.echo_error_msg('Connection Timed Out!')
             
         except UnboundLocalError as e:
-            #utils.echo_error_msg(e)
+            utils.echo_error_msg(e)
             pass
             
         except Exception as e:
@@ -660,10 +661,10 @@ class FetchModule:
                 callback=self.callback,
                 verbose=self.verbose,
                 headers=self.headers,
-            ).fetch_file(os.path.join(self._outdir, entry[1]), timeout=5, read_timeout=5, check_size=check_size)
+            ).fetch_file(os.path.join(self._outdir, entry[1]), check_size=check_size)
         except:
             status = -1
-
+            
         return(status)
 
     def fetch_results(self):
@@ -3087,6 +3088,8 @@ fileTypes	Description
         self.erddap_format = erddap_format
         self._emodnet_grid_url = 'https://ows.emodnet-bathymetry.eu/wcs?'
         self._emodnet_grid_url_erddap = 'https://erddap.emodnet.eu/erddap/griddap/dtm_2020_v2_e0bf_e7e4_5b8f.{}?'.format(erddap_format)
+
+        self.src_srs = 'epsg:4326'
         
     def run(self):
         """Run the EMODNET fetching module"""
