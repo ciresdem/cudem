@@ -1534,12 +1534,7 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = 100, chunk_
             #mask_mask_band.FlushCache()
 
             ## setup the parameters for yield_srcwin
-            # if chunk_size is None:
-            #     n_chunk = int(ds_config['nx'] * .25)
-            #     n_chunk = 100 if n_chunk < 100 else n_chunk
-            # else:
-            #     n_chunk = chunk_size
-            n_chunk = utils.int_or(chunk_size, 100)
+            n_chunk = utils.int_or(chunk_size, int(ds_config['nx']*.25))
             n_step = utils.int_or(chunk_step, int(n_chunk*.25))
             
             for srcwin in utils.yield_srcwin(
@@ -1667,7 +1662,8 @@ def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = 100, chunk_
                 utils.echo_msg('{}'.format(mask_upper_limit))
             else:
                 mask_upper_limit, mask_lower_limit = get_outliers(mask_mask_data, percentile)
-                count_upper_limit, count_lower_limit = get_outliers(mask_count_data, percentile)
+                #count_upper_limit, count_lower_limit = get_outliers(mask_count_data, percentile)
+                count_upper_limit = np.nanpercentile(mask_count_data, percentile)
                 utils.echo_msg('{} {}'.format(mask_upper_limit, mask_lower_limit))
 
             utils.echo_msg('{}'.format(count_upper_limit))

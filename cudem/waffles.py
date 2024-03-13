@@ -3295,11 +3295,13 @@ class WafflesCUDEM(Waffle):
         if self.filter_outliers is not None:
 
             outlier_opts = [utils.float_or(x) for x in self.filter_outliers.split('/')]
-            
+            out_perc = outlier_opts[0]
+            out_size = None if len(outlier_opts) < 2 else outlier_opts[1]
+            out_step = None if len(outlier_opts) < 3 else outlier_opts[2]
             
             gdalfun.gdal_filter_outliers2(
-                stack_elev, None, percentile=outlier_opts[0], cache_dir=self.cache_dir,
-                unc_mask = stack_unc, chunk_size = outlier_opts[1], chunk_step = outlier_opts[2]
+                stack_elev, None, percentile=out_perc, cache_dir=self.cache_dir,
+                unc_mask = stack_unc, chunk_size = out_size, chunk_step = out_step, interpolation='nearest'
             )
             # gdalfun.gdal_filter_outliers2(
             #     self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
