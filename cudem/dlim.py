@@ -4734,6 +4734,30 @@ class HydroNOSFetcher(Fetcher):
                                          parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                          cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+class EMODNetFetcher(Fetcher):
+    """EMODNet Data Fetcher
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        if result[2] == 'csv':
+            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,',
+                                 src_srs='epsg:4326', dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
+                                 uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask, parent=self, invert_region = self.invert_region,
+                                 metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+            
+            yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
+                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                 parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
+                                 cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
     """
