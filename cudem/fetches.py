@@ -3082,7 +3082,7 @@ fileTypes	Description
 
 < emodnet >"""
 
-    def __init__(self, want_erddap=True, erddap_format='csv', **kwargs):
+    def __init__(self, want_erddap=True, erddap_format='nc', **kwargs):
         super().__init__(name='emodnet', **kwargs)
         self.want_erddap = want_erddap
         self.erddap_format = erddap_format
