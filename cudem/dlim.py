@@ -158,7 +158,7 @@ def write_datalist(data_list, outname=None):
 
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
               sample_alg='bilinear', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
-              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4):
+              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, fltrs=None, stack_node=True):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
@@ -167,7 +167,8 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
                                y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                               dump_precision=dump_precision)._acquire_module() for dl in data_list]
+                               dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node
+                               )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
             this_datalist = Scratch(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
@@ -175,7 +176,8 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                     src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
                                     sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                     cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                                    dump_precision=dump_precision)
+                                    dump_precision=dump_precision, fltrs=fltrs,
+                                    stack_node=stack_node)
         else:
             this_datalist = xdls[0]
 
@@ -338,7 +340,7 @@ class ElevationDataset:
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
-                 cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
+                 fltrs=None, stack_node=True, cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
                              'vdatum':None, 'url':None}, **kwargs):
@@ -353,6 +355,7 @@ class ElevationDataset:
         self.dst_geoid = dst_geoid # dataset target geoid
         self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
         self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
+        self.fltrs = fltrs # pass the stack, if generated, through gdal_outliers
         self.want_mask = want_mask # mask the data
         self.want_sm = want_sm # generate spatial metadata vector
         self.sample_alg = sample_alg # the gdal resample algorithm
@@ -364,7 +367,8 @@ class ElevationDataset:
         self.verbose = verbose # be verbose
         self.remote = remote # dataset is remote
         self.dump_precision = dump_precision # the precision of the dumped xyz data
-
+        self.stack_node = stack_node
+        
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal']
         if self.mask is not None:
             if isinstance(self.mask, str):
@@ -565,7 +569,7 @@ class ElevationDataset:
                 self.y_inc = utils.str2inc(self.y_inc)
 
             out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
-            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff', want_mask=self.want_mask)
+            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')
             
     def mask_and_yield_array(self):
         """mask the incoming array from `self.yield_array` and yield the results.
@@ -1207,8 +1211,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    ## add weighted mean of x/y values to stack
-    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False, mask_only = False):
+    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
@@ -1218,7 +1221,6 @@ class ElevationDataset:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
-        want_mask (bool): generate a data mask
         mask_only (bool): only generate a mask, don't stack...
 
         --------
@@ -1538,19 +1540,52 @@ class ElevationDataset:
             gdalfun.ogr_polygonize_multibands(msk_ds)
 
         m_ds = msk_ds = dst_ds = None
+        fltrs = utils.parse_filter(self.fltrs)
+
+        ## filter outliers from the stack
+        if stack_fltrs is not None and len(fltrs) > 0:
+            for f in fltrs:
+                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
+                if gdalfun.waffles_filter(
+                        out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
+                ) == 0:
+                    if int(f[0]) != 3:
+                        fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)
+                        with gdalfun.gdal_datasource(out_file, update=True) as src_ds:
+                            z_band = src_ds.GetRasterBand(1)
+                            z_band.WriteArray(fltr_arr)                            
+
+            # out_perc = None
+            # out_size = None
+            # out_step = None
+            
+            # if utils.float_or(self.fltrs) is not None:
+            #     out_perc = utils.float_or(self.fltrs)
+            # elif utils.str_or(self.fltrs) is not None:
+            #     outlier_opts = [utils.float_or(x) for x in self.fltrs.split('/')]
+            #     out_perc = outlier_opts[0]
+            #     out_size = None if len(outlier_opts) < 2 else outlier_opts[1]
+            #     out_step = None if len(outlier_opts) < 3 else outlier_opts[2]
+            
+            # gdalfun.gdal_filter_outliers2(
+            #     out_file, None, percentile=out_perc, cache_dir=self.cache_dir,
+            #     unc_mask = 4, chunk_size = out_size, chunk_step = out_step,
+            #     interpolation='linear'
+            # )
+        
         return(out_file)        
     
-    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', want_mask = False):
+    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):
         """yield the result of `_stacks` as an xyz object"""
 
-        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt, want_mask=want_mask)
+        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
         sds_w_band = sds.GetRasterBand(3) # the weight band from stacks
         sds_u_band = sds.GetRasterBand(4) # the uncertainty band from stacks
-        #sds_x_band = sds.GetRasterBand(5) # the x band from stacks
-        #sds_y_band = sds.GetRasterBand(6) # the y band from stacks
+        sds_x_band = sds.GetRasterBand(6) # the x band from stacks
+        sds_y_band = sds.GetRasterBand(7) # the y band from stacks
         srcwin = (0, 0, sds.RasterXSize, sds.RasterYSize)
         for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
             sz = sds_z_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
@@ -1560,13 +1595,22 @@ class ElevationDataset:
             
             sw = sds_w_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             su = sds_u_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+
+            sx = sds_x_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
+            sy = sds_y_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
-                    geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
-                    out_xyz = xyzfun.XYZPoint(
-                        x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
-                    )
+                    if self.stack_node:
+                        out_xyz = xyzfun.XYZPoint(
+                            x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
+                        )
+                    else:
+                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
+                        )
+                        
                     yield(out_xyz)
         sds = None
     
@@ -2156,9 +2200,9 @@ class GDALFile(ElevationDataset):
     band_no: the band number of the elevation data
     """
     
-    def __init__(self, weight_mask = None, uncertainty_mask = None,  uncertainty_mask_to_meter = 1, open_options = None,
-                 sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
-                 **kwargs):
+    def __init__(self, weight_mask = None, uncertainty_mask = None,  x_band = None, y_band = None, uncertainty_mask_to_meter = 1,
+                 open_options = None, sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
+                 node = 'pixel', **kwargs):
         super().__init__(**kwargs)
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
@@ -2173,6 +2217,9 @@ class GDALFile(ElevationDataset):
         self.tmp_weight_band = None
         self.src_ds = None
         self.remove_flat = remove_flat
+        self.x_band = x_band
+        self.y_band = y_band
+        self.node = node
 
         if self.fn.startswith('http') or self.fn.startswith('/vsicurl/'):
             self.check_path = False
@@ -2284,6 +2331,9 @@ class GDALFile(ElevationDataset):
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
             self.resample_and_warp = False
 
+        if self.node == 'grid':
+            self.resample_and_warp = False
+            
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
             self.warp_region = self.region.copy()
@@ -2532,13 +2582,26 @@ class GDALFile(ElevationDataset):
             ## ==============================================
             ## convert grid array to points
             ## ==============================================
-            geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node='pixel')
+            #if self.node == 'pixel':
+            geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
             geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
-            geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
-            lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
-            lat_array = np.zeros((lon_array.shape))
-            lat_array[:] = geo_y_origin
-            dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
+
+            if self.x_band is None and self.y_band is None:
+                geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
+                lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+                lat_array = np.zeros((lon_array.shape))
+                lat_array[:] = geo_y_origin
+                dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
+            else:
+                lon_band = self.src_ds.GetRasterBand(self.x_band)
+                lon_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
+                lon_array[np.isnan(band_data)] = np.nan
+
+                lat_band = self.src_ds.GetRasterBand(self.x_band)
+                lat_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
+                lat_array[np.isnan(band_data)] = np.nan
+                dataset = np.column_stack((lon_array[0], lat_array[0], band_data[0], weight_data[0], uncertainty_data[0]))
+
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
             dataset = band_data = weight_data = uncertainty_data = lat_array = lon_array = None
@@ -5033,7 +5096,7 @@ class DatasetFactory(factory.CUDEMFactory):
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
-        301: {'name': 'mbs', 'fmts': ['fbt'], 'call': MBSParser},
+        301: {'name': 'mbs', 'fmts': ['fbt', 'mb'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'], 'call': OGRFile},
         ## fetches modules
         -100: {'name': 'https', 'fmts': ['https'], 'call': Fetcher},
@@ -5334,6 +5397,9 @@ class DatasetFactory(factory.CUDEMFactory):
         for key in self._modules.keys():
             if fn.split('.')[-1] in self._modules[key]['fmts']:
                 return(key)
+            ## hack to accept .mb* mb-system files without having to record every one...
+            elif fn.split('.')[-1][:2] in self._modules[key]['fmts']:
+                return(key)
             
     def write_parameter_file(self, param_file: str):
         try:
@@ -5352,7 +5418,7 @@ class DatasetFactory(factory.CUDEMFactory):
 ## ==============================================
 datalists_usage = """{cmd} ({dl_version}): DataLists IMproved; Process and generate datalists
 
-usage: {cmd} [ -acdghijquwEJPR [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
+usage: {cmd} [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -5372,6 +5438,15 @@ Options:
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
+  -T, --filter\t\tFILTER the stack data using one or multiple filters. 
+\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value]]
+\t\t\tAvailable FILTERS:
+\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
+\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
+\t\t\t3: perform an Outlier Filter at -T3:<percentile>.
+\t\t\tThe -T switch may be set multiple times to perform multiple filters.
+\t\t\tAppend :split_value<num> to only filter values below z-value <num>.
+\t\t\te.g. -T1:10:0 to smooth bathymetry (z<0) using Gaussian filter
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -5380,6 +5455,7 @@ Options:
   --info\t\tGenerate and return an INFO dictionary of the dataset
   --weights\t\tOutput WEIGHT values along with xyz
   --uncertainties\tOutput UNCERTAINTY values along with xyz
+  --stack-node\t\tOutput stacked x/y data rather than pixel
   --quiet\t\tLower the verbosity to a quiet
 
   --modules\t\tDisplay the datatype descriptions and usage
@@ -5421,8 +5497,10 @@ def datalists_cli(argv=sys.argv):
     want_region = False
     want_separate = False
     want_sm = False
-    invert_region=False
-    z_precision=4
+    invert_region = False
+    z_precision = 4
+    fltrs = []
+    stack_node = False
     cache_dir = utils.cudem_cache()
     
     ## ==============================================
@@ -5452,11 +5530,17 @@ def datalists_cli(argv=sys.argv):
         elif arg == '-t_srs' or arg == '--t_srs' or arg == '-P':
             dst_srs = argv[i + 1]
             i = i + 1
-        elif arg[:2] == '-Z':
-            z_precision = utils.int_or(argv[2:], 4)
-        elif arg == '--z_precision' or arg == '--z-precision' or arg == '-Z':
+        elif arg == '-z_precision' or arg == '--z-precision' or arg == '-Z':
             z_precision = utils.int_or(argv[i + 1], 4)
             i = i + 1
+        elif arg[:2] == '-Z':
+            z_precision = utils.int_or(argv[2:], 4)
+            
+        elif arg == '-filter' or arg == '--filter' or arg == '-T':
+            fltrs.append(argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-T':
+            fltrs.append(argv[2:])
 
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
@@ -5484,6 +5568,8 @@ def datalists_cli(argv=sys.argv):
         elif arg == '--spatial-metadata' or arg == '-sm':
             want_sm = True
             want_mask = True
+        elif arg == '--stack-node' or arg == '-n':
+            stack_node = True
             
         elif arg == '--separate' or arg == '-s':
             want_separate = True
@@ -5554,7 +5640,7 @@ def datalists_cli(argv=sys.argv):
                 dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='bilinear',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
                 want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
-                dump_precision=z_precision
+                dump_precision=z_precision, fltrs=fltrs, stack_node=stack_node
             )
 
             if this_datalist is not None and this_datalist.valid_p(
@@ -5586,18 +5672,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e) 
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e) 
 ### End

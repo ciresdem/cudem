@@ -85,81 +85,6 @@ from cudem import fetches
 ## ==============================================
 waffles_cache = utils.cudem_cache()
 
-def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel'):
-    """filter raster using smoothing factor `fltr`; optionally
-    only smooth bathymetry (sub-zero) using a split_val of 0.
-
-    -----------
-    Parameters:
-    fltr (int): the filter to use, 1, 2 or 3
-    flt_val (varies): the filter value, varies by filter.
-    split_val (float): an elevation value (only filter below this value)
-    """
-
-    tmp_file = True
-    
-    def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
-        """filter `src_dem` using GMT grdfilter"""
-
-        ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp' if node == 'pixel' else ''))
-        return(utils.run_cmd(ft_cmd1, verbose=verbose))
-    
-    utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
-    if os.path.exists(src_dem):
-        ## ==============================================
-        ## Filter the DEM (1=blur, 2=grdfilter, 3=outliers)
-        ## ==============================================
-        if int(fltr) == 1:
-            out, status = gdalfun.gdal_blur(
-                src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
-        elif int(fltr) == 2:
-            out, status = grdfilter(
-                src_dem, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
-                node = node, verbose = True)
-        elif int(fltr) == 3:
-            out, status = gdalfun.gdal_filter_outliers2(
-                src_dem, None, replace=True, percentile=utils.float_or(fltr_val, 95)
-            )
-            tmp_file = False
-            
-        else:
-            utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
-            out, status = gdalfun.gdal_blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
-            
-        if status != 0:
-            return(status)
-
-        ## ==============================================
-        ## Split the filtered DEM by z-value
-        ## ==============================================
-        split_val = utils.float_or(split_val)
-        if split_val is not None:
-            with gdalfun.gdal_datasource(src_dem) as src_ds:
-                if src_ds is not None:
-                    ds_config = gdalfun.gdal_infos(src_ds)
-                    elev_array = src_ds.GetRasterBand(1).ReadAsArray()
-                    mask_array = np.zeros((ds_config['ny'], ds_config['nx']))                
-                    mask_array[elev_array == ds_config['ndv']] = 0
-                    mask_array[elev_array < split_val] = 1
-                    elev_array[elev_array < split_val] = 0
-
-                    with gdalfun.gdal_datasource('tmp_fltr.tif') as s_ds:
-                        if s_ds is not None:
-                            s_array = s_ds.GetRasterBand(1).ReadAsArray()
-                            s_array = s_array * mask_array
-                            smoothed_array = s_array + elev_array
-                            elev_array = None
-                            gdalfun.gdal_write(smoothed_array, dst_dem, ds_config)
-
-                    utils.remove_glob('tmp_fltr.tif')
-        else:
-            if tmp_file:
-                os.replace('tmp_fltr.tif', dst_dem)
-        return(0)
-    
-    else:
-        return(-1)
-
 ## ==============================================
 ## WAFFLES
 ##
@@ -307,10 +232,13 @@ class Waffle:
         this function sets `self.data` to a list of dataset objects.
         """
 
+        fltrs = utils.parse_filter(self.fltr)
+        stack_fltrs = [x for x in fltrs if x[3]] # grab any stack filters
+        
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   invert_region=False, cache_dir=self.cache_dir)
+                                   fltrs=stack_fltrs, invert_region=False, cache_dir=self.cache_dir)
 
         if self.data is not None:
             self.data.initialize()
@@ -524,22 +452,19 @@ class Waffle:
                 #         sk.arr_q.task_done()                        
                 #
                 # self.stack = sk.out_file
-
+                
                 ## ==============================================
                 ## generate the stack
                 ## ==============================================
                 stack_fn = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 stack_bn = utils.fn_basename2(stack_fn)
 
-                if not self.clobber and os.path.exists(stack_fn): #os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))):
-                    #self.stack = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
+                if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
                     if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
-                        self.stack = self.data._stacks(out_name=stack_bn, #os.path.join(self.cache_dir, stack_name),
-                                                       supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
+                        self.stack = self.data._stacks(out_name=stack_bn, supercede=self.supercede)
                 else:
-                    self.stack = self.data._stacks(out_name=stack_bn, #os.path.join(self.cache_dir, stack_name),
-                                                   supercede=self.supercede, want_mask=self.want_mask or self.want_sm)
+                    self.stack = self.data._stacks(out_name=stack_bn, supercede=self.supercede)
                     
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
@@ -811,12 +736,13 @@ quite heavy on memory when large grid-size...
         self.wn = 0
         self.wsum = None;
 
-    def __call__(self, q, nnear=6, eps=0, p=1, dub=np.inf, weights=None):
+    def __call__(self, q, nnear=6, eps=0, p=1, dub=np.inf, weights=None, uncertainties=None):
         # nnear nearest neighbours of each query point --
         q = np.asarray(q)
         qdim = q.ndim
         if qdim == 1:
             q = np.array([q])
+            
         if self.wsum is None:
             self.wsum = np.zeros(nnear)
 
@@ -835,6 +761,9 @@ quite heavy on memory when large grid-size...
                 w = 1 / dist**p
                 if weights is not None:
                     w *= weights[ix]  # >= 0
+
+                # if uncertainties is not None:
+                #     w *= (1/uncertainties[ix])
                     
                 w /= np.sum(w)
                 wz = np.dot( w, self.z[ix] )
@@ -910,6 +839,8 @@ class WafflesIDW(Waffle):
         points_no_data = points_band.GetNoDataValue()
         weights_band = stack_ds.GetRasterBand(3)
         weights_no_data = weights_band.GetNoDataValue()
+        uncertainty_band = stack_ds.GetRasterBand(4)
+        uncertainty_no_data = uncertainty_band.GetNoDataValue()
 
         #try:
         interp_ds = stack_ds.GetDriver().Create(
@@ -937,6 +868,13 @@ class WafflesIDW(Waffle):
         else:
             weight_values = None
 
+        if self.want_uncertainty:
+            uncertainty_array = uncertainty_band.ReadAsArray()
+            uncertainty_values = uncertainty_array[point_indices]
+            uncertainty_array = None
+        else:
+            uncertainty_values = None
+
         stack_ds = None
         invdisttree = Invdisttree(np.transpose(point_indices), point_values, leafsize=10, stat=1)
         for srcwin in utils.yield_srcwin((self.ycount, self.xcount), n_chunk=n_chunk,
@@ -960,7 +898,8 @@ class WafflesIDW(Waffle):
                     eps=.1,
                     p=self.power,
                     dub=self.radius,
-                    weights=weight_values
+                    weights=weight_values,
+                    uncertainties=uncertainty_values
                 )
                 interp_data = np.reshape(interp_data, (srcwin[2], srcwin[3]))
                 interp_band.WriteArray(interp_data.T, srcwin[0], srcwin[1])
@@ -4756,29 +4695,20 @@ class WaffleDEM:
                 utils.echo_msg('set nodata value to {}.'.format(ndv))
 
     def filter_(self, fltr = []):
-        if len(fltr) > 0:
-            for f in fltr:
-                fltr_val = None
-                split_val = None
-                fltr_opts = f.split(':')
-                fltr = fltr_opts[0]
-                if len(fltr_opts) > 1:
-                    fltr_val = utils.int_or(fltr_opts[1])
+        fltrs = utils.parse_filter(fltr)
+        fltr = [x for x in fltrs if not x[3]] # grab any stack filters
+        for f in fltr:
+            # fails if fltr_val in float
+            if f[1] is not None:
+                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
+                if gdalfun.waffles_filter(
+                        self.fn, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
+                ) == 0:
+                    if int(f[0]) != 3:
+                        os.replace(filter_fn, self.fn)
 
-                if len(fltr_opts) > 2:
-                    split_val = utils.float_or(fltr_opts[2], 0)
-
-                # fails if fltr_val in float
-                if fltr_val is not None:
-                    filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
-                    if waffles_filter(
-                            self.fn, filter_fn, fltr=fltr, fltr_val=fltr_val, split_val=split_val,
-                    ) == 0:
-                        if int(fltr) != 3:
-                            os.replace(filter_fn, self.fn)
-
-                    if self.verbose:
-                        utils.echo_msg('filtered data using {}.'.format(f))
+                if self.verbose:
+                    utils.echo_msg('filtered data using {}.'.format(f))
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
@@ -5202,14 +5132,16 @@ Options:
 \t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10
 \t\t\t\tpercent of the input REGION.
   -T, --filter\t\t\tFILTER the output DEM using one or multiple filters. 
-\t\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value=z]]
+\t\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value[:filter_stack]]]
 \t\t\t\tAvailable FILTERS:
 \t\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
 \t\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
 \t\t\t\t3: perform an Outlier Filter at -T3:<percentile>.
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\t\tAppend :split_value=<num> to only filter values below z-value <num>.
-\t\t\t\te.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
+\t\t\t\tAppend :split_value<num> to only filter values below z-value <num>.
+\t\t\t\te.g. -T1:10:0 to smooth bathymetry (z<0) using Gaussian filter
+\t\t\t\tAppend :filter_stack<True> to filter the data stack instead of the output DEM.
+\t\t\t\te.g. -T3:75:None:True to filter outliers from the data stack.
   -L, --limits\t\t\tLIMIT the output elevation or interpolation values, append 
 \t\t\t\t'u<value>' to set the upper elevation limit, 
 \t\t\t\t'l<value>' to set the lower elevation limit,

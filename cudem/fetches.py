@@ -31,6 +31,7 @@ import os
 import sys
 import time
 import json
+import re
 import requests
 import urllib
 import lxml.etree
@@ -1504,10 +1505,15 @@ worldwide.
 
 https://data.ngdc.noaa.gov/platforms/
 
-< multibeam:process=False:min_year=None:survey_id=None:exclude=None >"""
+<exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, using a '/' as a seperator.
+
+< multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >"""
 
     
-    def __init__(self, processed=True, process=False, min_year=None, survey_id=None, exclude=None, make_datalist=False, **kwargs):
+    def __init__(
+            self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None, exclude_ship_id=None, min_year=None, max_year=None,
+            exclude=None, make_datalist=False, **kwargs
+    ):
         super().__init__(name='multibeam', **kwargs)
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
@@ -1518,9 +1524,12 @@ https://data.ngdc.noaa.gov/platforms/
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
         self.name = 'multibeam'
         self.processed_p = processed
-        self.process = process
         self.min_year = utils.int_or(min_year)
+        self.max_year = utils.int_or(max_year)
         self.survey_id = survey_id
+        self.exclude_survey_id = exclude_survey_id
+        self.ship_id = ship_id
+        self.exclude_ship_id = exclude_ship_id
         self.exclude = exclude
         self.make_datalist = make_datalist
         self.data_format = 301
@@ -1570,13 +1579,37 @@ https://data.ngdc.noaa.gov/platforms/
             survey_list = _req.text.split('\n')[:-1]
             for r in survey_list:
                 dst_pfn = r.split(' ')[0]
-                dst_fn = dst_pfn.split('/')[-1:][0]
-                survey = dst_pfn.split('/')[6]
-                dn = r.split(' ')[0].split('/')[:-1]
-                version = dst_pfn.split('/')[9][-1]
+                dst_p = dst_pfn.split('/')
+                dst_fn = dst_p[-1:][0]
+                survey = dst_p[6]
+                dn = dst_p[:-1]
+                version = dst_p[9][-1]
+                ship = dst_p[5]
                 data_url = self._mb_data_url + '/'.join(r.split('/')[3:])
+                date = re.search("([0-9]{8})", dst_pfn)
+
                 if self.survey_id is not None:
-                    if survey != self.survey_id:
+                    if survey not in self.survey_id.split('/'):
+                        continue
+
+                if self.exclude_survey_id is not None:
+                    if survey in self.exlcude_survey_id.split('/'):
+                        continue
+
+                if self.ship_id is not None:
+                    if ship.lower() not in [x.lower() for x in self.ship_id.split('/')]:
+                        continue
+
+                if self.exclude_ship_id is not None:
+                    if ship.lower() in [x.lower() for x in self.exclude_ship_id.split('/')]:
+                        continue
+
+                if date is not None:
+                    date = date[0]
+                    if self.min_year is not None and int(date[:4]) < self.min_year:
+                        continue
+                
+                    if self.max_year is not None and int(date[:4]) > self.max_year:
                         continue
                     
                 if survey in these_surveys.keys():
@@ -1590,43 +1623,20 @@ https://data.ngdc.noaa.gov/platforms/
                     
         else:
             utils.echo_error_msg('failed to fetch multibeam request')
-                    
+
         for key in these_surveys.keys():
             if self.processed_p:
                 if '2' in these_surveys[key].keys():
                     for v2 in these_surveys[key]['2']:
-                        if self.min_year is not None:
-                            try:
-                                s,d,f,p,t = self.parse_entry_inf(v2)
-                                if int(t) >= self.min_year:
-                                    self.results.append(v2)
-                            except: pass
-                        else:
-                            self.results.append(v2)
+                        self.results.append(v2)
                 else:
                     for v1 in these_surveys[key]['1']:
-                        if self.min_year is not None:
-                            try:
-                                s,d,f,p,t = self.parse_entry_inf(v1)
-                                if int(t) >= self.min_year:
-                                    self.results.append(v1)
-                            except:
-                                pass
-                        else:
-                            self.results.append(v1)
-                        
+                        self.results.append(v1)                        
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
-                        if self.min_year is not None:
-                            try:
-                                s,d,f,p,t = self.parse_entry_inf(survs)
-                                if int(t) >= self.min_year:
-                                    self.results.append(survs)
-                            except: pass
-                        else:
-                            self.results.append(survs)
-
+                        self.results.append(survs)
+                            
         if self.make_datalist:
             s_got = []
             with open('mb_inf.txt', 'w') as mb_inf_txt:

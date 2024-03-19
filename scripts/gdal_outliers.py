@@ -145,7 +145,6 @@ if __name__ == "__main__":
     if dst_gdal is None:
         dst_gdal = elev.split('.')[0] + '_fltr.tif'
         
-    #utils.echo_msg('filtering {} to {}'.format(elev, dst_gdal))
     gdalfun.gdal_filter_outliers2(
         elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
         elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
