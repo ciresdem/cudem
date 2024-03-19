@@ -1543,7 +1543,7 @@ class ElevationDataset:
         fltrs = utils.parse_filter(self.fltrs)
 
         ## filter outliers from the stack
-        if stack_fltrs is not None and len(fltrs) > 0:
+        if fltrs is not None and len(fltrs) > 0:
             for f in fltrs:
                 filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
                 if gdalfun.waffles_filter(
