@@ -1778,6 +1778,10 @@ def parse_filter(fltr = []):
                 break
             
             fltr_ = fltr_opts[0]
+
+            #fltr_opts = args2dict(fltr_opts[1:])
+            #fltr_opts['filter'] = fltr_
+            #echo_msg(fltr_opts)
             if len(fltr_opts) > 1:
                 fltr_val = fltr_opts[1]
 

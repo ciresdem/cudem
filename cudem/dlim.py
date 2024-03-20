@@ -1541,7 +1541,7 @@ class ElevationDataset:
 
         m_ds = msk_ds = dst_ds = None
         fltrs = utils.parse_filter(self.fltrs)
-
+        
         ## filter outliers from the stack
         if fltrs is not None and len(fltrs) > 0:
             for f in fltrs:
