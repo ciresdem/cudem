@@ -2183,7 +2183,7 @@ def gdal_query(src_xyz, src_gdal, out_form, band = 1):
         
     return(np.array(xyzl))
                 
-def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel'):
+def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel', uncertainty_mask = None):
     """filter raster using smoothing factor `fltr`; optionally
     only smooth bathymetry (sub-zero) using a split_val of 0.
 
@@ -2216,7 +2216,7 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
                 node = node, verbose = True)
         elif int(fltr) == 3:
             out, status = gdal_filter_outliers2(
-                src_dem, 'tmp_fltr.tif', percentile=utils.float_or(fltr_val, 95)
+                src_dem, 'tmp_fltr.tif', percentile=utils.float_or(fltr_val, 95), unc_mask=uncertainty_mask
             )
             #tmp_file = False
             

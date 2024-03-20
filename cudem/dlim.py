@@ -1547,7 +1547,7 @@ class ElevationDataset:
             for f in fltrs:
                 filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
                 if gdalfun.waffles_filter(
-                        out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
+                        out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2], uncertainty_mask=4
                 ) == 0:
                     #if int(f[0]) != 3:
                     fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)[0]
@@ -1557,7 +1557,7 @@ class ElevationDataset:
                         for b in range(2, src_ds.RasterCount+1):
                             this_band = src_ds.GetRasterBand(b)
                             this_arr = this_band.ReadAsArray()
-                            this_arr[fltr_arr == ds_config['ndv']] = ds_config['ndv']
+                            this_arr[fltr_arr == ndv] = ndv
                             this_band.WriteArray(this_arr)
                             
             # out_perc = None
