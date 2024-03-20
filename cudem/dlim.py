@@ -1550,7 +1550,7 @@ class ElevationDataset:
                         out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
                 ) == 0:
                     #if int(f[0]) != 3:
-                    fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)
+                    fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)[0]
                     with gdalfun.gdal_datasource(out_file, update=True) as src_ds:
                         z_band = src_ds.GetRasterBand(1)
                         z_band.WriteArray(fltr_arr)

@@ -1443,7 +1443,7 @@ def get_outliers(in_array, percentile=75):
     
 ## todo: min_weight parameter (only filter points below a weight threshhold)
 ## output a filter mask to show which cells were filtered out
-def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = 100, chunk_step = None,
+def gdal_filter_outliers2(src_gdal, dst_gdal, band = 1, chunk_size = None, chunk_step = None,
                           percentile = 75, weight_mask = None, unc_mask = None, return_mask = False,
                           elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
                           rough_weight = 1, tri_weight = 1, aggressive = False, interpolation='cubic',
