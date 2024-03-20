@@ -1765,7 +1765,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
 
 def parse_filter(fltr = []):
     out_fltrs = []
-    if len(fltr) > 0:
+    if fltr is not None and len(fltr) > 0:
         for f in fltr:
             fltr_val = None
             split_val = None

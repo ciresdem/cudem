@@ -1549,12 +1549,17 @@ class ElevationDataset:
                 if gdalfun.waffles_filter(
                         out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
                 ) == 0:
-                    if int(f[0]) != 3:
-                        fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)
-                        with gdalfun.gdal_datasource(out_file, update=True) as src_ds:
-                            z_band = src_ds.GetRasterBand(1)
-                            z_band.WriteArray(fltr_arr)                            
-
+                    #if int(f[0]) != 3:
+                    fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)
+                    with gdalfun.gdal_datasource(out_file, update=True) as src_ds:
+                        z_band = src_ds.GetRasterBand(1)
+                        z_band.WriteArray(fltr_arr)
+                        for b in range(2, src_ds.RasterCount+1):
+                            this_band = src_ds.GetRasterBand(b)
+                            this_arr = this_band.ReadAsArray()
+                            this_arr[fltr_arr == ds_config['ndv']] = ds_config['ndv']
+                            this_band.WriteArray(this_arr)
+                            
             # out_perc = None
             # out_size = None
             # out_step = None
