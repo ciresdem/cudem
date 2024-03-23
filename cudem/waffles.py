@@ -79,6 +79,7 @@ from cudem import gdalfun
 from cudem import vdatums
 from cudem import factory
 from cudem import fetches
+from cudem import grits
 
 ## ==============================================
 ## Data cache directory, hold temp data, fetch data, etc here.
@@ -232,13 +233,10 @@ class Waffle:
         this function sets `self.data` to a list of dataset objects.
         """
 
-        fltrs = utils.parse_filter(self.fltr)
-        stack_fltrs = [x for x in fltrs if x[3]] # grab any stack filters
-        
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   fltrs=stack_fltrs, invert_region=False, cache_dir=self.cache_dir)
+                                   fltrs=self.fltr, invert_region=False, cache_dir=self.cache_dir)
 
         if self.data is not None:
             self.data.initialize()
@@ -3011,7 +3009,6 @@ class WafflesCUDEM_old(Waffle):
         
         return(self)
 
-
 class WafflesCUDEM(Waffle):
     """CUDEM integrated DEM generation.
     
@@ -4695,20 +4692,13 @@ class WaffleDEM:
                 utils.echo_msg('set nodata value to {}.'.format(ndv))
 
     def filter_(self, fltr = []):
-        fltrs = utils.parse_filter(fltr)
-        fltr = [x for x in fltrs if not x[3]] # grab any stack filters
         for f in fltr:
-            # fails if fltr_val in float
-            if f[1] is not None:
-                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
-                if gdalfun.waffles_filter(
-                        self.fn, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2],
-                ) == 0:
-                    if int(f[0]) != 3:
-                        os.replace(filter_fn, self.fn)
-
-                if self.verbose:
-                    utils.echo_msg('filtered data using {}.'.format(f))
+            grits_filter = grits.GritsFactory(mod=f, src_dem=self.fn)._acquire_module()
+            if 'stacks' in grits_filter.kwargs.keys():
+                if grits_filter.kwargs['stacks']:
+                    continue                
+            grits_filter()
+            os.replace(grits_filter.dst_dem, self.fn)
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:
@@ -5132,16 +5122,11 @@ Options:
 \t\t\t\te.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10
 \t\t\t\tpercent of the input REGION.
   -T, --filter\t\t\tFILTER the output DEM using one or multiple filters. 
-\t\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value[:filter_stack]]]
-\t\t\t\tAvailable FILTERS:
-\t\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
-\t\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-\t\t\t\t3: perform an Outlier Filter at -T3:<percentile>.
+\t\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\t\tAppend :split_value<num> to only filter values below z-value <num>.
-\t\t\t\te.g. -T1:10:0 to smooth bathymetry (z<0) using Gaussian filter
-\t\t\t\tAppend :filter_stack<True> to filter the data stack instead of the output DEM.
-\t\t\t\te.g. -T3:75:None:True to filter outliers from the data stack.
+\t\t\t\tAppend `:stacks=True` to the filter to perform the filter on the data stack instead 
+\t\t\t\tof the final DEM.
+\t\t\t\tAvailable FILTERS: {grits_modules}
   -L, --limits\t\t\tLIMIT the output elevation or interpolation values, append 
 \t\t\t\t'u<value>' to set the upper elevation limit, 
 \t\t\t\t'l<value>' to set the lower elevation limit,
@@ -5197,7 +5182,7 @@ Modules (see waffles --modules <module-name> for more info):
 """.format(cmd=os.path.basename(sys.argv[0]),
            dl_formats=factory._cudem_module_name_short_desc(dlim.DatasetFactory._modules),
            modules=factory._cudem_module_short_desc(WaffleFactory._modules),
-           wf_version=cudem.__version__)
+           wf_version=cudem.__version__, grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules))
 
 def waffles_cli(argv = sys.argv):
     """run waffles from command-line

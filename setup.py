@@ -29,7 +29,7 @@ with open('README.md', 'r') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '2.2.4',
+    version = '2.2.5',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',
@@ -78,6 +78,7 @@ setuptools.setup(
             'fetches = cudem.fetches:fetches_cli',
             'perspecto = cudem.perspecto:perspecto_cli',
             'vdatums = cudem.vdatums:vdatums_cli',
+            'grits = cudem.grits:grits_cli',
             'cudem = cudem.cudem_cli:cudem_cli',
         ],
     },

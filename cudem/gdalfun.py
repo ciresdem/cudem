@@ -2183,19 +2183,22 @@ def gdal_query(src_xyz, src_gdal, out_form, band = 1):
         
     return(np.array(xyzl))
                 
-def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None, node = 'pixel', uncertainty_mask = None):
+def waffles_filter(
+        src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None, mask = None,
+        node = 'pixel', uncertainty_mask = None, **kwargs
+):
     """filter raster using smoothing factor `fltr`; optionally
     only smooth bathymetry (sub-zero) using a split_val of 0.
 
     -----------
     Parameters:
     fltr (int): the filter to use, 1, 2 or 3
-    flt_val (varies): the filter value, varies by filter.
+    flt_val (varies): the filter value(s), varies by filter.
     split_val (float): an elevation value (only filter below this value)
     """
 
     tmp_file = True
-    
+    print(kwargs)
     def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
         """filter `src_dem` using GMT grdfilter"""
 
@@ -2255,6 +2258,88 @@ def waffles_filter(src_dem, dst_dem, fltr = 1, fltr_val = None, split_val = None
                 os.replace('tmp_fltr.tif', dst_dem)
         return(0)
     
+    else:
+        return(-1)
+
+def waffles_filter2(
+        src_dem, dst_dem, fltrs = []
+):
+    """filter raster using smoothing factor `fltr`; optionally
+    only smooth bathymetry (sub-zero) using a split_val of 0.
+
+    -----------
+    Parameters:
+    fltr (int): the filter to use, 1, 2 or 3
+    flt_val (varies): the filter value(s), varies by filter.
+    split_val (float): an elevation value (only filter below this value)
+    """
+
+    tmp_file = True
+    def grdfilter(src_dem, dst_dem, dist='c3s', node='pixel', verbose=False):
+        """filter `src_dem` using GMT grdfilter"""
+
+        ft_cmd1 = ('gmt grdfilter -V {} -G{} -F{} -D1{}'.format(src_dem, dst_dem, dist, ' -rp' if node == 'pixel' else ''))
+        return(utils.run_cmd(ft_cmd1, verbose=verbose))
+    
+    #utils.echo_msg('filtering DEM {} using {}@{}'.format(src_dem, fltr, fltr_val))
+    if os.path.exists(src_dem):
+        for fltr in fltrs:
+            fltr_id = fltr[0]
+            fltr_opts = utils.args2dict(fltr[1:])
+            print(fltr_id)
+            print(fltr_opts)
+            sys.exit()
+            ## ==============================================
+            ## Filter the DEM (1=blur, 2=grdfilter, 3=outliers)
+            ## ==============================================
+            if int(fltr) == 1:
+                out, status = gdal_blur(
+                    src_dem, 'tmp_fltr.tif', fltr_val if fltr_val is not None else 10)
+            elif int(fltr) == 2:
+                out, status = grdfilter(
+                    src_dem, 'tmp_fltr.tif=gd:GTiff', dist = fltr_val if fltr_val is not None else '1s',
+                    node = node, verbose = True)
+            elif int(fltr) == 3:
+                out, status = gdal_filter_outliers2(
+                    src_dem, 'tmp_fltr.tif', percentile=utils.float_or(fltr_val, 95), unc_mask=uncertainty_mask
+                )
+                #tmp_file = False
+
+            else:
+                utils.echo_warning_msg('invalid filter {}, defaulting to blur'.format(fltr))
+                out, status = gdal_blur(src_dem, 'tmp_fltr.tif', fltr_val if utils.int_or(fltr_val) is not None else 10)
+
+            if status != 0:
+                return(status)
+
+            ## ==============================================
+            ## Split the filtered DEM by z-value
+            ## ==============================================
+            split_val = utils.float_or(split_val)
+            if split_val is not None:
+                with gdal_datasource(src_dem) as src_ds:
+                    if src_ds is not None:
+                        ds_config = gdal_infos(src_ds)
+                        elev_array = src_ds.GetRasterBand(1).ReadAsArray()
+                        mask_array = np.zeros((ds_config['ny'], ds_config['nx']))                
+                        mask_array[elev_array == ds_config['ndv']] = 0
+                        mask_array[elev_array < split_val] = 1
+                        elev_array[elev_array < split_val] = 0
+
+                        with gdal_datasource('tmp_fltr.tif') as s_ds:
+                            if s_ds is not None:
+                                s_array = s_ds.GetRasterBand(1).ReadAsArray()
+                                s_array = s_array * mask_array
+                                smoothed_array = s_array + elev_array
+                                elev_array = None
+                                gdal_write(smoothed_array, dst_dem, ds_config)
+
+                        utils.remove_glob('tmp_fltr.tif')
+            else:
+                if tmp_file:
+                    os.replace('tmp_fltr.tif', dst_dem)
+            return(0)
+
     else:
         return(-1)
 

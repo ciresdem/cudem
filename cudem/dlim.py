@@ -111,6 +111,7 @@ from cudem import gdalfun
 from cudem import factory
 from cudem import vdatums
 from cudem import fetches
+from cudem import grits
 
 # cshelph
 import pandas as pd
@@ -340,7 +341,7 @@ class ElevationDataset:
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
-                 fltrs=None, stack_node=True, cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
+                 fltrs=[], stack_node=True, cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
                              'vdatum':None, 'url':None}, **kwargs):
@@ -1540,43 +1541,15 @@ class ElevationDataset:
             gdalfun.ogr_polygonize_multibands(msk_ds)
 
         m_ds = msk_ds = dst_ds = None
-        fltrs = utils.parse_filter(self.fltrs)
-        
-        ## filter outliers from the stack
-        if fltrs is not None and len(fltrs) > 0:
-            for f in fltrs:
-                filter_fn = utils.make_temp_fn('__tmp_fltr.tif', temp_dir = self.cache_dir)
-                if gdalfun.waffles_filter(
-                        out_file, filter_fn, fltr=f[0], fltr_val=f[1], split_val=f[2], uncertainty_mask=4
-                ) == 0:
-                    #if int(f[0]) != 3:
-                    fltr_arr = gdalfun.gdal_get_array(filter_fn, band = 1)[0]
-                    with gdalfun.gdal_datasource(out_file, update=True) as src_ds:
-                        z_band = src_ds.GetRasterBand(1)
-                        z_band.WriteArray(fltr_arr)
-                        for b in range(2, src_ds.RasterCount+1):
-                            this_band = src_ds.GetRasterBand(b)
-                            this_arr = this_band.ReadAsArray()
-                            this_arr[fltr_arr == ndv] = ndv
-                            this_band.WriteArray(this_arr)
-                            
-            # out_perc = None
-            # out_size = None
-            # out_step = None
-            
-            # if utils.float_or(self.fltrs) is not None:
-            #     out_perc = utils.float_or(self.fltrs)
-            # elif utils.str_or(self.fltrs) is not None:
-            #     outlier_opts = [utils.float_or(x) for x in self.fltrs.split('/')]
-            #     out_perc = outlier_opts[0]
-            #     out_size = None if len(outlier_opts) < 2 else outlier_opts[1]
-            #     out_step = None if len(outlier_opts) < 3 else outlier_opts[2]
-            
-            # gdalfun.gdal_filter_outliers2(
-            #     out_file, None, percentile=out_perc, cache_dir=self.cache_dir,
-            #     unc_mask = 4, chunk_size = out_size, chunk_step = out_step,
-            #     interpolation='linear'
-            # )
+        ## apply any filters to the stack
+        ## todo: all bands in grits...
+        if isinstance(self.fltrs, list):
+            for f in self.fltrs:
+                gf = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
+                if 'stacks' in gf.kwargs.keys():
+                    if gf.kwargs['stacks']:
+                        gf()
+                        os.replace(gf.dst_dem, out_file)
         
         return(out_file)        
     
@@ -5443,15 +5416,10 @@ Options:
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
-  -T, --filter\t\tFILTER the stack data using one or multiple filters. 
-\t\t\tWhere FILTER is fltr_id[:fltr_val[:split_value]]
-\t\t\tAvailable FILTERS:
-\t\t\t1: perform a Gaussian Filter at -T1:<factor>.
-\t\t\t2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-\t\t\t3: perform an Outlier Filter at -T3:<percentile>.
+  -T, --filter\t\tFILTER the data stack using one or multiple filters. 
+\t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
-\t\t\tAppend :split_value<num> to only filter values below z-value <num>.
-\t\t\te.g. -T1:10:0 to smooth bathymetry (z<0) using Gaussian filter
+\t\t\tAvailable FILTERS: {grits_modules}
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -5476,7 +5444,8 @@ Examples:
   % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
-           dl_formats=utils._cudem_module_name_short_desc(DatasetFactory._modules))
+           dl_formats=utils._cudem_module_name_short_desc(DatasetFactory._modules),
+           grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules))
 
 def datalists_cli(argv=sys.argv):
     """run datalists from command-line
@@ -5620,6 +5589,7 @@ def datalists_cli(argv=sys.argv):
                     
         sys.exit(0)
 
+    fltrs = [f + ':stacks=True' for f in fltrs]        
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):
