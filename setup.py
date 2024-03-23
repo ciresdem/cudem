@@ -51,7 +51,7 @@ setuptools.setup(
         'lxml', # fetches xml parsing
         'matplotlib', # uncertainty plots
         'laspy[lazrs,laszip]', # dlim/lasfile support
-        'pyproj',
+        'pyproj', # all
         'h5py', # nsidc
         'boto3', # for amazon/bluetopo
         'tqdm', # progress bar

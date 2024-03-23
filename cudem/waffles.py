@@ -656,9 +656,9 @@ def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1,
         return arr_b
     
     ## load src_dem array
-    with gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
+    with gdalfun.gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
         src_arr = src_ds.GetRasterBand(band).ReadAsArray()
-        src_config = gdal_infos(src_ds)
+        src_config = gdalfun.gdal_infos(src_ds)
         src_arr[src_arr == src_config['ndv']] = np.nan
 
         ## generate the mask array
@@ -687,7 +687,7 @@ def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1,
         if dst_dem is None:
             src_ds.GetRasterBand(band).WriteArray(src_arr)
         else:
-            gdal_write(src_arr, dst_dem, src_config)
+            gdalfun.gdal_write(src_arr, dst_dem, src_config)
 
     return(dst_dem if dst_dem is not None else src_dem, 0)
     
@@ -3361,7 +3361,7 @@ class WafflesCUDEM(Waffle):
 
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
-        flatten_nodata_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
+        flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## ==============================================
         ## reset the stack for uncertainty
