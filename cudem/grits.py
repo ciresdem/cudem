@@ -30,22 +30,16 @@ import shutil
 import numpy as np
 import scipy
 from scipy.signal import fftconvolve
-        
+from scipy import interpolate
+
+from tqdm import trange
+
 from osgeo import gdal
 
 from cudem import utils
 from cudem import gdalfun
 from cudem import regions
 from cudem import factory
-
-def parse_filters(filters = []):
-    out_filters = []
-    for f in filters:
-        f_id = f[0]
-        f_opts = utils.args2dict(f[1:])
-        out_filters.append([f_id, f_opts])
-        
-    return(out_filters)
 
 class Grits:
     def __init__(
@@ -120,6 +114,26 @@ class Grits:
                             elev_array = None
                             s_band.WriteArray(smoothed_array)
         return(self)
+
+    def get_outliers(self, in_array, percentile=75):
+        """get the outliers from in_array based on the percentile"""
+
+        if percentile <= 50:
+            percentile = 51
+            
+        if percentile >= 100:
+            percentile = 99
+
+        max_percentile = percentile
+        min_percentile = 100 - percentile
+
+        perc_max = np.nanpercentile(in_array, max_percentile)
+        perc_min = np.nanpercentile(in_array, min_percentile)
+        iqr_p = (perc_max - perc_min) * 1.5
+        upper_limit = perc_max + iqr_p
+        lower_limit = perc_min - iqr_p
+
+        return(upper_limit, lower_limit)
     
 class Blur(Grits):
     def __init__(self, blur_factor = 1, **kwargs):
@@ -235,7 +249,7 @@ class Outliers(Grits):
         super().__init__(**kwargs)
         self.chunk_size = chunk_size
         self.chunk_step = chunk_step
-        self.percentile = percentile
+        self.percentile = utils.float_or(percentile)
         self.weight_mask = weight_mask
         self.unc_mask = unc_mask
         self.return_mask = return_mask
@@ -331,26 +345,6 @@ class Outliers(Grits):
         slp_ds = None
         utils.remove_glob(slp_fn)
         return(curv_ds, curv_fn)
-                
-    def get_outliers(self, in_array, percentile=75):
-        """get the outliers from in_array based on the percentile"""
-
-        if percentile <= 50:
-            percentile = 51
-            
-        if percentile >= 100:
-            percentile = 99
-
-        max_percentile = percentile
-        min_percentile = 100 - percentile
-
-        perc_max = np.nanpercentile(in_array, max_percentile)
-        perc_min = np.nanpercentile(in_array, min_percentile)
-        iqr_p = (perc_max - perc_min) * 1.5
-        upper_limit = perc_max + iqr_p
-        lower_limit = perc_min - iqr_p
-
-        return(upper_limit, lower_limit)
         
     def mask_outliers(
             self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False, src_weight=1
@@ -508,18 +502,65 @@ class Outliers(Grits):
                 return(self.dst_dem, 0)
             else:
                 return(None, -1)
+
+class Flats(Grits):
+    def __init__(self, size_threshold = None, n_chunk = None, **kwargs):
+        super().__init__(**kwargs)
+        self.size_threshold = size_threshold
+        self.n_chunk = n_chunk
         
+    def run(self):
+        """Discover and remove flat zones"""
+        
+        count = 0
+        with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+            if src_ds is not None:
+                self.init_ds(src_ds)
+                if self.n_chunk is None:
+                    self.n_chunk = self.ds_config['nb']
+
+                for srcwin in gdalfun.gdal_yield_srcwin(src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=True):
+                    src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
+                    #src_arr[src_arr == src_config['ndv']] = np.nan
+
+                    uv, uv_counts = np.unique(src_arr, return_counts=True)
+                    if self.size_threshold is None:
+                        _size_threshold = self.get_outliers(uv_counts, 99)[0]
+                    else:
+                        _size_threshold = self.size_threshold
+
+                    uv_ = uv[uv_counts > _size_threshold]
+                    if len(uv_) > 0:
+                        for i in trange(
+                                0,
+                                len(uv_),
+                                desc='{}: removing flattened data greater than {} cells'.format(
+                                    os.path.basename(sys.argv[0]), _size_threshold
+                                ),
+                                leave=self.verbose
+                        ):
+                            mask = src_arr == uv_[i]
+                            count += np.count_nonzero(mask)
+                            src_arr[mask] = self.ds_config['ndv']
+
+                    with gdalfun.gdal_datasource(self.dst_dem, update=True) as dst_ds:
+                        dst_band = dst_ds.GetRasterBand(self.band)
+                        dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
+
+        utils.echo_msg('removed {} flats.'.format(count))
+        return(self.dst_dem, 0)
+
 class GritsFactory(factory.CUDEMFactory):
     _modules = {
         'blur': {'call': Blur},
         'grdfilter': {'call': GMTgrdfilter},
         'outliers': {'call': Outliers},
+        'flats': {'call': Flats},
     }
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        
 ## ==============================================
 ## Command-line Interface (CLI)
 ## $ grits

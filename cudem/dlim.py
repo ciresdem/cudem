@@ -1542,14 +1542,13 @@ class ElevationDataset:
 
         m_ds = msk_ds = dst_ds = None
         ## apply any filters to the stack
-        ## todo: all bands in grits...
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
-                gf = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
-                if 'stacks' in gf.kwargs.keys():
-                    if gf.kwargs['stacks']:
-                        gf()
-                        os.replace(gf.dst_dem, out_file)
+                grits_filter = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
+                if 'stacks' in grits_filter.kwargs.keys():
+                    if grits_filter.kwargs['stacks']:
+                        grits_filter()
+                        os.replace(grits_filter.dst_dem, out_file)
         
         return(out_file)        
     

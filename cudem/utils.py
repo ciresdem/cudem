@@ -1763,36 +1763,4 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
 
     return(out)
 
-def parse_filter(fltr = []):
-    out_fltrs = []
-    if fltr is not None and len(fltr) > 0:
-        for f in fltr:
-            fltr_val = None
-            split_val = None
-            filter_stack = False
-            if isinstance(f, str):
-                fltr_opts = f.split(':')
-            elif isinstance(f, list):
-                fltr_opts = f
-            else:
-                break
-            
-            fltr_ = fltr_opts[0]
-
-            #fltr_opts = args2dict(fltr_opts[1:])
-            #fltr_opts['filter'] = fltr_
-            #echo_msg(fltr_opts)
-            if len(fltr_opts) > 1:
-                fltr_val = fltr_opts[1]
-
-            if len(fltr_opts) > 2:
-                split_val = float_or(fltr_opts[2], 0)
-
-            if len(fltr_opts) > 3:
-                filter_stack = fltr_opts[3]
-
-            out_fltrs.append([fltr_, fltr_val, split_val, filter_stack])
-
-    return(out_fltrs)
-
 ### End

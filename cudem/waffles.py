@@ -132,7 +132,7 @@ class Waffle:
         self.extend_proc = extend_proc # extend the dem processing region by this percentage
         self.want_weight = want_weight # use weights, either None or 1
         self.want_uncertainty = want_uncertainty # apply/calculate uncertainty
-        self.fltr = fltr # a list of filters (see waffles_filter for options)
+        self.fltr = fltr # a list of filters (see cudem.grits for options)
         self.clip = clip # ogr compatible vector file or keyword module to clip output dem
         self.chunk = chunk # process the dem in this many chunks
         self.dst_srs = dst_srs # the output dem projection
@@ -642,6 +642,55 @@ class WafflesStacks(Waffle):
 ## ==============================================
 ## The Flattening
 ## ==============================================
+def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
+    """Flatten nodata areas larger than `size_threshhold`"""
+
+    def expand_for(arr, shiftx=1, shifty=1):
+        arr_b = arr.copy().astype(bool)
+        for i in range(arr.shape[0]):
+            for j in range(arr.shape[1]):
+                if(arr[i,j]):
+                    i_min, i_max = max(i-shifty, 0), min(i+shifty+1, arr.shape[0])
+                    j_min, j_max = max(j-shiftx, 0), min(j+shiftx+1, arr.shape[1])
+                    arr_b[i_min:i_max, j_min:j_max] = True
+        return arr_b
+    
+    ## load src_dem array
+    with gdal_datasource(src_dem, update=True if dst_dem is None else False) as src_ds:
+        src_arr = src_ds.GetRasterBand(band).ReadAsArray()
+        src_config = gdal_infos(src_ds)
+        src_arr[src_arr == src_config['ndv']] = np.nan
+
+        ## generate the mask array
+        msk_arr = np.zeros((src_config['ny'], src_config['nx']))
+        msk_arr[np.isnan(src_arr)] = 1
+        
+        ## group adjacent non-zero cells
+        l, n = scipy.ndimage.label(msk_arr)
+        
+        ## get the total number of cells in each group
+        mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
+        for i in trange(0,
+                        n,
+                        desc='{}: flattening data voids greater than {} cells'.format(
+                            os.path.basename(sys.argv[0]), size_threshold
+                        ),
+                        leave=verbose):
+            if mn[i] >= size_threshold:
+                i += 1
+                ll = expand_for(l==i)
+                flat_value = np.nanpercentile(src_arr[ll], 5)
+                src_arr[l==i] = flat_value
+
+        src_arr[np.isnan(src_arr)] = src_config['ndv']
+        
+        if dst_dem is None:
+            src_ds.GetRasterBand(band).WriteArray(src_arr)
+        else:
+            gdal_write(src_arr, dst_dem, src_config)
+
+    return(dst_dem if dst_dem is not None else src_dem, 0)
+    
 class WafflesFlatten(Waffle):
     """Stack the data into a DEM and then hydro-flatten all the void areas.
 
@@ -661,7 +710,7 @@ class WafflesFlatten(Waffle):
         self.size_threshold = size_threshold
         
     def run(self):
-        gdalfun.gdal_hydro_flatten(
+        flatten_no_data_zones(
             self.stack, dst_dem=self.fn, band=1, size_threshold=self.size_threshold
         )
         return(self)
@@ -2999,7 +3048,7 @@ class WafflesCUDEM_old(Waffle):
 
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
-        gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
+        flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## ==============================================
         ## reset the stack for uncertainty
@@ -3108,7 +3157,7 @@ class WafflesCUDEM(Waffle):
         self.want_supercede = want_supercede
         self.pre_smoothing = utils.float_or(pre_smoothing)
         if self.pre_smoothing is not None:
-            self.pre_smoothing = ['1:{}'.format(self.pre_smoothing)]
+            self.pre_smoothing = ['blur:blur_factor={}'.format(self.pre_smoothing)]
 
         self.flatten = utils.float_or(flatten)
         self.want_weight = True
@@ -3145,15 +3194,10 @@ class WafflesCUDEM(Waffle):
                 tmp_xinc = self.xinc
                 self.inc_levels.append(tmp_xinc)
                 
-            #while tmp_pre > 0:
             for t in range(1, tmp_pre+1):
-                #utils.echo_msg(tmp_pre)
                 tmp_xinc = float(self.inc_levels[-1] * 3)
                 tmp_yinc = float(self.inc_levels[-1] * 3)
-                #tmp_xinc = float(self.xinc * (3**t))
-                #tmp_yinc = float(self.xinc * (3**t))
                 self.inc_levels.append(tmp_xinc)
-                #tmp_pre -= 1
 
         if self.inc_levels[0] != self.xinc:
             self.inc_levels.insert(0, self.xinc)
@@ -3218,41 +3262,40 @@ class WafflesCUDEM(Waffle):
         pre_region = self.p_region.copy()
         pre_region.wmin = None
 
-        stack_elev = utils.make_temp_fn('{}_elev.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
-        stack_weight = utils.make_temp_fn('{}_weight.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
-        stack_unc = utils.make_temp_fn('{}_unc.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
-        gdalfun.gdal_extract_band(self.stack, stack_elev, band=1) # band 4 is the elevation band in stacks
-        gdalfun.gdal_extract_band(self.stack, stack_weight, band=3) # band 3 is the weight band in stacks
-        gdalfun.gdal_extract_band(self.stack, stack_unc, band=4) # band 4 is the uncertainty band in stacks            
+        # stack_elev = utils.make_temp_fn('{}_elev.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        # stack_weight = utils.make_temp_fn('{}_weight.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        # stack_unc = utils.make_temp_fn('{}_unc.tif'.format(utils.fn_basename2(self.stack)), self.cache_dir)
+        # gdalfun.gdal_extract_band(self.stack, stack_elev, band=1) # band 4 is the elevation band in stacks
+        # gdalfun.gdal_extract_band(self.stack, stack_weight, band=3) # band 3 is the weight band in stacks
+        # gdalfun.gdal_extract_band(self.stack, stack_unc, band=4) # band 4 is the uncertainty band in stacks            
         
-        ## ==============================================
-        ## Remove outliers from the stacked data
-        ## ==============================================
-        if self.filter_outliers is not None:
+        # ## ==============================================
+        # ## Remove outliers from the stacked data
+        # ## ==============================================
+        # if self.filter_outliers is not None:
 
-            outlier_opts = [utils.float_or(x) for x in self.filter_outliers.split('/')]
-            out_perc = outlier_opts[0]
-            out_size = None if len(outlier_opts) < 2 else outlier_opts[1]
-            out_step = None if len(outlier_opts) < 3 else outlier_opts[2]
+        #     outlier_opts = [utils.float_or(x) for x in self.filter_outliers.split('/')]
+        #     out_perc = outlier_opts[0]
+        #     out_size = None if len(outlier_opts) < 2 else outlier_opts[1]
+        #     out_step = None if len(outlier_opts) < 3 else outlier_opts[2]
             
-            gdalfun.gdal_filter_outliers2(
-                stack_elev, None, percentile=out_perc, cache_dir=self.cache_dir,
-                unc_mask = stack_unc, chunk_size = out_size, chunk_step = out_step, interpolation='nearest'
-            )
-            # gdalfun.gdal_filter_outliers2(
-            #     self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
-            #     unc_mask = 4, chunk_size = 85, chunk_step = 20
-            # )
-            # gdalfun.gdal_filter_outliers(
-            #     self.stack, None, replace=False
-            # )
-
+        #     gdalfun.gdal_filter_outliers2(
+        #         stack_elev, None, percentile=out_perc, cache_dir=self.cache_dir,
+        #         unc_mask = stack_unc, chunk_size = out_size, chunk_step = out_step, interpolation='nearest'
+        #     )
+        #     # gdalfun.gdal_filter_outliers2(
+        #     #     self.stack, None, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir,
+        #     #     unc_mask = 4, chunk_size = 85, chunk_step = 20
+        #     # )
+        #     # gdalfun.gdal_filter_outliers(
+        #     #     self.stack, None, replace=False
+        #     # )
             
         ## ==============================================
         ## initial data to pass through surface (stack)
         ## ==============================================
-        #stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
-        stack_data_entry = '{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=average,1'.format(stack_elev, stack_weight, stack_unc)
+        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
+        #stack_data_entry = '{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=average,1'.format(stack_elev, stack_weight, stack_unc)
         pre_data = [stack_data_entry]
         
         ## ==============================================
@@ -3265,14 +3308,14 @@ class WafflesCUDEM(Waffle):
                     pre_clip = '{}:invert=True'.format(self.landmask) # todo: update to make 'invert' an option
 
             if pre_clip is None:
-                coast_data = ['{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=cubicspline,1'.format(stack_elev, stack_weight, stack_unc)]
+                coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
+                #coast_data = ['{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=cubicspline,1'.format(stack_elev, stack_weight, stack_unc)]
                 coastline = self.generate_coastline(pre_data=coast_data)
                 pre_clip = coastline
 
         ## ==============================================
         ## Grid/Stack the data `pre` times concluding in full resolution with data > min_weight
         ## ==============================================
-        #while pre >= 0:
         for pre in range(self.pre_count, -1, -1):
             pre_xinc = self.inc_levels[pre]
             pre_yinc = self.inc_levels[pre]
@@ -3318,14 +3361,14 @@ class WafflesCUDEM(Waffle):
 
         ## todo add option to flatten here...or move flatten up
         #os.replace(pre_surface.fn, self.fn)
-        gdalfun.gdal_hydro_flatten(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
+        flatten_nodata_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## ==============================================
         ## reset the stack for uncertainty
         ## ==============================================
         #self.stack = pre_surface.stack
         self.stack = orig_stack
-        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 
@@ -4539,6 +4582,32 @@ class WafflesPatch(Waffle):
 ## WaffleDEM which holds a gdal DEM to process
 ## WaffleDEM(fn='module_output.tif')
 ## ==============================================
+def nodata_count_mask(src_dem, band = 1):
+    """Make a data mask of nodata zones.
+
+    output array will have the number of cells per nodata zone
+    """
+    
+    mn = None
+    with gdal_datasource(src_dem) as src_ds:
+        if src_ds is not None:
+            src_band = src_ds.GetRasterBand(band)
+            src_arr = src_band.ReadAsArray().astype(float)
+            src_config = gdal_infos(src_ds)
+            src_arr[src_arr == src_config['ndv']] = np.nan
+
+            ## generate the mask array
+            msk_arr = np.zeros((src_config['ny'], src_config['nx']))
+            msk_arr[np.isnan(src_arr)] = 1
+
+            ## group adjacent non-zero cells
+            l, n = scipy.ndimage.label(msk_arr)
+
+            ## get the total number of cells in each group
+            mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=l)
+    
+    return(mn)
+
 class WaffleDEM:
     def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {},
                  cache_dir: str = waffles_cache, verbose: bool = True,
@@ -4786,11 +4855,12 @@ class WaffleDEM:
                 else:
                     if self.verbose:
                         utils.echo_warning_msg('could not set proximity limit')
+                        
             ## ==============================================
             ## optionally mask nodata zones based on size_threshold
             ## ==============================================
             if size_limit is not None:
-                mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
+                mn = nodata_count_mask(stack_fn, band=2)
                 if mn is not None:
                     with gdalfun.gdal_datasource(self.fn, update=True) as src_ds:
                         if src_ds is not None:
@@ -4810,7 +4880,7 @@ class WaffleDEM:
             ## optionally mask nodata zones based on percentile_threshold
             ## ==============================================
             if percentile_limit is not None:
-                mn = gdalfun.gdal_nodata_count_mask(stack_fn, band=2)
+                mn = nodata_count_mask(stack_fn, band=2)
                 if mn is not None:
                     mn[mn == 0] = np.nan
                     mn_percentile = np.nanpercentile(mn, percentile_limit)
