@@ -482,7 +482,7 @@ class Outliers(Grits):
 
                 with gdalfun.gdal_datasource(self.dst_dem, update=True) as dst_ds:
                     dst_band = dst_ds.GetRasterBand(self.band)
-                    dst_band.WriteArray(smooth_array)
+                    dst_band.WriteArray(src_data)
                     # ## remove corresponding cells from all bands in the raster
                     # for b in range(1, src_ds.RasterCount+1):                        
                     #     this_band = src_ds.GetRasterBand(b)
