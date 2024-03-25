@@ -19,7 +19,7 @@
 ##
 ### Commentary:
 ##
-## filter grids
+## filter grids using various methods
 ##
 ### Code:
 
@@ -611,6 +611,10 @@ Options:
 
 Supported GRITS modules (see grits --modules <module-name> for more info): 
   {d_formats}
+
+Examples:
+  % {cmd} input_dem.tif -M blur
+  % {cmd} input_dem.tif --uncertainty_mask input_dem_u.tif --max_z 0 -M outliers:percentile=65
 """.format(cmd=os.path.basename(sys.argv[0]),
            d_formats=factory._cudem_module_short_desc(GritsFactory._modules))
         
