@@ -44,13 +44,17 @@ from cudem import factory
 class Grits:
     def __init__(
             self, src_dem = None, dst_dem = None, band = 1, min_z = None, max_z = None,
-            cache_dir = './', verbose = True, params = {}, **kwargs
+            count_mask = None, weight_mask = None, uncertainty_mask = None, cache_dir = './',
+            verbose = True, params = {}, **kwargs
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
         self.band = band
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
+        self.weight_mask = weight_mask
+        self.uncertainty_mask = uncertainty_mask
+        self.count_mask = count_mask
         self.cache_dir = cache_dir
         self.verbose = verbose
         self.params = params
@@ -248,43 +252,20 @@ class Outliers(Grits):
     percentile(float) - the percentile to use in calculating outliers
     chunk_size(int) the moving window size in pixels
     chunk_step(int) - the moving window step in pixels
-    weight_mask(str/int) - the associated weight grid or band number
-    unc_mask(str/int) - the associated uncertainty grid or band number
     return_mask(bool) - save the generated outlier mask
     interpolation(str) - interpolation method to use for neighborhood calculations (linear, cubic or nearest)
     aggressive(bool) - use straight percentiles instead of outliers
     """
     
-    def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, weight_mask = None,
-                 unc_mask = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
-                 tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1, aggressive = False,
+    def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, return_mask = False,
+                 elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
+                 rough_weight = 1, tri_weight = 1, aggressive = False,
                  interpolation='cubic', **kwargs):
-        """
-        -----------
-        Parameters:
-        src_gdal (str): The source GDAL file to scan.
-        chunk_size (int): The size of the moving srcwin.
-        chunk_step (int): The step of the moving srcwin.
-        percentile (float): The percentile to use to calculate the outliers. Should be between 50 and 100.
-        weight_mask (str/int): The GDAL file containing weight data, or a band number related to src_gdal.
-        unc_mask (str/int): The GDAL file containing uncertainty data, or a band number related to src_gdal.
-        return_mask (bool): Output a <>_outliers.tif file representing the outlier mask data.
-        elevation_weight (float): The weight to assign elevation outliers.
-        curvature_weight (float): The weight to assign curvature outliers.
-        tpi_weight (float): The weight to assign TPI outliers.
-        tri_weight (float): The weight to assign TRI outliers.
-        rough_weight (float): The weight to assign roughness outliers.
-        unc_weight (float): The weight to assign uncertainty outliers (used only if `unc_mask` is set.
-        aggressive (bool): If True, remove data with outliers masked above `percentile` rather than outliers of the outliers.
-        interpolation (str): The interpolation method to use to fill nodata values (linear, cubic, nearest)
-        """
         
         super().__init__(**kwargs)
         self.chunk_size = chunk_size
         self.chunk_step = chunk_step
         self.percentile = utils.float_or(percentile)
-        self.weight_mask = weight_mask
-        self.unc_mask = unc_mask
         self.return_mask = return_mask
         self.elevation_weight = elevation_weight
         self.curvature_weight = curvature_weight
@@ -296,16 +277,16 @@ class Outliers(Grits):
         self.interpolation = interpolation
 
         ## setup the uncertainty data if wanted
-        if self.unc_mask is not None:
+        if self.uncertainty_mask is not None:
             self.unc_is_band = False
             self.unc_is_fn = False
-            if utils.int_or(self.unc_mask) is not None:
+            if utils.int_or(self.uncertainty_mask) is not None:
                 self.unc_is_band = True
-                self.unc_mask = utils.int_or(self.unc_mask)
-            elif os.path.exists(self.unc_mask):
+                self.uncertainty_mask = utils.int_or(self.uncertainty_mask)
+            elif os.path.exists(self.uncertainty_mask):
                 self.unc_is_fn = True
             else:
-                self.unc_mask = None
+                self.uncertainty_mask = None
 
     def init_chunks(self):
         self.n_chunk = utils.int_or(self.chunk_size, int(self.ds_config['nx']*.25))
@@ -429,12 +410,12 @@ class Outliers(Grits):
 
                 # uncertainty ds
                 unc_band = None
-                if self.unc_mask is not None:
+                if self.uncertainty_mask is not None:
                     if self.unc_is_fn:
-                        unc_ds = gdal.Open(self.unc_mask)
+                        unc_ds = gdal.Open(self.uncertainty_mask)
                         unc_band = unc_ds.GetRasterBand(1)
                     elif self.unc_is_band:
-                        unc_band = src_ds.GetRasterBand(self.unc_mask)
+                        unc_band = src_ds.GetRasterBand(self.uncertainty_mask)
 
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=self.n_chunk,
@@ -611,19 +592,22 @@ class GritsFactory(factory.CUDEMFactory):
 ## ==============================================
 grits_cli_usage = """{cmd}
 
-usage: {cmd} [ -hvM [ args ] ] DEM ...
+usage: {cmd} [ -hvCMNUWX [ args ] ] DEM ...
 
 Options:
 
-  -M, --module\t\tDesired grits MODULE and options. (see available Modules below)
-\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+  -M, --module\t\t\tDesired grits MODULE and options. (see available Modules below)
+\t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 
-  --min_z\t\tMinimum z value (filter data above this value)
-  --max_z\t\tMaximum z value (filter data below this value)
+  -N, --min_z\t\t\tMinimum z value (filter data above this value)
+  -X, --max_z\t\t\tMaximum z value (filter data below this value)
+  -U, --uncertainty_mask\tAn associated uncertainty raster or band number
+  -W, --weight_mask\t\tAn associated weight raster or band number
+  -C, --count_mask\t\tAn associated count raster or band number
 
-  --help\t\tPrint the usage text
-  --modules\t\tDisplay the module descriptions and usage
-  --version\t\tPrint the version information
+  --help\t\t\tPrint the usage text
+  --modules\t\t\tDisplay the module descriptions and usage
+  --version\t\t\tPrint the version information
 
 Supported GRITS modules (see grits --modules <module-name> for more info): 
   {d_formats}
@@ -639,6 +623,9 @@ def grits_cli(argv = sys.argv):
     module = None
     min_z = None
     max_z = None
+    uncertainty_mask = None
+    weight_mask = None
+    count_mask = None
     
     while i < len(argv):
         arg = argv[i]
@@ -647,12 +634,31 @@ def grits_cli(argv = sys.argv):
             i += 1
         elif arg[:2] == '-M':
             module = str(arg[2:])
-        elif arg == '--min_z':
+        elif arg == '--min_z' or arg == '-N':
             min_z = utils.float_or(argv[i + 1])
-            i += 1            
-        elif arg == '--max_z':
+            i += 1
+        elif arg[:2] == '-N':
+            min_z = utils.float_or(arg[2:])
+        elif arg == '--max_z' or arg == '-X':
             max_z = utils.float_or(argv[i + 1])
             i += 1
+        elif arg[:2] == 'X':
+            max_z = utils.float_or(arg[2:])            
+        elif arg == '--uncertainty_mask' or arg == '-U':
+            uncertainty_mask = argv[i + 1]
+            i += 1
+        elif arg[:2] == '-U':
+            uncertainty_mask = arg[2:]
+        elif arg == '--weight_mask' or arg == '-@':
+            weight_mask = argv[i + 1]
+            i += 1
+        elif arg[:2] == '-W':
+            weight_mask = arg[2:]
+        elif arg == '--count_mask' or arg == '-C':
+            count_mask = argv[i + 1]
+            i += 1
+        elif arg[:2] == '-C':
+            count_mask = arg[2:]
         
         elif arg == '--modules' or arg == '-m':
             factory.echo_modules(GritsFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
@@ -722,13 +728,15 @@ def grits_cli(argv = sys.argv):
         )
         sys.exit(-1)
 
-    this_grits = GritsFactory(mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z)
+    this_grits = GritsFactory(
+        mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, uncertainty_mask=uncertainty_mask, weight_mask=weight_mask,
+        count_mask=count_mask
+    )
     if this_grits is not None:
         this_grits_module = this_grits._acquire_module()
         if this_grits_module is not None:
             out_dem = this_grits_module()
             utils.echo_msg('filtered {}'.format(out_dem))
-            #this_grits_module.run()
         else:
             utils.echo_error_msg('could not acquire grits module {}'.format(module))
         
