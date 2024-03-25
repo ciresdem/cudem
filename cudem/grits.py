@@ -41,6 +41,9 @@ from cudem import gdalfun
 from cudem import regions
 from cudem import factory
 
+## ==============================================
+## GRITS
+## ==============================================
 class Grits:
     def __init__(
             self, src_dem = None, dst_dem = None, band = 1, min_z = None, max_z = None,
@@ -138,7 +141,10 @@ class Grits:
         lower_limit = perc_min - iqr_p
 
         return(upper_limit, lower_limit)
-    
+
+## ==============================================
+## Blur
+## ==============================================
 class Blur(Grits):
     """Blur DEM values using a Gaussian Blur
 
@@ -200,7 +206,10 @@ class Blur(Grits):
                 #status = gdalfun.gdal_write(smooth_array, self.dst_dem, self.ds_config)
 
         return(self.dst_dem, 0)
-    
+
+## ==============================================
+## GMT grdfilter
+## ==============================================
 class GMTgrdfilter(Grits):
     """Filter a DEM through GMT's `grdfilter`; see `gmt grdfilter --help`
 
@@ -242,7 +251,10 @@ class GMTgrdfilter(Grits):
             dst_band.Write(out_array)            
         
         return(self.dst_dem, 0)
-            
+
+## ==============================================
+## Outliers - filter outliers
+## ==============================================
 class Outliers(Grits):
     """Remove outliers from the input DEM.
 
@@ -517,6 +529,9 @@ class Outliers(Grits):
             else:
                 return(None, -1)
 
+## ==============================================
+## Flats - filter out flat areas
+## ==============================================
 class Flats(Grits):
     """Remove flat areas from the input DEM
 
