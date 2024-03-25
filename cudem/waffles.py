@@ -4767,7 +4767,8 @@ class WaffleDEM:
             grits_filter = grits.GritsFactory(mod=f, src_dem=self.fn)._acquire_module()
             if 'stacks' in grits_filter.kwargs.keys():
                 if grits_filter.kwargs['stacks']:
-                    continue                
+                    continue
+                
             grits_filter()
             os.replace(grits_filter.dst_dem, self.fn)
             

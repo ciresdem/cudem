@@ -136,6 +136,14 @@ class Grits:
         return(upper_limit, lower_limit)
     
 class Blur(Grits):
+    """Blur DEM values using a Gaussian Blur
+
+    -----------
+    Parameters:
+
+    blur_factor(int) - the blur factor
+    """
+    
     def __init__(self, blur_factor = 1, **kwargs):
         super().__init__(**kwargs)
         self.blur_factor = blur_factor
@@ -190,6 +198,16 @@ class Blur(Grits):
         return(self.dst_dem, 0)
     
 class GMTgrdfilter(Grits):
+    """Filter a DEM through GMT's `grdfilter`; see `gmt grdfilter --help`
+
+    -----------
+    Parameters:
+
+    filter_type(str) - The grdfilter filter type (grdfilter -F)
+    dist(str) - The grdfilter distance value (grdfilter -D)
+    node(str) - Either 'grid' or 'pixel'
+    """
+    
     def __init__(self, filter_type = 'c3s', dist='1', node='pixel', **kwargs):
         super().__init__(**kwargs)
         self.filter_type = filter_type
@@ -222,6 +240,21 @@ class GMTgrdfilter(Grits):
         return(self.dst_dem, 0)
             
 class Outliers(Grits):
+    """Remove outliers from the input DEM.
+
+    -----------
+    Parameters:
+
+    percentile(float) - the percentile to use in calculating outliers
+    chunk_size(int) the moving window size in pixels
+    chunk_step(int) - the moving window step in pixels
+    weight_mask(str/int) - the associated weight grid or band number
+    unc_mask(str/int) - the associated uncertainty grid or band number
+    return_mask(bool) - save the generated outlier mask
+    interpolation(str) - interpolation method to use for neighborhood calculations (linear, cubic or nearest)
+    aggressive(bool) - use straight percentiles instead of outliers
+    """
+    
     def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, weight_mask = None,
                  unc_mask = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
                  tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1, aggressive = False,
@@ -504,6 +537,15 @@ class Outliers(Grits):
                 return(None, -1)
 
 class Flats(Grits):
+    """Remove flat areas from the input DEM
+
+    -----------
+    Parameters:
+
+    size_threshold(int) - the minimum flat area in pixels to remove
+    n_chunk(int) - the moving window size in pixels
+    """
+    
     def __init__(self, size_threshold = None, n_chunk = None, **kwargs):
         super().__init__(**kwargs)
         self.size_threshold = size_threshold
