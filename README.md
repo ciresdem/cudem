@@ -78,6 +78,7 @@ pip install --no-deps git+https://github.com/ciresdem/cudem.git
 | fetches | fetch elevation data from a variety of public online sources |
 | vdatums | generate vertical transformation grids |
 | perspecto | generate images of DEMs |
+| grits | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
 # Usage: Data Download, Processing, and DEM Generation
