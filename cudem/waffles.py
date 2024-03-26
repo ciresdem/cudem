@@ -2258,7 +2258,7 @@ class WafflesCoastline(Waffle):
                 if not os.path.exists(tnm_zip):
                     break
                 
-                tnm_zips = utils.unzip(tnm_zip, self.cache_dir)
+                tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
                 gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
@@ -2305,7 +2305,7 @@ class WafflesCoastline(Waffle):
         """HydroLakes -- Global Lakes"""
         
         this_lakes = fetches.HydroLakes(
-            src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
+            src_region=self.wgs_region, verbose=False, outdir=self.cache_dir
         )
         this_lakes.run()        
         fr = fetches.fetch_results(this_lakes)
@@ -2347,6 +2347,12 @@ class WafflesCoastline(Waffle):
             min_length=self.min_building_length, outdir=self.cache_dir
         )
         this_osm.run()
+
+        fr = fetches.fetch_results(this_osm)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
@@ -2357,44 +2363,46 @@ class WafflesCoastline(Waffle):
             for n, osm_result in enumerate(this_osm.results):
                 pbar.update()
                 osm_z = os.path.join(this_osm._outdir, osm_result[1])
-                if fetches.Fetch(osm_result[0], verbose=True).fetch_file(
-                        osm_z, check_size=False, tries=self.osm_tries, read_timeout=3600
-                ) >= 0:
-                    #if True:
-                    if osm_result[-1] == 'bz2':
-                        osm_planet = utils.unbz2(osm_z, self.cache_dir)
-                        osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
-                        _clipped = True
-                    elif osm_result[-1] == 'pbf':
-                        osm_file = utils.ogr_clip(osm_z, self.wgs_region, 'multipolygons')
-                        _clipped = True
-                    else:
-                        osm_file = osm_z
-                        _clipped = False
+                # if fetches.Fetch(osm_result[0], verbose=True).fetch_file(
+                #         osm_z, check_size=False, tries=self.osm_tries, read_timeout=3600
+                # ) >= 0:
+                #if True:
+                if osm_result[-1] == 'bz2':
+                    osm_planet = utils.unbz2(osm_z, self.cache_dir)
+                    osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
+                    _clipped = True
+                elif osm_result[-1] == 'pbf':
+                    osm_file = utils.ogr_clip(osm_z, self.wgs_region, 'multipolygons')
+                    _clipped = True
+                else:
+                    osm_file = osm_z
+                    _clipped = False
 
-                    if os.path.getsize(osm_file) == 366:
-                        continue
+                if os.path.getsize(osm_file) == 366:
+                    continue
 
-                    out, status = utils.run_cmd(
-                        'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
-                            osm_file,
-                            self.p_region.format('te'),
-                            self.ds_config['nx'],
-                            self.ds_config['ny'],
-                        ),
-                        verbose=False
-                    )
+                out, status = utils.run_cmd(
+                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
+                        osm_file,
+                        self.p_region.format('te'),
+                        self.ds_config['nx'],
+                        self.ds_config['ny'],
+                    ),
+                    verbose=False
+                )
 
-                    if status == 0:
-                        bldg_ds = gdal.Open('bldg_osm.tif')
-                        if bldg_ds is not None:
-                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                            self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
-                            bldg_ds = bldg_ds_arr = None
+                if status == 0:
+                    bldg_ds = gdal.Open('bldg_osm.tif')
+                    if bldg_ds is not None:
+                        bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                        self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
+                        bldg_ds = bldg_ds_arr = None
 
-                        bldg_ds = None
+                    bldg_ds = None
+                else:
+                    utils.echo_warning_msg('could not parse buildings!')
 
-                    utils.remove_glob('bldg_osm.tif*')
+                utils.remove_glob('bldg_osm.tif*')
 
         bldg_ds = bldg_warp_ds = None
         
