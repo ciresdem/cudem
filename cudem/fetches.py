@@ -378,7 +378,10 @@ class Fetch:
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
                 req_h = req.headers
-                if 'Content-Length' in req_h:
+
+                if 'Content-Range' in req_h:
+                    req_s = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack
+                elif 'Content-Length' in req_h:
                     req_s = int(req_h['Content-Length'])
                 else:
                     req_s = -1
@@ -400,6 +403,7 @@ class Fetch:
                 ## recursion here may never end with incorrect user/pass
                 ## ==============================================
                 timed_out = False
+
                 if req.status_code == 401:
                     ## ==============================================
                     ## we're hoping for a redirect url here.
@@ -416,7 +420,7 @@ class Fetch:
                         read_timeout=read_timeout
                     )
 
-                elif req.status_code == 200 or req.status_code == 206:
+                elif (req.status_code == 200) or (req.status_code == 206):
                     curr_chunk = 0
                     total_size = int(req.headers.get('content-length', 0))
                     with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
@@ -466,7 +470,7 @@ class Fetch:
                         raise UnboundLocalError('sizes do not match!')
                         timed_out = True
                         
-                elif req.status_code == 429 or req.status_code == 504 or timed_out:
+                elif (req.status_code == 429) or (req.status_code == 416) or (req.status_code == 504) or (timed_out):
 
                     #elif tries > 0:
                     # if self.verbose:
