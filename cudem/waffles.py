@@ -2039,6 +2039,7 @@ class WafflesCoastline(Waffle):
     def __init__(
             self,
             want_nhd=True,
+            want_nhd_plus=False,
             want_copernicus=True,
             want_gmrt=False,
             want_lakes=False,
@@ -2072,6 +2073,7 @@ class WafflesCoastline(Waffle):
 
         super().__init__(**kwargs)
         self.want_nhd = want_nhd
+        self.want_nhd_plus = want_nhd_plus
         self.want_gmrt = want_gmrt
         self.want_copernicus = want_copernicus
         self.want_lakes = want_lakes
@@ -2102,6 +2104,8 @@ class WafflesCoastline(Waffle):
         self.cst_srs = horz_epsg        
         self._load_coast_mask()
 
+        self.want_nhd = True if self.want_nhd_plus else self.want_nhd
+        
         if self.want_gmrt:
             self._load_gmrt()
             
@@ -2260,24 +2264,27 @@ class WafflesCoastline(Waffle):
                 
                 tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
                 gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
+
                 utils.run_cmd(
                     'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
                         gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=self.verbose
                 )
-                # utils.run_cmd(
-                #     'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterBody -clipdst {} 2>/dev/null'.format(
-                #         gdb, self.p_region.format('ul_lr')
-                #     ),
-                #     verbose=self.verbose
-                # )
                 utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterBody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
+                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
                         gdb, self.p_region.format('ul_lr')
                     ),
                     verbose=self.verbose
                 )
+
+                if self.want_nhd_plus:
+                    utils.run_cmd(
+                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
+                            gdb, self.p_region.format('ul_lr')
+                        ),
+                        verbose=self.verbose
+                    )
 
             try:
                 utils.run_cmd(
@@ -2297,6 +2304,7 @@ class WafflesCoastline(Waffle):
                 tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                 tnm_ds_arr[tnm_ds_arr < 1] = 0
                 self.coast_array -= (tnm_ds_arr * self.min_weight)
+                #self.coast_array[tnm_ds_arr < 1] = 0
                 tnm_ds = tnm_ds_arr = None
                 
             utils.remove_glob('nhdArea_merge.*')
@@ -2305,7 +2313,7 @@ class WafflesCoastline(Waffle):
         """HydroLakes -- Global Lakes"""
         
         this_lakes = fetches.HydroLakes(
-            src_region=self.wgs_region, verbose=False, outdir=self.cache_dir
+            src_region=self.wgs_region, verbose=True, outdir=self.cache_dir
         )
         this_lakes.run()        
         fr = fetches.fetch_results(this_lakes)
