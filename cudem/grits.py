@@ -301,8 +301,8 @@ class Outliers(Grits):
                 self.uncertainty_mask = None
 
     def init_chunks(self):
-        self.n_chunk = utils.int_or(self.chunk_size, int(self.ds_config['nx']*.25))
-        self.n_step = utils.int_or(self.chunk_step, int(self.n_chunk*.25))
+        self.n_chunk = utils.int_or(self.chunk_size, int(self.ds_config['nx']*.35))
+        self.n_step = utils.int_or(self.chunk_step, int(self.n_chunk*.5))
     
     def generate_mask_ds(self, src_ds = None):
         ## to hold the mask data

@@ -38,6 +38,7 @@ from osgeo import gdal
 from cudem import utils
 from cudem import gdalfun
 from cudem import regions
+from cudem import fetches
 from cudem import factory
 
 try:
@@ -115,6 +116,16 @@ def generate_etopo_cpt(gmin, gmax):
                         )
                     )
     return('tmp.cpt')
+
+def fetch_cpt_city(cache_dir = './'):
+    cpt_url = "http://soliton.vm.bytemark.co.uk/pub/cpt-city/pkg/"
+    cpt_xml = fetches.iso_xml(cpt_url + "package.xml")
+    cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
+    cpt_zip = os.path.join(cache_dir, 'cpt_city.zip')
+    fetches.Fetch(cpt_url + cpt_url_bn).fetch_file(cpt_zip)
+    cpts = utils.unzip(cpt_zip, cache_dir, verbose=True)
+
+    print(cpts)
 
 ## ==============================================
 ## PERSPECTO!!

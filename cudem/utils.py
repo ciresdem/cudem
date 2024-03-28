@@ -639,6 +639,18 @@ def unbz2(bz2_file, outdir='./', overwrite=False):
                 new_file.write(data)
     return(newfilepath)
 
+def zip_list(zip_file):
+    try:
+        zip_ref = zipfile.ZipFile(zip_file)
+        zip_files = zip_ref.namelist()
+        
+        return(zip_files)
+    
+    except Exception as e:
+        echo_error_msg(e)
+
+        return(None)
+        
 def unzip(zip_file, outdir = './', overwrite = False, verbose = True):
     """unzip (extract) `zip_file`
 

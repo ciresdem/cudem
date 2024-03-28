@@ -2089,6 +2089,18 @@ class WafflesCoastline(Waffle):
         self.ds_config = None
         self.min_weight = utils.float_or(min_weight, 1)
         
+    def fetch_data(self, fetches_module, check_size=True):
+        this_fetches = fetches.FetchesFactory(
+            mod=fetches_module, src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
+        )._acquire_module()        
+        this_fetches.run()
+        fr = fetches.fetch_results(this_fetches, check_size=check_size)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        return(this_fetches)
+        
     def run(self):
         self.f_region = self.p_region.copy()
         self.f_region.buffer(pct=5, x_inc=self.xinc, y_inc=self.yinc)
@@ -2169,15 +2181,7 @@ class WafflesCoastline(Waffle):
         Used to fill un-set cells.
         """
         
-        this_gmrt = fetches.GMRT(
-            src_region=self.wgs_region, verbose=self.verbose, layer='topo', outdir=self.cache_dir
-        )
-        this_gmrt.run()
-        fr = fetches.fetch_results(this_gmrt)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
+        this_gmrt = self.fetch_data('gmrt:layer=topo')        
         gmrt_result = this_gmrt.results[0]
         gmrt_tif = os.path.join(this_gmrt._outdir, gmrt_result[1])
         gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', src_srs=self.wgs_srs)
@@ -2191,15 +2195,7 @@ class WafflesCoastline(Waffle):
     def _load_copernicus(self):
         """copernicus"""
 
-        this_cop = fetches.CopernicusDEM(
-            src_region=self.wgs_region, verbose=self.verbose, datatype='1', outdir=self.cache_dir
-        )
-        this_cop.run()
-        fr = fetches.fetch_results(this_cop, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-        
+        this_cop = self.fetch_data('copernicus:datatype=1', check_size=False)        
         for i, cop_result in enumerate(this_cop.results):
             cop_tif = os.path.join(this_cop._outdir, cop_result[1])
             gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
@@ -2216,16 +2212,7 @@ class WafflesCoastline(Waffle):
     def _load_wsf(self):
         """wsf"""
 
-        this_wsf = fetches.WSF(
-            src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
-        )
-        this_wsf.run()
-
-        fr = fetches.fetch_results(this_wsf, check_size=False)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-       
+        this_wsf = self.fetch_data('wsf', check_size=False)        
         for i, wsf_result in enumerate(this_wsf.results):
             wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
             gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
@@ -2245,16 +2232,7 @@ class WafflesCoastline(Waffle):
         High resoultion data varies by location...
         """
 
-        this_tnm = fetches.TheNationalMap(
-            src_region=self.wgs_region, verbose=self.verbose, where="Name LIKE '%Hydro%'",
-            extents='HU-8 Subbasin,HU-4 Subregion', outdir=self.cache_dir
-        )
-        this_tnm.run()
-        fr = fetches.fetch_results(this_tnm)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
+        this_tnm = self.fetch_data("tnm:where='Name LIKE %Hydro%':extents='HU-8 Subbasin,HU-4 Subregion'")        
         if len(this_tnm.results) > 0:
             tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs)
             for i, tnm_result in enumerate(this_tnm.results):
@@ -2312,15 +2290,7 @@ class WafflesCoastline(Waffle):
     def _load_lakes(self):
         """HydroLakes -- Global Lakes"""
         
-        this_lakes = fetches.HydroLakes(
-            src_region=self.wgs_region, verbose=True, outdir=self.cache_dir
-        )
-        this_lakes.run()        
-        fr = fetches.fetch_results(this_lakes)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-        
+        this_lakes = self.fetch_data('hydrolakes')
         lakes_shp = None
         lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
         lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
@@ -2349,18 +2319,9 @@ class WafflesCoastline(Waffle):
         do multiple osm calls
         """
 
-        this_osm = fetches.OpenStreetMap(
-            src_region=self.wgs_region, verbose=self.verbose,
-            planet=self.want_osm_planet, chunks=True, q='buildings', fmt='osm',
-            min_length=self.min_building_length, outdir=self.cache_dir
+        this_osm = self.fetch_data(
+            "osm:q=buildings:fmt=osm:chunks=True:min_length={}:planet={}".format(self.min_building_length, self.want_osm_planet)
         )
-        this_osm.run()
-
-        fr = fetches.fetch_results(this_osm)
-        fr.daemon = True
-        fr.start()
-        fr.join()
-
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(

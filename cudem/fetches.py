@@ -4284,6 +4284,32 @@ class ShallowBathyEverywhere(FetchModule):
         super().__init__(**kwargs)
         self.sbe_dem_url - 'https://shallowbathymetryeverywhere.com/data/dem/'
 
+class CPTCity(FetchModule):
+    def __init__(self, q = None, **kwargs):
+        super().__init__(name='cpt_city', **kwargs)
+        self.q = q
+        self.cpt_pub_url = 'http://soliton.vm.bytemark.co.uk/pub/'
+        self.cpt_pkg_url = self.cpt_pub_url + 'cpt-city/pkg/'
+
+    def run(self):
+        import zipfile
+        from io import BytesIO
+        cpt_xml = iso_xml(self.cpt_pkg_url + "package.xml")
+        cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
+        cpt_zip = requests.get(self.cpt_pkg_url + cpt_url_bn)
+        zip_ref = zipfile.ZipFile(BytesIO(cpt_zip.content))
+        zip_cpts = zip_ref.namelist()
+
+        if self.q is not None:
+            mask = [self.q in x for x in zip_cpts]
+            ff = [b for a, b in zip(mask, zip_cpts) if a]
+        else:
+            ff = zip_cpts
+
+        for f in ff:
+            self.results.append([self.cpt_pub_url + f, f.split('/')[-1], 'cpt'])
+        
+        
 class HttpDataset(FetchModule):
     """fetch an http file"""
     
@@ -4339,6 +4365,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'https': {'call': HttpDataset},
         'bing_bfp': {'call': BingBFP},
         'waterservices': {'call': WaterServices},
+        'cpt_city': {'call': CPTCity},
     }
 
     def __init__(self, **kwargs):
