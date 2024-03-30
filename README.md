@@ -408,7 +408,7 @@ waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb_idw -p -P epsg:4326 -m -u 
 # Filter the output and generate an IDW grid:
 
 ```
-grits mb19_n48x50_w123x25_2024v1.tif -M outliers
+grits mb19_n48x50_w123x25_2024v1_filtered.tif -M outliers
 ```
 
 ```
