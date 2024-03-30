@@ -391,7 +391,9 @@ nearest measurement raster.
 
 ## Automatic Gridding and filtering of Multibeam data
 
-# Fetch and grid multibeam data:
+First, we use the 'multibeam' fetches module as a datalist entry in a waffles command to fetch and grid the
+multibeam data in our region, the using that result as a datalist entry in a waffles command to grid the data
+using the 'IDW' waffles gridding module.
 
 ```
 waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb -p -P epsg:4326 -m -u -M stacks multibeam
@@ -405,7 +407,8 @@ waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb_idw -p -P epsg:4326 -m -u 
 
 **Figure 5.** Auto-gridded raw multibeam data
 
-# Filter the output and generate an IDW grid:
+The above results show some major artifacts from the raw multibeam data, so we then filter that output using
+the grits 'outlier' filter and re-generate the IDW grid with waffles:
 
 ```
 grits mb19_n48x50_w123x25_2024v1_filtered.tif -M outliers
@@ -419,10 +422,11 @@ waffles $(dlim -r mb19_n48x50_w123x25_2024v1.tif) -M IDW:radius=5 -O mb_idw -E .
 
 **Figure 6.** Auto-grided filtered multibeam data
 
-# Do all of the above in a single waffles command:
+We can combine all the above steps using a single waffles command to fetch the multibeam, filter it using the
+grits 'outlier' module with the waffles -T switch and generate an IDW DEM with the waffles 'IDW' module.
 
 ```
-waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb -p -P epsg:4326 -m -u -M IDW:radius=10 multibeam -T outliers:stacks=True
+waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb -p -P epsg:4326 -m -u -M IDW:radius=10 -T outliers:stacks=True multibeam
 ```
 
 # Additional Information
