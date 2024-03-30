@@ -404,7 +404,7 @@ waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb_idw -p -P epsg:4326 -m -u 
 ```
 
 ![](media/mb_idw19_n48x50_w123x25_2024v1_nofilter.png)
-<center><img src="media/mb19_n48x50_w123x25_2024v1_cbar.png" height="75" width="100"></center>
+<center><img src="media/mb19_n48x50_w123x25_2024v1_cbar.png" height="75"></center>
 
 **Figure 5.** Auto-gridded raw multibeam data
 
