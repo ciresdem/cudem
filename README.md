@@ -415,7 +415,7 @@ grits mb19_n48x50_w123x25_2024v1_filtered.tif -M outliers
 waffles $(dlim -r mb19_n48x50_w123x25_2024v1.tif) -M IDW:radius=5 -O mb_idw -E .11111111s -p -P epsg:4326 mb_data19_n_w_filtered.tif
 ```
 
-![](media/mb_idw19_n48x50_w123x25_2024v1_nout75.png)
+![](media/mb_idw19_n48x50_w123x25_2024v1_out75.png)
 
 **Figure 6.** Auto-grided filtered multibeam data
 
