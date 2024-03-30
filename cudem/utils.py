@@ -1038,8 +1038,8 @@ def run_cmd(cmd, data_fun=None, verbose=False):
             echo_msg('ran cmd {} and returned {}'.format(cmd.rstrip(), p.returncode))
 
         ## todo update so no crash if cmd doesn't exist!
-        if p.returncode != 0:
-            raise Exception(p.returncode)
+        #if p.returncode != 0:
+        #    raise Exception(p.returncode)
         
     return(out, p.returncode)
 

@@ -389,6 +389,42 @@ gebcop3_n28x00_w079x50_2023v1.tif - final DEM
 interpolation uncertainty equation applied to the distance to the
 nearest measurement raster.
 
+## Automatic Gridding and filtering of Multibeam data
+
+# Fetch and grid multibeam data:
+
+```
+waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb -p -P epsg:4326 -m -u -M stacks multibeam
+```
+
+```
+waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb_idw -p -P epsg:4326 -m -u -M IDW:radius=10 mb19_n48x50_w123x25_2024v1.tif
+```
+
+![](media/mb_idw19_n48x50_w123x25_2024v1_nofilter.png)
+
+**Figure 5.** Auto-gridded raw multibeam data
+
+# Filter the output and generate an IDW grid:
+
+```
+grits mb19_n48x50_w123x25_2024v1.tif -M outliers
+```
+
+```
+waffles $(dlim -r mb19_n48x50_w123x25_2024v1.tif) -M IDW:radius=5 -O mb_idw -E .11111111s -p -P epsg:4326 mb_data19_n_w_filtered.tif
+```
+
+![](media/mb_idw19_n48x50_w123x25_2024v1_nout75.png)
+
+**Figure 6.** Auto-grided filtered multibeam data
+
+# Do all of the above in a single waffles command:
+
+```
+waffles -R-123.25/-123/48.25/48.5 -E .11111111s -O mb -p -P epsg:4326 -m -u -M IDW:radius=10 multibeam -T outliers:stacks=True
+```
+
 # Additional Information
 
 The CUDEM code repository is frequently updated, and code syntax is

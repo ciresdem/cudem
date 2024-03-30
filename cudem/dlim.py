@@ -262,8 +262,8 @@ class INF:
                     data = MBSParser(fn=inf_fn).inf_parse().infos.__dict__
                     #self.check_hash = False
                     mb_inf = True
-                except:
-                    raise ValueError('CUDEMFactory: Unable to read data from {} as mb-system inf'.format(inf_fn))
+                except Exception as e:
+                    raise ValueError('CUDEMFactory: Unable to read data from {} as mb-system inf, {}'.format(inf_fn, e))
             except:
                 raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
 
@@ -791,12 +791,12 @@ class ElevationDataset:
             try:
                 self.infos.load_inf_file(inf_path)
                 
-            except ValueError:
+            except ValueError as e:
                 generate_inf = True
                 utils.remove_glob(inf_path)
                 if self.verbose:
                     utils.echo_warning_msg(
-                        'failed to parse inf {}'.format(inf_path)
+                        'failed to parse inf {}, {}'.format(inf_path, e)
                     )
         else:
             generate_inf = True        
@@ -1942,7 +1942,7 @@ class XYZFile(ElevationDataset):
                         dtype={'names': self.field_names, 'formats': self.field_formats}, max_rows=self.iter_rows
                     )
                     skip_ = 0
-                        
+
                     if self.scoff:
                         points['x'] = (points['x'] + self.x_offset) * self.x_scale
                         points['y'] = (points['y'] + self.y_offset) * self.y_scale
@@ -2740,6 +2740,8 @@ class MBSParser(ElevationDataset):
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
         this_row = 0
+        xinc = 0
+        yinc = 0
         dims = []
         inf_fn = '{}.inf'.format(self.fn) if self.fn.split('.')[-1] != 'inf' else self.fn
         with open(inf_fn) as iob:
@@ -2776,8 +2778,11 @@ class MBSParser(ElevationDataset):
                         this_row += 1
 
         mbs_region = regions.Region().from_list(self.infos.minmax)
-        xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
-        yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
+
+        if len(dims) > 0:
+            xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
+            yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
+        
         if abs(xinc) > 0 and abs(yinc) > 0:
             xcount, ycount, dst_gt = mbs_region.geo_transform(
                 x_inc=xinc, y_inc=yinc
@@ -2814,7 +2819,94 @@ class MBSParser(ElevationDataset):
         self.infos.wkt = wkt
         return(self)
 
+    def parse_(self):
+        mb_fn = os.path.join(self.fn)
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=25)
+        else:
+            mb_region = None
+
+        out_mb = utils.make_temp_fn('{}_.xyz'.format(utils.fn_basename2(mb_fn)), self.cache_dir)
+        out, status = utils.run_cmd('mblist -M{}{} -OXYZ -I{} > {}'.format(
+            self.mb_exclude, ' {}'.format(
+                mb_region.format('gmt') if mb_region is not None else ''
+            ), mb_fn, out_mb
+        ), verbose=False)
+
+        if status == 0:
+            data_set = DatasetFactory(mod = out_mb, data_format = 168, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                                      invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+                                      x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                                      verbose=self.verbose)._acquire_module()
+
+            data_set.initialize()
+            for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
+                self.data_entries.append(ds) 
+                yield(ds)
+
+        utils.remove_glob('{}*'.format(out_mb))
+        
     def yield_ds(self):        
+        mb_fn = os.path.join(self.fn)
+        if self.region is None or self.data_region is None:
+            self.want_mbgrid = False
+
+        ## update want_mbgrid to output points!
+        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None): 
+            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
+                tmp_dl.write(
+                    '{} {} {}\n'.format(
+                        self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''
+                    )
+                )
+
+            ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
+            try:
+                utils.run_cmd(
+                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                    ), verbose=True
+                )
+                
+                gdalfun.gdal2gdal('{}.grd'.format(ofn))
+                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+                                  src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+
+                yield(mbs_ds)
+                utils.remove_glob('{}.tif*'.format(ofn))
+            except:
+                pass
+        else:        
+            if self.region is not None:
+                mb_region = self.region.copy()
+                mb_region.buffer(pct=25)
+            else:
+                mb_region = None
+            
+            mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
+                    'mblist -M{}{} -OXYZ -I{}'.format(
+                        self.mb_exclude, ' {}'.format(
+                            mb_region.format('gmt') if mb_region is not None else ''
+                        ), mb_fn
+                    ),
+                    verbose=False,
+            )]
+
+            if len(mb_points) > 0:
+                mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+            else:
+                mb_points = None
+            
+            if self.want_binned:
+                mb_points = self.bin_z_points(mb_points)
+
+            if mb_points is not None:
+                yield(mb_points)
+            
+    def yield_ds_(self):        
         mb_fn = os.path.join(self.fn)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
@@ -2852,7 +2944,6 @@ class MBSParser(ElevationDataset):
             zs = []
             ws = []
             us = []
-
             if self.region is not None:
                 mb_region = self.region.copy()
                 mb_region.buffer(pct=25)
@@ -2907,7 +2998,7 @@ class MBSParser(ElevationDataset):
 
                 if mb_points is not None:
                     yield(mb_points)
-
+            
     def bin_points(self, points, y_res, z_res):
         '''Bin data along vertical and horizontal scales for later segmentation'''
         
@@ -5646,18 +5737,18 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e) 
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e) 
 ### End
