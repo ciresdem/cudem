@@ -389,7 +389,7 @@ gebcop3_n28x00_w079x50_2023v1.tif - final DEM
 interpolation uncertainty equation applied to the distance to the
 nearest measurement raster.
 
-## Automatic Gridding and filtering of Multibeam data
+## Automatic gridding and filtering of Multibeam data
 
 First, we use the 'multibeam' fetches module as a datalist entry in a waffles command to fetch and grid the
 multibeam data in our region, the using that result as a datalist entry in a waffles command to grid the data
