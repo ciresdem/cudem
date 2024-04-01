@@ -55,7 +55,11 @@ pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 - Setup a conda environment and install the dependencies:
 
 ```
-conda install -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile gfortran
+conda create -n cudem -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git
+conda activate cudem
+wget https://geodesy.noaa.gov/TOOLS/Htdp/HTDP-download.zip
+unzip HTDP-download.zip
+gfortran htdp.f
 ```
 
 - install HTDP and MB-System

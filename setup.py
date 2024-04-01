@@ -58,6 +58,7 @@ setuptools.setup(
         'mercantile', # for MS building footprints
         'utm', # for cshelph
         'pandas', # for cshelph
+        'windows-curses', # for windows
         # 'shapely',
         #'xarray', # for cshelph
         #'geopandas', # for cshelph
@@ -67,7 +68,7 @@ setuptools.setup(
         #'earthaccess', # for earthdata access sst
         #'zarr',
         #'zarr-eosdis-store',
-        # 'windows-curses', # for windows
+        
         # 'pydap',
     ], 
     entry_points = {
