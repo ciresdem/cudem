@@ -2398,10 +2398,17 @@ class GDALFile(ElevationDataset):
                     self.weight_mask = self.tmp_weight_band
 
             if self.remove_flat:
-                tmp_noflat = utils.make_temp_fn('tmp_flat.tif', temp_dir=self.cache_dir)
-                tmp_ds = gdalfun.gdal_remove_flats(tmp_ds, dst_dem=tmp_noflat, verbose=self.verbose)[0]
+                #tmp_noflat = utils.make_temp_fn('tmp_flat.tif', temp_dir=self.cache_dir)
+                #tmp_ds = gdalfun.gdal_remove_flats(tmp_ds, dst_dem=tmp_noflat, verbose=self.verbose)[0]
                 #gdalfun.gdal_flat_to_nan(tmp_ds, verbose=self.verbose)[0]
 
+                # src_dem = os.path.join(self.fetch_module._outdir, result[1])
+                grits_filter = grits.GritsFactory(mod='flats', src_dem=tmp_ds, size_threshold=10, cache_dir=self.fetch_module._outdir)._acquire_module()
+                grits_filter()
+                tmp_ds = grits_filter.dst_dem
+                #tmp_ds = gdal.Open(ned_fn)
+
+                
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_proj4, dst_srs=self.dst_proj4,
                                         src_region=self.warp_region,#if (self.y_inc is not None and self.x_inc is not None) else None,
                                         sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
@@ -3928,6 +3935,25 @@ class Fetcher(ElevationDataset):
                             remote=True)._acquire_module()
         yield(ds)
 
+class NEDFetcher(Fetcher):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+        
+        src_dem = os.path.join(self.fetch_module._outdir, result[1])
+        # grits_filter = grits.GritsFactory(mod='flats', src_dem=src_dem, size_threshold=10, cache_dir=self.fetch_module._outdir)._acquire_module()
+        # grits_filter()
+        # ned_fn = grits_filter.dst_dem
+        
+        ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                            remote=True, remove_flat=True)._acquire_module()
+        yield(ds)
+
+        
 class DAVFetcher_CoNED(Fetcher):
     """CoNED from the digital coast 
 
@@ -5185,6 +5211,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -207: {'name': 'digital_coast', 'fmts': ['digital_coast'], 'call': Fetcher},
         -208: {'name': 'ncei_thredds', 'fmts': ['ncei_thredds'], 'call': Fetcher},
         -209: {'name': 'tnm', 'fmts': ['tnm'], 'call': Fetcher},
+        -215: {'name': 'ned', 'fmts': ['ned', 'ned1'], 'call': NEDFetcher},        
         -210: {'name': "CUDEM", 'fmts': ['CUDEM'], 'call': Fetcher},
         -211: {'name': "CoNED", 'fmts': ['CoNED'], 'call': DAVFetcher_CoNED},
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},

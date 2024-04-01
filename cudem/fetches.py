@@ -3045,6 +3045,21 @@ http://tnmaccess.nationalmap.gov/
                     self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
 
 ## ==============================================
+## The National Map - NED (1 & 1/3) shortcut
+## ==============================================
+class NED(TheNationalMap):
+    def __init__(self, **kwargs):
+        super().__init__(where="NAME LIKE '%NED%'", **kwargs)
+        self.data_format = 200
+## ==============================================
+## The National Map - NED (1m) shortcut
+## ==============================================
+class NED1(TheNationalMap):
+    def __init__(self, **kwargs):
+        super().__init__(where="NAME LIKE '%DEM%'", **kwargs)
+        self.data_format = 200
+        
+## ==============================================
 ## EMODNet - EU data
 ## ==============================================
 class EMODNet(FetchModule):
@@ -4344,6 +4359,8 @@ class FetchesFactory(factory.CUDEMFactory):
         'hydronos': {'call': HydroNOS},
         'ncei_thredds': {'call': NCEIThreddsCatalog},
         'tnm': {'call': TheNationalMap},
+        'ned': {'call': NED},
+        'ned1': {'call': NED1},
         'emodnet': {'call': EMODNet},
         'chs': {'call': CHS}, # chs isn't working! awaiting IT assistance from CA
         'hrdem': {'call': HRDEM},

@@ -4568,11 +4568,11 @@ def nodata_count_mask(src_dem, band = 1):
     """
     
     mn = None
-    with gdal_datasource(src_dem) as src_ds:
+    with gdalfun.gdal_datasource(src_dem) as src_ds:
         if src_ds is not None:
             src_band = src_ds.GetRasterBand(band)
             src_arr = src_band.ReadAsArray().astype(float)
-            src_config = gdal_infos(src_ds)
+            src_config = gdalfun.gdal_infos(src_ds)
             src_arr[src_arr == src_config['ndv']] = np.nan
 
             ## generate the mask array

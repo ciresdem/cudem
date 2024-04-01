@@ -522,8 +522,8 @@ class Outliers(Grits):
                     self.mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
 
                 mask_mask_data = self.mask_mask_band.ReadAsArray()
-                mask_count_data = self.mask_count_band.ReadAsArray()
                 mask_mask_data[mask_mask_data == 0] = np.nan
+                mask_count_data = self.mask_count_band.ReadAsArray()
                 mask_count_data[mask_count_data == 0] = np.nan
 
                 if self.aggressive:
@@ -554,7 +554,7 @@ class Outliers(Grits):
                 utils.echo_msg('removed {} outliers.'.format(
                     np.count_nonzero(outlier_mask)
                 ))
-                dst_ds = self.mask_mask_ds = unc_ds = mask_mask_data = mask_count_data = None
+                self.mask_mask_ds = dst_ds = unc_ds = mask_mask_data = mask_count_data = None
                 if not self.return_mask:
                     utils.remove_glob(self.mask_mask_fn)
                     
