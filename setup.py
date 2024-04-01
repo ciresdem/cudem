@@ -58,7 +58,7 @@ setuptools.setup(
         'mercantile', # for MS building footprints
         'utm', # for cshelph
         'pandas', # for cshelph
-        'windows-curses', # for windows
+        # 'windows-curses', # for windows
         # 'shapely',
         #'xarray', # for cshelph
         #'geopandas', # for cshelph
