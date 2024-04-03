@@ -300,15 +300,20 @@ class Fetch:
         except:
             req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
 
-        if req.status_code == 416:
-            if 'Range' in self.headers.keys():
-                del self.headers['Range']
-
+        if req is not None:
+            if req.status_code == 504:
+                time.sleep(2)
                 req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
+                
+            elif req.status_code == 416:
+                if 'Range' in self.headers.keys():
+                    del self.headers['Range']
                     
-        if req is not None and req.status_code != 200:
-            utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
-            req = None
+                    req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
+                    
+            elif req.status_code != 200:
+                utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
+                req = None
             
         return(req)
             

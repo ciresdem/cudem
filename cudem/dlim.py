@@ -396,7 +396,7 @@ class ElevationDataset:
             self.params['mod'] = self.fn
             self.params['mod_name'] = self.data_format
             self.params['mod_args'] = {}
-
+            
     def __str__(self):
         return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
     
@@ -428,7 +428,7 @@ class ElevationDataset:
                 )
             )
             self.sample_alg = 'bilinear'
-            
+
         if utils.fn_url_p(self.fn):
             self.remote = True
 
@@ -725,17 +725,23 @@ class ElevationDataset:
 
         if self.data_format is None:
             return(False)
-        
+
+        #check_path=True
+        #if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
+        #    check_path = False
+            
+        #if check_path:
         if self.fn is not None:
             if self.fn not in fmts:
                 if not isinstance(self.fn, list):
-                    if not utils.fn_url_p(self.fn):
-                        if self.data_format > -10:
-                            if not os.path.exists(self.fn):
-                                return (False)
+                    if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
+                        if not utils.fn_url_p(self.fn):
+                            if self.data_format > -10:
+                                if not os.path.exists(self.fn):
+                                    return (False)
 
-                            if os.stat(self.fn).st_size == 0:
-                                return(False)
+                                if os.stat(self.fn).st_size == 0:
+                                    return(False)
                         
         return(True)
         
@@ -2198,7 +2204,7 @@ class GDALFile(ElevationDataset):
         self.y_band = y_band
         self.node = node
 
-        if self.fn.startswith('http') or self.fn.startswith('/vsicurl/'):
+        if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
             self.check_path = False
 
         if self.valid_p() and self.src_srs is None:
@@ -2240,11 +2246,11 @@ class GDALFile(ElevationDataset):
                 #if scan:
                 #    zr = src_ds.GetRasterBand(utils.int_or(self.band_no, 1)).ComputeRasterMinMax()
                 
-        #this_region.zmin, this_region.zmax = zr[0], zr[1]
-        #self.infos.minmax = this_region.export_as_list(include_z=True)
-        self.infos.minmax = this_region.export_as_list()
-        self.infos.wkt = this_region.export_as_wkt()
-        self.infos.numpts = ds_infos['nb']
+                #this_region.zmin, this_region.zmax = zr[0], zr[1]
+                #self.infos.minmax = this_region.export_as_list(include_z=True)
+                self.infos.minmax = this_region.export_as_list()
+                self.infos.wkt = this_region.export_as_wkt()
+                self.infos.numpts = ds_infos['nb']
 
         return(self.infos)
         
@@ -2682,20 +2688,28 @@ class BAGFile(ElevationDataset):
                 sub_datasets = src_ds.GetSubDatasets()
                 src_ds = None
 
-                for sub_dataset in sub_datasets:
-                    sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                      weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01, src_region=self.region,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose, check_path=False, super_grid=True,
-                                      metadata=copy.deepcopy(self.metadata))
-                    sub_ds.infos = {}
-                    sub_ds.generate_inf()
-                    for gdal_ds in sub_ds.parse():
-                        yield(gdal_ds)
+                with tqdm(
+                        total=len(sub_datasets),
+                        desc='parsing {} supergrids from BAG file {}'.format(len(sub_datasets), self.fn),
+                        leave=self.verbose
+                ) as pbar:                
+                    for sub_dataset in sub_datasets:
+                        pbar.update()
+                        sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                                          weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01, src_region=self.region,
+                                          x_inc=self.x_inc, y_inc=self.y_inc, verbose=False, check_path=False, super_grid=True,
+                                          uncertainty_mask=2, metadata=copy.deepcopy(self.metadata))
+                        #sub_ds.infos = {}
+                        self.data_entries.append(sub_ds)
+                        sub_ds.initialize()
+                        #sub_ds.generate_inf()
+                        for gdal_ds in sub_ds.parse():
+                            yield(gdal_ds)
 
             else:
                 oo.append("MODE=RESAMPLED_GRID")
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
-                sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs, node='grid',
                                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
                                   verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
                 self.data_entries.append(sub_ds)
@@ -2706,7 +2720,7 @@ class BAGFile(ElevationDataset):
         else:
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-                              uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
+                              uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata), node='grid')
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
@@ -2755,9 +2769,13 @@ class MBSParser(ElevationDataset):
             for il in iob:
                 til = il.split()
                 if len(til) > 1:
+
                     if til[0] == 'Swath':
                         if til[2] == 'File:':
                             self.infos.name = til[3]
+
+                    if ' '.join(til[:-1]) == 'MBIO Data Format ID:':
+                        self.mb_fmt = til[-1]
                             
                     if til[0] == 'Number':
                         if til[2] == 'Records:':
@@ -2859,6 +2877,8 @@ class MBSParser(ElevationDataset):
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
 
+        self.inf_parse()
+
         ## update want_mbgrid to output points!
         if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None): 
             with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
@@ -2892,14 +2912,14 @@ class MBSParser(ElevationDataset):
                 mb_region.buffer(pct=25)
             else:
                 mb_region = None
-            
+
             mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZ -I{}'.format(
+                    'mblist -M{}{} -OXYZ -I{} {}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') if mb_region is not None else ''
-                        ), mb_fn
+                        ), mb_fn, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
                     ),
-                    verbose=False,
+                    verbose=True,
             )]
 
             if len(mb_points) > 0:
@@ -4863,8 +4883,9 @@ class HydroNOSFetcher(Fetcher):
     -----------
     Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.HydroNOS.__doc__)
 
-    def __init__(self, **kwargs):
+    def __init__(self, explode=False, **kwargs):
         super().__init__(**kwargs)
+        self.explode=explode
 
     def set_ds(self, result):
         if result[2] == 'xyz':
@@ -4887,7 +4908,7 @@ class HydroNOSFetcher(Fetcher):
             )
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower():
-                    yield(DatasetFactory(mod=bag_fn, data_format=201, src_srs=None, dst_srs=self.dst_srs,
+                    yield(DatasetFactory(mod=bag_fn, data_format=201, explode=self.explode, src_srs=None, dst_srs=self.dst_srs,
                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                          parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                          cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
