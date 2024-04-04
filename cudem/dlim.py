@@ -2872,159 +2872,139 @@ class MBSParser(ElevationDataset):
 
         utils.remove_glob('{}*'.format(out_mb))
         
-    def yield_ds(self):        
+    def yield_ds_(self):        
         mb_fn = os.path.join(self.fn)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
 
         self.inf_parse()
 
-        ## update want_mbgrid to output points!
-        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None): 
-            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
-                tmp_dl.write(
-                    '{} {} {}\n'.format(
-                        self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''
-                    )
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=25)
+        else:
+            mb_region = None
+
+        mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
+                'mblist -M{}{} -OXYZ -I{}'.format(
+                    self.mb_exclude, ' {}'.format(
+                        mb_region.format('gmt') if mb_region is not None else ''
+                    ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
+                ),
+                verbose=True,
+        )]
+
+        if len(mb_points) > 0:
+            mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+        else:
+            mb_points = None
+
+        if self.want_binned:
+            mb_points = self.bin_z_points(mb_points)
+
+        if mb_points is not None:
+            yield(mb_points)
+
+    def yield_mbgrid_ds(self):
+        mb_fn = os.path.join(self.fn)
+        with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
+            tmp_dl.write(
+                '{} {} {}\n'.format(
+                    self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''
                 )
+            )
 
-            ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
-            try:
-                utils.run_cmd(
-                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                    ), verbose=True
-                )
-                
-                gdalfun.gdal2gdal('{}.grd'.format(ofn))
-                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-                                  src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+        ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
+        try:
+            utils.run_cmd(
+                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                    self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
+                ), verbose=True
+            )
 
-                yield(mbs_ds)
-                utils.remove_glob('{}.tif*'.format(ofn))
-            except:
-                pass
-        else:        
-            if self.region is not None:
-                mb_region = self.region.copy()
-                mb_region.buffer(pct=25)
-            else:
-                mb_region = None
+            gdalfun.gdal2gdal('{}.grd'.format(ofn))
+            utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+            mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+                              weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+                              src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
 
-            mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZ -I{}'.format(
-                        self.mb_exclude, ' {}'.format(
-                            mb_region.format('gmt') if mb_region is not None else ''
-                        ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
-                    ),
-                    verbose=True,
-            )]
+            yield(mbs_ds)
+            utils.remove_glob('{}.tif*'.format(ofn))
+        except:
+            pass
 
-            if len(mb_points) > 0:
-                mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
-            else:
-                mb_points = None
-            
+    def yield_mblist_ds(self):
+        mb_fn = os.path.join(self.fn)
+        xs = []
+        ys = []
+        zs = []
+        ws = []
+        us = []
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=25)
+        else:
+            mb_region = None
+
+        for line in utils.yield_cmd(
+                'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
+                    self.mb_exclude, ' {}'.format(
+                        mb_region.format('gmt') if mb_region is not None else ''
+                    ), mb_fn
+                ),
+                verbose=False,
+        ):
+            this_line = [float(x) for x in line.strip().split('\t')]
+            x = this_line[0]
+            y = this_line[1]
+            z = this_line[2]
+            crosstrack_distance = this_line[3]
+            crosstrack_slope = this_line[4]
+            flat_bottom_grazing_angle = this_line[5]
+            seafloor_grazing_angle = this_line[6]
+            beamflag = this_line[7]
+            pitch = this_line[8]
+            draft = this_line[9]
+            roll = this_line[10]
+            heave = this_line[11]
+            speed = this_line[12]
+
+            #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
+            if int(beamflag) == 0:# and abs(this_line[4]) < .15:
+                u_depth = ((2+(0.02*(z*-1)))*0.51)
+                #u_depth = 0
+                #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                #u_cd = 0
+                u = math.sqrt(u_depth**2 + u_cd**2)
+                xs.append(x)
+                ys.append(y)
+                zs.append(z)
+                ws.append(1)
+                us.append(u)
+
+        if len(xs) > 0:
+            mb_points = np.column_stack((xs, ys, zs, ws, us))
+            xs = ys = zs = ws = us = None
+            mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
+
             if self.want_binned:
                 mb_points = self.bin_z_points(mb_points)
 
             if mb_points is not None:
                 yield(mb_points)
-            
-    def yield_ds_(self):        
+        
+    def yield_ds(self):        
         mb_fn = os.path.join(self.fn)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
 
         ## update want_mbgrid to output points!
-        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None): 
-            with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
-                tmp_dl.write(
-                    '{} {} {}\n'.format(
-                        self.fn, self.mb_fmt if self.mb_fmt is not None else '', self.weight if self.mb_fmt is not None else ''
-                    )
-                )
-
-            ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
-            try:
-                utils.run_cmd(
-                    'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
-                        self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
-                    ), verbose=True
-                )
-                
-                gdalfun.gdal2gdal('{}.grd'.format(ofn))
-                utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-                mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                  weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-                                  src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
-
-                yield(mbs_ds)
-                utils.remove_glob('{}.tif*'.format(ofn))
-            except:
-                pass
-        else:        
-            xs = []
-            ys = []
-            zs = []
-            ws = []
-            us = []
-            if self.region is not None:
-                mb_region = self.region.copy()
-                mb_region.buffer(pct=25)
-            else:
-                mb_region = None
-
-            for line in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
-                        self.mb_exclude, ' {}'.format(
-                            mb_region.format('gmt') if mb_region is not None else ''
-                        ), mb_fn
-                    ),
-                    verbose=False,
-            ):
-                this_line = [float(x) for x in line.strip().split('\t')]
-                x = this_line[0]
-                y = this_line[1]
-                z = this_line[2]
-                crosstrack_distance = this_line[3]
-                crosstrack_slope = this_line[4]
-                flat_bottom_grazing_angle = this_line[5]
-                seafloor_grazing_angle = this_line[6]
-                beamflag = this_line[7]
-                pitch = this_line[8]
-                draft = this_line[9]
-                roll = this_line[10]
-                heave = this_line[11]
-                speed = this_line[12]
-                
-                #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
-                if int(beamflag) == 0:# and abs(this_line[4]) < .15:
-                    #u_depth = ((2+(0.02*(z*-1)))*0.51)
-                    u_depth = 0
-                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                    #u_cd = 0
-                    u = math.sqrt(u_depth**2 + u_cd**2)
-                    xs.append(x)
-                    ys.append(y)
-                    zs.append(z)
-                    ws.append(1)
-                    us.append(u)
-
-            if len(xs) > 0:
-                mb_points = np.column_stack((xs, ys, zs, ws, us))
-                xs = ys = zs = ws = us = None
-                mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
-
-                if self.want_binned:
-                    mb_points = self.bin_z_points(mb_points)
-
-                if mb_points is not None:
-                    yield(mb_points)
+        if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
+            yield(self.yield_mbgrid_ds)
+        else:
+            yield(self.yield_mblist_ds)
             
     def bin_points(self, points, y_res, z_res):
         '''Bin data along vertical and horizontal scales for later segmentation'''

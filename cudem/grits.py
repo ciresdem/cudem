@@ -273,7 +273,7 @@ class Outliers(Grits):
     def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, return_mask = False,
                  elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
                  rough_weight = 1, tri_weight = 1, aggressive = False,
-                 interpolation='cubic', **kwargs):
+                 interpolation='nearest', **kwargs):
         
         super().__init__(**kwargs)
         self.chunk_size = chunk_size
@@ -306,10 +306,12 @@ class Outliers(Grits):
         auto_chunks = self._chunks(src_arr)        
         self.n_chunk = utils.int_or(self.chunk_size, auto_chunks[0])
         self.n_step = utils.int_or(self.chunk_step, auto_chunks[1])
+        src_arr = src_den = None
 
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
-        n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-n_den))
+        #n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-n_den))
+        n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-math.sqrt(n_den)))
         n_step = math.ceil(n_chunk*n_den)
         
         return(n_chunk, n_step)
@@ -361,6 +363,9 @@ class Outliers(Grits):
                     )
                 except:
                     pass
+
+                point_values = xi = yi = None
+            point_indices = None
         
         ## generate a mem datasource to feed into gdal.DEMProcessing
         dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]), self.gt[1], 0., self.gt[3] + (srcwin[1] * self.gt[5]), 0., self.gt[5])
@@ -395,7 +400,7 @@ class Outliers(Grits):
     def mask_outliers(
             self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False, src_weight=1
     ):
-        if src_data is not None and mask_data is not None:
+        if src_data is not None and mask_data is not None and count_data is not None:
             upper_limit, lower_limit = self.get_outliers(src_data, percentile)
             if upper_limit != 0:
                 mask_data[(src_data > upper_limit)] = np.sqrt(
@@ -460,6 +465,7 @@ class Outliers(Grits):
                     band_data = self.ds_band.ReadAsArray(*srcwin)
                     band_data[band_data == self.ds_config['ndv']] = np.nan
                     if np.all(np.isnan(band_data)):
+                        band_data = None
                         continue
 
                     #srcwin_buff = self._chunks(band_data)[1]                    
@@ -489,10 +495,12 @@ class Outliers(Grits):
                             src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data,
                             percentile=self.percentile, upper_only=True, src_weight=self.unc_weight
                         )
+                        unc_data = None
 
                     ## generate a mem datasource to feed into gdal.DEMProcessing
                     srcwin_ds = self.generate_mem_ds(band_data=band_data, srcwin=srcwin)
                     if srcwin_ds is None:
+                        band_data = None
                         continue
 
                     ## apply curvature outliers
@@ -520,6 +528,7 @@ class Outliers(Grits):
                     ## write the mask data to file
                     self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
                     self.mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
+                    band_data = mask_mask_data = mask_count_data = None
 
                 mask_mask_data = self.mask_mask_band.ReadAsArray()
                 mask_mask_data[mask_mask_data == 0] = np.nan
@@ -564,7 +573,7 @@ class Outliers(Grits):
 
 ## ==============================================
 ## Flats - filter out flat areas
-## ==============================================
+## ============================================
 class Flats(Grits):
     """Remove flat areas from the input DEM
 
@@ -722,7 +731,7 @@ def grits_cli(argv = sys.argv):
             sys.stdout.write('{}\n'.format(cudem.__version__))
             sys.exit(0)
         elif arg[0] == '-':
-            sys.stdout.write(uncertainties_cli_usage)
+            sys.stdout.write(grits_cli_usage)
             utils.echo_error_msg('{} is not a valid grits cli switch'.format(arg))
             sys.exit(0)
         else:
