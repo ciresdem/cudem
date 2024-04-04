@@ -3002,9 +3002,11 @@ class MBSParser(ElevationDataset):
 
         ## update want_mbgrid to output points!
         if self.want_mbgrid and (self.x_inc is not None and self.y_inc is not None):
-            yield(self.yield_mbgrid_ds)
+            for pts in self.yield_mbgrid_ds():
+                yield(pts)
         else:
-            yield(self.yield_mblist_ds)
+            for pts in self.yield_mblist_ds():
+                yield(pts)
             
     def bin_points(self, points, y_res, z_res):
         '''Bin data along vertical and horizontal scales for later segmentation'''
