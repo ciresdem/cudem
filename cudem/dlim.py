@@ -2574,10 +2574,10 @@ class GDALFile(ElevationDataset):
             ## ==============================================
             #if self.node == 'pixel':
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
+            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node=self.node)
 
             if self.x_band is None and self.y_band is None:
-                geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
+                #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
                 lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
                 lat_array = np.zeros((lon_array.shape))
                 lat_array[:] = geo_y_origin
@@ -2917,7 +2917,7 @@ class MBSParser(ElevationDataset):
                     'mblist -M{}{} -OXYZ -I{} {}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') if mb_region is not None else ''
-                        ), mb_fn, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
+                        ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
                     ),
                     verbose=True,
             )]
@@ -4866,11 +4866,12 @@ class MBSFetcher(Fetcher):
 
     def set_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, want_binned=self.want_binned,
-                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            remote=True)._acquire_module()
+        if mb_infos[2] != '32':
+            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
+                                parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, want_binned=self.want_binned,
+                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
+                                remote=True)._acquire_module()
 
         yield(ds)
                 
