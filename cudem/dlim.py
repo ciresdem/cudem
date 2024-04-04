@@ -2914,7 +2914,7 @@ class MBSParser(ElevationDataset):
                 mb_region = None
 
             mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
-                    'mblist -M{}{} -OXYZ -I{} {}'.format(
+                    'mblist -M{}{} -OXYZ -I{}'.format(
                         self.mb_exclude, ' {}'.format(
                             mb_region.format('gmt') if mb_region is not None else ''
                         ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
