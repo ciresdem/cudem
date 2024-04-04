@@ -2574,7 +2574,7 @@ class GDALFile(ElevationDataset):
             ## ==============================================
             #if self.node == 'pixel':
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node=self.node)
+            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
 
             if self.x_band is None and self.y_band is None:
                 #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
