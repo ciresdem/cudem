@@ -310,8 +310,8 @@ class Outliers(Grits):
 
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
-        n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-n_den))
-        #n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-math.sqrt(n_den)))
+        #n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-n_den))
+        n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-math.sqrt(n_den)))
         n_step = math.ceil(n_chunk*n_den)
         
         return(n_chunk, n_step)

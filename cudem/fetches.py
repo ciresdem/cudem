@@ -1552,7 +1552,7 @@ https://data.ngdc.noaa.gov/platforms/
                 til = il.split()
                 if len(til) > 1:
                     if til[0] == 'MBIO':
-                        return('mb'.format(til[4]))
+                        return('{}'.format(til[4]))
 
     def mb_inf_data_date(self, src_inf):
         """extract the data format from the mbsystem inf file."""
@@ -3056,6 +3056,7 @@ class NED(TheNationalMap):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%NED%'", **kwargs)
         self.data_format = 200
+        
 ## ==============================================
 ## The National Map - NED (1m) shortcut
 ## ==============================================
