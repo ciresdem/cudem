@@ -271,7 +271,7 @@ class Outliers(Grits):
     """
     
     def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, return_mask = False,
-                 elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
+                 elevation_weight = .25, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
                  rough_weight = 1, tri_weight = 1, aggressive = False,
                  interpolation='nearest', **kwargs):
         
@@ -303,18 +303,17 @@ class Outliers(Grits):
 
     def init_chunks(self, src_ds = None):
         src_arr, src_den = self.gdal_density(src_ds)
-        auto_chunks = self._chunks(src_arr)        
-        self.n_chunk = utils.int_or(self.chunk_size, auto_chunks[0])
-        self.n_step = utils.int_or(self.chunk_step, auto_chunks[1])
+        self._chunks(src_arr)
         src_arr = src_den = None
 
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
-        #n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-n_den))
-        n_chunk = math.ceil(math.sqrt(src_arr.size) * (1-math.sqrt(n_den)))
-        n_step = math.ceil(n_chunk*n_den)
+        self.n_chunk = utils.int_or(self.chunk_size, math.ceil(math.sqrt(src_arr.size) * (1-n_den)))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 10))
+        #self.n_chunk = utils.int_or(self.chunk_size, math.ceil(math.sqrt(src_arr.size) * ((1-n_den) * .1)))
+        #self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (1-n_den)))
         
-        return(n_chunk, n_step)
+        #return(n_chunk, n_step)
         
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
@@ -438,15 +437,14 @@ class Outliers(Grits):
         """Scan a src_gdal file for outliers and remove them."""
 
         with gdalfun.gdal_datasource(
-                self.src_dem, update=True if self.dst_dem is None else False
+                self.src_dem, update=False#update=True if self.dst_dem is None else False
         ) as src_ds:
             if src_ds is not None:
                 self.init_ds(src_ds=src_ds)
                 self.generate_mask_ds(src_ds=src_ds)
                 self.init_chunks(src_ds=src_ds)
-
                 #utils.echo_msg(self.gdal_density(src_ds))
-                #src_denself.gdal_density(src_ds)
+                #src_den = self.gdal_density(src_ds)[1]
                 
                 # uncertainty ds
                 unc_band = None
@@ -456,7 +454,8 @@ class Outliers(Grits):
                         unc_band = unc_ds.GetRasterBand(1)
                     elif self.unc_is_band:
                         unc_band = src_ds.GetRasterBand(self.uncertainty_mask)
-
+                        
+                #while self.n_chunk <= math.ceil(math.sqrt(self.ds_config['nb']) * (1-src_den)):
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=self.n_chunk,
                         step=self.n_step, verbose=self.verbose, msg='scanning for outliers ({})'.format(self.percentile)
@@ -468,14 +467,15 @@ class Outliers(Grits):
                         band_data = None
                         continue
 
-                    #srcwin_buff = self._chunks(band_data)[1]                    
-                    #srcwin = utils.buffer_srcwin(srcwin, (src_ds.RasterYSize, src_ds.RasterXSize), srcwin_buff)
-                    #band_data = self.ds_band.ReadAsArray(*srcwin)
-                    #band_data[band_data == self.ds_config['ndv']] = np.nan
-                    #if np.all(np.isnan(band_data)):
-                    #    continue                    
-                    # n_chunk = self._chunks(band_data)[0]
-                    # n_step = n_chunk                    
+                    # n_den = self._density(band_data)
+                    # while n_den < src_den:
+                    #     srcwin_buff = self._chunks(band_data)[0]
+                    #     srcwin = utils.buffer_srcwin(srcwin, (src_ds.RasterYSize, src_ds.RasterXSize), srcwin_buff)
+                    #     band_data = self.ds_band.ReadAsArray(*srcwin)
+                    #     band_data[band_data == self.ds_config['ndv']] = np.nan
+                    #     if np.all(np.isnan(band_data)):
+                    #         continue
+                    #     n_den = self._density(band_data)
 
                     ## read in the mask data for the srcwin
                     mask_mask_data = self.mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
@@ -530,39 +530,39 @@ class Outliers(Grits):
                     self.mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
                     band_data = mask_mask_data = mask_count_data = None
 
+                    #self.n_chunk *= 2
+                        
                 mask_mask_data = self.mask_mask_band.ReadAsArray()
                 mask_mask_data[mask_mask_data == 0] = np.nan
                 mask_count_data = self.mask_count_band.ReadAsArray()
                 mask_count_data[mask_count_data == 0] = np.nan
+                #mask_mask_data *= mask_count_data
 
+                count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)                
                 if self.aggressive:
                     mask_upper_limit = np.nanpercentile(mask_mask_data, self.percentile)
-                    count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
+                    mask_lower_limit = None
+                    outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
                 else:
                     mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, self.percentile)
-                    count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
-
-                outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))                
-                #if self.dst_dem is not None:
+                    outlier_mask = (((mask_mask_data > mask_upper_limit) | (mask_mask_data < mask_lower_limit)) & (mask_count_data > count_upper_limit))
+                    
+                if self.verbose:
+                    utils.echo_msg('outliers: {} {}'.format(mask_upper_limit, mask_lower_limit))
+                    utils.echo_msg('counts: {}'.format(count_upper_limit))                    
+                        
                 src_data = self.ds_band.ReadAsArray()
                 src_data[outlier_mask] = self.ds_config['ndv']
-                #status = gdalfun.gdal_write(src_data, self.dst_dem, self.ds_config)
-
                 with gdalfun.gdal_datasource(self.dst_dem, update=True) as dst_ds:
                     dst_band = dst_ds.GetRasterBand(self.band)
                     dst_band.WriteArray(src_data)
-                    # ## remove corresponding cells from all bands in the raster
-                    # for b in range(1, src_ds.RasterCount+1):                        
-                    #     this_band = src_ds.GetRasterBand(b)
-                    #     this_arr = this_band.ReadAsArray()
-                    #     this_arr[outlier_mask] = self.ds_config['ndv']                    
-                    #     this_band.WriteArray(this_arr)
-                    #     this_arr = None
 
-                src_data = None                    
-                utils.echo_msg('removed {} outliers.'.format(
-                    np.count_nonzero(outlier_mask)
-                ))
+                src_data = None
+                if self.verbose:
+                    utils.echo_msg('removed {} outliers.'.format(
+                        np.count_nonzero(outlier_mask)
+                    ))
+                    
                 self.mask_mask_ds = dst_ds = unc_ds = mask_mask_data = mask_count_data = None
                 if not self.return_mask:
                     utils.remove_glob(self.mask_mask_fn)

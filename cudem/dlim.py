@@ -1776,6 +1776,7 @@ class ElevationDataset:
             ## ==============================================
             ## set the srcwin of the incoming points
             ## ==============================================
+
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
 
