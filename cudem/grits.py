@@ -273,7 +273,7 @@ class Outliers(Grits):
     
     def __init__(self, chunk_size = None, chunk_step = None, percentile = 75, return_mask = False,
                  elevation_weight = 1, curvature_weight = 1, tpi_weight = 1, unc_weight = 1,
-                 rough_weight = 1, tri_weight = 1, aggressive = False, multi_pass = False
+                 rough_weight = 1, tri_weight = 1, aggressive = False, multi_pass = False,
                  interpolation='nearest', **kwargs):
         
         super().__init__(**kwargs)
