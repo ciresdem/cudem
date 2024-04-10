@@ -2503,6 +2503,9 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                     else:
                                         break
 
+                                if not os.path.exists(urllist):
+                                    continue
+                                    
                                 with open(urllist, 'r') as ul:
                                     for line in ul:
                                         if 'tileindex' in line:
