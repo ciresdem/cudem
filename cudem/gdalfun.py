@@ -43,6 +43,12 @@ from cudem import utils
 from cudem import regions
 from cudem import xyzfun
 
+gc = utils.config_check()
+gdal.DontUseExceptions()
+ogr.DontUseExceptions()
+osr.DontUseExceptions()
+gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
+
 ## ==============================================
 ## OSR/WKT/proj
 ## ==============================================
@@ -903,6 +909,29 @@ def gdal_nan(ds_config, outfile, nodata = None):
     ds_config['ndv'] = nodata        
     gdal_write(nullArray, outfile, ds_config)
 
+def gdal_get_node(src_gdal):
+    node = 'pixel'
+    with gdal_datasource(src_gdal) as src_ds:
+        ds_config = gdal_infos(src_ds)
+        mt = ds_config['metadata']
+        if 'AREA_OR_POINT' in mt.keys():
+            node = mt['AREA_OR_POINT']
+        elif 'NC_GLOBAL#node_offset' in mt.keys():
+            node = mt['NC_GLOBAL#node_offset']
+            
+        elif 'tos#node_offset' in mt.keys():
+            node = mt['tos#node_offset']
+                            
+        elif 'node_offset' in mt.keys():
+            node = mt['node_offset']
+                        
+        if node.upper() == 'AREA' or node == '1':
+            node = 'pixel'
+        elif node.upper() == 'POINT' or node == '0':
+            node = 'grid'
+
+    return(node)
+    
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None, inverse = False):
     """extract a band from the src_gdal file"""
     

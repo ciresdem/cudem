@@ -892,6 +892,8 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
+
+    assert step > 0    
     with tqdm(
             total=(math.ceil((n_size[0] + (n_chunk-step)) / step) * math.ceil((n_size[1] +  (n_chunk-step)) / step)),
             desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
@@ -1137,6 +1139,7 @@ def config_check(chk_vdatum=False, verbose=False):
         _waff_co['MBGRID'] = cmd_check('mbgrid{}'.format(ae), 'mbgrid -version 2>&1 | grep Version').decode()
         _waff_co['LASZIP'] = cmd_check('laszip{}'.format(ae), 'laszip -version 2>&1 | awk \'{print $5}\'').decode()
         _waff_co['HTDP'] = cmd_check('htdp{}'.format(ae), 'echo 0 | htdp 2>&1' if host_os == 'win32' else 'echo 0 | htdp 2>&1 | grep SOFTWARE | awk \'{print $3}\'').decode()
+        _waff_co['ImageMagick'] = cmd_check('mogrify{}'.format(ae), 'mogrify --version | grep Version | awk \'{print $3}\'').decode()
         _waff_co['CUDEM'] = str(cudem.__version__)
 
         for key in _waff_co.keys():

@@ -39,6 +39,7 @@ import lxml.html as lh
 from tqdm import tqdm
 import mercantile
 import csv
+import warnings
 
 import threading
 try:
@@ -1276,7 +1277,10 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
         _data = {'north':self.region.ymax, 'west':self.region.xmin,
                  'south':self.region.ymin, 'east':self.region.xmax,
                  'mag':self.mag}
-        _req = Fetch(self._mar_grav_url, verify=False).fetch_req(params=_data)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            _req = Fetch(self._mar_grav_url, verify=False).fetch_req(params=_data)
+            
         if _req is not None:
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
             self.results.append([_req.url, outf, 'mar_grav'])
@@ -1764,6 +1768,10 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                     else:
                         ID = feature['attributes']['SURVEY_ID']
                         link = feature['attributes']['DOWNLOAD_URL']
+
+                        if link is None:
+                            continue
+                        
                         nos_dir = link.split('/')[-2]
                         data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
                         

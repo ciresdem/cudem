@@ -1,6 +1,6 @@
 ### htdp.py
 ##
-## Copyright (c) 2022 - 2023  Regents of the University of Colorado
+## Copyright (c) 2022 - 2024  Regents of the University of Colorado
 ##
 ## htdp.py is part of CUDEM
 ##
@@ -163,6 +163,7 @@ class HTDP:
         for i in range(grid.shape[2]):
             for j in range(grid.shape[1]):
                 fd_out.write('{} {} 0 "PNT_{}_{}"\n'.format(grid[1,j,i], grid[0,j,i], i, j))
+                
         fd_out.close()
         
     def _write_control(self, control_fn, out_grid_fn,

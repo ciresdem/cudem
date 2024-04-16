@@ -81,10 +81,10 @@ import re
 import copy
 import json
 import math
-# from datetime import datetime
 from tqdm import tqdm
 import warnings
-        
+import traceback
+
 # import threading
 # import multiprocessing as mp
 # mp.set_start_method('spawn')
@@ -116,6 +116,14 @@ from cudem import grits
 # cshelph
 import pandas as pd
 from cudem import cshelph
+
+## ==============================================
+## Config info and setup
+## ==============================================
+gc = utils.config_check()
+gdal.DontUseExceptions()
+ogr.DontUseExceptions()
+gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
 ## ==============================================
 ## Datalist convenience functions
@@ -287,6 +295,8 @@ class INF:
     
 ## ==============================================
 ## Elevation Dataset class
+##
+## Super class to hold various elevation datasets
 ## ==============================================
 class ElevationDataset:
     """representing an Elevation Dataset
@@ -341,7 +351,7 @@ class ElevationDataset:
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
-                 fltrs=[], stack_node=True, cache_dir = None, verbose = False, remote = False, dump_precision=6, params = {},
+                 fltrs=[], stack_node = True, cache_dir = None, verbose = False, remote = False, dump_precision = 6, params = {},
                  metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                              'data_type':None, 'resolution':None, 'hdatum':None,
                              'vdatum':None, 'url':None}, **kwargs):
@@ -368,7 +378,7 @@ class ElevationDataset:
         self.verbose = verbose # be verbose
         self.remote = remote # dataset is remote
         self.dump_precision = dump_precision # the precision of the dumped xyz data
-        self.stack_node = stack_node
+        self.stack_node = stack_node # yield avg x/y data instead of center
         
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal']
         if self.mask is not None:
@@ -445,10 +455,15 @@ class ElevationDataset:
                     self.mask['ogr_or_gdal'] = 0
                        
         if self.valid_p():
+            
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
+
+                #try:
                 self.set_transform()
+                #except Exception as e:
+                #    utils.echo_error_msg('could not set transformation, {}'.format(e))
                 
             self.set_yield()
             
@@ -597,7 +612,7 @@ class ElevationDataset:
                 mask_infos = gdalfun.gdal_infos(src_mask)
             else:
                 utils.echo_warning_msg('could not load mask {}'.format(self.mask['mask']))
-                    
+
         for out_arrays, this_srcwin, this_gt in self.yield_array():
             if mask_band is not None:
                 ycount, xcount = out_arrays['z'].shape
@@ -620,7 +635,7 @@ class ElevationDataset:
         
         the mask should be either an ogr supported vector or a gdal supported raster.
         """
-        
+
         for this_entry in self.parse():
             if this_entry.mask is None:
                 for this_xyz in this_entry.yield_xyz():
@@ -748,7 +763,14 @@ class ElevationDataset:
     def format_entry(self, sep=' '):
         """format the dataset information as a `sep` separated string."""
         
-        dl_entry = sep.join([str(x) for x in [self.fn, '{}:{}'.format(self.data_format, factory.dict2args(self.params['mod_args'])), self.weight, self.uncertainty]])
+        dl_entry = sep.join(
+            [str(x) for x in [
+                self.fn,
+                '{}:{}'.format(self.data_format, factory.dict2args(self.params['mod_args'])),
+                self.weight,
+                self.uncertainty
+            ]]
+        )
         metadata = self.echo_()
         return(sep.join([dl_entry, metadata]))
         
@@ -760,7 +782,6 @@ class ElevationDataset:
             if key != 'name':
                 out.append(str(self.metadata[key]))
 
-        #return(sep.join(['"{}"'.format(str(self.metadata[x])) for x in self.metadata.keys()]))
         return(sep.join(['"{}"'.format(str(x)) for x in out]))
     
     def echo(self, **kwargs):
@@ -845,6 +866,7 @@ class ElevationDataset:
 
         return(self.infos)
 
+    ## todo: make an osr version of this incase pyproj installs weird
     def set_transform(self):
         """Set the pyproj horizontal and vertical transformations for the dataset"""
         
@@ -863,6 +885,15 @@ class ElevationDataset:
             if len(tmp_dst_srs) > 1:
                 dst_geoid = tmp_dst_srs[1]
 
+            is_esri = False
+            in_vertical_epsg_esri = None
+            if 'ESRI' in src_srs:
+                is_esri = True
+                srs_split = src_srs.split('+')
+                src_srs = srs_split[0]
+                if len(srs_split) > 1:
+                    in_vertical_epsg_esri = srs_split[1]
+                
             in_crs = pyproj.CRS.from_user_input(src_srs)
             out_crs = pyproj.CRS.from_user_input(dst_srs)
 
@@ -890,6 +921,10 @@ class ElevationDataset:
             in_horizontal_epsg = in_horizontal_crs.to_epsg()
             out_horizontal_epsg = out_horizontal_crs.to_epsg()
 
+            if (in_vertical_epsg_esri is not None and is_esri):
+                in_vertical_epsg = in_vertical_epsg_esri
+                want_vertical = True
+            
             if want_vertical:
                 if (in_vertical_epsg == out_vertical_epsg) and self.src_geoid is None:
                     want_vertical = False
@@ -1130,9 +1165,14 @@ class ElevationDataset:
                             ), 'a'
                     ) as sub_dlf:
                         pbar.update()
+                        #utils.echo_msg(this_entry)
+                        #utils.echo_msg(this_entry.metadata)
                         if this_entry.remote == True:
+                            #sub_xyz_path = '{}_{}.xyz'.format(
+                            #    this_entry.metadata['name'], self.region.format('fn')
+                            #)
                             sub_xyz_path = '{}_{}.xyz'.format(
-                                this_entry.metadata['name'], self.region.format('fn')
+                                os.path.basename(utils.fn_basename2(this_entry.fn)), self.region.format('fn')
                             )
                                 
                         elif len(this_entry.fn.split('.')) > 1:
@@ -1190,7 +1230,7 @@ class ElevationDataset:
                                       uncertainty=0)._acquire_module().initialize()
         this_archive.inf()
 
-    def yield_block_array(self):
+    def yield_block_array(self): #*depreciated*
         """yield the xyz data as arrays, for use in `array_yield` or `yield_array`
 
         Yields:
@@ -1547,7 +1587,10 @@ class ElevationDataset:
             gdalfun.ogr_polygonize_multibands(msk_ds)
 
         m_ds = msk_ds = dst_ds = None
+
+        ## ==============================================
         ## apply any filters to the stack
+        ## ==============================================
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
                 grits_filter = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
@@ -1584,11 +1627,11 @@ class ElevationDataset:
             for x in range(0, sds.RasterXSize):
                 z = sz[0, x]
                 if z != ndv:
-                    if self.stack_node:
+                    if self.stack_node: # yield avg x/y data instead of center
                         out_xyz = xyzfun.XYZPoint(
                             x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
                         )
-                    else:
+                    else: # yield center of pixel as x/y
                         geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
                         out_xyz = xyzfun.XYZPoint(
                             x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
@@ -1639,31 +1682,33 @@ class ElevationDataset:
         yield the transformed and reduced points.
         """
 
-        for points in self.yield_ds():
-            if self.transformer is not None:
-                points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            for points in self.yield_ds():
+                if self.transformer is not None:
+                    points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
 
-            if self.region is not None and self.region.valid_p():
-                xyz_region = self.region.copy() #if self.trans_region is None else self.trans_region.copy()
-                if self.invert_region:
-                    points = points[((points['x'] > xyz_region.xmax) | (points['x'] < xyz_region.xmin)) | \
-                                    ((points['y'] > xyz_region.ymax) | (points['y'] < xyz_region.ymin))]
-                    if xyz_region.zmin is not None:
-                        points =  points[(points['z'] < xyz_region.zmin)]
-                        
-                    if xyz_region.zmax is not None:
-                        points =  points[(points['z'] > xyz_region.zmax)]
-                else:
-                    points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
-                                    ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
-                    if xyz_region.zmin is not None:
-                        points =  points[(points['z'] > xyz_region.zmin)]
+                if self.region is not None and self.region.valid_p():
+                    xyz_region = self.region.copy() #if self.trans_region is None else self.trans_region.copy()
+                    if self.invert_region:
+                        points = points[((points['x'] > xyz_region.xmax) | (points['x'] < xyz_region.xmin)) | \
+                                        ((points['y'] > xyz_region.ymax) | (points['y'] < xyz_region.ymin))]
+                        if xyz_region.zmin is not None:
+                            points =  points[(points['z'] < xyz_region.zmin)]
 
-                    if xyz_region.zmax is not None:
-                        points =  points[(points['z'] < xyz_region.zmax)]
-                        
-            if len(points) > 0:
-                yield(points)
+                        if xyz_region.zmax is not None:
+                            points =  points[(points['z'] > xyz_region.zmax)]
+                    else:
+                        points = points[((points['x'] < xyz_region.xmax) & (points['x'] > xyz_region.xmin)) & \
+                                        ((points['y'] < xyz_region.ymax) & (points['y'] > xyz_region.ymin))]
+                        if xyz_region.zmin is not None:
+                            points =  points[(points['z'] > xyz_region.zmin)]
+
+                        if xyz_region.zmax is not None:
+                            points =  points[(points['z'] < xyz_region.zmax)]
+
+                if len(points) > 0:
+                    yield(points)
                 
         self.transformer = None
             
@@ -1777,7 +1822,9 @@ class ElevationDataset:
             ## set the srcwin of the incoming points
             ## ==============================================
 
-            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)), int(max(pixel_x) - min(pixel_x))+1, int(max(pixel_y) - min(pixel_y))+1)
+            this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
+                           int(max(pixel_x) - min(pixel_x))+1,
+                           int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
 
             ## ==============================================
@@ -1927,21 +1974,8 @@ class XYZFile(ElevationDataset):
             if self.delim is None:
                 self.guess_delim()
 
-            # with open(self.fn, "rb") as f:
-            #     num_lines = sum(1 for _ in f)
-
-            # if num_lines < self.iter_rows:
-            #     self.iter_rows = None
-            skip_ = self.skip
-            
+            skip_ = self.skip            
             with open(self.fn, 'r') as src_data:
-                # if self.skip > 0:
-                #     #while self.skip > 0:
-                #     for line in src_data:
-                #         self.skip -= 1
-                #         if self.skip <= 0:
-                #             break
-                    
                 while True:
                     points = np.loadtxt(
                         src_data, delimiter=self.delim, comments='#', ndmin = 1, skiprows=skip_,
@@ -2007,13 +2041,6 @@ class XYZFile(ElevationDataset):
                             utils.echo_error_msg('{} ; {}'.format(e, this_xyz))
                             this_xyz = xyzfun.XYZPoint()
                             
-                        # if self.invert_region:
-                        #     if regions.xyz_in_region_p(this_xyz, self.data_region):
-                        #         continue
-                        # else:
-                        #     if not regions.xyz_in_region_p(this_xyz, self.data_region):
-                        #         continue
-                                                        
                     points_x.append(x)
                     points_y.append(y)
                     points_z.append(z)
@@ -2066,6 +2093,8 @@ class XYZFile(ElevationDataset):
                 pass
 
 class YXZFile(XYZFile):
+    """yxz file shortcut (167 mbdatalist)
+    """
     def __init__(self, **kwargs):
         super().__init__(xpos = 1, ypos = 0, zpos = 2, **kwargs)
             
@@ -2310,6 +2339,7 @@ class GDALFile(ElevationDataset):
         inf_region = regions.Region().from_string(self.infos.wkt)
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
+        self.node = gdalfun.gdal_get_node(self.fn)
         self.resample_and_warp = True
         
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
@@ -2535,7 +2565,7 @@ class GDALFile(ElevationDataset):
         ## ==============================================
         ## parse through the data
         ## ==============================================
-        srcwin = self.get_srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node='pixel')
+        srcwin = self.get_srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node=self.node)
         for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
             band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
             if ndv is not None and not np.isnan(ndv):
@@ -2575,14 +2605,23 @@ class GDALFile(ElevationDataset):
             ## ==============================================
             #if self.node == 'pixel':
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
+            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node=self.node)
 
             if self.x_band is None and self.y_band is None:
                 #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
-                lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+                #lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+                num = round((geo_x_end - geo_x_origin) / gt[1])
+                lon_array = np.linspace(geo_x_origin, geo_x_end, num)
                 lat_array = np.zeros((lon_array.shape))
                 lat_array[:] = geo_y_origin
-                dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
+
+                try:
+                    assert lon_array.shape == lat_array.shape
+                    assert lon_array.shape == band_data[0].shape
+                    dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
+                except Exception as e:
+                    utils.echo_error_msg(e)
+                    pass
             else:
                 lon_band = self.src_ds.GetRasterBand(self.x_band)
                 lon_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
@@ -2700,28 +2739,25 @@ class BAGFile(ElevationDataset):
                                           weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01, src_region=self.region,
                                           x_inc=self.x_inc, y_inc=self.y_inc, verbose=False, check_path=False, super_grid=True,
                                           uncertainty_mask=2, metadata=copy.deepcopy(self.metadata))
-                        #sub_ds.infos = {}
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
-                        #sub_ds.generate_inf()
                         for gdal_ds in sub_ds.parse():
                             yield(gdal_ds)
 
             else:
                 oo.append("MODE=RESAMPLED_GRID")
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
-                sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs, node='grid',
+                sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
                                   verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
                 self.data_entries.append(sub_ds)
-                #utils.echo_msg(gdalfun.gdal_infos(self.fn))
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
                     yield(gdal_ds)
         else:
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-                              uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata), node='grid')
+                              uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
@@ -2846,6 +2882,8 @@ class MBSParser(ElevationDataset):
         return(self)
 
     def parse_(self):
+        """use mblist to convert data to xyz then set the dataset as xyz and use that to process..."""
+        
         mb_fn = os.path.join(self.fn)
         if self.region is not None:
             mb_region = self.region.copy()
@@ -2861,52 +2899,22 @@ class MBSParser(ElevationDataset):
         ), verbose=False)
 
         if status == 0:
-            data_set = DatasetFactory(mod = out_mb, data_format = 168, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                                      invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
-                                      verbose=self.verbose)._acquire_module()
-
-            data_set.initialize()
+            data_set = DatasetFactory(
+                mod = out_mb, data_format = 168, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+                x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                verbose=self.verbose
+            )._acquire_module().initialize()
+            
             for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
                 self.data_entries.append(ds) 
                 yield(ds)
 
         utils.remove_glob('{}*'.format(out_mb))
-        
-    def yield_ds_(self):        
-        mb_fn = os.path.join(self.fn)
-        if self.region is None or self.data_region is None:
-            self.want_mbgrid = False
-
-        self.inf_parse()
-
-        if self.region is not None:
-            mb_region = self.region.copy()
-            mb_region.buffer(pct=25)
-        else:
-            mb_region = None
-
-        mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
-                'mblist -M{}{} -OXYZ -I{}'.format(
-                    self.mb_exclude, ' {}'.format(
-                        mb_region.format('gmt') if mb_region is not None else ''
-                    ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
-                ),
-                verbose=True,
-        )]
-
-        if len(mb_points) > 0:
-            mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
-        else:
-            mb_points = None
-
-        if self.want_binned:
-            mb_points = self.bin_z_points(mb_points)
-
-        if mb_points is not None:
-            yield(mb_points)
 
     def yield_mbgrid_ds(self):
+        """process the data through mbgrid and use GDALFile to further process the gridded data"""
+        
         mb_fn = os.path.join(self.fn)
         with open('_mb_grid_tmp.datalist', 'w') as tmp_dl:
             tmp_dl.write(
@@ -2935,6 +2943,8 @@ class MBSParser(ElevationDataset):
             pass
 
     def yield_mblist_ds(self):
+        """use mblist to process the multibeam data"""
+        
         mb_fn = os.path.join(self.fn)
         xs = []
         ys = []
@@ -2995,7 +3005,40 @@ class MBSParser(ElevationDataset):
 
             if mb_points is not None:
                 yield(mb_points)
+
+    def yield_mblist2_ds(self):
+        """use mblist to process the multibeam data"""
         
+        mb_fn = os.path.join(self.fn)
+        if self.region is None or self.data_region is None:
+            self.want_mbgrid = False
+
+        if self.region is not None:
+            mb_region = self.region.copy()
+            mb_region.buffer(pct=25)
+        else:
+            mb_region = None
+
+        mb_points = [[float(x) for x in l.strip().split('\t')] for l in utils.yield_cmd(
+                'mblist -M{}{} -OXYZ -I{}'.format(
+                    self.mb_exclude, ' {}'.format(
+                        mb_region.format('gmt') if mb_region is not None else ''
+                    ), mb_fn#, '-F{}'.format(self.mb_fmt) if self.mb_fmt is not None else ''
+                ),
+                verbose=False,
+        )]
+
+        if len(mb_points) > 0:
+            mb_points = np.rec.fromrecords(mb_points, names='x, y, z')
+        else:
+            mb_points = None
+
+        if self.want_binned:
+            mb_points = self.bin_z_points(mb_points)
+
+        if mb_points is not None:
+            yield(mb_points)
+                
     def yield_ds(self):        
         mb_fn = os.path.join(self.fn)
         if self.region is None or self.data_region is None:
@@ -3006,7 +3049,7 @@ class MBSParser(ElevationDataset):
             for pts in self.yield_mbgrid_ds():
                 yield(pts)
         else:
-            for pts in self.yield_mblist_ds():
+            for pts in self.yield_mblist2_ds():
                 yield(pts)
             
     def bin_points(self, points, y_res, z_res):
@@ -3236,6 +3279,8 @@ class OGRFile(ElevationDataset):
 
 ## ==============================================
 ## Scratch dataset.
+##
+## process a python list of valid dataset entries
 ## ==============================================
 class Scratch(ElevationDataset):
     """Scratch Dataset
@@ -3951,7 +3996,7 @@ class NEDFetcher(Fetcher):
         
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, node='grid',
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
         yield(ds)
@@ -5743,8 +5788,7 @@ def datalists_cli(argv=sys.argv):
             if this_datalist is not None and this_datalist.valid_p(
                     fmts=DatasetFactory._modules[this_datalist.data_format]['fmts']
             ):
-                this_datalist.initialize()
-                
+                this_datalist.initialize()                
                 if not want_weights:
                     this_datalist.weight = None
                     
@@ -5769,18 +5813,19 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e) 
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
 ### End

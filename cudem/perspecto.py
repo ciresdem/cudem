@@ -34,6 +34,9 @@ import math
 import sys
 
 from osgeo import gdal
+from osgeo_utils import gdal_calc
+import numpy as np
+from tqdm import tqdm
 
 from cudem import utils
 from cudem import gdalfun
@@ -176,9 +179,18 @@ class Perspecto:
         self.cpt = output
 
     def cpt_no_slash(self):
-        utils.run_cmd("sed -i 's/\// /g' {}".format(self.cpt), verbose=True)
-        #utils.run_cmd("sed -i 's/L/ /g' {}".format(self.cpt), verbose=True)
-        #utils.run_cmd("sed -i 's/B/ /g' {}".format(self.cpt), verbose=True)
+        #utils.run_cmd("sed -i 's/\// /g' {}".format(self.cpt), verbose=False)
+
+        # Read in the file
+        with open(self.cpt, 'r') as file:
+            filedata = file.read()
+            
+        # Replace the target string
+        filedata = filedata.replace('\\', ' ')
+            
+        # Write the file out again
+        with open(self.cpt, 'w') as file:
+            file.write(filedata)
         
     def lll(self):
         gds_equator = 111321.543
@@ -267,6 +279,87 @@ class Hillshade(Perspecto):
 
         return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
 
+## ==============================================
+## HILLSHADE
+## uses gdal
+## https://en.wikipedia.org/wiki/Blend_modes#Overlay
+## ==============================================
+class Hillshade_(Perspecto):
+    """Generate a Hillshade Image
+
+< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
+    """
+    
+    def __init__(
+            self,
+            vertical_exaggeration=1,
+            projection=4326,
+            azimuth=315,
+            altitude=45,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.vertical_exaggeration = vertical_exaggeration
+        self.projection = projection
+        self.azimuth = azimuth
+        self.altitude = altitude
+        self.cpt_no_slash()
+
+    def gamma_correction(self, gamma = .5, outfile = 'gdaldem_gamma.tif'):
+        gdal_calc.Calc("uint8(((A / 255.)**(1/0.5)) * 255)", A=hs_fn, outfile=hs_gamma_fn, quiet=True)
+        return(outfile)
+        
+    def overlay(self, rgb_file, color_relief_file, outfile = 'gdaldem_overlay.tif'):
+
+        hs_ds = gdal_calc.Calc(
+            "uint8( ( 2 * (A/255.)*(B/255.)*(A<128) + ( 1 - 2 * (1-(A/255.))*(1-(B/255.)) ) * (A>=128) ) * 255 )",
+            A=rgb_file, B=color_relief_file, outfile=outfile, allBands="B", NoDataValue=None, quiet=True
+        )
+        for band in range(1, hs_ds.RasterCount+1):
+            this_band = hs_ds.GetRasterBand(band)
+            this_band.DeleteNoDataValue()            
+        hs_ds = None        
+
+        return(outfile)
+        
+    def run(self):
+        hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
+        gdal.DEMProcessing(
+            hs_fn, self.src_dem, 'hillshade', computeEdges=True, scale=111120, azimuth=self.azimuth,
+            altitude=self.altitude, zFactor=self.vertical_exaggeration
+        )
+
+        hs_gamma_fn = utils.make_temp_fn('gdaldem_hs_gamma.tif', self.outdir)
+        self.gamma_correction(outfile=hs_gamma_fn)
+        
+        cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
+        gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True)
+
+        cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
+        self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
+
+        utils.remove_glob(hs_fn, hs_gamma_fn, cr_fn)
+        out_hs = '{}_hs.tif'.format(utils.fn_basename2(self.src_dem))
+        os.rename(cr_hs_fn, out_hs)
+        return(out_hs)
+    
+class HillShade(Perspecto):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def hillshade(self, array, azimuth, angle_altitude):
+        azimuth = 360.0 - azimuth 
+    
+        x, y = np.gradient(array)
+        slope = np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
+        aspect = np.arctan2(-x, y)
+        azm_rad = azimuth*np.pi/180. #azimuth in radians
+        alt_rad = angle_altitude*np.pi/180. #altitude in radians
+        
+        shaded = np.sin(alt_rad)*np.sin(slope) + np.cos(alt_rad)*np.cos(slope)*np.cos((azm_rad - np.pi/2.) - aspect)
+        
+        return(255*(shaded + 1)/2)
+    
 ## ==============================================
 ## POV-Ray
 ## ==============================================

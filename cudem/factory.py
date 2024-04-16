@@ -1,6 +1,6 @@
 ### factory.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2023 Regents of the University of Colorado
+## Copyright (c) 2023 - 2024 Regents of the University of Colorado
 ##
 ## factory.py is part of CUDEM
 ##

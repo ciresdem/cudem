@@ -29,12 +29,12 @@ import os
 import sys
 
 import pyproj
-#import shapely
-
 from osgeo import ogr
 
 import cudem
 from cudem import utils
+
+ogr.DontUseExceptions()
 
 ## ==============================================
 ##
@@ -100,40 +100,53 @@ class Region:
             if self.ymax is None: return(False)
 
         if self.xmin is not None and self.xmax is not None:
-            if self.xmin > self.xmax: return(False)
+            if self.xmin > self.xmax:
+                return(False)
+            
         if self.ymin is not None and self.ymax is not None:
-            if self.ymin > self.ymax: return(False)
+            if self.ymin > self.ymax:
+                return(False)
+            
         if self.zmin is not None and self.zmax is not None:
-            if self.zmin > self.zmax: return(False)
+            if self.zmin > self.zmax:
+                return(False)
+            
         if self.wmin is not None and self.wmax is not None:
-            if self.wmin > self.wmax: return(False)
+            if self.wmin > self.wmax:
+                return(False)
+            
         if self.umin is not None and self.umax is not None:
-            if self.umin > self.umax: return(False)            
+            if self.umin > self.umax:
+                return(False)
 
-        if not any(self.full_region()): return(False)
+        if not any(self.full_region()):
+            return(False)
+        
         return(True)
 
     def copy(self):
         """return a copy of the region."""
-        return(Region(xmin = self.xmin, xmax = self.xmax,
-                      ymin = self.ymin, ymax = self.ymax,
-                      zmin = self.zmin, zmax = self.zmax,
-                      wmin = self.wmin, wmax = self.wmax,
-                      umin = self.umin, umax = self.umax,
-                      src_srs = self.src_srs, wkt = self.wkt))
+        return(Region(xmin=self.xmin, xmax=self.xmax,
+                      ymin=self.ymin, ymax=self.ymax,
+                      zmin=self.zmin, zmax=self.zmax,
+                      wmin=self.wmin, wmax=self.wmax,
+                      umin=self.umin, umax=self.umax,
+                      src_srs=self.src_srs, wkt=self.wkt))
 
     def _wgs_extremes(self, just_below=False):
         """adjust the region to make sure it is within WGS extremes..."""
         
         if self.xmin <= -180:
             self.xmin = -180 if not just_below else -179.85
+            
         if self.xmax >= 180:
             self.xmax = 180 if not just_below else 179.85
+            
         if self.ymin <= -90:
             self.ymin = -90 if not just_below else -89.85
-        if self.ymax >= 90:
-            self.ymax = 90 if not just_below else 89.85
             
+        if self.ymax >= 90:
+            self.ymax = 90 if not just_below else 89.85            
     
     def from_list(self, region_list):
         """import a region from a region list 
@@ -153,16 +166,22 @@ class Region:
             if len(region_list) >= 6:
                 self.zmin = utils.float_or(region_list[4])
                 self.zmax = utils.float_or(region_list[5])
+                
                 if len(region_list) >= 8:
                     self.wmin = utils.float_or(region_list[6])
                     self.wmax = utils.float_or(region_list[7])
+                    
                     if len(region_list) >= 10:
                         self.umin = utils.float_or(region_list[8])
                         self.umax = utils.float_or(region_list[9])
+                        
             if self.wkt is None:
                 if self.valid_p(check_xy = True):
                     self.wkt = self.export_as_wkt()
-                else: self.wkt = None
+                    
+                else:
+                    self.wkt = None
+                    
         return(self)
 
     def from_string(self, region_str):
@@ -189,7 +208,7 @@ class Region:
         elif region_str.split()[0] == "POLYGON" or region_str.split()[0] == "MULTIPOLYGON":
             self.wkt = region_str
             self.from_list(ogr.CreateGeometryFromWkt(region_str).GetEnvelope())
-            #self.from_list(shapely.from_wkt(region_str).GetEnvelope())
+
         return(self)
     
     def from_geo_transform(self, geo_transform=None, x_count=None, y_count=None):
@@ -209,8 +228,10 @@ class Region:
             self.xmax = geo_transform[0] + geo_transform[1] * x_count
             self.ymin = geo_transform[3] + geo_transform[5] * y_count
             self.ymax = geo_transform[3]
+            
         if self.wkt is None:
             self.wkt = self.export_as_wkt()
+            
         return(self)
 
     def from_region(self, input_region):
@@ -290,6 +311,7 @@ class Region:
                 return(' '.join([str(x) for x in self.region]))
             else:
                 return('/'.join([str(x) for x in self.region[:4]]))
+            
         else:
             return(None)
         
@@ -314,6 +336,7 @@ class Region:
         this_origin = utils._geo2pixel(self.xmin, self.ymax, dst_gt, node=node)
         this_end = utils._geo2pixel(self.xmax, self.ymin, dst_gt, node=node)
         this_size = (this_end[0] - this_origin[0], this_end[1] - this_origin[1])
+        
         return(this_end[0] - this_origin[0], this_end[1] - this_origin[1], dst_gt)
 
     def export_as_list(self, include_z = False, include_w = False, include_u = False):
@@ -409,6 +432,7 @@ class Region:
         
         x_inc = float((self.xmax - self.xmin) / x_count)
         y_inc = float((self.ymax - self.ymin) / y_count)
+        
         return(x_inc, y_inc)
         
     def srcwin(self, geo_transform, x_count, y_count, node = 'grid'):
@@ -470,7 +494,9 @@ class Region:
                     self.ymin -= (y_min_count*y_inc)
                 else:
                     return(regions_reduce(self, cut_region))
+                
                 return(self)
+            
         return(self)
                 
     def buffer(self, x_bv = 0, y_bv = 0, pct = None, x_inc = None, y_inc = None):
@@ -509,6 +535,7 @@ class Region:
             self.ymax += y_bv
 
             self.wkt = self.export_as_wkt()
+            
         return(self)
 
     def round(self, round_val=5):
@@ -527,7 +554,9 @@ class Region:
         if self.valid_p():
             return([self.xmin + (self.xmax-self.xmin/2),
                     self.ymax + (self.ymax-self.ymin/2)])
-        else: return(None)        
+        
+        else:
+            return(None)        
         
     def chunk(self, inc, n_chunk = 10):
         """chunk the xy region [xmin, xmax, ymin, ymax] into 
@@ -565,20 +594,31 @@ class Region:
                 c_region.ymin = self.ymin + this_y_origin * inc
                 c_region.ymax = c_region.ymin + this_y_size * inc
 
-                if c_region.ymax > self.ymax: c_region.ymax = self.ymax
-                if c_region.ymin < self.ymin: c_region.ymin = self.ymin
-                if c_region.xmax > self.xmax: c_region.xmax = self.xmax
-                if c_region.xmin < self.xmin: c_region.xmin = self.xmin
+                if c_region.ymax > self.ymax:
+                    c_region.ymax = self.ymax
+                    
+                if c_region.ymin < self.ymin:
+                    c_region.ymin = self.ymin
+                    
+                if c_region.xmax > self.xmax:
+                    c_region.xmax = self.xmax
+                    
+                if c_region.xmin < self.xmin:
+                    c_region.xmin = self.xmin
+                    
                 o_chunks.append(c_region)
 
                 if y_chunk < ycount:
                     y_chunk += n_chunk
                     i_chunk += 1
-                else: break
+                else:
+                    break
+                
             if x_chunk < xcount:
                 x_chunk += n_chunk
                 x_i_chunk += 1
-            else: break
+            else:
+                break
 
         return(o_chunks)
 
@@ -590,6 +630,7 @@ class Region:
 
         if transformer is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
+            
             return(self)
         
         self.src_srs = dst_crs
@@ -764,6 +805,7 @@ def regions_intersect_ogr_p(region_a, region_b):
     if region_a.valid_p() and region_b.valid_p():
         if region_a.export_as_geom().Intersects(region_b.export_as_geom()):
             return(True)
+        
     return(False)
 
 def regions_within_ogr_p(region_a, region_b):
@@ -780,6 +822,7 @@ def regions_within_ogr_p(region_a, region_b):
     if region_a.valid_p() and region_b.valid_p():
         if region_b.export_as_geom().Within(region_a.export_as_geom()):
             return(True)
+        
     return(False)
 
 def z_region_pass(region, upper_limit = None, lower_limit = None):
@@ -801,6 +844,7 @@ def z_region_pass(region, upper_limit = None, lower_limit = None):
             if upper_limit is not None:
                 if z_region[0] >= upper_limit:
                     return(False)
+                
             if lower_limit is not None:
                 if z_region[1] <= lower_limit:
                     return(False)
@@ -881,6 +925,7 @@ def gdal_ogr_regions(src_ds):
                 pwkt = pgeom.ExportToWkt()
                 this_region.from_list(ogr.CreateGeometryFromWkt(pwkt).GetEnvelope())
                 these_regions.append(this_region)
+                
         poly = None
         
     return(these_regions)
@@ -948,9 +993,11 @@ def ogr_wkts(src_ds):
                     if len(src_r) > 1: r.zmax = utils.float_or(src_r[1])
                     if len(src_r) > 2: r.wmin = utils.float_or(src_r[2])
                     if len(src_r) > 3:  r.wmax = utils.float_or(src_r[3])
+                    
                 these_regions.append(r)
 
         poly = None
+        
     return(these_regions)
 
 def parse_cli_region(region_list, verbose = True):
@@ -994,11 +1041,17 @@ def parse_cli_region(region_list, verbose = True):
 
     if verbose:
         if len(these_regions) > 4:
-            utils.echo_msg('parsed {} region(s): {}...{}'.format(len(these_regions), these_regions[:2], these_regions[-2:]))
+            utils.echo_msg(
+                'parsed {} region(s): {}...{}'.format(len(these_regions), these_regions[:2], these_regions[-2:])
+            )
         elif len(these_regions) > 0:
-            utils.echo_msg('parsed {} region(s): {}'.format(len(these_regions), these_regions))
+            utils.echo_msg(
+                'parsed {} region(s): {}'.format(len(these_regions), these_regions)
+            )
         else:
-            utils.echo_error_msg('failed to parse region(s), {}'.format(region_list))
+            utils.echo_error_msg(
+                'failed to parse region(s), {}'.format(region_list)
+            )
             
     return(these_regions)
 
@@ -1200,6 +1253,7 @@ def regions_cli(argv = sys.argv):
                 print(this_region.format('te'))
             else:
                 print(this_region.format('gmt'))
+                
         elif echo_fn:
             print(this_region.format('fn'))
         else:

@@ -82,11 +82,17 @@ from cudem import vdatums
 from cudem import factory
 from cudem import fetches
 from cudem import grits
+from cudem import perspecto
 
 ## ==============================================
 ## Data cache directory, hold temp data, fetch data, etc here.
 ## ==============================================
 waffles_cache = utils.cudem_cache()
+gc = utils.config_check()
+gdal.DontUseExceptions()
+ogr.DontUseExceptions()
+osr.DontUseExceptions()
+gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
 ## ==============================================
 ## WAFFLES
