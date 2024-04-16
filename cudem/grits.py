@@ -533,7 +533,7 @@ class Outliers(Grits):
                         ## apply the elevation outliers
                         self.mask_outliers(
                             src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data,
-                            percentile=self.percentile, src_weight=elevation_weight
+                            percentile=75, src_weight=elevation_weight
                         )
 
                         ## apply uncertainty outliers
@@ -542,7 +542,7 @@ class Outliers(Grits):
                             unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
                             self.mask_outliers(
                                 src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data,
-                                percentile=self.percentile, upper_only=True, src_weight=self.unc_weight
+                                percentile=75, upper_only=True, src_weight=self.unc_weight
                             )
                             unc_data = None
 
@@ -554,27 +554,27 @@ class Outliers(Grits):
 
                         ## apply slope outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
                                                     src_weight=slope_weight, var='slope')
 
                         ## apply curvature outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
                                                     src_weight=curvature_weight, var='curvature')
 
                         ## apply roughness outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
                                                     src_weight=rough_weight, var='roughness')
 
                         ## apply tri outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
                                                     src_weight=tri_weight, var='TRI')
 
                         ## apply TPI outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
                                                     src_weight=tpi_weight, var='TPI')
 
                         srcwin_ds = None
