@@ -326,7 +326,7 @@ class Outliers(Grits):
         #     )
         # )
         #self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size) * (1-n_den)) * n_den))
-        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.05 * n_den)))))
+        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.005 * n_den)))))
         self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 2))
 
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * n_den)))))
