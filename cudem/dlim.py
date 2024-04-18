@@ -887,7 +887,7 @@ class ElevationDataset:
 
             is_esri = False
             in_vertical_epsg_esri = None
-            if 'ESRI' in src_srs:
+            if 'ESRI' in src_srs.upper():
                 is_esri = True
                 srs_split = src_srs.split('+')
                 src_srs = srs_split[0]
@@ -932,7 +932,14 @@ class ElevationDataset:
             ## ==============================================                
             ## horizontal Transformation
             ## ==============================================
-            self.transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
+            try:
+                self.transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
+            except Exception as e:
+                utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
+                    in_horizontal_crs.name, out_horizontal_crs.name, e
+                ))
+                self.transformer = None
+                return
 
             if self.region is not None:
                 self.trans_region = self.region.copy()

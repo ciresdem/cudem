@@ -48,7 +48,7 @@ try:
     import pygmt
     has_pygmt = True
 except ImportError as e:
-    utils.echo_error_msg('Could not import pygmt, {}'.format(e))
+    #utils.echo_error_msg('Could not import pygmt, {}'.format(e))
     has_pygmt = False
     
 ## lll
