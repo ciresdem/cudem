@@ -563,10 +563,10 @@ class Outliers(Grits):
                             band_data = None
                             continue
 
-                        ## apply slope outliers
-                        self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=75, upper_only=True,
-                                                    src_weight=self.slope_weight, var='slope')
+                        # ## apply slope outliers
+                        # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                        #                             mask_count_data=mask_count_data, percentile=75, upper_only=True,
+                        #                             src_weight=self.slope_weight, var='slope')
 
                         ## apply curvature outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
@@ -600,7 +600,7 @@ class Outliers(Grits):
                 mask_count_data = self.mask_count_band.ReadAsArray()
                 mask_count_data[mask_count_data == 0] = np.nan
                 #mask_mask_data *= mask_count_data
-                mask_mask_data /= mask_count_data
+                #mask_mask_data /= mask_count_data
 
                 count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
                 if self.aggressive:
