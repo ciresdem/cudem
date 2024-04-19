@@ -309,11 +309,10 @@ class Outliers(Grits):
 
     def init_chunks(self, src_ds = None):
         src_arr, src_den = self.gdal_density(src_ds)
-        src_config = gdalfun.gdal_infos(src_ds)
-        self._chunks(src_arr, src_config['geoT'][1])
+        self._chunks(src_arr)
         src_arr = src_den = None
 
-    def _chunks(self, src_arr, inc):
+    def _chunks(self, src_arr):
         n_den = self._density(src_arr)
         if round(n_den) == 1:
             n_den = .945
@@ -326,12 +325,12 @@ class Outliers(Grits):
         #     )
         # )
         #self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size) * (1-n_den)) * n_den))
-        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.005 * n_den)))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 4))
+        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.005 * (1-n_den))))))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 5))
 
-        self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * n_den)))))
+        self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.05 * (1-n_den))))))
         #self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size) * (1-n_den))))
-        self.max_step = utils.int_or(self.max_step, math.ceil((self.max_chunk / 4)))
+        self.max_step = utils.int_or(self.max_step, math.ceil((self.max_chunk / 5)))
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
             
@@ -373,9 +372,11 @@ class Outliers(Grits):
         self.mask_mask_ds.SetGeoTransform(self.ds_config['geoT'])
         self.mask_mask_band = self.mask_mask_ds.GetRasterBand(1)
         self.mask_count_band = self.mask_mask_ds.GetRasterBand(2)
+        #self.mask_weight_band = self.mask_mask_ds.GetRasterBand(3)
         self.mask_mask_band.SetNoDataValue(0)
         self.mask_mask_band.WriteArray(mask_mask)
         self.mask_count_band.WriteArray(mask_mask)
+        #self.mask_weight_band.WriteArray(mask_mask)
         mask_mask = None
         #return(mask_mask_ds, mask_mask_fn)
                 
@@ -441,6 +442,7 @@ class Outliers(Grits):
             if verbose:
                 utils.echo_msg('{} {}'.format(upper_limit, lower_limit))
 
+            #count_data[:] += 1
             src_upper = src_data[src_data > upper_limit]
             if src_upper.size > 0:
                 src_max = src_upper.max()
@@ -454,7 +456,8 @@ class Outliers(Grits):
                     #     (np.power(mask_data[(src_data > upper_limit)], 2) +
                     #      np.power(src_weight * np.abs((src_upper / upper_limit)), 2))
                     # )
-                    count_data[(src_data > upper_limit)] += src_weight
+                    count_data[(src_data > upper_limit)] += 1
+                    #weight_data[(src_data > upper_limit)] += src_weight
 
             if not upper_only:
                 src_lower = src_data[src_data < lower_limit]
@@ -470,7 +473,8 @@ class Outliers(Grits):
                         #     (np.power(mask_data[(src_data < lower_limit)], 2) +
                         #      np.power(src_weight * np.abs((src_lower / lower_limit)), 2))
                         # )
-                        count_data[(src_data < lower_limit)] += src_weight
+                        count_data[(src_data < lower_limit)] += 1
+                        #weight_data[(src_data < lower_limit)] += src_weight
 
     def mask_gdal_dem_outliers(
             self, srcwin_ds = None, band_data = None, mask_mask_data = None, mask_count_data = None,
@@ -517,12 +521,12 @@ class Outliers(Grits):
                     step = steps_it[n]
                     n+=1
                     
-                    self.elevation_weight *= (1/n**4)
-                    self.curvature_weight *= (1/n**2)
-                    self.slope_weight *= (1/n**2)
-                    self.rough_weight *= (1/n**2)
-                    self.tri_weight *= (1/n**2)
-                    self.tpi_weight *= (1/n**2)
+                    # self.elevation_weight *= (1/n**2)
+                    # self.curvature_weight *= (1/n)
+                    # self.slope_weight *= (1/n)
+                    # self.rough_weight *= (1/n)
+                    # self.tri_weight *= (1/n)
+                    # self.tpi_weight *= (1/n)
 
                     #utils.echo_msg('{} {} {}'.format(self.elevation_weight, self.curvature_weight, self.slope_weight))
                     #utils.echo_msg('{} {} {}'.format(self.rough_weight, self.tri_weight, self.tpi_weight))
@@ -539,12 +543,13 @@ class Outliers(Grits):
 
                         ## read in the mask data for the srcwin
                         mask_mask_data = self.mask_mask_band.ReadAsArray(*srcwin) # read in the mask id data
-                        mask_count_data = self.mask_count_band.ReadAsArray(*srcwin) # read in the count id data
+                        mask_count_data = self.mask_count_band.ReadAsArray(*srcwin) # read in the count data
+                        #mask_weight_data = self.mask_weight_band.ReadAsArray(*srcwin) # read in the weight data
 
                         ## apply the elevation outliers
                         self.mask_outliers(
                             src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data,
-                            percentile=75, src_weight=self.elevation_weight
+                            percentile=self.percentile, src_weight=self.elevation_weight
                         )
 
                         ## apply uncertainty outliers
@@ -553,7 +558,7 @@ class Outliers(Grits):
                             unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
                             self.mask_outliers(
                                 src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data,
-                                percentile=75, upper_only=True, src_weight=self.unc_weight
+                                percentile=self.percentile, upper_only=True, src_weight=self.unc_weight
                             )
                             unc_data = None
 
@@ -570,22 +575,22 @@ class Outliers(Grits):
 
                         ## apply curvature outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=75, upper_only=True,
+                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=True,
                                                     src_weight=self.curvature_weight, var='curvature')
 
                         # ## apply roughness outliers
-                        # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                        # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data, mask_weight_data=mask_weight_data,
                         #                             mask_count_data=mask_count_data, percentile=75, upper_only=True,
                         #                             src_weight=self.rough_weight, var='roughness')
 
                         ## apply tri outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=75, upper_only=True,
+                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=True,
                                                     src_weight=self.tri_weight, var='TRI')
 
                         ## apply TPI outliers
                         self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                    mask_count_data=mask_count_data, percentile=75, upper_only=False,
+                                                    mask_count_data=mask_count_data, percentile=self.percentile, upper_only=False,
                                                     src_weight=self.tpi_weight, var='TPI')
 
                         srcwin_ds = None
@@ -593,25 +598,35 @@ class Outliers(Grits):
                         ## write the mask data to file
                         self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
                         self.mask_count_band.WriteArray(mask_count_data, srcwin[0], srcwin[1])
+                        #self.mask_weight_band.WriteArray(mask_weight_data, srcwin[0], srcwin[1])
                         band_data = mask_mask_data = mask_count_data = None
 
                 mask_mask_data = self.mask_mask_band.ReadAsArray()
                 mask_mask_data[mask_mask_data == 0] = np.nan
                 mask_count_data = self.mask_count_band.ReadAsArray()
                 mask_count_data[mask_count_data == 0] = np.nan
+                #mask_weight_data = self.mask_weight_band.ReadAsArray()
+                #mask_weight_data[mask_weight_data == 0] = 1
                 #mask_mask_data *= mask_count_data
                 #mask_mask_data /= mask_count_data
 
-                #count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
+                #mask_weight_data = mask_weight_data / mask_count_data
+                #mask_mask_data = (mask_mask_data / mask_weight_data) / mask_count_data
+
+                #self.mask_mask_band.WriteArray(mask_mask_data)
+                #self.mask_weight_band.WriteArray(mask_weight_data)
+                
+                count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
                 if self.aggressive:
                     mask_upper_limit = np.nanpercentile(mask_mask_data, self.percentile)
                     mask_lower_limit = None
-                    count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
+                    #count_upper_limit = np.nanpercentile(mask_count_data, self.percentile)
                 else:
                     mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, self.percentile)
-                    count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, self.percentile)
+                    #count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, self.percentile)
                     
                 outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data >= count_upper_limit))
+                #outlier_mask = ((mask_mask_data > mask_upper_limit))
                     
                 if self.verbose:
                     utils.echo_msg('outliers: {} {}'.format(mask_upper_limit, mask_lower_limit))
