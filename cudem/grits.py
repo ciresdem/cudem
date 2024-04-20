@@ -272,17 +272,17 @@ class Outliers(Grits):
     multi_pass(bool) - pass through the data at multiple chunk_sizes
     """
     
-    def __init__(self, chunk_size = None, chunk_step = None, max_chunk = None, max_step = None, percentile = 75, return_mask = False,
-                 elevation_weight = 1, curvature_weight = 1, slope_weight = 1, tpi_weight = 1, unc_weight = 1,
-                 rough_weight = 1, tri_weight = 1, aggressive = False, multipass = 1,
-                 interpolation='nearest', **kwargs):
+    def __init__(self, percentile = 75, chunk_size = None, chunk_step = None, max_chunk = None, max_step = None,
+                 return_mask = False, elevation_weight = 1, curvature_weight = 1, slope_weight = 0,
+                 tpi_weight = 1, unc_weight = 1, rough_weight = 0, tri_weight = 1, aggressive = False,
+                 multipass = 1, interpolation='nearest', **kwargs):
         
         super().__init__(**kwargs)
+        self.percentile = utils.float_or(percentile, 75)
         self.chunk_size = chunk_size
         self.chunk_step = chunk_step
         self.max_chunk = max_chunk
         self.max_step = max_step
-        self.percentile = utils.float_or(percentile)
         self.return_mask = return_mask
         self.elevation_weight = utils.float_or(elevation_weight, 1)
         self.curvature_weight = utils.float_or(curvature_weight, 1)
@@ -317,46 +317,23 @@ class Outliers(Grits):
         if round(n_den) == 1:
             n_den = .945
         
-        # self.n_chunk = utils.int_or(
-        #     self.chunk_size,
-        #     math.ceil(
-        #         (math.sqrt(src_arr.size) * (1-n_den)) *
-        #         (((math.sqrt(src_arr.size) * (1-n_den)) * inc) * ((1-n_den) * .1))
-        #     )
-        # )
-        #self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size) * (1-n_den)) * n_den))
         self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.005 * (1-n_den))))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 5))
-
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.05 * (1-n_den))))))
-        #self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size) * (1-n_den))))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 5))
         self.max_step = utils.int_or(self.max_step, math.ceil((self.max_chunk / 5)))
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
-            
-        # if round(n_den) < 1:
-        #     self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size) * (1-n_den)) * n_den))
-        #     #self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 10))
-        #     #self.n_chunk = utils.int_or(self.chunk_size, math.ceil(math.sqrt(src_arr.size) * ((1-n_den) * .1)))
-        #     #self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / (10 * (1-n_den))))
-        #     #self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (1-n_den)))
-        
-        #     #return(n_chunk, n_step)
-        # else:
-        #     self.n_chunk = utils.int_or(self.chunk_size, math.ceil(math.sqrt(src_arr.size) * .05))
 
-        # if self.n_chunk < 10:
-        #     self.n_chunk = self.max_chunk
-
-        utils.echo_msg('{} {} < {} {}'.format(self.n_chunk, self.n_step, self.max_chunk, self.max_step))
+        if self.verbose:
+            utils.echo_msg('{} {} < {} {}'.format(self.n_chunk, self.n_step, self.max_chunk, self.max_step))
         
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
         dd = nonzero / src_arr.size
+        
         return(dd)        
         
     def gdal_density(self, src_ds = None):
-
         src_arr, src_config = gdalfun.gdal_get_array(src_ds)
         src_arr[src_arr == src_config['ndv']] = np.nan
 
@@ -381,11 +358,11 @@ class Outliers(Grits):
         #return(mask_mask_ds, mask_mask_fn)
                 
     def generate_mem_ds(self, band_data = None, srcwin = None):
-        ## interpolate the srcwin for neighborhood calculations                    
         tmp_band_data = band_data
         if np.all(np.isnan(tmp_band_data)):
             return(None)
 
+        ## interpolate the srcwin for neighborhood calculations
         if np.any(np.isnan(band_data)):                        
             point_indices = np.nonzero(~np.isnan(tmp_band_data))
             if len(point_indices[0]):
@@ -431,6 +408,7 @@ class Outliers(Grits):
         curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
         slp_ds = None
         utils.remove_glob(slp_fn)
+        
         return(curv_ds, curv_fn)
         
     def mask_outliers(
@@ -442,7 +420,6 @@ class Outliers(Grits):
             if verbose:
                 utils.echo_msg('{} {}'.format(upper_limit, lower_limit))
 
-            #count_data[:] += 1
             src_upper = src_data[src_data > upper_limit]
             if src_upper.size > 0:
                 src_max = src_upper.max()
@@ -452,10 +429,6 @@ class Outliers(Grits):
                          np.power(src_weight * np.abs((src_upper - upper_limit) / (src_max - upper_limit)), 2))
                     )
                     #mask_data[(src_data > upper_limit)] += (src_weight * np.abs((src_upper - upper_limit) / (src_max - upper_limit)))
-                    # mask_data[(src_data > upper_limit)] = np.sqrt(
-                    #     (np.power(mask_data[(src_data > upper_limit)], 2) +
-                    #      np.power(src_weight * np.abs((src_upper / upper_limit)), 2))
-                    # )
                     count_data[(src_data > upper_limit)] += 1
                     #weight_data[(src_data > upper_limit)] += src_weight
 
@@ -469,10 +442,6 @@ class Outliers(Grits):
                              np.power(src_weight * np.abs((src_lower - lower_limit) / (src_min - lower_limit)), 2))
                         )
                         #mask_data[(src_data < lower_limit)] += (src_weight * np.abs((src_lower - lower_limit) / (src_min - lower_limit)))
-                        # mask_data[(src_data < lower_limit)] = np.sqrt(
-                        #     (np.power(mask_data[(src_data < lower_limit)], 2) +
-                        #      np.power(src_weight * np.abs((src_lower / lower_limit)), 2))
-                        # )
                         count_data[(src_data < lower_limit)] += 1
                         #weight_data[(src_data < lower_limit)] += src_weight
 
@@ -528,8 +497,6 @@ class Outliers(Grits):
                     # self.tri_weight *= (1/n)
                     # self.tpi_weight *= (1/n)
 
-                    #utils.echo_msg('{} {} {}'.format(self.elevation_weight, self.curvature_weight, self.slope_weight))
-                    #utils.echo_msg('{} {} {}'.format(self.rough_weight, self.tri_weight, self.tpi_weight))
                     for srcwin in utils.yield_srcwin(
                             (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
                             step=step, verbose=self.verbose, msg='scanning for outliers ({})'.format(self.percentile)
@@ -607,12 +574,9 @@ class Outliers(Grits):
                 mask_count_data[mask_count_data == 0] = np.nan
                 #mask_weight_data = self.mask_weight_band.ReadAsArray()
                 #mask_weight_data[mask_weight_data == 0] = 1
-                #mask_mask_data *= mask_count_data
                 #mask_mask_data /= mask_count_data
-
                 #mask_weight_data = mask_weight_data / mask_count_data
                 #mask_mask_data = (mask_mask_data / mask_weight_data) / mask_count_data
-
                 #self.mask_mask_band.WriteArray(mask_mask_data)
                 #self.mask_weight_band.WriteArray(mask_weight_data)
                 
