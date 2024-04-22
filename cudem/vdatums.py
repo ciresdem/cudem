@@ -468,8 +468,14 @@ class VerticalTransform:
                     
         if len(cdn_results) > 0:
             for _result in cdn_results:
-                src_code = int(_result['source_crs_code'].split(':')[-1])
-                dst_code = int(_result['target_crs_code'].split(':')[-1])
+                src_code = _result['source_crs_code']
+                dst_code = _result['target_crs_code']
+                if src_code is not None:
+                    src_code = int(src_code.split(':')[-1])
+
+                if dst_code is not None:
+                    dst_code = int(dst_code.split(':')[-1])
+                    
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
