@@ -312,8 +312,8 @@ class Outliers(Grits):
     def init_percentiles(self):
         self.max_percentile = utils.float_or(self.max_percentile, ((100 - self.percentile) / 2) + self.percentile)
 
-        if self.verbose:
-            utils.echo_msg('{} < {}'.format(self.percentile, self.max_percentile))
+        # if self.verbose:
+        #     utils.echo_msg('{} < {}'.format(self.percentile, self.max_percentile))
         
     def init_chunks(self, src_ds = None):
         src_arr, src_den = self.gdal_density(src_ds)
@@ -334,8 +334,8 @@ class Outliers(Grits):
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
 
-        if self.verbose:
-            utils.echo_msg('{} {} < {} {}'.format(self.n_chunk, self.n_step, self.max_chunk, self.max_step))
+        # if self.verbose:
+        #     utils.echo_msg('{} {} < {} {}'.format(self.n_chunk, self.n_step, self.max_chunk, self.max_step))
         
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
@@ -510,9 +510,9 @@ class Outliers(Grits):
 
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
 
-        if self.verbose:
-            utils.echo_msg('outliers: {} {}'.format(mask_upper_limit, mask_lower_limit))
-            utils.echo_msg('counts: {}'.format(count_upper_limit))                    
+        # if self.verbose:
+        #     utils.echo_msg('outliers: {} {}'.format(mask_upper_limit, mask_lower_limit))
+        #     utils.echo_msg('counts: {}'.format(count_upper_limit))                    
 
         src_data[outlier_mask] = self.ds_config['ndv']
         self.ds_band.WriteArray(src_data)

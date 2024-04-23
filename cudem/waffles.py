@@ -330,6 +330,7 @@ class Waffle:
         if self.data is None:
             return(self)
 
+        output_files = {}
         ## todo: move to init
         if os.path.exists(self.fn):
             if not self.clobber:
@@ -507,12 +508,13 @@ class Waffle:
                 iu.initialize()
                 iu.run()
 
-                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
+                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=False, want_scan=True).initialize()
                 if unc_dem.valid_p():
-                    utils.echo_msg('processing uncertainty grid')
+                    #utils.echo_msg('processing uncertainty grid')
                     unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                     dst_dir=os.path.dirname(self.fn))
+                    output_files['uncertainty'] = iu.fn
                 unc_fn = iu.fn
             
             ## ==============================================
@@ -524,13 +526,14 @@ class Waffle:
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr)
-
+                output_files['DEM'] = self.fn
+                
             ## ==============================================
             ## post-process the mask, etc.
             ## ==============================================
             if self.want_mask or self.want_sm:
                 if mask_fn is not None:
-                    mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True).initialize()
+                    mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=False, want_scan=True).initialize()
                     if mask_dem.valid_p():
                         #if self.want_mask:
                         #utils.echo_msg('processing mask')
@@ -538,18 +541,21 @@ class Waffle:
                                          node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                          dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
                                          dst_dir=os.path.dirname(self.fn))
+                        output_files['mask'] = mask_dem.fn
 
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
                                 sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
 
                             sm_files = glob.glob('{}.*'.format(sm_layer))
+                            output_files['spatial-metadata'] = []
                             for sm_file in sm_files:
                                 out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
 
                                 os.rename(sm_file, out_sm)
+                                output_files['spatial-metadata'].append(out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
                     
@@ -557,11 +563,12 @@ class Waffle:
             ## post-process any auxiliary rasters
             ## ==============================================
             for aux_dem in self.aux_dems:
-                aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
+                aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=False).initialize()
                 if aux_dem.valid_p():
                     aux_dem.process(ndv=None, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
                                     set_metadata=False)
+                    output_files['stack'] = aux_dem.fn
 
             ## ==============================================
             ## reset the self.stack to new post-processed fn and ds
@@ -572,7 +579,8 @@ class Waffle:
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1,
                                               verbose=self.verbose).initialize()
-                
+
+        utils.echo_msg('output files: {}'.format(output_files))
         return(self)
 
     def run(self):
@@ -4935,7 +4943,7 @@ class WaffleDEM:
             _out_fn = os.path.join(os.path.dirname(self.fn), out_fn)
             os.replace(self.fn, _out_fn)
             if self.verbose:
-                utils.echo_msg('moved output DEM from {} to {}.'.format(os.path.basename(self.fn), out_fn))
+                utils.echo_msg('moved output DEM from {} to {}.'.format(os.path.basename(self.fn), os.path.abspath(out_fn)))
                 
             self.fn = _out_fn
 
@@ -4946,7 +4954,7 @@ class WaffleDEM:
             self.fn = _out_fn
             self.initialize()
             if self.verbose:
-                utils.echo_msg('moved output DEM {} to {}.'.format(os.path.basename(self.fn), out_dir))
+                utils.echo_msg('moved output DEM {} to {}.'.format(os.path.basename(self.fn), os.path.abspath(out_dir)))
                     
     def set_metadata(self, cudem = False, node = 'pixel'):
         """add metadata to the waffled raster
