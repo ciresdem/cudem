@@ -234,7 +234,7 @@ class Perspecto:
 ## HILLSHADE
 ## uses gdal/ImageMagick
 ## ==============================================
-class Hillshade_(Perspecto):
+class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
@@ -284,7 +284,7 @@ class Hillshade_(Perspecto):
 ## uses gdal
 ## https://en.wikipedia.org/wiki/Blend_modes#Overlay
 ## ==============================================
-class Hillshade(Perspecto):
+class Hillshade_(Perspecto):
     """Generate a Hillshade Image
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >

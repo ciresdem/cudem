@@ -522,8 +522,8 @@ class VerticalTransform:
             return(np.zeros( (self.ycount, self.xcount) ), epsg_out)
         else:
             htdp = htdpfun.HTDP(verbose=self.verbose)
-            if self.verbose:
-                utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
+            # if self.verbose:
+            #     utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
 
             griddef = (self.src_region.xmax, self.src_region.ymax,
                        self.src_region.xmin, self.src_region.ymin,
@@ -554,9 +554,9 @@ class VerticalTransform:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
             
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
-            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
+            #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
+            #utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
