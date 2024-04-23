@@ -1601,10 +1601,11 @@ class ElevationDataset:
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
                 grits_filter = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
-                if 'stacks' in grits_filter.kwargs.keys():
-                    if grits_filter.kwargs['stacks']:
-                        grits_filter()
-                        os.replace(grits_filter.dst_dem, out_file)
+                if grits_filter is not None:
+                    if 'stacks' in grits_filter.kwargs.keys():
+                        if grits_filter.kwargs['stacks']:
+                            grits_filter()
+                            os.replace(grits_filter.dst_dem, out_file)
         
         return(out_file)        
     
@@ -2364,6 +2365,11 @@ class GDALFile(ElevationDataset):
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
 
+        tmp_elev_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+        tmp_unc_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+        tmp_weight_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+        #tmp_elev_fn = tmp_unc_fn = tmp_weight_fn = None
+                
         ## ==============================================
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
         ## ==============================================
@@ -2410,7 +2416,7 @@ class GDALFile(ElevationDataset):
                 else:
                     srcwin = None
 
-                self.tmp_elev_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                self.tmp_elev_band = tmp_elev_fn
                 if self.verbose:
                     utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
                     
@@ -2422,7 +2428,7 @@ class GDALFile(ElevationDataset):
                     return(None)
                 
                 if utils.int_or(self.uncertainty_mask) is not None:
-                    self.tmp_unc_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                    self.tmp_unc_band = tmp_unc_fn
                     if self.verbose:
                         utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
                         
@@ -2431,8 +2437,8 @@ class GDALFile(ElevationDataset):
                     )
                     self.uncertainty_mask = self.tmp_unc_band
 
-                if utils.int_or(self.weight_mask) is not None:
-                    self.tmp_weight_band = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+                if utils.int_or(self.weight_mask) is not None:                    
+                    self.tmp_weight_band = tmp_weight_fn
                     if self.verbose:
                         utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
                         
@@ -2642,7 +2648,7 @@ class GDALFile(ElevationDataset):
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
             dataset = band_data = weight_data = uncertainty_data = lat_array = lon_array = None
-            
+            utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)            
             yield(points)
             
         src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None
@@ -5373,9 +5379,10 @@ class DatasetFactory(factory.CUDEMFactory):
                         se = entry[0].split('.')
                         see = se[-1] if len(se) > 1 else entry[0].split(":")[0]
 
-                    if see in self._modules[key]['fmts']:
-                        entry.append(int(key))
-                        break
+                    if 'fmts' in self._modules[key].keys():
+                        if see in self._modules[key]['fmts']:
+                            entry.append(int(key))
+                            break
 
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))

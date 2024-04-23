@@ -193,6 +193,7 @@ class CUDEMModule:
         for kpam, kval in kwargs.items():
             self.__setattr__(kpam, kval)
 
+        self.kwargs = kwargs
         self.run()
 
     def initialize(self):
@@ -204,6 +205,7 @@ class CUDEMModule:
 
     def run(self):
         raise NotImplementedError('the module {} could not be parsed by the sub factory'.format(self.params['mod']))
+        #utils.echo_error_msg('the module {} could not be parsed by the sub factory'.format(self.params['mod']))
 
 class CUDEMFactory:
     ## optional modules, should be dictionary of dictionaries
@@ -235,6 +237,7 @@ class CUDEMFactory:
 
         #elif self.kwargs['fn'] is not None:
         #    self._parse_mod(self.kwargs['fn'])
+        self.add_module(self._factory_module)
 
     def __str__(self):
         return('<{}>'.format(self.__dict__))
@@ -243,7 +246,6 @@ class CUDEMFactory:
         return('<{}>'.format(self.__dict__))
     
     def _parse_mod(self, mod):
-        #self.add_module(self._factory_module)
         opts = mod.split(':')
         if opts[0] in self._modules.keys():
             if len(opts) > 1:
@@ -253,7 +255,7 @@ class CUDEMFactory:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
             )
-            return(None)
+            #return(None)
         return(self.mod_name, self.mod_args)
 
     def add_module(self, type_def={}):
@@ -277,7 +279,7 @@ class CUDEMFactory:
                 m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
                 return(m(self.mod_args, self.kwargs))
             except Exception as e:
-                utils.echo_error_msg('could not acquire module, {}'.format(e))
+                utils.echo_error_msg('could not acquire module, {}'.format(e))                
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))
 
     def load_parameter_dict(self, param_dict: dict):

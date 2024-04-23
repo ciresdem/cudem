@@ -4748,12 +4748,13 @@ class WaffleDEM:
     def filter_(self, fltr = []):
         for f in fltr:
             grits_filter = grits.GritsFactory(mod=f, src_dem=self.fn)._acquire_module()
-            if 'stacks' in grits_filter.kwargs.keys():
-                if grits_filter.kwargs['stacks']:
-                    continue
-                
-            grits_filter()
-            os.replace(grits_filter.dst_dem, self.fn)
+            if grits_filter is not None:
+                if 'stacks' in grits_filter.kwargs.keys():
+                    if grits_filter.kwargs['stacks']:
+                        continue
+
+                grits_filter()
+                os.replace(grits_filter.dst_dem, self.fn)
             
     def resample(self, region = None, xsample = None, ysample = None, ndv = -9999, sample_alg = 'cubicspline'):
         if xsample is not None or ysample is not None:

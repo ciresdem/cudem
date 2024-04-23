@@ -325,11 +325,11 @@ class Outliers(Grits):
         if round(n_den) == 1:
             n_den = .945
         
-        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.05 * (1-n_den))))))
+        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.01 * (1-n_den))))))
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * (1-n_den))))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (.5 * n_den)))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk /4))#* (.5 * n_den)))
         #self.n_step = utils.int_or(self.chunk_step, self.n_chunk)
-        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk * (.5 * n_den)))
+        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk /4))#* (.5 * n_den)))
         #self.max_step = utils.int_or(self.max_step, self.max_chunk)
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk

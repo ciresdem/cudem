@@ -234,7 +234,7 @@ class Perspecto:
 ## HILLSHADE
 ## uses gdal/ImageMagick
 ## ==============================================
-class Hillshade(Perspecto):
+class Hillshade_(Perspecto):
     """Generate a Hillshade Image
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
@@ -284,7 +284,7 @@ class Hillshade(Perspecto):
 ## uses gdal
 ## https://en.wikipedia.org/wiki/Blend_modes#Overlay
 ## ==============================================
-class Hillshade_(Perspecto):
+class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
@@ -305,8 +305,8 @@ class Hillshade_(Perspecto):
         self.altitude = altitude
         self.cpt_no_slash()
 
-    def gamma_correction(self, gamma = .5, outfile = 'gdaldem_gamma.tif'):
-        gdal_calc.Calc("uint8(((A / 255.)**(1/0.5)) * 255)", A=hs_fn, outfile=hs_gamma_fn, quiet=True)
+    def gamma_correction(self, hs_fn = None, gamma = .5, outfile = 'gdaldem_gamma.tif'):
+        gdal_calc.Calc("uint8(((A / 255.)**(1/0.5)) * 255)", A=hs_fn, outfile=outfile, quiet=True)
         return(outfile)
         
     def overlay(self, rgb_file, color_relief_file, outfile = 'gdaldem_overlay.tif'):
@@ -330,7 +330,7 @@ class Hillshade_(Perspecto):
         )
 
         hs_gamma_fn = utils.make_temp_fn('gdaldem_hs_gamma.tif', self.outdir)
-        self.gamma_correction(outfile=hs_gamma_fn)
+        self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn)
         
         cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
         gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True)
