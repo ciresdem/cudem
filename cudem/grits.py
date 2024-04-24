@@ -38,6 +38,7 @@ from tqdm import trange
 
 from osgeo import gdal
 
+import cudem
 from cudem import utils
 from cudem import gdalfun
 from cudem import regions
@@ -327,9 +328,9 @@ class Outliers(Grits):
         
         self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.01 * (1-n_den))))))
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * (1-n_den))))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk /4))#* (.5 * n_den)))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (.5 * n_den)))
         #self.n_step = utils.int_or(self.chunk_step, self.n_chunk)
-        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk /4))#* (.5 * n_den)))
+        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk * (.5 * n_den)))
         #self.max_step = utils.int_or(self.max_step, self.max_chunk)
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
@@ -738,7 +739,7 @@ class GritsFactory(factory.CUDEMFactory):
 ##
 ## grits cli
 ## ==============================================
-grits_cli_usage = """{cmd}
+grits_cli_usage = """{cmd} ({version}): grits; Filter raster datasets
 
 usage: {cmd} [ -hvCMNUWX [ args ] ] DEM ...
 
@@ -746,6 +747,7 @@ Options:
 
   -M, --module\t\t\tDesired grits MODULE and options. (see available Modules below)
 \t\t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+\t\t\t\tThis can be set multiple times to perform multiple filters.
 
   -N, --min_z\t\t\tMinimum z value (filter data above this value)
   -X, --max_z\t\t\tMaximum z value (filter data below this value)
@@ -764,6 +766,7 @@ Examples:
   % {cmd} input_dem.tif -M blur
   % {cmd} input_dem.tif --uncertainty_mask input_dem_u.tif --max_z 0 -M outliers:percentile=65
 """.format(cmd=os.path.basename(sys.argv[0]),
+           version=cudem.__version__,
            d_formats=factory._cudem_module_short_desc(GritsFactory._modules))
         
 #if __name__ == '__main__':
@@ -772,20 +775,39 @@ def grits_cli(argv = sys.argv):
     src_dem = None
     dst_dem = None
     wg_user = None
-    module = None
+    #module = None
     min_z = None
     max_z = None
     uncertainty_mask = None
     weight_mask = None
     count_mask = None
+    filters = []
     
     while i < len(argv):
         arg = argv[i]
         if arg == '--module' or arg == '-M':
             module = str(argv[i + 1])
+            if module.split(':')[0] not in GritsFactory()._modules.keys():
+                utils.echo_warning_msg(
+                    '''{} is not a valid grits module, available modules are: {}'''.format(
+                        module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
+                    )
+                )
+            else:
+                filters.append(module)
+                
             i += 1
         elif arg[:2] == '-M':
             module = str(arg[2:])
+            if module.split(':')[0] not in GritsFactory()._modules.keys():
+                utils.echo_warning_msg(
+                    '''{} is not a valid grits module, available modules are: {}'''.format(
+                        module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
+                    )
+                )
+            else:
+                filters.append(module)
+                
         elif arg == '--min_z' or arg == '-N':
             min_z = utils.float_or(argv[i + 1])
             i += 1
@@ -829,18 +851,11 @@ def grits_cli(argv = sys.argv):
             wg_user = arg
         i += 1
 
-    if module is None:
+    #if module is None:
+    if len(filters) == 0:
         sys.stderr.write(grits_cli_usage)
         utils.echo_error_msg(
             '''must specify a grits -M module.'''
-        )
-        sys.exit(-1)
-
-    if module.split(':')[0] not in GritsFactory()._modules.keys():
-        utils.echo_error_msg(
-            '''{} is not a valid grits module, available modules are: {}'''.format(
-                module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
-            )
         )
         sys.exit(-1)
         
@@ -880,20 +895,32 @@ def grits_cli(argv = sys.argv):
         )
         sys.exit(-1)
 
-    this_grits = GritsFactory(
-        mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, uncertainty_mask=uncertainty_mask, weight_mask=weight_mask,
-        count_mask=count_mask
-    )
-    if this_grits is not None:
+    for module in filters:
+        utils.echo_msg(module)
+        if module.split(':')[0] not in GritsFactory()._modules.keys():
+            utils.echo_error_msg(
+                '''{} is not a valid grits module, available modules are: {}'''.format(
+                    module.split(':')[0], factory._cudem_module_short_desc(GritsFactory._modules)
+                )
+            )
+            continue
+        
+        this_grits = GritsFactory(
+            mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, uncertainty_mask=uncertainty_mask, weight_mask=weight_mask,
+            count_mask=count_mask
+        )
         try:
             this_grits_module = this_grits._acquire_module()
             if this_grits_module is not None:
                 out_dem = this_grits_module()
                 utils.echo_msg('filtered {}'.format(out_dem))
+                src_dem = out_dem.dst_dem
             else:
                 utils.echo_error_msg('could not acquire grits module {}'.format(module))
+                
         except KeyboardInterrupt:
             utils.echo_error_msg('Killed by user')
+            
         except Exception as e:
             utils.echo_error_msg(e)
             print(traceback.format_exc())
