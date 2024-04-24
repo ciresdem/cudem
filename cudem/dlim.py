@@ -1600,7 +1600,7 @@ class ElevationDataset:
         ## ==============================================
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
-                grits_filter = grits.GritsFactory(mod=f, src_dem=out_file)._acquire_module()
+                grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
                 if grits_filter is not None:
                     if 'stacks' in grits_filter.kwargs.keys():
                         if grits_filter.kwargs['stacks']:
