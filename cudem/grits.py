@@ -895,8 +895,16 @@ def grits_cli(argv = sys.argv):
         )
         sys.exit(-1)
 
+    dst_dem = '{}_filtered.{}'.format(utils.fn_basename2(src_dem), utils.fn_ext(src_dem))
+    with gdalfun.gdal_datasource(
+            src_dem, update=False
+    ) as src_ds:
+        src_infos = gdalfun.gdal_infos(src_ds)
+        driver = gdal.GetDriverByName(src_infos['fmt'])
+        driver.CreateCopy(dst_dem, src_ds, 1)
+
+    src_dem = dst_dem        
     for module in filters:
-        utils.echo_msg(module)
         if module.split(':')[0] not in GritsFactory()._modules.keys():
             utils.echo_error_msg(
                 '''{} is not a valid grits module, available modules are: {}'''.format(
@@ -914,7 +922,7 @@ def grits_cli(argv = sys.argv):
             if this_grits_module is not None:
                 out_dem = this_grits_module()
                 utils.echo_msg('filtered {}'.format(out_dem))
-                src_dem = out_dem.dst_dem
+                os.replace(out_dem.dst_dem, src_dem)
             else:
                 utils.echo_error_msg('could not acquire grits module {}'.format(module))
                 
