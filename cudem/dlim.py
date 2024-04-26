@@ -2620,31 +2620,31 @@ class GDALFile(ElevationDataset):
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
             geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
 
-            #if self.x_band is None and self.y_band is None:
-            #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
-            lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
-            #num = round((geo_x_end - geo_x_origin) / gt[1])
-            #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
-            lat_array = np.zeros((lon_array.shape))
-            lat_array[:] = geo_y_origin
-            dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
-            
-            # try:
-            #     assert lon_array.shape == lat_array.shape
-            #     assert lon_array.shape == band_data[0].shape
-            #     dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
-            # except Exception as e:
-            #     utils.echo_error_msg(e)
-            #     pass
-            # else:
-            #     lon_band = self.src_ds.GetRasterBand(self.x_band)
-            #     lon_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
-            #     lon_array[np.isnan(band_data)] = np.nan
+            if self.x_band is None and self.y_band is None:
+                #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
+                lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+                #num = round((geo_x_end - geo_x_origin) / gt[1])
+                #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
+                lat_array = np.zeros((lon_array.shape))
+                lat_array[:] = geo_y_origin
+                dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
 
-            #     lat_band = self.src_ds.GetRasterBand(self.x_band)
-            #     lat_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
-            #     lat_array[np.isnan(band_data)] = np.nan
-            #     dataset = np.column_stack((lon_array[0], lat_array[0], band_data[0], weight_data[0], uncertainty_data[0]))
+                try:
+                    assert lon_array.shape == lat_array.shape
+                    assert lon_array.shape == band_data[0].shape
+                    dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
+                except Exception as e:
+                    utils.echo_error_msg(e)
+                    pass
+            else:
+                lon_band = self.src_ds.GetRasterBand(self.x_band)
+                lon_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
+                lon_array[np.isnan(band_data)] = np.nan
+
+                lat_band = self.src_ds.GetRasterBand(self.x_band)
+                lat_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
+                lat_array[np.isnan(band_data)] = np.nan
+                dataset = np.column_stack((lon_array[0], lat_array[0], band_data[0], weight_data[0], uncertainty_data[0]))
 
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
