@@ -37,6 +37,7 @@ from osgeo import gdal
 from osgeo_utils import gdal_calc
 import numpy as np
 from tqdm import tqdm
+import colorsys
 
 from cudem import utils
 from cudem import gdalfun
@@ -120,6 +121,39 @@ def generate_etopo_cpt(gmin, gmax):
                     )
     return('tmp.cpt')
 
+def get_correctMap(path, luminosity, contrast):
+        ds = gdal.Open(image_path)
+
+        #To normalize
+        band1 = ds.GetRasterBand(1)
+        #Get the max value
+        maxValue = int(2**16 -1)
+        if band1.DataType == gdal.GDT_UInt16:
+            maxValue = int(2**16 -1)
+        elif band1.DataType == gdal.GDT_Byte:
+            maxValue = int(2**8 -1)
+        else:
+            LOGGER.info(f"band type {band1.DataType} not handled: use default size of value (16 bits)")
+
+        band1 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[0]
+        band2 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[1]
+        band3 = ds.ReadAsArray(0,0,ds.RasterXSize,ds.RasterYSize)[2] 
+
+        for x in range(0,ds.RasterXSize):
+                for y in range(0,ds.RasterXSize):
+
+                    r = float(band1[x,y]) / maxValue
+                    g = float(band2[x,y]) / maxValue
+                    b = float(band3[x,y]) / maxValue
+
+                    #Convert to HLS them apply luminosity and contrast
+                    (h,l,s) = colorsys.rgb_to_hls(r, g, b)
+
+                    l = min(max(0, l + (l - 0.5)*(luminosity - 0.5)) , 1)
+                    s = min(max(0, s + (s - 0.5)*(contrast - 0.5)) , 1)
+
+                    (r,g,b) = colorsys.hls_to_rgb(h, l, s)
+                    
 def fetch_cpt_city(cache_dir = './'):
     cpt_url = "http://soliton.vm.bytemark.co.uk/pub/cpt-city/pkg/"
     cpt_xml = fetches.iso_xml(cpt_url + "package.xml")
@@ -296,6 +330,7 @@ class Hillshade_(Perspecto):
             projection=4326,
             azimuth=315,
             altitude=45,
+            modulate=125,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -303,8 +338,12 @@ class Hillshade_(Perspecto):
         self.projection = projection
         self.azimuth = azimuth
         self.altitude = altitude
+        self.modulate = utils.float_or(modulate, 115)
         self.cpt_no_slash()
 
+    def _modulate(self, gdal_fn):
+        utils.run_cmd('mogrify -modulate {} -depth 8 {}'.format(self.modulate, gdal_fn), verbose=False)
+        
     def gamma_correction(self, hs_fn = None, gamma = .5, outfile = 'gdaldem_gamma.tif'):
         gdal_calc.Calc("uint8(((A / 255.)**(1/0.5)) * 255)", A=hs_fn, outfile=outfile, quiet=True)
         return(outfile)
@@ -321,7 +360,45 @@ class Hillshade_(Perspecto):
         hs_ds = None        
 
         return(outfile)
-        
+
+    def hard_light(self, rgb_file, color_relief_file, outfile = 'gdaldem_overlay.tif'):
+
+        hs_ds = gdal_calc.Calc(
+            "uint8( ( 2 * (A/255.)*(B/255.)*(B<128) + ( 1 - 2 * (1-(A/255.))*(1-(B/255.)) ) * (B>=128) ) * 255 )",
+            A=rgb_file, B=color_relief_file, outfile=outfile, allBands="B", NoDataValue=None, quiet=True
+        )
+        for band in range(1, hs_ds.RasterCount+1):
+            this_band = hs_ds.GetRasterBand(band)
+            this_band.DeleteNoDataValue()            
+        hs_ds = None        
+
+        return(outfile)
+
+
+    def multiply(self, rgb_file, color_relief_file, outfile = 'gdaldem_multiply.tif'):
+        hs_ds = gdal_calc.Calc(
+            "uint8( ((A/255.) * (B/255.)) * 255 )",
+            A=rgb_file, B=color_relief_file, outfile=outfile, allBands="B", NoDataValue=None, quiet=True
+        )
+        for band in range(1, hs_ds.RasterCount+1):
+            this_band = hs_ds.GetRasterBand(band)
+            this_band.DeleteNoDataValue()            
+        hs_ds = None        
+
+        return(outfile)
+
+    def screen(self, rgb_file, color_relief_file, outfile = 'gdaldem_screen.tif'):
+        hs_ds = gdal_calc.Calc(
+            "uint8( (1 - (1 - (A/255.)) * (1 - (B/255.))) * 255)",
+            A=rgb_file, B=color_relief_file, outfile=outfile, allBands="B", NoDataValue=None, quiet=True
+        )
+        for band in range(1, hs_ds.RasterCount+1):
+            this_band = hs_ds.GetRasterBand(band)
+            this_band.DeleteNoDataValue()            
+        hs_ds = None        
+
+        return(outfile)
+    
     def run(self):
         hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
         gdal.DEMProcessing(
@@ -330,17 +407,21 @@ class Hillshade_(Perspecto):
         )
 
         hs_gamma_fn = utils.make_temp_fn('gdaldem_hs_gamma.tif', self.outdir)
-        self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn)
+        self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn, gamma=.5)
         
         cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
         gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True)
 
         cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
-        self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
+        #self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)
+        self.multiply(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
 
         utils.remove_glob(hs_fn, hs_gamma_fn, cr_fn)
         out_hs = '{}_hs.tif'.format(utils.fn_basename2(self.src_dem))
         os.rename(cr_hs_fn, out_hs)
+
+        self._modulate(out_hs)
+        
         return(out_hs)
     
 class HillShade(Perspecto):
