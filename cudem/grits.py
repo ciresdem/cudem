@@ -215,6 +215,7 @@ class Blur(Grits):
                 
                 #status = gdalfun.gdal_write(smooth_array, self.dst_dem, self.ds_config)
 
+        dst_ds = None
         return(self.dst_dem, 0)
 
 ## ==============================================
@@ -333,7 +334,7 @@ class Outliers(Grits):
         if round(n_den) == 1:
             n_den = .945
         
-        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.01 * (1-n_den))))))
+        self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.1 * (1-n_den))))))
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * (1-n_den))))))
         self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (.5 * n_den)))
         self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk * (.5 * n_den)))
@@ -341,7 +342,7 @@ class Outliers(Grits):
             self.max_step = self.max_chunk
 
         if self.verbose:
-            utils.echo_msg('outlier chunks: {} {} < {} {}'.format(self.n_chunk, self.n_step, self.max_chunk, self.max_step))
+            utils.echo_msg('outlier chunks ({}): {} {} < {} {}'.format(n_den, self.n_chunk, self.n_step, self.max_chunk, self.max_step))
         
     def _density(self, src_arr):
         nonzero = np.count_nonzero(~np.isnan(src_arr))
@@ -386,6 +387,8 @@ class Outliers(Grits):
                 #unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
                 unc_data[(unc_data == self.ds_config['ndv'])] = 0
                 mask_mask[(unc_data != 0)] = 1
+        else:
+            unc_data = mask_mask
                 
         self.mask_mask_band.SetNoDataValue(0)        
         self.mask_mask_band.WriteArray(unc_data)
@@ -572,7 +575,7 @@ class Outliers(Grits):
                 
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
-                        step=step, verbose=self.verbose, msg='scanning for outliers ({})'.format(perc)
+                        step=step, verbose=self.verbose, msg='scanning for outliers ({})'.format(perc),
                 ):
                     ## buffer based on density
                     band_data = self.ds_band.ReadAsArray(*srcwin)
@@ -614,30 +617,30 @@ class Outliers(Grits):
                         band_data = None
                         continue
 
-                    # ## apply slope outliers
-                    # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                    #                             mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True,
-                    #                             src_weight=self.slope_weight, var='slope')
+                    ## apply slope outliers
+                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.slope_weight, var='slope')
 
                     ## apply curvature outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True,
-                                                src_weight=self.curvature_weight, var='curvature')
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.curvature_weight, var='curvature')
 
                     ## apply roughness outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True,
-                                                src_weight=self.rough_weight, var='roughness')
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.rough_weight, var='roughness')
 
                     ## apply tri outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True,
-                                                src_weight=self.tri_weight, var='TRI')
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.tri_weight, var='TRI')
 
                     ## apply TPI outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=False,
-                                                src_weight=self.tpi_weight, var='TPI')
+                                                mask_count_data=mask_count_data, percentile=75,#perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=False, src_weight=self.tpi_weight, var='TPI')
 
                     srcwin_ds = None
 

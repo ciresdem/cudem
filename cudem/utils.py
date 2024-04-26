@@ -882,28 +882,29 @@ def fix_srcwin(srcwin, xcount, ycount):
 def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     return([s for s in yield_srcwin(n_size, n_chunk, step, verbose)])
 
-def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_msg='chunked srcwin', verbose=True):
+def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_msg='chunked srcwin', start_at_edge=True, verbose=True):
     """yield source windows in n_chunks at step"""
     
     if step is None:
         step = n_chunk
-        
-    #x_chunk = n_chunk
-    x_chunk = step
+
+    n_edge = n_chunk if start_at_edge else step
+    x_chunk = n_edge
+    #x_chunk = step
     y_chunk = 0
     i_chunk = 0
     x_i_chunk = 0
 
     assert step > 0    
     with tqdm(
-            total=(math.ceil((n_size[0] + (n_chunk-step)) / step) * math.ceil((n_size[1] +  (n_chunk-step)) / step)),
+            total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
             desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
             leave=verbose
     ) as pbar:
         while True:
             #pbar.update()
-            #y_chunk = n_chunk
-            y_chunk = step
+            y_chunk = n_edge
+            #y_chunk = step
             while True:
                 this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
                 this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
