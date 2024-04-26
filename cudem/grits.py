@@ -273,18 +273,23 @@ class Outliers(Grits):
     Parameters:
 
     percentile(float) - the percentile to use in calculating outliers
+    max_percentile(float) - the maximum percentile to use with multipass
     chunk_size(int) the moving window size in pixels
     chunk_step(int) - the moving window step in pixels
+    max_chunk(int) - the maximum moving window size in pixels to use with multipass
+    max_ste(int) - the maximum moving window step in pixels to use with multipass
     return_mask(bool) - save the generated outlier mask
-    interpolation(str) - interpolation method to use for neighborhood calculations (linear, cubic or nearest)
-    aggressive(bool) - use straight percentiles instead of outliers
+    interpolation(str) - interpolation method to use for neighborhood calculations (None, linear, cubic or nearest)
+    aggressive(bool/int) - use straight percentiles instead of outliers (0-2)
     multipass(int) - pass through the data at multiple chunk_sizes, set the number of passes here
+    acuumulate(bool) - accumulate outliers with multipass
     """
     
     def __init__(self, percentile = 75, max_percentile = None, chunk_size = None, chunk_step = None,
                  max_chunk = None, max_step = None, return_mask = False, elevation_weight = 1,
                  curvature_weight = 1, slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1,
-                 tri_weight = 1, aggressive = 0, multipass = 1, accumulate = True, interpolation='nearest', **kwargs):
+                 tri_weight = 1, aggressive = 0, multipass = 1, accumulate = True, interpolation = None,
+                 **kwargs):
         
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile, 75)
@@ -336,8 +341,8 @@ class Outliers(Grits):
         
         self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.1 * (1-n_den))))))
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * (1-n_den))))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk * (.5 * n_den)))
-        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk * (.5 * n_den)))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk /5))#* (.5 * n_den)))
+        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk /5))#* (.5 * n_den)))
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
 
@@ -401,22 +406,23 @@ class Outliers(Grits):
             return(None)
 
         ## interpolate the srcwin for neighborhood calculations
-        if np.any(np.isnan(band_data)):                        
-            point_indices = np.nonzero(~np.isnan(tmp_band_data))
-            if len(point_indices[0]):
-                point_values = tmp_band_data[point_indices]
-                xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
+        if self.interpolation is not None and self.interpolation in ['nearest', 'linear', 'cubic']:
+            if np.any(np.isnan(band_data)):                        
+                point_indices = np.nonzero(~np.isnan(tmp_band_data))
+                if len(point_indices[0]):
+                    point_values = tmp_band_data[point_indices]
+                    xi, yi = np.mgrid[0:srcwin[3], 0:srcwin[2]]
 
-                try:
-                    tmp_band_data = scipy.interpolate.griddata(
-                        np.transpose(point_indices), point_values,
-                        (xi, yi), method=self.interpolation
-                    )
-                except:
-                    pass
+                    try:
+                        tmp_band_data = scipy.interpolate.griddata(
+                            np.transpose(point_indices), point_values,
+                            (xi, yi), method=self.interpolation
+                        )
+                    except:
+                        pass
 
-                point_values = xi = yi = None
-            point_indices = None
+                    point_values = xi = yi = None
+                point_indices = None
         
         ## generate a mem datasource to feed into gdal.DEMProcessing
         dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]), self.gt[1], 0., self.gt[3] + (srcwin[1] * self.gt[5]), 0., self.gt[5])

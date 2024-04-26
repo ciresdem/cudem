@@ -1331,7 +1331,7 @@ class ElevationDataset:
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else [])
 
         if dst_ds is None:
-            utils.echo_error_msg('failed to create stack grid...')
+            utils.echo_error_msg('failed to create stack grid {}...'.format(out_file))
             sys.exit(-1)
 
         dst_ds.SetGeoTransform(dst_gt)
