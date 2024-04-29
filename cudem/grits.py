@@ -336,13 +336,19 @@ class Outliers(Grits):
 
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
-        if round(n_den) == 1:
-            n_den = .945
+        #if round(n_den) == 1:
+        if n_den > .9:
+            n_den = .9
+
+        if n_den < .1:
+            n_den = .1
+
+        #n_den = .35
         
         self.n_chunk = utils.int_or(self.chunk_size, math.ceil((math.sqrt(src_arr.size * (.1 * (1-n_den))))))
         self.max_chunk = utils.int_or(self.max_chunk, math.ceil((math.sqrt(src_arr.size * (.5 * (1-n_den))))))
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk /5))#* (.5 * n_den)))
-        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk /5))#* (.5 * n_den)))
+        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 5))#* (.5 * n_den)))
+        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk / 5))#* (.5 * n_den)))
         if self.max_step > self.max_chunk:
             self.max_step = self.max_chunk
 
@@ -360,7 +366,7 @@ class Outliers(Grits):
         src_arr[src_arr == src_config['ndv']] = np.nan
 
         return(src_arr, self._density(src_arr))
-        
+    
     def generate_mask_ds(self, src_ds = None):
         ## to hold the mask data
         self.mask_mask_fn = '{}{}'.format(utils.fn_basename2(self.src_dem), '_outliers.tif')
@@ -377,28 +383,52 @@ class Outliers(Grits):
         self.mask_mask_ds.SetGeoTransform(self.ds_config['geoT'])
         self.mask_mask_band = self.mask_mask_ds.GetRasterBand(1)
         self.mask_count_band = self.mask_mask_ds.GetRasterBand(2)
-
-        # uncertainty ds
-        unc_band = None
-        if self.uncertainty_mask is not None:
-            if self.unc_is_fn:
-                unc_ds = gdal.Open(self.uncertainty_mask)
-                unc_band = unc_ds.GetRasterBand(1)
-            elif self.unc_is_band:
-                unc_band = src_ds.GetRasterBand(self.uncertainty_mask)
-
-            if unc_band is not None:
-                unc_data = unc_band.ReadAsArray()
-                #unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
-                unc_data[(unc_data == self.ds_config['ndv'])] = 0
-                mask_mask[(unc_data != 0)] = 1
-        else:
-            unc_data = mask_mask
-                
+        #self.mask_weight_band = self.mask_mask_ds.GetRasterBand(3)
+        
         self.mask_mask_band.SetNoDataValue(0)        
-        self.mask_mask_band.WriteArray(unc_data)
+        self.mask_mask_band.WriteArray(mask_mask)
         self.mask_count_band.WriteArray(mask_mask)
+        #self.mask_weight_band.WriteArray(mask_mask)
         mask_mask = None
+        
+    # def generate_mask_ds(self, src_ds = None):
+    #     ## to hold the mask data
+    #     self.mask_mask_fn = '{}{}'.format(utils.fn_basename2(self.src_dem), '_outliers.tif')
+    #     mask_mask = np.zeros((src_ds.RasterYSize, src_ds.RasterXSize))
+    #     driver = gdal.GetDriverByName('GTiff')
+
+    #     if os.path.exists(self.mask_mask_fn):
+    #         status = driver.Delete(self.mask_mask_fn)
+    #         if status != 0:
+    #             utils.remove_glob('{}*'.format(self.mask_mask_fn))
+        
+    #     self.mask_mask_ds = driver.Create(self.mask_mask_fn, self.ds_config['nx'], self.ds_config['ny'], 2, gdal.GDT_Float32,
+    #                                       options=['COMPRESS=DEFLATE', 'PREDICTOR=1', 'TILED=YES', 'BIGTIFF=YES'])
+    #     self.mask_mask_ds.SetGeoTransform(self.ds_config['geoT'])
+    #     self.mask_mask_band = self.mask_mask_ds.GetRasterBand(1)
+    #     self.mask_count_band = self.mask_mask_ds.GetRasterBand(2)
+
+    #     # uncertainty ds
+    #     unc_band = None
+    #     if self.uncertainty_mask is not None:
+    #         if self.unc_is_fn:
+    #             unc_ds = gdal.Open(self.uncertainty_mask)
+    #             unc_band = unc_ds.GetRasterBand(1)
+    #         elif self.unc_is_band:
+    #             unc_band = src_ds.GetRasterBand(self.uncertainty_mask)
+
+    #         if unc_band is not None:
+    #             unc_data = unc_band.ReadAsArray()
+    #             #unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
+    #             unc_data[(unc_data == self.ds_config['ndv'])] = 0
+    #             mask_mask[(unc_data != 0)] = 1
+    #     else:
+    #         unc_data = mask_mask
+                
+    #     self.mask_mask_band.SetNoDataValue(0)        
+    #     self.mask_mask_band.WriteArray(unc_data)
+    #     self.mask_count_band.WriteArray(mask_mask)
+    #     mask_mask = None
                 
     def generate_mem_ds(self, band_data = None, srcwin = None):
         tmp_band_data = band_data
@@ -570,7 +600,7 @@ class Outliers(Grits):
                 perc = percs_it[n]
                 n+=1
 
-                self.elevation_weight *= (1/n**2)
+                # self.elevation_weight *= (1/n**2)
                 # self.curvature_weight *= (1/n)
                 # self.slope_weight *= (1/n)
                 # self.rough_weight *= (1/n)
@@ -600,22 +630,22 @@ class Outliers(Grits):
                         percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, src_weight=self.elevation_weight
                     )
 
-                    # ## apply uncertainty outliers
-                    # if unc_band is not None:
-                    #     unc_data = unc_band.ReadAsArray(*srcwin)
-                    #     unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
-                    #     self.mask_outliers(
-                    #         src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data,
-                    #         percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True, src_weight=self.unc_weight
-                    #     )
-                    #     unc_data = None
+                    ## apply uncertainty outliers
+                    if unc_band is not None:
+                        unc_data = unc_band.ReadAsArray(*srcwin)
+                        unc_data[(np.isnan(band_data) | (unc_data == self.ds_config['ndv']) | (unc_data == 0))] = np.nan
+                        self.mask_outliers(
+                            src_data=unc_data, mask_data=mask_mask_data, count_data=mask_count_data,
+                            percentile=perc if (self.aggressive > 0 or self.accumulate) else 75, upper_only=True, src_weight=self.unc_weight
+                        )
+                        unc_data = None
 
-                    #     # mask_mask_data[~np.isnan(unc_data)] = np.sqrt(
-                    #     #     (np.power(mask_mask_data[~np.isnan(unc_data)], 2) +
-                    #     #      np.power(self.unc_weight * unc_data[~np.isnan(unc_data)], 2))
-                    #     # )
-                    #     # #mask_count_data[~np.isnan(unc_data)] += self.unc_weight
-                    #     # unc_data = None
+                        # mask_mask_data[~np.isnan(unc_data)] = np.sqrt(
+                        #     (np.power(mask_mask_data[~np.isnan(unc_data)], 2) +
+                        #      np.power(self.unc_weight * unc_data[~np.isnan(unc_data)], 2))
+                        # )
+                        # #mask_count_data[~np.isnan(unc_data)] += self.unc_weight
+                        # unc_data = None
                         
                     ## generate a mem datasource to feed into gdal.DEMProcessing
                     srcwin_ds = self.generate_mem_ds(band_data=band_data, srcwin=srcwin)

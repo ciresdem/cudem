@@ -2453,7 +2453,7 @@ class GDALFile(ElevationDataset):
                 #gdalfun.gdal_flat_to_nan(tmp_ds, verbose=self.verbose)[0]
 
                 # src_dem = os.path.join(self.fetch_module._outdir, result[1])
-                grits_filter = grits.GritsFactory(mod='flats', src_dem=tmp_ds, size_threshold=10, cache_dir=self.cache_dir)._acquire_module()
+                grits_filter = grits.GritsFactory(mod='flats', src_dem=tmp_ds, cache_dir=self.cache_dir)._acquire_module()
                 grits_filter()
                 tmp_ds = grits_filter.dst_dem
                 #tmp_ds = gdal.Open(ned_fn)

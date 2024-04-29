@@ -1606,7 +1606,7 @@ https://data.ngdc.noaa.gov/platforms/
                         continue
 
                 if self.exclude_survey_id is not None:
-                    if survey in self.exlcude_survey_id.split('/'):
+                    if survey in self.exclude_survey_id.split('/'):
                         continue
 
                 if self.ship_id is not None:
