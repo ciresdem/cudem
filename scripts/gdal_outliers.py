@@ -25,8 +25,29 @@
 ### Code:
 
 import sys
+import numpy as np
 from cudem import gdalfun
 from cudem import utils
+
+def get_outliers(in_array, percentile=75):
+    """get the outliers from in_array based on the percentile"""
+
+    if percentile <= 50:
+        percentile = 51
+
+    if percentile >= 100:
+        percentile = 99
+
+    max_percentile = percentile
+    min_percentile = 100 - percentile
+
+    perc_max = np.nanpercentile(in_array, max_percentile)
+    perc_min = np.nanpercentile(in_array, min_percentile)
+    iqr_p = (perc_max - perc_min) * 1.5
+    upper_limit = perc_max + iqr_p
+    lower_limit = perc_min - iqr_p
+
+    return(upper_limit, lower_limit)
 
 _version = '0.2.1'
 _usage = '''gdal_outliers.py ({}): filter z outliers in a DEM
@@ -145,10 +166,12 @@ if __name__ == "__main__":
     if dst_gdal is None:
         dst_gdal = elev.split('.')[0] + '_fltr.tif'
         
-    gdalfun.gdal_filter_outliers2(
-        elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
-        elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
-        unc_weight=uncertainty_weight, tpi_weight=tpi_weight, tri_weight=tri_weight, interpolation=interpolation
-    )
+    # gdalfun.gdal_filter_outliers2(
+    #     elev, dst_gdal, unc_mask=unc_mask, chunk_size=chunk_size, chunk_step=chunk_step, percentile=percentile,
+    #     elevation_weight=elevation_weight, curvature_weight=curvature_weight, rough_weight=roughness_weight,
+    #     unc_weight=uncertainty_weight, tpi_weight=tpi_weight, tri_weight=tri_weight, interpolation=interpolation
+    # )
+    elev_array = gdalfun.gdal_get_array(elev)
+    print(get_outliers(elev_array[0]))
 
 ### End

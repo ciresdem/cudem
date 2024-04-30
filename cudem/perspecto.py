@@ -207,8 +207,10 @@ class Perspecto:
             cmap=cmap,
             color_model='{}'.format(color_model),
             output=output,
-            series=[min_z, max_z],
+            series=[min_z, max_z,50],
             no_bg=True,
+            #continuous=True,
+            #truncate=[min_z, max_z],
         )
         self.cpt = output
 

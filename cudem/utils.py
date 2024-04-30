@@ -946,10 +946,13 @@ def buffer_srcwin(srcwin=(), n_size=None, buff_size=0, verbose=True):
     y_origin = srcwin[1] - buff_size
     y_origin = 0 if y_origin < 0 else y_origin
 
-    x_size = srcwin[3] + (buff_size*2)
+    x_buff_size = buff_size * 2 if x_origin !=0 else buff_size
+    y_buff_size = buff_size * 2 if y_origin !=0 else buff_size
+    
+    x_size = srcwin[3] + x_buff_size#(buff_size*2)
     x_size = (n_size[1] - x_origin) if (x_origin + x_size) > n_size[1] else x_size
     
-    y_size = srcwin[2] + (buff_size*2)
+    y_size = srcwin[2] + y_buff_size#(buff_size*2)
     y_size = (n_size[0] - y_origin) if (y_origin + y_size) > n_size[0] else y_size
     
     return(int(x_origin), int(y_origin), int(x_size), int(y_size))
