@@ -132,7 +132,10 @@ class Grits:
         return(self)
 
     def get_outliers(self, in_array, percentile=75):
-        """get the outliers from in_array based on the percentile"""
+        """get the outliers from in_array based on the percentile
+
+        https://en.wikipedia.org/wiki/Interquartile_range
+        """
 
         if percentile <= 50:
             percentile = 51
@@ -618,7 +621,8 @@ class Outliers(Grits):
                 
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
-                        step=step, verbose=self.verbose, msg='scanning for outliers ({})'.format(perc if (self.aggressive > 0 or self.accumulate) else 75),
+                        step=step, verbose=self.verbose, start_at_edge=False,
+                        msg='scanning for outliers ({})'.format(perc if (self.aggressive > 0 or self.accumulate) else 75),
                 ):
                     # buffer srcwin
                     #buff_srcwin = utils.buffer_srcwin(srcwin, n_size=(src_ds.RasterYSize, src_ds.RasterXSize), buff_size=1)
@@ -660,15 +664,15 @@ class Outliers(Grits):
                     curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
                     rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
                     
-                    # ## apply slope outliers
-                    # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                    #                             mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                    #                             upper_only=True, src_weight=self.slope_weight, var='slope')
+                    ## apply slope outliers
+                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.slope_weight, var='slope')
 
-                    # ## apply curvature outliers
-                    # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                    #                             mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                    #                             upper_only=True, src_weight=self.curvature_weight, var='curvature')
+                    ## apply curvature outliers
+                    self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                                                upper_only=True, src_weight=self.curvature_weight, var='curvature')
 
                     # ## apply roughness outliers
                     # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
@@ -721,8 +725,8 @@ class Outliers(Grits):
                 self.mask_mask_ds = None
                 
             unc_ds = src_ds = None
-            #if not self.return_mask or not self.accumulate:
-            utils.remove_glob(self.mask_mask_fn)
+            if not self.return_mask or not self.accumulate:
+                utils.remove_glob(self.mask_mask_fn)
 
             return(self.dst_dem, 0)
         else:

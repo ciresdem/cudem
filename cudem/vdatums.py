@@ -479,7 +479,6 @@ class VerticalTransform:
                 if epsg == dst_code or np.any([g in _result['name'] for g in _geoids.keys()]):
                     if src_code in _htdp_reference_frames.keys():
                         _trans_grid = os.path.join(self.cache_dir, _result['name'])
-                        #utils.echo_msg_bold(_result)
                         if fetches.Fetch(
                                 _result['url'], verbose=self.verbose
                         ).fetch_file(_trans_grid) == 0:
@@ -489,6 +488,7 @@ class VerticalTransform:
                             )
                             if os.path.exists('_{}'.format(os.path.basename(_trans_grid))):
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
+                                
                             utils.run_cmd(
                                 'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline'.format(
                                     _trans_grid,

@@ -25,6 +25,10 @@
 ## Use CLI command 'fetches'
 ## or use FetchesFactory() to acquire and use a fetch module.
 ##
+### TODO:
+## eurodem
+## cpt-city
+##
 ### Code:
 
 import os
@@ -166,9 +170,7 @@ def get_credentials(url, authenticator_url = 'https://urs.earthdata.nasa.gov'):
 
     return(credentials)
 
-## ==============================================
 ## a few convenience functions to parse common iso xml files
-## ==============================================
 class iso_xml:
     def __init__(self, xml_url, timeout=2, read_timeout=10):
         self.url = xml_url
@@ -276,8 +278,6 @@ class iso_xml:
                     
         return(dd)
 
-## ==============================================
-## ==============================================
 class Fetch:
     def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers, verify=True):
         self.url = url
@@ -404,16 +404,12 @@ class Fetch:
                 if req.status_code == 300:
                     pass
 
-                ## ==============================================
                 ## hack for earthdata credential redirect...
                 ## recursion here may never end with incorrect user/pass
-                ## ==============================================
                 timed_out = False
 
                 if req.status_code == 401:
-                    ## ==============================================
                     ## we're hoping for a redirect url here.
-                    ## ==============================================
                     if self.url == req.url:
                         raise UnboundLocalError('Incorrect Authentication')
 
@@ -483,9 +479,7 @@ class Fetch:
                     #     utils.echo_warning_msg('max tries exhausted...')
                     #     status = -1
                     #else:
-                    ## ==============================================
                     ## pause a bit and retry...
-                    ## ==============================================
                     if self.verbose:
                         utils.echo_warning_msg(
                             'server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries)
@@ -558,9 +552,7 @@ class Fetch:
                 
         return(status)
 
-## ==============================================
 ## fetch queue for threads
-## ==============================================
 def fetch_queue(q, c=True):
     """fetch queue `q` of fetch results
 
@@ -632,9 +624,7 @@ class fetch_results(threading.Thread):
             
         self.fetch_q.join()
 
-## ==============================================
 ## Fetch Modules
-## ==============================================
 class FetchModule:
     def __init__(self, src_region = None, callback = lambda: False, verbose = True,
                  outdir = None, name = 'fetches', params = {}):
@@ -682,9 +672,7 @@ class FetchModule:
         for entry in self.results:
             self.fetch(entry)
 
-## ==============================================
 ## GMRT
-## ==============================================
 class GMRT(FetchModule):
     """The Global Multi-Resolution Topography synthesis.
     
@@ -778,9 +766,7 @@ https://www.gmrt.org
                 
         return(self)
 
-## ==============================================
 ## GEBCO
-## ==============================================
 class GEBCO(FetchModule):
     """GEBCO
     
@@ -871,9 +857,7 @@ https://www.gebco.net
                 
         return(self)
 
-## ==============================================
 ## Copernicus
-## ==============================================
 class CopernicusDEM(FetchModule):
     """COPERNICUS sattelite elevation data
     
@@ -1026,9 +1010,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
                 
         return(self)
 
-## ==============================================
 ## FABDEM
-## ==============================================
 class FABDEM(FetchModule):
     """FABDEM elevation data
     
@@ -1142,9 +1124,7 @@ class FABDEM_FRED(FetchModule):
                         self.results.append(['/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster'])
             utils.remove_glob(v_zip)
 
-## ==============================================
 ## NASADEM
-## ==============================================
 class NASADEM(FetchModule):
     """NASA Digital Elevation Model
     
@@ -1240,9 +1220,7 @@ https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
                 self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
         return(self)
             
-## ==============================================
 ## MarGrav - Marine Gravity
-## ==============================================
 class MarGrav(FetchModule):
     """MARine GRAVity Satellite Altimetry Topography from Scripps.
 
@@ -1285,9 +1263,7 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
             self.results.append([_req.url, outf, 'mar_grav'])
             
-## ==============================================
 ## SRTM Plus
-## ==============================================
 class SRTMPlus(FetchModule):
     """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
 
@@ -1319,9 +1295,7 @@ https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
             self.results.append([_req.url, outf, 'srtm'])
             
-## ==============================================
 ## Charts - ENC/RNC
-## ==============================================
 ## the arcgis rest server doesn't filter by bbox for some reason, always returns all data
 class Charts(FetchModule):
     """NOAA Nautical CHARTS
@@ -1469,9 +1443,7 @@ https://www.charts.noaa.gov/
                 for i in surv['DataLink'].split(','):
                     self.results.append([i, i.split('/')[-1], surv['DataType']])
     
-## ==============================================
 ## NCEI Multibeam
-## ==============================================
 ## MapServer testing
 class MBDB(FetchModule):
     """NOSHydro"""
@@ -1700,9 +1672,7 @@ https://data.ngdc.noaa.gov/platforms/
                 
             return(survey, src_data, mb_fmt, mb_perc, mb_date)
 
-## ==============================================
 ## NOAA NOS
-## ==============================================
 class HydroNOS(FetchModule):
     """NOS Soundings (bag/hydro)
     
@@ -1790,10 +1760,8 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                                     xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
                                     self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
 
-## ==============================================
 ## NOAA DEMs
 ## doesn't really work well, use ncei_thredds or digital_coast instead...
-## ==============================================
 class DEMMosaic(FetchModule):
     """
 Fields:
@@ -1885,9 +1853,7 @@ Fields:
                     #             xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
                     #             self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
                                 
-## ==============================================
 ## NOAA Trackline
-## ==============================================
 class Trackline(FetchModule):
     """NOAA TRACKLINE bathymetric data.
 
@@ -1924,9 +1890,7 @@ http://www.ngdc.noaa.gov/trackline/
             #self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'trackline'])
             #self.results.append([xyz_link, os.path.join(self._outdir, 'tmp_trackline.xyz'), 'trackline'])
 
-## ==============================================
 ## eHydro (USACE)
-## ==============================================
 class eHydro(FetchModule):
     """USACE eHydro bathymetric data.
     
@@ -2005,9 +1969,7 @@ Fields:
                 
         return(self)
 
-## ==============================================
 ## BlueTopo
-## ==============================================
 class BlueTopo(FetchModule):
     """BlueTOPO DEM
     
@@ -2081,9 +2043,7 @@ https://www.nauticalcharts.noaa.gov/data/bluetopo.html
             
         return(self)
     
-## ==============================================
 ## MGDS
-## ==============================================
 class MGDS(FetchModule):
     """The Marine Geoscience Data System (MGDS)
 
@@ -2130,9 +2090,7 @@ data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Anci
                 
         return(self)
 
-## ==============================================
 ## NGS - geodesic monuments
-## ==============================================
 class NGS(FetchModule):
     """NGS Monuments
     
@@ -2170,9 +2128,7 @@ http://geodesy.noaa.gov/
             
         return(self)
 
-## ==============================================
 ## TIDES
-## ==============================================
 class Tides(FetchModule):
     """TIDE station information from NOAA/NOS
 
@@ -2246,9 +2202,7 @@ https://tidesandcurrents.noaa.gov/
             
         return(self)
 
-## ==============================================
 ## WaterServices (USGS)
-## ==============================================
 class WaterServices(FetchModule):
     """WaterServices station information from USGS
 
@@ -2278,9 +2232,7 @@ https://waterservices.usgs.gov/
             
         return(self)
     
-## ==============================================
 ## buoys 
-## ==============================================
 class BUOYS(FetchModule):
     """NOAA BUOY data (beta)
 
@@ -2345,9 +2297,7 @@ https://www.ndbc.noaa.gov
             
         return(self)
 
-## ==============================================
 ## Digital Coast - Data Access Viewer
-## ==============================================
 class DAV(FetchModule):
     """Fetch NOAA lidar data from DAV
 
@@ -2590,30 +2540,22 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
 
         return(self)
 
-## ==============================================
 ## Digital Coast - Data Access Viewer - SLR shortcut
-## ==============================================
 class SLR(DAV):
     def __init__(self, **kwargs):
         super().__init__(where='ID=6230', **kwargs)
 
-## ==============================================
 ## Digital Coast - Data Access Viewer CoNED shortcut
-## ==============================================
 class CoNED(DAV):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%CoNED%'", **kwargs)
 
-## ==============================================
 ## Digital Coast - Data Access Viewer - CUDEM shortcut
-## ==============================================
 class CUDEM(DAV):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%CUDEM%'", **kwargs)
     
-## ==============================================
 ## NCEI THREDDS Catalog
-## ==============================================
 class NCEIThreddsCatalog(FetchModule):
     """NOAA NCEI DEMs via THREDDS
 
@@ -2753,10 +2695,8 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
                             [d, d.split('/')[-1], surv['DataType']]
                         )
 
-## ==============================================
 ## The National Map
 ## update is broken! fix this.
-## ==============================================
 class TheNationalMap(FetchModule):
     """USGS' The National Map
 
@@ -2872,11 +2812,9 @@ http://tnmaccess.nationalmap.gov/
                     DataType = datatype, DataSource = 'tnm', HorizontalDatum = h_epsg,
                     VerticalDatum = v_epsg, Etcetra = fmt, Info = ds['refreshCycle'], geom = geom)
 
-    ## ==============================================
     ## update the FRED geojson with each TNM dataset
     ## each dataset will have any number of products, which get parsed for the data-link
     ## in _parse_results().
-    ## ==============================================
     def update(self):
         """Update FRED with each dataset in TNM"""
         
@@ -2991,14 +2929,12 @@ http://tnmaccess.nationalmap.gov/
                 
         return(self)
     
-    ## ==============================================
     ## _update_prods() and _parse_prods_results() will update FRED with every product as a feature, rather than
     ## the default of each feature being a TNM dataset. _update_prods() takes much longer time to gather the
     ## products for each dataset and recording them in FRED, though the parsing of results is much faster.
     ## For our purposes, we wont be using most of what's available on TNM, so it is a bit of a waste to store
     ## all their datasets, which are already stored online, in FRED. This means user-time for fetches TNM is a
     ## bit slower, however storage costs are minimal and fewer updates may be necesary...
-    ## ==============================================                
     def _update_prods(self):
         """updated FRED with each product file available from TNM"""
         
@@ -3060,25 +2996,19 @@ http://tnmaccess.nationalmap.gov/
                 if d != '':
                     self.results.append([d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']])
 
-## ==============================================
 ## The National Map - NED (1 & 1/3) shortcut
-## ==============================================
 class NED(TheNationalMap):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%NED%'", **kwargs)
         self.data_format = 200
         
-## ==============================================
 ## The National Map - NED (1m) shortcut
-## ==============================================
 class NED1(TheNationalMap):
     def __init__(self, **kwargs):
         super().__init__(where="NAME LIKE '%DEM%'", **kwargs)
         self.data_format = 200
         
-## ==============================================
 ## EMODNet - EU data
-## ==============================================
 class EMODNet(FetchModule):
     """EU elevation data extracts from EMOD DTM.
 
@@ -3173,9 +3103,7 @@ fileTypes	Description
             
         return(self)
 
-## ==============================================
 ## CHS - Canada Hydro
-## ==============================================
 class CHS(FetchModule):
     """High-Resolution Digital Elevation Model data for Canada
 
@@ -3228,9 +3156,7 @@ https://open.canada.ca
             self.results.append([_wcs_req.url, outf, 'chs'])
         return(self)
 
-## ==============================================
 ## HRDEM - Canada Topo
-## ==============================================    
 class HRDEM(FetchModule):
     """High-Resolution Digital Elevation Model data for Canada
 
@@ -3273,9 +3199,7 @@ https://open.canada.ca
 
         utils.remove_glob(v_zip, *v_shps)
 
-## ==============================================
 ## ArcticDEM
-## ==============================================
 class ArcticDEM(FetchModule):
     """Arctic DEM
 ArcticDEM is an NGA-NSF public-private initiative to automatically produce a high-resolution, 
@@ -3402,9 +3326,7 @@ https://www.pgc.umn.edu/data/arcticdem/
             
         return(self)
 
-## ==============================================
 ## OSM - Open Street Map
-## ==============================================
 class OpenStreetMap(FetchModule):
     """OpenStreetMap data.
     
@@ -3517,9 +3439,7 @@ https://wiki.openstreetmap.org/
             osm_data_url = self._osm_api + '?' + osm_data            
             self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
 
-## ==============================================
 ## BING Building Footprints
-## ==============================================
 class BingBFP(FetchModule):
     """Bing Building Footprints
 
@@ -3559,9 +3479,7 @@ https://github.com/microsoft/GlobalMLBuildingFootprints
 
         self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
         
-## ==============================================
 ## VDATUM
-## ==============================================
 def proc_vdatum_inf(vdatum_inf, name='vdatum'):
     
     _inf = open(vdatum_inf, 'r')
@@ -3606,7 +3524,8 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
     """
     
     _proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
-    cdn_index = os.path.join(cache_dir, 'proj_cdn_files.geojson')
+    #cdn_index = os.path.join(cache_dir, 'proj_cdn_files.geojson')
+    cdn_index = utils.make_temp_fn('proj_cdn_files.geojson', cache_dir)
     #cdn_headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }
     cdn_headers = {'Host': 'cdn.proj.org',
                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0',
@@ -3747,12 +3666,10 @@ https://cdn.proj.org
             surveys = []
 
             if vd == 'TIDAL' or vd == 'IGLD85':
-                ## ==============================================
                 ## All tidal inf data is in each one, so we only
                 ## have to download one of the tidal zips to process
                 ## them all; lets use the smallest one
                 ## Keep this link up-to-date!
-                ## ==============================================
                 if vd == 'TIDAL':
                     vd_ = 'DEVAemb12_8301'
                 else:
@@ -3826,13 +3743,11 @@ https://cdn.proj.org
         elif self.epsg is not None:
             w.append("DataType = '{}'".format(self._tidal_references[self.epsg]['name']))
             
-        ## ==============================================
         ## Search FRED for VDATUM TIDAL TRANSFORMATION GRIDS
         ## FRED holds the VDATUM tidal grids,
         ## mllw, mlw, mhhw, mhw, tss, mtl
         ## where all convert to MSL and tss represents the
         ## current geoid
-        ## ==============================================
         for surv in self.FRED._filter(self.region, w, [self.name]):
             if self.gtx:
                 dst_zip = '{}.zip'.format(surv['ID'])
@@ -3849,11 +3764,9 @@ https://cdn.proj.org
             else:
                 self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
 
-        ## ==============================================
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
         ## world, including global transformations such as EGM
-        ## ==============================================
         cdn_index = 'proj_cdn_files.geojson'
         try:
             status = Fetch(self._proj_vdatum_index, callback=self.callback, verbose=self.verbose).fetch_file(cdn_index)
@@ -3903,9 +3816,7 @@ https://cdn.proj.org
             cdn_ds = None
             utils.remove_glob(cdn_index)
 
-## ==============================================
 ## EarthData - NASA (requires login credentials)
-## ==============================================
 class EarthData(FetchModule):
     """ACCESS NASA EARTH SCIENCE DATA
     
@@ -4027,9 +3938,7 @@ https://cmr.earthdata.nasa.gov
                     cc = [float(x) for x in poly.split()]
                     gg = [x for x in zip(cc[::2], cc[1::2])]
                     ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
-                    ## ==============================================
                     ## uncomment below to output shapefiles of the feature polygons
-                    ## ==============================================
                     #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
                 else:
                     ogr_geom = self.region.export_as_geom()
@@ -4041,13 +3950,11 @@ https://cmr.earthdata.nasa.gov
                             if not any([link['href'].split('/')[-1] in res for res in self.results]):
                                 self.results.append([link['href'], link['href'].split('/')[-1], self.short_name])
 
-## ==============================================
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
 ##
 ## This module allows us to use icesat2 data in dlim/waffles
 ##
 ## todo: dmrpp
-## ==============================================
 class IceSat(EarthData):
     """Access IceSat2 data.
 
@@ -4074,12 +3981,8 @@ you might need to `chmod 0600 ~/.netrc`
         self.data_format = 202
         self.src_srs = 'epsg:4326+3855'
 
-## ==============================================
 ## SST from EarthData
-##
 ## This module allows us to use SST data in dlim/waffles
-##
-## ==============================================
 class MUR_SST(EarthData):
     """Access SST data.
 
@@ -4088,9 +3991,7 @@ class MUR_SST(EarthData):
     def __init__(self, **kwargs):
         super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
         
-## ==============================================
 ## USIEI
-## ==============================================
 class USIEI(FetchModule):
     """US Interagency Elevation Inventory
 
@@ -4169,9 +4070,7 @@ https://coast.noaa.gov/inventory/
             
         return(self)
     
-## ==============================================
 ## wsf
-## ==============================================
 class WSF(FetchModule):
     """WSF from German Aerospace Service (DLR)
 
@@ -4265,9 +4164,7 @@ https://geoservice.dlr.de/web/services
                 
         return(self)
 
-## ==============================================
 ## hydrolakes
-## ==============================================
 class HydroLakes(FetchModule):
     """HydroLakes vector and derived elevations
     
@@ -4352,9 +4249,7 @@ class HttpDataset(FetchModule):
         self.results.append([self.params['mod'], os.path.basename(self.params['mod']), 'https'])
         return(self)
         
-## ==============================================
 ## Fetches Module Parser
-## ==============================================
 class FetchesFactory(factory.CUDEMFactory):
     """Acquire a fetches module."""
     
@@ -4405,12 +4300,10 @@ class FetchesFactory(factory.CUDEMFactory):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     
-## ==============================================
 ## Command-line Interface (CLI)
 ## $ fetches
 ##
 ## fetches cli
-## ==============================================
 fetches_usage = """{cmd} ({version}): Fetches; Fetch and process remote elevation data
 
 usage: {cmd} [ -hlqzHR [ args ] ] MODULE ...
@@ -4453,9 +4346,7 @@ See `fetches_cli_usage` for full cli options.
     check_size = True
     num_threads = 1
     
-    ## ==============================================
     ## parse command line arguments.
-    ## ==============================================
     i = 1
     while i < len(argv):
         arg = argv[i]
