@@ -38,7 +38,7 @@ def Usage():
     print('')
     print('gdal_minmax v.%s' %(_version))
 
-def returnMinMax(ingrd):
+def returnMinMax(ingrd, nbins):
     # Process the grid file
 
     try:
@@ -57,7 +57,7 @@ def returnMinMax(ingrd):
         tgrid = band.ReadAsArray()
         tgrid2 = tgrid[tgrid != ndata]
 
-        hbin,hist = np.histogram(tgrid2, 1000)
+        hbin,hist = np.histogram(tgrid2, nbins)
 
         for i,j in enumerate(hbin):
             tmp_val = str(hist[i]) + " " + str(j)# + "\n"
@@ -67,12 +67,29 @@ def returnMinMax(ingrd):
 
 if __name__ == "__main__":
 
-    if len(sys.argv) <= 1:
-        Usage()
-        sys.exit()
-    else:
-        infile = sys.argv[1]
+    nbins = 1000
+    infile = None
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg == '-b' or arg == '-bins' or arg == '--bins':
+            nbins = int(float(sys.argv[i+1]))
+            i += 1
+        elif infile is None:
+            infile = arg
 
-    returnMinMax(infile)
+        else:
+            print(arg)
+            #sys.stderr.write(_usage)
+            sys.exit(1)
+            
+        i = i + 1
+
+    if infile is None:
+        #sys.stderr.write(_usage)
+        utils.echo_error_msg('you must enter an input file')
+        sys.exit(1)
+        
+    returnMinMax(infile, nbins)
 
 ### END
