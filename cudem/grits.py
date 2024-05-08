@@ -686,7 +686,7 @@ class Outliers(Grits):
         rough_arr = rough_ds = rr_ds = None
         utils.remove_glob(rough_fn, rr_fn)
         
-        return(p, d)
+        return(p, k)
     
     def run(self):
         """Run the outlier module and scan a source DEM file for outliers and remove them."""
