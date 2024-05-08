@@ -279,7 +279,8 @@ class Outliers(Grits):
 
     In general, k=1.5 for general outliers and k=3 for 'far out' outliers. Since this is fairly arbitrary,
     k here is calculated as:
-    k = (3/(self.aggressive+1))*(1/abs(Rs-Rm))
+    #k = (3/(self.aggressive+1))*(1/abs(Rs-Rm))
+    k = (Rx / Rs) / Rs
 
     So that we are more aggressive, k is larger, on generally non-flat data, while k is smaller on generally flat data.
     This allows us to retain real features where there is little variability in the data.
@@ -295,6 +296,8 @@ class Outliers(Grits):
 
     If `percentile` is not set, we will calculate a reasonable value to use in both the gathering of the sub-regional LSP outliers
     as well as the final removal of the outliers of the outliers.
+    
+    percentile = ((Rm + ((Rx / (k * Rs)) * Rs)) - Rn) / (Rx - Rn) * (50 - 100) + 100
     
     Most datasets should be fine with using only the default parameters, however, closer refinement of the parameters may
     yield more acceptable results.
@@ -317,7 +320,7 @@ class Outliers(Grits):
     
     def __init__(self, percentile = None, max_percentile = None, chunk_size = None, chunk_step = None,
                  max_chunk = None, max_step = None, return_mask = False, elevation_weight = 1,
-                 curvature_weight = 1, aspect_weight = 1, slope_weight = 1, tpi_weight = 1, unc_weight = 1,
+                 curvature_weight = 1, slope_weight = 1, tpi_weight = 1, unc_weight = 1,
                  rough_weight = 1, tri_weight = 1, aggressive = 0, multipass = 1, accumulate = True,
                  interpolation = 'nearest', **kwargs):
         
@@ -335,12 +338,12 @@ class Outliers(Grits):
         self.accumulate = accumulate
         self.elevation_weight = utils.float_or(elevation_weight, 0)
         self.curvature_weight = utils.float_or(curvature_weight, 1)
-        self.aspect_weight = utils.float_or(aspect_weight, 1)
-        self.slope_weight = utils.float_or(slope_weight, 1)
-        self.tpi_weight = utils.float_or(tpi_weight, 1)
+        self.slope_weight = utils.float_or(slope_weight, .25)
+        self.tpi_weight = utils.float_or(tpi_weight, .5)
         self.unc_weight = utils.float_or(unc_weight, 1)
-        self.rough_weight = utils.float_or(rough_weight, 1)
-        self.tri_weight = utils.float_or(tri_weight, 1)
+        self.rough_weight = utils.float_or(rough_weight, .25)
+        self.tri_weight = utils.float_or(tri_weight, .5)
+        self.k = 1.5
         
         ## setup the uncertainty data if wanted
         if self.uncertainty_mask is not None:
@@ -356,7 +359,12 @@ class Outliers(Grits):
 
     def init_percentiles(self, src_ds = None):
         if self.percentile is None:
-            self.percentile = self.rough_q(src_ds)[0]
+            self.percentile, self.k = self.rough_q(src_ds)
+
+        if self.percentile <=50:
+            self.percentile = 51
+        elif self.percentile >=100:
+            self.percentile = 99
             
         self.max_percentile = utils.float_or(self.max_percentile, ((100 - self.percentile) / 2) + self.percentile)
         if self.verbose:
@@ -461,7 +469,7 @@ class Outliers(Grits):
                 unc_data = unc_band.ReadAsArray()
                 unc_data[(unc_data == self.ds_config['ndv'])] = 0
                 self.mask_outliers(
-                    src_data=unc_data, mask_data=mask_mask, count_data=mask_count, percentile=75, upper_only=True, k=1.5
+                    src_data=unc_data, mask_data=mask_mask, count_data=mask_count, percentile=75, upper_only=True, k=1.5, src_weight=self.unc_weight
                 )
                 unc_data = None
                 
@@ -556,7 +564,8 @@ class Outliers(Grits):
         return(nn_ds, nn_fn)
 
     def mask_outliers(
-            self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False, src_weight=1, k=1.5, verbose=False
+            self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False,
+            src_weight=1, k=1.5, verbose=False, other_data=None
     ):
         """mask outliers and assign an outlier 'score' to each affected cell.
 
@@ -569,13 +578,16 @@ class Outliers(Grits):
         """
         
         if src_data is not None and mask_data is not None and count_data is not None:
+
             upper_limit, lower_limit = self.get_outliers(src_data, percentile, k)
+                
             if verbose:
                 utils.echo_msg('{} {}'.format(upper_limit, lower_limit))
 
             src_upper = src_data[src_data > upper_limit]
             if src_upper.size > 0:
-                src_max = upper_limit * 2
+                src_max = (upper_limit + (upper_limit ** 2))
+                #src_max = src_upper.max()
                 if upper_limit != 0:
                     mask_data[(src_data > upper_limit)] = np.sqrt(
                         (np.power(mask_data[(src_data > upper_limit)], 2) +
@@ -586,7 +598,8 @@ class Outliers(Grits):
             if not upper_only:
                 src_lower = src_data[src_data < lower_limit]
                 if src_lower.size > 0:
-                    src_min = lower_limit * 2
+                    src_min = (lower_limit - (lower_limit ** 2))
+                    #src_min = src_lower.min()
                     if lower_limit != 0:
                         mask_data[(src_data < lower_limit)] = np.sqrt(
                             (np.power(mask_data[(src_data < lower_limit)], 2) +
@@ -622,51 +635,59 @@ class Outliers(Grits):
         """
         
         src_data = self.ds_band.ReadAsArray()
-        mask_mask_data = self.mask_mask_band.ReadAsArray()
+        mask_mask_data = self.mask_mask_band.ReadAsArray()        
+        mask_count_data = self.mask_count_band.ReadAsArray()        
         mask_mask_data[mask_mask_data == 0] = np.nan
-        mask_count_data = self.mask_count_band.ReadAsArray()
-        mask_count_data[mask_count_data == 0] = np.nan        
-        p, sk, k = self.rough_q(self.mask_mask_ds)
-        
+        mask_count_data[mask_count_data == 0] = np.nan
+        #perc, sk, k = self.rough_q(self.mask_mask_ds, inv_p=False)
+        #k = 1.5
         count_upper_limit = np.nanpercentile(mask_count_data, perc)
-        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=k)
+        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k)
 
-        if self.aggressive == 0:
-            outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
-        else:
-            outlier_mask = mask_mask_data > mask_upper_limit
-        
+        #if self.aggressive == 0:
+        outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
+        #else:
+        #outlier_mask = mask_mask_data > mask_upper_limit
+
         src_data[outlier_mask] = self.ds_config['ndv']
         self.ds_band.WriteArray(src_data)
         self.ds_band.FlushCache()
         
         if self.verbose:
-            utils.echo_msg('removed {} outliers{} @ {}:{}.'.format(
+            utils.echo_msg('removed {} outliers{} @ <{}:{}>{}:{}.'.format(
                 np.count_nonzero(outlier_mask), ' (aggressive: {})'.format(self.aggressive) if self.aggressive > 0 else '',
-                mask_upper_limit, count_upper_limit
+                perc, self.k, mask_upper_limit, count_upper_limit
             ))
 
         src_data = mask_mask_data = mask_count_data = None
 
         return(np.count_nonzero(outlier_mask))
 
-    def rough_q(self, src_ds):
-        rough_ds, rough_fn = self.gdal_dem(input_ds=src_ds, var='roughness')
+    def rough_q(self, src_ds, inv_p=False):
+        rr_ds, rr_fn = self.gdal_dem(input_ds=src_ds, var='roughness')
+        rough_ds, rough_fn = self.gdal_dem(input_ds=rr_ds, var='TPI')
         rough_arr = rough_ds.GetRasterBand(1).ReadAsArray()
         rough_arr[(rough_arr == self.ds_config['ndv']) | (rough_arr == -9999)] = np.nan
-        med_rough = np.nanpercentile(rough_arr, 50)
+        n_den = self._density(rough_arr)
+        
+        if np.all(np.isnan(rough_arr)):
+            rough_ds = rough_arr = None
+            utils.remove_glob(rough_fn)
+            return(None, None, None)
+        
+        med_rough = np.nanmedian(rough_arr)
+        m_rough = np.nanmean(rough_arr)
         std_rough = np.nanstd(rough_arr)
         if med_rough == 0:
             med_rough = 1e-10
 
-        p = 100 - (50 * ((std_rough - med_rough) / (std_rough)))
-        sk = 3*(1/med_rough)
-        k = (3/(self.aggressive+1))*(1/abs(std_rough - med_rough))
-
-        rough_arr = rough_ds = None
-        utils.remove_glob(rough_fn)
+        k = abs((np.nanmax(rough_arr) / std_rough) / std_rough)
+        pp = (((med_rough + ((np.nanmax(rough_arr) / (k * std_rough)) * std_rough)) - np.nanmin(rough_arr)) / (np.nanmax(rough_arr) - np.nanmin(rough_arr)))
+        p = pp * (50 - 100) + 100
+        rough_arr = rough_ds = rr_ds = None
+        utils.remove_glob(rough_fn, rr_fn)
         
-        return(p, sk, k)
+        return(p, d)
     
     def run(self):
         """Run the outlier module and scan a source DEM file for outliers and remove them."""
@@ -690,6 +711,7 @@ class Outliers(Grits):
             chunks_it = np.ceil(np.linspace(self.n_chunk, self.max_chunk, self.multipass))
             steps_it = np.ceil(np.linspace(self.n_step, self.max_step, self.multipass))
             percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+            ks_it = np.linspace(1.5, 3, self.multipass)
             weights_it = np.linspace(1, 1/self.multipass, self.multipass)
 
             if self.accumulate:
@@ -698,11 +720,11 @@ class Outliers(Grits):
             for n, chunk in enumerate(chunks_it):
                 step = steps_it[n]
                 perc = percs_it[n]
+                k = ks_it[n]
                 elevation_weight = self.elevation_weight #* weights_it[n]#(1/n)
                 curvature_weight = self.curvature_weight #* weights_it[n]#(1/n)
                 slope_weight = self.slope_weight #* weights_it[n]#(1/n)
                 rough_weight = self.rough_weight #* weights_it[n]#(1/n)
-                aspect_weight = self.aspect_weight
                 tri_weight = self.tri_weight
                 tpi_weight = self.tpi_weight
                 n+=1
@@ -729,27 +751,28 @@ class Outliers(Grits):
                     if srcwin_ds is None:
                         band_data = None
                         continue
-
-                    asp_ds, asp_fn = self.gdal_dem(input_ds=srcwin_ds, var='aspect')
-                    ee_ds, ee_fn = self.gdal_dem(input_ds=srcwin_ds, var='easterliness')
-                    nn_ds, nn_fn = self.gdal_dem(input_ds=srcwin_ds, var='northerliness')
+                    
                     slp_ds, slp_fn = self.gdal_dem(input_ds=srcwin_ds, var='slope')
-                    curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
+                    #curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
                     rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
-                    p, sk, k = self.rough_q(srcwin_ds)
+                    #perc, sk, k = self.rough_q(srcwin_ds, inv_p=False)
+                    # if sk is None:
+                    #     band_data = srcwin_ds = slp_ds = rough_ds = curv_ds = None
+                    #     utils.remove_glob(slp_fn, rough_fn, curv_fn)
+                    #     continue
                     
                     self.mask_outliers(
                         src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                        src_weight=elevation_weight, k=sk
+                        src_weight=elevation_weight, k=k
                     )                    
                     ## apply slope outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=True, src_weight=slope_weight, var='slope', k=sk)
+                                                upper_only=True, src_weight=slope_weight, var='slope', k=k)
                     ## apply tri outliers
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=True, src_weight=tri_weight, var='TRI', k=sk)
+                                                upper_only=True, src_weight=tri_weight, var='TRI', k=k)
                     # ## apply curvature outliers
                     # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=75,#perc if (self.aggressive > 0 or self.accumulate) else 75,
@@ -759,30 +782,21 @@ class Outliers(Grits):
                     #                             mask_count_data=mask_count_data, percentile=75,#perc if (self.aggressive > 0 or self.accumulate) else 75,
                     #                             upper_only=True, src_weight=rough_weight, var='roughness', k=k)
                     # ## apply TPI outliers
-                    # self.mask_gdal_dem_outliers(srcwin_ds=asp_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                    #                             mask_count_data=mask_count_data, percentile=75,#perc if (self.aggressive > 0 or self.accumulate) else 75,
-                    #                             upper_only=False, src_weight=aspect_weight, var='TPI', k=k)
                     # self.mask_gdal_dem_outliers(srcwin_ds=curv_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=75,#perc if (self.aggressive > 0 or self.accumulate) else 75,
                     #                             upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
-                    self.mask_gdal_dem_outliers(srcwin_ds=rough_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=False, src_weight=rough_weight, var='TPI', k=sk)
-                    self.mask_gdal_dem_outliers(srcwin_ds=ee_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=False, src_weight=aspect_weight, var='TPI', k=sk)
-                    self.mask_gdal_dem_outliers(srcwin_ds=nn_ds, band_data=band_data, mask_mask_data=mask_mask_data,
-                                                mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=False, src_weight=aspect_weight, var='TPI', k=sk)
+                    # self.mask_gdal_dem_outliers(srcwin_ds=rough_ds, band_data=band_data, mask_mask_data=mask_mask_data,
+                    #                             mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
+                    #                             upper_only=False, src_weight=rough_weight, var='TPI', k=sk)
                     self.mask_gdal_dem_outliers(srcwin_ds=slp_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=False, src_weight=slope_weight, var='TPI', k=sk)
+                                                upper_only=False, src_weight=slope_weight, var='TPI', k=k)
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc if (self.aggressive > 0 or self.accumulate) else 75,
-                                                upper_only=False, src_weight=tpi_weight, var='TPI', k=sk)
+                                                upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
 
-                    srcwin_ds = slp_ds = rough_ds = ee_ds = nn_ds = asp_ds = curv_ds = None
-                    utils.remove_glob(slp_fn, rough_fn, ee_fn, nn_fn, asp_fn, curv_fn)
+                    srcwin_ds = slp_ds = rough_ds = None
+                    utils.remove_glob(slp_fn, rough_fn)
 
                     ## write the mask data to file
                     self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
@@ -1230,20 +1244,20 @@ def grits_cli(argv = sys.argv):
             mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, uncertainty_mask=uncertainty_mask, weight_mask=weight_mask,
             count_mask=count_mask, dst_dem=dst_dem
         )
-        try:
-            this_grits_module = this_grits._acquire_module()
-            if this_grits_module is not None:
-                out_dem = this_grits_module()
-                utils.echo_msg('filtered DEM to {}'.format(out_dem.dst_dem))
-                #os.replace(out_dem.dst_dem, src_dem)
-            else:
-                utils.echo_error_msg('could not acquire grits module {}'.format(module))
+        #try:
+        this_grits_module = this_grits._acquire_module()
+        if this_grits_module is not None:
+            out_dem = this_grits_module()
+            utils.echo_msg('filtered DEM to {}'.format(out_dem.dst_dem))
+            #os.replace(out_dem.dst_dem, src_dem)
+        else:
+            utils.echo_error_msg('could not acquire grits module {}'.format(module))
                 
-        except KeyboardInterrupt:
-            utils.echo_error_msg('Killed by user')
+        # except KeyboardInterrupt:
+        #     utils.echo_error_msg('Killed by user')
             
-        except Exception as e:
-            utils.echo_error_msg(e)
-            print(traceback.format_exc())
+        # except Exception as e:
+        #     utils.echo_error_msg(e)
+        #     print(traceback.format_exc())
         
 ### End

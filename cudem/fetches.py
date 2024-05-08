@@ -1558,7 +1558,7 @@ https://data.ngdc.noaa.gov/platforms/
         else:
             fetch_region = self.region.copy()
             fetch_region.buffer(pct=25)
-            
+
         _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': fetch_region.format('bbox')}, timeout=20)
         if _req is not None and _req.status_code == 200:
             survey_list = _req.text.split('\n')[:-1]
