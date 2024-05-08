@@ -279,7 +279,6 @@ class Outliers(Grits):
 
     In general, k=1.5 for general outliers and k=3 for 'far out' outliers. Since this is fairly arbitrary,
     k here is calculated as:
-    #k = (3/(self.aggressive+1))*(1/abs(Rs-Rm))
     k = (Rx / Rs) / Rs
 
     So that we are more aggressive, k is larger, on generally non-flat data, while k is smaller on generally flat data.
