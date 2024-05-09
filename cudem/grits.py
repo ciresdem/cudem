@@ -377,7 +377,7 @@ class Outliers(Grits):
         cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
         #self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den * self.multipass))) / cell_size))
-        self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den))) / cell_size))
+        self.n_chunk = utils.int_or(self.chunk_size, ((1000*(1/(n_den))) / cell_size))
         self.max_chunk = utils.int_or(self.max_chunk, ((50000*(1/n_den)) / cell_size))
         if self.n_chunk < 15:
             self.n_chunk = 15
@@ -659,24 +659,23 @@ class Outliers(Grits):
         if np.all(np.isnan(rough_arr)):
             rough_ds = rough_arr = None
             utils.remove_glob(rough_fn)
-            return(None, None, None)
+            return(None, None)
         
         med_rough = np.nanmedian(rough_arr)
         m_rough = np.nanmean(rough_arr)
         std_rough = np.nanstd(rough_arr)
-        if std_rough == 0:
+        if std_rough == 0 or med_rough == 0:
             rough_arr = rough_ds = rr_ds = None
             utils.remove_glob(rough_fn, rr_fn)
             return(75,3)
         
-        k = ((abs(med_rough) / std_rough) * 300)        
-        a = std_rough
+        k = ((abs(med_rough) / std_rough) * 300)
+        a = -1*(std_rough*k) #* (k * (med_rough - m_rough))
         pp = ((med_rough + a) - np.nanmin(rough_arr)) / ((np.nanmax(rough_arr) + a) - np.nanmin(rough_arr))
         p = pp * (100 - 50) + 50
-
+        #print(med_rough, std_rough, k, a, p)
         rough_arr = rough_ds = rr_ds = None
         utils.remove_glob(rough_fn, rr_fn)
-        
         return(p, k)
     
     def run(self):
@@ -712,12 +711,12 @@ class Outliers(Grits):
                 step = steps_it[n]
                 perc = percs_it[n]
                 k = ks_it[n]
-                elevation_weight = self.elevation_weight# * weights_it[n]#(1/n)
-                curvature_weight = self.curvature_weight# * weights_it[n]#(1/n)
-                slope_weight = self.slope_weight# * weights_it[n]#(1/n)
-                rough_weight = self.rough_weight# * weights_it[n]#(1/n)
-                tri_weight = self.tri_weight# * weights_it[n]#(1/n)
-                tpi_weight = self.tpi_weight# * weights_it[n]#(1/n)
+                elevation_weight = self.elevation_weight * weights_it[n]#(1/n)
+                curvature_weight = self.curvature_weight * weights_it[n]#(1/n)
+                slope_weight = self.slope_weight * weights_it[n]#(1/n)
+                rough_weight = self.rough_weight * weights_it[n]#(1/n)
+                tri_weight = self.tri_weight * weights_it[n]#(1/n)
+                tpi_weight = self.tpi_weight * weights_it[n]#(1/n)
                 n+=1
                 if not self.accumulate:
                     self.generate_mask_ds(src_ds=src_ds)
@@ -746,9 +745,10 @@ class Outliers(Grits):
                     slp_ds, slp_fn = self.gdal_dem(input_ds=srcwin_ds, var='slope')
                     #curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
                     rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
+                    # perc, k = self.rough_q(srcwin_ds)
                     # if k is None:
-                    #     band_data = srcwin_ds = slp_ds = rough_ds = curv_ds = None
-                    #     utils.remove_glob(slp_fn, rough_fn, curv_fn)
+                    #     srcwin_ds = slp_ds = rough_ds = None
+                    #     utils.remove_glob(slp_fn, rough_fn)
                     #     continue
                     
                     self.mask_outliers(
