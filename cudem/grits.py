@@ -824,7 +824,7 @@ class Outliers(Grits):
                     
                     slp_ds, slp_fn = self.gdal_dem(input_ds=srcwin_ds, var='slope')
                     #curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
-                    #rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
+                    rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
                     #p, k = self.rough_q(srcwin_ds)
                     # if k is None:
                     #     srcwin_ds = slp_ds = rough_ds = None
@@ -870,8 +870,8 @@ class Outliers(Grits):
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
 
-                    srcwin_ds = slp_ds = None
-                    utils.remove_glob(slp_fn)
+                    srcwin_ds = slp_ds = rough_ds = None
+                    utils.remove_glob(slp_fn, rough_fn)
 
                     ## write the mask data to file
                     self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
