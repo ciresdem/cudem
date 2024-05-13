@@ -909,8 +909,7 @@ def gdal_nan(ds_config, outfile, nodata = None):
     ds_config['ndv'] = nodata        
     gdal_write(nullArray, outfile, ds_config)
 
-def gdal_get_node(src_gdal):
-    node = 'pixel'
+def gdal_get_node(src_gdal, node='pixel'):
     with gdal_datasource(src_gdal) as src_ds:
         ds_config = gdal_infos(src_ds)
         mt = ds_config['metadata']

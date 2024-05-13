@@ -2223,7 +2223,7 @@ class GDALFile(ElevationDataset):
     
     def __init__(self, weight_mask = None, uncertainty_mask = None,  x_band = None, y_band = None, uncertainty_mask_to_meter = 1,
                  open_options = None, sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
-                 node = 'pixel', **kwargs):
+                 node = None, **kwargs):
         super().__init__(**kwargs)
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
@@ -2347,9 +2347,10 @@ class GDALFile(ElevationDataset):
         inf_region = regions.Region().from_string(self.infos.wkt)
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
-        self.node = gdalfun.gdal_get_node(self.fn)
-        self.resample_and_warp = True
-        
+        if self.node is None:
+            self.node = gdalfun.gdal_get_node(self.fn, 'pixel')
+            
+        self.resample_and_warp = True        
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
             self.resample_and_warp = False
 
@@ -2763,7 +2764,8 @@ class BAGFile(ElevationDataset):
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
-                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
+                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata),
+                                  node='pixel')
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
