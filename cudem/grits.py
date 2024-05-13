@@ -682,10 +682,10 @@ class Outliers(Grits):
         med_pk = np.nanmedian(pk_arr)
         m_pk = np.nanmean(pk_arr)
         std_pk = np.nanstd(pk_arr)
-        if std_pk == 0 or med_pk == 0:
-            pk_arr = pk_ds = ds_ds = None
-            utils.remove_glob(pk_fn, ds_fn)
-            return(75,3)
+        # if std_pk == 0 or med_pk == 0:
+        #     pk_arr = pk_ds = ds_ds = None
+        #     utils.remove_glob(pk_fn, ds_fn)
+        #     return(75,3)
 
         pkr = (np.nanmax(pk_arr) - np.nanmin(pk_arr))
         #pkrm = pkr / std_pk #* .01
@@ -823,8 +823,8 @@ class Outliers(Grits):
                         continue
                     
                     slp_ds, slp_fn = self.gdal_dem(input_ds=srcwin_ds, var='slope')
-                    curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
-                    rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
+                    #curv_ds, curv_fn = self.gdal_dem(input_ds=slp_ds, var='slope')
+                    #rough_ds, rough_fn = self.gdal_dem(input_ds=srcwin_ds, var='roughness')
                     #p, k = self.rough_q(srcwin_ds)
                     # if k is None:
                     #     srcwin_ds = slp_ds = rough_ds = None
@@ -870,8 +870,8 @@ class Outliers(Grits):
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tpi_weight, var='TPI', k=k)
 
-                    srcwin_ds = slp_ds = rough_ds = curv_ds = None
-                    utils.remove_glob(slp_fn, rough_fn, curv_fn)
+                    srcwin_ds = slp_ds = None
+                    utils.remove_glob(slp_fn)
 
                     ## write the mask data to file
                     self.mask_mask_band.WriteArray(mask_mask_data, srcwin[0], srcwin[1])
