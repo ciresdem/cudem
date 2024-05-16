@@ -698,7 +698,7 @@ class Outliers(Grits):
         pk_arr = pk_ds = ds_ds = None
         utils.remove_glob(pk_fn, ds_fn)
 
-        return(p, k, pp)
+        return(pp, k, p)
 
     def rough_q(self, src_ds):
         rp,rk,rpp = self.get_pk(src_ds, var='roughness')
@@ -734,8 +734,8 @@ class Outliers(Grits):
         mask_mask_data[mask_mask_data == 0] = np.nan
         mask_count_data[mask_count_data == 0] = np.nan
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
-        if self.aggressive:
-            perc = perc1
+        #if self.aggressive:
+        #    perc = perc1
             
         #count_upper_limit = np.nanpercentile(mask_count_data, perc)
         #mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
@@ -831,18 +831,18 @@ class Outliers(Grits):
                     #     utils.remove_glob(slp_fn, rough_fn)
                     #     continue
 
-                    # #perc,k = self.get_pk(srcwin_ds, var='elevation')                    
+                    #perc,k,p = self.get_pk(srcwin_ds, var='elevation')                    
                     self.mask_outliers(
                         src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=perc, 
                         src_weight=elevation_weight, k=k
                     )                    
                     ## apply slope outliers
-                    #perc,k = self.get_pk(srcwin_ds, var='slope')                    
+                    #perc,k,p = self.get_pk(srcwin_ds, var='slope')                    
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc, 
                                                 upper_only=False, src_weight=slope_weight, var='slope', k=k)
                     ## apply tri outliers
-                    #perc1,k = self.get_pk(srcwin_ds, var='tri')                    
+                    #perc,k,p = self.get_pk(srcwin_ds, var='tri')                    
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tri_weight, var='TRI', k=k)
@@ -851,6 +851,7 @@ class Outliers(Grits):
                     #                             mask_count_data=mask_count_data, percentile=perc,
                     #                             upper_only=True, src_weight=curvature_weight, var='curvature', k=k)
                     ## apply roughness outliers
+                    #perc,k,p = self.get_pk(srcwin_ds, var='roughness')                    
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=rough_weight, var='roughness', k=k)
@@ -861,11 +862,11 @@ class Outliers(Grits):
                     # self.mask_gdal_dem_outliers(srcwin_ds=rough_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
                     #                             upper_only=False, src_weight=rough_weight, var='TPI', k=k)
-                    #perc,k = self.get_pk(slp_ds, var='TPI')                    
+                    #perc,k,p = self.get_pk(slp_ds, var='elevation')                    
                     self.mask_gdal_dem_outliers(srcwin_ds=slp_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=slope_weight, var='TPI', k=k)
-                    #perc,k = self.get_pk(srcwin_ds, var='TPI')                    
+                    #perc,k,p = self.get_pk(srcwin_ds, var='TPI')                    
                     self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tpi_weight, var='TPI', k=k)

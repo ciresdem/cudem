@@ -5759,7 +5759,7 @@ def datalists_cli(argv=sys.argv):
     if want_glob:
         import glob
         for key in DatasetFactory()._modules.keys():
-            if key != -1:
+            if key != -1 and key != '_factory':
                 for f in DatasetFactory()._modules[key]['fmts']:
                     globs = glob.glob('*.{}'.format(f))
                     [sys.stdout.write(

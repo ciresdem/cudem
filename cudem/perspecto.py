@@ -63,18 +63,51 @@ def lll(src_lat):
     return(lonl_, latl_)
 
 ## CPT          
-def scale_el(value, gmin, gmax, tr):
+def scale_el__(value, gmin, gmax, tr):
+    #print(value, gmin, gmax, tr)
     if value > 0 and gmax > 0:
         return((gmax * tr) / 8000)
     elif value < 0 and gmin < 0:
         return((gmin * tr) / -11000)
     elif value == 0:
         return(0)
-    else: return(None)
+    else:
+        print(value)
+        return(None)
 
+def scale_el_(value, gmin, gmax, tr, trs):
+    #print(value, gmin, gmax, tr, trs)
+    if value > 0 and gmax > 0:
+        return((gmax * tr) / max(trs))
+    elif value < 0 and gmin < 0:
+        if min(trs) == 0:
+            return(gmin * tr)
+        else:
+            return((gmin * tr) / min(trs))
+    elif value == 0:
+        return(0)
+    else:
+        return(None)
+
+def scale_el(value, gmin, gmax, tr, trs):
+    p = (tr - min(trs)) / (max(trs) - min(trs))
+    v = (1-p) * (gmin - gmax) + gmax
+    #v = p * (gmax - gmin) + gmin
+    
+    # if value < 0:
+    #     p = (tr - min(trs)) / (max(trs) - min(trs))
+    #     v = (1-p) * (gmin - 0) + 0
+    # elif value > 0:
+    #     p = (tr - min(trs)) / (max(trs) - min(trs))
+    #     v = (1-p) * (0 - gmax) + gmax
+    # elif value == 0:
+    #     v = 0
+
+    return(v)
+    
 def generate_etopo_cpt(gmin, gmax):
 
-    trs = (
+    trs = [
         -11000, -10500, -10000, -9500, -9000, -8500,
         -8000, -7500, -7000, -6500, -6000, -5500,
         -5000, -4500, -4000, -3500, -3000, -2500,
@@ -82,7 +115,7 @@ def generate_etopo_cpt(gmin, gmax):
         100, 200, 500, 1000, 1500, 2000, 2500,
         3000, 3500, 4000, 4500, 5000, 5500,
         6000, 6500, 7000, 7500, 8000
-    )
+    ]
     
     elevs = [
         -20, -19.09090909, -18.18181818, -17.27272727, -16.36363636,
@@ -111,8 +144,8 @@ def generate_etopo_cpt(gmin, gmax):
     with open('tmp.cpt', 'w') as cpt:
         for i,j in enumerate(elevs):
             if j != None and i + 1 != len(elevs):
-                elev = scale_el(j, gmin, gmax, trs[i])
-                elev1 = scale_el(elevs[i + 1], gmin, gmax, trs[i + 1])
+                elev = scale_el_(j, gmin, gmax, trs[i], trs)
+                elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
                 if elev is not None and elev1 is not None:
                     cpt.write(
                         '{} {} {} {} {} {} {} {}\n'.format(
@@ -121,6 +154,49 @@ def generate_etopo_cpt(gmin, gmax):
                     )
     return('tmp.cpt')
 
+cpt_colors = {
+    'black': [0, 0, 0],
+    'white': [255, 255, 255],
+}
+
+def process_cpt(cpt, gmin, gmax):
+    trs = []
+    colors = []
+    with open(cpt, 'r') as cpt:
+        for l in cpt:
+            ll = l.split()
+            if utils.float_or(ll[0]) is not None:
+                trs.append(float(ll[0]))
+
+                if utils.int_or(ll[1]) is not None:
+                    colors.append([int(float(ll[1])), int(float(ll[2])), int(float(ll[3]))])
+                elif ll[1] in cpt_colors.keys():
+                    colors.append(cpt_colors[ll[1]])
+                elif len(ll[1].split('/')) > 1:
+                    colors.append([int(float(x)) for x in ll[1].split('/')])
+
+    elevs = np.linspace(gmin, gmax, len(trs))
+    #print(elevs)
+    #print(trs)
+    #print(colors)
+    with open('tmp.cpt', 'w') as cpt:
+        for i,j in enumerate(elevs):
+            if j != None and i + 1 != len(elevs):
+                #print(j)
+                elev = scale_el(j, gmin, gmax, trs[i], trs)
+                #elev = j
+                #print(elev)
+                elev1 = scale_el(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                #elev1 = elevs[i+1]
+                #print(elev1)
+                if elev is not None and elev1 is not None:
+                    cpt.write(
+                        '{} {} {} {} {} {} {} {}\n'.format(
+                            elev, colors[i][0], colors[i][1], colors[i][2], elev1, colors[i][0], colors[i][1], colors[i][2]
+                        )
+                    )
+    return('tmp.cpt')
+    
 def get_correctMap(path, luminosity, contrast):
         ds = gdal.Open(image_path)
 
@@ -154,15 +230,21 @@ def get_correctMap(path, luminosity, contrast):
 
                     (r,g,b) = colorsys.hls_to_rgb(h, l, s)
                     
-def fetch_cpt_city(cache_dir = './'):
-    cpt_url = "http://soliton.vm.bytemark.co.uk/pub/cpt-city/pkg/"
-    cpt_xml = fetches.iso_xml(cpt_url + "package.xml")
-    cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
-    cpt_zip = os.path.join(cache_dir, 'cpt_city.zip')
-    fetches.Fetch(cpt_url + cpt_url_bn).fetch_file(cpt_zip)
-    cpts = utils.unzip(cpt_zip, cache_dir, verbose=True)
+def fetch_cpt_city(q='grass/haxby', cache_dir = './'):
 
-    print(cpts)
+    utils.echo_msg('checking for `{}` at cpt-city'.format(q))
+    this_fetches = fetches.FetchesFactory(
+        mod='cpt_city', verbose=True, outdir=cache_dir, q=q
+    )._acquire_module()
+    this_fetches.run()
+    #print(this_fetches.results)
+    utils.echo_msg(
+        'found {} results for `{}` at cpt-city, using first entry `{}`'.format(
+            len(this_fetches.results), q, this_fetches.results[0][1]
+        )
+    )
+    fetches.Fetch(this_fetches.results[0][0]).fetch_file(this_fetches.results[0][1])
+    return(this_fetches.results[0][1])
 
 ## ==============================================
 ## PERSPECTO!!
@@ -186,16 +268,20 @@ class Perspecto:
         self.dem_region = regions.Region().from_geo_transform(
             self.dem_infos['geoT'], self.dem_infos['nx'], self.dem_infos['ny']
         )
-        
+
+        min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
+        max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
         if self.cpt is None:
             #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
-            min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
-            max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
             self.cpt = generate_etopo_cpt(min_z, max_z)
+        #else:
+        #self.cpt = process_cpt(self.cpt, min_z, max_z)
+        elif os.path.exists(self.cpt):
+            # if has_pygmt:
+            #     self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem))) 
+            self.cpt = process_cpt(self.cpt, min_z, max_z)
         else:
-            if has_pygmt:
-                self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
-
+            self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z)
         
     def __call__(self):
         return(self.run())
