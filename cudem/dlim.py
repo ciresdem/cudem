@@ -1978,7 +1978,8 @@ class XYZFile(ElevationDataset):
                              if x is not None]
         self.field_formats = [float for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None]
 
-        if self.use_numpy:
+        #if self.use_numpy:
+        try:
             if self.delim is None:
                 self.guess_delim()
 
@@ -2004,7 +2005,8 @@ class XYZFile(ElevationDataset):
                     
                     if self.iter_rows is None or len(points) < self.iter_rows:
                         break
-        else:
+        except Exception as e:
+            utils.echo_warning_msg('could not load xyz data from {}, {}, falling back'.format(self.fn, e))
             if self.fn is not None:
                 if os.path.exists(str(self.fn)):
                     self.src_data = open(self.fn, "r")
@@ -2026,12 +2028,15 @@ class XYZFile(ElevationDataset):
                     if this_xyz is None:
                         continue
 
-                    x = float(this_xyz[self.xpos])
-                    y = float(this_xyz[self.ypos])
-                    z = float(this_xyz[self.zpos])
-                    w = float(this_xyz[self.wpos]) if self.wpos is not None else 1
-                    u = float(this_xyz[self.upos]) if self.upos is not None else 0
+                    x = utils.float_or(this_xyz[self.xpos])
+                    y = utils.float_or(this_xyz[self.ypos])
+                    z = utils.float_or(this_xyz[self.zpos])
+                    w = utils.float_or(this_xyz[self.wpos]) if self.wpos is not None else 1
+                    u = utils.float_or(this_xyz[self.upos]) if self.upos is not None else 0
 
+                    if x is None or y is None or z is None:
+                        continue
+                    
                     if self.scoff:
                         x = (x+self.x_offset) * self.x_scale
                         y = (y+self.y_offset) * self.y_scale
