@@ -3931,7 +3931,11 @@ https://cmr.earthdata.nasa.gov
                 
         _req = Fetch(self._cmr_url).fetch_req(params=_data)
         if _req is not None:
+            print(_req.url)
             features = _req.json()['feed']['entry']
+            # print(features[0])
+            # print(features[0].keys())
+            # sys.exit()
             for feature in features:
                 if 'polygons' in feature.keys():
                     poly = feature['polygons'][0][0]
@@ -3981,6 +3985,56 @@ you might need to `chmod 0600 ~/.netrc`
         self.data_format = 202
         self.src_srs = 'epsg:4326+3855'
 
+## SWOT from EarthData
+## This module allows us to use SWOT data in dlim/waffles
+class SWOT(EarthData):
+    """Access SWOT data.
+
+https://podaac.jpl.nasa.gov/SWOT?tab=datasets-information
+
+set `product` to one of:
+
+Land-based KaRIn (HR mode)
+L2_HR_PIXC	netCDF
+L2_HR_PIXCVec	netCDF
+L2_HR_Raster	netCDF
+L2_HR_Raster_100m	netCDF
+L2_HR_Raster_250m	netCDF
+L2_HR_RiverSP	shapefile
+L2_HR_RiverSP_node	shapefile
+L2_HR_RiverSP_reach	shapefile
+L2_HR_LakeSP	shapefile
+L2_HR_LakeSP_obs	shapefile
+L2_HR_LakeSP_prior	shapefile
+L2_HR_LakeSP_unassigned	shapefile
+L2_HR_RiverAvg	shapefile
+L2_HR_LakeAvg	shapefile
+
+Ocean-based KaRIn (LR mode)
+L2_LR_SSH (2 km grid)	netCDF
+L2_LR_SSH_BASIC	netCDF
+L2_LR_SSH_WINDWAVE	netCDF
+L2_LR_SSH_EXPERT	netCDF
+L2_LR_SSH_UNSMOOTHED (250m)	netCDF
+
+Continuation of nadir altimetry
+L2_NALT_OGDR	netCDF
+L2_NALT_OGDR_SSHA	netCDF
+L2_NALT_OGDR_GDR	netCDF
+L2_NALT_IGDR	netCDF
+L2_NALT_IGDR_SSHA	netCDF
+L2_NALT_IGDR_GDR	netCDF
+L2_NALT_IGDR_SGDR	netCDF
+L2_NALT_GDR	netCDF
+L2_NALT_GDR_SSHA	netCDF
+L2_NALT_GDR_GDR	netCDF
+L2_NALT_GDR_SGDR	netCDF
+
+< swot:time_start='':time_end='':filename_filter='':product='' >"""
+    
+    def __init__(self, product='L2_HR_Raster', **kwargs):
+        super().__init__(short_name='SWOT*{}*'.format(product), **kwargs)   
+        
 ## SST from EarthData
 ## This module allows us to use SST data in dlim/waffles
 class MUR_SST(EarthData):
@@ -4288,6 +4342,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'earthdata': {'call': EarthData},
         'icesat': {'call': IceSat},
         'mur_sst': {'call': MUR_SST},
+        'swot': {'call': SWOT},
         'usiei': {'call': USIEI},
         'wsf': {'call': WSF},
         'hydrolakes': {'call': HydroLakes},

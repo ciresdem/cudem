@@ -548,6 +548,76 @@ def ogr_polygonize_multibands(
     ds = None
     return(dst_layer, ogr_format)
 
+def ogr_polygonize(
+        src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', band = 1, verbose = True
+):
+    """polygonze a multi-band raster. 
+    for use in generating spatial metadata from a waffles mask.
+
+    -----------
+    Parameters:
+    src_ds (GDALDataset): the source multi-band raster as a gdal dataset object
+    dst_srs (str): the output srs
+    ogr_format (str): the output OGR format
+    verbose (bool): be verbose
+
+    -----------
+    Returns:
+    tuple: (dst_layer, ogr_format)
+    """
+    
+    dst_layer = '{}_ply'.format(utils.fn_basename2(src_ds.GetDescription()))
+    dst_vector = dst_layer + '.{}'.format(ogr_fext(ogr_format))
+    utils.remove_glob('{}.*'.format(dst_layer))
+    osr_prj_file('{}.prj'.format(dst_layer), gdal_infos(src_ds)['proj'])
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+            '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    defn = None
+
+    this_band = src_ds.GetRasterBand(band)
+    this_band_md = this_band.GetMetadata()
+    b_infos = gdal_infos(src_ds, scan=True, band=band)
+    field_names = [field.name for field in layer.schema]
+    for k in this_band_md.keys():
+        this_band_md[k.title()] = this_band_md.pop(k)
+
+    for k in this_band_md.keys():
+        if k[:9] not in field_names:
+            layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+
+    if ds is not None:
+        if verbose:
+            utils.echo_msg('polygonizing {} mask...'.format(this_band.GetDescription()))
+
+        status = gdal.Polygonize(
+            this_band,
+            None,
+            layer,
+            layer.GetLayerDefn().GetFieldIndex('DN'),
+            [],
+            #callback = gdal.TermProgress if verbose else None
+            callback = None
+        )
+        
+        if verbose:
+            utils.echo_msg('polygonized {}'.format(this_band.GetDescription()))
+
+        for feat in layer:
+            if feat.GetField('DN') == 0:
+                layer.DeleteFeature(feat.GetFID())
+            
+    ds = layer = None
+    return(dst_layer, ogr_format)
+
 def ogr2gdal_mask(
         mask_fn, region = None, x_inc = None, y_inc = None, dst_srs = 'epsg:4326',
         invert = True, verbose = True, temp_dir = utils.cudem_cache()
@@ -616,7 +686,7 @@ class gdal_datasource:
             except:
                 self.src_ds = None
 
-        elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal)):
+        elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal) or len(self.src_gdal.split(':')) > 1):
             try:
                 self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
             except:
@@ -912,22 +982,23 @@ def gdal_nan(ds_config, outfile, nodata = None):
 def gdal_get_node(src_gdal, node='pixel'):
     with gdal_datasource(src_gdal) as src_ds:
         ds_config = gdal_infos(src_ds)
-        mt = ds_config['metadata']
-        if 'AREA_OR_POINT' in mt.keys():
-            node = mt['AREA_OR_POINT']
-        elif 'NC_GLOBAL#node_offset' in mt.keys():
-            node = mt['NC_GLOBAL#node_offset']
-            
-        elif 'tos#node_offset' in mt.keys():
-            node = mt['tos#node_offset']
-                            
-        elif 'node_offset' in mt.keys():
-            node = mt['node_offset']
-                        
-        if node.upper() == 'AREA' or node == '1':
-            node = 'pixel'
-        elif node.upper() == 'POINT' or node == '0':
-            node = 'grid'
+        if 'metadata' in ds_config.keys():
+            mt = ds_config['metadata']
+            if 'AREA_OR_POINT' in mt.keys():
+                node = mt['AREA_OR_POINT']
+            elif 'NC_GLOBAL#node_offset' in mt.keys():
+                node = mt['NC_GLOBAL#node_offset']
+
+            elif 'tos#node_offset' in mt.keys():
+                node = mt['tos#node_offset']
+
+            elif 'node_offset' in mt.keys():
+                node = mt['node_offset']
+
+            if node.upper() == 'AREA' or node == '1':
+                node = 'pixel'
+            elif node.upper() == 'POINT' or node == '0':
+                node = 'grid'
 
     return(node)
     

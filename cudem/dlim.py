@@ -4112,6 +4112,84 @@ class DAVFetcher_SLR(Fetcher):
                             remote=True, remove_flat=True)._acquire_module()
         yield(ds)
 
+class SWOTFetcher(Fetcher):
+    """SWOT L2_HR_Raster data from NASA
+
+    set `data_set` to one of (for L2_HR_Raster):
+    1 - longitude (64-bit floating-point)
+    2 - latitude (64-bit floating-point)
+    3 - wse (32-bit floating-point)
+    4 - status_flag (8-bit unsigned integer)
+    5 - status_flag (32-bit unsigned integer)
+    6 - wse_uncert (32-bit floating-point)
+    7 - water_area (32-bit floating-point)
+    8 - status_flag (8-bit unsigned integer)
+    9 - status_flag (32-bit unsigned integer)
+    10 - water_area_uncert (32-bit floating-point)
+    11 - water_frac (32-bit floating-point)
+    12 - water_frac_uncert (32-bit floating-point)
+    13 - sig0 (32-bit floating-point)
+    14 - status_flag (8-bit unsigned integer)
+    15 - status_flag (32-bit unsigned integer)
+    16 - sig0_uncert (32-bit floating-point)
+    17 - inc (32-bit floating-point)
+    18 - cross_track (32-bit floating-point)
+    19 - time (64-bit floating-point)
+    20 - time (64-bit floating-point)
+    21 - n_wse_pix (32-bit unsigned integer)
+    22 - n_water_area_pix (32-bit unsigned integer)
+    23 - n_sig0_pix (32-bit unsigned integer)
+    24 - n_other_pix (32-bit unsigned integer)
+    25 - dark_frac (32-bit floating-point)
+    26 - status_flag (8-bit unsigned integer)
+    27 - status_flag (8-bit unsigned integer)
+    28 - layover_impact (32-bit floating-point)
+    29 - sig0_cor_atmos_model (32-bit floating-point)
+    30 - height_cor_xover (32-bit floating-point)
+    31 - geoid_height_above_reference_ellipsoid (32-bit floating-point)
+    32 - solid_earth_tide (32-bit floating-point)
+    33 - load_tide_fes (32-bit floating-point)
+    34 - load_tide_got (32-bit floating-point)
+    35 - pole_tide (32-bit floating-point)
+    36 - model_dry_tropo_cor (32-bit floating-point)
+    37 - model_wet_tropo_cor (32-bit floating-point)
+    38 - iono_cor_gim_ka (32-bit floating-point)
+    """
+
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
+    
+
+    def __init__(self, data_set='wse', **kwargs):
+        super().__init__(**kwargs)
+        self.data_set = data_set
+
+    def set_ds(self, result):
+        swot_fn = os.path.join(self.fetch_module._outdir, result[1])
+        src_ds = gdal.Open(swot_fn)
+        if src_ds is not None:
+            sub_datasets = src_ds.GetSubDatasets()
+
+            idx = 2
+            if utils.int_or(self.data_set) is not None:
+                idx = utils.int_or(self.data_set)
+            else:
+                for j, sd in enumerate(sub_datasets):
+                    _name = sd[0].split(':')[-1]
+                    if self.data_set == _name:
+                        idx = j
+                        break
+
+            src_ds = None
+            src_horz = gdalfun.gdal_get_srs(sub_datasets[idx][0])
+            sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_horz, dst_srs=self.dst_srs,
+                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                              x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
+                              node='pixel',metadata=copy.deepcopy(self.metadata))
+            yield(sub_ds)
+            
 class IceSatFetcher(Fetcher):
     """IceSat data from NASA
 
@@ -5282,6 +5360,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
         -213: {'name': 'waterservies', 'fmts': ['waterservices'], 'call': WaterServicesFetcher},
         -214: {'name': "icesat", 'fmts': ['icesat'], 'call': IceSatFetcher},
+        -215: {'name': "swot", 'fmts': ['swot'], 'call': SWOTFetcher},
         -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': EMODNetFetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},

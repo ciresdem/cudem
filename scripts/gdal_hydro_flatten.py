@@ -7,6 +7,7 @@
 import sys
 from cudem import gdalfun
 from cudem import utils
+from cudem import waffles
 
 _version = '0.0.1'
 
@@ -62,6 +63,7 @@ if __name__ == "__main__":
         sys.stderr.write(_usage)
         sys.exit(1)
 
-    gdalfun.gdal_hydro_flatten(src_dem, dst_dem=dst_dem, band=band, size_threshold=size_threshold)
+    #gdalfun.gdal_hydro_flatten(src_dem, dst_dem=dst_dem, band=band, size_threshold=size_threshold)
+    waffles.flatten_no_data_zones(src_dem, dst_dem=dst_dem, band=band, size_threshold=size_threshold)
 
 #--END

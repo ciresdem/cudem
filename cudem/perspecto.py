@@ -176,9 +176,6 @@ def process_cpt(cpt, gmin, gmax):
                     colors.append([int(float(x)) for x in ll[1].split('/')])
 
     elevs = np.linspace(gmin, gmax, len(trs))
-    #print(elevs)
-    #print(trs)
-    #print(colors)
     with open('tmp.cpt', 'w') as cpt:
         for i,j in enumerate(elevs):
             if j != None and i + 1 != len(elevs):
