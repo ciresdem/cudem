@@ -2005,6 +2005,7 @@ class XYZFile(ElevationDataset):
                     
                     if self.iter_rows is None or len(points) < self.iter_rows:
                         break
+                    
         except Exception as e:
             utils.echo_warning_msg('could not load xyz data from {}, {}, falling back'.format(self.fn, e))
             if self.fn is not None:
@@ -5040,6 +5041,26 @@ class HydroNOSFetcher(Fetcher):
                                          parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                          cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+class CSBFetcher(Fetcher):
+    """Crowd Sourced Bathymetry data fetcher
+    """
+    
+    __doc__ = '''{}
+    
+    -----------
+    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.CSB.__doc__)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def set_ds(self, result):
+
+        csb_fn = os.path.join(self.fetch_module._outdir, result[1])
+        yield(DatasetFactory(mod=csb_fn, data_format='168:skip=1:xpos=2:ypos=3:zpos=4:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
+                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
+                             cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
 class EMODNetFetcher(Fetcher):
     """EMODNet Data Fetcher
     """
@@ -5359,13 +5380,14 @@ class DatasetFactory(factory.CUDEMFactory):
         -207: {'name': 'digital_coast', 'fmts': ['digital_coast'], 'call': Fetcher},
         -208: {'name': 'ncei_thredds', 'fmts': ['ncei_thredds'], 'call': Fetcher},
         -209: {'name': 'tnm', 'fmts': ['tnm'], 'call': Fetcher},
-        -215: {'name': 'ned', 'fmts': ['ned', 'ned1'], 'call': NEDFetcher},        
         -210: {'name': "CUDEM", 'fmts': ['CUDEM'], 'call': Fetcher},
         -211: {'name': "CoNED", 'fmts': ['CoNED'], 'call': DAVFetcher_CoNED},
         -212: {'name': "SLR", 'fmts': ['SLR'], 'call': DAVFetcher_SLR},
         -213: {'name': 'waterservies', 'fmts': ['waterservices'], 'call': WaterServicesFetcher},
         -214: {'name': "icesat", 'fmts': ['icesat'], 'call': IceSatFetcher},
-        -215: {'name': "swot", 'fmts': ['swot'], 'call': SWOTFetcher},
+        -215: {'name': 'ned', 'fmts': ['ned', 'ned1'], 'call': NEDFetcher},        
+        -216: {'name': "swot", 'fmts': ['swot'], 'call': SWOTFetcher},
+        -217: {'name': "csb", 'fmts': ['csb'], 'call': CSBFetcher},
         -300: {'name': 'emodnet', 'fmts': ['emodnet'], 'call': EMODNetFetcher},
         -301: {'name': 'chs', 'fmts': ['chs'], 'call': Fetcher}, # chs is broken
         -302: {'name': 'hrdem', 'fmts': ['hrdem'], 'call': Fetcher},

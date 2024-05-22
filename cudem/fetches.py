@@ -1758,7 +1758,57 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                                 geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
                                 if geodas:
                                     xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
-                                    self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
+                                    self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])
+
+class CSB(FetchModule):
+    """crowd sourced bathymetry
+
+< csv:where=None:layer=0:index=False >"""
+    
+    def __init__(self, where='1=1', layer=1, index=False, **kwargs):
+        super().__init__(name='csb', **kwargs)
+        self._csb_data_url = 'https://noaa-dcdb-bathymetry-pds.s3.amazonaws.com'
+        self._csb_map_server = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/csb/MapServer'
+        self._csb_query_url = '{0}/{1}/query?'.format(self._csb_map_server, layer)
+        self.where = where
+        self.index = index
+        self.src_srs = None # bag/xyz data are different, reset later
+        #self._bt_bucket = 'noaa-dcdb-bathymetry-pds'
+        #self.s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
+        #self.s3._request_signer.sign = (lambda *args, **kwargs: None)
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {'where': self.where, 'outFields': '*', 'geometry': self.region.format('bbox'),
+                 'inSR':4326, 'outSR':4326, 'f':'pjson', 'returnGeometry':'False'}
+        _req = Fetch(self._csb_query_url, verbose=self.verbose).fetch_req(params=_data)
+
+        if _req is not None:
+            features = _req.json()
+            if 'features' in features.keys():
+                for feature in features['features']:
+                    if self.index:
+                        print(json.dumps(feature['attributes'], indent=4))
+                    else:
+                        _name = feature['attributes']['NAME']
+                        _year = _name[:4]
+                        _dir_a = _name[4:6]
+                        _dir_b = _name[6:8]
+                        _csv_fn = '{}_pointData.csv'.format(_name[:-7])
+                        link = '{0}/csb/csv/{1}/{2}/{3}/{4}'.format(self._csb_data_url, _year, _dir_a, _dir_b, _csv_fn)
+
+                        if link is None:
+                            continue
+
+                        self.results.append([link, _csv_fn, 'csb'])
+                        
+                        # r = self.s3.list_objects(Bucket = self._bt_bucket, Prefix='csb/csv/{}/{}/{}'.format(_year, _dir_a, _dir_b))
+                        # if 'Contents' in r:
+                        #     for key in r['Contents']:
+                        #         data_link = '{}/{}'.format(self._csb_data_url, key['Key'])                                
+                        #         self.results.append([data_link, _csv_fn, 'csb'])
 
 ## NOAA DEMs
 ## doesn't really work well, use ncei_thredds or digital_coast instead...
@@ -4349,6 +4399,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'https': {'call': HttpDataset},
         'bing_bfp': {'call': BingBFP},
         'waterservices': {'call': WaterServices},
+        'csb': {'call': CSB},
         'cpt_city': {'call': CPTCity},
     }
 
