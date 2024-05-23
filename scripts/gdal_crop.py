@@ -28,9 +28,9 @@ import os
 import sys
 from osgeo import gdal
 from cudem import utils
-from cudem import demfun
+from cudem import gdalfun
 
-_version = '0.0.7'
+_version = '0.0.8'
 _usage = '''gdal_crop.py ({}): crop a gdal grid by the nodata value
 
 usage: gdal_crop.py [ file ]
@@ -71,6 +71,6 @@ if __name__ == '__main__':
 
     if os.path.exists(elev):
         output_name = elev[:-4] + '_crop.tif'
-        demfun.crop(elev, output_name)
+        gdalfun.crop(elev, output_name)
     else: utils.echo_error_msg('{} is not a valid file'.format(elev))
 ### End

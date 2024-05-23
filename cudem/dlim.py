@@ -2326,6 +2326,7 @@ class GDALFile(ElevationDataset):
             srcwin = (
                 0, 0, x_size, y_size
             )
+            
         return(srcwin)
         
     def yield_ds(self):
@@ -2376,7 +2377,7 @@ class GDALFile(ElevationDataset):
         tmp_unc_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         #tmp_elev_fn = tmp_unc_fn = tmp_weight_fn = None
-                
+
         ## ==============================================
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
         ## ==============================================
@@ -2393,6 +2394,8 @@ class GDALFile(ElevationDataset):
             tmp_ds = self.fn
             if self.open_options is not None:
                 self.src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
+                if self.src_ds is None:
+                    self.src_ds = gdal.Open(self.fn)
             else:
                 self.src_ds = gdal.Open(self.fn)
 
@@ -2624,11 +2627,11 @@ class GDALFile(ElevationDataset):
             ## convert grid array to points
             ## ==============================================
             #if self.node == 'pixel':
-            geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node)
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid')
+            geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, precision=5)
+            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node=self.node, precision=5)
 
             if self.x_band is None and self.y_band is None:
-                #geo_x, geo_y = utils._pixel2geo(0, 0, gt)            
+                #geo_x, geo_y = utils._pixel2geo(0, 0, gt)
                 lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
                 #num = round((geo_x_end - geo_x_origin) / gt[1])
                 #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
@@ -2770,8 +2773,8 @@ class BAGFile(ElevationDataset):
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
-                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata),
-                                  node='pixel')
+                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
+                                  #node='pixel')
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
@@ -4874,7 +4877,7 @@ class CopernicusFetcher(Fetcher):
                 yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                     cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                                     cache_dir = self.fetch_module._outdir, verbose=self.verbose, node='pixel')._acquire_module())
 
 class FABDEMFetcher(Fetcher):
     """FABDEM Gridded data

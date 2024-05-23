@@ -557,7 +557,7 @@ def __geo2pixel(geo_x, geo_y, geo_transform, node='pixel'):
     
     return(pixel_x, pixel_y)
 
-def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel'):
+def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel', precision=None):
     """convert a pixel location to geographic coordinates given geoTransform
 
     Args:
@@ -570,7 +570,11 @@ def _pixel2geo(pixel_x, pixel_y, geo_transform, node='pixel'):
     """
     
     geo_x, geo_y = _apply_gt(pixel_x, pixel_y, geo_transform, node)
-    return(geo_x, geo_y)
+    precision = int_or(precision)
+    if precision is None:
+        return(geo_x, geo_y)
+    else:
+        return(round(geo_x, precision), round(geo_y, precision))
 
 def _apply_gt(in_x, in_y, geo_transform, node='pixel'):
     """apply geotransform to in_x,in_y
