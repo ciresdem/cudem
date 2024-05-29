@@ -133,11 +133,18 @@ class Grits:
                             s_band.WriteArray(smoothed_array)
         return(self)
 
-    def get_outliers(self, in_array, percentile=75, k=1.5):
+    def get_outliers(self, in_array, percentile=75, k=1.5, verbose=False):
         """get the outliers from in_array based on the percentile
 
         https://en.wikipedia.org/wiki/Interquartile_range
         """
+
+        if verbose:
+            utils.echo_msg('input percentile: {}'.format(percentile))
+
+        if np.isnan(percentile):
+            percentile = 75
+            
         if percentile < 0:
             percentile = 0
             
@@ -150,7 +157,10 @@ class Grits:
 
         if min_percentile < 0:
             min_percentile = 0
-        
+
+        if verbose:
+            utils.echo_msg('percentiles: {}>>{}'.format(min_percentile, max_percentile))
+            
         perc_max = np.nanpercentile(in_array, max_percentile)
         perc_min = np.nanpercentile(in_array, min_percentile)
         iqr_p = (perc_max - perc_min) * k
@@ -624,6 +634,7 @@ class Outliers(Grits):
                     #    (np.power(mask_data[(src_data > upper_limit)], 2) +
                     #     np.power(src_weight * np.abs((src_upper - upper_limit) / (src_max - upper_limit)), 2))
                     #)
+                    #utils.echo_msg('{} {} {}'.format(src_upper, upper_limit, lower_limit))
                     mask_data[(src_data > upper_limit)] = np.sqrt(
                         (np.power(mask_data[(src_data > upper_limit)], 2) +
                          np.power(src_weight * np.abs((src_upper - lower_limit) / (upper_limit - lower_limit)), 2))
@@ -734,13 +745,20 @@ class Outliers(Grits):
         mask_mask_data[mask_mask_data == 0] = np.nan
         mask_count_data[mask_count_data == 0] = np.nan
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
+        if perc is None or np.isnan(perc):
+            perc = 75
+            
+        if self.k is None or np.isnan(self.k):
+            self.k = 1.5
+            
         #if self.aggressive:
         #    perc = perc1
             
         #count_upper_limit = np.nanpercentile(mask_count_data, perc)
         #mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
-        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k)
-        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k)
+        utils.echo_msg(mask_count_data)
+        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=True)
+        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=True)
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
         #outlier_mask = (mask_count_data > count_upper_limit)
 
