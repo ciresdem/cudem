@@ -142,8 +142,8 @@ class Grits:
         if verbose:
             utils.echo_msg('input percentile: {}'.format(percentile))
 
-        if np.isnan(percentile):
-            percentile = 75
+        # if np.isnan(percentile):
+        #     percentile = 75
             
         if percentile < 0:
             percentile = 0
@@ -629,7 +629,7 @@ class Outliers(Grits):
                 #src_max = (upper_limit + (upper_limit))
                 #src_max = np.nanmax(src_upper)
                 
-                if upper_limit != 0:
+                if (upper_limit - lower_limit) != 0:
                     #mask_data[(src_data > upper_limit)] = np.sqrt(
                     #    (np.power(mask_data[(src_data > upper_limit)], 2) +
                     #     np.power(src_weight * np.abs((src_upper - upper_limit) / (src_max - upper_limit)), 2))
@@ -646,7 +646,7 @@ class Outliers(Grits):
                 if src_lower.size > 0:
                     #src_min = (lower_limit - (abs(lower_limit)))
                     #src_min = np.nanmin(src_lower)
-                    if lower_limit != 0:
+                    if (lower_limit - upper_limit) != 0:
                         # mask_data[(src_data < lower_limit)] = np.sqrt(
                         #     (np.power(mask_data[(src_data < lower_limit)], 2) +
                         #      np.power(src_weight * np.abs((src_lower - lower_limit) / (src_min - lower_limit)), 2))
@@ -682,7 +682,7 @@ class Outliers(Grits):
             ds_ds, ds_fn = self.gdal_dem(input_ds=src_ds, var=var)
             
         pk_ds, pk_fn = self.gdal_dem(input_ds=ds_ds, var='TPI')
-        pk_arr = pk_ds.GetRasterBand(1).ReadAsArray()
+        pk_arr = pk_ds.GetRasterBand(1).ReadAsArray().astype(float)
         pk_arr[(pk_arr == self.ds_config['ndv']) | (pk_arr == -9999) ] = np.nan
 
         if np.all(np.isnan(pk_arr)):
@@ -707,6 +707,7 @@ class Outliers(Grits):
         p = p * 100
         pp = pkrm * 100
         pk_arr = pk_ds = ds_ds = None
+        #print(med_pk, m_pk, std_pk, pkr, pkrm, kk, k, p, pp)
         utils.remove_glob(pk_fn, ds_fn)
 
         return(pp, k, p)
@@ -743,22 +744,25 @@ class Outliers(Grits):
         mask_mask_data = self.mask_mask_band.ReadAsArray()        
         mask_count_data = self.mask_count_band.ReadAsArray()        
         mask_mask_data[mask_mask_data == 0] = np.nan
+        mask_mask_data[np.isinf(mask_mask_data)] = np.nan
         mask_count_data[mask_count_data == 0] = np.nan
+        mask_count_data[np.isinf(mask_count_data)] = np.nan
+        
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
-        if perc is None or np.isnan(perc):
-            perc = 75
+        # if perc is None or np.isnan(perc):
+        #     perc = 75
             
-        if self.k is None or np.isnan(self.k):
-            self.k = 1.5
+        # if self.k is None or np.isnan(self.k):
+        #     self.k = 1.5
             
         #if self.aggressive:
         #    perc = perc1
             
         #count_upper_limit = np.nanpercentile(mask_count_data, perc)
         #mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
-        utils.echo_msg(mask_count_data)
-        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=True)
-        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=True)
+        #utils.echo_msg(mask_count_data)
+        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
+        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
         #outlier_mask = (mask_count_data > count_upper_limit)
 
