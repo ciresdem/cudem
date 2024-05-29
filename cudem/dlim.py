@@ -2785,7 +2785,27 @@ class BAGFile(ElevationDataset):
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
-                                            
+
+class h5file(ElevationDataset):
+    def __init__(self, group='pixel_cloud', var='height', lon_var='longitude', lat_var='latitude', **kwargs):
+        super().__init__(**kwargs)
+        self.group = group
+        self.var = var
+        self.lon_var = lon_var
+        self.lat_var = lat_var
+
+    def yield_ds(self):
+        swot_h5 = h5.File(self.fn)
+        utils.echo_msg(swot_h5)
+        var_data = swot_h5['/{}/{}'.format(self.group, self.var)][...,]
+        latitude = swot_h5['/{}/{}'.format(self.group, self.lat_var)][...,]
+        longitude = swot_h5['/{}/{}'.format(self.group, self.lon_var)][...,]
+        dataset = np.column_stack((longitude, latitude, var_data))
+        points = np.rec.fromrecords(dataset, names='x, y, z')
+        swot_h5.close()
+        
+        yield(points)
+                
 ## ==============================================
 ## Multibeam Data.
 ## Uses MB-System
@@ -4119,7 +4139,7 @@ class DAVFetcher_SLR(Fetcher):
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
         yield(ds)
-
+        
 class SWOTFetcher(Fetcher):
     """SWOT L2_HR_Raster data from NASA
 
@@ -4173,8 +4193,17 @@ class SWOTFetcher(Fetcher):
     def __init__(self, data_set='wse', **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
+        
+    def yield_ds(self, swot_fn, group='pixel_cloud', var='height'):
+        swot_h5 = h5.File(swot_fn)
+        var_data = swot_h5['/{}/{}'.format(group, var)][...,]
+        latitude = swot_h5['/{}/latitude'.format(group)][...,]
+        longitude = swot_h5['/{}/longitude'.format(group)][...,]
+        points = np.column_stack((lons, lats, sea_height))
 
-    def set_ds(self, result):
+        yield(points)
+        
+    def set_ds_(self, result):
         swot_fn = os.path.join(self.fetch_module._outdir, result[1])
         src_ds = gdal.Open(swot_fn)
         if src_ds is not None:
@@ -5360,6 +5389,7 @@ class DatasetFactory(factory.CUDEMFactory):
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
+        202: {'name': 'hdf', 'fmts': ['h5'], 'call': h5file},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
         301: {'name': 'mbs', 'fmts': ['fbt', 'mb'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'], 'call': OGRFile},
