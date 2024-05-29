@@ -2798,9 +2798,12 @@ class h5file(ElevationDataset):
         swot_h5 = h5.File(self.fn)
         utils.echo_msg(swot_h5)
         var_data = swot_h5['/{}/{}'.format(self.group, self.var)][...,]
+        geoid_data = swot_h5['/{}/geoid'.format(self.group)][...,]
+        height_data = var_data - geoid_data
+        
         latitude = swot_h5['/{}/{}'.format(self.group, self.lat_var)][...,]
         longitude = swot_h5['/{}/{}'.format(self.group, self.lon_var)][...,]
-        dataset = np.column_stack((longitude, latitude, var_data))
+        dataset = np.column_stack((longitude, latitude, height_data))
         points = np.rec.fromrecords(dataset, names='x, y, z')
         swot_h5.close()
         
