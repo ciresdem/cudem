@@ -2786,29 +2786,82 @@ class BAGFile(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
-class h5file(ElevationDataset):
-    def __init__(self, group='pixel_cloud', var='height', lon_var='longitude', lat_var='latitude', **kwargs):
+class H5File(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.src_h5 = None
+        
+    def _init_h5File(self):
+        self.src_h5 = h5.File(self.fn, 'r')
+
+    def _close_h5File(self):
+        self.src_h5.close()
+
+    def _get_var_arr(self, var_path):
+        return(self.src_h5['/{}'.format(var_path)][...,])
+                
+class SWOT_PIXC(H5File):
+    def __init__(self, group='pixel_cloud', var='height', apply_geoid=True, **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
-        self.lon_var = lon_var
-        self.lat_var = lat_var
+        self.apply_geoid = apply_geoid
 
     def yield_ds(self):
-        swot_h5 = h5.File(self.fn)
-        utils.echo_msg(swot_h5)
-        var_data = swot_h5['/{}/{}'.format(self.group, self.var)][...,]
-        geoid_data = swot_h5['/{}/geoid'.format(self.group)][...,]
-        height_data = var_data - geoid_data
+        self._init_h5File()
+
+        latitude = self.src_h5['/{}/latitude'.format(self.group)][...,]
+        longitude = self.src_h5['/{}/longitude'.format(self.group)][...,]
         
-        latitude = swot_h5['/{}/{}'.format(self.group, self.lat_var)][...,]
-        longitude = swot_h5['/{}/{}'.format(self.group, self.lon_var)][...,]
-        dataset = np.column_stack((longitude, latitude, height_data))
+        var_data = self.src_h5['/{}/{}'.format(self.group, self.var)][...,]
+        geoid_data = self.src_h5['/{}/geoid'.format(self.group)][...,]
+        if self.apply_geoid:
+            out_data = var_data - geoid_data
+        else:
+            out_data = var_data
+        
+        dataset = np.column_stack((longitude, latitude, out_data))
         points = np.rec.fromrecords(dataset, names='x, y, z')
-        swot_h5.close()
+
+        self._close_h5File()
         
         yield(points)
-                
+
+class SWOT_HR_Raster(ElevationDataset):
+    def __init__(self, data_set='wse', **kwargs):
+        super().__init__(**kwargs)
+        self.data_set = data_set
+
+    def parse(self):
+        src_ds = gdal.Open(self.fn)
+        if src_ds is not None:
+            sub_datasets = src_ds.GetSubDatasets()
+
+            idx = 2
+            if utils.int_or(self.data_set) is not None:
+                idx = utils.int_or(self.data_set)
+            else:
+                for j, sd in enumerate(sub_datasets):
+                    _name = sd[0].split(':')[-1]
+                    if self.data_set == _name:
+                        idx = j
+                        break
+
+            src_ds = None
+            src_srs = gdalfun.gdal_get_srs(sub_datasets[idx][0])
+            if self.data_set == 'wse':
+                src_srs = gdalfun.combine_epsgs(src_srs, '3855', name='SWOT Combined')
+
+            sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_srs, dst_srs=self.dst_srs,
+                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                              x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
+                              node='pixel',metadata=copy.deepcopy(self.metadata))
+            
+            self.data_entries.append(sub_ds)
+            sub_ds.initialize()
+            for gdal_ds in sub_ds.parse():
+                yield(gdal_ds)
+        
 ## ==============================================
 ## Multibeam Data.
 ## Uses MB-System
@@ -4196,39 +4249,37 @@ class SWOTFetcher(Fetcher):
     def __init__(self, data_set='wse', **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
-        
-    def yield_ds(self, swot_fn, group='pixel_cloud', var='height'):
-        swot_h5 = h5.File(swot_fn)
-        var_data = swot_h5['/{}/{}'.format(group, var)][...,]
-        latitude = swot_h5['/{}/latitude'.format(group)][...,]
-        longitude = swot_h5['/{}/longitude'.format(group)][...,]
-        points = np.column_stack((lons, lats, sea_height))
 
-        yield(points)
+    # def parse(self):
+    #     self.fetch_module.run()
+    #     yield(self)
+
+    # def fetch_and_yield_results(self, fetch_data = True):
+    #     for result in self.fetch_module.results:
+    #         if fetch_data:
+    #             if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
+    #                 yield(result)
+    #             else:
+    #                 self.fetch_module.results.append(result)
+    #         else:
+    #             yield(result)
         
-    def set_ds_(self, result):
+    def set_ds(self, result):
+        utils.echo_msg(result)
         swot_fn = os.path.join(self.fetch_module._outdir, result[1])
-        src_ds = gdal.Open(swot_fn)
-        if src_ds is not None:
-            sub_datasets = src_ds.GetSubDatasets()
-
-            idx = 2
-            if utils.int_or(self.data_set) is not None:
-                idx = utils.int_or(self.data_set)
-            else:
-                for j, sd in enumerate(sub_datasets):
-                    _name = sd[0].split(':')[-1]
-                    if self.data_set == _name:
-                        idx = j
-                        break
-
-            src_ds = None
-            src_horz = gdalfun.gdal_get_srs(sub_datasets[idx][0])
-            sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_horz, dst_srs=self.dst_srs,
-                              weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                              x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
-                              node='pixel',metadata=copy.deepcopy(self.metadata))
-            yield(sub_ds)
+        if 'L2_HR_PIXC' in result[-1]:
+            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=True, src_srs='epsg:4326+3855', dst_srs=self.dst_srs,
+                               weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                               x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
+            
+        elif 'L2_HR_Raster' in result[-1]:
+            sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=True, src_srs=None, dst_srs=self.dst_srs,
+                                    weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                    x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
+        else:
+            sub_ds = None
+            
+        yield(sub_ds)
             
 class IceSatFetcher(Fetcher):
     """IceSat data from NASA
@@ -5392,7 +5443,8 @@ class DatasetFactory(factory.CUDEMFactory):
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
         201: {'name': 'bag', 'fmts': ['bag'], 'call': BAGFile},
-        202: {'name': 'hdf', 'fmts': ['h5'], 'call': h5file},
+        202: {'name': 'swot_pixc', 'fmts': ['h5'], 'call': SWOT_PIXC},
+        203: {'name': 'swot_hr_raster', 'fmts': ['nc'], 'call': SWOT_HR_Raster},
         300: {'name': 'las', 'fmts': ['las', 'laz'], 'call': LASFile},
         301: {'name': 'mbs', 'fmts': ['fbt', 'mb'], 'call': MBSParser},
         302: {'name': 'ogr', 'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'], 'call': OGRFile},
