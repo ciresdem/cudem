@@ -493,6 +493,11 @@ class ElevationDataset:
             _region = self.region.copy()
             self.region = None
 
+        _x_inc = None
+        if self.x_inc is not None:
+            _x_inc = self.x_inc
+            self.x_inc = None
+            
         this_region = regions.Region()
         point_count = 0
 
@@ -533,6 +538,9 @@ class ElevationDataset:
         if _region is not None:
             self.region = _region.copy()
 
+        if _x_inc is not None:
+            self.x_inc = _x_inc
+            
         return(self.infos)
 
     def yield_ds(self):
@@ -2855,7 +2863,7 @@ class SWOT_HR_Raster(ElevationDataset):
             sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                               x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
-                              node='pixel',metadata=copy.deepcopy(self.metadata))
+                              node='pixel', metadata=copy.deepcopy(self.metadata))
             
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
