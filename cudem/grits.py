@@ -373,8 +373,12 @@ class Outliers(Grits):
             p, k, pp = self.rough_q(src_ds)
             if self.percentile is None:
                 self.percentile = p
+                
             if self.k is None:
-                self.k = k
+                if np.isnan(k):
+                    k = 1.5
+                else:
+                    self.k = k
             
         # if self.percentile <50:
         #     self.percentile = 50
