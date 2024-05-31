@@ -1810,6 +1810,46 @@ class CSB(FetchModule):
                         #         data_link = '{}/{}'.format(self._csb_data_url, key['Key'])                                
                         #         self.results.append([data_link, _csv_fn, 'csb'])
 
+
+class NSW_TB(FetchModule):
+    """New South Wales Topo-Bathy DEM
+    **testing**
+< nsw_tb:where=None:layer=0:index=False >"""
+    
+    def __init__(self, where='1=1', layer=2, index=False, **kwargs):
+        super().__init__(name='csb', **kwargs)
+        self._nsw_map_server = 'https://mapprod2.environment.nsw.gov.au/arcgis/rest/services/Coastal_Marine/NSW_Marine_Lidar_Bathymetry_Data_2018/MapServer'
+        self._nsw_query_url = '{0}/{1}/query?'.format(self._nsw_map_server, layer)
+        self.where = where
+        self.index = index
+        self.src_srs = None
+        
+    def run(self):
+        if self.region is None:
+            return([])
+
+        _data = {'where': self.where, 'outFields': '*', 'geometry': self.region.format('bbox'),
+                 'inSR':4326, 'outSR':4326, 'f':'pjson', 'returnGeometry':'False'}
+        _req = Fetch(self._nsw_query_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            print(_req.url)
+            features = _req.json()
+            print(features)
+            if 'features' in features.keys():
+                for feature in features['features']:
+                    if self.index:
+                        print(json.dumps(feature['attributes'], indent=4))
+                    else:
+                        print(feature['attributes'])
+
+                        #link = '{0}/csb/csv/{1}/{2}/{3}/{4}'.format(self._csb_data_url, _year, _dir_a, _dir_b, _csv_fn)
+                        link = None
+
+                        if link is None:
+                            continue
+                        
+                        #self.results.append([link, _csv_fn, 'csb'])
+                                                
 ## NOAA DEMs
 ## doesn't really work well, use ncei_thredds or digital_coast instead...
 class DEMMosaic(FetchModule):
@@ -3983,7 +4023,7 @@ https://cmr.earthdata.nasa.gov
         if _req is not None:
             print(_req.url)
             features = _req.json()['feed']['entry']
-            # print(features[0])
+            #print(features[0])
             # print(features[0].keys())
             # sys.exit()
             for feature in features:
@@ -4046,8 +4086,12 @@ set `product` to one of:
 
 Land-based KaRIn (HR mode)
 L2_HR_PIXC	netCDF
+L2_HR_PIXC_2	netCDF
+L2_HR_PIXC_1	netCDF
 L2_HR_PIXCVec	netCDF
 L2_HR_Raster	netCDF
+L2_HR_Raster_2	netCDF
+L2_HR_Raster_1	netCDF
 L2_HR_Raster_100m	netCDF
 L2_HR_Raster_250m	netCDF
 L2_HR_RiverSP	shapefile
@@ -4082,8 +4126,8 @@ L2_NALT_GDR_SGDR	netCDF
 
 < swot:time_start='':time_end='':filename_filter='':product='' >"""
     
-    def __init__(self, product='L2_HR_Raster', **kwargs):
-        super().__init__(short_name='SWOT*{}*'.format(product), **kwargs)   
+    def __init__(self, product='L2_HR_Raster_2', **kwargs):
+        super().__init__(short_name='SWOT_{}*'.format(product), **kwargs)   
         
 ## SST from EarthData
 ## This module allows us to use SST data in dlim/waffles
@@ -4400,6 +4444,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'bing_bfp': {'call': BingBFP},
         'waterservices': {'call': WaterServices},
         'csb': {'call': CSB},
+        #'nsw_tb': {'call': NSW_TB},
         'cpt_city': {'call': CPTCity},
     }
 

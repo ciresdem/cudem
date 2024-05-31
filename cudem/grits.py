@@ -688,7 +688,7 @@ class Outliers(Grits):
         if np.all(np.isnan(pk_arr)):
             ds_ds = pk_ds = pk_arr = None
             utils.remove_glob(pk_fn, ds_fn)
-            return(None, None)
+            return(None, None, None)
 
         med_pk = np.nanmedian(pk_arr)
         m_pk = np.nanmean(pk_arr)

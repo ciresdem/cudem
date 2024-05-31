@@ -608,6 +608,7 @@ class ElevationDataset:
             if os.path.exists(self.mask['mask']):            
                 utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
+                    utils.echo_msg(self.dst_srs)
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
                         src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
@@ -1273,13 +1274,14 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):
+    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False, mode = 'mean'):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
         Parameters:
         supercede (bool): if true, higher weighted data superceded lower weighted, otherwise
                           will combine data using weighted-mean
+        mode (str): mode can be 'mean', 'supercede', 'min', 'max'
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
@@ -1299,7 +1301,10 @@ class ElevationDataset:
         """
 
         utils.set_cache(self.cache_dir)
-
+        if supercede: mode = 'supercede'
+        if mode not in ['mean', 'min', 'max', 'supercede']:
+            mode = 'mean'
+            
         ## ==============================================
         ## initialize the output rasters
         ## ==============================================
@@ -1400,15 +1405,10 @@ class ElevationDataset:
             ## ==============================================
             #for arrs, srcwin, gt in this_entry.yield_array():
             for arrs, srcwin, gt in this_entry.array_yield:
-                #utils.echo_msg(arrs)
-                #for arrs, srcwin, gt in array_yield:
-                #utils.echo_msg(srcwin)
-                #utils.echo_msg(arrs['z'].shape)
                 ## ==============================================
                 ## update the mask
                 ## ==============================================
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                #utils.echo_msg(m_array)
                 m_array[arrs['count'] != 0] = 1
                 m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                 if mask_only:
@@ -1443,7 +1443,7 @@ class ElevationDataset:
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
                 ## ==============================================
-                if supercede:
+                if mode == 'supercede':
                     ## ==============================================
                     ## higher weight supercedes lower weight (first come first served atm)
                     ## ==============================================
@@ -1464,7 +1464,19 @@ class ElevationDataset:
                     # for key in stacked_bands.keys():
                     #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
-                else:
+                elif mode == 'min':
+                    stacked_data['z'] = arrs['z']
+                    stacked_data['x'] = arrs['x']
+                    stacked_data['y'] = arrs['y']
+                    stacked_data['src_uncertainty']  = arrs['uncertainty']
+                    stacked_data['weights'] = arrs['weights']
+                    ## ==============================================
+                    ## uncertainty is src_uncertainty, as only one point goes into a cell
+                    ## ==============================================
+                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty']
+                    
+                    
+                elif mode == 'mean':
                     ## ==============================================
                     ## accumulate incoming z*weight and uu*weight
                     ## ==============================================
@@ -1539,7 +1551,7 @@ class ElevationDataset:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
 
         if not mask_only:
-            if not supercede:
+            if mode == 'mean':
                 # ## by moving window
                 # n_chunk = int(xcount)
                 # n_step = n_chunk
@@ -2794,46 +2806,66 @@ class BAGFile(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
-class H5File(ElevationDataset):
+class SWOTFile(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.src_h5 = None
         
-    def _init_h5File(self):
-        self.src_h5 = h5.File(self.fn, 'r')
+    def _init_h5File(self, short_name='L2_HR_PIXC'):
+        src_h5 = None
+        try:
+            src_h5 = h5.File(self.fn, 'r')
+            if src_h5 is not None:
+                if 'short_name' in src_h5.attrs.keys():
+                    if src_h5.attrs['short_name'] != short_name.encode('utf-8'):
+                        utils.echo_error_msg('{} does not appear to be a SWOT {} file'.format(self.fn, short_name))
+                        self._close_h5File(src_h5)
+                else:
+                    utils.echo_error_msg('{} does not appear to be a SWOT file'.format(self.fn))
+                    self._close_h5File(src_h5)
+                    
+        except Exception as e:
+            utils.echo_error_msg(e)
 
-    def _close_h5File(self):
-        self.src_h5.close()
+        return(src_h5)
+            
+    def _close_h5File(self, src_h5):
+        if src_h5 is not None:
+            src_h5.close()
 
-    def _get_var_arr(self, var_path):
-        return(self.src_h5['/{}'.format(var_path)][...,])
+    def _get_var_arr(self, src_h5, var_path):
+        return(src_h5['/{}'.format(var_path)][...,])
                 
-class SWOT_PIXC(H5File):
-    def __init__(self, group='pixel_cloud', var='height', apply_geoid=True, **kwargs):
+class SWOT_PIXC(SWOTFile):
+    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
         self.apply_geoid = apply_geoid
 
     def yield_ds(self):
-        self._init_h5File()
+        src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
+        src_h5_vec = None
+        
+        #if self.pixc_vec is not None:
+        #    src_h5_vec = self._init_h5File(short_name='L2_HR_PIXCVec')
+        
+        if src_h5 is not None:
+            latitude = self._get_var_arr(src_h5, '{}/latitude'.format(self.group))
+            longitude = self._get_var_arr(src_h5, '{}/longitude'.format(self.group))
+            var_data = self._get_var_arr(src_h5, '{}/{}'.format(self.group, self.var))
+            geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
+            if self.apply_geoid:
+                out_data = var_data - geoid_data
+            else:
+                out_data = var_data
 
-        latitude = self.src_h5['/{}/latitude'.format(self.group)][...,]
-        longitude = self.src_h5['/{}/longitude'.format(self.group)][...,]
-        
-        var_data = self.src_h5['/{}/{}'.format(self.group, self.var)][...,]
-        geoid_data = self.src_h5['/{}/geoid'.format(self.group)][...,]
-        if self.apply_geoid:
-            out_data = var_data - geoid_data
-        else:
-            out_data = var_data
-        
-        dataset = np.column_stack((longitude, latitude, out_data))
-        points = np.rec.fromrecords(dataset, names='x, y, z')
+            dataset = np.column_stack((longitude, latitude, out_data))
+            points = np.rec.fromrecords(dataset, names='x, y, z')
 
-        self._close_h5File()
-        
-        yield(points)
+            self._close_h5File(src_h5)
+            self._close_h5File(src_h5_vec)
+            
+            yield(points)
 
 class SWOT_HR_Raster(ElevationDataset):
     def __init__(self, data_set='wse', **kwargs):
@@ -4207,7 +4239,7 @@ class DAVFetcher_SLR(Fetcher):
 class SWOTFetcher(Fetcher):
     """SWOT L2_HR_Raster data from NASA
 
-    set `data_set` to one of (for L2_HR_Raster):
+set `data_set` to one of (for L2_HR_Raster):
     1 - longitude (64-bit floating-point)
     2 - latitude (64-bit floating-point)
     3 - wse (32-bit floating-point)
@@ -4246,6 +4278,15 @@ class SWOTFetcher(Fetcher):
     36 - model_dry_tropo_cor (32-bit floating-point)
     37 - model_wet_tropo_cor (32-bit floating-point)
     38 - iono_cor_gim_ka (32-bit floating-point)
+
+    currently supported SWOT products and product options:
+    - L2_HR_Raster
+      apply_geoid
+      data_set
+
+    - L2_HR_PIXC
+      apply_geoid
+      
     """
 
     __doc__ = '''{}
@@ -4254,37 +4295,41 @@ class SWOTFetcher(Fetcher):
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
-    def __init__(self, data_set='wse', **kwargs):
+    def __init__(self, data_set = 'wse', apply_geoid = True, **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
+        self.apply_geoid = apply_geoid
 
-    # def parse(self):
-    #     self.fetch_module.run()
-    #     yield(self)
-
-    # def fetch_and_yield_results(self, fetch_data = True):
-    #     for result in self.fetch_module.results:
-    #         if fetch_data:
-    #             if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
-    #                 yield(result)
-    #             else:
-    #                 self.fetch_module.results.append(result)
-    #         else:
-    #             yield(result)
+    # def fetch_pixc_vec(self, swot_fn):
+    #     pixc_vec_filter = utils.fn_basename2(swot_fn).split('PIXC_')[1]
+    #     this_pixc_vec = fetches.SWOT(
+    #         src_region=None, verbose=self.verbose, outdir=self.fetch_module._outdir, product='L2_HR_PIXCVec', filename_filter=pixc_vec_filter
+    #     )
+    #     this_pixc_vec.run()
+    #     if len(this_pixc_vec.results) == 0:
+    #         utils.echo_warning_msg('could not locate associated PIXCVec file for {}'.format(pixc_vec_filter))
+    #         return(None)
+    #     else:
+    #         if this_pixc_vec.fetch(this_pixc_vec.results[0], check_size=self.check_size) == 0:
+    #             return(os.path.join(this_pixc_vec._outdir, this_pixc_vec.results[0][1]))
         
     def set_ds(self, result):
         utils.echo_msg(result)
         swot_fn = os.path.join(self.fetch_module._outdir, result[1])
-        if 'L2_HR_PIXC' in result[-1]:
-            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=True, src_srs='epsg:4326+3855', dst_srs=self.dst_srs,
-                               weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+        if 'L2_HR_PIXC_' in result[-1]:
+            #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
+            #swot_pixc_vec_fn = pixc_vec_result
+            
+            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, src_srs='epsg:4326+3855',
+                               dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
             
         elif 'L2_HR_Raster' in result[-1]:
-            sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=True, src_srs=None, dst_srs=self.dst_srs,
+            sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=self.apply_geoid, src_srs=None, dst_srs=self.dst_srs,
                                     weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                     x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
         else:
+            utils.echo_warning_msg('{} is not a currently supported dlim dataset'.format(result[-1]))
             sub_ds = None
             
         yield(sub_ds)
