@@ -1372,8 +1372,8 @@ def sample_warp(
     #             os.path.basename(str(src_dem)), out_region, x_sample_inc, y_sample_inc, xcount, ycount, sample_alg, src_srs, dst_srs
     #         )
     #     )        
-    utils.echo_msg('gdalwarp {} {} -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_dem, dst_dem, src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
-    utils.echo_msg('dst_dem: > {} <'.format(dst_dem))
+    #utils.echo_msg('gdalwarp {} {} -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_dem, dst_dem, src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
+    #utils.echo_msg('dst_dem: > {} <'.format(dst_dem))
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
@@ -1390,9 +1390,9 @@ def sample_warp(
     #with tqdm(desc='warping...', total=100) as pbar:
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, #width=xcount, height=ycount,
-                       dstNodata=ndv, outputBounds=out_region, #outputBoundsSRS=dst_srs if out_region is not None else None,
-                       resampleAlg=sample_alg, errorThreshold=0, #options=["COMPRESS=LZW", "TILED=YES"], srcSRS=src_srs,
-                       dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
+                       dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
+                       resampleAlg=sample_alg, errorThreshold=0, #options=["COMPRESS=LZW", "TILED=YES"],
+                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
 
     if verbose:
         pbar.close()
