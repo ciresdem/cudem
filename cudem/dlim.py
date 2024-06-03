@@ -608,10 +608,10 @@ class ElevationDataset:
             if os.path.exists(self.mask['mask']):            
                 utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
-                    utils.echo_msg(self.dst_srs)
+                    dst_srs = self.dst_srs.split('+geoid')[0]
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
-                        src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
+                        src_region=self.region, sample_alg='nearest', dst_srs=dst_srs,
                         ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose
                     )[0]
                 else:
