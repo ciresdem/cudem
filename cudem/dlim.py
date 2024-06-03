@@ -608,10 +608,10 @@ class ElevationDataset:
             if os.path.exists(self.mask['mask']):            
                 utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
-                    dst_srs = self.dst_srs.split('+geoid')[0]
+                    #dst_srs = self.dst_srs.split('+geoid')[0]
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
-                        src_region=self.region, sample_alg='nearest', dst_srs=dst_srs,
+                        src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
                         ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose
                     )[0]
                 else:
@@ -886,14 +886,16 @@ class ElevationDataset:
         if self.src_srs is not None and self.dst_srs is not None:
             tmp_src_srs = self.src_srs.split('+geoid:')
             src_srs = tmp_src_srs[0]
+            self.src_srs = src_srs
             if len(tmp_src_srs) > 1:
                 src_geoid = tmp_src_srs[1]
 
             tmp_dst_srs = self.dst_srs.split('+geoid:')
             dst_srs = tmp_dst_srs[0]
+            self.dst_srs = dst_srs
             if len(tmp_dst_srs) > 1:
                 dst_geoid = tmp_dst_srs[1]
-
+                
             is_esri = False
             in_vertical_epsg_esri = None
             if 'ESRI' in src_srs.upper():
