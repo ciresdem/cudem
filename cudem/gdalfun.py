@@ -1373,7 +1373,7 @@ def sample_warp(
     #         )
     #     )        
     utils.echo_msg('gdalwarp -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
-    utils.echo_msg(dst_dem)
+    utils.echo_msg('dst_dem: > {} <'.format(dst_dem))
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
