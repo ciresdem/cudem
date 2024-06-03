@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### gdal_null.py
 ##
-## Copyright (c) 2018 - 2022 CIRES DEM Team
+## Copyright (c) 2018 - 2024 CIRES DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -32,7 +32,7 @@ from cudem import utils
 from cudem import regions
 from cudem import gdalfun
 
-_version = '0.1.10'
+_version = '0.1.11'
 _usage = '''gdal_null.py ({}): generate a null grid
 usage: gdal_null.py [-region xmin xmax ymin ymax] [-cell_size value]
                     [-t_nodata value] [-d_format grid-format] [-overwrite]
@@ -62,7 +62,7 @@ def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
     ds = None
     dsArray = np.zeros([ds_config['ny'],ds_config['nx']])
     dsArray[:] = float(nodata)
-    utils.gdal_write(dsArray, outfile, ds_config)
+    gdalfun.gdal_write(dsArray, outfile, ds_config)
     
 def createGrid(outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
     '''create a nodata grid'''
@@ -70,7 +70,7 @@ def createGrid(outfile, extent, cellsize, nodata, outformat, verbose, overwrite)
     ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, gt, gdalfun.osr_wkt(4326), gdal.GDT_Float32, nodata, outformat, {}, 1)
     nullArray = np.zeros( (ycount, xcount) )
     nullArray[nullArray==0]=nodata
-    utils.gdal_write(nullArray, outfile, ds_config)
+    gdalfun.gdal_write(nullArray, outfile, ds_config)
 
 if __name__ == '__main__':
 
