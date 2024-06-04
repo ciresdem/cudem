@@ -1579,10 +1579,10 @@ class ElevationDataset:
         
         return(out_file)        
     
-    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
+    def stacks_yield_xyz(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
         """yield the result of `_stacks` as an xyz object"""
 
-        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
+        stacked_fn = self._stacks(out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
