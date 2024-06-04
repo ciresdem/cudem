@@ -45,10 +45,10 @@ from cudem import gdalfun
 from cudem import regions
 from cudem import factory
 
-## ==============================================
-## GRITS
-## ==============================================
 class Grits:
+    """DEM Filtering
+    """
+    
     def __init__(
             self, src_dem = None, dst_dem = None, band = 1, min_z = None, max_z = None,
             count_mask = None, weight_mask = None, uncertainty_mask = None, cache_dir = './',
@@ -169,9 +169,6 @@ class Grits:
 
         return(upper_limit, lower_limit)
 
-## ==============================================
-## Blur
-## ==============================================
 class Blur(Grits):
     """Blur DEM values using a Gaussian Blur
 
@@ -233,9 +230,6 @@ class Blur(Grits):
         dst_ds = None
         return(self.dst_dem, 0)
 
-## ==============================================
-## GMT grdfilter
-## ==============================================
 class GMTgrdfilter(Grits):
     """Filter a DEM through GMT's `grdfilter`; see `gmt grdfilter --help`
 
@@ -278,9 +272,6 @@ class GMTgrdfilter(Grits):
         
         return(self.dst_dem, 0)
 
-## ==============================================
-## Outliers - filter outliers
-## ==============================================
 class Outliers(Grits):
     """Discover and remove outliers from the input DEM.
 
@@ -1084,9 +1075,6 @@ class Bins(Grits):
         utils.echo_msg('removed {} flats.'.format(count))
         return(self.dst_dem, 0)    
         
-## ==============================================
-## Flats - filter out flat areas
-## ============================================
 class Flats(Grits):
     """Remove flat areas from the input DEM
 
@@ -1286,9 +1274,7 @@ def grits_cli(argv = sys.argv):
         )
         sys.exit(-1)
         
-    ## ==============================================
     ## load the user wg json and run grits with that.
-    ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
             try:

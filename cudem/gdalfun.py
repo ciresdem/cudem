@@ -49,9 +49,7 @@ ogr.DontUseExceptions()
 osr.DontUseExceptions()
 gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
-## ==============================================
 ## OSR/WKT/proj
-## ==============================================
 def split_srs(srs, as_epsg = False):
     """split an SRS into the horizontal and vertical elements.
 
@@ -254,9 +252,7 @@ def osr_parse_srs(src_srs, return_vertcs = True):
     else:
         return(None)
 
-## ==============================================
 ## OGR
-## ==============================================
 def ogr_or_gdal(osgeo_fn):
     '''ogr file is 1, gdal file is 2, neither is -1'''
     
@@ -657,9 +653,7 @@ def ogr2gdal_mask(
         #else:
         #    self.mask = None
 
-## ==============================================
 ## GDAL
-## ==============================================
 class gdal_datasource:
     """
     use as:

@@ -243,9 +243,6 @@ def fetch_cpt_city(q='grass/haxby', cache_dir = './'):
     fetches.Fetch(this_fetches.results[0][0]).fetch_file(this_fetches.results[0][1])
     return(this_fetches.results[0][1])
 
-## ==============================================
-## PERSPECTO!!
-## ==============================================
 class Perspecto:
 
     def __init__(self, mod = None, src_dem = None, cpt = None, min_z = None, max_z = None, callback = lambda: False,
@@ -349,12 +346,10 @@ class Perspecto:
     def run(self):
         raise(NotImplementedError)
 
-## ==============================================
-## HILLSHADE
-## uses gdal/ImageMagick
-## ==============================================
 class Hillshade(Perspecto):
     """Generate a Hillshade Image
+
+    uses gdal/ImageMagick
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
     """
@@ -362,7 +357,7 @@ class Hillshade(Perspecto):
     def __init__(
             self,
             vertical_exaggeration=1,
-            projection=4326,
+            projection=None,
             azimuth=315,
             altitude=45,
             **kwargs,
@@ -388,7 +383,7 @@ class Hillshade(Perspecto):
         # Generate the combined georeferenced tif
         utils.run_cmd('gdal_translate -co "TFW=YES" {} temp.tif'.format(self.src_dem), verbose=self.verbose)
         utils.run_cmd('mv temp.tfw output.tfw')
-        utils.run_cmd('gdal_translate -a_srs epsg:{} output.tif temp2.tif'.format(self.projection))
+        utils.run_cmd('gdal_translate {} output.tif temp2.tif'.format('-a_srs epsg:{}'.format(self.projection) if self.projection is not None else ''))
         # Cleanup
         utils.remove_glob('output.tif*', 'temp.tif*', 'hillshade.tif*', 'colors.tif*', 'output.tfw*')
         #subtract 2 cells from rows and columns 
