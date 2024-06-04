@@ -1387,7 +1387,6 @@ def sample_warp(
     else:
         pbar_update = None
         
-    #with tqdm(desc='warping...', total=100) as pbar:
     if (xcount is None or ycount is None):
         dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                            xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, #width=xcount, height=ycount,

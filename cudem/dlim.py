@@ -38,7 +38,7 @@
 ## datalist and process that.
 ##
 ## If region, x_inc, and y_inc are set, all processing will go through Dataset._stacks() where the data will be combined
-## either using the 'supercede' or 'weighted-mean' method. Dataset._stacks will output a multi-banded gdal file with the following
+## either using the 'supercede', 'weighted-mean', 'min' or 'max' method. Dataset._stacks will output a multi-banded gdal file with the following
 ## bands: 1: z, 2: count, 3: weight, 4: uncerainty, 5: source-uncertainty
 ##
 ## If want_mask is set, _stacks() will also generate a multi-band gdal raster file where each
@@ -166,8 +166,8 @@ def write_datalist(data_list, outname=None):
     return('{}.datalist'.format(outname))
 
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
-              sample_alg='bilinear', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
-              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, fltrs=None, stack_node=True):
+              sample_alg='auto', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
+              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, fltrs=None, stack_node=True, stack_mode='mean'):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
@@ -176,7 +176,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
                                y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                               dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node
+                               dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode
                                )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
@@ -185,8 +185,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                     src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
                                     sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                     cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                                    dump_precision=dump_precision, fltrs=fltrs,
-                                    stack_node=stack_node)
+                                    dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode)
         else:
             this_datalist = xdls[0]
 
@@ -350,11 +349,11 @@ class ElevationDataset:
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
-                 want_sm = False, sample_alg = 'bilinear', parent = None, src_region = None, invert_region = False,
-                 fltrs=[], stack_node = True, cache_dir = None, verbose = False, remote = False, dump_precision = 6, params = {},
-                 metadata = {'name':None, 'title':None, 'source':None, 'date':None,
-                             'data_type':None, 'resolution':None, 'hdatum':None,
-                             'vdatum':None, 'url':None}, **kwargs):
+                 want_sm = False, sample_alg = 'auto', parent = None, src_region = None, invert_region = False,
+                 fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False, dump_precision = 6,
+                 params = {}, metadata = {'name':None, 'title':None, 'source':None, 'date':None,
+                                          'data_type':None, 'resolution':None, 'hdatum':None,
+                                          'vdatum':None, 'url':None}, **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
@@ -379,6 +378,7 @@ class ElevationDataset:
         self.remote = remote # dataset is remote
         self.dump_precision = dump_precision # the precision of the dumped xyz data
         self.stack_node = stack_node # yield avg x/y data instead of center
+        self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal']
         if self.mask is not None:
@@ -593,7 +593,7 @@ class ElevationDataset:
                 self.y_inc = utils.str2inc(self.y_inc)
 
             out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
-            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')
+            self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')#, mode=self.stack_mode)
             
     def mask_and_yield_array(self):
         """mask the incoming array from `self.yield_array` and yield the results.
@@ -1276,7 +1276,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False, mode = 'mean'):
+    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):#, mode = 'mean'):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
@@ -1303,10 +1303,13 @@ class ElevationDataset:
         """
 
         utils.set_cache(self.cache_dir)
-        if supercede: mode = 'supercede'
-        if mode not in ['mean', 'min', 'max', 'supercede']:
+        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
             mode = 'mean'
+        else:
+            mode = self.stack_mode
             
+        if supercede: mode = 'supercede'
+        utils.echo_msg('stacking using {} mode'.format(mode))
         ## ==============================================
         ## initialize the output rasters
         ## ==============================================
@@ -1422,19 +1425,26 @@ class ElevationDataset:
                 ## ==============================================
                 for key in stacked_bands.keys():
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                    stacked_data[key][np.isnan(stacked_data[key])] = 0
-
+                    if mode != 'min' and mode != 'max':
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
+                    else:
+                        if key == 'count':
+                            stacked_data[key][np.isnan(stacked_data[key])] = 0
+                    
                 ## ==============================================
                 ## set incoming np.nans to zero and mask to non-nan count
                 ## ==============================================
-                arrs['weight'][np.isnan(arrs['z'])] = 0
-                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
-                arrs['x'][np.isnan(arrs['x'])] = 0
-                arrs['y'][np.isnan(arrs['y'])] = 0
-                arrs['z'][np.isnan(arrs['z'])] = 0
-                for arr_key in arrs:
-                    if arrs[arr_key] is not None:
-                        arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+                if mode != 'min' and mode != 'max':
+                    arrs['weight'][np.isnan(arrs['z'])] = 0
+                    arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                    arrs['x'][np.isnan(arrs['x'])] = 0
+                    arrs['y'][np.isnan(arrs['y'])] = 0
+                    arrs['z'][np.isnan(arrs['z'])] = 0
+                    for arr_key in arrs:
+                        if arrs[arr_key] is not None:
+                            arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+                else:
+                    arrs['count'][np.isnan(arrs['count'])] = 0
 
                 ## ==============================================
                 ## add the count to the accumulated rasters
@@ -1466,17 +1476,26 @@ class ElevationDataset:
                     # for key in stacked_bands.keys():
                     #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
-                elif mode == 'min':
-                    stacked_data['z'] = arrs['z']
-                    stacked_data['x'] = arrs['x']
-                    stacked_data['y'] = arrs['y']
-                    stacked_data['src_uncertainty']  = arrs['uncertainty']
-                    stacked_data['weights'] = arrs['weights']
-                    ## ==============================================
-                    ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    ## ==============================================
-                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty']
-                    
+                elif mode == 'min' or mode == 'max':
+                    mask = np.isnan(stacked_data['z'])
+                    stacked_data['x'][mask] = arrs['x'][mask]
+                    stacked_data['y'][mask] = arrs['y'][mask]
+                    stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['weights'][mask] = arrs['weight'][mask]
+                    stacked_data['z'][mask] = arrs['z'][mask]
+
+                    if mode == 'min':
+                        mask = arrs['z'] < stacked_data['z']
+                    else:
+                        mask = arrs['z'] > stacked_data['z']
+                        
+                    stacked_data['x'][mask] = arrs['x'][mask]
+                    stacked_data['y'][mask] = arrs['y'][mask]
+                    stacked_data['src_uncertainty'][mask]  = arrs['uncertainty'][mask]
+                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['weights'][mask] = arrs['weight'][mask]
+                    stacked_data['z'][mask] = arrs['z'][mask]
                     
                 elif mode == 'mean':
                     ## ==============================================
@@ -1507,8 +1526,9 @@ class ElevationDataset:
                 for key in stacked_bands.keys():
                     #stacked_data[key][np.isnan(stacked_data[key])] = ndv
                     #stacked_data[key][stacked_data['count'] == ndv] = ndv
+                    
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
-                    if supercede:
+                    if mode != 'mean':
                         stacked_data[key][np.isnan(stacked_data[key])] = ndv
 
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
@@ -1553,33 +1573,33 @@ class ElevationDataset:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
 
         if not mask_only:
-            if mode == 'mean':
-                # ## by moving window
-                # n_chunk = int(xcount)
-                # n_step = n_chunk
-                # for srcwin in utils.yield_srcwin(
-                #         (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
-                # ):
-                #     y = srcwin[1]
-                #     for key in stacked_bands.keys():
-                #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
-                #         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                ## by scan-line
-                srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
-                ):
-                    for key in stacked_bands.keys():
-                        stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                        stacked_data[key][stacked_data[key] == ndv] = np.nan
+            # ## by moving window
+            # n_chunk = int(xcount)
+            # n_step = n_chunk
+            # for srcwin in utils.yield_srcwin(
+            #         (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
+            # ):
+            #     y = srcwin[1]
+            #     for key in stacked_bands.keys():
+            #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
+            #         stacked_data[key][stacked_data[key] == ndv] = np.nan
 
+            ## by scan-line
+            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+            for y in range(
+                    srcwin[1], srcwin[1] + srcwin[3], 1
+            ):
+                for key in stacked_bands.keys():
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                    stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+                if mode == 'mean':
                     ## ==============================================
                     ## average the accumulated arrays for finalization
                     ## x, y, z and u are weighted sums, so divide by weights
                     ## ==============================================
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                    #utils.echo_msg(stacked_data['count'])
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
@@ -1592,13 +1612,13 @@ class ElevationDataset:
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
                     #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
-                    
-                    ## ==============================================
-                    ## write out final rasters
-                    ## ==============================================
-                    for key in stacked_bands.keys():
-                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                        stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+
+                ## ==============================================
+                ## write out final rasters
+                ## ==============================================
+                for key in stacked_bands.keys():
+                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
                 
             ## ==============================================
             ## set the final output nodatavalue
@@ -1631,10 +1651,10 @@ class ElevationDataset:
         
         return(out_file)        
     
-    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):
+    def stacks_yield_xyz(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
         """yield the result of `_stacks` as an xyz object"""
 
-        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt)
+        stacked_fn = self._stacks(supercede=supercede, out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
         sds = gdal.Open(stacked_fn)
         sds_gt = sds.GetGeoTransform()
         sds_z_band = sds.GetRasterBand(1) # the z band from stacks
@@ -1884,11 +1904,19 @@ class ElevationDataset:
             yy = points_y[unq_idx]
             #u = np.zeros(zz.shape)
             if np.any([len(dup) for dup in dup_idx]):
-                dup_means = [np.mean(pixel_z[dup]) for dup in dup_idx]
-                dup_means_x = [np.mean(points_x[dup]) for dup in dup_idx]
-                dup_means_y = [np.mean(points_y[dup]) for dup in dup_idx]
-                dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
-                zz[cnt_msk] = dup_means
+                if self.stack_mode == 'min':
+                    dup_stack = [np.min(pixel_z[dup]) for dup in dup_idx]
+                    dup_stds = np.zeros(dup_stack.shape)
+                elif self.stack_mode == 'max':
+                    dup_stack = [np.max(pixel_z[dup]) for dup in dup_idx]
+                    dup_stds = np.zeros(dup_stack.shape)
+                else:
+                    dup_stack = [np.mean(pixel_z[dup]) for dup in dup_idx]
+                    dup_stack_x = [np.mean(points_x[dup]) for dup in dup_idx]
+                    dup_stack_y = [np.mean(points_y[dup]) for dup in dup_idx]
+                    dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
+                    
+                zz[cnt_msk] = dup_stack
                 uu[cnt_msk] = dup_stds
                 
             ## ==============================================
@@ -2407,8 +2435,13 @@ class GDALFile(ElevationDataset):
             if self.transformer is not None:
                 self.transformer = None
 
+            utils.echo_msg(self.sample_alg)
             if self.sample_alg == 'auto':
-                if self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
+                if self.stack_mode == 'min':
+                    self.sample_alg = 'min'
+                elif self.stack_mode == 'max':
+                    self.sample_alg = 'max'
+                elif self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
                     self.sample_alg = 'bilinear'
                 else:
                     self.sample_alg = 'average'
@@ -5847,6 +5880,7 @@ Options:
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
   -T, --filter\t\tFILTER the data stack using one or multiple filters. 
 \t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
@@ -5906,6 +5940,7 @@ def datalists_cli(argv=sys.argv):
     z_precision = 4
     fltrs = []
     stack_node = False
+    stack_mode = 'mean'
     cache_dir = utils.cudem_cache()
     
     ## ==============================================
@@ -5940,6 +5975,12 @@ def datalists_cli(argv=sys.argv):
             i = i + 1
         elif arg[:2] == '-Z':
             z_precision = utils.int_or(argv[2:], 4)
+
+        elif arg == '-stack-mode' or arg == '--stack-mode' or arg == '-A':
+            stack_mode = utils.str_or(argv[i + 1], 'mean')
+            i = i + 1
+        elif arg[:2] == '-A':
+            stack_mode = utils.str_or(arg[2:], 'mean')
             
         elif arg == '-filter' or arg == '--filter' or arg == '-T':
             fltrs.append(argv[i + 1])
@@ -6043,10 +6084,10 @@ def datalists_cli(argv=sys.argv):
             ## intiialze the input data. Treat data from CLI as a datalist.
             ## ==============================================
             this_datalist = init_data(
-                dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='bilinear',
+                dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='auto',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
                 want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
-                dump_precision=z_precision, fltrs=fltrs, stack_node=stack_node
+                dump_precision=z_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode
             )
 
             if this_datalist is not None and this_datalist.valid_p(

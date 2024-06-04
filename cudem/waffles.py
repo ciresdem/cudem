@@ -120,7 +120,7 @@ class Waffle:
                  sample: str = 'bilinear', xsample: str = None, ysample: str = None, clip: str = None, chunk: int = None,
                  dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
-                 cache_dir: str = waffles_cache, supercede: bool = False, upper_limit: float = None, lower_limit: float = None,
+                 cache_dir: str = waffles_cache, stack_mode: str = 'mean', upper_limit: float = None, lower_limit: float = None,
                  proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, want_stack: bool = True, params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
@@ -147,7 +147,8 @@ class Waffle:
         self.srs_transform = srs_transform # transform data to the dst_srs
         self.archive = archive # archive the data used in this dem
         self.want_mask = want_mask # mask the incoming datalist
-        self.supercede = supercede # higher weighted data supercedes lower weighted data
+        #self.supercede = supercede # higher weighted data supercedes lower weighted data
+        self.stack_mode = stack_mode
         self.upper_limit = utils.float_or(upper_limit) # upper limit of z values in output
         self.lower_limit = utils.float_or(lower_limit) # lower limit of z values in output
         self.proximity_limit = utils.int_or(proximity_limit) # proximity limit of interpolation
@@ -244,7 +245,7 @@ class Waffle:
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   fltrs=self.fltr, invert_region=False, cache_dir=self.cache_dir)
+                                   fltrs=self.fltr, invert_region=False, cache_dir=self.cache_dir, stack_mode=self.stack_mode)
 
         if self.data is not None:
             self.data.initialize()
@@ -469,9 +470,9 @@ class Waffle:
                 if not self.clobber and os.path.exists(stack_fn):
                     self.stack = stack_fn
                     if not WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
-                        self.stack = self.data._stacks(out_name=stack_bn, supercede=self.supercede)
+                        self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
                 else:
-                    self.stack = self.data._stacks(out_name=stack_bn, supercede=self.supercede)
+                    self.stack = self.data._stacks(out_name=stack_bn)#, mode=self.stack_mode)#supercede=self.supercede)
                     
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
@@ -617,7 +618,7 @@ class WafflesStacks(Waffle):
     
     Generate a DEM using a raster STACKing method. 
     By default, will calculate the [weighted]-mean where overlapping cells occur. 
-    Set supercede to True to overwrite overlapping cells with higher weighted data.
+    Set `stack_mode` to 'supercede' to True to overwrite overlapping cells with higher weighted data.
 
     stack data to generate DEM. No interpolation
     occurs with this module. To guarantee a full DEM,
@@ -2843,214 +2844,6 @@ class WafflesLakes(Waffle):
 ##
 ## combined gridding method (stacks/surface/coastline/IDW/flatten)
 ## ==============================================
-class WafflesCUDEM_old(Waffle):
-    """CUDEM integrated DEM generation.
-    
-    Generate an topo/bathy integrated DEM using a variety of data sources.
-    Will iterate <pre_count> pre-surfaces at lower-resolutions, specified with <inc_levels>.
-    Each pre-surface will be clipped to <landmask> if it exists and smoothed with <pre_smoothing> factor.
-    Each pre-surface is used in subsequent pre-surface(s)/final DEM at each iterative weight specified in <weight_levels>.
-
-    generate a DEM with `pre_surface`s which are generated at lower resolution and with various weight threshholds.
-
-    To generate a typical CUDEM tile, generate 1 pre-surface ('bathy_surface'), clipped to a coastline.
-    Use a <min_weight> that excludes low-resolution bathymetry data from being used as input in the final
-    DEM generation. 
-
-    e.g.
-    cudem:mode=gmt-surface:tension=.65:geographic=True:landmask=True:polygonize=2:min_weight=1:pre_count=2:pre_upper_limit=-.1:pre_smoothing=2:flatten=95
-
-    -----------
-    Parameters:
-    
-    min_weight (float): the minumum weight to include in the final DEM
-    pre_count (int): number of pre-surface iterations to perform
-    pre_upper_limit (float) - the upper elevation limit of the pre-surfaces (used with landmask)
-    pre_smoothing (float) - the smoothing (blur) factor to apply to the pre-surfaces
-    landmask (bool): path to coastline vector mask or set as `coastline` to auto-generate
-    want_supercede (bool) - supercede subsquent pre-surfaces
-    flatten (float) - the nodata-size percentile above which to flatten
-    exclude_lakes (bool) - exclude lakes from the landmask
-    <mode-opts> - options for the waffles module specified in 'mode'
-    <coastline-opts> - options for the coastline module when generating the landmask
-    """
-
-    def __init__(self, mode = 'gmt-surface', min_weight = None, pre_count = 1, pre_upper_limit = -0.1,
-                 pre_smoothing = None, landmask = False, filter_outliers = None, want_supercede = False,
-                 flatten = 95, exclude_lakes = False, **kwargs):
-
-        self.valid_modes = ['gmt-surface', 'IDW', 'linear', 'cubic', 'nearest', 'gmt-triangulate', 'mbgrid']
-        self.coastline_args = {}
-        tmp_waffles = Waffle()
-        tmp_coastline = WafflesCoastline()
-        for kpam, kval in kwargs.items():
-            if kpam not in tmp_waffles.__dict__:
-                if kpam in tmp_coastline.__dict__:
-                    self.coastline_args[kpam] = kval
-
-        for kpam, kval in self.coastline_args.items():
-            del kwargs[kpam]
-
-        if exclude_lakes:
-            self.coastline_args['want_lakes'] = True
-            self.coastline_args['invert_lakes'] = True
-            
-        self.mode = mode
-        self.mode_args = {}
-        if self.mode not in self.valid_modes:
-            self.mode = 'IDW'
-
-        tmp_waffles_mode = WaffleFactory(mod=self.mode)._acquire_module()
-        for kpam, kval in kwargs.items():
-            if kpam not in tmp_waffles.__dict__:
-                if kpam in tmp_waffles_mode.__dict__:
-                    self.mode_args[kpam] = kval
-
-        for kpam, kval in self.mode_args.items():
-            del kwargs[kpam]
-        
-        super().__init__(**kwargs)
-        self.pre_count = utils.int_or(pre_count, 1)
-        self.min_weight = utils.float_or(min_weight)
-        self.landmask = landmask
-        self.pre_upper_limit = utils.float_or(pre_upper_limit, -0.1) if landmask else None
-        
-        self.filter_outliers = utils.int_or(filter_outliers)
-        self.want_supercede = want_supercede
-        self.pre_smoothing = utils.float_or(pre_smoothing)
-        if self.pre_smoothing is not None:
-            self.pre_smoothing = ['1:{}'.format(self.pre_smoothing)]
-
-        self.flatten = utils.float_or(flatten)
-        self.want_weight = True
-
-    ## todo: remove coastline after processing...
-    def generate_coastline(self, pre_data=None):
-        cst_region = self.p_region.copy()
-        cst_region.wmin = self.min_weight
-        if self.verbose:
-            utils.echo_msg('coast region is: {}'.format(cst_region))
-            
-        cst_fn = '{}_cst'.format(os.path.join(self.cache_dir, os.path.basename(self.name)))
-        this_coastline = 'coastline:{}'.format(factory.dict2args(self.coastline_args))
-        coastline = WaffleFactory(mod=this_coastline, data=pre_data, src_region=cst_region, want_weight=True, min_weight=self.min_weight,
-                                  xinc=self.xinc, yinc=self.yinc, name=cst_fn, node=self.node, dst_srs=self.dst_srs,
-                                  srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
-        coastline.initialize()
-        coastline.generate()
-
-        if coastline is not None:
-            return('{}.shp:invert=True'.format(coastline.name))
-        else:
-            return(None)
-            
-    def run(self):
-        pre = self.pre_count
-        pre_weight = 0 # initial run will use all data weights
-        pre_region = self.p_region.copy()
-        pre_region.wmin = None
-        if self.min_weight is None:
-            self.min_weight = gdalfun.gdal_percentile(self.stack, perc=75, band=3)
-
-        ## ==============================================
-        ## Remove outliers from the stacked data
-        ## ==============================================
-        if self.filter_outliers is not None:
-            gdalfun.gdal_filter_outliers2(
-                self.stack, None, replace=False, percentile=utils.float_or(self.filter_outliers, 95), cache_dir=self.cache_dir
-            )
-            # gdalfun.gdal_filter_outliers(
-            #     self.stack, None, replace=False
-            # )
-            
-        ## ==============================================
-        ## initial data to pass through surface (stack)
-        ## ==============================================
-        stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
-        pre_data = [stack_data_entry]
-        
-        ## ==============================================
-        ## generate coastline
-        ## ==============================================
-        pre_clip = None
-        if self.landmask:            
-            if isinstance(self.landmask, str):
-                if os.path.exists(self.landmask.split(':')[0]):
-                    pre_clip = self.landmask
-
-            if pre_clip is None:
-                coast_data = ['{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=cubicspline,1'.format(self.stack)]
-                coastline = self.generate_coastline(pre_data=coast_data)
-                pre_clip = coastline
-
-        ## ==============================================
-        ## Grid/Stack the data `pre` times concluding in full resolution with data > min_weight
-        ## ==============================================
-        while pre >= 0:
-            pre_xinc = float(self.xinc * (3**pre))
-            pre_yinc = float(self.yinc * (3**pre))
-            xsample = self.xinc * (3**(pre - 1))
-            ysample = self.yinc * (3**(pre - 1))
-            if xsample == 0:
-                xsample = self.xinc
-                
-            if ysample == 0:
-                ysample = self.yinc
-                
-            ## ==============================================
-            ## if not final or initial output, setup the configuration for the pre-surface
-            ## ==============================================
-            if pre != self.pre_count:
-                pre_weight = self.min_weight/(pre + 1) if pre > 0 else self.min_weight
-                if pre_weight == 0:
-                    pre_weight = 1-e20
-                    
-                _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
-                pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
-                    _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
-                )
-                pre_data = [stack_data_entry, pre_data_entry]
-                pre_region.wmin = pre_weight
-                
-            ## ==============================================
-            ## reset pre_region for final grid
-            ## ==============================================
-            if pre == 0:
-                pre_region = self.p_region.copy()
-                pre_region.wmin = pre_weight
-
-            _pre_name = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre))
-            if self.verbose:
-                utils.echo_msg('pre region: {}'.format(pre_region))
-
-            ## change this to go: 'gmt-surface', 'stacks', 'linear' with interp limit, flatten
-            #'linear:chunk_step=None:chunk_buffer=10'
-            waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'IDW'
-            #waffles_mod = '{}:{}'.format(self.mode, factory.dict2args(self.mode_args)) if pre==self.pre_count else 'stacks' if pre != 0 else 'mbgrid:dist=20/2'
-
-            pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc if pre !=0 else self.xinc,
-                                        yinc=pre_yinc if pre !=0 else self.yinc, xsample=self.xinc if pre !=0 else None, ysample=self.yinc if pre != 0 else None,
-                                        name=_pre_name, node=self.node, want_weight=True, want_uncertainty=self.want_uncertainty,
-                                        dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.verbose,
-                                        clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
-                                        upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
-                                        percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
-            pre_surface.initialize()
-            pre_surface.generate()
-            pre -= 1
-
-        ## todo add option to flatten here...or move flatten up
-        #os.replace(pre_surface.fn, self.fn)
-        flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
-
-        ## ==============================================
-        ## reset the stack for uncertainty
-        ## ==============================================
-        self.stack = pre_surface.stack
-        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
-        
-        return(self)
-
 class WafflesCUDEM(Waffle):
     """CUDEM integrated DEM generation.
     
@@ -3346,7 +3139,8 @@ class WafflesCUDEM(Waffle):
             pre_surface = WaffleFactory(mod=waffles_mod, data=pre_data, src_region=pre_region, xinc=pre_xinc, yinc=pre_yinc, xsample=xsample, ysample=ysample,#xsample=None, ysample=None,
                                         name=_pre_name, node='pixel', want_weight=True, want_uncertainty=self.want_uncertainty,
                                         dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True, verbose=self.pre_verbose,
-                                        clip=pre_clip if pre !=0 else None, supercede=self.want_supercede if pre == 0 else self.supercede,
+                                        clip=pre_clip if pre !=0 else None, stack_mode='supercede' if (pre == 0 and self.want_supercede) else self.stack_mode,
+                                        #supercede=self.want_supercede if pre == 0 else self.supercede,
                                         upper_limit=self.pre_upper_limit if pre != 0 else None, keep_auxiliary=False, fltr=self.pre_smoothing if pre != 0 else None,
                                         percentile_limit=self.flatten if pre == 0 else None)._acquire_module()
             pre_surface.initialize()
@@ -5206,6 +5000,7 @@ Options:
   -O, --output-name\t\tBASENAME for all outputs.
   -P, --t_srs\t\t\tProjection of REGION and output DEM.
   -N, --nodata\t\t\tThe NODATA value of output DEM.
+  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (higher weighted data supercedes lower weighted data).
   -G, --wg-config\t\tA waffles config JSON file. If supplied, will overwrite all other options.
 \t\t\t\tGenerate a waffles_config JSON file using the --config flag.
   -H, --threads\t\t\tSet the number of THREADS (1). Each input region will be run in up to THREADS threads. 
@@ -5224,7 +5019,6 @@ Options:
   -a, --archive\t\t\tARCHIVE the datalist to the given region.
   -k, --keep-cache\t\tKEEP the cache data intact after run
   -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
-  -d, --supercede\t\thigher weighted data supercedes lower weighted data.
   -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
   -c, --continue\t\tDon't clobber existing files.
   -q, --quiet\t\t\tLower verbosity to a quiet.
@@ -5410,6 +5204,13 @@ def waffles_cli(argv = sys.argv):
 
         elif arg[:2] == '-H':
             n_threads = utils.int_or(arg[2:], 1)
+
+        elif arg == '-stack-mode' or arg == '--stack-mode' or arg == '-A':
+            wg['stack_mode'] = utils.str_or(argv[i + 1], 'mean')
+            i = i + 1
+
+        elif arg[:2] == '-A':
+            wg['stack_mode'] = utils.str_or(arg[2:], 'mean')
                 
         elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
@@ -5439,7 +5240,6 @@ def waffles_cli(argv = sys.argv):
         elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
         elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
-        elif arg == '-d' or arg == '--supercede': wg['supercede'] = True
         elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
