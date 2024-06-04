@@ -117,33 +117,25 @@ from cudem import grits
 import pandas as pd
 from cudem import cshelph
 
-## ==============================================
 ## Config info and setup
-## ==============================================
 gc = utils.config_check()
 gdal.DontUseExceptions()
 ogr.DontUseExceptions()
 gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
-## ==============================================
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
-## ==============================================
 def make_datalist(data_list, want_weight, want_uncertainty, region,
                   src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
     """Make a datalist object from a list of supported datasets"""
 
-    ## ==============================================
     ## Make the datalist object
-    ## ==============================================
     xdl = Datalist(fn='scratch', data_format=-1, weight=None if not want_weight else 1,
                    uncertainty=None if not want_uncertainty else 0, src_region=region,
                    verbose=verbose, parent=None, src_srs=src_srs, dst_srs=dst_srs,
                    x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg)
 
-    ## ==============================================
     ## add the datasets from data_list to the datalist object
-    ## ==============================================
     xdl.data_entries = [DatasetFactory(fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
                                        weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
                                        src_region=region, verbose=verbose, src_srs=src_srs, dst_srs=dst_srs,
@@ -165,6 +157,7 @@ def write_datalist(data_list, outname=None):
 
     return('{}.datalist'.format(outname))
 
+## initialize a list of datasets into a dataset object
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
               sample_alg='auto', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
               want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, fltrs=None, stack_node=True, stack_mode='mean'):
@@ -195,12 +188,10 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
         utils.echo_error_msg('could not initialize data, {}: {}'.format(data_list, e))
         return(None)
     
-## ==============================================
-## INF Files
-##
-## containing information about datasets
-## ==============================================
 class INF:
+    """INF Files contain information about datasets
+    """
+    
     def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
                  fmt = None, src_srs = None):
         self.name = name
@@ -292,11 +283,6 @@ class INF:
         except:
             pass
     
-## ==============================================
-## Elevation Dataset class
-##
-## Super class to hold various elevation datasets
-## ==============================================
 class ElevationDataset:
     """representing an Elevation Dataset
     
@@ -325,19 +311,24 @@ class ElevationDataset:
     mask: mask the dataset
     src_srs: dataset source srs
     dst_srs: dataset target srs
+    src_geoid: dataset source geoid (if applicable)
+    dst_geoid: dataset target geoid
     x_inc: target dataset x/lat increment
     y_inc: target dataset y/lon increment
-    want_mask: mask the data
+    want_mask: generate a mask of the data
     want_sm: generate spatial metadata vector
     sample_alg: the gdal resample algorithm
-    metadata: dataset metadata
     parent: dataset parent obj
     region: ROI
     invert_region: invert the region
+    stack_node: output x/y data as mean of input x/y instead of cell center
+    stack_mode: 'min', 'max', 'supercede', 'mean'
     cache_dir: cache_directory
     verbose: be verbose
     remote: dataset is remote
+    dump_precision: specify the float precision of the dumped xyz data
     params: the factory parameters
+    metadata: dataset metadata
     """
 
     gdal_sample_methods = [
@@ -346,14 +337,18 @@ class ElevationDataset:
         'auto'
     ]
 
+    stack_modes = [
+        'min', 'max', 'mean', 'supercede'
+    ]
+
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
-    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None, #invert_mask = False,
+    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'auto', parent = None, src_region = None, invert_region = False,
-                 fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False, dump_precision = 6,
-                 params = {}, metadata = {'name':None, 'title':None, 'source':None, 'date':None,
-                                          'data_type':None, 'resolution':None, 'hdatum':None,
-                                          'vdatum':None, 'url':None}, **kwargs):
+                 fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False,
+                 dump_precision = 6, params = {}, metadata = {'name':None, 'title':None, 'source':None, 'date':None,
+                                                              'data_type':None, 'resolution':None, 'hdatum':None,
+                                                              'vdatum':None, 'url':None}, **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
@@ -379,8 +374,7 @@ class ElevationDataset:
         self.dump_precision = dump_precision # the precision of the dumped xyz data
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
-        
-        self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal']
+        self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
         if self.mask is not None:
             if isinstance(self.mask, str):
                 self.mask = {'mask': self.mask}
@@ -398,8 +392,7 @@ class ElevationDataset:
                 if key not in self.mask.keys():
                     self.mask[key] = None
             
-        self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob
-            
+        self.infos = INF(name=self.fn, file_hash='0', numpts=0, fmt=self.data_format) # infos blob            
         self.params = params # the factory parameters
         if not self.params:
             self.params['kwargs'] = self.__dict__.copy()
@@ -417,7 +410,7 @@ class ElevationDataset:
         self.initialize()
         
     def initialize(self):
-        self._fn = None
+        self._fn = None # temp filename holder
         self.transformer = None # pyproj Transformer obj
         self.trans_fn = None # vertical datum transformation grid
         self.trans_fn_unc = None # vertical transformation uncertainty
@@ -433,18 +426,16 @@ class ElevationDataset:
         self.cache_dir = utils.cudem_cache() if self.cache_dir is None else self.cache_dir # cache directory
         if self.sample_alg not in self.gdal_sample_methods: # gdal_warp resmaple algorithm 
             utils.echo_warning_msg(
-                '{} is not a valid gdal warp resample algorithm, falling back to bilinear'.format(
+                '{} is not a valid gdal warp resample algorithm, falling back to auto'.format(
                     self.sample_alg
                 )
             )
-            self.sample_alg = 'bilinear'
+            self.sample_alg = 'auto'
 
         if utils.fn_url_p(self.fn):
             self.remote = True
 
-        ## ==============================================
         ## Dataset Mask, if the input mask is a vector, rasterize it if possible.
-        ## ==============================================
         if self.mask is not None:
             if self.mask['ogr_or_gdal'] == 1: # mask is ogr, rasterize it
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
@@ -455,15 +446,13 @@ class ElevationDataset:
                     self.mask['ogr_or_gdal'] = 0
                        
         if self.valid_p():
-            
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
-
-                #try:
-                self.set_transform()
-                #except Exception as e:
-                #    utils.echo_error_msg('could not set transformation, {}'.format(e))
+                try:
+                    self.set_transform()
+                except Exception as e:
+                    utils.echo_error_msg('could not set transformation, {}'.format(e))
                 
             self.set_yield()
             
@@ -511,7 +500,6 @@ class ElevationDataset:
                     ]
                 )
             else:
-
                 if points['x'].min() < this_region.xmin:
                     this_region.xmin = points['x'].min()
                 elif points['x'].max() > this_region.xmax:
@@ -820,9 +808,7 @@ class ElevationDataset:
         inf_path = '{}.inf'.format(self.fn)
         generate_inf = False
 
-        ## ==============================================
         ## try to parse the existing inf file as either a native inf json file
-        ## ==============================================
         if os.path.exists(inf_path):
             try:
                 self.infos.load_inf_file(inf_path)
@@ -837,13 +823,11 @@ class ElevationDataset:
         else:
             generate_inf = True        
 
-        ## ==============================================
         ## check hash from inf file vs generated hash,
         ## if hashes are different, then generate a new
         ## inf file...only do this if check_hash is set
         ## to True, as this can be time consuming and not
         ## always necessary...
-        ## ==============================================
         if check_hash:
             generate_inf = self.infos.generate_hash() != self.infos.file_hash
 
@@ -940,9 +924,7 @@ class ElevationDataset:
                 if (in_vertical_epsg == out_vertical_epsg) and self.src_geoid is None:
                     want_vertical = False
                     
-            ## ==============================================                
             ## horizontal Transformation
-            ## ==============================================
             try:
                 self.transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
             except Exception as e:
@@ -960,9 +942,7 @@ class ElevationDataset:
             self.src_proj4 = in_horizontal_crs.to_proj4()
             self.dst_proj4 = out_horizontal_crs.to_proj4()
                 
-            ## ==============================================
             ## vertical Transformation
-            ## ==============================================
             if want_vertical:
                 if self.region is None:
                     vd_region = regions.Region().from_list(self.infos.minmax)
@@ -980,18 +960,14 @@ class ElevationDataset:
                 vd_region.zmax = None
                 vd_region.buffer(pct=5)
                 
-                ## ==============================================
                 ## trans_fn is the transformation grid, used in gdalwarp
-                ## ==============================================
                 self.trans_fn = os.path.join(
                     self.cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
                         in_vertical_epsg, out_vertical_epsg, vd_region.format('fn')
                     )
                 )
 
-                ## ==============================================
                 ## vertical transformation grid is generated in WGS84
-                ## ==============================================
                 if not os.path.exists(self.trans_fn):
                     with tqdm(
                             desc='generating vertical transformation grid {} from {} to {}'.format(
@@ -1276,14 +1252,11 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    def _stacks(self, supercede = False, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):#, mode = 'mean'):
+    def _stacks(self, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
         Parameters:
-        supercede (bool): if true, higher weighted data superceded lower weighted, otherwise
-                          will combine data using weighted-mean
-        mode (str): mode can be 'mean', 'supercede', 'min', 'max'
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
@@ -1310,9 +1283,8 @@ class ElevationDataset:
             
         if supercede: mode = 'supercede'
         utils.echo_msg('stacking using {} mode'.format(mode))
-        ## ==============================================
+        
         ## initialize the output rasters
-        ## ==============================================
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
                 utils.append_fn('_dlim_stacks', self.region, self.x_inc)
@@ -1363,21 +1335,17 @@ class ElevationDataset:
             #stacked_bands[key].SetNoDataValue(ndv)
             stacked_bands[key].SetDescription(key)
 
-        ## ==============================================
         ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
         ## srcwin is the srcwin of the waffle relative to the incoming arrays
         ## gt is the geotransform of the incoming arrays
         ## mask grid
-        ## ==============================================
         driver = gdal.GetDriverByName('MEM')
         m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
         m_ds.SetGeoTransform(dst_gt)
-        ## initialize data mask
         
-        ## ==============================================
+        ## initialize data mask        
         ## parse each entry and process it
         ## todo: mask here instead of in each dataset module
-        ## ==============================================
         for this_entry in self.parse():
             m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
             if not this_entry.metadata['name'] in m_bands.keys():
@@ -1405,14 +1373,10 @@ class ElevationDataset:
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
-            ## ==============================================
             ## yield entry arrays for stacks
-            ## ==============================================
             #for arrs, srcwin, gt in this_entry.yield_array():
             for arrs, srcwin, gt in this_entry.array_yield:
-                ## ==============================================
                 ## update the mask
-                ## ==============================================
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 m_array[arrs['count'] != 0] = 1
                 m_band.WriteArray(m_array, srcwin[0], srcwin[1])
@@ -1420,9 +1384,7 @@ class ElevationDataset:
                     continue
                 
                 m_ds.FlushCache()
-                ## ==============================================
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
-                ## ==============================================
                 for key in stacked_bands.keys():
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     if mode != 'min' and mode != 'max':
@@ -1431,9 +1393,7 @@ class ElevationDataset:
                         if key == 'count':
                             stacked_data[key][np.isnan(stacked_data[key])] = 0
                     
-                ## ==============================================
                 ## set incoming np.nans to zero and mask to non-nan count
-                ## ==============================================
                 if mode != 'min' and mode != 'max':
                     arrs['weight'][np.isnan(arrs['z'])] = 0
                     arrs['uncertainty'][np.isnan(arrs['z'])] = 0
@@ -1446,33 +1406,23 @@ class ElevationDataset:
                 else:
                     arrs['count'][np.isnan(arrs['count'])] = 0
 
-                ## ==============================================
                 ## add the count to the accumulated rasters
-                ## ==============================================
                 stacked_data['count'] += arrs['count']
 
-                ## ==============================================
                 ## supercede based on weights, else do weighted mean
                 ## todo: do (weighted) mean on cells with same weight
-                ## ==============================================
                 if mode == 'supercede':
-                    ## ==============================================
                     ## higher weight supercedes lower weight (first come first served atm)
-                    ## ==============================================
                     stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
                     #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
-                    ## ==============================================
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    ## ==============================================
                     stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
 
-                    # ## ==============================================
                     # ## reset all data where weights are zero to nan
-                    # ## ==============================================
                     # for key in stacked_bands.keys():
                     #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
@@ -1498,28 +1448,20 @@ class ElevationDataset:
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
                 elif mode == 'mean':
-                    ## ==============================================
                     ## accumulate incoming z*weight and uu*weight
-                    ## ==============================================
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
                     stacked_data['x'] += (arrs['x'] * arrs['weight'])
                     stacked_data['y'] += (arrs['y'] * arrs['weight'])
                     stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
 
-                    ## ==============================================
                     ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
-                    ## ==============================================
                     stacked_data['weights'] += arrs['weight']
                     stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
                     
-                    ## ==============================================
                     ## accumulate variance * weight
-                    ## ==============================================
                     stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
 
-                ## ==============================================
                 ## write out results to accumulated rasters
-                ## ==============================================
                 #stacked_data['count'][stacked_data['count'] == 0] = ndv
                 stacked_data['count'][stacked_data['count'] == 0] = np.nan
 
@@ -1533,12 +1475,10 @@ class ElevationDataset:
 
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
-        ## ==============================================
         ## Finalize weighted mean rasters and close datasets
         ## incoming arrays have all been processed, if weighted mean the
         ## "z" is the sum of z*weight, "weights" is the sum of weights
         ## "uncertainty" is the sum of variance*weight
-        ## ==============================================
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
 
@@ -1595,51 +1535,39 @@ class ElevationDataset:
                     stacked_data[key][stacked_data[key] == ndv] = np.nan
 
                 if mode == 'mean':
-                    ## ==============================================
                     ## average the accumulated arrays for finalization
                     ## x, y, z and u are weighted sums, so divide by weights
-                    ## ==============================================
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
                     stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
                     stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
 
-                    ## ==============================================
                     ## apply the source uncertainty with the sub-cell variance uncertainty
                     ## caclulate the standard error (sqrt( uncertainty / count))
-                    ## ==============================================
                     stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
                     #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
 
-                ## ==============================================
                 ## write out final rasters
-                ## ==============================================
                 for key in stacked_bands.keys():
                     stacked_data[key][np.isnan(stacked_data[key])] = ndv
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
                 
-            ## ==============================================
             ## set the final output nodatavalue
-            ## ==============================================
             for key in stacked_bands.keys():
                 stacked_bands[key].DeleteNoDataValue()
                 
             for key in stacked_bands.keys():
                 stacked_bands[key].SetNoDataValue(ndv)
                 
-        ## ==============================================
         ## create a vector of the masks (spatial-metadata)
-        ## ==============================================
         if self.want_sm:
             gdalfun.ogr_polygonize_multibands(msk_ds)
 
         m_ds = msk_ds = dst_ds = None
 
-        ## ==============================================
         ## apply any filters to the stack
-        ## ==============================================
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
                 grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
@@ -1725,7 +1653,7 @@ class ElevationDataset:
         return(ogr_ds)
 
     def yield_points(self):
-        """points are an array of `points['x']`, `points['y']`, `points['z'], <points['w'], points['u']>`
+        """points are an array of `points['x']`, `points['y']`, `points['z']`, <`points['w']`, `points['u']`>`
 
         points will be transformed here, based on `self.transformer`, which is set in `set_transform`
         after the points are transformed, the data will pass through the region, if it exists and finally
@@ -1734,7 +1662,7 @@ class ElevationDataset:
 
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            for points in self.yield_ds():
+            for points in self.yield_ds(): 
                 if self.transformer is not None:
                     points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
 
@@ -1829,10 +1757,8 @@ class ElevationDataset:
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
 
-            ## ==============================================
             ## convert the points to pixels based on the geotransform
             ## and calculate the local srcwin of the points
-            ## ==============================================
             pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
             pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
             # points_x = dst_gt[0] + (pixel_x+0.5) * dst_gt[1] + (pixel_y+0.5) * dst_gt[2]
@@ -1852,9 +1778,7 @@ class ElevationDataset:
             except:
                 pixel_u = np.zeros(pixel_z.shape)
                 
-            ## ==============================================
             ## remove pixels that will break the srcwin
-            ## ==============================================
             out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))            
             pixel_x = np.delete(pixel_x, out_idx)
             pixel_y = np.delete(pixel_y, out_idx)
@@ -1868,26 +1792,19 @@ class ElevationDataset:
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
 
-            ## ==============================================
             ## set the srcwin of the incoming points
-            ## ==============================================
-
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
                            int(max(pixel_x) - min(pixel_x))+1,
                            int(max(pixel_y) - min(pixel_y))+1)
             count += len(pixel_x)
 
-            ## ==============================================
             ## adjust the pixels to the srcwin and stack together
-            ## ==============================================
             pixel_x = pixel_x - this_srcwin[0]
             pixel_y = pixel_y - this_srcwin[1]
             pixel_xy = np.vstack((pixel_y, pixel_x)).T
             
-            ## ==============================================
-            ## find the non-unique x/y points and mean their z values together
+            ## find the non-unique x/y points and mean/min/max their z values together
             ## while calculating the std for uncertainty
-            ## ==============================================
             unq, unq_idx, unq_inv, unq_cnt = np.unique(
                 pixel_xy, axis=0, return_inverse=True, return_index=True, return_counts=True
             )
@@ -1919,9 +1836,7 @@ class ElevationDataset:
                 zz[cnt_msk] = dup_stack
                 uu[cnt_msk] = dup_stds
                 
-            ## ==============================================
             ## make the output arrays to yield
-            ## ==============================================
             out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
             out_x[unq[:,0], unq[:,1]] = xx
             out_x[out_x == 0] = np.nan
@@ -1958,9 +1873,6 @@ class ElevationDataset:
                 )
             )    
 
-## ==============================================
-## XYZ File
-## ==============================================
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
@@ -2007,9 +1919,9 @@ class XYZFile(ElevationDataset):
         self.z_scale = utils.float_or(z_scale, 1) # multiply z by z_scale
         self.x_offset = x_offset # offset x by x_offset
         self.y_offset = utils.int_or(y_offset, 0) # offset y by y_offset
-        self.rem = False
+        self.rem = False # x is 360 instead of 180
         self.use_numpy = use_numpy # use numpy.loadtxt to load the xyz points
-        self.iter_rows = iter_rows
+        self.iter_rows = iter_rows # max rows to process at a time
 
     def yield_ds(self):
         if self.delim is not None:
@@ -2055,7 +1967,8 @@ class XYZFile(ElevationDataset):
                     
                     if self.iter_rows is None or len(points) < self.iter_rows:
                         break
-                    
+
+        ## old processing function used as a fallback for when numpy.loadtxt fails
         except Exception as e:
             utils.echo_warning_msg('could not load xyz data from {}, {}, falling back'.format(self.fn, e))
             if self.fn is not None:
@@ -2159,12 +2072,10 @@ class XYZFile(ElevationDataset):
 class YXZFile(XYZFile):
     """yxz file shortcut (167 mbdatalist)
     """
+    
     def __init__(self, **kwargs):
         super().__init__(xpos = 1, ypos = 0, zpos = 2, **kwargs)
             
-## ==============================================
-## LAS/LAZ Dataset.
-## ==============================================
 class LASFile(ElevationDataset):
     """representing an LAS/LAZ dataset.
 
@@ -2185,7 +2096,7 @@ class LASFile(ElevationDataset):
 
     def __init__(self, classes='2/29/40', **kwargs):
         super().__init__(**kwargs)
-        self.classes = [int(x) for x in classes.split('/')]
+        self.classes = [int(x) for x in classes.split('/')] # list of lidar classes to retain
         if self.src_srs is None:
             self.src_srs = self.get_epsg()
             if self.src_srs is None:
@@ -2240,17 +2151,12 @@ class LASFile(ElevationDataset):
                 for points in lasf.chunk_iterator(2_000_000):
                     points = points[(np.isin(points.classification, self.classes))]
                     dataset = np.column_stack((points.x, points.y, points.z))
-                    points = np.rec.fromrecords(dataset, names='x, y, z')
-                    
+                    points = np.rec.fromrecords(dataset, names='x, y, z')                    
                     yield(points)
                     
             except Exception as e:
                 utils.echo_warning_msg('could not read points from lasfile {}, {}'.format(self.fn, e))
                 
-## ==============================================
-## Raster Dataset.
-## Parses with GDAL
-## ==============================================
 class GDALFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
 
@@ -2281,22 +2187,22 @@ class GDALFile(ElevationDataset):
                  open_options = None, sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
                  node = None, **kwargs):
         super().__init__(**kwargs)
-        self.weight_mask = weight_mask
-        self.uncertainty_mask = uncertainty_mask
-        self.uncertainty_mask_to_meter = uncertainty_mask_to_meter
-        self.open_options = open_options
-        self.sample = sample
-        self.check_path = check_path
-        self.super_grid = super_grid
-        self.band_no = band_no
-        self.tmp_elev_band = None
-        self.tmp_unc_band = None
-        self.tmp_weight_band = None
-        self.src_ds = None
-        self.remove_flat = remove_flat
-        self.x_band = x_band
-        self.y_band = y_band
-        self.node = node
+        self.weight_mask = weight_mask # associated raster file/band holding weight data
+        self.uncertainty_mask = uncertainty_mask # associated raster file/band holding uncertainty data
+        self.uncertainty_mask_to_meter = uncertainty_mask_to_meter # uncertainty data factor to meters
+        self.open_options = open_options # GDAL open-options
+        self.sample = sample # GDAL resampling method
+        self.check_path = check_path # check for the path to the input data file
+        self.super_grid = super_grid # input has super_grids (force their use)
+        self.band_no = band_no # band number holding elevation data
+        self.tmp_elev_band = None # temporary elevation band
+        self.tmp_unc_band = None # temporary uncertainty band
+        self.tmp_weight_band = None # temporary weight band
+        self.src_ds = None # the GDAL dataset object
+        self.remove_flat = remove_flat # remove flattened data from input
+        self.x_band = x_band # band holding x values
+        self.y_band = y_band # band holding y values
+        self.node = node # input is 'pixel' or 'grid' registered (force)
 
         if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
             self.check_path = False
@@ -2388,9 +2294,7 @@ class GDALFile(ElevationDataset):
         if self.check_path and not os.path.exists(self.fn):
             return(None)
 
-        ## ==============================================
         ## apply any open_options that are specified
-        ## ==============================================
         try:
             self.open_options = self.open_options.split('/')
         except AttributeError:
@@ -2398,9 +2302,7 @@ class GDALFile(ElevationDataset):
         except:
             self.open_options = None
             
-        ## ==============================================
         ## set up any transformations and other options
-        ## ==============================================
         inf_region = regions.Region().from_string(self.infos.wkt)
         self.sample_alg = self.sample if self.sample is not None else self.sample_alg
         self.dem_infos = gdalfun.gdal_infos(self.fn)
@@ -2428,9 +2330,7 @@ class GDALFile(ElevationDataset):
         tmp_weight_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         #tmp_elev_fn = tmp_unc_fn = tmp_weight_fn = None
 
-        ## ==============================================
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
-        ## ==============================================
         if self.resample_and_warp:
             if self.transformer is not None:
                 self.transformer = None
@@ -2457,12 +2357,10 @@ class GDALFile(ElevationDataset):
             if self.src_ds is None:
                 return(None)
 
-            ## ==============================================
             ## Sample/Warp
             ## resmaple and/or warp dataset based on target srs and x_inc/y_inc
             ## doing this in MEM has a bug, fix if able
             ## extract necessary bands before warping, gadlwarp does not work with multiband rasters!
-            ## ==============================================
             tmp_warp = utils.make_temp_fn('{}'.format(tmp_ds), temp_dir=self.cache_dir)
             in_bands = self.src_ds.RasterCount
             src_ds_config = gdalfun.gdal_infos(self.src_ds)
@@ -2583,11 +2481,9 @@ class GDALFile(ElevationDataset):
         src_dem_region = regions.Region().from_geo_transform(self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny'])
             
         ## todo: always warp these to src_ds
-        ## ==============================================
         ## weight mask, each cell should have the corresponding weight
         ## weight_mask can either be a seperate gdal file or a band number
         ## corresponding to the appropriate band in src_ds
-        ## ==============================================
         if self.weight_mask is not None:
             if utils.int_or(self.weight_mask) is not None:
                 weight_band = self.src_ds.GetRasterBand(int(self.weight_mask))
@@ -2602,11 +2498,9 @@ class GDALFile(ElevationDataset):
                 utils.echo_warning_msg('could not load weight mask {}'.format(self.weight_mask))
                 weight_band = None
 
-        ## ==============================================
         ## uncertainty mask, each cell should have the corresponding uncertainty
         ## uncertainty_mask can either be a seperate gdal file or a band number
         ## corresponding to the appropriate band in src_ds
-        ## ==============================================
         if self.uncertainty_mask is not None:
             if utils.int_or(self.uncertainty_mask):
                 uncertainty_band = self.src_ds.GetRasterBand(int(self.uncertainty_mask))
@@ -2620,9 +2514,7 @@ class GDALFile(ElevationDataset):
                 utils.echo_warning_msg('could not load uncertainty mask {}'.format(self.uncertainty_mask))
                 uncertainty_band = None
 
-        ## ==============================================
         ## uncertainty from the vertical transformation
-        ## ==============================================
         if self.trans_fn_unc is not None:
             trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
                                                     src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=self.aux_dst_proj4,
@@ -2640,9 +2532,7 @@ class GDALFile(ElevationDataset):
             else:
                 uncertainty_band = trans_uncertainty.GetRasterBand(1)
 
-        ## ==============================================
         ## parse through the data
-        ## ==============================================
         srcwin = self.get_srcwin(gt, self.src_ds.RasterXSize, self.src_ds.RasterYSize, node=self.node)
         for y in range(srcwin[1], (srcwin[1] + srcwin[3]), 1):
             band_data = band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
@@ -2652,9 +2542,7 @@ class GDALFile(ElevationDataset):
             if np.all(np.isnan(band_data)):
                 continue
 
-            ## ==============================================
             ## weights
-            ## ==============================================
             if weight_band is not None:
                 weight_data = weight_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
                 weight_ndv = float(weight_band.GetNoDataValue())
@@ -2663,9 +2551,7 @@ class GDALFile(ElevationDataset):
             else:
                 weight_data = np.ones(band_data.shape)
 
-            ## ==============================================
             ## uncertainty
-            ## ==============================================
             if uncertainty_band is not None:
                 uncertainty_data = uncertainty_band.ReadAsArray(srcwin[0], y, srcwin[2], 1)
                 uncertainty_ndv = float(uncertainty_band.GetNoDataValue())
@@ -2678,9 +2564,7 @@ class GDALFile(ElevationDataset):
             else:
                 uncertainty_data = np.zeros(band_data.shape)
 
-            ## ==============================================
             ## convert grid array to points
-            ## ==============================================
             geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, precision=5)
             geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid', precision=5)
 
@@ -2717,10 +2601,6 @@ class GDALFile(ElevationDataset):
             
         src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None
         
-## ==============================================
-## BAG Raster File.
-## Uses GDAL
-## ==============================================
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
@@ -2841,7 +2721,15 @@ class BAGFile(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
+## NASA SWOT Data class (hdf5)
+## uses h5py
 class SWOTFile(ElevationDataset):
+    """NASA SWOT Data super class
+
+    Uses h5py to parse data. Make a subclass of this to 
+    process various types of SWOT data
+    """
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
@@ -2869,8 +2757,13 @@ class SWOTFile(ElevationDataset):
 
     def _get_var_arr(self, src_h5, var_path):
         return(src_h5['/{}'.format(var_path)][...,])
-                
+
 class SWOT_PIXC(SWOTFile):
+    """NASA SWOT PIXC data file.
+
+    Extract data from a SWOT PIXC file.
+    """
+    
     def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, **kwargs):
         super().__init__(**kwargs)
         self.group = group
@@ -2903,6 +2796,11 @@ class SWOT_PIXC(SWOTFile):
             yield(points)
 
 class SWOT_HR_Raster(ElevationDataset):
+    """NASA SWOT HR_Raster data file.
+
+    Extract data from a SWOT HR_Raster file.
+    """
+        
     def __init__(self, data_set='wse', **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
@@ -2937,10 +2835,6 @@ class SWOT_HR_Raster(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
         
-## ==============================================
-## Multibeam Data.
-## Uses MB-System
-## ==============================================
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
@@ -3229,10 +3123,8 @@ class MBSParser(ElevationDataset):
     def bin_points(self, points, y_res, z_res):
         '''Bin data along vertical and horizontal scales for later segmentation'''
         
-        ## ==============================================
         ## Calculate number of bins required both vertically and
         ## horizontally with resolution size
-        ## ==============================================
         y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
         z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
 
@@ -3359,12 +3251,10 @@ class MBSParser(ElevationDataset):
             
         return(None)
             
-## ==============================================
-## OGR vector data such as S-57 dataset (.000)
-## for ENC/E-Hydro
-## ==============================================
 class OGRFile(ElevationDataset):
-    """providing an OGR 3D point dataset parser
+    """providing an OGR 3D point dataset parser.
+
+    Useful for data such as S-57, ENC, E-Hydro, Etc.
 
     -----------
     Parameters:
@@ -3451,13 +3341,10 @@ class OGRFile(ElevationDataset):
                             
             ds_ogr = layer_s = None
 
-## ==============================================
-## Scratch dataset.
-##
-## process a python list of valid dataset entries
-## ==============================================
 class Scratch(ElevationDataset):
     """Scratch Dataset
+
+    Process a python list of valid dataset entries
     """
     
     def __init__(self, **kwargs):
@@ -3481,9 +3368,7 @@ class Scratch(ElevationDataset):
                 callback()
 
             entry_minmax = entry.infos.minmax
-            ## ==============================================
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
-            ## ==============================================
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
                 if self.dst_srs is not None:
@@ -3498,9 +3383,7 @@ class Scratch(ElevationDataset):
                 out_regions.append(entry_region)
                 self.infos.numpts += entry.infos.numpts
 
-        ## ==============================================
         ## merge all the gathered regions
-        ## ==============================================
         region_count = 0
         out_region = None
         for this_region in out_regions:
@@ -3515,9 +3398,7 @@ class Scratch(ElevationDataset):
             self.infos.minmax = out_region.export_as_list(include_z=True)
             self.infos.wkt = out_region.export_as_wkt()
 
-        ## ==============================================
         ## set the epsg for the datalist
-        ## ==============================================
         if self.infos.src_srs is None:
             if self.src_srs is not None:
                 self.infos.src_srs = self.src_srs
@@ -3541,11 +3422,6 @@ class Scratch(ElevationDataset):
                         self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
                         yield(ds)
                         
-## ==============================================
-## Datalist Class - Recursive data structure (-1)
-##
-## see cudem.datasets for superclass ElevationDataset
-## ==============================================
 class Datalist(ElevationDataset):
     """representing a datalist parser
     
@@ -3556,6 +3432,8 @@ class Datalist(ElevationDataset):
 
     the datalist can contain datalist-entries to other datalist files, distributed across a
     file-system.
+
+    see `cudem.dlim.datasets` for superclass ElevationDataset
     """
 
     _datalist_json_cols = ['path', 'format', 'weight', 'uncertainty', 'name', 'title', 'source',
@@ -3636,10 +3514,8 @@ class Datalist(ElevationDataset):
         out_srs = []
         self.infos.file_hash = self.infos.generate_hash()
 
-        ## ==============================================
         ## attempt to generate a datalist-vector geojson and
         ## if successful, fill it wil the datalist entries, using `parse`
-        ## ==============================================
         if self._init_datalist_vector() == 0:
             for entry in self.parse():
                 #utils.echo_msg_bold(entry.mask)
@@ -3651,9 +3527,7 @@ class Datalist(ElevationDataset):
                 if entry.mask is not None: ## add all duplicat params???
                     entry.params['mod_args'] = {'mask': entry.mask}
                     
-                ## ==============================================
                 ## entry has an srs and dst_srs is set, so lets transform the region to suit
-                ## ==============================================
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
                     if self.dst_srs is not None:
@@ -3663,9 +3537,7 @@ class Datalist(ElevationDataset):
                         entry_region.warp(self.dst_srs)
                         entry_minmax = entry_region.export_as_list(include_z=True)
 
-                ## ==============================================
                 ## create the feature for the geojson
-                ## ==============================================
                 entry_region = regions.Region().from_list(entry_minmax)
                 if entry_region.valid_p():
                     self._create_entry_feature(entry, entry_region)
@@ -3678,9 +3550,7 @@ class Datalist(ElevationDataset):
             utils.echo_warning_msg('could not initialize datalist vector')
             return(self.infos)
 
-        ## ==============================================
         ## merge all the gathered regions
-        ## ==============================================
         region_count = 0
         out_region = None
         for this_region in out_regions:
@@ -3695,9 +3565,7 @@ class Datalist(ElevationDataset):
             self.infos.minmax = out_region.export_as_list(include_z=True)
             self.infos.wkt = out_region.export_as_wkt()
 
-        ## ==============================================
         ## set the epsg for the datalist
-        ## ==============================================
         if self.infos.src_srs is None:
             if self.src_srs is not None:
                 self.infos.src_srs = self.src_srs
@@ -3726,9 +3594,7 @@ class Datalist(ElevationDataset):
         status = 0
         count = 0
         
-        ## ==============================================
         ## user input to re-gerenate json...?
-        ## ==============================================
         if os.path.exists('{}.json'.format(self.fn)):
             driver = ogr.GetDriverByName('GeoJSON')
             dl_ds = driver.Open('{}.json'.format(self.fn))
@@ -3738,9 +3604,7 @@ class Datalist(ElevationDataset):
         else:
             status = -1
 
-        ## ==============================================
         ## parse the datalist-vector geojson and yield the results
-        ## ==============================================
         if status != -1:
             dl_layer = dl_ds.GetLayer()
             ldefn = dl_layer.GetLayerDefn()
@@ -3757,9 +3621,7 @@ class Datalist(ElevationDataset):
             ) as pbar:
                 for l,feat in enumerate(dl_layer):
                     pbar.update()
-                    ## ==============================================
                     ## filter by input source region extras (weight/uncertainty)
-                    ## ==============================================
                     if self.region is not None:
                         w_region = self.region.w_region()
                         if w_region[0] is not None:
@@ -3779,9 +3641,7 @@ class Datalist(ElevationDataset):
                             if float(feat.GetField('uncertainty')) > u_region[1]:
                                 continue
 
-                    ## ==============================================
                     ## extract the module arguments from the datalist-vector
-                    ## ==============================================
                     try:
                         ds_args = feat.GetField('mod_args')
                         data_set_args = utils.args2dict(list(ds_args.split(':')), {})
@@ -3792,16 +3652,12 @@ class Datalist(ElevationDataset):
                     except:
                         data_set_args = {}
 
-                    ## ==============================================
                     ## update existing metadata
-                    ## ==============================================
                     md = copy.deepcopy(self.metadata)
                     for key in self.metadata.keys():
                         md[key] = feat.GetField(key)
 
-                    ## ==============================================
                     ## generate the dataset object to yield
-                    ## ==============================================
                     data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
                     #utils.echo_msg_bold(self.src_srs)
@@ -3820,10 +3676,8 @@ class Datalist(ElevationDataset):
             dl_ds = dl_layer = None
                 
         else:
-            ## ==============================================
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            ## ==============================================
             utils.echo_warning_msg(
                 'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
             )
@@ -3847,16 +3701,12 @@ class Datalist(ElevationDataset):
                 with tqdm(desc='parsing datalist {}...'.format(self.fn), leave=self.verbose) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()
-                        ## ==============================================
                         ## parse the datalist entry line
-                        ## ==============================================
                         if this_line[0] != '#' and this_line[0] != '\n' and this_line[0].rstrip() != '':
                             md = copy.deepcopy(self.metadata)
                             md['name'] = utils.fn_basename2(os.path.basename(self.fn))
-                            ## ==============================================
+                            
                             ## generate the dataset object to yield
-                            ## ==============================================
-
                             data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
                                                       src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
                                                       src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
@@ -3865,11 +3715,9 @@ class Datalist(ElevationDataset):
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                             ):
                                 data_set.initialize()
-                                ## ==============================================
                                 ## filter with input source region, if necessary
                                 ## check input source region against the dataset region found
                                 ## in its inf file.
-                                ## ==============================================
                                 if self.region is not None and self.region.valid_p(check_xy=True):
                                     inf_region = regions.Region().from_list(data_set.infos.minmax)
                                     if inf_region.valid_p():
@@ -3896,10 +3744,8 @@ class Datalist(ElevationDataset):
                                         self.data_entries.append(ds)
                                         yield(ds)
 
-        ## ==============================================
         ## self.fn is not a file-name, so check if self.data_entries not empty
         ## and return the dataset objects found there.
-        ## ==============================================
         elif len(self.data_entries) > 0:
             for data_set in self.data_entries:
                 for ds in data_set.parse():
@@ -3910,14 +3756,12 @@ class Datalist(ElevationDataset):
                     'could not open datalist/entry {}'.format(self.fn)
                 )
                 
-## ==============================================
-## ZIPlist Class - Recursive data structure - testing
-## ==============================================
 class ZIPlist(ElevationDataset):
     """Zip file parser.
 
     Parse supported datasets from a zipfile.
     """
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -3939,9 +3783,7 @@ class ZIPlist(ElevationDataset):
                 callback()
                 
             entry_minmax = entry.infos.minmax
-            ## ==============================================
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
-            ## ==============================================
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
                 if self.dst_srs is not None:
@@ -3955,9 +3797,7 @@ class ZIPlist(ElevationDataset):
                 out_regions.append(entry_region)
                 self.infos.numpts += entry.infos.numpts
 
-        ## ==============================================
         ## merge all the gathered regions
-        ## ==============================================
         region_count = 0
         out_region = None
         for this_region in out_regions:
@@ -4040,48 +3880,40 @@ class ZIPlist(ElevationDataset):
             
             utils.remove_glob('{}*'.format(this_data))
         
-## ==============================================
-## dlim Fetcher dataset class
-##
-## see cudem.fetches for various fetches supported
-## datasets
-##
-## If a fetch module needs special processing define a sub-class
-## of Fetcher and redefine the set_ds(self, result) function which yields a
-## list of dlim dataset objects, where result is an item from the fetch result list.
-## Otherwise, this Fetcher class can be used as default if the fetched data comes
-## in a normal sort of way.
-##
-## Generally, though not always, if the fetched data is a raster then
-## there is no need to redefine set_ds, though if the raster has insufficient
-## information, such as with Copernicus, whose nodata value is not
-## specified in the geotiff files, it may be best to create a simple
-## sub-class for it.
-##
-## todo:
-##   cudem fetcher (digital_coast)
-## ==============================================
 class Fetcher(ElevationDataset):
-    """The default fetches dataset type.
+    """The default fetches dataset type; dlim Fetcher dataset class
 
     This is used in waffles/dlim for on-the-fly remote data
     parsing and processing.
     
-    See `fetches` for more information.
+    See `fetches`, `cudem.fetches` for more information on usage and the
+    various fetches modules supported.
+
+    If a fetch module needs special processing define a sub-class
+    of Fetcher and redefine the set_ds(self, result) function which yields a
+    list of dlim dataset objects, where result is an item from the fetch result list.
+    Otherwise, this Fetcher class can be used as default if the fetched data comes
+    in a normal sort of way.
+
+    Generally, though not always, if the fetched data is a raster then
+    there is no need to redefine set_ds, though if the raster has insufficient
+    information, such as with Copernicus, whose nodata value is not
+    specified in the geotiff files, it may be best to create a simple
+    sub-class for it.
     """
 
     def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, **kwargs):
         super().__init__(remote=True, **kwargs)        
-        self.outdir = outdir if outdir is not None else self.cache_dir
+        self.outdir = outdir if outdir is not None else self.cache_dir # cache directory to store fetched data
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.outdir#outdir=self.cache_dir
-        )._acquire_module()
+        )._acquire_module() # the fetches module
         if self.fetch_module is None:
             pass
 
-        self.metadata['name'] = self.fn
-        self.check_size = check_size
-        self.keep_fetched_data = keep_fetched_data
+        self.metadata['name'] = self.fn # set the metadata name from the input fetches module
+        self.check_size = check_size # check the size of the fetched data
+        self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
         ## breaks when things not set...
         # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
         # self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
@@ -4158,6 +3990,11 @@ class Fetcher(ElevationDataset):
         yield(ds)
 
 class NEDFetcher(Fetcher):
+    """National Elevation Dataset from USGS
+
+    This is a wrapper shortcut for fetching NED DEMs from USGS' The National Map (TNM)
+    """
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -4455,14 +4292,10 @@ class IceSatFetcher(Fetcher):
                 leave=self.verbose
         ) as pbar:
             for result in self.fetch_and_yield_results(fetch_data=True):
-                ## ==============================================
                 ## load the atl 03 data
-                ## ==============================================
                 self.atl_03_fn = os.path.join(self.fetch_module._outdir, result[1])
                 
-                ## ==============================================
                 ## load the atl 08 data
-                ## ==============================================
                 atl_08_result = self.fetch_atl_08()
                 self.atl_08_fn = atl_08_result
 
@@ -4475,17 +4308,12 @@ class IceSatFetcher(Fetcher):
                     continue
                                                                                    
                 dataset = None
-                ## ==============================================
+
                 ## Fetch the associated ATL08 dataset for bare-earth processing
-                ## ==============================================                
                 for i in range(1, 4):
-                    ## ==============================================
                     ## read the data from the atl03
-                    ## ==============================================
                     dataset = self.read_atl_data('{}'.format(i))
-                    ## ==============================================
                     ## Bare-Earth topography (class 1)
-                    ## ==============================================
                     if self.want_topo:
                         bare_earth_dataset = self.extract_topography(dataset, thresh=self.bathy_thresh)
                         if bare_earth_dataset is not None:
@@ -4493,9 +4321,7 @@ class IceSatFetcher(Fetcher):
                             bare_earth_points = np.rec.fromrecords(bare_earth_dataset, names='x, y, z')
                             yield(bare_earth_points)
 
-                    ## ==============================================
                     ## Bathymetry via C-Shelph
-                    ## ==============================================
                     if self.want_bathy:
                         bathy_dataset = self.extract_bathymetry(dataset, thresh=self.bathy_thresh)
                         if bathy_dataset is not None:
@@ -4521,9 +4347,7 @@ class IceSatFetcher(Fetcher):
         orientDict = {0:'l', 1:'r', 21:'error'}
         laser = 'gt' + laser_num + orientDict[orientation]
 
-        ## ==============================================
         ## Read in the required photon level data
-        ## ==============================================
         photon_h = self.atl_03_f['/' + laser + '/heights/h_ph'][...,]
         latitude = self.atl_03_f['/' + laser + '/heights/lat_ph'][...,]
         longitude = self.atl_03_f['/' + laser + '/heights/lon_ph'][...,]
@@ -4531,9 +4355,7 @@ class IceSatFetcher(Fetcher):
         dist_ph_along = self.atl_03_f['/' + laser + '/heights/dist_ph_along'][...,]
         this_N = latitude.shape[0]
 
-        ## ==============================================
         ## Read in the geolocation level data
-        ## ==============================================
         segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         segment_id = self.atl_03_f['/' + laser + '/geolocation/segment_id'][...,]
         segment_dist_x = self.atl_03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
@@ -4543,34 +4365,24 @@ class IceSatFetcher(Fetcher):
         ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
         altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
 
-        ## ==============================================
         ## Read in the geoid data
-        ## ==============================================
         photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
         photon_geoid_f2m = self.atl_03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
 
-        ## ==============================================
         ## Create a dictionary with (segment_id --> index into ATL03 photons)
         ## lookup pairs, for the starting photon of each segment
-        ## ==============================================
         segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
         segment_index_dict = dict(zip(segment_id, segment_indices))
 
-        ## ==============================================
         ## Compute the total along-track distances.
-        ## ==============================================
         segment_dist_dict = dict(zip(segment_id, segment_dist_x))
 
-        ## ==============================================
         ## Determine where in the array each segment index needs to look.
-        ## ==============================================
         ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, this_N, 1))-1]
         ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids)))
         dist_x = ph_segment_dist_x + dist_ph_along
 
-        ## ==============================================
         ## meantide/geoid heights
-        ## ==============================================
         h_geoid_dict = dict(zip(segment_id, photon_geoid))
         ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))
 
@@ -4581,9 +4393,7 @@ class IceSatFetcher(Fetcher):
         photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
 
         ph_h_classed = np.zeros(photon_h.shape)
-        ## ==============================================
         ## Read in the atl08 data
-        ## ==============================================
         if self.atl_08_f is not None:
             atl_08_classed_pc_flag  = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_flag'][...,]
             atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,]
@@ -4648,9 +4458,7 @@ class IceSatFetcher(Fetcher):
         ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
         ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
 
-        ## ==============================================
         ## Aggregate data into dataframe
-        ## ==============================================
         dataset_sea = pd.DataFrame(
             {'latitude': lat_utm,
              'longitude': lon_utm,
@@ -4690,9 +4498,7 @@ class IceSatFetcher(Fetcher):
 
         return(None)
             
-    ## ==============================================
     ## C-Shelph bathymetric processing
-    ## ==============================================
     def get_water_temp(self):
         #import xarray as xr
         #from eosdis_store import EosdisStore
@@ -4745,9 +4551,7 @@ class IceSatFetcher(Fetcher):
         ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
         ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
 
-        ## ==============================================
         ## Aggregate data into dataframe
-        ## ==============================================
         dataset_sea = pd.DataFrame(
             {'latitude': lat_utm,
              'longitude': lon_utm,
@@ -4784,9 +4588,7 @@ class IceSatFetcher(Fetcher):
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height)
 
-                    ## ==============================================
                     ## Correct for refraction
-                    ## ==============================================
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
                         water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height,
                         dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
@@ -5129,6 +4931,7 @@ class ChartsFetcher(Fetcher):
 
 Digital Soundings
     """
+    
     __doc__ = '''{}
     
     -----------
@@ -5501,11 +5304,9 @@ class VDatumFetcher(Fetcher):
                              parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
 
-## ==============================================
 ## todo: allow lakes bathymetry
 ## as well as lakes breaklines (shape nodes)
 ## see: https://www.esri.com/arcgis-blog/products/arcgis-pro/3d-gis/hydro-flattening-of-river-shorelines-in-lidar-based-dem-production/
-## ==============================================
 class HydroLakesFetcher(Fetcher):
     """HydroLakes lake bathymetric data
     """
@@ -5516,13 +5317,12 @@ class HydroLakesFetcher(Fetcher):
     def set_ds(self, result):
         pass
     
-## ==============================================
-## Dataset Factory Settings and generator
-##
-## Parse a datalist entry and return the dataset
-## object
-## ==============================================
-class DatasetFactory(factory.CUDEMFactory):    
+class DatasetFactory(factory.CUDEMFactory):
+    """Dataset Factory Settings and Generator
+    
+    Parse a datalist entry and return the dataset object
+    """
+    
     _modules = {
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
@@ -5580,11 +5380,9 @@ class DatasetFactory(factory.CUDEMFactory):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    ## ==============================================
     ## redefine the factory default _parse_mod function for datasets
     ## the mod in this case is a datalist entry and the format key
     ## becomes the module
-    ## ==============================================
     def _parse_mod(self, mod=None):
         """parse the datalist entry line"""
 
@@ -5592,12 +5390,10 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['fn'] is None:
             return(self)
 
-        ## ==============================================
         ## mod exists as a file, no other entry items should occur, so
         ## guess the format and finish there...
         ## the format number becomes the mod_name
         ## check for specified data format as well
-        ## ==============================================
         if os.path.exists(self.kwargs['fn']):
             if self.kwargs['data_format'] is None:
                 self.mod_name = self.guess_data_format(self.kwargs['fn'])
@@ -5624,10 +5420,8 @@ class DatasetFactory(factory.CUDEMFactory):
 
             return(self.mod_name, self.mod_args)
 
-        ## ==============================================
         ## if fn is not a path, parse it as a datalist entry
 		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
-        ## ==============================================
         #this_entry = re.findall(r'[^"\s]\S*|".+?"', self.kwargs['fn'].rstrip())
         #this_entry = shlex.split(shlex.quote(self.kwargs['fn'].rstrip()))#.replace("'", "\'")))
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
@@ -5645,11 +5439,9 @@ class DatasetFactory(factory.CUDEMFactory):
             utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
             return(self)
 
-        ## ==============================================
         ## data format - entry[1]
         ## guess format based on fn if not specified otherwise
         ## parse the format for dataset specific opts.
-        ## ==============================================
         #utils.echo_msg(entry)
         if len(entry) < 2:
             if self.kwargs['data_format'] is not None:
@@ -5690,12 +5482,10 @@ class DatasetFactory(factory.CUDEMFactory):
         self.kwargs['data_format'] = int(entry[1])
         self.mod_name = int(entry[1])
         
-        ## ==============================================
         ## file-name (or fetches module name) - entry[0]
         ## set to relative path from parent
         ## don't set relative path if 'fn' is a
         ## fetches module (entry[1] < -3)
-        ## ==============================================
         if 'parent' not in self.kwargs:
             self.kwargs['parent'] = None
 
@@ -5710,10 +5500,8 @@ class DatasetFactory(factory.CUDEMFactory):
             else:
                 self.kwargs['fn'] = entry[0]
             
-        ## ==============================================
         ## weight - entry[2]
         ## inherit weight of parent
-        ## ==============================================
         if len(entry) < 3:
             entry.append(self.set_default_weight())
         elif entry[2] is None:
@@ -5729,10 +5517,8 @@ class DatasetFactory(factory.CUDEMFactory):
             if self.kwargs['weight'] is not None:
                 self.kwargs['weight'] = entry[2]
 
-        ## ==============================================
         ## uncertainty - entry[3]
         ## combine with partent using root sum of squares
-        ## ==============================================
         if len(entry) < 4:
             entry.append(self.set_default_uncertainty())
         elif entry[3] is None:
@@ -5748,9 +5534,7 @@ class DatasetFactory(factory.CUDEMFactory):
             if self.kwargs['uncertainty'] is not None:
                 self.kwargs['uncertainty'] = entry[3]
                     
-        ## ==============================================
         ## Optional arguments follow, for metadata generation
-        ## ==============================================
         if 'metadata' not in self.kwargs:
             self.kwargs['metadata'] = {}
 
@@ -5758,9 +5542,7 @@ class DatasetFactory(factory.CUDEMFactory):
             if key not in self.kwargs['metadata'].keys():
                 self.kwargs['metadata'][key] = None
 
-        ## ==============================================
         ## title - entry[4]
-        ## ==============================================
         if len(entry) < 5:
             entry.append(self.kwargs['metadata']['title'])
         else:
@@ -5769,57 +5551,43 @@ class DatasetFactory(factory.CUDEMFactory):
         if self.kwargs['metadata']['name'] is None:
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
 
-        ## ==============================================
         ## source - entry[5]
-        ## ==============================================
         if len(entry) < 6:
             entry.append(self.kwargs['metadata']['source'])
         else:
             self.kwargs['metadata']['source'] = entry[5]
 
-        ## ==============================================
         ## date - entry[6]
-        ## ==============================================
         if len(entry) < 7:
             entry.append(self.kwargs['metadata']['date'])
         else:
             self.kwargs['metadata']['date'] = entry[6]
 
-        ## ==============================================
         ## data type - entry[7]
-        ## ==============================================
         if len(entry) < 8:
             entry.append(self.kwargs['metadata']['data_type'])
         else:
             self.kwargs['metadata']['data_type'] = entry[7]
 
-        ## ==============================================
         ## resolution - entry[8]
-        ## ==============================================
         if len(entry) < 9:
             entry.append(self.kwargs['metadata']['resolution'])
         else:
             self.kwargs['metadata']['resolution'] = entry[8]
 
-        ## ==============================================
         ## hdatum - entry[9]
-        ## ==============================================
         if len(entry) < 10:
             entry.append(self.kwargs['metadata']['hdatum'])
         else:
             self.kwargs['metadata']['hdatum'] = entry[9]
 
-        ## ==============================================
         ## vdatum - entry[10]
-        ## ==============================================
         if len(entry) < 11:
             entry.append(self.kwargs['metadata']['vdatum'])
         else:
             self.kwargs['metadata']['vdatum'] = entry[10]
 
-        ## ==============================================
         ## url - entry[11]
-        ## ==============================================
         if len(entry) < 12:
             entry.append(self.kwargs['metadata']['url'])
         else:
@@ -5943,9 +5711,7 @@ def datalists_cli(argv=sys.argv):
     stack_mode = 'mean'
     cache_dir = utils.cudem_cache()
     
-    ## ==============================================
     ## parse command line arguments.
-    ## ==============================================
     i = 1
     while i < len(argv):
         arg = argv[i]
@@ -6065,12 +5831,10 @@ def datalists_cli(argv=sys.argv):
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):
-        ## ==============================================
         ## buffer the region by `extend` if xy_inc is set
         ## this effects the output naming of masks/stacks!
         ## do we want this like in waffles where the output name
         ## does not include the -X extend buffer?
-        ## ==============================================
         if xy_inc[0] is not None and xy_inc[1] is not None and this_region is not None:
             this_region.buffer(
                 x_bv=(utils.str2inc(xy_inc[0])*extend),
@@ -6080,9 +5844,7 @@ def datalists_cli(argv=sys.argv):
             sys.stderr.write(datalists_usage)
             utils.echo_error_msg('you must specify some type of data')
         else:
-            ## ==============================================
             ## intiialze the input data. Treat data from CLI as a datalist.
-            ## ==============================================
             this_datalist = init_data(
                 dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='auto',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
