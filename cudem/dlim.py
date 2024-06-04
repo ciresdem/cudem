@@ -1281,7 +1281,7 @@ class ElevationDataset:
         else:
             mode = self.stack_mode
             
-        if supercede: mode = 'supercede'
+        #if supercede: mode = 'supercede'
         utils.echo_msg('stacking using {} mode'.format(mode))
         
         ## initialize the output rasters
