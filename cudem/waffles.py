@@ -3269,9 +3269,8 @@ class WafflesUncertainty(Waffle):
                 p_perc = self._prox_analysis(prox_ds, region=sub_region)
                 slp_perc = self._prox_analysis(slp_ds, region=sub_region)
                 zone = None
-                ## ==============================================
+                
                 ## assign the region to the zone based on the density/slope
-                ## ==============================================
                 if p_perc <= self.prox_perc_33:# or abs(p_perc - self.prox_perc_33) < 0.01:
                     if slp_perc <= self.slp_perc_33:# or abs(slp_perc - self.slp_perc_33) < 0.01:
                         zone = self._zones[6]

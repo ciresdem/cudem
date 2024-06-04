@@ -150,7 +150,6 @@ def _factory_module_check(mf, mc):
         if isinstance(mf._modules[k]['call'](), mc):
             return(k)
                 
-## ==============================================
 ## echo cudem module options
 ## modules are a dictionary with the module name
 ## as the key and at least a 'class' key which
@@ -159,7 +158,6 @@ def _factory_module_check(mf, mc):
 ##
 ## e.g.
 ## _cudem_module_long_desc({'module_name': {'class': MyClass}})
-## ==============================================
 _cudem_module_short_desc = lambda m: ', '.join(
     ['{}'.format(key) for key in m])
 _cudem_module_name_short_desc = lambda m: ',  '.join(
@@ -182,12 +180,9 @@ def echo_modules(module_dict, key):
 
     sys.stderr.flush()
 
-## ==============================================
-##
-## Factories
-##
-## ==============================================    
 class CUDEMModule:
+    """cudem module factory"""
+    
     def __init__(self, params = {}, **kwargs):
         self.params = params
         for kpam, kval in kwargs.items():

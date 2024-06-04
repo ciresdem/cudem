@@ -1,6 +1,6 @@
 ### perspecto.py 
 ##
-## Copyright (c)2023 Regents of the University of Colorado
+## Copyright (c) 2023 - 2024 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -393,13 +393,10 @@ class Hillshade(Perspecto):
 
         return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
 
-## ==============================================
-## HILLSHADE
-## uses gdal
-## https://en.wikipedia.org/wiki/Blend_modes#Overlay
-## ==============================================
 class Hillshade_(Perspecto):
     """Generate a Hillshade Image
+
+    https://en.wikipedia.org/wiki/Blend_modes#Overlay
 
 < hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
     """
@@ -521,9 +518,6 @@ class HillShade(Perspecto):
         
         return(255*(shaded + 1)/2)
     
-## ==============================================
-## POV-Ray
-## ==============================================
 class POVRay(Perspecto):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -788,11 +782,9 @@ camera {{
         
         self.run_povray(self.output_pov, self.dem_infos['nx'], self.dem_infos['ny'])
 
-## ==============================================
-## GMTImage
-## with pygmt
-## ==============================================
 class GMTImage(Perspecto):
+    """Use GMTImage with pygmt"""
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -1023,9 +1015,7 @@ def perspecto_cli(argv = sys.argv):
         )
         sys.exit(-1)
         
-    ## ==============================================
     ## load the user wg json and run perspecto with that.
-    ## ==============================================
     if wg_user is not None:
         if os.path.exists(wg_user):
             try:

@@ -375,8 +375,15 @@ class Outliers(Grits):
         #     self.percentile = 50
         # elif self.percentile > 100:
         #     self.percentile = 100
-            
+
+        if self.percentile is None:
+            self.percentile = 75
+        
         self.max_percentile = utils.float_or(self.max_percentile, ((100 - self.percentile) / 2) + self.percentile)
+
+        if self.k is None:
+            self.k = 1.5
+
         self.max_k = utils.float_or(self.max_k, self.k**2)
         if self.verbose:
             utils.echo_msg('outlier percentiles: {} {} < {} {}'.format(self.percentile, self.k, self.max_percentile, self.max_k))
@@ -722,7 +729,7 @@ class Outliers(Grits):
         k = (rk + sk + tk + ek + ck) / 5
         p = (rp + sp + tp + ep + cp) / 5
         pp = (rpp + spp + tpp + epp + cpp) / 5
-        print(p, k, pp)
+        #print(p, k, pp)
         return(p, k, pp)
     
     def apply_mask(self, perc=75):

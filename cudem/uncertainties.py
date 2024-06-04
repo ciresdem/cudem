@@ -31,6 +31,8 @@
 ## rank factors? 
 ## multi threading !!
 ##
+## Depreciated!
+##
 ### Code:
 
 import os
@@ -49,14 +51,13 @@ from cudem import demfun
 from cudem import xyzfun
 from cudem import waffles
 
-## ==============================================
-## Waffles Interpolation Uncertainty module
-##
-## Calculate the uncertainty of interpolated cells in a
-## (waffles) raster
-##
-## ==============================================
 class InterpolationUncertainty: #(waffles.Waffle):
+    """Waffles Interpolation Uncertainty module
+    
+    Calculate the uncertainty of interpolated cells in a
+    (waffles) raster
+    
+    """
 
     def __init__(self, dem=None, percentile=95, sims=None, chnk_lvl=None, max_sample=None):
         """calculate cell-level interpolation uncertainty
@@ -466,9 +467,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                     train_h = train[:25]
                     ss_samp = perc
 
-                    ## ==============================================
                     ## perform split-sample analysis on each training region.
-                    ## ==============================================
                     for n, sub_region in enumerate(train_h):
                         #print(sub_region)
                         #_prog.update()
@@ -479,9 +478,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         #   ss_samp = sub_region[3]
                         ss_samp = sub_region[3]
 
-                        ## ==============================================
                         ## extract the xyz data for the region from the DEM
-                        ## ==============================================
                         o_xyz = '{}_{}.xyz'.format(self.dem.name, n)
                         ds = gdal.Open(self.dem.fn)
                         ds_config = demfun.gather_infos(ds)
@@ -499,10 +496,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
                         ds = None
 
                         if os.stat(o_xyz).st_size != 0:
-                            ## ==============================================
                             ## split the xyz data to inner/outer; outer is
                             ## the data buffer, inner will be randomly sampled
-                            ## ==============================================
 
                             s_inner, s_outer = self._gmt_select_split(
                                 o_xyz, this_region, 'sub_{}'.format(n), verbose=False
@@ -528,9 +523,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                 np.random.shuffle(sub_xyz)
                                 np.savetxt(sub_xyz_head, sub_xyz[:sx_cnt], '%f', ' ')
 
-                                ## ==============================================
                                 ## generate the random-sample DEM
-                                ## ==============================================
                                 waff = waffles.WaffleFactory(
                                     mod=self.dem.mod,
                                     data=[s_outer, sub_xyz_head],
@@ -554,17 +547,13 @@ class InterpolationUncertainty: #(waffles.Waffle):
                                 wf = waff.acquire().generate()
 
                                 if wf.valid_p():
-                                    ## ==============================================
                                     ## generate the random-sample data PROX and SLOPE
-                                    ## ==============================================
                                     sub_prox = '{}_prox.tif'.format(wf.name)
                                     demfun.proximity('{}_m.tif'.format(wf.name), sub_prox)
                                     #sub_slp = '{}_slp.tif'.format(wf.name)
                                     #demfun.slope(wf.fn, sub_slp)
 
-                                    ## ==============================================
                                     ## Calculate the random-sample errors
-                                    ## ==============================================
                                     sub_xyd = demfun.query(sub_xyz[sx_cnt:], wf.fn, 'xyd')
                                     sub_dp = demfun.query(sub_xyd, sub_prox, 'xyzg')
                                     #sub_ds = demfun.query(sub_dp, self.slope, 'g')
@@ -647,9 +636,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         if self.slope is None:
             self._gen_slope()
             
-        ## ==============================================
         ## region and der. analysis
-        ## ==============================================
         self.region_info = {}
         msk_ds = gdal.Open(self.dem.mask_fn)
         num_sum, g_max, num_perc = self._mask_analysis(msk_ds)
@@ -670,9 +657,7 @@ class InterpolationUncertainty: #(waffles.Waffle):
         for x in self.region_info.keys():
             utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
 
-        ## ==============================================
         ## chunk region into sub regions
-        ## ==============================================
         #print(self.region_info[self.dem.name])
         #print(num_sum, g_max, num_perc)
         chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
@@ -682,24 +667,18 @@ class InterpolationUncertainty: #(waffles.Waffle):
         sub_regions = self.dem.region.chunk(self.dem.xinc, chnk_inc)
         utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
-        ## ==============================================
         ## sub-region analysis
-        ## ==============================================
         sub_zones = self._sub_region_analysis(sub_regions)
         #sub_zones.append(self._sub_region_analysis(sub_regions, prox_or_slp='slp'))
 
-        ## ==============================================
         ## sub-region density and percentiles
-        ## ==============================================
         s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
         s_5perc = np.percentile(s_dens, 5)
         s_dens = None
         #utils.echo_msg('Sampling density for region is: {:.16f}'.format(s_5perc))
         utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
 
-        ## ==============================================
         ## zone analysis / generate training regions
-        ## ==============================================
         trainers = []
         t_perc = 95
         s_perc = 50
@@ -727,10 +706,8 @@ class InterpolationUncertainty: #(waffles.Waffle):
         # utils.echo_msg('sorted sub-regions into {} training tiles.'.format(tot_trains))
         utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
 
-        ## ==============================================
         ## split-sample simulations and error calculations
         ## sims = max-simulations
-        ## ==============================================
         if self.sims is None:
             #self.sims = int(len(sub_regions)/tot_trains)
             self.sims = 12
@@ -743,11 +720,9 @@ class InterpolationUncertainty: #(waffles.Waffle):
         #ec_d = self._split_sample(trains, s_5perc)[0]
         ec_d = self._split_sample(trainers, num_perc, chnk_inc/2)[0]
 
-        ## ==============================================
         ## Save/Output results
         ## apply error coefficient to full proximity grid
         ## TODO: USE numpy/gdal instead!
-        ## ==============================================
         utils.echo_msg('applying coefficient to PROXIMITY grid')
         #if self.dem.gc['GMT'] is None:
         utils.run_cmd('gdal_calc.py -A {} --outfile {}_prox_unc.tif --calc "{}+({}*(A**{}))"'.format(self.prox, self.dem.name, 0, ec_d[1], ec_d[2]), verbose = True)
