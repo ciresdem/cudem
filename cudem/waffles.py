@@ -84,9 +84,7 @@ from cudem import fetches
 from cudem import grits
 from cudem import perspecto
 
-## ==============================================
 ## Data cache directory, hold temp data, fetch data, etc here.
-## ==============================================
 waffles_cache = utils.cudem_cache()
 gc = utils.config_check()
 gdal.DontUseExceptions()
@@ -94,13 +92,6 @@ ogr.DontUseExceptions()
 osr.DontUseExceptions()
 gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
-## ==============================================
-## WAFFLES
-##
-## TODO
-## add upper/lower limits to waffle class and
-## remove from individual waffle modules.
-## ==============================================
 class Waffle:
     """Representing a WAFFLES DEM/MODULE.
     Specific Gridding modules are sub-classes of this class.
@@ -184,9 +175,8 @@ class Waffle:
         self.gc = utils.config_check() # cudem config file holding foriegn programs and versions
         self._init_regions() # initialize regions
         self._init_incs() # initialize increments
-        ## ==============================================
+
         ## initialize data, setting set_incs to True will force dlim to process the data to the set increments
-        ## ==============================================
         if self.want_stack:
             self._init_data(set_incs=True) 
 
@@ -352,10 +342,8 @@ class Waffle:
                 except: pass
 
         if self.chunk is not None:
-            ## ==============================================
             ## Generate in Chunks of self.chunk by self.chunk and
             ## merge chunks into final DEM
-            ## ==============================================
             chunks = []
             stack_chunks = []
             mask_chunks = []
@@ -376,9 +364,7 @@ class Waffle:
                 this_waffle_module.initialize()
                 this_waffle_module.generate()
 
-                ## ==============================================
                 ## append the chunk to the chunk list if the DEM generated ok
-                ## ==============================================
                 if WaffleDEM(this_waffle_module.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     chunks.append(this_waffle_module.fn)
 
@@ -391,35 +377,27 @@ class Waffle:
                 mask_chunks.append(this_waffle_module.msk_fn)
                 aux_chunks.append(this_waffle_module.aux_dems)
 
-            ## ==============================================
             ## combine DEM chunks
-            ## ==============================================
             if len(chunks) > 0:
                 g = gdal.Warp(self.fn, chunks, format=self.fmt, resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
 
-            ## ==============================================
             ## combine STACK chunks
             ## multi-band
-            ## ==============================================
             if len(stack_chunks) > 0:
                 g = gdal.Warp(self.fn, stack_chunks, format=self.fmt, resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
 
-            ## ==============================================
             ## combine MASK chunks
             ## multi-band
-            ## ==============================================
             if len(mask_chunks) > 0:
                 g = gdal.Warp(mask_fn, mask_chunks, format=self.fmt, resampleAlg='cubicspline',
                               options=["COMPRESS=LZW", "TILED=YES"])
                 g = None
                 
-            ## ==============================================
             ## combine AUXILIARY chunks
-            ## ==============================================
             if len(aux_chunks) > 0:
                 for ac, aux_dem in enumerate(aux_chunks):
                     g = gdal.Warp(aux_dem, aux_chunks[ac], format=self.fmt, resampleAlg='cubicspline',
@@ -430,9 +408,7 @@ class Waffle:
             for aux_chunk in aux_chunks:
                 utils.remove_glob(aux_chunk)
         else:
-            ## ==============================================
             ## stack the data and run the waffles module
-            ## ==============================================
             mask_fn = None
             if self.want_stack:
                 stack_name = '{}_stack'.format(os.path.basename(self.name))
@@ -461,9 +437,7 @@ class Waffle:
                 #
                 # self.stack = sk.out_file
                 
-                ## ==============================================
                 ## generate the stack
-                ## ==============================================
                 stack_fn = os.path.join(self.cache_dir, '{}.{}'.format(stack_name, gdalfun.gdal_fext('GTiff')))
                 stack_bn = utils.fn_basename2(stack_fn)
 
@@ -481,9 +455,7 @@ class Waffle:
                 if self.keep_auxiliary:
                     self.aux_dems.append(self.stack)
 
-                ## ==============================================
                 ## run the waffles module
-                ## ==============================================
                 if WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     self.run()
                     
@@ -493,9 +465,7 @@ class Waffle:
             # if self.node == 'grid':
             #     self.region = self.region.buffer(x_bv=-self.xinc*.5, y_bv=-self.yinc*.5)
 
-            ## ==============================================
             ## calculate estimated uncertainty of the interpolation
-            ## ==============================================
             unc_fn = None
             if self.want_uncertainty:
                 iu = WaffleFactory(
@@ -518,9 +488,7 @@ class Waffle:
                     output_files['uncertainty'] = iu.fn
                 unc_fn = iu.fn
             
-            ## ==============================================
             ## post-process the DEM(s)
-            ## ==============================================
             waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize()
             if waffle_dem.valid_p():
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
@@ -529,9 +497,7 @@ class Waffle:
                                    dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr)
                 output_files['DEM'] = self.fn
                 
-            ## ==============================================
             ## post-process the mask, etc.
-            ## ==============================================
             if self.want_mask or self.want_sm:
                 if mask_fn is not None:
                     mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=False, want_scan=True).initialize()
@@ -560,9 +526,7 @@ class Waffle:
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
                     
-            ## ==============================================
             ## post-process any auxiliary rasters
-            ## ==============================================
             for aux_dem in self.aux_dems:
                 aux_dem = WaffleDEM(aux_dem, cache_dir=self.cache_dir, verbose=False).initialize()
                 if aux_dem.valid_p():
@@ -571,9 +535,7 @@ class Waffle:
                                     set_metadata=False)
                     output_files['stack'] = aux_dem.fn
 
-            ## ==============================================
             ## reset the self.stack to new post-processed fn and ds
-            ## ==============================================
             if self.want_stack and self.keep_auxiliary:
                 self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
                 self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
@@ -589,9 +551,6 @@ class Waffle:
         
         raise(NotImplementedError)
 
-## ==============================================
-## Waffles Raster Stacking
-## ==============================================
 class WafflesScratch(Waffle):
     """SCRATCH Module. 
     
@@ -656,9 +615,6 @@ class WafflesStacks(Waffle):
             
         return(self)
 
-## ==============================================
-## The Flattening
-## ==============================================
 def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1, verbose = True):
     """Flatten nodata areas larger than `size_threshhold`"""
 
@@ -732,9 +688,6 @@ class WafflesFlatten(Waffle):
         )
         return(self)
     
-## ==============================================
-## Waffles IDW
-## ==============================================
 class Invdisttree():
     """ inverse-distance-weighted interpolation using KDTree:
     @Denis via https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python
@@ -971,13 +924,6 @@ class WafflesIDW(Waffle):
         interp_ds = point_values = weight_values = None        
         return(self)    
     
-## ==============================================
-## Scipy interpolate.griddata gridding (linear, cubic, nearest)
-##
-## https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
-##
-## set 'num_threads' to int over 1 to generate in multiple threads...
-## ==============================================
 def write_array_queue(wq, q, m):
     while True:
         wq_args = wq.get()
@@ -1003,6 +949,13 @@ def scipy_queue(q, wq, m, p):
         q.task_done()
                
 class grid_scipy(threading.Thread):
+    """Scipy interpolate.griddata gridding (linear, cubic, nearest)
+
+    https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+    
+    set 'num_threads' to int over 1 to generate in multiple threads...
+    """
+    
     def __init__(self, mod, n_threads=3):
         threading.Thread.__init__(self)
         self.mod = mod
@@ -1075,9 +1028,7 @@ class WafflesSciPy(Waffle):
         self.chunk_buffer = utils.int_or(chunk_buffer)
         self.num_threads = utils.int_or(num_threads)
 
-    ## ==============================================
     ## this 'run' command runs the scipy module in a multiple threads
-    ## ==============================================
     def _run(self):
         if self.num_threads is None:
             return(self._run())
@@ -1186,9 +1137,7 @@ class WafflesSciPy(Waffle):
                 
         return(None)
 
-    ## ==============================================
     ## this 'run' command runs the scipy module in a single thread
-    ## ==============================================
     def run(self):
         if self.method not in self.methods:
             utils.echo_error_msg(
@@ -1314,11 +1263,6 @@ class WafflesNearest(WafflesSciPy):
         super().__init__(**kwargs)
         self.method = 'nearest'
         
-## ==============================================
-## GMT Surface
-##
-## TODO: update to use pygmt
-## ==============================================
 class GMTSurface(Waffle):
     """SPLINE DEM via GMT surface
     
@@ -1394,11 +1338,6 @@ class GMTSurface(Waffle):
         )
         return(self)
 
-## ==============================================
-## GMT Triangulate
-##
-## TODO: update to use pygmt
-## ==============================================
 class GMTTriangulate(Waffle):
     """TRIANGULATION DEM via GMT triangulate
     
@@ -1435,11 +1374,6 @@ class GMTTriangulate(Waffle):
         )        
         return(self)
 
-## ==============================================
-## GMT Near Neighbor
-##
-## TODO: update to use pygmt
-## ==============================================
 class GMTNearNeighbor(Waffle):
     """NEARNEIGHBOR DEM via GMT nearneighbor
     
@@ -1486,9 +1420,6 @@ class GMTNearNeighbor(Waffle):
         )        
         return(self)
 
-## ==============================================
-## MB-System mbgrid
-## ==============================================
 class WafflesMBGrid(Waffle):
     """SPLINE DEM via MB-System's mbgrid.
     
@@ -1673,9 +1604,6 @@ class WafflesMBGrid(Waffle):
                     
         return(self)
 
-## ==============================================
-## GDAL gridding (invdst, linear, nearest, average)
-## ==============================================
 class WafflesGDALGrid(Waffle):
     """Waffles GDAL_GRID module.
 
@@ -1853,11 +1781,6 @@ class GDALNearest(WafflesGDALGrid):
         self.alg_str = 'nearest:radius1={}:radius2={}:angle={}:nodata={}'\
             .format(radius1, radius2, angle, nodata)
     
-## ==============================================
-## Waffles 'num' - no interpolation
-##
-## old module, just use stacks...
-## ==============================================
 class WafflesNum(Waffle):
     """Uninterpolated DEM populated by <mode>.
     
@@ -1866,7 +1789,9 @@ class WafflesNum(Waffle):
     see gmt xyz2grd --help for more info.
     
     mode keys: k (mask), m (mean), n (num), w (wet), A<mode> (gmt xyz2grd)
-    
+
+    This module is depreciated!
+
     -----------
     Parameters:
     
@@ -1976,9 +1901,6 @@ class WafflesNum(Waffle):
                         
         return(self)
     
-## ==============================================
-## Waffles VDatum
-## ==============================================
 class WafflesVDatum(Waffle):
     """VDATUM transformation grid.
     Generate a Vertical DATUM transformation grid.
@@ -2021,9 +1943,6 @@ class WafflesVDatum(Waffle):
         ).run(outfile='{}.tif'.format(self.name))
         return(self)
     
-## ==============================================
-## Waffles Coastline/Landmask
-## ==============================================
 class WafflesCoastline(Waffle):
     """COASTLINE (land/etc-mask) generation
     
@@ -2450,9 +2369,6 @@ class WafflesCoastline(Waffle):
         )        
         gdalfun.osr_prj_file(self.name + '.prj', self.dst_srs)
 
-## ==============================================
-## Waffles Lakes Bathymetry
-## ==============================================
 class WafflesLakes(Waffle):
     """Estimate lake bathymetry.
     
@@ -2661,24 +2577,18 @@ class WafflesLakes(Waffle):
         lk_ds = ogr.Open(lakes_shp, 1)
         lk_layer = lk_ds.GetLayer()
 
-        ## ==============================================
         ## filter layer to region
-        ## ==============================================
         filter_region = self.p_region.copy()
         lk_layer.SetSpatialFilter(filter_region.export_as_geom())
 
-        ## ==============================================
         ## filter by ID
-        ## ==============================================
         if self.max_id is not None:
             lk_layer.SetAttributeFilter('Hylak_id < {}'.format(self.max_id))
             
         if self.min_id is not None:
             lk_layer.SetAttributeFilter('Hylak_id > {}'.format(self.min_id))
 
-        ## ==============================================
         ## filter by Area
-        ## ==============================================
         if self.max_area is not None:
             lk_layer.SetAttributeFilter('Lake_area < {}'.format(self.max_area))
             
@@ -2690,9 +2600,7 @@ class WafflesLakes(Waffle):
             utils.echo_error_msg('no lakes found in region')
             return(self)
 
-        ## ==============================================
         ## get lake ids and globathy depths
-        ## ==============================================
         lk_ids = []
         [lk_ids.append(feat.GetField('Hylak_id')) for feat in lk_layer]
         utils.echo_msg('using Lake IDS: {}'.format(lk_ids))
@@ -2715,9 +2623,7 @@ class WafflesLakes(Waffle):
             utils.echo_msg('buffering region by 2 percent to gather all lake boundaries...')
             self.p_region.buffer(pct=2, x_inc=self.xinc, y_inc=self.yinc)
 
-        ## ==============================================
         ## fetch and initialize the copernicus data
-        ## ==============================================
         if self.elevations == 'copernicus':
             cop_ds = self._fetch_copernicus(cop_region=self.p_region)
             cop_band = cop_ds.GetRasterBand(1)
@@ -2754,9 +2660,7 @@ class WafflesLakes(Waffle):
             cop_band = None
             cop_arr = None
 
-        ## ==============================================
         ## initialize the tmp datasources
-        ## ==============================================
         prox_ds = gdalfun.gdal_mem_ds(self.ds_config, name='prox')
         msk_ds = gdalfun.gdal_mem_ds(self.ds_config, name='msk')
         msk_band = None
@@ -2767,17 +2671,13 @@ class WafflesLakes(Waffle):
         
         if self.depth == 'globathy':
             globd = self._fetch_globathy(ids=lk_ids[:])
-            ## ==============================================
             ## rasterize hydrolakes using id
-            ## ==============================================
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
             msk_band = msk_ds.GetRasterBand(1)
             msk_band.SetNoDataValue(self.ds_config['ndv'])
 
-            ## ==============================================
             ## assign max depth from globathy
-            ## ==============================================
             msk_arr = msk_band.ReadAsArray()
             with tqdm(
                     total=len(lk_ids),
@@ -2804,9 +2704,7 @@ class WafflesLakes(Waffle):
         else:            
             msk_arr = np.ones((self.ds_config['nx'], self.ds_config['ny']))
 
-        ## ==============================================
         ## calculate proximity of lake cells to shore
-        ## ==============================================
         if msk_band is None:
             gdal.RasterizeLayer(msk_ds, [1], lk_layer, options=["ATTRIBUTE=Hylak_id"], callback=gdal.TermProgress)
             msk_ds.FlushCache()
@@ -2821,9 +2719,7 @@ class WafflesLakes(Waffle):
         if cop_band is not None:
             cop_arr = cop_band.ReadAsArray()
 
-        ## ==============================================
         ## apply calculation from globathy
-        ## ==============================================
         utils.echo_msg('Calculating simulated lake depths...')
         bathy_arr = self.apply_calculation(
             prox_arr,
@@ -2839,11 +2735,6 @@ class WafflesLakes(Waffle):
         prox_ds = msk_ds = cop_ds = None
         return(self)
 
-## ==============================================
-## Waffles 'CUDEM' gridding
-##
-## combined gridding method (stacks/surface/coastline/IDW/flatten)
-## ==============================================
 class WafflesCUDEM(Waffle):
     """CUDEM integrated DEM generation.
     
@@ -2949,9 +2840,7 @@ class WafflesCUDEM(Waffle):
         self.want_weight = True
         self.pre_verbose = pre_verbose
         
-        ## ==============================================
         ## set the weights if not already set correctly
-        ## ==============================================
         self.weight_levels.sort(reverse=True)
         if len(self.weight_levels) < self.pre_count+1:
             tmp_pre = self.pre_count - len(self.weight_levels)
@@ -2970,9 +2859,7 @@ class WafflesCUDEM(Waffle):
                 self.weight_levels.append(tmp_weight)                
                 tmp_pre -= 1
 
-        ## ==============================================
         ## set the increments if not already set correctly
-        ## ==============================================
         self.inc_levels.sort()
         if len(self.inc_levels) < self.pre_count+1:
             tmp_pre = self.pre_count - len(self.inc_levels)
@@ -3055,9 +2942,7 @@ class WafflesCUDEM(Waffle):
         # gdalfun.gdal_extract_band(self.stack, stack_weight, band=3) # band 3 is the weight band in stacks
         # gdalfun.gdal_extract_band(self.stack, stack_unc, band=4) # band 4 is the uncertainty band in stacks            
         
-        # ## ==============================================
         # ## Remove outliers from the stacked data
-        # ## ==============================================
         # if self.filter_outliers is not None:
 
         #     outlier_opts = [utils.float_or(x) for x in self.filter_outliers.split('/')]
@@ -3077,16 +2962,12 @@ class WafflesCUDEM(Waffle):
         #     #     self.stack, None, replace=False
         #     # )
             
-        ## ==============================================
         ## initial data to pass through surface (stack)
-        ## ==============================================
         stack_data_entry = '{},200:band_no=1:weight_mask=3:uncertainty_mask=4:sample=average,1'.format(self.stack)
         #stack_data_entry = '{},200:band_no=1:weight_mask={}:uncertainty_mask={}:sample=average,1'.format(stack_elev, stack_weight, stack_unc)
         pre_data = [stack_data_entry]
         
-        ## ==============================================
         ## generate coastline
-        ## ==============================================
         pre_clip = None
         if self.landmask:            
             if isinstance(self.landmask, str):
@@ -3099,18 +2980,14 @@ class WafflesCUDEM(Waffle):
                 coastline = self.generate_coastline(pre_data=coast_data)
                 pre_clip = coastline
 
-        ## ==============================================
         ## Grid/Stack the data `pre` times concluding in full resolution with data > min_weight
-        ## ==============================================
         for pre in range(self.pre_count, -1, -1):
             pre_xinc = self.inc_levels[pre]
             pre_yinc = self.inc_levels[pre]
             xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc
             ysample = self.inc_levels[pre-1] if pre != 0 else self.yinc
             
-            ## ==============================================
             ## if not final or initial output, setup the configuration for the pre-surface
-            ## ==============================================
             if pre != self.pre_count:
                 pre_weight = self.weight_levels[pre]
                 _pre_name_plus = os.path.join(self.cache_dir, utils.append_fn('_pre_surface', pre_region, pre+1))
@@ -3122,9 +2999,7 @@ class WafflesCUDEM(Waffle):
                 #pre_data = [stack_data_entry]
                 pre_region.wmin = pre_weight
                 
-            ## ==============================================
             ## reset pre_region for final grid
-            ## ==============================================
             if pre == 0:
                 pre_region = self.p_region.copy()
                 pre_region.wmin = self.weight_levels[pre]
@@ -3150,18 +3025,13 @@ class WafflesCUDEM(Waffle):
         #os.replace(pre_surface.fn, self.fn)
         flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
-        ## ==============================================
         ## reset the stack for uncertainty
-        ## ==============================================
         #self.stack = pre_surface.stack
         self.stack = orig_stack
         utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 
-## ==============================================
-## Waffles Uncertainty module
-## ==============================================
 class WafflesUncertainty(Waffle):
     """Calculate cell-level interpolation uncertainty
 
@@ -3180,9 +3050,7 @@ class WafflesUncertainty(Waffle):
     def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
                  max_sample = None, max_errors = 5000000, accumulate = False, **kwargs):
 
-        ## ==============================================
         ## parse the waffles module
-        ## ==============================================
         self.waffles_module_args = {}
         tmp_waffles = Waffle()
         for kpam, kval in kwargs.items():
@@ -3201,9 +3069,7 @@ class WafflesUncertainty(Waffle):
         self.accumulate = accumulate
         self.max_errors = max_errors
 
-        ## ==============================================
         ## set up the accumulated errors file
-        ## ==============================================
         self.prox_errs = '{}_errs.dat.gz'.format(self.waffles_module.split(':')[0])
         self.prox_errs_local = self.prox_errs
         if not os.path.exists(self.prox_errs):
@@ -3337,11 +3203,9 @@ class WafflesUncertainty(Waffle):
                 np.random.shuffle(train)
                 train.sort(reverse=True, key=d_t)
                 
-            ## ==============================================
             ## uncomment to print out the sorted regions...
             #if self.verbose:
             #    utils.echo_msg(' '.join([x[0].format('gmt') for x in train_d[:t_num]]))
-            ## ==============================================
                 
             train_sorted.append(train_d)
             
@@ -3464,18 +3328,14 @@ class WafflesUncertainty(Waffle):
                 total=tot_trains
         ) as pbar:
             for n, sub_region in enumerate(all_trains):
-                ## ==============================================
                 ## perform split-sample analysis on each training region.
-                ## ==============================================
                 pbar.update()
                 ss_samp = perc
                 this_region = sub_region[0].copy()
                 if sub_region[3] < ss_samp:
                    ss_samp = sub_region[3]
 
-                ## ==============================================
                 ## extract the xyz data for the region from the DEM
-                ## ==============================================
                 o_xyz = utils.make_temp_fn('{}_{}.xyz'.format(self.name, n))
                 with gdalfun.gdal_datasource(self.stack) as ds:
                    ds_config = gdalfun.gdal_infos(ds)
@@ -3491,10 +3351,8 @@ class WafflesUncertainty(Waffle):
                 if os.stat(o_xyz).st_size == 0:
                     continue
 
-                ## ==============================================
                 ## split the xyz data to inner/outer; outer is
                 ## the data buffer, inner will be randomly sampled
-                ## ==============================================
                 s_inner, s_outer = self._select_split(o_xyz, this_region, utils.make_temp_fn('sub_{}'.format(n)))
                 if os.stat(s_inner).st_size == 0:
                     utils.echo_warning_msg('no inner points, cont.')
@@ -3507,9 +3365,7 @@ class WafflesUncertainty(Waffle):
                 sub_xyz = np.loadtxt(s_inner, ndmin=2, delimiter=' ')                        
                 ss_len = len(sub_xyz)
 
-                ## ==============================================
                 ## determine the sampling density
-                ## ==============================================
                 #sx_cnt = int(sub_region[2] * (ss_samp / 100.)) if ss_samp is not None else ss_len-1
                 sx_cnt = int(sub_region[1] * (ss_samp / 100.)) + 1
                 ##sx_cnt = int(ss_len * (ss_samp / 100.))
@@ -3518,9 +3374,7 @@ class WafflesUncertainty(Waffle):
                 np.random.shuffle(sub_xyz)
                 np.savetxt(sub_xyz_head, sub_xyz[sx_cnt:], '%f', ' ')
 
-                ## ==============================================
                 ## generate the random-sample DEM
-                ## ==============================================
                 this_mod = '{}:{}'.format(self.waffles_module, factory.dict2args(self.waffles_module_args))
                 kwargs = self.params['kwargs']
                 kwargs['name'] = utils.make_temp_fn('sub_{}'.format(n))
@@ -3536,16 +3390,12 @@ class WafflesUncertainty(Waffle):
                 if not WaffleDEM(wf.fn, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
                     continue
 
-                ## ==============================================
                 ## generate the random-sample data PROX and SLOPE
-                ## ==============================================
                 sub_prox = '{}_prox.tif'.format(wf.name)
                 gdalfun.gdal_proximity(wf.stack, sub_prox, distunits='PIXEL')
 
-                ## ==============================================
                 ## Calculate the random-sample errors
                 ## todo: account for source uncertainty (rms with xyz?)
-                ## ==============================================
                 sub_xyd = gdalfun.gdal_query(sub_xyz[:sx_cnt], wf.fn, 'xyd')
                 sub_dp = gdalfun.gdal_query(sub_xyd, sub_prox, 'zg')
                 utils.remove_glob('{}*'.format(sub_xyz_head))
@@ -3558,9 +3408,7 @@ class WafflesUncertainty(Waffle):
 
                 utils.remove_glob('{}*'.format(wf.stack), '{}*'.format(o_xyz), s_inner, s_outer, wf.fn)
                 s_dp_m = []
-                ## ==============================================
                 ## bin the error data
-                ## ==============================================
                 if s_dp is not None and len(s_dp) > 0:
                     err_count = len(s_dp)
                     ds = np.unique(s_dp[:,1])
@@ -3673,9 +3521,7 @@ class WafflesUncertainty(Waffle):
             utils.remove_glob(self.prox)
             return(unc_out, 0)                        
         else:
-            ## ==============================================
             ## region and der. analysis
-            ## ==============================================
             self.region_info = {}
             with gdalfun.gdal_datasource(self.stack) as tmp_ds:
                 num_sum, g_max, num_perc = self._mask_analysis(tmp_ds)
@@ -3694,9 +3540,7 @@ class WafflesUncertainty(Waffle):
             for x in self.region_info.keys():
                 utils.echo_msg('region: {}: {}'.format(x, self.region_info[x]))
 
-            ## ==============================================
             ## chunk region into sub regions
-            ## ==============================================
             chnk_inc = int((num_sum / math.sqrt(g_max)) / num_perc) * 2
             chnk_inc = chnk_inc if chnk_inc > 10 else 10
             utils.echo_msg('chunk inc is: {}'.format(chnk_inc))
@@ -3704,22 +3548,16 @@ class WafflesUncertainty(Waffle):
             sub_regions = self.region.chunk(self.xinc, chnk_inc)
             utils.echo_msg('chunked region into {} sub-regions @ {}x{} cells.'.format(len(sub_regions), chnk_inc, chnk_inc))
 
-            ## ==============================================
             ## sub-region analysis
-            ## ==============================================
             sub_zones = self._sub_region_analysis(sub_regions)
 
-            ## ==============================================
             ## sub-region density and percentiles
-            ## ==============================================
             s_dens = np.array([sub_zones[x][3] for x in sub_zones.keys()])
             s_5perc = np.percentile(s_dens, 5)
             s_dens = None
             utils.echo_msg('Sampling density for region is: {:.16f}'.format(num_perc))
 
-            ## ==============================================
             ## zone analysis / generate training regions
-            ## ==============================================
             trainers = []
             t_perc = 95
             s_perc = 50
@@ -3740,10 +3578,8 @@ class WafflesUncertainty(Waffle):
 
             utils.echo_msg('analyzed {} sub-regions.'.format(len(sub_regions)))
 
-            ## ==============================================
             ## split-sample simulations and error calculations
             ## sims = max-simulations
-            ## ==============================================
             if self.sims is None:
                 self.sims = int(len(sub_regions)/tot_trains)
 
@@ -3761,9 +3597,7 @@ class WafflesUncertainty(Waffle):
                 
             while True:
                 sim += 1
-                ## ==============================================
                 ## run the split-sample simulation(s)
-                ## ==============================================
                 sample_dp = self._split_sample(trainers, num_perc)
                 if len(s_dp) == 0:
                     s_dp = sample_dp
@@ -3775,9 +3609,7 @@ class WafflesUncertainty(Waffle):
                     utils.echo_error_msg('did not gather any errors, check configuration')
                     break
 
-                ## ==============================================
                 ## bin the error data
-                ## ==============================================
                 ds = np.unique(s_dp[:,1])
                 s_dp_m = None
                 for d in ds:
@@ -3813,35 +3645,24 @@ class WafflesUncertainty(Waffle):
                 if self.verbose:
                     utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
 
-                ## ==============================================
                 ## continue if we got back the default err coeff
-                ## ==============================================
                 if ec_d[0] == 0 and ec_d[1] == 0.1 and ec_d[2] == 0.2:
                     continue
 
-                ## ==============================================
                 ## continue if we haven't reached max_sample
-                ## ==============================================
                 #if len(s_dp) < self.max_sample:
                 #    continue
 
-                ## ==============================================
                 ## break if we gathered enough simulation errors
-                ## ==============================================
                 if sim >= int(self.sims): 
                     break
 
-            ## ==============================================
             ## Save/Output results, apply error coefficient to full proximity grid
-            ## ==============================================
             unc_out = self.apply_coefficient(ec_d)
             utils.remove_glob(self.slope, self.prox)
 
         return(self)
 
-## ==============================================
-## Waffles TESTING
-## ==============================================
 class WafflesCUBE(Waffle):
     """
     BathyCUBE - doesn't seem to work as expected, likely doing something wrong here...
@@ -4298,14 +4119,11 @@ class WafflesPatch(Waffle):
         if not regions.regions_intersect_p(self.region, dem_region):
             utils.echo_error_msg('input region does not intersect with input DEM')
 
-        ## ==============================================
         ## grid the difference to array using query_dump / num
         ## polygonize the differences and add small buffer (1% or so)
         ## make zero array, inverse clipped to buffered polygonized diffs
         ## surface zero array and diffs...
         ## add surfaced diffs to self.dem
-        ## ==============================================
-                        
         # diff_cmd = 'gmt blockmedian {region} -I{xinc}/{yinc} | gmt surface {region} -I{xinc}/{yinc} -G_diff.tif=gd+n-9999:GTiff -T.1 -Z1.2 -V -rp -C.5 -Lud -Lld -M{radius}'.format(
         #     region=dem_region, xinc=dem_infos['geoT'][1], yinc=-1*dem_infos['geoT'][5], radius=self.radius
         # )
@@ -4365,10 +4183,6 @@ class WafflesPatch(Waffle):
         #utils.remove_glob('_tmp_smooth.tif', '_diff.tif')
         return(self)
         
-## ==============================================
-## WaffleDEM which holds a gdal DEM to process
-## WaffleDEM(fn='module_output.tif')
-## ==============================================
 def nodata_count_mask(src_dem, band = 1):
     """Make a data mask of nodata zones.
 
@@ -4396,6 +4210,10 @@ def nodata_count_mask(src_dem, band = 1):
     return(mn)
 
 class WaffleDEM:
+    """WaffleDEM which holds a gdal DEM to process
+    WaffleDEM(fn='module_output.tif')
+    """
+    
     def __init__(self, fn: str = 'this_waffle.tif', ds_config: dict = {},
                  cache_dir: str = waffles_cache, verbose: bool = True,
                  waffle: Waffle = None, want_scan: bool = True):
@@ -4475,63 +4293,45 @@ class WaffleDEM:
         if self.ds_config is None:
             self.initialize()
             
-        ## ==============================================
         ## set nodata value
-        ## ==============================================
         if ndv is not None:
             self.set_nodata(ndv)
         else:
             if self.ds_config['ndv'] is not None:
                 self.set_nodata(self.ds_config['ndv'])
 
-        ## ==============================================
         ## set interpolation limits
-        ## ==============================================
         self.set_interpolation_limits(
             stack_fn=stack_fn, size_limit=size_limit, proximity_limit=proximity_limit, percentile_limit=percentile_limit
         )
 
-        ## ==============================================
         ## filtering the DEM will change the weights/uncertainty
-        ## ==============================================
         if filter_ is not None:
             self.filter_(filter_)
 
-        ## ==============================================
         ## resamples all bands
-        ## ==============================================
         self.resample(xsample=xsample, ysample=ysample, ndv=ndv, region=region)
 
-        ## ==============================================
         ## setting limits will change the weights/uncertainty for flattened data
-        ## ==============================================
         self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
 
-        ## ==============================================
         ## put everything in a hdf5
-        ## ==============================================
         # if stack_fn is not None:
         #     self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
 
-        ## ==============================================
         ## clip/cut
-        ## ==============================================
         self.clip(clip_str=clip_str)
         if region is not None:
             self.cut(region=region, node='grid')#'pixel' if node == 'grid' else 'grid')
             
-        ## ==============================================
         ## set projection, metadata, reformat and move to final location
-        ## ==============================================
         if dst_srs is not None:
             self.set_srs(dst_srs=dst_srs)
 
         if set_metadata:
             self.set_metadata(node=node)
 
-        ## ==============================================
         ## reformat and move final output
-        ## ==============================================            
         self.reformat(out_fmt=dst_fmt)
         self.move(out_fn=dst_fn, out_dir=dst_dir)
 
@@ -4620,11 +4420,9 @@ class WaffleDEM:
         """set interpolation limits"""
 
         if stack_fn is not None:
-            ## ==============================================
             ## optionally mask nodata zones based on proximity
             ## todo: adjust proxmimity grid to only limit areas
             ##       where all neighbors are below proximity limit...
-            ## ==============================================
             if proximity_limit is not None:
                 tmp_prox = gdalfun.gdal_proximity(stack_fn, utils.make_temp_fn('_prox.tif'), band=2)
                 mn = gdalfun.gdal_get_array(tmp_prox)[0]
@@ -4645,9 +4443,7 @@ class WaffleDEM:
                     if self.verbose:
                         utils.echo_warning_msg('could not set proximity limit')
                         
-            ## ==============================================
             ## optionally mask nodata zones based on size_threshold
-            ## ==============================================
             if size_limit is not None:
                 mn = nodata_count_mask(stack_fn, band=2)
                 if mn is not None:
@@ -4665,9 +4461,7 @@ class WaffleDEM:
                     if self.verbose:
                         utils.echo_warning_msg('could not set size limit')
                         
-            ## ==============================================
             ## optionally mask nodata zones based on percentile_threshold
-            ## ==============================================
             if percentile_limit is not None:
                 mn = nodata_count_mask(stack_fn, band=2)
                 if mn is not None:
@@ -4889,10 +4683,10 @@ class WaffleDEM:
         f.close()
 
                 
-## ==============================================
-## Waffles Factory Settings
-## ==============================================
 class WaffleFactory(factory.CUDEMFactory):
+    """Waffles Factory Settings
+    """
+    
     _modules = {
         'stacks': {'name': 'stacks', 'stack': True, 'call': WafflesStacks},
         'IDW': {'name': 'IDW', 'stack': True, 'call': WafflesIDW},
@@ -4927,14 +4721,12 @@ class WaffleFactory(factory.CUDEMFactory):
     def _set_modules(self):
         pass
 
-## ==============================================
-## waffle queue for threads
-##
-## waffles will run multiple input regions as
-## separate threads...
-## ==============================================
 def waffle_queue(q):
-    """
+    """waffle queue for threads
+
+    waffles will run multiple input regions as
+    separate threads...
+
     waffles_args is [waffle_module]
     """
     
@@ -5269,10 +5061,8 @@ def waffles_cli(argv = sys.argv):
         t.daemon = True
         t.start()
 
-    ## ==============================================
     ## load the user wg json and run waffles with that.
     ## allow input of multiple config files with -G .. -G ..
-    ## ==============================================    
     if wg_user is not None:
         if os.path.exists(wg_user):
             with open(wg_user, 'r') as wgj:
@@ -5294,10 +5084,8 @@ def waffles_cli(argv = sys.argv):
         #waffle_q.join()
         sys.exit(0)
 
-    ## ==============================================
     ## Otherwise run from cli options...
     ## set the dem module
-    ## ==============================================
     if module.split(':')[0] not in WaffleFactory()._modules.keys():
         utils.echo_error_msg(
             '''{} is not a valid waffles module, available modules are: {}'''.format(
@@ -5314,9 +5102,7 @@ def waffles_cli(argv = sys.argv):
     else:
         wg['want_stack'] = True if len(dls) > 0 else False
 
-    ## ==============================================
     ## check the increment
-    ## ==============================================
     if 'xinc' in wg.keys():
         if wg['xinc'] is None:
             sys.stderr.write(waffles_cli_usage)
@@ -5330,17 +5116,13 @@ def waffles_cli(argv = sys.argv):
         utils.echo_error_msg('''must specify a gridding increment.''')
         sys.exit(-1)      
 
-    ## ==============================================
     ## set the datalists and names
-    ## ==============================================
     wg['data'] = dls
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, wg['verbose'])
     name = wg['name']
 
-    ## ==============================================
     ## parse the regions and add them to the queue, or output as config file
-    ## ==============================================
     for i, this_region in enumerate(these_regions):
         ## input region is None, so gather the region from the input data...
         if this_region is None:
@@ -5363,9 +5145,7 @@ def waffles_cli(argv = sys.argv):
 
         wg['src_region'] = this_region
 
-        ## ==============================================
         ## set the output name, appending the region, etc. if wanted/needed
-        ## ==============================================
         if want_prefix or len(these_regions) > 1:
             wg['name'] = utils.append_fn(
                 name, wg['src_region'], wg['xsample'] if wg['xsample'] is not None else wg['xinc'], **prefix_args
@@ -5392,11 +5172,10 @@ def waffles_cli(argv = sys.argv):
     for t in processes:
         t.join()
 
-    ## ==============================================
     ## remove the cahce dir if not asked to keep
-    ## ==============================================
     if not keep_cache:
        utils.remove_glob(wg['cache_dir'])
 
     return(0)
+
 ### End
