@@ -346,7 +346,7 @@ class Perspecto:
     def run(self):
         raise(NotImplementedError)
 
-class Hillshade(Perspecto):
+class _Hillshade(Perspecto):
     """Generate a Hillshade Image
 
     uses gdal/ImageMagick
@@ -393,7 +393,7 @@ class Hillshade(Perspecto):
 
         return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
 
-class Hillshade_(Perspecto):
+class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
     https://en.wikipedia.org/wiki/Blend_modes#Overlay

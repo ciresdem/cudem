@@ -2565,11 +2565,28 @@ class GDALFile(ElevationDataset):
                 uncertainty_data = np.zeros(band_data.shape)
 
             ## convert grid array to points
-            geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, precision=5)
-            geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid', precision=5)
-
+            
             if self.x_band is None and self.y_band is None:
-                lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+
+                x_precision = len(str(gt[0]).split('.')[-1])
+                y_precision = len(str(gt[3]).split('.')[-1])
+                #utils.echo_msg(gt)
+                #utils.echo_msg('{} {}'.format(x_precision, y_precision))
+                while True:
+                    geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision)
+                    geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid', x_precision=x_precision, y_precision=y_precision)
+                
+                    lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
+
+                    if lon_array.shape == band_data[0].shape:
+                        break
+                    else:
+                        if x_precision < 0 or y_precision < 0:
+                            break
+                        
+                        x_precision -= 1
+                        y_precision -= 1
+                    
                 #num = round((geo_x_end - geo_x_origin) / gt[1])
                 #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
                 lat_array = np.zeros((lon_array.shape))
