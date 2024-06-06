@@ -378,7 +378,7 @@ class Outliers(Grits):
         # elif self.percentile > 100:
         #     self.percentile = 100
 
-        if self.percentile is None:
+        if self.percentile is None or np.isnan(self.percentile):
             self.percentile = 75
         
         self.max_percentile = utils.float_or(self.max_percentile, ((100 - self.percentile) / 2) + self.percentile)
