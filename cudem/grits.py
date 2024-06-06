@@ -323,7 +323,8 @@ class Outliers(Grits):
                  chunk_step = None, max_chunk = None, max_step = None, k = None, max_k = None,
                  outlier_k = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
                  slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1,
-                 multipass = 1, accumulate = True, interpolation = 'nearest', aggressive = True, **kwargs):
+                 multipass = 1, accumulate = True, interpolation = 'nearest', aggressive = True,
+                 units_are_degrees = True, **kwargs):
         
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile)
@@ -346,6 +347,7 @@ class Outliers(Grits):
         self.k = utils.float_or(k)
         self.max_k = utils.float_or(max_k)
         self.aggressive = aggressive
+        self.units_are_degrees = units_are_degrees
         
         ## setup the uncertainty data if wanted
         if self.uncertainty_mask is not None:
@@ -397,7 +399,8 @@ class Outliers(Grits):
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
         cell_size = self.ds_config['geoT'][1]
-        cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+        if self.units_are_degrees:
+            cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
         m_size = 1000
         mm_size = 10000

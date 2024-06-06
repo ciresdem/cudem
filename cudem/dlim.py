@@ -112,6 +112,7 @@ from cudem import factory
 from cudem import vdatums
 from cudem import fetches
 from cudem import grits
+from cudem import vrbag
 
 # cshelph
 import pandas as pd
@@ -2636,10 +2637,13 @@ class BAGFile(ElevationDataset):
     vr_strategy (str): VR strategy to use (MIN/MAX/AUTO)
     """
 
-    def __init__(self, explode = False, force_vr = False, vr_strategy = 'MIN', **kwargs):
+    def __init__(
+            self, explode = False, force_vr = False, vr_resampled_grid = False, vr_strategy = 'MIN', **kwargs
+    ):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
+        self.resampled_grid = resampled_grid
         self.vr_strategy = vr_strategy
         if self.src_srs is None:
             self.src_srs = self.init_srs()
@@ -2718,7 +2722,7 @@ class BAGFile(ElevationDataset):
                         for gdal_ds in sub_ds.parse():
                             yield(gdal_ds)
 
-            else:
+            elif self.vr_resampled_grid:
                 oo.append("MODE=RESAMPLED_GRID")
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
@@ -2729,6 +2733,19 @@ class BAGFile(ElevationDataset):
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
                     yield(gdal_ds)
+            else: # use vrbag.py
+                tmp_bag_as_tif = utils.make_temp_fn('{}_tmp.tif'.format(utils.fn_basename2(self.fn)))
+                sr_cell_size = self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+                vrbag.interpolate_vr_bag(self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size= , use_blocks=True, method='linear', nodata=3.4028234663852886e+38)
+
+                sub_ds = GDALFile(fn=tmp_bag_as_tif, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
+                                  uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
+                                  uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
+                self.data_entries.append(sub_ds)
+                sub_ds.initialize()
+                for gdal_ds in sub_ds.parse():
+                    yield(gdal_ds)
+                
         else:
             sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                               uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,

@@ -15,6 +15,9 @@ from scipy import spatial
 from osgeo import gdal
 from tqdm import tqdm
 
+#MRL: import cudem stuff
+from cudem import utils
+
 DEBUGGING = False
 if DEBUGGING:
     import matplotlib.pyplot as plt
@@ -503,7 +506,8 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
                     yends[-1] = max(yends[-1], bag_lly + supergrid_y + bag_supergrid_dy - .000001)
                     # print(xstarts[0], xends[-1], ystarts[0], yends[-1])
                 if edge_option == STRETCH and not apply_stretch:
-                    print("not stretched??")
+                    #print("not stretched??")
+                    utils.echo_warning_msg('not stretched??')
 
         # convert the BAG coordinates into geotiff pixel indices
         # also reverse the rows since bag is lowerleft and tif is upper left
@@ -518,7 +522,8 @@ def VRBag_to_TIF(input_file_full_path, dst_filename, sr_cell_size=None, mode=MIN
             row_max = int(max(row_start_indices.max(), row_end_indices.max())) + 1
             col_max = int(max(col_start_indices.max(), col_end_indices.max())) + 1
             if row_min<0 or row_max<0 or col_min<0 or col_max<0:
-                print("something is less than zero")
+                #print("something is less than zero")
+                utils.echo_warning_msg('something is less than zero')
         if use_blocks:  # read the part of the geotiff that we need and modify it then write it back after applying the refinement grid
             row_offset = int(min(row_start_indices.min(), row_end_indices.min()))
             col_offset = int(min(col_start_indices.min(), col_end_indices.min()))
@@ -645,10 +650,13 @@ def interpolate_vr_bag(input_file_full_path, dst_filename, tmp_dir, sr_cell_size
     os.close(fobj)
     # if not DEBUGGING:
     if 1:
-        print('Creating point output...') #JDV
+        #print('Creating point output...') #JDV
+        utils.echo_msg('Creating point output from VR BAG.') # MRL
         dx, dy, cell_sz = VRBag_to_TIF(input_file_full_path, point_filename, sr_cell_size=sr_cell_size, mode=POINT, use_blocks=use_blocks, nodata=nodata)
-        print (dx, dy, cell_sz)
-        print('Creating min output...') #JDV
+        #print (dx, dy, cell_sz)
+        #print('Creating min output...') #JDV
+        utils.echo_msg('{} {} {}'.format(dx, dy, cell_sz)) #MRL
+        utils.echo_msg('Creating min output from VR BAG...') #MRL
         VRBag_to_TIF(input_file_full_path, min_filename, sr_cell_size=sr_cell_size, mode=MIN, use_blocks=use_blocks, nodata=nodata)
     else:
         dx, dy, cell_sz = 46.879258, 46.879258, 1.0
@@ -668,7 +676,8 @@ def interpolate_vr_bag(input_file_full_path, dst_filename, tmp_dir, sr_cell_size
     interp_band = interp_ds.GetRasterBand(1)
     interp_band.SetNoDataValue(nodata)
 
-    print ('Interpolating...') #JDV
+    #print ('Interpolating...') #JDV
+    utils.echo_msg('Interpolating...') #MRL
     if use_blocks:
         pixels_per_supergrid = int(max(dx / cell_sz, dy / cell_sz)) + 1
         row_block_size = col_block_size = 3 * pixels_per_supergrid
@@ -744,7 +753,8 @@ def interpolate_vr_bag(input_file_full_path, dst_filename, tmp_dir, sr_cell_size
                         # Write the data into the TIF on disk
                         interp_band.WriteArray(interp_data, ir, ic)
                     except:
-                        print('An error occurred in interpolation, continuing...')
+                        #print('An error occurred in interpolation, continuing...')
+                        utils.echo_warning_msg('An error occured in interpolation, continuing...')
                         #traceback.print_exc() MRL don't print the traceback here, just makes it messy
                         continue
         if DEBUGGING:
@@ -799,10 +809,20 @@ def interpolate_vr_bag(input_file_full_path, dst_filename, tmp_dir, sr_cell_size
     if not DEBUGGING:
         os.remove(min_filename)
         os.remove(point_filename)
-    print('Finished interpolating.') #JDV
+    #print('Finished interpolating.') #JDV
+    utils.echo_msg('Finished interpolating') #MRL
+    return(dst_filename)
 
 
-if __name__ == "__main__":
+## ==============================================
+## Command-line Interface (CLI)
+## $ dlim
+##
+## datalists cli
+## ==============================================
+## cli input is `vrbag input_file output_file cell_size interpolation_method temp_directory`
+#if __name__ == "__main__":
+def vrbag_cli(argv=sys.argv): #MRL called from entry-point
     # input_file = r"C:\Data\Survey_Outline_Examples\Variable_resolution\H13070_VR\H13070_MB_VR_MLLW_1of2.bag"
     # input_file = r"C:\Data\BAG\GDAL_VR\H-10771\ExampleForEven\H-10771.bag"
     # input_file = r"C:\Data\BAG\GDAL_VR\F00788\F00788_MB_VR_MLLW_Final.bag"
@@ -810,17 +830,29 @@ if __name__ == "__main__":
     # input_file = r"C:\Data\Survey_Outline_Examples\Variable_resolution\H12993_MB_VR_MLLW.bag"
     
     #JDV: read arguments for input, output, and temp dir from the command line
-    input_file = sys.argv[1]
-    output_file = sys.argv[2]
-    #MRL: add default tmp_dir and method
+    #MRL: exit program if input/output not supplied
+    if len(argv) > 2:
+        input_file = argv[1]
+        output_file = argv[2]
+    else:
+        utils.echo_error_msg('you must supply some information...')
+        utils.echo_msg('vrbag <input_bag> <output_tif> <cell_size> <interpolation_method> <temp_dir>')
+        sys.exit(1)
+    #MRL: add default tmp_dir and method and output cellsize
     #MRL: add interpolation method option to CLI and make sure the method is 'idw', 'linear' or 'cubic', use 'linear as default
-    if len(sys.argv) > 3:
-        method = sys.argv[3]
+    #MRL: add cell-size to cli
+    if len(argv) > 3:
+        cell_size = utils.int_or(argv[3])
+    else:
+        cell_size = None
+        
+    if len(argv) > 4:
+        method = argv[4]
     else:
         method = 'linear'
 
-    if len(sys.argv) > 4:
-        tmp_dir = sys.argv[4]
+    if len(argv) > 5:
+        tmp_dir = argv[5]
     else:
         tmp_dir = './'
         
@@ -829,7 +861,7 @@ if __name__ == "__main__":
         method = 'linear'
     
     if 1:
-        interpolate_vr_bag(input_file, output_file, tmp_dir, use_blocks=True, method=method, nodata=3.4028234663852886e+38)
+        interpolate_vr_bag(input_file, output_file, tmp_dir, sr_cell_size=cell_size, use_blocks=True, method=method, nodata=3.4028234663852886e+38)
     if 0:
         dst_filename = input_file+".1m_mean.tif"
         print("\n\nmean")

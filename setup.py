@@ -80,6 +80,7 @@ setuptools.setup(
             'perspecto = cudem.perspecto:perspecto_cli',
             'vdatums = cudem.vdatums:vdatums_cli',
             'grits = cudem.grits:grits_cli',
+            'vrbag = cudem.vrbag:vrbag_cli',
             'cudem = cudem.cudem_cli:cudem_cli',
         ],
     },
