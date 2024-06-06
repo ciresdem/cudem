@@ -2650,7 +2650,7 @@ class BAGFile(ElevationDataset):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
-        self.resampled_grid = vr_resampled_grid
+        self.vr_resampled_grid = vr_resampled_grid
         self.vr_strategy = vr_strategy
         if self.src_srs is None:
             self.src_srs = self.init_srs()
@@ -2742,7 +2742,7 @@ class BAGFile(ElevationDataset):
                     yield(gdal_ds)
             else: # use vrbag.py
                 tmp_bag_as_tif = utils.make_temp_fn('{}_tmp.tif'.format(utils.fn_basename2(self.fn)))
-                sr_cell_size = self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+                sr_cell_size = None#self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
                 vrbag.interpolate_vr_bag(self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size=sr_cell_size, use_blocks=True, method='linear', nodata=3.4028234663852886e+38)
 
                 sub_ds = GDALFile(fn=tmp_bag_as_tif, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
