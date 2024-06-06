@@ -1447,6 +1447,13 @@ class ElevationDataset:
                     stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
                     stacked_data['weights'][mask] = arrs['weight'][mask]
                     stacked_data['z'][mask] = arrs['z'][mask]
+
+                # elif mode == 'median':
+                #     ## accumulate incoming median(z), etc.
+                #     stacked_data['z'] += np.median([arrs['z']])
+                #     stacked_data['x'] += np.median(arrs['x'])
+                #     stacked_data['y'] += np.median(arrs['y'])
+                #     stacked_data['src_uncertainty'] += np.median(arrs['uncertainty'])
                     
                 elif mode == 'mean':
                     ## accumulate incoming z*weight and uu*weight
@@ -2736,7 +2743,7 @@ class BAGFile(ElevationDataset):
             else: # use vrbag.py
                 tmp_bag_as_tif = utils.make_temp_fn('{}_tmp.tif'.format(utils.fn_basename2(self.fn)))
                 sr_cell_size = self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
-                vrbag.interpolate_vr_bag(self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size= , use_blocks=True, method='linear', nodata=3.4028234663852886e+38)
+                vrbag.interpolate_vr_bag(self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size=sr_cell_size, use_blocks=True, method='linear', nodata=3.4028234663852886e+38)
 
                 sub_ds = GDALFile(fn=tmp_bag_as_tif, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                                   uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
