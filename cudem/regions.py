@@ -121,7 +121,7 @@ class Region:
 
         if not any(self.full_region()):
             return(False)
-        
+
         return(True)
 
     def copy(self):
@@ -622,7 +622,7 @@ class Region:
 
         return(o_chunks)
 
-    def warp(self, dst_crs = 'epsg:4326'):
+    def warp(self, dst_crs = 'epsg:4326', include_z = True):
         in_crs = pyproj.CRS.from_user_input(self.src_srs)
         out_crs = pyproj.CRS.from_user_input(dst_crs)
 
@@ -636,14 +636,14 @@ class Region:
         self.src_srs = dst_crs
         self.wkt = None
         
-        return(self.transform(transformer))
+        return(self.transform(transformer, include_z=include_z))
         
-    def transform(self, transformer = None):
+    def transform(self, transformer = None, include_z = True):
         if transformer is None or not self.valid_p():
             utils.echo_error_msg('could not perform transformation')
             return(self)
 
-        if self.zmin is not None and self.zmax is not None:
+        if include_z and (self.zmin is not None and self.zmax is not None):
             self.xmin, self.ymin, self.zmin = transformer.transform(self.xmin, self.ymin, self.zmin)
             self.xmax, self.ymax, self.zmax = transformer.transform(self.xmax, self.ymax, self.zmax)
         else:

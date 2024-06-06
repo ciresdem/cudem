@@ -5910,13 +5910,16 @@ def datalists_cli(argv=sys.argv):
                 elif want_region: # get the region and warp it if necessary
                     this_inf = this_datalist.inf()
                     this_region = regions.Region().from_list(this_inf.minmax)
+                    #print(this_region)
+                    #print(dst_srs)
+                    #print(this_inf.src_srs)
                     if dst_srs is not None:
                         if src_srs is not None:
                             this_region.src_srs = src_srs
                             this_region.warp(dst_srs)
                         elif this_inf.src_srs is not None:
                             this_region.src_srs = this_inf.src_srs
-                            this_region.warp(dst_srs)
+                            this_region.warp(dst_srs, include_z=False)
                     print(this_region.format('gmt'))
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
