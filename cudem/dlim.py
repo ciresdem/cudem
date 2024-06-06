@@ -2650,7 +2650,7 @@ class BAGFile(ElevationDataset):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
-        self.resampled_grid = resampled_grid
+        self.resampled_grid = vr_resampled_grid
         self.vr_strategy = vr_strategy
         if self.src_srs is None:
             self.src_srs = self.init_srs()
