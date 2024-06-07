@@ -1337,7 +1337,7 @@ def sample_warp(
 ):
     """sample and/or warp the src_dem"""
 
-    xcount = ycount = None
+    xcount = ycount = 0
     out_region = None
     if src_region is not None:
         out_region = [src_region.xmin, src_region.ymin, src_region.xmax, src_region.ymax]        
@@ -1381,20 +1381,20 @@ def sample_warp(
     else:
         pbar_update = None
 
-    warp_options = gdal.WarpOptions(format='MEM' if dst_dem is None else 'GTiff',
-                                    xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
-                                    dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-                                    resampleAlg=sample_alg, errorThreshold=0, creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
-                                    srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
-    
-    dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, warpOptions=warp_options)
+    # warp_options = gdal.WarpOptions(format='MEM' if dst_dem is None else 'GTiff',
+    #                                 xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
+    #                                 dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
+    #                                 resampleAlg=sample_alg, errorThreshold=0, creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
+    #                                 srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
+    # dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, warpOptions=warp_options)
     
     # if (xcount is None or ycount is None):
-    #     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-    #                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, #width=xcount, height=ycount,
-    #                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-    #                        resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=DEFLATE", "TILED=YES"],
-    #                        srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
+
+    dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
+                       xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
+                       dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
+                       resampleAlg=sample_alg, errorThreshold=0, creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
+                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
     # else:
     #     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
     #                        targetAlignedPixels=tap, width=xcount, height=ycount,
