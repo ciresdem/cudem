@@ -601,7 +601,8 @@ class ElevationDataset:
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
                         src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
-                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose
+                        ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose,
+                        co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
                 else:
                     src_mask = gdal.Open(self.mask['mask'])
@@ -2432,7 +2433,8 @@ class GDALFile(ElevationDataset):
                 
             warp_ = gdalfun.sample_warp(tmp_ds, tmp_warp, self.x_inc, self.y_inc, src_srs=self.src_proj4, dst_srs=self.dst_proj4,
                                         src_region=self.warp_region,#if (self.y_inc is not None and self.x_inc is not None) else None,
-                                        sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose)[0]
+                                        sample_alg=self.sample_alg, ndv=ndv, verbose=self.verbose,
+                                        co=["COMPRESS=DEFLATE", "TILED=YES"])[0]
             tmp_ds = warp_ = None
             
             ## the following seems to be redundant...
@@ -2499,7 +2501,7 @@ class GDALFile(ElevationDataset):
                 src_weight = gdalfun.sample_warp(self.weight_mask, None, src_dem_x_inc, src_dem_y_inc,
                                                  src_srs=self.aux_src_proj4, dst_srs=self.aux_dst_proj4,
                                                  src_region=src_dem_region, sample_alg=self.sample_alg,
-                                                 ndv=ndv, verbose=self.verbose)[0]
+                                                 ndv=ndv, verbose=self.verbose, co=["COMPRESS=DEFLATE", "TILED=YES"])[0]
                 weight_band = src_weight.GetRasterBand(1)
 
             else:
@@ -2516,7 +2518,7 @@ class GDALFile(ElevationDataset):
                 src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
                                                       src_srs=self.aux_src_proj4, dst_srs=self.aux_dst_proj4,
                                                       src_region=src_dem_region, sample_alg=self.sample_alg,
-                                                      ndv=ndv, verbose=self.verbose)[0]
+                                                      ndv=ndv, verbose=self.verbose, co=["COMPRESS=DEFLATE", "TILED=YES"],)[0]
                 uncertainty_band = src_uncertainty.GetRasterBand(1)
             else:
                 utils.echo_warning_msg('could not load uncertainty mask {}'.format(self.uncertainty_mask))
@@ -2527,7 +2529,7 @@ class GDALFile(ElevationDataset):
             trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
                                                     src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=self.aux_dst_proj4,
                                                     src_region=src_dem_region, sample_alg=self.sample_alg,
-                                                    ndv=ndv, verbose=self.verbose)[0]
+                                                    ndv=ndv, verbose=self.verbose, co=["COMPRESS=DEFLATE", "TILED=YES"])[0]
 
             if uncertainty_band is not None:
                 trans_uncertainty_band = trans_uncertainty.GetRasterBand(1)

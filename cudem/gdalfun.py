@@ -941,11 +941,11 @@ def gdal_has_ndv(src_gdal, band = 1):
             
         return(False)
     
-def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None):
+def gdal_mem_ds(ds_config, name = 'MEM', bands = 1, src_srs = None, co = ['COMPRESS=DEFLATE', 'TILED=YES']):
     """Create temporary gdal mem dataset"""
         
     mem_driver = gdal.GetDriverByName('MEM')
-    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'])
+    mem_ds = mem_driver.Create(name, ds_config['nx'], ds_config['ny'], bands, ds_config['dt'], options=co)
     if mem_ds is not None:
         mem_ds.SetGeoTransform(ds_config['geoT'])
         if src_srs is None:
@@ -1060,7 +1060,7 @@ def gdal_get_array(src_gdal, band = 1):
 
     return(src_array, infos)
 
-def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
+def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["COMPRESS=DEFLATE", "TILED=YES"]):
     """cut src_ds datasource to src_region and output dst_gdal file
 
     -----------
@@ -1098,7 +1098,7 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True):
                     this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                     mem_ds.FlushCache()
 
-                dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0)
+                dst_ds = gdal.GetDriverByName(ds_config['fmt']).CreateCopy(dst_gdal, mem_ds, 0, options=co)
                 status = 0
 
     return(dst_gdal, status)
@@ -1301,7 +1301,7 @@ def gdal_polygonize(src_gdal, dst_layer, verbose = False):
 
     return(status, status)
 
-def gdal_mask(src_gdal, msk_gdal, out_gdal, msk_value = None, verbose = True):
+def gdal_mask(src_gdal, msk_gdal, out_gdal, msk_value = None, co=["COMPRESS=DEFLATE", "TILED=YES"], verbose = True):
     """mask the src_gdal file with the msk_gdal file to out_gdal"""
     
     with gdal_datasource(src_gdal) as src_ds:
@@ -1315,7 +1315,7 @@ def gdal_mask(src_gdal, msk_gdal, out_gdal, msk_value = None, verbose = True):
             with gdal_datasource(msk_gdal) as tmp_ds:
                 msk_ds = sample_warp(
                     tmp_ds, None, src_config['geoT'][1], src_config['geoT'][5],
-                    src_region=tmp_region, sample_alg='bilinear',
+                    src_region=tmp_region, sample_alg='bilinear', co=co,
                     verbose=verbose
                 )[0] 
                 if msk_ds is not None:
@@ -1333,7 +1333,8 @@ def gdal_mask(src_gdal, msk_gdal, out_gdal, msk_value = None, verbose = True):
 def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
-        ndv=-9999, tap=False, size=False, verbose=False
+        ndv=-9999, tap=False, size=False, co=["COMPRESS=DEFLATE", "TILED=YES"],
+        ot=gdal.GDT_Float32, verbose=False
 ):
     """sample and/or warp the src_dem"""
 
@@ -1368,6 +1369,7 @@ def sample_warp(
     #     )        
     #utils.echo_msg('gdalwarp {} {} -s_srs {} -t_srs {} -tr {} {} -r {}'.format(src_dem, dst_dem, src_srs, dst_srs, x_sample_inc, y_sample_inc, sample_alg))
     #utils.echo_msg('dst_dem: > {} <'.format(dst_dem))
+    
     if dst_dem is not None:
         if not os.path.exists(os.path.dirname(dst_dem)):
             os.makedirs(os.path.dirname(dst_dem))
@@ -1381,26 +1383,11 @@ def sample_warp(
     else:
         pbar_update = None
 
-    # warp_options = gdal.WarpOptions(format='MEM' if dst_dem is None else 'GTiff',
-    #                                 xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
-    #                                 dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-    #                                 resampleAlg=sample_alg, errorThreshold=0, creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
-    #                                 srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
-    # dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, warpOptions=warp_options)
-    
-    # if (xcount is None or ycount is None):
-
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-                       resampleAlg=sample_alg, errorThreshold=0, creationOptions=["COMPRESS=DEFLATE", "TILED=YES"],
-                       srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
-    # else:
-    #     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
-    #                        targetAlignedPixels=tap, width=xcount, height=ycount,
-    #                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
-    #                        resampleAlg=sample_alg, errorThreshold=0, options=["COMPRESS=DEFLATE", "TILED=YES"],
-    #                        srcSRS=src_srs, dstSRS=dst_srs, outputType=gdal.GDT_Float32, callback=pbar_update)
+                       resampleAlg=sample_alg, errorThreshold=0, creationOptions=co, srcSRS=src_srs, dstSRS=dst_srs,
+                       outputType=ot, callback=pbar_update)
 
     if verbose:
         pbar.close()
@@ -1414,7 +1401,10 @@ def sample_warp(
         dst_ds = None
         return(dst_dem, 0)    
     
-def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, verbose=False):
+def gdal_write(
+        src_arr, dst_gdal, ds_config, dst_fmt='GTiff', co=["COMPRESS=DEFLATE", "TILED=YES"],
+        max_cache=False, verbose=False
+):
     """write src_arr to gdal file dst_gdal using src_config
 
     -----------
@@ -1439,12 +1429,12 @@ def gdal_write(src_arr, dst_gdal, ds_config, dst_fmt='GTiff', max_cache=False, v
     if max_cache:
         gdal.SetCacheMax(2**30)
 
-    if ds_config['dt'] == 5:
-        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
-                           ds_config['dt'], options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES'])
-    else:
-        ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
-                           ds_config['dt'], options=['COMPRESS=LZW', 'TILED=YES', 'PREDICTOR=3'])
+    #if ds_config['dt'] == 5:
+    ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
+                       ds_config['dt'], options=co)
+    #else:
+    #ds = driver.Create(dst_gdal, ds_config['nx'], ds_config['ny'], 1,
+    #ds_config['dt'], options=['COMPRESS=LZW', 'TILED=YES', 'PREDICTOR=3'])
 
     if ds is not None:
         ds.SetGeoTransform(ds_config['geoT'])
@@ -1479,7 +1469,7 @@ def gdal2gdal(src_dem, dst_fmt='GTiff', src_srs='epsg:4326', dst_dem=None, co=Tr
         if dst_fmt != 'GTiff':
             co = False
             
-        if not co:
+        if not co: # update co
             gdal2gdal_cmd = ('gdal_translate {} {} -f {}'.format(src_dem, dst_dem, dst_fmt))
         else:
             gdal2gdal_cmd = ('gdal_translate {} {} -f {} -co TILED=YES -co COMPRESS=DEFLATE\
