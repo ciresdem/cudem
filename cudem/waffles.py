@@ -185,7 +185,7 @@ class Waffle:
         else:
             self.co = ["COMPRESS=DEFLATE", "TILED=YES"]
 
-        utils.echo_msg(self.co)
+            #utils.echo_msg(self.co)
         ## initialize data, setting set_incs to True will force dlim to process the data to the set increments
         if self.want_stack:
             self._init_data(set_incs=True) 
@@ -1948,10 +1948,12 @@ class WafflesVDatum(Waffle):
         self.vdatum_out = vdatum_out        
 
     def run(self):
-        vdatums.VerticalTransform(
+        status = vdatums.VerticalTransform(
             self.mode, self.p_region, self.xinc, self.yinc, self.vdatum_in, self.vdatum_out,
             node=self.node, cache_dir=waffles_cache
         ).run(outfile='{}.tif'.format(self.name))
+
+        utils.echo_msg(status)
         return(self)
     
 class WafflesCoastline(Waffle):

@@ -1,0 +1,17 @@
+## CRM Datalist
+
+# topo and bathy low-res
+mar_grav -106:bathy_only=True .001 .85
+charts -200 .01 .75
+hydronos:datatype=xyz -202 .1 .1
+multibeam:exclude_survey_id=CNTL14RR -201 .6 .1
+fabdem -104 .6 .65
+ned -215 .625 .35
+ned1 -215 2 .35
+
+# topo and topobathy - high-res
+ehydro -203 .75 0	
+hydronos:datatype=bag -202 2 0
+CoNED -211 14 0
+CUDEM -210 15 0
+

@@ -991,8 +991,10 @@ class ElevationDataset:
 
                         self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
                             'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
-                            geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=False
-                        ).run(outfile=self.trans_fn)
+                            geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=self.verbose
+                        ).run(outfile=self.trans_fn)                        
+                        utils.echo_msg('{} {}'.format(self.trans_fn, self.trans_fn_unc))
+
                 #else:
                 #    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
 
@@ -1283,9 +1285,7 @@ class ElevationDataset:
         else:
             mode = self.stack_mode
             
-        #if supercede: mode = 'supercede'
-        utils.echo_msg('stacking using {} mode'.format(mode))
-        
+        utils.echo_msg('stacking using {} mode'.format(mode))        
         ## initialize the output rasters
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
@@ -1294,6 +1294,7 @@ class ElevationDataset:
 
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        #zs_fn = '{}_zs.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
@@ -1673,7 +1674,9 @@ class ElevationDataset:
             warnings.simplefilter('ignore')
             for points in self.yield_ds(): 
                 if self.transformer is not None:
+                    #utils.echo_msg_inline('transforming points...')
                     points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
+                    #utils.echo_msg_inline('ok\n')
 
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy() #if self.trans_region is None else self.trans_region.copy()
@@ -1730,7 +1733,6 @@ class ElevationDataset:
 
             points_u = np.sqrt(points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
             points_u[np.isnan(points_u)] = 0
-            
             dataset = np.vstack((points['x'], points['y'], points['z'], points_w, points_u)).transpose()
             count += len(dataset)
             points = None
@@ -1766,6 +1768,12 @@ class ElevationDataset:
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
 
+            ## bin-filter the incoming points
+            # utils.echo_msg('binning points with {} {}'.format(y_res, z_res))
+            # b_points = self.bin_z_points(points, y_res=.25,z_res=15)
+            # if b_points is not None:
+            #     points = b_points
+                
             ## convert the points to pixels based on the geotransform
             ## and calculate the local srcwin of the points
             pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
@@ -1882,6 +1890,142 @@ class ElevationDataset:
                 )
             )    
 
+    def bin_points(self, points, y_res, z_res):
+        '''Bin data along vertical and horizontal scales for later segmentation'''
+        
+        ## Calculate number of bins required both vertically and
+        ## horizontally with resolution size
+        y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
+        z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
+
+        if (y_bin_number > 0 and z_bin_number > 0):    
+            points1 = points
+            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
+            points['y_bins'] = y_bins
+            z_bins = pd.cut(
+                points['z'], z_bin_number, labels = np.round(
+                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
+                    decimals = 1
+                )
+            )
+            points1['z_bins'] = z_bins
+            points1 = points1.reset_index(drop=True)
+
+            return(points1)
+
+        return(None)
+
+    def convert_wgs_to_utm(self, lat, lon):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            easting, northing, num, letter = utm.from_latlon(lat, lon)
+            if letter >= 'N':
+                epsg = 'epsg:326' + str(num)
+            elif letter < 'N':
+                epsg = 'epsg:327' + str(num)
+            else:
+                print('Error Finding UTM')
+
+            return(epsg)
+
+    def get_bin_height(self, binned_data, percentile=50):
+        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
+
+        # Create sea height list
+        sea_height = []
+        bin_lat = []
+        bin_lon = []
+
+        # Group data by latitude
+        binned_data_sea = binned_data
+        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
+        data_groups = dict(list(grouped_data))
+
+        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
+        
+        # Loop through groups and return average sea height
+        for k,v in data_groups.items():
+            # Create new dataframe based on occurance of photons per height bin
+            new_df = pd.DataFrame(v.groupby('z_bins').count())
+
+            # Return the bin with the highest count
+            largest_h_bin = new_df['z'].argmax()
+
+            # Select the index of the bin with the highest count
+            largest_h = new_df.index[largest_h_bin]
+
+            # Set threshold of photon counts per bin
+            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:        
+
+                # Calculate the median value of all values within this bin
+                lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
+                lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
+                lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
+
+                # Append to sea height list
+                sea_height.append(lat_bin_sea_median)
+                bin_lat.append(lat_bin_median)
+                bin_lon.append(lon_bin_median)
+                del new_df
+            else:
+                del new_df
+
+        # Filter out sea height bin values outside 2 SD of mean.
+        if np.all(np.isnan(sea_height)):
+            return(None)
+
+        mean = np.nanmean(sea_height, axis=0)
+        sd = np.nanstd(sea_height, axis=0)
+        sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
+
+        return(bin_lat, bin_lon, sea_height_1)
+    
+    def bin_z_points(self, points, y_res=1, z_res=.5):
+        utils.echo_msg('binning points @ {} {}'.format(y_res, z_res))
+        try:
+            epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
+            epsg_num = int(epsg_code.split(':')[-1])
+            utm_proj = pyproj.Proj(epsg_code)
+            x_utm, y_utm = utm_proj(points['x'], points['y'])
+        except:
+            x_utm, y_utm = points['x'], points['y']
+
+        points_1 = pd.DataFrame(
+            {'y': y_utm,
+             'x': x_utm,
+             'z': points['z']},
+            columns=['y', 'x', 'z']
+        )
+
+        points_1 = points_1[(points_1['z'] < 0)]
+
+        if len(points_1) > 0:
+            binned_points = self.bin_points(points_1, y_res, z_res)
+            points_1 = None
+            
+            if binned_points is not None:
+                ys, xs, zs = self.get_bin_height(binned_points, percentile=85)
+                binned_points = None
+                
+                bin_ds = np.column_stack((xs, ys, zs))
+                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
+                xs = ys = zs = None
+                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
+                med_surface_h = np.nanmedian(bin_ds['z'])
+                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
+                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
+
+                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
+                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
+                lon_wgs84 = lat_wgs84 = bin_ds = None
+                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
+
+                return(bin_points)
+            
+        return(None)
+            
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
@@ -2190,6 +2334,8 @@ class GDALFile(ElevationDataset):
     check_path: check to make sure path exists
     super_grid: Force processing of a supergrid (BAG files) (True/False)
     band_no: the band number of the elevation data
+    remove_flat: remove flattened data from the input
+    node: force node registration of either 'pixel' or 'grid'
     """
     
     def __init__(self, weight_mask = None, uncertainty_mask = None,  x_band = None, y_band = None, uncertainty_mask_to_meter = 1,
@@ -2344,7 +2490,7 @@ class GDALFile(ElevationDataset):
             if self.transformer is not None:
                 self.transformer = None
 
-            utils.echo_msg(self.sample_alg)
+            #utils.echo_msg(self.sample_alg)
             if self.sample_alg == 'auto':
                 if self.stack_mode == 'min':
                     self.sample_alg = 'min'
@@ -2526,6 +2672,7 @@ class GDALFile(ElevationDataset):
 
         ## uncertainty from the vertical transformation
         if self.trans_fn_unc is not None:
+            #print(self.trans_fn_unc, src_dem_x_inc, src_dem_y_inc, self.aux_dst_proj4, src_dem_region, self.sample_alg, ndv)
             trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
                                                     src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=self.aux_dst_proj4,
                                                     src_region=src_dem_region, sample_alg=self.sample_alg,
@@ -2575,17 +2722,15 @@ class GDALFile(ElevationDataset):
                 uncertainty_data = np.zeros(band_data.shape)
 
             ## convert grid array to points
-            
+            #utils.echo_msg(band_data[0].shape)
             if self.x_band is None and self.y_band is None:
 
-                x_precision = len(str(gt[0]).split('.')[-1])
-                y_precision = len(str(gt[3]).split('.')[-1])
+                x_precision = 12#len(str(gt[0]).split('.')[-1])
+                y_precision = 12#len(str(gt[3]).split('.')[-1])
                 #utils.echo_msg(gt)
-                #utils.echo_msg('{} {}'.format(x_precision, y_precision))
                 while True:
                     geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision)
                     geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid', x_precision=x_precision, y_precision=y_precision)
-                
                     lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
 
                     if lon_array.shape == band_data[0].shape:
@@ -2593,10 +2738,15 @@ class GDALFile(ElevationDataset):
                     else:
                         if x_precision < 0 or y_precision < 0:
                             break
-                        
+
+                        #if self.node == 'grid':
                         x_precision -= 1
                         y_precision -= 1
-                    
+                        #else:
+                        #    x_precision += 1
+                        #    y_precision += 1
+
+                #utils.echo_msg('{} {}'.format(x_precision, y_precision))
                 #num = round((geo_x_end - geo_x_origin) / gt[1])
                 #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
                 lat_array = np.zeros((lon_array.shape))
@@ -2824,15 +2974,15 @@ class SWOT_PIXC(SWOTFile):
             latitude = self._get_var_arr(src_h5, '{}/latitude'.format(self.group))
             longitude = self._get_var_arr(src_h5, '{}/longitude'.format(self.group))
             var_data = self._get_var_arr(src_h5, '{}/{}'.format(self.group, self.var))
-            geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
             if self.apply_geoid:
+                geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
                 out_data = var_data - geoid_data
             else:
                 out_data = var_data
 
             dataset = np.column_stack((longitude, latitude, out_data))
             points = np.rec.fromrecords(dataset, names='x, y, z')
-
+            
             self._close_h5File(src_h5)
             self._close_h5File(src_h5_vec)
             
@@ -3162,138 +3312,7 @@ class MBSParser(ElevationDataset):
         else:
             for pts in self.yield_mblist_ds():
                 yield(pts)
-            
-    def bin_points(self, points, y_res, z_res):
-        '''Bin data along vertical and horizontal scales for later segmentation'''
-        
-        ## Calculate number of bins required both vertically and
-        ## horizontally with resolution size
-        y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
-        z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
-
-        if (y_bin_number > 0 and z_bin_number > 0):    
-            points1 = points
-            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
-            points['y_bins'] = y_bins
-            z_bins = pd.cut(
-                points['z'], z_bin_number, labels = np.round(
-                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
-                    decimals = 1
-                )
-            )
-            points1['z_bins'] = z_bins
-            points1 = points1.reset_index(drop=True)
-
-            return(points1)
-
-        return(None)
-
-    def convert_wgs_to_utm(self, lat, lon):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            easting, northing, num, letter = utm.from_latlon(lat, lon)
-            if letter >= 'N':
-                epsg = 'epsg:326' + str(num)
-            elif letter < 'N':
-                epsg = 'epsg:327' + str(num)
-            else:
-                print('Error Finding UTM')
-
-            return(epsg)
-
-    def get_bin_height(self, binned_data, percentile=50):
-        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
-
-        # Create sea height list
-        sea_height = []
-        bin_lat = []
-        bin_lon = []
-
-        # Group data by latitude
-        binned_data_sea = binned_data
-        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
-        data_groups = dict(list(grouped_data))
-
-        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
-        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-        
-        # Loop through groups and return average sea height
-        for k,v in data_groups.items():
-            # Create new dataframe based on occurance of photons per height bin
-            new_df = pd.DataFrame(v.groupby('z_bins').count())
-
-            # Return the bin with the highest count
-            largest_h_bin = new_df['z'].argmax()
-
-            # Select the index of the bin with the highest count
-            largest_h = new_df.index[largest_h_bin]
-
-            # Set threshold of photon counts per bin
-            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:        
-
-                # Calculate the median value of all values within this bin
-                lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
-                lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
-                lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
-
-                # Append to sea height list
-                sea_height.append(lat_bin_sea_median)
-                bin_lat.append(lat_bin_median)
-                bin_lon.append(lon_bin_median)
-                del new_df
-            else:
-                del new_df
-
-        # Filter out sea height bin values outside 2 SD of mean.
-        if np.all(np.isnan(sea_height)):
-            return(None)
-
-        mean = np.nanmean(sea_height, axis=0)
-        sd = np.nanstd(sea_height, axis=0)
-        sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
-
-        return(bin_lat, bin_lon, sea_height_1)
-    
-    def bin_z_points(self, points, y_res=1, z_res=.5):
-        epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
-        epsg_num = int(epsg_code.split(':')[-1])
-        utm_proj = pyproj.Proj(epsg_code)
-        x_utm, y_utm = utm_proj(points['x'], points['y'])
-
-        points_1 = pd.DataFrame(
-            {'y': y_utm,
-             'x': x_utm,
-             'z': points['z']},
-            columns=['y', 'x', 'z']
-        )
-
-        points_1 = points_1[(points_1['z'] < 0)]
-        if len(points_1) > 0:
-            binned_points = self.bin_points(points_1, y_res, z_res)
-            points_1 = None
-            
-            if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points)
-                binned_points = None
-                
-                bin_ds = np.column_stack((xs, ys, zs))
-                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
-                xs = ys = zs = None
-                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
-                med_surface_h = np.nanmedian(bin_ds['z'])
-                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
-                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
-
-                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
-                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
-                lon_wgs84 = lat_wgs84 = bin_ds = None
-                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
-
-                return(bin_points)
-            
-        return(None)
-            
+                        
 class OGRFile(ElevationDataset):
     """providing an OGR 3D point dataset parser.
 
@@ -5338,11 +5357,13 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)
         src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
-        utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx[0], src_tif), verbose=self.verbose)
         
-        yield(DatasetFactory(mod=src_tif, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
+        if result[1].endswith('.zip'):
+            v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)[0]
+            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=self.verbose)
+        
+        yield(DatasetFactory(mod=src_tif, data_format=200, node='pixel', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                              parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                              cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
@@ -5691,7 +5712,7 @@ Options:
   -P, --t_srs\t\tSet the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
-  -A, --stack-mode\t\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+  -A, --stack-mode\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
   -T, --filter\t\tFILTER the data stack using one or multiple filters. 
 \t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
