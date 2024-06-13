@@ -4279,10 +4279,11 @@ set `data_set` to one of (for L2_HR_Raster):
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
-    def __init__(self, data_set = 'wse', apply_geoid = True, **kwargs):
+    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
         self.apply_geoid = apply_geoid
+        self.classes = classes
 
     # def fetch_pixc_vec(self, swot_fn):
     #     pixc_vec_filter = utils.fn_basename2(swot_fn).split('PIXC_')[1]
@@ -4304,7 +4305,7 @@ set `data_set` to one of (for L2_HR_Raster):
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
             
-            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, src_srs='epsg:4326+3855',
+            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, classes=self.classes, src_srs='epsg:4326+3855',
                                dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
             
