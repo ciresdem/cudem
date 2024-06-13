@@ -1450,11 +1450,20 @@ class ElevationDataset:
                         
                     stacked_data['x'][mask] = arrs['x'][mask]
                     stacked_data['y'][mask] = arrs['y'][mask]
-                    stacked_data['src_uncertainty'][mask]  = arrs['uncertainty'][mask]
-                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
-                    stacked_data['weights'][mask] = arrs['weight'][mask]
-                    stacked_data['z'][mask] = arrs['z'][mask]
+                    # stacked_data['src_uncertainty'][mask]  = arrs['uncertainty'][mask]
+                    # stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+                    # stacked_data['weights'][mask] = arrs['weight'][mask]
 
+                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+
+                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                    stacked_data['weights'] += arrs['weight']
+                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+                    stacked_data['z'][mask] = arrs['z'][mask]
+                    
                 # elif mode == 'median':
                 #     ## accumulate incoming median(z), etc.
                 #     stacked_data['z'] += np.median([arrs['z']])
@@ -1549,14 +1558,15 @@ class ElevationDataset:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                     stacked_data[key][stacked_data[key] == ndv] = np.nan
 
-                if mode == 'mean':
-                    ## average the accumulated arrays for finalization
-                    ## x, y, z and u are weighted sums, so divide by weights
+                if mode == 'mean' or mode == 'min' or mode == 'max':
                     stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
-                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
-                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
-
+                    if mode == 'mean':
+                        ## average the accumulated arrays for finalization
+                        ## x, y, z and u are weighted sums, so divide by weights
+                        stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
+                        stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
+                        stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+                    
                     ## apply the source uncertainty with the sub-cell variance uncertainty
                     ## caclulate the standard error (sqrt( uncertainty / count))
                     stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
@@ -1924,6 +1934,7 @@ class ElevationDataset:
             points1 = points
             y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
             points['y_bins'] = y_bins
+            utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
             z_bins = pd.cut(
                 points['z'], z_bin_number, labels = np.round(
                     np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
@@ -2027,7 +2038,7 @@ class ElevationDataset:
             points_1 = None
             
             if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points, percentile=25)
+                ys, xs, zs = self.get_bin_height(binned_points, percentile=50)
                 binned_points = None
                 
                 bin_ds = np.column_stack((xs, ys, zs))
@@ -2978,13 +2989,17 @@ class SWOT_PIXC(SWOTFile):
     """NASA SWOT PIXC data file.
 
     Extract data from a SWOT PIXC file.
+
+    classes: 1UB, 2UB, 3UB, 4UB, 5UB, 6UB, 7UB
+    "land, land_near_water, water_near_land, open_water, dark_water, low_coh_water_near_land, open_low_coh_water"
     """
     
-    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, **kwargs):
+    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
         self.apply_geoid = apply_geoid
+        self.classes = [int(x) for x in classes.split('/')] if classes is not None else []
 
     def yield_ds(self):
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
@@ -2997,14 +3012,21 @@ class SWOT_PIXC(SWOTFile):
             latitude = self._get_var_arr(src_h5, '{}/latitude'.format(self.group))
             longitude = self._get_var_arr(src_h5, '{}/longitude'.format(self.group))
             var_data = self._get_var_arr(src_h5, '{}/{}'.format(self.group, self.var))
+            class_data = self._get_var_arr(src_h5, '{}/classification'.format(self.group))
             if self.apply_geoid:
                 geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
                 out_data = var_data - geoid_data
             else:
                 out_data = var_data
-
+                
             dataset = np.column_stack((longitude, latitude, out_data))
             points = np.rec.fromrecords(dataset, names='x, y, z')
+            #points = points[points['z'] != 9.96921e+36]
+
+            if len(self.classes) > 0:
+                points = points[(np.isin(class_data, self.classes))]
+
+            points = points[points['z'] != -9.969209968386869e+36]
             self._close_h5File(src_h5)
             self._close_h5File(src_h5_vec)
 
@@ -4074,7 +4096,7 @@ class Fetcher(ElevationDataset):
         
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs,
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True)._acquire_module()
         yield(ds)
@@ -4284,7 +4306,7 @@ set `data_set` to one of (for L2_HR_Raster):
             
             sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, src_srs='epsg:4326+3855',
                                dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                               x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
+                               x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
             
         elif 'L2_HR_Raster' in result[-1]:
             sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=self.apply_geoid, src_srs=None, dst_srs=self.dst_srs,
