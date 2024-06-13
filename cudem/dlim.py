@@ -376,6 +376,7 @@ class ElevationDataset:
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
+        self.dlim_filters = ['bin_z']
         if self.mask is not None:
             if isinstance(self.mask, str):
                 self.mask = {'mask': self.mask}
@@ -946,12 +947,15 @@ class ElevationDataset:
                 
             ## vertical Transformation
             if want_vertical:
-                if self.region is None:
-                    vd_region = regions.Region().from_list(self.infos.minmax)
-                    vd_region.src_srs = in_horizontal_crs.to_proj4()
-                else:
-                    vd_region = self.region.copy()
-                    vd_region.src_srs = out_horizontal_crs.to_proj4()
+                ## proj transform takes a long time if the vertical datum has a region that
+                ## is smaller than the dataset (esp. swot data). Setting the vertical transformation
+                ## grid to the region of the input data speeds things up considerably...
+                #if self.region is None:
+                vd_region = regions.Region().from_list(self.infos.minmax)
+                vd_region.src_srs = in_horizontal_crs.to_proj4()
+                #else:
+                #    vd_region = self.region.copy()
+                #    vd_region.src_srs = out_horizontal_crs.to_proj4()
                     
                 vd_region.warp('epsg:4326')                
                 if not vd_region.valid_p():
@@ -991,9 +995,9 @@ class ElevationDataset:
 
                         self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
                             'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
-                            geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=self.verbose
+                            geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=False
                         ).run(outfile=self.trans_fn)                        
-                        utils.echo_msg('{} {}'.format(self.trans_fn, self.trans_fn_unc))
+                        #utils.echo_msg('{} {}'.format(self.trans_fn, self.trans_fn_unc))
 
                 #else:
                 #    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
@@ -1020,6 +1024,7 @@ class ElevationDataset:
                 self.dst_proj4 = out_horizontal_crs.to_proj4()
                 self.aux_src_proj4 = in_horizontal_crs.to_proj4()
                 self.aux_dst_proj4 = out_horizontal_crs.to_proj4()
+                #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
                 self.transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True)
 
         ## dataset region
@@ -1674,10 +1679,9 @@ class ElevationDataset:
             warnings.simplefilter('ignore')
             for points in self.yield_ds(): 
                 if self.transformer is not None:
-                    #utils.echo_msg_inline('transforming points...')
                     points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
-                    #utils.echo_msg_inline('ok\n')
-
+                    points = points[~np.isinf(points['z'])]
+                    
                 if self.region is not None and self.region.valid_p():
                     xyz_region = self.region.copy() #if self.trans_region is None else self.trans_region.copy()
                     if self.invert_region:
@@ -1698,6 +1702,30 @@ class ElevationDataset:
                             points =  points[(points['z'] < xyz_region.zmax)]
 
                 if len(points) > 0:
+
+                    ## apply any dlim filters to the points
+                    if isinstance(self.fltrs, list):
+                        for f in self.fltrs:
+                            opts = f.split(':')
+                            if opts[0] in self.dlim_filters:
+                                if len(opts) > 1:
+                                    if opts[0] == 'bin_z':
+                                        fltr_args = utils.args2dict(list(opts[1:]), {})
+                                        fltr_args_1 = {}
+                                        for k in fltr_args.keys():
+                                            if k == 'y_res' or k == 'z_res':
+                                                #utils.echo_msg(fltr_args_1)
+                                                arg_val = utils.float_or(fltr_args[k])
+                                                if arg_val is not None:
+                                                    fltr_args_1[k] = arg_val
+
+                                        utils.echo_msg(fltr_args_1)
+
+                                        ## bin-filter the incoming points
+                                        b_points = self.bin_z_points(points, **fltr_args_1)#y_res=y_res,z_res=z_res)
+                                        if b_points is not None:
+                                            points = b_points
+
                     yield(points)
                 
         self.transformer = None
@@ -1767,12 +1795,6 @@ class ElevationDataset:
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
-
-            ## bin-filter the incoming points
-            # utils.echo_msg('binning points with {} {}'.format(y_res, z_res))
-            # b_points = self.bin_z_points(points, y_res=.25,z_res=15)
-            # if b_points is not None:
-            #     points = b_points
                 
             ## convert the points to pixels based on the geotransform
             ## and calculate the local srcwin of the points
@@ -1924,7 +1946,7 @@ class ElevationDataset:
             elif letter < 'N':
                 epsg = 'epsg:327' + str(num)
             else:
-                print('Error Finding UTM')
+                utils.echo_error_msg('Could not find UTM zone')
 
             return(epsg)
 
@@ -1998,14 +2020,14 @@ class ElevationDataset:
             columns=['y', 'x', 'z']
         )
 
-        points_1 = points_1[(points_1['z'] < 0)]
+        #points_1 = points_1[(points_1['z'] < 0)]
 
         if len(points_1) > 0:
             binned_points = self.bin_points(points_1, y_res, z_res)
             points_1 = None
             
             if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points, percentile=85)
+                ys, xs, zs = self.get_bin_height(binned_points, percentile=25)
                 binned_points = None
                 
                 bin_ds = np.column_stack((xs, ys, zs))
@@ -2663,7 +2685,7 @@ class GDALFile(ElevationDataset):
             elif os.path.exists(self.uncertainty_mask):
                 src_uncertainty = gdalfun.sample_warp(self.uncertainty_mask, None, src_dem_x_inc, src_dem_y_inc,
                                                       src_srs=self.aux_src_proj4, dst_srs=self.aux_dst_proj4,
-                                                      src_region=src_dem_region, sample_alg=self.sample_alg,
+                                                      src_region=src_dem_region, sample_alg='bilinear',
                                                       ndv=ndv, verbose=self.verbose, co=["COMPRESS=DEFLATE", "TILED=YES"],)[0]
                 uncertainty_band = src_uncertainty.GetRasterBand(1)
             else:
@@ -2673,9 +2695,10 @@ class GDALFile(ElevationDataset):
         ## uncertainty from the vertical transformation
         if self.trans_fn_unc is not None:
             #print(self.trans_fn_unc, src_dem_x_inc, src_dem_y_inc, self.aux_dst_proj4, src_dem_region, self.sample_alg, ndv)
+            #utils.echo_msg(self.sample_alg)
             trans_uncertainty = gdalfun.sample_warp(self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
                                                     src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84', dst_srs=self.aux_dst_proj4,
-                                                    src_region=src_dem_region, sample_alg=self.sample_alg,
+                                                    src_region=src_dem_region, sample_alg='bilinear',
                                                     ndv=ndv, verbose=self.verbose, co=["COMPRESS=DEFLATE", "TILED=YES"])[0]
 
             if uncertainty_band is not None:
@@ -2982,10 +3005,15 @@ class SWOT_PIXC(SWOTFile):
 
             dataset = np.column_stack((longitude, latitude, out_data))
             points = np.rec.fromrecords(dataset, names='x, y, z')
-            
             self._close_h5File(src_h5)
             self._close_h5File(src_h5_vec)
-            
+
+            #tmp_points = points
+            #while len(points) > 0:
+            #tmp_points = points[:1000000]
+            #points = points[1000000:]
+            #utils.echo_msg(len(points))
+            #yield(tmp_points)
             yield(points)
 
 class SWOT_HR_Raster(ElevationDataset):
@@ -3021,7 +3049,7 @@ class SWOT_HR_Raster(ElevationDataset):
             sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                               x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
-                              node='pixel', metadata=copy.deepcopy(self.metadata))
+                              node='grid', metadata=copy.deepcopy(self.metadata))
             
             self.data_entries.append(sub_ds)
             sub_ds.initialize()

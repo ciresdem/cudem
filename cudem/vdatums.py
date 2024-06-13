@@ -617,7 +617,9 @@ class VerticalTransform:
     def run(self, outfile=None):
         if outfile is None:
             outfile = utils.make_temp_fn('trans_grid.tif', self.cache_dir)
-        utils.echo_msg(outfile)
+
+        if self.verbose:
+            utils.echo_msg(outfile)
         
         if os.path.exists(outfile):
             if self.verbose:
@@ -626,14 +628,18 @@ class VerticalTransform:
             return(outfile)
 
         unc_outfile = '{}_unc.{}'.format(utils.fn_basename2(outfile), utils.fn_ext(outfile))
-        utils.echo_msg(unc_outfile)
+
+        if self.verbose:
+            utils.echo_msg(unc_outfile)
         
         if self.epsg_in is None or self.epsg_out is None:
             utils.echo_error_msg('failed to parse vertical input or output, check inputs')
                 
             return(None)
         else:
-            utils.echo_msg('{} {}'.format(self.epsg_in, self.epsg_out))
+            if self.verbose:
+                utils.echo_msg('{} {}'.format(self.epsg_in, self.epsg_out))
+                
             trans_array, unc_array = self._vertical_transform(self.epsg_in, self.epsg_out)
             trans_infos = gdalfun.gdal_set_infos(
                 self.xcount, self.ycount, self.xcount*self.ycount, self.gt, None, gdal.GDT_Float32, -9999, 'GTiff', None, None

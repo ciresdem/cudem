@@ -2530,8 +2530,9 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                         for link in links['links']:
                             if link['serviceID'] == 46 and (self.datatype == 'lidar' or self.datatype == 'dem' or self.datatype is None):
                                 urllist = 'urllist' + str(feature['attributes']['ID']) + '.txt'
-                                surv_name = '_'.join(link['link'].split('/')[-1].split('_')[:-1])
+                                surv_name = '_'.join(link['link'].split('/')[-2].split('_')[:-1])
                                 #index_zipfile = 'tileindex.zip'
+                                #utils.echo_msg(link['link'])
                                 index_zipfile = 'tileindex_{}.zip'.format(surv_name)
                                 index_zipurl = link['link'] + '/' + index_zipfile
                                 #urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
@@ -2567,7 +2568,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
                                     ).fetch_file(index_zipfile)
                                 except:
                                     status = -1
-                                    
+                                utils.echo_msg(index_zipfile)    
                                 if status == 0:
                                     index_shps = utils.p_unzip(index_zipfile, ['shp', 'shx', 'dbf', 'prj'])
                                     index_shp = None
