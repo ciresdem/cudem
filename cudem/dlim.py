@@ -950,12 +950,12 @@ class ElevationDataset:
                 ## proj transform takes a long time if the vertical datum has a region that
                 ## is smaller than the dataset (esp. swot data). Setting the vertical transformation
                 ## grid to the region of the input data speeds things up considerably...
-                #if self.region is None:
-                vd_region = regions.Region().from_list(self.infos.minmax)
-                vd_region.src_srs = in_horizontal_crs.to_proj4()
-                #else:
-                #    vd_region = self.region.copy()
-                #    vd_region.src_srs = out_horizontal_crs.to_proj4()
+                if self.region is None:
+                    vd_region = regions.Region().from_list(self.infos.minmax)
+                    vd_region.src_srs = in_horizontal_crs.to_proj4()
+                else:
+                    vd_region = self.region.copy()
+                    vd_region.src_srs = out_horizontal_crs.to_proj4()
                     
                 vd_region.warp('epsg:4326')                
                 if not vd_region.valid_p():
