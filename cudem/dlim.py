@@ -1299,8 +1299,6 @@ class ElevationDataset:
 
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        #zs_fn = '{}_zs.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
@@ -1340,7 +1338,6 @@ class ElevationDataset:
         
         for key in stacked_bands.keys():
             stacked_bands[key].SetNoDataValue(np.nan)
-            #stacked_bands[key].SetNoDataValue(ndv)
             stacked_bands[key].SetDescription(key)
 
         ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
@@ -1355,6 +1352,7 @@ class ElevationDataset:
         ## parse each entry and process it
         ## todo: mask here instead of in each dataset module
         for this_entry in self.parse():
+            ## MASK
             m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
             if not this_entry.metadata['name'] in m_bands.keys():
                 m_ds.AddBand()
@@ -1397,22 +1395,26 @@ class ElevationDataset:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     if mode != 'min' and mode != 'max':
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
-                    else:
-                        if key == 'count':
-                            stacked_data[key][np.isnan(stacked_data[key])] = 0
+                    #else:
+                    if key == 'count':
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
                     
                 ## set incoming np.nans to zero and mask to non-nan count
+                arrs['count'][np.isnan(arrs['count'])] = 0
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                
                 if mode != 'min' and mode != 'max':
-                    arrs['weight'][np.isnan(arrs['z'])] = 0
-                    arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                    #arrs['weight'][np.isnan(arrs['z'])] = 0
+                    #arrs['uncertainty'][np.isnan(arrs['z'])] = 0
                     arrs['x'][np.isnan(arrs['x'])] = 0
                     arrs['y'][np.isnan(arrs['y'])] = 0
                     arrs['z'][np.isnan(arrs['z'])] = 0
                     for arr_key in arrs:
                         if arrs[arr_key] is not None:
                             arrs[arr_key][np.isnan(arrs[arr_key])] = 0
-                else:
-                    arrs['count'][np.isnan(arrs['count'])] = 0
+                #else:
+
 
                 ## add the count to the accumulated rasters
                 stacked_data['count'] += arrs['count']
@@ -1435,6 +1437,7 @@ class ElevationDataset:
                     #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
                 elif mode == 'min' or mode == 'max':
+                    ## set nodata values in stacked_data to whatever the value is in arrs
                     mask = np.isnan(stacked_data['z'])
                     stacked_data['x'][mask] = arrs['x'][mask]
                     stacked_data['y'][mask] = arrs['y'][mask]
@@ -1443,25 +1446,27 @@ class ElevationDataset:
                     stacked_data['weights'][mask] = arrs['weight'][mask]
                     stacked_data['z'][mask] = arrs['z'][mask]
 
+                    ## mask the min or max and apply it to stacked_data 
                     if mode == 'min':
-                        mask = arrs['z'] < stacked_data['z']
+                        mask = arrs['z'] <= stacked_data['z']
                     else:
-                        mask = arrs['z'] > stacked_data['z']
+                        mask = arrs['z'] >= stacked_data['z']
                         
                     stacked_data['x'][mask] = arrs['x'][mask]
                     stacked_data['y'][mask] = arrs['y'][mask]
-                    # stacked_data['src_uncertainty'][mask]  = arrs['uncertainty'][mask]
-                    # stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
-                    # stacked_data['weights'][mask] = arrs['weight'][mask]
+                    #stacked_data['src_uncertainty'][mask]  += arrs['uncertainty'][mask]
+                    #stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+                    #stacked_data['weights'][mask] = arrs['weight'][mask]
 
-                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+                    ## accumulate uncertainty and weight
+                    stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
 
                     ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
-                    stacked_data['weights'] += arrs['weight']
-                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    stacked_data['weights'][mask] += arrs['weight'][mask]
+                    stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
                     
                     ## accumulate variance * weight
-                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
                     stacked_data['z'][mask] = arrs['z'][mask]
                     
                 # elif mode == 'median':
@@ -1494,8 +1499,8 @@ class ElevationDataset:
                     #stacked_data[key][stacked_data['count'] == ndv] = ndv
                     
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
-                    if mode != 'mean':
-                        stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                    #if mode != 'mean':
+                    #    stacked_data[key][np.isnan(stacked_data[key])] = ndv
 
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
 
@@ -1723,13 +1728,13 @@ class ElevationDataset:
                                         fltr_args = utils.args2dict(list(opts[1:]), {})
                                         fltr_args_1 = {}
                                         for k in fltr_args.keys():
-                                            if k == 'y_res' or k == 'z_res':
+                                            if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
                                                 #utils.echo_msg(fltr_args_1)
                                                 arg_val = utils.float_or(fltr_args[k])
                                                 if arg_val is not None:
                                                     fltr_args_1[k] = arg_val
 
-                                        utils.echo_msg(fltr_args_1)
+                                        #utils.echo_msg(fltr_args_1)
 
                                         ## bin-filter the incoming points
                                         b_points = self.bin_z_points(points, **fltr_args_1)#y_res=y_res,z_res=z_res)
@@ -1928,13 +1933,16 @@ class ElevationDataset:
         ## Calculate number of bins required both vertically and
         ## horizontally with resolution size
         y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
+        #x_bin_number = round(abs(points['x'].min() - points['x'].max())/y_res)
         z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
 
         if (y_bin_number > 0 and z_bin_number > 0):    
             points1 = points
             y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
-            points['y_bins'] = y_bins
-            utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
+            #x_bins = pd.cut(points['x'], x_bin_number, labels = np.array(range(x_bin_number)))
+            points1['y_bins'] = y_bins
+            #points1['x_bins'] = x_bins
+            #utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
             z_bins = pd.cut(
                 points['z'], z_bin_number, labels = np.round(
                     np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
@@ -1971,12 +1979,14 @@ class ElevationDataset:
 
         # Group data by latitude
         binned_data_sea = binned_data
+        #grouped_data = binned_data_sea.groupby(['y_bins', 'x_bins'], group_keys=True)
         grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
         data_groups = dict(list(grouped_data))
 
         # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+        #count_threshold = np.percentile(binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
         count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-        
+        #utils.echo_msg(count_threshold)
         # Loop through groups and return average sea height
         for k,v in data_groups.items():
             # Create new dataframe based on occurance of photons per height bin
@@ -1989,17 +1999,21 @@ class ElevationDataset:
             largest_h = new_df.index[largest_h_bin]
 
             # Set threshold of photon counts per bin
-            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:        
+            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:
 
-                # Calculate the median value of all values within this bin
-                lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
-                lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
-                lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
+                [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
+                [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
+                [sea_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
+                
+                # # Calculate the median value of all values within this bin
+                # lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
+                # lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
+                # lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
 
-                # Append to sea height list
-                sea_height.append(lat_bin_sea_median)
-                bin_lat.append(lat_bin_median)
-                bin_lon.append(lon_bin_median)
+                # # Append to sea height list
+                # sea_height.append(lat_bin_sea_median)
+                # bin_lat.append(lat_bin_median)
+                # bin_lon.append(lon_bin_median)
                 del new_df
             else:
                 del new_df
@@ -2011,11 +2025,11 @@ class ElevationDataset:
         mean = np.nanmean(sea_height, axis=0)
         sd = np.nanstd(sea_height, axis=0)
         sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
-
+                
         return(bin_lat, bin_lon, sea_height_1)
     
-    def bin_z_points(self, points, y_res=1, z_res=.5):
-        utils.echo_msg('binning points @ {} {}'.format(y_res, z_res))
+    def bin_z_points(self, points, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None):
+        #utils.echo_msg('binning points @ {} {}'.format(y_res, z_res))
         try:
             epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
             epsg_num = int(epsg_code.split(':')[-1])
@@ -2031,14 +2045,18 @@ class ElevationDataset:
             columns=['y', 'x', 'z']
         )
 
-        #points_1 = points_1[(points_1['z'] < 0)]
+        if utils.float_or(z_min) is not None:
+            points_1 = points_1[(points_1['z'] > z_min)]
+
+        if utils.float_or(z_max) is not None:
+            points_1 = points_1[(points_1['z'] < z_max)]
 
         if len(points_1) > 0:
             binned_points = self.bin_points(points_1, y_res, z_res)
             points_1 = None
             
             if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points, percentile=50)
+                ys, xs, zs = self.get_bin_height(binned_points, percentile=percentile)
                 binned_points = None
                 
                 bin_ds = np.column_stack((xs, ys, zs))
@@ -2056,6 +2074,7 @@ class ElevationDataset:
                 bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
 
                 return(bin_points)
+            # return(bin_ds)
             
         return(None)
             
@@ -3775,7 +3794,7 @@ class Datalist(ElevationDataset):
                     #utils.echo_msg_bold(self.src_srs)
                     data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
                                               invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir, fltrs=self.fltrs,
                                               verbose=self.verbose, **data_set_args)._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
@@ -3821,7 +3840,7 @@ class Datalist(ElevationDataset):
                             ## generate the dataset object to yield
                             data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
                                                       src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
-                                                      src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                                                      src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs,
                                                       sample_alg=self.sample_alg, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
@@ -4299,7 +4318,7 @@ set `data_set` to one of (for L2_HR_Raster):
     #             return(os.path.join(this_pixc_vec._outdir, this_pixc_vec.results[0][1]))
         
     def set_ds(self, result):
-        utils.echo_msg(result)
+        #utils.echo_msg(result)
         swot_fn = os.path.join(self.fetch_module._outdir, result[1])
         if 'L2_HR_PIXC_' in result[-1]:
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
@@ -5998,19 +6017,19 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e)
+                    #   print(traceback.format_exc())
 ### End
