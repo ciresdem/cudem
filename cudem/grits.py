@@ -70,7 +70,7 @@ class Grits:
         if self.dst_dem is None:
             self.dst_dem = '{}_filtered.{}'.format(
                 utils.fn_basename2(self.src_dem), utils.fn_ext(self.src_dem)
-            )            
+            )
         
     def __call__(self):
         return(self.generate())
@@ -979,10 +979,10 @@ class Flats(Grits):
 
 class GritsFactory(factory.CUDEMFactory):
     _modules = {
-        'blur': {'call': Blur},
-        'grdfilter': {'call': GMTgrdfilter},
-        'outliers': {'call': Outliers},
-        'flats': {'call': Flats},
+        'blur': {'name': 'blur', 'call': Blur},
+        'grdfilter': {'name': 'grdfilter', 'call': GMTgrdfilter},
+        'outliers': {'name': 'outliers', 'call': Outliers},
+        'flats': {'name': 'flats', 'call': Flats},
     }
     
     def __init__(self, **kwargs):

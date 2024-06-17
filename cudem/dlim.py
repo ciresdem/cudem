@@ -457,7 +457,19 @@ class ElevationDataset:
                     utils.echo_error_msg('could not set transformation, {}'.format(e))
                 
             self.set_yield()
-            
+
+        ## initialize filters
+        self.stack_filters = []
+        self.point_filters = []        
+        if isinstance(self.fltrs, list):
+            for f in self.fltrs:
+                if f.split(':')[0] in grits.GritsFactory()._modules.keys():
+                    self.stack_filters.append(f)
+                elif f.split(':')[0] in self.dlim_filters:
+                    self.point_filters.append(f)
+        else:
+            self.fltrs = []    
+
         return(self)
     
     def generate_inf(self, callback=lambda: False):
@@ -947,9 +959,6 @@ class ElevationDataset:
                 
             ## vertical Transformation
             if want_vertical:
-                ## proj transform takes a long time if the vertical datum has a region that
-                ## is smaller than the dataset (esp. swot data). Setting the vertical transformation
-                ## grid to the region of the input data speeds things up considerably...
                 if self.region is None:
                     vd_region = regions.Region().from_list(self.infos.minmax)
                     vd_region.src_srs = in_horizontal_crs.to_proj4()
@@ -957,7 +966,7 @@ class ElevationDataset:
                     vd_region = self.region.copy()
                     vd_region.src_srs = out_horizontal_crs.to_proj4()
                     
-                vd_region.warp('epsg:4326')                
+                vd_region.warp('epsg:4326')
                 if not vd_region.valid_p():
                     utils.echo_warning_msg('failed to generate transformation')
                     return
@@ -997,12 +1006,9 @@ class ElevationDataset:
                             'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
                             geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=False
                         ).run(outfile=self.trans_fn)                        
-                        #utils.echo_msg('{} {}'.format(self.trans_fn, self.trans_fn_unc))
-
-                #else:
-                #    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
 
                 if self.trans_fn is not None and os.path.exists(self.trans_fn):
+                    utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
                     out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
 
                     if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
@@ -1025,7 +1031,12 @@ class ElevationDataset:
                 self.aux_src_proj4 = in_horizontal_crs.to_proj4()
                 self.aux_dst_proj4 = out_horizontal_crs.to_proj4()
                 #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
-                self.transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True)
+                if self.region is not None:
+                    aoi = pyproj.aoi.AreaOfInterest(self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax)
+                else:
+                    aoi = None
+                    
+                self.transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi)
 
         ## dataset region
         if self.region is not None and self.region.valid_p():
@@ -1598,14 +1609,22 @@ class ElevationDataset:
         m_ds = msk_ds = dst_ds = None
 
         ## apply any filters to the stack
-        if isinstance(self.fltrs, list):
-            for f in self.fltrs:
-                grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
-                if grits_filter is not None:
-                    if 'stacks' in grits_filter.kwargs.keys():
-                        if grits_filter.kwargs['stacks']:
-                            grits_filter()
-                            os.replace(grits_filter.dst_dem, out_file)
+        for f in self.stack_filters:
+            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
+            if grits_filter is not None:
+                if 'stacks' in grits_filter.kwargs.keys():
+                    if grits_filter.kwargs['stacks']:
+                        grits_filter()
+                        os.replace(grits_filter.dst_dem, out_file)
+            
+        # if isinstance(self.fltrs, list):
+        #     for f in self.fltrs:
+        #         grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
+        #         if grits_filter is not None:
+        #             if 'stacks' in grits_filter.kwargs.keys():
+        #                 if grits_filter.kwargs['stacks']:
+        #                     grits_filter()
+        #                     os.replace(grits_filter.dst_dem, out_file)
         
         return(out_file)        
     
@@ -1719,32 +1738,30 @@ class ElevationDataset:
                 if len(points) > 0:
 
                     ## apply any dlim filters to the points
-                    if isinstance(self.fltrs, list):
-                        for f in self.fltrs:
-                            opts = f.split(':')
-                            if opts[0] in self.dlim_filters:
-                                if len(opts) > 1:
-                                    if opts[0] == 'bin_z':
-                                        fltr_args = utils.args2dict(list(opts[1:]), {})
-                                        fltr_args_1 = {}
-                                        for k in fltr_args.keys():
-                                            if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
-                                                #utils.echo_msg(fltr_args_1)
-                                                arg_val = utils.float_or(fltr_args[k])
-                                                if arg_val is not None:
-                                                    fltr_args_1[k] = arg_val
+                    #if isinstance(self.fltrs, list):
+                    #for f in self.fltrs:
+                    for f in self.point_filters:
+                        opts = f.split(':')
+                        if len(opts) > 1:
+                            fltr_args = utils.args2dict(list(opts[1:]), {})
+                            fltr_args_1 = {}
+                            for k in fltr_args.keys():
+                                if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
+                                    arg_val = utils.float_or(fltr_args[k])
+                                    if arg_val is not None:
+                                        fltr_args_1[k] = arg_val
+                        else:
+                            fltr_args_1 = {}            
 
-                                        #utils.echo_msg(fltr_args_1)
-
-                                        ## bin-filter the incoming points
-                                        b_points = self.bin_z_points(points, **fltr_args_1)#y_res=y_res,z_res=z_res)
-                                        if b_points is not None:
-                                            points = b_points
+                        ## bin-filter the incoming points
+                        b_points = self.bin_z_points(points, **fltr_args_1)
+                        if b_points is not None:
+                            points = b_points
 
                     yield(points)
-                
+        
         self.transformer = None
-            
+        
     def yield_xyz(self):
         """Yield the data as xyz points
 
@@ -1973,7 +1990,7 @@ class ElevationDataset:
         '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
 
         # Create sea height list
-        sea_height = []
+        bin_height = []
         bin_lat = []
         bin_lon = []
 
@@ -2003,7 +2020,7 @@ class ElevationDataset:
 
                 [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
                 [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
-                [sea_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
+                [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
                 
                 # # Calculate the median value of all values within this bin
                 # lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
@@ -2011,7 +2028,7 @@ class ElevationDataset:
                 # lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
 
                 # # Append to sea height list
-                # sea_height.append(lat_bin_sea_median)
+                # bin_height.append(lat_bin_bin_median)
                 # bin_lat.append(lat_bin_median)
                 # bin_lon.append(lon_bin_median)
                 del new_df
@@ -2019,17 +2036,16 @@ class ElevationDataset:
                 del new_df
 
         # Filter out sea height bin values outside 2 SD of mean.
-        if np.all(np.isnan(sea_height)):
+        if np.all(np.isnan(bin_height)):
             return(None)
 
-        mean = np.nanmean(sea_height, axis=0)
-        sd = np.nanstd(sea_height, axis=0)
-        sea_height_1 = np.where((sea_height > (mean + 2*sd)) | (sea_height < (mean - 2*sd)), np.nan, sea_height).tolist()
+        mean = np.nanmean(bin_height, axis=0)
+        sd = np.nanstd(bin_height, axis=0)
+        bin_height_1 = np.where((bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height).tolist()
                 
-        return(bin_lat, bin_lon, sea_height_1)
+        return(bin_lat, bin_lon, bin_height_1)
     
     def bin_z_points(self, points, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None):
-        #utils.echo_msg('binning points @ {} {}'.format(y_res, z_res))
         try:
             epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
             epsg_num = int(epsg_code.split(':')[-1])
