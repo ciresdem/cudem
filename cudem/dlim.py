@@ -362,6 +362,8 @@ class ElevationDataset:
         self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
         self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
         self.fltrs = fltrs # pass the stack, if generated, through gdal_outliers
+        self.stack_filters = [] # stack filters
+        self.point_filters = [] # point filters
         self.want_mask = want_mask # mask the data
         self.want_sm = want_sm # generate spatial metadata vector
         self.sample_alg = sample_alg # the gdal resample algorithm
@@ -459,8 +461,6 @@ class ElevationDataset:
             self.set_yield()
 
         ## initialize filters
-        self.stack_filters = []
-        self.point_filters = []        
         if isinstance(self.fltrs, list):
             for f in self.fltrs:
                 if f.split(':')[0] in grits.GritsFactory()._modules.keys():
