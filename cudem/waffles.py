@@ -242,10 +242,25 @@ class Waffle:
         this function sets `self.data` to a list of dataset objects.
         """
 
+        stack_fltr=[]
+        point_fltr=[]
+        for f in self.fltr:
+            if f.split(':')[0] in grits.GritsFactory._modules.keys():
+                grits_filter = grits.GritsFactory(mod=f)._acquire_module()
+                if grits_filter is not None:
+                    if 'stacks' in grits_filter.kwargs.keys():
+                        if grits_filter.kwargs['stacks']:
+                            stack_fltr.append(f)
+            elif f.split(':')[0] in dlim.PointFilterFactory._modules.keys():
+                point_filter = dlim.PointFilterFactory(mod=f)._acquire_module()
+                if point_filter is not None:
+                    point_fltr.append(f)
+
         self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
                                    xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
                                    want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   fltrs=self.fltr, invert_region=False, cache_dir=self.cache_dir, stack_mode=self.stack_mode)
+                                   pnt_fltrs=point_fltr, stack_fltrs=stack_fltr, invert_region=False, cache_dir=self.cache_dir,
+                                   stack_mode=self.stack_mode)
 
         if self.data is not None:
             self.data.initialize()

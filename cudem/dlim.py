@@ -161,7 +161,8 @@ def write_datalist(data_list, outname=None):
 ## initialize a list of datasets into a dataset object
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
               sample_alg='auto', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
-              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, fltrs=None, stack_node=True, stack_mode='mean'):
+              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, pnt_fltrs=None, stack_fltrs=None, stack_node=True,
+              stack_mode='mean'):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
@@ -170,7 +171,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
                                y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                               dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode
+                               dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node, stack_mode=stack_mode
                                )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
@@ -179,7 +180,8 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                     src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
                                     sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                                     cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                                    dump_precision=dump_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode)
+                                    dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
+                                    stack_mode=stack_mode)
         else:
             this_datalist = xdls[0]
 
@@ -188,6 +190,193 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
     except Exception as e:
         utils.echo_error_msg('could not initialize data, {}: {}'.format(data_list, e))
         return(None)
+
+class PointFilter:
+    def __init__(self, points = None, params = {}, **kwargs):
+        self.points = points
+        self.params = params
+        self.kwargs = kwargs
+
+    def __call__(self):
+        utils.echo_msg('filtering points using {}'.format(self))
+        return(self.run())
+
+    def run(self):
+        raise(NotImplementedError)
+    
+    def convert_wgs_to_utm(self, lat, lon):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            easting, northing, num, letter = utm.from_latlon(lat, lon)
+            if letter >= 'N':
+                epsg = 'epsg:326' + str(num)
+            elif letter < 'N':
+                epsg = 'epsg:327' + str(num)
+            else:
+                utils.echo_error_msg('Could not find UTM zone')
+
+            return(epsg)
+
+class BinZ(PointFilter):
+    def __init__(self, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None, **kwargs):
+        super().__init__(**kwargs)
+        self.y_res = utils.float_or(y_res, 1)
+        self.z_res = utils.float_or(z_res, .5)
+        self.percentile = utils.float_or(percentile, 50)
+        self.z_min = utils.float_or(z_min)
+        self.z_max = utils.float_or(z_max)
+        
+    def bin_points(self, points):
+        '''Bin data along vertical and horizontal scales for later segmentation'''
+
+        ## Calculate number of bins required both vertically and
+        ## horizontally with resolution size
+        y_bin_number = round(abs(points['y'].min() - points['y'].max())/self.y_res)
+        if y_bin_number == 0:
+            y_bin_number = 1
+            
+        #x_bin_number = round(abs(points['x'].min() - points['x'].max())/self.y_res)
+        z_bin_number = round(abs(points['z'].min() - points['z'].max())/self.z_res)
+        if z_bin_number == 0:
+            z_bin_number = 1
+
+        if (y_bin_number > 0 and z_bin_number > 0):    
+            points1 = points
+            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
+            #x_bins = pd.cut(points['x'], x_bin_number, labels = np.array(range(x_bin_number)))
+            points1['y_bins'] = y_bins
+            #points1['x_bins'] = x_bins
+            #utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
+            z_bins = pd.cut(
+                points['z'], z_bin_number, labels = np.round(
+                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
+                    decimals = 1
+                )
+            )
+            points1['z_bins'] = z_bins
+            points1 = points1.reset_index(drop=True)
+
+            return(points1)
+
+        return(None)
+
+    def get_bin_height(self, binned_data):
+        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
+
+        # Create sea height list
+        bin_height = []
+        bin_lat = []
+        bin_lon = []
+
+        # Group data by latitude
+        binned_data_sea = binned_data
+        #grouped_data = binned_data_sea.groupby(['y_bins', 'x_bins'], group_keys=True)
+        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
+        data_groups = dict(list(grouped_data))
+
+        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+        #count_threshold = np.percentile(binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
+        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), self.percentile)
+        #utils.echo_msg(count_threshold)
+        # Loop through groups and return average sea height
+        for k,v in data_groups.items():
+            # Create new dataframe based on occurance of photons per height bin
+            new_df = pd.DataFrame(v.groupby('z_bins').count())
+
+            # Return the bin with the highest count
+            largest_h_bin = new_df['z'].argmax()
+
+            # Select the index of the bin with the highest count
+            largest_h = new_df.index[largest_h_bin]
+
+            # Set threshold of photon counts per bin
+            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:
+
+                [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
+                [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
+                [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
+                
+                # # Calculate the median value of all values within this bin
+                # lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
+                # lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
+                # lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
+
+                # # Append to sea height list
+                # bin_height.append(lat_bin_bin_median)
+                # bin_lat.append(lat_bin_median)
+                # bin_lon.append(lon_bin_median)
+                del new_df
+            else:
+                del new_df
+
+        # Filter out sea height bin values outside 2 SD of mean.
+        if np.all(np.isnan(bin_height)):
+            return(None)
+
+        mean = np.nanmean(bin_height, axis=0)
+        sd = np.nanstd(bin_height, axis=0)
+        bin_height_1 = np.where((bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height).tolist()
+                
+        return(bin_lat, bin_lon, bin_height_1)
+    
+    def run(self):
+        try:
+            epsg_code = self.convert_wgs_to_utm(self.points['y'][0], self.points['x'][0])
+            epsg_num = int(epsg_code.split(':')[-1])
+            utm_proj = pyproj.Proj(epsg_code)
+            x_utm, y_utm = utm_proj(self.points['x'], self.points['y'])
+        except:
+            utils.echo_warning_msg('could not transform to utm')
+            x_utm, y_utm = self.points['x'], self.points['y']
+
+        points_1 = pd.DataFrame(
+            {'y': y_utm,
+             'x': x_utm,
+             'z': self.points['z']},
+            columns=['y', 'x', 'z']
+        )
+
+        if utils.float_or(self.z_min) is not None:
+            points_1 = points_1[(points_1['z'] > self.z_min)]
+
+        if utils.float_or(self.z_max) is not None:
+            points_1 = points_1[(points_1['z'] < self.z_max)]
+
+        if len(points_1) > 0:
+            binned_points = self.bin_points(points_1)
+            points_1 = None
+            
+            if binned_points is not None:
+                ys, xs, zs = self.get_bin_height(binned_points)
+                binned_points = None
+                
+                bin_ds = np.column_stack((xs, ys, zs))
+                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
+                
+                xs = ys = zs = None
+                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
+                med_surface_h = np.nanmedian(bin_ds['z'])
+                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
+                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
+
+                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
+                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
+                lon_wgs84 = lat_wgs84 = bin_ds = None
+                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
+                #utils.echo_msg('bin_points: {}'.format(bin_points))
+                return(bin_points)
+            # return(bin_ds)
+            
+        return(None)
+
+class PointFilterFactory(factory.CUDEMFactory):
+    _modules = {
+        'bin_z': {'name': 'bin_z', 'call': BinZ},
+    }
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
     
 class INF:
     """INF Files contain information about datasets
@@ -346,7 +535,7 @@ class ElevationDataset:
     def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
                  dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
                  want_sm = False, sample_alg = 'auto', parent = None, src_region = None, invert_region = False,
-                 fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False,
+                 pnt_fltrs=[], stack_fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False,
                  dump_precision = 6, params = {}, metadata = {'name':None, 'title':None, 'source':None, 'date':None,
                                                               'data_type':None, 'resolution':None, 'hdatum':None,
                                                               'vdatum':None, 'url':None}, **kwargs):
@@ -361,9 +550,10 @@ class ElevationDataset:
         self.dst_geoid = dst_geoid # dataset target geoid
         self.x_inc = utils.str2inc(x_inc) # target dataset x/lat increment
         self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
-        self.fltrs = fltrs # pass the stack, if generated, through gdal_outliers
-        self.stack_filters = [] # stack filters
-        self.point_filters = [] # point filters
+        self.stack_fltrs = stack_fltrs # pass the stack, if generated, through grits filters
+        self.pnt_fltrs = pnt_fltrs # pass the points through filters
+        #self.stack_filters = [] # stack filters
+        #self.point_filters = [] # point filters
         self.want_mask = want_mask # mask the data
         self.want_sm = want_sm # generate spatial metadata vector
         self.sample_alg = sample_alg # the gdal resample algorithm
@@ -378,7 +568,6 @@ class ElevationDataset:
         self.stack_node = stack_node # yield avg x/y data instead of center
         self.stack_mode = stack_mode # 'mean', 'min', 'max', 'supercede'
         self.mask_keys = ['mask', 'invert_mask', 'ogr_or_gdal'] # options for input data mask
-        self.dlim_filters = ['bin_z']
         if self.mask is not None:
             if isinstance(self.mask, str):
                 self.mask = {'mask': self.mask}
@@ -461,14 +650,21 @@ class ElevationDataset:
             self.set_yield()
 
         ## initialize filters
-        if isinstance(self.fltrs, list):
-            for f in self.fltrs:
-                if f.split(':')[0] in grits.GritsFactory()._modules.keys():
-                    self.stack_filters.append(f)
-                elif f.split(':')[0] in self.dlim_filters:
-                    self.point_filters.append(f)
-        else:
-            self.fltrs = []    
+        if isinstance(self.stack_fltrs, str):
+            self.stack_fltrs = [self.stack_fltrs]
+
+        if isinstance(self.pnt_fltrs, str):
+            #self.pnt_fltrs = [self.pnt_fltrs]
+            self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
+            
+        # if isinstance(self.fltrs, list):
+        #     for f in self.fltrs:
+        #         if f.split(':')[0] in grits.GritsFactory()._modules.keys():
+        #             self.stack_filters.append(f)
+        #         elif f.split(':')[0] in self.dlim_filters:
+        #             self.point_filters.append(f)            
+        # else:
+        #     self.fltrs = []    
 
         return(self)
     
@@ -1609,13 +1805,13 @@ class ElevationDataset:
         m_ds = msk_ds = dst_ds = None
 
         ## apply any filters to the stack
-        for f in self.stack_filters:
+        for f in self.stack_fltrs:
             grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
             if grits_filter is not None:
-                if 'stacks' in grits_filter.kwargs.keys():
-                    if grits_filter.kwargs['stacks']:
-                        grits_filter()
-                        os.replace(grits_filter.dst_dem, out_file)
+                #if 'stacks' in grits_filter.kwargs.keys():
+                #if grits_filter.kwargs['stacks']:
+                grits_filter()
+                os.replace(grits_filter.dst_dem, out_file)
             
         # if isinstance(self.fltrs, list):
         #     for f in self.fltrs:
@@ -1740,23 +1936,29 @@ class ElevationDataset:
                     ## apply any dlim filters to the points
                     #if isinstance(self.fltrs, list):
                     #for f in self.fltrs:
-                    for f in self.point_filters:
-                        opts = f.split(':')
-                        if len(opts) > 1:
-                            fltr_args = utils.args2dict(list(opts[1:]), {})
-                            fltr_args_1 = {}
-                            for k in fltr_args.keys():
-                                if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
-                                    arg_val = utils.float_or(fltr_args[k])
-                                    if arg_val is not None:
-                                        fltr_args_1[k] = arg_val
-                        else:
-                            fltr_args_1 = {}            
+                    for f in self.pnt_fltrs:
+                        #utils.echo_msg(f)
+                        point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
+                        if point_filter is not None:
+                            points = point_filter()
+                    
+                    # for f in self.pnt_fltrs:
+                    #     opts = f.split(':')
+                    #     if len(opts) > 1:
+                    #         fltr_args = utils.args2dict(list(opts[1:]), {})
+                    #         fltr_args_1 = {}
+                    #         for k in fltr_args.keys():
+                    #             if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
+                    #                 arg_val = utils.float_or(fltr_args[k])
+                    #                 if arg_val is not None:
+                    #                     fltr_args_1[k] = arg_val
+                    #     else:
+                    #         fltr_args_1 = {}            
 
-                        ## bin-filter the incoming points
-                        b_points = self.bin_z_points(points, **fltr_args_1)
-                        if b_points is not None:
-                            points = b_points
+                    #     ## bin-filter the incoming points
+                    #     b_points = self.bin_z_points(points, **fltr_args_1)
+                    #     if b_points is not None:
+                    #         points = b_points
 
                     yield(points)
         
@@ -1943,156 +2145,6 @@ class ElevationDataset:
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )    
-
-    def bin_points(self, points, y_res, z_res):
-        '''Bin data along vertical and horizontal scales for later segmentation'''
-        
-        ## Calculate number of bins required both vertically and
-        ## horizontally with resolution size
-        y_bin_number = round(abs(points['y'].min() - points['y'].max())/y_res)
-        #x_bin_number = round(abs(points['x'].min() - points['x'].max())/y_res)
-        z_bin_number = round(abs(points['z'].min() - points['z'].max())/z_res)
-
-        if (y_bin_number > 0 and z_bin_number > 0):    
-            points1 = points
-            y_bins = pd.cut(points['y'], y_bin_number, labels = np.array(range(y_bin_number)))
-            #x_bins = pd.cut(points['x'], x_bin_number, labels = np.array(range(x_bin_number)))
-            points1['y_bins'] = y_bins
-            #points1['x_bins'] = x_bins
-            #utils.echo_msg('{} {} {}'.format(points['z'].min(), points['z'].max(), z_bin_number))
-            z_bins = pd.cut(
-                points['z'], z_bin_number, labels = np.round(
-                    np.linspace(points['z'].min(), points['z'].max(), num=z_bin_number),
-                    decimals = 1
-                )
-            )
-            points1['z_bins'] = z_bins
-            points1 = points1.reset_index(drop=True)
-
-            return(points1)
-
-        return(None)
-
-    def convert_wgs_to_utm(self, lat, lon):
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            easting, northing, num, letter = utm.from_latlon(lat, lon)
-            if letter >= 'N':
-                epsg = 'epsg:326' + str(num)
-            elif letter < 'N':
-                epsg = 'epsg:327' + str(num)
-            else:
-                utils.echo_error_msg('Could not find UTM zone')
-
-            return(epsg)
-
-    def get_bin_height(self, binned_data, percentile=50):
-        '''Calculate mean sea height for easier calculation of depth and cleaner figures'''
-
-        # Create sea height list
-        bin_height = []
-        bin_lat = []
-        bin_lon = []
-
-        # Group data by latitude
-        binned_data_sea = binned_data
-        #grouped_data = binned_data_sea.groupby(['y_bins', 'x_bins'], group_keys=True)
-        grouped_data = binned_data_sea.groupby(['y_bins'], group_keys=True)
-        data_groups = dict(list(grouped_data))
-
-        # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
-        #count_threshold = np.percentile(binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-        #utils.echo_msg(count_threshold)
-        # Loop through groups and return average sea height
-        for k,v in data_groups.items():
-            # Create new dataframe based on occurance of photons per height bin
-            new_df = pd.DataFrame(v.groupby('z_bins').count())
-
-            # Return the bin with the highest count
-            largest_h_bin = new_df['z'].argmax()
-
-            # Select the index of the bin with the highest count
-            largest_h = new_df.index[largest_h_bin]
-
-            # Set threshold of photon counts per bin
-            if new_df.iloc[largest_h_bin]['y'] >= count_threshold:
-
-                [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
-                [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
-                [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
-                
-                # # Calculate the median value of all values within this bin
-                # lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
-                # lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
-                # lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
-
-                # # Append to sea height list
-                # bin_height.append(lat_bin_bin_median)
-                # bin_lat.append(lat_bin_median)
-                # bin_lon.append(lon_bin_median)
-                del new_df
-            else:
-                del new_df
-
-        # Filter out sea height bin values outside 2 SD of mean.
-        if np.all(np.isnan(bin_height)):
-            return(None)
-
-        mean = np.nanmean(bin_height, axis=0)
-        sd = np.nanstd(bin_height, axis=0)
-        bin_height_1 = np.where((bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height).tolist()
-                
-        return(bin_lat, bin_lon, bin_height_1)
-    
-    def bin_z_points(self, points, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None):
-        try:
-            epsg_code = self.convert_wgs_to_utm(points['y'][0], points['x'][0])
-            epsg_num = int(epsg_code.split(':')[-1])
-            utm_proj = pyproj.Proj(epsg_code)
-            x_utm, y_utm = utm_proj(points['x'], points['y'])
-        except:
-            x_utm, y_utm = points['x'], points['y']
-
-        points_1 = pd.DataFrame(
-            {'y': y_utm,
-             'x': x_utm,
-             'z': points['z']},
-            columns=['y', 'x', 'z']
-        )
-
-        if utils.float_or(z_min) is not None:
-            points_1 = points_1[(points_1['z'] > z_min)]
-
-        if utils.float_or(z_max) is not None:
-            points_1 = points_1[(points_1['z'] < z_max)]
-
-        if len(points_1) > 0:
-            binned_points = self.bin_points(points_1, y_res, z_res)
-            points_1 = None
-            
-            if binned_points is not None:
-                ys, xs, zs = self.get_bin_height(binned_points, percentile=percentile)
-                binned_points = None
-                
-                bin_ds = np.column_stack((xs, ys, zs))
-                bin_ds = np.rec.fromrecords(bin_ds, names='x, y, z')
-                xs = ys = zs = None
-                bin_ds = bin_ds[~np.isnan(bin_ds['z'])]
-                med_surface_h = np.nanmedian(bin_ds['z'])
-                #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
-                #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
-
-                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-                lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
-                bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
-                lon_wgs84 = lat_wgs84 = bin_ds = None
-                bin_points = np.rec.fromrecords(bin_points, names='x,y,z')
-
-                return(bin_points)
-            # return(bin_ds)
-            
-        return(None)
             
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
@@ -3810,8 +3862,8 @@ class Datalist(ElevationDataset):
                     #utils.echo_msg_bold(self.src_srs)
                     data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
                                               invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir, fltrs=self.fltrs,
-                                              verbose=self.verbose, **data_set_args)._acquire_module()
+                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                                              stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=self.verbose, **data_set_args)._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                     ):
@@ -3856,8 +3908,9 @@ class Datalist(ElevationDataset):
                             ## generate the dataset object to yield
                             data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
                                                       src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
-                                                      src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs,
-                                                      sample_alg=self.sample_alg, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
+                                                      src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                                                      stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, sample_alg=self.sample_alg,
+                                                      cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                             ):
@@ -4131,9 +4184,9 @@ class Fetcher(ElevationDataset):
         
         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs,
-                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            remote=True)._acquire_module()
+                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                            pnt_fltrs=self.pnt_fltrs, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
+                            cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
         yield(ds)
 
 class NEDFetcher(Fetcher):
@@ -4342,12 +4395,14 @@ set `data_set` to one of (for L2_HR_Raster):
             
             sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, classes=self.classes, src_srs='epsg:4326+3855',
                                dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                               x_inc=self.x_inc, y_inc=self.y_inc, fltrs=self.fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
+                               x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=True,
+                               metadata=copy.deepcopy(self.metadata))
             
         elif 'L2_HR_Raster' in result[-1]:
             sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=self.apply_geoid, src_srs=None, dst_srs=self.dst_srs,
                                     weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                    x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, metadata=copy.deepcopy(self.metadata))
+                                    x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs,
+                                    verbose=True, metadata=copy.deepcopy(self.metadata))
         else:
             utils.echo_warning_msg('{} is not a currently supported dlim dataset'.format(result[-1]))
             sub_ds = None
@@ -5799,10 +5854,14 @@ Options:
   -D, --cache-dir\tCACHE Directory for storing temp and output data.
   -Z, --z-precision\tSet the target precision of dumped z values. (default is 4)
   -A, --stack-mode\tSet the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
-  -T, --filter\t\tFILTER the data stack using one or multiple filters. 
+  -T, --stack_filter\tFILTER the data stack using one or multiple filters. 
 \t\t\tWhere FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 \t\t\tThe -T switch may be set multiple times to perform multiple filters.
 \t\t\tAvailable FILTERS: {grits_modules}
+  -F, --point_filter\tFILTER the POINT data using one or multiple filters. 
+\t\t\tWhere FILTER is fltr_name[:opts] 
+\t\t\tThe -F switch may be set multiple times to perform multiple filters.
+\t\t\tAvailable FILTERS: {point_filter_modules}
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -5828,7 +5887,8 @@ Examples:
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
            dl_formats=utils._cudem_module_name_short_desc(DatasetFactory._modules),
-           grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules))
+           grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules),
+           point_filter_modules=factory._cudem_module_short_desc(PointFilterFactory._modules))
 
 def datalists_cli(argv=sys.argv):
     """run datalists from command-line
@@ -5856,7 +5916,8 @@ def datalists_cli(argv=sys.argv):
     want_sm = False
     invert_region = False
     z_precision = 4
-    fltrs = []
+    stack_fltrs = []
+    pnt_fltrs = []
     stack_node = False
     stack_mode = 'mean'
     cache_dir = utils.cudem_cache()
@@ -5898,11 +5959,17 @@ def datalists_cli(argv=sys.argv):
         elif arg[:2] == '-A':
             stack_mode = utils.str_or(arg[2:], 'mean')
             
-        elif arg == '-filter' or arg == '--filter' or arg == '-T':
-            fltrs.append(argv[i + 1])
+        elif arg == '-stack-filter' or arg == '--stack-filter' or arg == '-T':
+            stack_fltrs.append(argv[i + 1])
             i = i + 1
         elif arg[:2] == '-T':
-            fltrs.append(argv[2:])
+            stack_fltrs.append(argv[2:])
+            
+        elif arg == '-point-filter' or arg == '--point-filter' or arg == '-F':
+            pnt_fltrs.append(argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-F':
+            pnt_fltrs.append(argv[2:])
 
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
@@ -5977,7 +6044,9 @@ def datalists_cli(argv=sys.argv):
                     
         sys.exit(0)
 
-    fltrs = [f + ':stacks=True' for f in fltrs]        
+    #stack_fltrs = [f + ':stacks=True' for f in stack_fltrs]
+    stack_fltrs = [':'.join(f.split('/')) for f in stack_fltrs]
+    pnt_fltrs = [':'.join(f.split('/')) for f in pnt_fltrs]
     if not i_regions: i_regions = [None]
     these_regions = regions.parse_cli_region(i_regions, want_verbose)
     for rn, this_region in enumerate(these_regions):
@@ -5999,7 +6068,8 @@ def datalists_cli(argv=sys.argv):
                 dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='auto',
                 want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
                 want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
-                dump_precision=z_precision, fltrs=fltrs, stack_node=stack_node, stack_mode=stack_mode
+                dump_precision=z_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
+                stack_mode=stack_mode
             )
 
             if this_datalist is not None and this_datalist.valid_p(

@@ -68,9 +68,12 @@ class Grits:
         self.kwargs = kwargs
 
         if self.dst_dem is None:
-            self.dst_dem = '{}_filtered.{}'.format(
-                utils.fn_basename2(self.src_dem), utils.fn_ext(self.src_dem)
-            )
+            if self.src_dem is not None:
+                self.dst_dem = '{}_filtered.{}'.format(
+                    utils.fn_basename2(self.src_dem), utils.fn_ext(self.src_dem)
+                )
+            else:
+                self.dst_dem = 'grits_filtered.tif'
         
     def __call__(self):
         return(self.generate())

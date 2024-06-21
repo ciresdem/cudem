@@ -265,9 +265,9 @@ class CUDEMFactory:
         self.kwargs['params'] = self.__dict__
         for k in self.kwargs.keys():
             if k in self.mod_args.keys():
+                utils.echo_warning_msg('duplicate options! {}: {} --> {}'.format(k, self.kwargs[k], self.mod_args[k]))
                 self.kwargs[k] = self.mod_args[k]
                 del self.mod_args[k]
-                utils.echo_warning_msg('duplicate options!')
                 
         if self.mod_name is not None:
             try:
