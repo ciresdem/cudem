@@ -342,6 +342,8 @@ class BinZ(PointFilter):
         if utils.float_or(self.z_max) is not None:
             points_1 = points_1[(points_1['z'] < self.z_max)]
 
+        #print(points_1)
+        #print(len(points_1))
         if len(points_1) > 0:
             binned_points = self.bin_points(points_1)
             points_1 = None
@@ -368,7 +370,7 @@ class BinZ(PointFilter):
                 return(bin_points)
             # return(bin_ds)
             
-        return(None)
+        return(points_1)
 
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
@@ -1941,7 +1943,7 @@ class ElevationDataset:
                         point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
                         if point_filter is not None:
                             points = point_filter()
-                    
+
                     # for f in self.pnt_fltrs:
                     #     opts = f.split(':')
                     #     if len(opts) > 1:
@@ -1960,7 +1962,8 @@ class ElevationDataset:
                     #     if b_points is not None:
                     #         points = b_points
 
-                    yield(points)
+                    if len(points) > 0:
+                        yield(points)
         
         self.transformer = None
         
