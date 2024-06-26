@@ -2921,7 +2921,7 @@ class BAGFile(ElevationDataset):
     """
 
     def __init__(
-            self, explode = False, force_vr = False, vr_resampled_grid = False, vr_strategy = 'MIN', **kwargs
+            self, explode = False, force_vr = False, vr_resampled_grid = True, vr_strategy = 'MIN', **kwargs
     ):
         super().__init__(**kwargs)
         self.explode = explode
