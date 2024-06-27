@@ -61,6 +61,8 @@ _tidal_frames = {
            'uncertainty': 0},
     5713: {'name': 'mtl', 'description': 'Mean Tide Level',
            'uncertainty': 0},
+    0000: {'name': 'crd', 'description': 'Columbia River Datum',
+           'uncertainty': 0},
 }
 
 _htdp_reference_frames = {
@@ -296,10 +298,11 @@ class VerticalTransform:
         self.cache_dir = _vdatum_cache if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid')
-        #print('transform: {} {}'.format(self.xcount, self.ycount))
+        #utils.echo_msg('transform: {} {}'.format(self.xcount, self.ycount))
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         self.node = node
         self.mode = mode
+        #self.geoid_in = 'geoid09'
         
     def _frames(self, epsg_in, epsg_out):
         if epsg_in in _tidal_frames.keys():
@@ -371,11 +374,13 @@ class VerticalTransform:
         from cudem import waffles
 
         v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
-        v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
-        v_out._outdir = self.cache_dir
-        v_out.run()
+
+        if vdatum_tidal_out is not None:
+            v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
+            v_out._outdir = self.cache_dir
+            v_out.run()
 
         if not v_in.results:
             utils.echo_error_msg(
@@ -387,6 +392,11 @@ class VerticalTransform:
             _trans_in = None
             #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
+            # if vdatum_tidal_in.lower() == 'crd':
+            #     cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
+            # else:
+            #     cg = np.zeros((self.ycount, self.xcount))
+                
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
                 _trans_in = waffles.WaffleFactory(mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
                                                   xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
@@ -396,6 +406,7 @@ class VerticalTransform:
 
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
+                #_trans_in_array += cg
                 #print(_trans_in_array.shape)
                 if _trans_in_array is None:
                     _trans_in = None
@@ -404,8 +415,8 @@ class VerticalTransform:
             else:
                 _trans_in = None
             
-        if not v_out.results:
-            utils.echo_error_msg(
+        if vdatum_tidal_out is None or not v_out.results:
+            utils.echo_warning_msg(
                 'could not locate {} in the region {}'.format(
                     vdatum_tidal_out, self.src_region
                 )
@@ -437,7 +448,7 @@ class VerticalTransform:
                 return(_trans_out_array*-1, self._datum_by_name(vdatum_tidal_out))
         else:
             if _trans_out is None:
-                return(_trans_in_array, self._datum_by_name(vdatum_tidal_out))
+                return(_trans_in_array, self._datum_by_name('msl'))#vdatum_tidal_out))
             else:
                 return(_trans_in_array - _trans_out_array, self._datum_by_name(vdatum_tidal_out))
 
@@ -547,22 +558,34 @@ class VerticalTransform:
     def _vertical_transform(self, epsg_in, epsg_out):
         trans_array = np.zeros( (self.ycount, self.xcount) )
         unc_array = np.zeros( (self.ycount, self.xcount) )
+        if self.epsg_in == 0:
+            self.geoid_in = 'geoid09'
+            
         if self.geoid_in is not None:# and self.geoid_out is not None:
+            if self.epsg_in == 0:
+                tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], None)
+            else:
+                tg = np.zeros((self.ycount, self.xcount))
+                
             unc_array = np.sqrt(unc_array**2 + _geoids[self.geoid_in]['uncertainty']**2)
             tmp_trans_geoid, epsg_in = self._cdn_transform(name='geoid', geoid=self.geoid_in, invert=False)
+            tmp_trans_geoid += tg
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
-            
+
+        #utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
-            #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
+            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            #utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
+            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
                     epsg_in = epsg_out
-                else: 
+                else:
                     tg, tv = self._tidal_transform(_tidal_frames[self.epsg_in]['name'], 'tss')
+                    ## crd here outputs navd88 geoid09
+                    #cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
                     cg, cv = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
                     tmp_trans = tg + cg
                     epsg_in = cv
@@ -631,7 +654,8 @@ class VerticalTransform:
 
         if self.verbose:
             utils.echo_msg(unc_outfile)
-        
+
+            utils.echo_msg('{} {}'.format(self.epsg_in, self.epsg_out))
         if self.epsg_in is None or self.epsg_out is None:
             utils.echo_error_msg('failed to parse vertical input or output, check inputs')
                 

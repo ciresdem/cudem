@@ -3572,10 +3572,9 @@ https://github.com/microsoft/GlobalMLBuildingFootprints
         
 ## VDATUM
 def proc_vdatum_inf(vdatum_inf, name='vdatum'):
-    
+
     _inf = open(vdatum_inf, 'r')
     _inf_areas = {}
-
     for line in _inf:
         line_list = line.split('.')
         if len(line_list) > 1:
@@ -3719,6 +3718,9 @@ https://cdn.proj.org
         5714: {'name': 'tss',
                'description': 'to MSL tss geoid',
                'grid': 'tss.gtx'},
+        # 0000: {'name': 'crd',
+        #        'description': 'columbia river datum',
+        #        'grid': 'crd.gtx'},
     }
     
     def __init__(self, where=[], datatype=None, gtx=False, epsg=None, **kwargs):
@@ -3729,7 +3731,7 @@ https://cdn.proj.org
         
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
-        self._vdatums = ['TIDAL']
+        self._vdatums = ['TIDAL', 'CRD', 'IGLD85']
         self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
         self.where = where
         self.datatype = datatype
@@ -3756,18 +3758,21 @@ https://cdn.proj.org
         for vd in self._vdatums:
             surveys = []
 
-            if vd == 'TIDAL' or vd == 'IGLD85':
+            #if vd == 'TIDAL' or vd == 'IGLD85':
+            if vd in self._vdatums:
                 ## All tidal inf data is in each one, so we only
                 ## have to download one of the tidal zips to process
                 ## them all; lets use the smallest one
                 ## Keep this link up-to-date!
                 if vd == 'TIDAL':
                     vd_ = 'DEVAemb12_8301'
+                    v_inf = 'tidal_area.inf'
                 else:
                     vd_ = vd
+                    v_inf = '{}.inf'.format(vd_)
                     
                 vd_zip_url = '{}{}.zip'.format(self._vdatum_data_url, vd_)
-                v_inf = 'tidal_area.inf'
+
             elif vd == 'VERTCON':
                 vd_zip_url = '{}vdatum_{}.zip'.format(self._vdatum_data_url, vd)
                 v_inf = 'vcn.inf'
@@ -3783,8 +3788,8 @@ https://cdn.proj.org
             if status == 0:
                 v_infs = utils.p_unzip('{}.zip'.format(vd), ['inf'])
                 utils.echo_msg(v_infs)
-                v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
-                v_dict = proc_vdatum_inf(v_inf, name=vd if vd != 'TIDAL' else None)#, loff=-360)
+                v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
+                v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360)
 
                 for key in v_dict.keys():
                     v_dict[key]['vdatum'] = vd
