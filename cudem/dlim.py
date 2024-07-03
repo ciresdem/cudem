@@ -4398,13 +4398,15 @@ set `data_set` to one of (for L2_HR_Raster):
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
-    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None, anc_classes = None, **kwargs):
+    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None,
+                 anc_classes = None, remove_class_flags = False, **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
         self.apply_geoid = apply_geoid
         self.classes = classes
         self.anc_classes = anc_classes
         self.classes_qual = classes_qual
+        self.remove_class_flags = remove_class_flags
 
     # def fetch_pixc_vec(self, swot_fn):
     #     pixc_vec_filter = utils.fn_basename2(swot_fn).split('PIXC_')[1]
@@ -4427,8 +4429,8 @@ set `data_set` to one of (for L2_HR_Raster):
             #swot_pixc_vec_fn = pixc_vec_result
             
             sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, classes=self.classes, anc_classes=self.anc_classes, classes_qual=self.classes_qual, 
-                               src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                               x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=True,
+                               remove_class_flags=self.remove_class_flags, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
+                               src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=True,
                                metadata=copy.deepcopy(self.metadata))
             
         elif 'L2_HR_Raster' in result[-1]:
