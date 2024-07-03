@@ -2051,6 +2051,8 @@ Fields:
             if 'features' in features.keys():
                 for feature in features['features']:
                     fetch_fn = feature['attributes']['sourcedatalocation']
+                    #survey_type = feature['attributes']['surveytype']
+                    #utils.echo_msg(survey_type)
                     if self.survey_name is not None:
                         if self.survey_name in fetch_fn:
                             self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])

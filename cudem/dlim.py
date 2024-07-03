@@ -1122,13 +1122,15 @@ class ElevationDataset:
             else:
                 out_horizontal_crs = out_crs
                 want_vertical=False
+                out_vertical_epsg=None
 
             in_horizontal_epsg = in_horizontal_crs.to_epsg()
             out_horizontal_epsg = out_horizontal_crs.to_epsg()
 
             if (in_vertical_epsg_esri is not None and is_esri):
                 in_vertical_epsg = in_vertical_epsg_esri
-                want_vertical = True
+                if out_vertical_epsg is not None:
+                    want_vertical = True
             
             if want_vertical:
                 if (in_vertical_epsg == out_vertical_epsg) and self.src_geoid is None:
@@ -3524,6 +3526,7 @@ class OGRFile(ElevationDataset):
     def yield_ds(self):
         ds_ogr = ogr.Open(self.fn)
         count = 0
+        #utils.echo_msg(self.ogr_layer)
         if ds_ogr is not None:
             layer_name = None
             if self.ogr_layer is None:
@@ -3547,23 +3550,47 @@ class OGRFile(ElevationDataset):
                 for f in layer_s:
                     geom = f.GetGeometryRef()
                     g = json.loads(geom.ExportToJson())
+                    #utils.echo_msg(g)
                     xyzs = g['coordinates']
                     if not geom.GetGeometryName() == 'MULTIPOINT':
                         xyzs = [xyzs]
 
-                    for xyz in xyzs:                        
+                    out_xyzs = []
+                    for xyz in xyzs:
+                        #utils.echo_msg(geom.Is3D())
                         if not geom.Is3D():
                             if self.elev_field is None:
                                 self.elev_field = self.find_elevation_field(f)
 
                             elev = utils.float_or(f.GetField(self.elev_field))
                             if elev is not None:
-                                xyz.append(elev)
+
+                                if isinstance(xyz[0], list):
+                                    for x in xyz:
+                                        for xx in x:
+                                            xx.append(elev)
+                                else:
+                                    xyz.append(elev)
                             else:
                                 continue
 
-                    points = np.rec.fromrecords(xyzs, names='x, y, z')
+                        else:
+                            if self.elev_field is not None:
+                                elev = utils.float_or(f.GetField(self.elev_field))
+                                if isinstance(xyz[0], list):
+                                    for x in xyz:
+                                        for xx in x:
+                                            xx[2] = elev
 
+                    if isinstance(xyzs[0], list):
+                        for x in xyzs:
+                            if isinstance(x[0], list):
+                                for xx in x:
+                                    points = np.rec.fromrecords(xx, names='x, y, z')
+                            else:
+                                points = np.rec.fromrecords(x, names='x, y, z')
+
+                    #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
                     if self.z_scale is not None:
                         points['z'] *= self.z_scale
 
@@ -5310,8 +5337,9 @@ class eHydroFetcher(Fetcher):
     -----------
     Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
         
-    def __init__(self, **kwargs):
+    def __init__(self, want_contours = False, **kwargs):
         super().__init__(**kwargs)
+        self.want_contours = want_contours
         
     def set_ds(self, result):
         try:
@@ -5325,14 +5353,24 @@ class eHydroFetcher(Fetcher):
             tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
             src_srs = tmp_layer.GetSpatialRef()
             src_epsg = gdalfun.osr_parse_srs(src_srs)
-            tmp_gdb = None
-
+            elev_datum = tmp_layer[1].GetField('elevationDatum')
+            tmp_gdb = tmp_layer = None
+            v = vdatums.get_vdatum_by_name(elev_datum)
+            
             usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048",
-                                      src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                      src_srs='{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None, dst_srs=self.dst_srs,
                                       x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                       parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                       cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
             yield(usace_ds)
+
+            if self.want_contours:
+                usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048",
+                                          src_srs='{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None, dst_srs=self.dst_srs,
+                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+                                          parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
+                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
+                yield(usace_ds)
 
     def set_ds_XYZ(self, result):
         src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
@@ -5350,6 +5388,7 @@ class eHydroFetcher(Fetcher):
                                           src_region=self.region, parent=self, invert_region=self.invert_region,
                                           metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
                 yield(usace_ds)
+        
         
 class BlueTopoFetcher(Fetcher):
     """BlueTopo Gridded bathymetric data Fetcher
