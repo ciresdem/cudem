@@ -32,6 +32,8 @@ import numpy as np
 from osgeo import gdal
 from osgeo import ogr
 from osgeo import osr
+import pyproj
+from tqdm import tqdm
 
 from cudem import regions
 from cudem import gdalfun
@@ -254,6 +256,167 @@ _geoids = {
 #_geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
 #_geoids = ['g2018']
 
+def set_transform(src_srs = None, dst_srs = None, region = None, verbose = True, cache_dir = None):
+    """Set the pyproj horizontal and vertical transformations for the dataset"""
+
+    want_vertical = True
+    src_geoid = None
+    dst_geoid = 'g2018'
+    cache_dir = _vdatums_cache if cache_dir is None else cache_dir
+    if region is None:
+        utils.echo_error_msg('you must suuply a reigon')
+        sys.exit(1)
+    
+    if src_srs is not None and dst_srs is not None:
+        tmp_src_srs = src_srs.split('+geoid:')
+        src_srs_ = tmp_src_srs[0]
+        src_srs = src_srs_
+        if len(tmp_src_srs) > 1:
+            src_geoid = tmp_src_srs[1]
+
+        tmp_dst_srs = dst_srs.split('+geoid:')
+        dst_srs_ = tmp_dst_srs[0]
+        dst_srs = dst_srs_
+        if len(tmp_dst_srs) > 1:
+            dst_geoid = tmp_dst_srs[1]
+
+        is_esri = False
+        in_vertical_epsg_esri = None
+        if 'ESRI' in src_srs_.upper():
+            is_esri = True
+            srs_split = src_srs_.split('+')
+            src_srs_ = srs_split[0]
+            if len(srs_split) > 1:
+                in_vertical_epsg_esri = srs_split[1]
+
+        in_crs = pyproj.CRS.from_user_input(src_srs_)
+        out_crs = pyproj.CRS.from_user_input(dst_srs_)
+
+        if in_crs.is_compound:
+            in_crs_list = in_crs.sub_crs_list
+            in_horizontal_crs = in_crs_list[0]
+            in_vertical_crs = in_crs_list[1]
+            in_vertical_name = in_vertical_crs.name
+            in_vertical_epsg = in_vertical_crs.to_epsg()
+            if in_vertical_epsg is None:
+                in_vertical_epsg = in_vertical_name
+        else:
+            in_horizontal_crs = in_crs
+            want_vertical=False
+
+        if out_crs.is_compound:            
+            out_crs_list = out_crs.sub_crs_list
+            out_horizontal_crs = out_crs_list[0]
+            out_vertical_crs = out_crs_list[1]
+            out_vertical_epsg = out_vertical_crs.to_epsg()
+        else:
+            out_horizontal_crs = out_crs
+            want_vertical=False
+
+        in_horizontal_epsg = in_horizontal_crs.to_epsg()
+        out_horizontal_epsg = out_horizontal_crs.to_epsg()
+
+        if (in_vertical_epsg_esri is not None and is_esri):
+            in_vertical_epsg = in_vertical_epsg_esri
+            want_vertical = True
+
+        if want_vertical:
+            if (in_vertical_epsg == out_vertical_epsg) and src_geoid is None:
+                want_vertical = False
+
+        ## horizontal Transformation
+        try:
+            transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
+        except Exception as e:
+            utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
+                in_horizontal_crs.name, out_horizontal_crs.name, e
+            ))
+            transformer = None
+            return
+
+        #if region is not None:
+        trans_region = region.copy()
+        trans_region.src_srs = out_horizontal_crs.to_proj4() #'epsg:{}'.format(out_horizontal_epsg)
+        trans_region.warp(in_horizontal_crs.to_proj4())
+
+        src_proj4 = in_horizontal_crs.to_proj4()
+        dst_proj4 = out_horizontal_crs.to_proj4()
+
+        ## vertical Transformation
+        if want_vertical:
+            vd_region = region.copy()
+            vd_region.src_srs = out_horizontal_crs.to_proj4()
+
+            vd_region.warp('epsg:4326')
+            if not vd_region.valid_p():
+                utils.echo_warning_msg('failed to generate transformation')
+                return
+
+            vd_region.zmin = None
+            vd_region.zmax = None
+            vd_region.buffer(pct=5)
+
+            ## trans_fn is the transformation grid, used in gdalwarp
+            trans_fn = os.path.join(
+                cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
+                    in_vertical_epsg, out_vertical_epsg, vd_region.format('fn')
+                )
+            )
+
+            ## vertical transformation grid is generated in WGS84
+            if not os.path.exists(trans_fn):
+                with tqdm(
+                        desc='generating vertical transformation grid {} from {} to {}'.format(
+                            trans_fn, in_vertical_epsg, out_vertical_epsg
+                        ),
+                        leave=verbose
+                ) as pbar:
+                    vd_x_inc = vd_y_inc = utils.str2inc('3s')
+                    xcount, ycount, dst_gt = vd_region.geo_transform(
+                        x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+                    )
+
+                    while (xcount <=10 or ycount <=10):
+                        vd_x_inc /= 2
+                        vd_y_inc /= 2
+                        xcount, ycount, dst_gt = vd_region.geo_transform(
+                            x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
+                        )
+
+                    trans_fn, trans_fn_unc = VerticalTransform(
+                        'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
+                        geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=cache_dir, verbose=False
+                    ).run(outfile=trans_fn)                        
+
+            if trans_fn is not None and os.path.exists(trans_fn):
+                #utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(trans_fn, in_vertical_epsg, out_vertical_epsg))
+                out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), trans_fn)
+
+                if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
+                    out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+                    trans_to_meter = True
+
+                # if utils.str_or(out_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(dst_vert, ''):
+                #     out_dst_srs = out_dst_srs + ' +vto_meter=0.3048006096012192'
+                #     trans_from_meter = True
+            else:
+                utils.echo_error_msg(
+                    'failed to generate vertical transformation grid between {} and {} for this region!'.format(
+                        in_vertical_epsg, out_vertical_epsg
+                    )
+                )
+
+            in_vertical_crs = pyproj.CRS.from_user_input(out_src_srs)
+            src_proj4 = in_vertical_crs.to_proj4()
+            dst_proj4 = out_horizontal_crs.to_proj4()
+            aux_src_proj4 = in_horizontal_crs.to_proj4()
+            aux_dst_proj4 = out_horizontal_crs.to_proj4()
+            #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
+            aoi = pyproj.aoi.AreaOfInterest(region.xmin, region.ymin, region.xmax, region.ymax)
+            transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi)
+
+    return(transformer)
+
 def get_vdatum_by_name(datum_name):
     ## tidal
     if utils.int_or(datum_name) not in _tidal_frames.keys():
@@ -295,7 +458,7 @@ class VerticalTransform:
         self.epsg_out = self._datum_by_name(str(epsg_out))
         self.geoid_in = geoid_in
         self.geoid_out = geoid_out
-        self.cache_dir = _vdatum_cache if cache_dir is None else cache_dir
+        self.cache_dir = _vdatums_cache if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid')
         #utils.echo_msg('transform: {} {}'.format(self.xcount, self.ycount))

@@ -554,8 +554,6 @@ class ElevationDataset:
         self.y_inc = utils.str2inc(y_inc) # target dataset y/lon increment
         self.stack_fltrs = stack_fltrs # pass the stack, if generated, through grits filters
         self.pnt_fltrs = pnt_fltrs # pass the points through filters
-        #self.stack_filters = [] # stack filters
-        #self.point_filters = [] # point filters
         self.want_mask = want_mask # mask the data
         self.want_sm = want_sm # generate spatial metadata vector
         self.sample_alg = sample_alg # the gdal resample algorithm
@@ -1072,7 +1070,6 @@ class ElevationDataset:
 
         return(self.infos)
 
-    ## todo: make an osr version of this incase pyproj installs weird
     def set_transform(self):
         """Set the pyproj horizontal and vertical transformations for the dataset"""
         
@@ -1938,11 +1935,12 @@ class ElevationDataset:
                     ## apply any dlim filters to the points
                     #if isinstance(self.fltrs, list):
                     #for f in self.fltrs:
-                    for f in self.pnt_fltrs:
-                        #utils.echo_msg(f)
-                        point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
-                        if point_filter is not None:
-                            points = point_filter()
+                    if self.pnt_fltrs is not None:
+                        for f in self.pnt_fltrs:
+                            #utils.echo_msg(f)
+                            point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
+                            if point_filter is not None:
+                                points = point_filter()
 
                     # for f in self.pnt_fltrs:
                     #     opts = f.split(':')
@@ -3082,14 +3080,24 @@ class SWOT_PIXC(SWOTFile):
 
     classes: 1UB, 2UB, 3UB, 4UB, 5UB, 6UB, 7UB
     "land, land_near_water, water_near_land, open_water, dark_water, low_coh_water_near_land, open_low_coh_water"
+
+    classes_qual: 1U, 2U, 4U, 8U, 16U, 2048U, 8192U, 16384U, 32768U, 262144U, 524288U, 134217728U, 536870912U, 1073741824U, 2147483648U
+    "no_coherent_gain power_close_to_noise_floor detected_water_but_no_prior_water detected_water_but_bright_land water_false_detection_rate_suspect coherent_power_suspect tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad large_karin_gap"
+
+    anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB 
+    "open_ocean land continental_water aquatic_vegetation continental_ice_snow floating_ice salted_basin"
+  		
     """
     
-    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, **kwargs):
+    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, classes_qual = None,
+                 anc_classes = None, **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
         self.apply_geoid = apply_geoid
         self.classes = [int(x) for x in classes.split('/')] if classes is not None else []
+        self.classes_qual = [int(x) for x in classes_qual.split('/')] if classes_qual is not None else []
+        self.anc_classes = [int(x) for x in anc_classes.split('/')] if anc_classes is not None else []
 
     def yield_ds(self):
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
@@ -3102,7 +3110,6 @@ class SWOT_PIXC(SWOTFile):
             latitude = self._get_var_arr(src_h5, '{}/latitude'.format(self.group))
             longitude = self._get_var_arr(src_h5, '{}/longitude'.format(self.group))
             var_data = self._get_var_arr(src_h5, '{}/{}'.format(self.group, self.var))
-            class_data = self._get_var_arr(src_h5, '{}/classification'.format(self.group))
             if self.apply_geoid:
                 geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
                 out_data = var_data - geoid_data
@@ -3113,9 +3120,22 @@ class SWOT_PIXC(SWOTFile):
             points = np.rec.fromrecords(dataset, names='x, y, z')
             #points = points[points['z'] != 9.96921e+36]
 
+            ## Classification Filter
             if len(self.classes) > 0:
+                class_data = self._get_var_arr(src_h5, '{}/classification'.format(self.group))
                 points = points[(np.isin(class_data, self.classes))]
 
+                ## Classification Quality Filter
+                if len(self.classes_qual) > 0:
+                    class_qual_data = self._get_var_arr(src_h5, '{}/classification_qual'.format(self.group))
+                    class_qual_data = class_qual_data[(np.isin(class_data, self.classes))]
+                    points = points[(~np.isin(class_qual_data, self.classes_qual))]
+                
+            ## Ancilliary Classification Filter
+            if len(self.anc_classes) > 0:
+                anc_class_data = self._get_var_arr(src_h5, '{}/ancillary_surface_classification_flag'.format(self.group))
+                points = points[(np.isin(anc_class_data, self.anc_classes))]
+                
             points = points[points['z'] != -9.969209968386869e+36]
             self._close_h5File(src_h5)
             self._close_h5File(src_h5_vec)
@@ -4370,11 +4390,13 @@ set `data_set` to one of (for L2_HR_Raster):
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
-    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, **kwargs):
+    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None, anc_classes = None, **kwargs):
         super().__init__(**kwargs)
         self.data_set = data_set
         self.apply_geoid = apply_geoid
         self.classes = classes
+        self.anc_classes = anc_classes
+        self.classes_qual = classes_qual
 
     # def fetch_pixc_vec(self, swot_fn):
     #     pixc_vec_filter = utils.fn_basename2(swot_fn).split('PIXC_')[1]
@@ -4396,8 +4418,8 @@ set `data_set` to one of (for L2_HR_Raster):
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
             
-            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, classes=self.classes, src_srs='epsg:4326+3855',
-                               dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
+            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, apply_geoid=self.apply_geoid, classes=self.classes, anc_classes=self.anc_classes, classes_qual=self.classes_qual, 
+                               src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=True,
                                metadata=copy.deepcopy(self.metadata))
             
