@@ -385,7 +385,7 @@ def set_transform(src_srs = None, dst_srs = None, region = None, verbose = True,
 
                     trans_fn, trans_fn_unc = VerticalTransform(
                         'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
-                        geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=cache_dir, verbose=False
+                        geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=cache_dir, verbose=True
                     ).run(outfile=trans_fn)                        
 
             if trans_fn is not None and os.path.exists(trans_fn):

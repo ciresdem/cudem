@@ -3090,7 +3090,7 @@ class SWOT_PIXC(SWOTFile):
     """
     
     def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, classes_qual = None,
-                 anc_classes = None, **kwargs):
+                 anc_classes = None, remove_class_flags = False, **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
@@ -3098,6 +3098,9 @@ class SWOT_PIXC(SWOTFile):
         self.classes = [int(x) for x in classes.split('/')] if classes is not None else []
         self.classes_qual = [int(x) for x in classes_qual.split('/')] if classes_qual is not None else []
         self.anc_classes = [int(x) for x in anc_classes.split('/')] if anc_classes is not None else []
+        self.remove_class_flags = remove_class_flags
+        #if self.remove_class_flags:
+        #    self.classes_qual = [1, 2, 4, 8, 16, 2048, 8192, 16384, 32768, 262144, 524288, 134217728, 536870912, 1073741824, 2147483648]
 
     def yield_ds(self):
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
@@ -3126,7 +3129,12 @@ class SWOT_PIXC(SWOTFile):
                 points = points[(np.isin(class_data, self.classes))]
 
                 ## Classification Quality Filter
-                if len(self.classes_qual) > 0:
+                if self.remove_class_flags:
+                    class_qual_data = self._get_var_arr(src_h5, '{}/classification_qual'.format(self.group))
+                    class_qual_data = class_qual_data[(np.isin(class_data, self.classes))]
+                    points = points[class_qual_data == 0]
+                                   
+                elif len(self.classes_qual) > 0:
                     class_qual_data = self._get_var_arr(src_h5, '{}/classification_qual'.format(self.group))
                     class_qual_data = class_qual_data[(np.isin(class_data, self.classes))]
                     points = points[(~np.isin(class_qual_data, self.classes_qual))]
