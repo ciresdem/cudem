@@ -2303,9 +2303,10 @@ https://waterservices.usgs.gov/
 < waterservices >"""
 
     
-    def __init__(self, **kwargs):
+    def __init__(self, printout = False, **kwargs):
         super().__init__(name='waterservices', **kwargs)
         self._water_services_api_url = 'https://waterservices.usgs.gov/nwis/iv/?'
+        self.printout = printout
         
     def run(self):
         '''Run the WATERSERVICES fetching module'''
@@ -2321,6 +2322,30 @@ https://waterservices.usgs.gov/
         _req = Fetch(self._water_services_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
             self.results.append([_req.url, 'water_services_results_{}.json'.format(self.region.format('fn')), 'waterservices'])
+
+            if self.printout:
+                j = _req.json()
+                print(j.keys())
+                out_list = j['value']['timeSeries']
+                for l in out_list:
+                    # geolocation
+                    gl = l['sourceInfo']['geoLocation']['geogLocation']
+                    y = gl['latitude']
+                    x = gl['longitude']
+                    #print(x, y)
+
+                    # vars
+                    #vs = l['variable']['variableCode']
+                    v = l['variable']['variableCode'][0]['value']
+                    vc = l['variable']['variableName']
+                    #print(v)
+
+                    # val
+                    vl = l['values'][0]['value'][0]['value']
+                    #print(vl)
+
+                    print(vc, v, x, y, vl)
+                #utils.echo_msg(json.dumps(j['value'], indent=4))
             
         return(self)
     
