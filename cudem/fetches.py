@@ -27,7 +27,6 @@
 ##
 ### TODO:
 ## eurodem
-## cpt-city
 ##
 ### Code:
 
@@ -2332,7 +2331,6 @@ https://waterservices.usgs.gov/
                     gl = l['sourceInfo']['geoLocation']['geogLocation']
                     y = gl['latitude']
                     x = gl['longitude']
-                    #print(x, y)
 
                     # vars
                     #vs = l['variable']['variableCode']
@@ -2342,10 +2340,8 @@ https://waterservices.usgs.gov/
 
                     # val
                     vl = l['values'][0]['value'][0]['value']
-                    #print(vl)
 
                     print(vc, v, x, y, vl)
-                #utils.echo_msg(json.dumps(j['value'], indent=4))
             
         return(self)
     

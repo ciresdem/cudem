@@ -3075,6 +3075,74 @@ class SWOTFile(ElevationDataset):
     def _get_var_arr(self, src_h5, var_path):
         return(src_h5['/{}'.format(var_path)][...,])
 
+# class IceSatFile(SWOTFile):
+#     def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, classes_qual = None,
+#                  anc_classes = None, remove_class_flags = False, **kwargs):
+#         super().__init__(**kwargs)
+#         self.group = group
+#         self.var = var
+#         self.apply_geoid = apply_geoid
+#         self.classes = [int(x) for x in classes.split('/')] if classes is not None else []
+#         self.classes_qual = [int(x) for x in classes_qual.split('/')] if classes_qual is not None else []
+#         self.anc_classes = [int(x) for x in anc_classes.split('/')] if anc_classes is not None else []
+#         self.remove_class_flags = remove_class_flags
+#         #if self.remove_class_flags:
+#         #    self.classes_qual = [1, 2, 4, 8, 16, 2048, 8192, 16384, 32768, 262144, 524288, 134217728, 536870912, 1073741824, 2147483648]
+
+#     def yield_ds(self):
+#         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
+#         src_h5_vec = None
+        
+#         #if self.pixc_vec is not None:
+#         #    src_h5_vec = self._init_h5File(short_name='L2_HR_PIXCVec')
+        
+#         if src_h5 is not None:
+#             latitude = self._get_var_arr(src_h5, '{}/latitude'.format(self.group))
+#             longitude = self._get_var_arr(src_h5, '{}/longitude'.format(self.group))
+#             var_data = self._get_var_arr(src_h5, '{}/{}'.format(self.group, self.var))
+#             if self.apply_geoid:
+#                 geoid_data = self._get_var_arr(src_h5, '{}/geoid'.format(self.group))
+#                 out_data = var_data - geoid_data
+#             else:
+#                 out_data = var_data
+                
+#             dataset = np.column_stack((longitude, latitude, out_data))
+#             points = np.rec.fromrecords(dataset, names='x, y, z')
+#             #points = points[points['z'] != 9.96921e+36]
+
+#             ## Classification Filter
+#             if len(self.classes) > 0:
+#                 class_data = self._get_var_arr(src_h5, '{}/classification'.format(self.group))
+#                 points = points[(np.isin(class_data, self.classes))]
+
+#                 ## Classification Quality Filter
+#                 if self.remove_class_flags:
+#                     class_qual_data = self._get_var_arr(src_h5, '{}/classification_qual'.format(self.group))
+#                     class_qual_data = class_qual_data[(np.isin(class_data, self.classes))]
+#                     points = points[class_qual_data == 0]
+                                   
+#                 elif len(self.classes_qual) > 0:
+#                     class_qual_data = self._get_var_arr(src_h5, '{}/classification_qual'.format(self.group))
+#                     class_qual_data = class_qual_data[(np.isin(class_data, self.classes))]
+#                     points = points[(~np.isin(class_qual_data, self.classes_qual))]
+                
+#             ## Ancilliary Classification Filter
+#             if len(self.anc_classes) > 0:
+#                 anc_class_data = self._get_var_arr(src_h5, '{}/ancillary_surface_classification_flag'.format(self.group))
+#                 points = points[(np.isin(anc_class_data, self.anc_classes))]
+                
+#             points = points[points['z'] != -9.969209968386869e+36]
+#             self._close_h5File(src_h5)
+#             self._close_h5File(src_h5_vec)
+
+#             #tmp_points = points
+#             #while len(points) > 0:
+#             #tmp_points = points[:1000000]
+#             #points = points[1000000:]
+#             #utils.echo_msg(len(points))
+#             #yield(tmp_points)
+#             yield(points)
+    
 class SWOT_PIXC(SWOTFile):
     """NASA SWOT PIXC data file.
 
@@ -3197,7 +3265,7 @@ class SWOT_HR_Raster(ElevationDataset):
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
-        
+                
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
@@ -3552,19 +3620,20 @@ class OGRFile(ElevationDataset):
                     g = json.loads(geom.ExportToJson())
                     #utils.echo_msg(g)
                     xyzs = g['coordinates']
+
                     if not geom.GetGeometryName() == 'MULTIPOINT':
                         xyzs = [xyzs]
 
                     out_xyzs = []
                     for xyz in xyzs:
-                        #utils.echo_msg(geom.Is3D())
+
                         if not geom.Is3D():
                             if self.elev_field is None:
                                 self.elev_field = self.find_elevation_field(f)
 
                             elev = utils.float_or(f.GetField(self.elev_field))
                             if elev is not None:
-
+                                
                                 if isinstance(xyz[0], list):
                                     for x in xyz:
                                         for xx in x:
@@ -3588,7 +3657,9 @@ class OGRFile(ElevationDataset):
                                 for xx in x:
                                     points = np.rec.fromrecords(xx, names='x, y, z')
                             else:
-                                points = np.rec.fromrecords(x, names='x, y, z')
+                                #utils.echo_msg(x)
+                                points = np.rec.fromrecords([x], names='x, y, z')
+                                #utils.echo_msg(points)
 
                     #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
                     if self.z_scale is not None:
