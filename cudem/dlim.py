@@ -3657,9 +3657,7 @@ class OGRFile(ElevationDataset):
                                 for xx in x:
                                     points = np.rec.fromrecords(xx, names='x, y, z')
                             else:
-                                #utils.echo_msg(x)
                                 points = np.rec.fromrecords([x], names='x, y, z')
-                                #utils.echo_msg(points)
 
                     #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
                     if self.z_scale is not None:
