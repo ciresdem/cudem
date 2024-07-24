@@ -33,6 +33,7 @@
 import os
 import sys
 import time
+import datetime
 import json
 import re
 import requests
@@ -290,16 +291,28 @@ class Fetch:
         
         if tries <= 0:
             utils.echo_error_msg('max-tries exhausted {}'.format(self.url))
-            return(None)
-            #raise ConnectionError('Maximum attempts at connecting have failed.')
+            raise ConnectionError('Maximum attempts at connecting have failed.')
+            #return(None)
         
         try:
             req = requests.get(
                 self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify
             )
-        except:
-            req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
+        # except requests.exceptions.Timeout:
+        #     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout * 2 if timeout is not None else None, read_timeout=read_timeout * 2 if read_timeout is not None else None)
+            
+        # except requests.exceptions.ReadTimeout:
+        #     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout * 2 if timeout is not None else None, read_timeout=read_timeout * 2 if read_timeout is not None else None)
 
+        except Exception as e:
+            utils.echo_warning_msg(e)
+            req = self.fetch_req(
+                params=params,
+                tries=tries - 1,
+                timeout=timeout * 2 if timeout is not None else None,
+                read_timeout=read_timeout * 2 if read_timeout is not None else None
+            )
+            
         if req is not None:
             if req.status_code == 504:
                 time.sleep(2)
@@ -311,11 +324,11 @@ class Fetch:
                     
                     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
                     
-            elif req.status_code != 200:
+            elif req.status_code != 200 and req.status_code != 201:
                 utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
                 req = None
             
-        return(req)
+            return(req)
             
     def fetch_html(self, timeout=2):
         """fetch src_url and return it as an HTML object"""
@@ -339,7 +352,7 @@ class Fetch:
 
     def fetch_file(
             self, dst_fn, params=None, datatype=None, overwrite=False,
-            timeout=10, read_timeout=300, tries=5, check_size=True
+            timeout=30, read_timeout=None, tries=5, check_size=True
     ):
         """fetch src_url and save to dst_fn"""
 
@@ -347,13 +360,13 @@ class Fetch:
             if 'Range' in self.headers:
                 del self.headers['Range']
 
-            self.fetch_file(
+            status = self.fetch_file(
                 dst_fn,
                 params=params,
                 datatype=datatype,
                 overwrite=overwrite,
-                timeout=timeout+5,
-                read_timeout=read_timeout+50,
+                timeout=timeout+5 if timeout is not None else None,
+                read_timeout=read_timeout+50 if read_timeout is not None else None,
                 tries=tries-1
             )
         
@@ -377,25 +390,31 @@ class Fetch:
                         dst_fn_size = os.stat(dst_fn).st_size
                         resume_byte_pos = dst_fn_size
                         self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
+                        
             except OSError:
                 pass
 
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
-                req_h = req.headers
 
+                if req.status_code == 416:
+                    return(0)
+                
+                req_h = req.headers
                 if 'Content-Range' in req_h:
                     req_s = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack
                 elif 'Content-Length' in req_h:
                     req_s = int(req_h['Content-Length'])
                 else:
-                    req_s = -1
+                    #req_s = -1
+                    req_s = int(req_h.get('content-length', 0))
 
                 try:
                     if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
                         raise UnboundLocalError('{} exists, '.format(dst_fn))
                     elif req_s == -1 or req_s == 0 or req_s == 49:
-                        raise UnboundLocalError('ivalid req_s {}, '.format(req_s))
+                        req_s = 0
+                        #raise UnboundLocalError('ivalid req_s {}, '.format(req_s))                        
                         
                 except OSError:
                     pass
@@ -412,7 +431,7 @@ class Fetch:
                     if self.url == req.url:
                         raise UnboundLocalError('Incorrect Authentication')
 
-                    Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                    status = Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
                         dst_fn,
                         params=params,
                         datatype=datatype,
@@ -421,13 +440,14 @@ class Fetch:
                         read_timeout=read_timeout
                     )
 
-                elif (req.status_code == 200) or (req.status_code == 206):
+                elif (req.status_code == 200) or (req.status_code == 206):# or (req.status_code :
                     curr_chunk = 0
                     total_size = int(req.headers.get('content-length', 0))
+                    
                     with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
                         with tqdm(
                                 desc='fetching: {}'.format(utils._init_msg(self.url, len('fetching: '), 40)),
-                                total=total_size,
+                                total=req_s,
                                 unit='iB',
                                 unit_scale=True
                         ) as pbar:
@@ -444,81 +464,76 @@ class Fetch:
                                     local_file.flush()
                             except Exception as e:
                                 #utils.echo_warning_msg(e)
-                                if self.verbose:
-                                    utils.echo_warning_msg(
-                                        'server returned: {}, and an exception occured: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, e, tries)
-                                    )
+                                if tries != 0:
+                                    if self.verbose:
+                                        utils.echo_warning_msg(
+                                            'server returned: {}, and an exception occured: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, e, tries)
+                                        )
 
-                                    time.sleep(2)
-                                    
-                                Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
-                                    dst_fn,
-                                    params=params,
-                                    datatype=datatype,
-                                    overwrite=overwrite,
-                                    timeout=timeout+5,
-                                    read_timeout=read_timeout+50,
-                                    tries=tries-1
-                                )
-                                self.verbose=False
+                                        time.sleep(2)
+
+                                    status = Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                                        dst_fn,
+                                        params=params,
+                                        datatype=datatype,
+                                        overwrite=overwrite,
+                                        timeout=timeout+5 if timeout is not None else None,
+                                        read_timeout=read_timeout+50 if read_timeout is not None else None,
+                                        tries=tries-1
+                                    )
+                                    self.verbose=False
 
                             # if chunk:
                             #     local_file.write(chunk)
                             # except TimeoutError as e:
                             #     timed_out = True
 
-                    if check_size and total_size != os.stat(dst_fn).st_size:
+                    if check_size and (total_size != 0) and (total_size != os.stat(dst_fn).st_size):
                         raise UnboundLocalError('sizes do not match!')
                         timed_out = True
                         
                 elif (req.status_code == 429) or (req.status_code == 416) or (req.status_code == 504) or (timed_out):
+                    if tries != 0:
+                        if self.verbose:
+                            utils.echo_warning_msg(
+                                'server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries)
+                            )
 
-                    #elif tries > 0:
-                    # if self.verbose:
-                    #     utils.echo_warning_msg('max tries exhausted...')
-                    #     status = -1
-                    #else:
-                    ## pause a bit and retry...
-                    if self.verbose:
-                        utils.echo_warning_msg(
-                            'server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries)
+                        time.sleep(10)
+                        status = Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
+                            dst_fn,
+                            params=params,
+                            datatype=datatype,
+                            overwrite=overwrite,
+                            timeout=timeout+5 if timeout is not None else None,
+                            read_timeout=read_timeout+50 if read_timeout is not None else None,
+                            tries=tries-1
                         )
-
-                    time.sleep(10)
-                    Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
-                        dst_fn,
-                        params=params,
-                        datatype=datatype,
-                        overwrite=overwrite,
-                        timeout=timeout+5,
-                        read_timeout=read_timeout+50,
-                        tries=tries-1
-                    )
-                    self.verbose=False
+                        #self.verbose=False
                 else:
                     if self.verbose:
                         utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
-                        raise UnboundLocalError(req.status_code)
-                    status = -1
-
-        # except requests.exceptions.Timeout:
-        #     utils.echo_error_msg('Connection Timed Out!')
-            
-        except UnboundLocalError as e:
-            #utils.echo_error_msg(e)
-            pass
-            
-        except Exception as e:
-            utils.echo_error_msg(e)
-            status = -1
-                
-        if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
-            #utils.echo_error_msg('data not fetched...')
-            status = -1
-            if check_size:
-                raise UnboundLocalError('data not fetched')
-            #status = -1
                         
+                    status = -1
+                    raise UnboundLocalError(req.status_code)
+
+        except requests.exceptions.ConnectionError as e:
+            status = -1
+            raise ConnectionError('Connection Aborted!')
+        
+        except UnboundLocalError as e:
+            status = -1
+            raise UnboundLocalError(e)
+        
+        except Exception as e:
+            status = -1
+            raise Exception(e)
+
+        if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
+            if check_size:
+                status = -1
+                raise UnboundLocalError('data not fetched')
+
         return(status)
 
     def fetch_ftp_file(self, dst_fn, params=None, datatype=None, overwrite=False):
@@ -586,8 +601,12 @@ def fetch_queue(q, c=True):
                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                     ).fetch_file(fetch_args[1], check_size=c)
                 except:
-                    utils.echo_warning_msg('fetch of {} failed...'.format(fetch_args[0]))
-                        
+                    if fetch_args[4] > 0:
+                        utils.echo_warning_msg('fetch of {} failed...putting back in the queue'.format(fetch_args[0]))
+                        fetch_args[4] -= 1
+                        q.put(fetch_args)
+                    else:
+                        utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
         q.task_done()
         
 class fetch_results(threading.Thread):
@@ -619,7 +638,8 @@ class fetch_results(threading.Thread):
             t.daemon = True
             t.start()
         for row in self.mod.results:
-            self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod])
+            # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries]
+            self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod, 5])
             
         self.fetch_q.join()
 
@@ -653,8 +673,11 @@ class FetchModule:
     def run(self):
         raise(NotImplementedError)
 
-    def fetch(self, entry, check_size = True):
+    def fetch(self, entry, check_size = True, retries=5):
         ## make sure this fetches correctly and retry if it doesn't!
+        if retries == 0:
+            return(-1)
+        
         try:
             status = Fetch(
                 entry[0],
@@ -662,8 +685,10 @@ class FetchModule:
                 verbose=self.verbose,
                 headers=self.headers,
             ).fetch_file(os.path.join(self._outdir, entry[1]), check_size=check_size)
-        except:
-            status = -1
+        except Exception as e:
+            utils.echo_msg(e)
+            status = self.fetch(entry, check_size=check_size, retries=retries-1)
+            #status = -1
             
         return(status)
 
@@ -3976,6 +4001,13 @@ ways to discover, access, and use the data.
 nsidc_download.py updated for fetches integration 12/21
 Updated from nsidc.py to earthdata.py to support all earthdata datasets
 
+    time_start: A Zulu-time date string. e.g. '2020-05-04T00:00:00Z'
+
+    time_end:   A Zulu-time date string. e.g. '2020-06-20T00:00:00Z'
+                Leaving either time_start or time_end as a blank string ('') will
+                default to searching from the start and/or end of the entire
+                dataset collection, respectively.
+
 some notable datasets:
     ATL03
     ATL06
@@ -4005,15 +4037,18 @@ https://cmr.earthdata.nasa.gov
 
 < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
 
-    def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter=None, **kwargs):
+    def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter=None, egi=False, **kwargs):
         super().__init__(name='cmr', **kwargs)
         self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
+        self._egi_url = 'https://n5eil02u.ecs.nsidc.org/egi/request?'
+        self._egi_zip_url = 'https://n5eil02u.ecs.nsidc.org/esir/'
         self.short_name = short_name
         self.provider = provider
         self.time_start = time_start
         self.time_end = time_end
         self.version = version
         self.filename_filter = filename_filter
+        self.egi = egi
 
         credentials = get_credentials(None)
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
@@ -4047,31 +4082,54 @@ https://cmr.earthdata.nasa.gov
             filename_filters = self.filename_filter.split(',')
             for filename_filter in filename_filters:
                 _data['producer_granule_id'] = self.add_wildcards_to_str(filename_filter)
-                
-        _req = Fetch(self._cmr_url).fetch_req(params=_data)
-        if _req is not None:
-            print(_req.url)
-            features = _req.json()['feed']['entry']
-            #print(features[0])
-            # print(features[0].keys())
-            # sys.exit()
-            for feature in features:
-                if 'polygons' in feature.keys():
-                    poly = feature['polygons'][0][0]
-                    cc = [float(x) for x in poly.split()]
-                    gg = [x for x in zip(cc[::2], cc[1::2])]
-                    ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
-                    ## uncomment below to output shapefiles of the feature polygons
-                    #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
-                else:
-                    ogr_geom = self.region.export_as_geom()
 
-                if self.region.export_as_geom().Intersects(ogr_geom):
-                    links = feature['links']
-                    for link in links:
-                        if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
-                            if not any([link['href'].split('/')[-1] in res for res in self.results]):
-                                self.results.append([link['href'], link['href'].split('/')[-1], self.short_name])
+        if self.egi:
+            _egi_data = {
+                'email': 'no',
+                'short_name': self.short_name,
+                'bounding_box': self.region.format('bbox'),
+                'bbox': self.region.format('bbox'),
+                'page_size': 10,
+                'page_num': 1,
+            }
+            ## add time if specified
+            #'time': f'{self.time_start}, {self.time_end}',
+
+            utils.echo_msg('requesting data subsets, please wait...')
+            while True:
+                _req = Fetch(self._egi_url).fetch_req(params=_egi_data, timeout=None, read_timeout=None)
+                if _req is not None and _req.status_code == 200:
+                    utils.echo_msg(_req.headers)
+                    if 'Content-Disposition' in _req.headers.keys():
+                        zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
+                        zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
+                
+                        self.results.append([zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)])
+                        _egi_data['page_num'] += 1
+                        #break
+                else:
+                    break    
+        else:
+            _req = Fetch(self._cmr_url).fetch_req(params=_data)
+            if _req is not None:
+                features = _req.json()['feed']['entry']
+                for feature in features:
+                    if 'polygons' in feature.keys():
+                        poly = feature['polygons'][0][0]
+                        cc = [float(x) for x in poly.split()]
+                        gg = [x for x in zip(cc[::2], cc[1::2])]
+                        ogr_geom = ogr.CreateGeometryFromWkt(regions.create_wkt_polygon(gg))
+                        ## uncomment below to output shapefiles of the feature polygons
+                        #regions.write_shapefile(ogr_geom, '{}.shp'.format(feature['title']))
+                    else:
+                        ogr_geom = self.region.export_as_geom()
+
+                    if self.region.export_as_geom().Intersects(ogr_geom):
+                        links = feature['links']
+                        for link in links:
+                            if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
+                                if not any([link['href'].split('/')[-1] in res for res in self.results]):
+                                    self.results.append([link['href'], link['href'].split('/')[-1], self.short_name])
 
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
 ##
@@ -4093,14 +4151,14 @@ you might need to `chmod 0600 ~/.netrc`
    
 < icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >"""
     
-    def __init__(self, short_name='ATL03', **kwargs):
+    def __init__(self, short_name='ATL03', subset=False, **kwargs):
         if short_name is not None:
             short_name = short_name.upper()
             if not short_name.startswith('ATL'):
                 utils.echo_warning_msg('{} is not a valid icesat short_name, using ATL03'.format(short_name))
                 short_name = 'ATL03'
                 
-        super().__init__(short_name=short_name, **kwargs)   
+        super().__init__(short_name=short_name, egi=subset, **kwargs)   
         self.data_format = 202
         self.src_srs = 'epsg:4326+3855'
 

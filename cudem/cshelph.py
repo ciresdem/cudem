@@ -165,7 +165,7 @@ def refraction_correction(water_temp, water_surface, wavelength, photon_ref_elev
     photon_y = photon_y[photon_z<=water_surface]
     photon_ref_elev = photon_ref_elev[photon_z<=water_surface]
     satellite_altitude = satellite_altitude[photon_z<=water_surface]
-    ph_ref_azimuth = ph_ref_azimuth[photon_z<=water_surface]
+    ph_ref_azimuth = ph_ref_azimuth[photon_z<=water_surface].astype(float)
     ph_conf = ph_conf[photon_z<=water_surface]
     photon_z = photon_z[photon_z<=water_surface]
     
