@@ -3357,6 +3357,7 @@ class IceSatFile(ElevationDataset):
         conf = self.atl_03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
         dist_ph_along = self.atl_03_f['/' + laser + '/heights/dist_ph_along'][...,]
         this_N = latitude.shape[0]
+        #utils.echo_msg(photon_h.shape)
 
         ## Read in the geolocation level data
         segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
@@ -3368,6 +3369,7 @@ class IceSatFile(ElevationDataset):
         ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
         altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
         #surface_type = self.atl_03_f['/' + laser + '/geolocation/surf_type'][...,]
+        #utils.echo_msg(ref_azimuth)
 
         ## Read in the geoid data
         photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
@@ -3400,15 +3402,16 @@ class IceSatFile(ElevationDataset):
         ph_h_classed[:] = -1
 
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
-        ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids))).astype(float)
+        ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
         #ph_ref_elev.float()
         
         h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
-        ph_ref_azimuth = np.array(list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids))).astype(float)
+        ph_ref_azimuth = np.array(list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids)))#.astype(float)
+        #utils.echo_msg(ph_ref_azimuth)
         #ph_ref_azimut.float()
 
         h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
-        ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids))).astype(float)
+        ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids)))#.astype(float)
         #ph_altitude_sc.float()
 
         # h_surf_type_dict = dict(zip(segment_id, surface_type))
@@ -3446,7 +3449,7 @@ class IceSatFile(ElevationDataset):
 
             atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag
-            
+
         return(latitude, longitude, photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
                conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_altitude_sc, seg_ph_count, ph_h_classed)
 
@@ -3468,7 +3471,7 @@ class IceSatFile(ElevationDataset):
                 dataset_sea['ph_h_classed'][dataset_sea['photon_height'] < med_water_surface_h] = 4
                 ## Correct for refraction
                 # ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-                #     water_temp, med_water_surface_h, 532, dataset_1.ref_elevation, dataset_1.ref_azminuth, dataset_1.photon_height,
+                #     water_temp, med_water_surface_h, 532, dataset_1.ref_elevation, dataset_1.ref_azimuth, dataset_1.photon_height,
                 #     dataset_1.longitude, dataset_1.latitude, dataset_1.confidence, dataset_1.ref_sat_alt
                 # )
                 # depth = med_water_surface_h - ref_z
@@ -3498,12 +3501,13 @@ class IceSatFile(ElevationDataset):
              'photon_height': photon_h,
              'confidence':conf,
              'ref_elevation':ph_ref_elev,
-             'ref_azminuth':ph_ref_azimuth,
+             'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_alt_sc,
              'ph_h_classed': ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt', 'ph_h_classed']
+            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
 
+        
         if len(self.confidence_levels) > 0:
             dataset_1 = dataset_1[(np.isin(dataset_1['confidence'], self.confidence_levels))]
 
@@ -3534,6 +3538,11 @@ class IceSatFile(ElevationDataset):
         water_temp = utils.float_or(water_temp)
         #latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count, ph_h_classed = dataset
         latitude, longitude, photon_h, conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_alt_sc, seg_ph_count, ph_h_classed = dataset
+        # utils.echo_msg(ph_ref_azimuth)
+        # utils.echo_msg(np.any(np.isnan(ph_ref_azimuth)))
+        # utils.echo_msg(ph_ref_azimuth.shape)
+        # utils.echo_msg(photon_h.shape)
+        # utils.echo_msg(latitude.shape)
         epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
         epsg_num = int(epsg_code.split(':')[-1])
         utm_proj = pyproj.Proj(epsg_code)
@@ -3551,11 +3560,13 @@ class IceSatFile(ElevationDataset):
              'photon_height': photon_h,
              'confidence':conf,
              'ref_elevation':ph_ref_elev,
-             'ref_azmimuth':ph_ref_azimuth,
+             'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_alt_sc,
              'ph_h_classed': ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt', 'ph_h_classed']
+            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
+        #utils.echo_msg(dataset_sea)
+        
         dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
         dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
         if self.region is not None:
@@ -3565,6 +3576,8 @@ class IceSatFile(ElevationDataset):
             dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > xyz_region.ymin) & (dataset_sea1['latitude'] < xyz_region.ymax)]
             dataset_sea1 = dataset_sea1[(dataset_sea1['longitude'] > xyz_region.xmin) & (dataset_sea1['longitude'] < xyz_region.xmax)]
 
+        #utils.echo_msg(dataset_sea1)
+            
         if len(dataset_sea1) > 0:
             binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
             if binned_data_sea is not None:
@@ -3583,7 +3596,7 @@ class IceSatFile(ElevationDataset):
 
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-                        water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height,
+                        water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth, dataset_sea1.photon_height,
                         dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
                     )
                     depth = med_water_surface_h - ref_z
@@ -5209,10 +5222,10 @@ class IceSatFetcher(Fetcher):
 #              'photon_height': photon_h,
 #              'confidence':conf,
 #              'ref_elevation':ph_ref_elev,
-#              'ref_azminuth':ph_ref_azimuth,
+#              'ref_azimuth':ph_ref_azimuth,
 #              'ref_sat_alt':ph_sat_alt,
 #              'ph_h_classed': ph_h_classed},
-#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt', 'ph_h_classed']
+#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
 #         )
 #         dataset_sea1 = dataset_sea[dataset_sea.confidence == 4]
 #         dataset_sea1 = dataset_sea1[(dataset_sea1['ph_h_classed'] == 1)]
@@ -5302,10 +5315,10 @@ class IceSatFetcher(Fetcher):
 #              'photon_height': photon_h,
 #              'confidence':conf,
 #              'ref_elevation':ph_ref_elev,
-#              'ref_azminuth':ph_ref_azimuth,
+#              'ref_azimuth':ph_ref_azimuth,
 #              'ref_sat_alt':ph_sat_alt,
 #              'ph_h_classed': ph_h_classed},
-#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azminuth', 'ref_sat_alt', 'ph_h_classed']
+#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
 #         )
 #         dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
 #         dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
@@ -5334,7 +5347,7 @@ class IceSatFetcher(Fetcher):
 
 #                     ## Correct for refraction
 #                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-#                         water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azminuth, dataset_sea1.photon_height,
+#                         water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth, dataset_sea1.photon_height,
 #                         dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
 #                     )
 #                     depth = med_water_surface_h - ref_z
