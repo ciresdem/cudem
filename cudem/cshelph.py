@@ -269,7 +269,8 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     
     # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
     count_threshold = np.percentile(binned_data.groupby(['lat_bins', 'height_bins']).size().reset_index().groupby('lat_bins')[[0]].max(), percentile)
-    
+    #if count threshold is 0 or 1, set it to 2
+    #count_threshold = 2 if count_threshold <= 1 else count_threshold
     # Loop through groups and return average bathy height
     for k,v in data_groups.items():
         new_df = pd.DataFrame(v.groupby('height_bins').count())

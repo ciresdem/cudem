@@ -4614,15 +4614,15 @@ class WaffleDEM:
             clip_args['verbose'] = self.verbose
             clip_args = factory.args2dict(cp[1:], clip_args)
 
-            #         if clip_args['src_ply'] == 'coastline':
-            #             self.coast = WaffleFactory(mod='coastline:polygonize=False', data=self.data_, src_region=self.p_region,
-            #                                        xinc=self.xsample if self.xsample is not None else self.xinc, yinc=self.ysample if self.ysample is not None else self.yinc,
-            #                                        name='tmp_coast', node=self.node, want_weight=self.want_weight, want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs,
-            #                                        srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
-            #             self.coast.initialize()
-            #             self.coast.generate()
-            #             gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
-            #             os.replace('__tmp_clip__.tif', '{}'.format(fn))
+            if clip_args['src_ply'] == 'coastline':
+                self.coast = WaffleFactory(mod='coastline:polygonize=False', data=self.data_, src_region=self.p_region,
+                                           xinc=self.xsample if self.xsample is not None else self.xinc, yinc=self.ysample if self.ysample is not None else self.yinc,
+                                           name='tmp_coast', node=self.node, want_weight=self.want_weight, want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs,
+                                           srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
+                self.coast.initialize()
+                self.coast.generate()
+                gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
+                os.replace('__tmp_clip__.tif', '{}'.format(fn))
 
             if os.path.exists(clip_args['src_ply']):
                 if ogr.Open(clip_args['src_ply']) is not None:

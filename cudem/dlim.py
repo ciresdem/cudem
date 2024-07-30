@@ -3213,13 +3213,13 @@ class IceSatFile(ElevationDataset):
 
     """
     
-    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = None, confidence_levels = None, **kwargs):
+    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = '1', confidence_levels = '3/4', **kwargs):
         super().__init__(**kwargs)
         self.want_topo = want_topo
         self.want_bathy = want_bathy
-        self.water_surface = water_surface
         self.want_topo = False
         self.want_bathy = True
+        self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
             self.water_surface = 'mean_tide'
 
@@ -3263,8 +3263,12 @@ class IceSatFile(ElevationDataset):
             
     def yield_ds(self):
         self.atl_03_fn = self.fn
-        atl_08_result = self.fetch_atl_08()
-        self.atl_08_fn = atl_08_result
+
+        if len(self.classes) > 0:
+            atl_08_result = self.fetch_atl_08()
+            self.atl_08_fn = atl_08_result
+        else:
+            self.atl_08_fn = None
 
         try:
             self.init_atl_h5()
@@ -3275,13 +3279,23 @@ class IceSatFile(ElevationDataset):
             
         dataset = None
         for i in range(1, 4):
-            try:
-                dataset = self.read_atl_data('{}'.format(i))
-            except Exception as e:
-                #utils.echo_warning_msg('could not read ATL data from {} for laser {}, {}'.format(self.fn, i, e))
+            #try:
+            dataset = self.read_atl_data('{}'.format(i))
+
+            if dataset is None or len(dataset) == 0:
                 continue
 
-            if dataset is None:
+            if len(self.confidence_levels) > 0:
+                dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
+
+            if len(self.classes) > 0:
+                dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
+                
+            #except Exception as e:
+            #    utils.echo_warning_msg('could not read ATL data from {} for laser {}, {}'.format(self.fn, i, e))
+            #    continue
+            
+            if dataset is None or len(dataset) == 0:
                 continue
 
             if self.want_topo:
@@ -3354,22 +3368,23 @@ class IceSatFile(ElevationDataset):
         photon_h = self.atl_03_f['/' + laser + '/heights/h_ph'][...,]
         latitude = self.atl_03_f['/' + laser + '/heights/lat_ph'][...,]
         longitude = self.atl_03_f['/' + laser + '/heights/lon_ph'][...,]
+        ph_count = self.atl_03_f['/' + laser + '/heights/ph_id_count'][...,]
         conf = self.atl_03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+        qual = self.atl_03_f['/' + laser + '/heights/quality_ph/'][...,0]
         dist_ph_along = self.atl_03_f['/' + laser + '/heights/dist_ph_along'][...,]
         this_N = latitude.shape[0]
-        #utils.echo_msg(photon_h.shape)
 
         ## Read in the geolocation level data
         segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         segment_id = self.atl_03_f['/' + laser + '/geolocation/segment_id'][...,]
         segment_dist_x = self.atl_03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-        seg_ph_count = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        #seg_ph_count = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         ref_elev = self.atl_03_f['/' + laser + '/geolocation/ref_elev'][...,]
         ref_azimuth = self.atl_03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
+        ref_photon_index = self.atl_03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
         ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
         altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
         #surface_type = self.atl_03_f['/' + laser + '/geolocation/surf_type'][...,]
-        #utils.echo_msg(ref_azimuth)
 
         ## Read in the geoid data
         photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
@@ -3378,15 +3393,17 @@ class IceSatFile(ElevationDataset):
         ## Create a dictionary with (segment_id --> index into ATL03 photons)
         ## lookup pairs, for the starting photon of each segment
         segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
+        #segment_indices = ph_index_beg+(ref_photon_index-1)
         segment_index_dict = dict(zip(segment_id, segment_indices))
-
+        #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
+        ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1]
+        
         ## Compute the total along-track distances.
-        segment_dist_dict = dict(zip(segment_id, segment_dist_x))
+        #segment_dist_dict = dict(zip(segment_id, segment_dist_x))
 
         ## Determine where in the array each segment index needs to look.
-        ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, this_N, 1))-1]
-        ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids)))
-        dist_x = ph_segment_dist_x + dist_ph_along
+        #ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids)))
+        #dist_x = ph_segment_dist_x + dist_ph_along
 
         ## meantide/geoid heights
         h_geoid_dict = dict(zip(segment_id, photon_geoid))
@@ -3401,74 +3418,86 @@ class IceSatFile(ElevationDataset):
         ph_h_classed = np.zeros(photon_h.shape)
         ph_h_classed[:] = -1
 
+        #ph_h_watermask = np.zeros(photon_h.shape)
+
+        ## ref values
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
         ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
-        #ph_ref_elev.float()
         
         h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
         ph_ref_azimuth = np.array(list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids)))#.astype(float)
-        #utils.echo_msg(ph_ref_azimuth)
-        #ph_ref_azimut.float()
 
         h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
         ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids)))#.astype(float)
-        #ph_altitude_sc.float()
 
         # h_surf_type_dict = dict(zip(segment_id, surface_type))
         # ph_h_classed = np.array(list(map((lambda pid: h_surf_type_dict[pid]), ph_segment_ids)))
-        
+
         ## Read in the atl08 data
         if self.atl_08_f is not None:
+            ## classed flag (signal_photons)
             atl_08_classed_pc_flag  = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_flag'][...,]
-            atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,]
+            atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,] # photon src 20 m seg id
             atl_08_classed_pc_indx = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
 
-            # atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,]
-            # atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,]
-            # atl_08_ph_ndx_end = self.atl_08_f['/' + laser + '/land_segments/ph_ndx_end'][...,]
-            # atl_08_ph_ndx_beg = self.atl_08_f['/' + laser + '/land_segments/ph_ndx_beg'][...,]
-            #atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
-            #utils.echo_msg(len(atl_08_classed_pc_flag))
-            #utils.echo_msg(len(atl_08_watermask))
+            atl_08_segment_id_msk = [True if x in segment_id else False for x in atl_08_ph_segment_id]
+            atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))
+            atl_08_ph_index = np.array(atl_08_ph_segment_indx + (atl_08_classed_pc_indx[atl_08_segment_id_msk] - 1), dtype=int)
+            ph_h_classed[atl_08_ph_index[atl_08_ph_index < len(ph_segment_ids)]] = atl_08_classed_pc_flag[atl_08_segment_id_msk][atl_08_ph_index < len(ph_segment_ids)]
 
-            dict_success = False
-            while not dict_success:
-                try:
-                    atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id)))
-                except KeyError as e:
-                    # One of the atl08_ph_segment_id entries does not exist in the atl03 granule, which
-                    # causes problems here. Eliminate it from the list and try again.
-                    problematic_id = e.args[0]
-                    good_atl08_mask = (atl_08_ph_segment_id != problematic_id)
-                    atl_08_classed_pc_flag = atl_08_classed_pc_flag[good_atl08_mask]
-                    atl_08_ph_segment_id = atl_08_ph_segment_id[good_atl08_mask]
-                    atl_08_classed_pc_indx = atl_08_classed_pc_indx[good_atl08_mask]
-                    # Then, try the loop again.
-                    continue
-                dict_success = True
+            ## old from IVERT
+            # dict_success = False
+            # while not dict_success:
+            #     try:
+            #         atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id)))
+            #     except KeyError as e:
+            #         # One of the atl08_ph_segment_id entries does not exist in the atl03 granule, which
+            #         # causes problems here. Eliminate it from the list and try again.
+            #         problematic_id = e.args[0]
+            #         good_atl08_mask = (atl_08_ph_segment_id != problematic_id)
+            #         atl_08_classed_pc_flag = atl_08_classed_pc_flag[good_atl08_mask]
+            #         atl_08_ph_segment_id = atl_08_ph_segment_id[good_atl08_mask]
+            #         atl_08_classed_pc_indx = atl_08_classed_pc_indx[good_atl08_mask]
+            #         # Then, try the loop again.
+            #         continue
+            #     dict_success = True
+            # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
+            # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]
+            
 
-            atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
-            ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag
-
-        return(latitude, longitude, photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
-               conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_altitude_sc, seg_ph_count, ph_h_classed)
-
-    def classify_water(self, dataset_sea):
-        thresh = 30
-        min_buffer = -40
-        max_buffer = 5
-        lat_res = .001
-        h_res = .5
-        surface_buffer = -.5
-        water_temp = 20
-        dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
-        binned_dataset_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
+        dataset = pd.DataFrame(
+            {'latitude': latitude,
+             'longitude': longitude,
+             'photon_height': photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
+             'confidence':conf,
+             'ref_elevation':ph_ref_elev,
+             'ref_azimuth':ph_ref_azimuth,
+             'ref_sat_alt':ph_altitude_sc,
+             'ph_h_classed': ph_h_classed},
+             #'ph_h_watermask': ph_h_watermask},
+            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']#, 'ph_h_watermask']
+        )
         
-        if binned_dataset_sea is not None:            
-            sea_height = cshelph.get_sea_height(binned_dataset_sea, surface_buffer)
+        return(dataset)
+        
+    def classify_water(self, dataset):
+        thresh = 30
+        min_buffer = -10
+        max_buffer = 10
+        lat_res = 0.0002777777777777778
+        h_res = .5
+        surface_buffer = .5
+        water_temp = 20
+        med_water_surface_h = 0
+        dataset_1 = dataset[(dataset['photon_height'] > min_buffer) & (dataset['photon_height'] < max_buffer)]
+        if len(dataset_1) == 0:
+            return(dataset)
+        
+        binned_dataset = cshelph.bin_data(dataset_1, lat_res, h_res)        
+        if binned_dataset is not None:            
+            sea_height = cshelph.get_sea_height(binned_dataset, surface_buffer)
             if sea_height is not None:
                 med_water_surface_h = np.nanmedian(sea_height)
-                dataset_sea['ph_h_classed'][dataset_sea['photon_height'] < med_water_surface_h] = 4
                 ## Correct for refraction
                 # ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
                 #     water_temp, med_water_surface_h, 532, dataset_1.ref_elevation, dataset_1.ref_azimuth, dataset_1.photon_height,
@@ -3492,40 +3521,31 @@ class IceSatFile(ElevationDataset):
                 #         bath_height = [x for x in bath_height if ~np.isnan(x)]
                 #         utils.echo_msg(bath_height)
 
+        dataset['ph_h_classed'][dataset['photon_height'] <= med_water_surface_h] = 4
+        return(dataset)
+                
     def extract_topography(self, dataset):
-        latitude, longitude, photon_h, conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_alt_sc, seg_ph_count, ph_h_classed = dataset
-        ## Aggregate data into dataframe
-        dataset_1 = pd.DataFrame(
-            {'latitude': latitude,
-             'longitude': longitude,
-             'photon_height': photon_h,
-             'confidence':conf,
-             'ref_elevation':ph_ref_elev,
-             'ref_azimuth':ph_ref_azimuth,
-             'ref_sat_alt':ph_alt_sc,
-             'ph_h_classed': ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
-        )
+        # if len(self.confidence_levels) > 0:
+        #     dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
 
+        # #dataset = self.classify_water(dataset)
+        # #dataset = dataset[dataset['ph_h_watermask']
+        # #dataset = dataset[(dataset['ph_h_watermask'] == 1)]
+                          
+        # if len(self.classes) > 0:
+        #     dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
         
-        if len(self.confidence_levels) > 0:
-            dataset_1 = dataset_1[(np.isin(dataset_1['confidence'], self.confidence_levels))]
+        # if len(dataset) != 0:
+        topo_ds = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
+        topo_ds = np.rec.fromrecords(topo_ds, names='x, y, z')
+        topo_ds = topo_ds[~np.isnan(topo_ds['z'])]
+        return(topo_ds['y'], topo_ds['x'], topo_ds['z'])
 
-        #self.classify_water(dataset_1)
-        if len(self.classes) > 0:
-            dataset_1 = dataset_1[(np.isin(dataset_1['ph_h_classed'], self.classes))]
-        
-        if len(dataset_1) != 0:
-            topo_ds = np.column_stack((dataset_1['longitude'], dataset_1['latitude'], dataset_1['photon_height']))
-            topo_ds = np.rec.fromrecords(topo_ds, names='x, y, z')
-            topo_ds = topo_ds[~np.isnan(topo_ds['z'])]
-            return(topo_ds['y'], topo_ds['x'], topo_ds['z'])
-
-        return(None)
+        #return(None)
             
     ## C-Shelph bathymetric processing    
     def extract_bathymetry(
-            self, dataset, thresh = 30, min_buffer = -40, max_buffer = 5,
+            self, dataset, thresh = 60, min_buffer = -40, max_buffer = 5,
             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
             surface_buffer = -.5, water_temp = None
     ):
@@ -3537,38 +3557,30 @@ class IceSatFile(ElevationDataset):
         
         water_temp = utils.float_or(water_temp)
         #latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count, ph_h_classed = dataset
-        latitude, longitude, photon_h, conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_alt_sc, seg_ph_count, ph_h_classed = dataset
-        # utils.echo_msg(ph_ref_azimuth)
-        # utils.echo_msg(np.any(np.isnan(ph_ref_azimuth)))
-        # utils.echo_msg(ph_ref_azimuth.shape)
-        # utils.echo_msg(photon_h.shape)
-        # utils.echo_msg(latitude.shape)
-        epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
+        #latitude, longitude, photon_h, conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_alt_sc, seg_ph_count, ph_h_classed = dataset
+        epsg_code = cshelph.convert_wgs_to_utm(dataset.latitude.iloc[0], dataset.longitude.iloc[0])
         epsg_num = int(epsg_code.split(':')[-1])
         utm_proj = pyproj.Proj(epsg_code)
-        lon_utm, lat_utm = utm_proj(longitude, latitude)
-        # ph_num_per_seg = seg_ph_count[ph_index_beg>0]
-        # ph_num_per_seg = ph_num_per_seg.astype(np.int64)
-        # ph_ref_elev = cshelph.ref_linear_interp(ph_num_per_seg, ref_elev[ph_index_beg>0])
-        # ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
-        # ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
+        lon_utm, lat_utm = utm_proj(dataset.longitude, dataset.latitude)
                        
         ## Aggregate data into dataframe
         dataset_sea = pd.DataFrame(
             {'latitude': lat_utm,
              'longitude': lon_utm,
-             'photon_height': photon_h,
-             'confidence':conf,
-             'ref_elevation':ph_ref_elev,
-             'ref_azimuth':ph_ref_azimuth,
-             'ref_sat_alt':ph_alt_sc,
-             'ph_h_classed': ph_h_classed},
+             'photon_height': dataset.photon_height,
+             'confidence': dataset.confidence,
+             'ref_elevation': dataset.ref_elevation,
+             'ref_azimuth': dataset.ref_azimuth,
+             'ref_sat_alt': dataset.ref_sat_alt,
+             'ph_h_classed': dataset.ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
-        #utils.echo_msg(dataset_sea)
+        #dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
+        dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
         
-        dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
-        dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
+        # if len(self.classes) > 0:
+        #     dataset_sea1 = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
+        
         if self.region is not None:
             xyz_region = self.region.copy()
             xyz_region.epsg = 'epsg:4326'
@@ -3576,8 +3588,6 @@ class IceSatFile(ElevationDataset):
             dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > xyz_region.ymin) & (dataset_sea1['latitude'] < xyz_region.ymax)]
             dataset_sea1 = dataset_sea1[(dataset_sea1['longitude'] > xyz_region.xmin) & (dataset_sea1['longitude'] < xyz_region.xmax)]
 
-        #utils.echo_msg(dataset_sea1)
-            
         if len(dataset_sea1) > 0:
             binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
             if binned_data_sea is not None:
@@ -3590,9 +3600,11 @@ class IceSatFile(ElevationDataset):
                         #utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
                         water_temp = 20
 
+                #utils.echo_msg('water temp is {}'.format(water_temp))
                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
                 if sea_height is not None:
-                    med_water_surface_h = np.nanmedian(sea_height)
+                    med_water_surface_h = np.nanmedian(sea_height) * -1
+                    utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
 
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
@@ -3608,18 +3620,20 @@ class IceSatFile(ElevationDataset):
                                                          'confidence', 'depth'])
 
                     # Bin dataset again for bathymetry
-                    binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
+                    #print(len(dataset_bath))
+                    if len(dataset_bath) > 0:
+                        binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
 
-                    if binned_data is not None:
-                        # Find bathymetry
-                        bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
-                        if bath_height is not None:
+                        if binned_data is not None:
+                            # Find bathymetry
+                            bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
+                            if bath_height is not None:
 
-                            transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-                            lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
+                                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+                                lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
 
-                            bath_height = [x for x in bath_height if ~np.isnan(x)]
-                            return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
+                                bath_height = [x for x in bath_height if ~np.isnan(x)]
+                                return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
             
         return(None)
                 
