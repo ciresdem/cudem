@@ -3217,8 +3217,6 @@ class IceSatFile(ElevationDataset):
         super().__init__(**kwargs)
         self.want_topo = want_topo
         self.want_bathy = want_bathy
-        self.want_topo = False
-        self.want_bathy = True
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
             self.water_surface = 'mean_tide'
@@ -3464,6 +3462,22 @@ class IceSatFile(ElevationDataset):
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]
             
+            ## watermask (land_segments)
+            # atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
+            # atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,] # 100m seg beg
+            # atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,] # 100m seg end
+            #watermask_ = [atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))] for num, x in enumerate(atl_08_watermask)]
+            #watermask_ = [k for num, k in enumerate(atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))])]
+            #watermask_arr = [x for k in atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))] for num, x in enumerate(atl_08_watermask)]
+            #watermask_arr = []
+            #for i in range(len(atl_08_watermask)):
+            #    for k in atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[i], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[i]))]:
+            #        watermask_arr.append(atl_08_watermask[i])
+            #        #watermask_arr[k] = atl_08_watermask[i]
+            #ph_h_watermask[atl_08_ph_index[atl_08_ph_index < len(ph_segment_ids)]] = watermask_arr[atl_08_ph_index < len(ph_segment_ids)]
+            #ph_h_watermask = np.array(list(map((lambda pid: watermask_arr[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))            
+            #h_watermask_dict = dict(zip(segment_id, ref_elev))
+            #ph_watermask = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
 
         dataset = pd.DataFrame(
             {'latitude': latitude,
@@ -3604,7 +3618,7 @@ class IceSatFile(ElevationDataset):
                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height) * -1
-                    utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
+                    #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
 
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(

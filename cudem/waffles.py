@@ -112,8 +112,8 @@ class Waffle:
                  dst_srs: str = None, srs_transform: bool = False, verbose: bool = False, archive: bool = False, want_mask: bool = False,
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, stack_mode: str = 'mean', upper_limit: float = None, lower_limit: float = None,
-                 proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, want_stack: bool = True,
-                 co: list = [], params: dict = {}):
+                 proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, count_limit: int = None,
+                 want_stack: bool = True, co: list = [], params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -146,6 +146,7 @@ class Waffle:
         self.proximity_limit = utils.int_or(proximity_limit) # proximity limit of interpolation
         self.size_limit = utils.int_or(size_limit) # size limit of interpolation
         self.percentile_limit = utils.float_or(percentile_limit) # percentile limit of interpolation
+        self.count_limit = utils.int_or(count_limit) # limit by stack count per cell
         self.keep_auxiliary = keep_auxiliary # keep auxiliary outputs
         self.clobber = clobber # clobber the output dem file
         self.verbose = verbose # increase verbosity
@@ -478,6 +479,20 @@ class Waffle:
                                               data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
                                               y_inc=self.yinc, src_region=self.p_region, weight=1,
                                               verbose=self.verbose).initialize()
+
+                if self.count_limit is not None:
+                    with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
+                        stack_infos = gdalfun.gdal_infos(stack_ds)
+                        count_band = stack_ds.GetRasterBand(2)
+                        count_arr = count_band.ReadAsArray()
+                        count_mask = count_arr <= self.count_limit
+
+                        for band in range(1, stack_ds.RasterCount+1):
+                            this_band = stack_ds.GetRasterBand(band)
+                            this_arr = this_band.ReadAsArray()
+                            this_arr[count_mask] = stack_infos['ndv']
+                            this_band.WriteArray(this_arr)
+                
                 if self.keep_auxiliary:
                     self.aux_dems.append(self.stack)
 
@@ -5015,11 +5030,13 @@ Options:
   -L, --limits\t\t\tLIMIT the output elevation or interpolation values, append 
 \t\t\t\t'u<value>' to set the upper elevation limit, 
 \t\t\t\t'l<value>' to set the lower elevation limit,
+\t\t\t\t'n<value>' to set the count per cell limit.
 \t\t\t\t'p<value>' to set an interpolation limit by proximity, or 
 \t\t\t\t's<value>' to set an interpolation limit by size, or
 \t\t\t\t'c<value>' to set an interpolation limit by nodata-size percentile.
 \t\t\t\te.g. -Lu0 to set all values above 0 to zero, or 
-\t\t\t\t-Ls100 to limit interpolation to nodata zones smaller than 100 pixels.
+\t\t\t\t-Ls100 to limit interpolation to nodata zones smaller than 100 pixels, or
+\t\t\t\t-Ln2 to limit stacked cells to those with at least 2 contributing data records.
   -C, --clip\t\t\tCLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
   -K, --chunk\t\t\tGenerate the DEM in CHUNKs.
   -F, --format\t\t\tOutput grid FORMAT. [GTiff]
@@ -5211,6 +5228,8 @@ def waffles_cli(argv = sys.argv):
                 wg['size_limit'] = utils.int_or(this_limit[1:])
             elif this_limit.startswith('c'):
                 wg['percentile_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('n'):
+                wg['count_limit'] = utils.float_or(this_limit[1:])
                 
             i = i + 1
         elif arg[:2] == '-L':
@@ -5225,6 +5244,8 @@ def waffles_cli(argv = sys.argv):
                 wg['size_limit'] = utils.int_or(this_limit[1:])
             elif this_limit.startswith('c'):
                 wg['percentile_limit'] = utils.float_or(this_limit[1:])
+            elif this_limit.startswith('n'):
+                wg['count_limit'] = utils.float_or(this_limit[1:])
                 
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             n_threads = utils.int_or(argv[i + 1], 1)
