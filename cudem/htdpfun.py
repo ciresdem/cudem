@@ -60,6 +60,7 @@
 ## 17...ITRF94 (=ITRF96=ITRF97) 
 ### Code:
 
+import os
 import sys
 import numpy as np
 from cudem import utils
