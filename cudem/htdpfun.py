@@ -191,7 +191,11 @@ class HTDP:
         open(control_fn,'w').write(control_template)
         
     def run(self, htdp_control):
-        #utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
-        utils.run_cmd('cat {} | {}'.format(htdp_control, self.htdp_bin), verbose=self.verbose)
+
+        if utils.config_check()['HTDP'] is not None:
+            if utils.config_check()['platform'] == 'win32':
+                os.system('cat {} | {}'.format(htdp_control, self.htdp_bin))
+            else:
+                utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
         
 ### End
