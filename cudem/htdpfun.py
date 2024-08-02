@@ -191,6 +191,7 @@ class HTDP:
         open(control_fn,'w').write(control_template)
         
     def run(self, htdp_control):
-        utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
+        #utils.run_cmd('{} < {}'.format(self.htdp_bin, htdp_control), verbose=self.verbose)
+        utils.run_cmd('{} | {}'.format(htdp_control, self.htdp_bin), verbose=self.verbose)
         
 ### End

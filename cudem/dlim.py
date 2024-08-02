@@ -3213,7 +3213,7 @@ class IceSatFile(ElevationDataset):
 
     """
     
-    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = '1', confidence_levels = '3/4', **kwargs):
+    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = '4', confidence_levels = '3/4', **kwargs):
         super().__init__(**kwargs)
         self.want_topo = want_topo
         self.want_bathy = want_bathy
@@ -3285,7 +3285,9 @@ class IceSatFile(ElevationDataset):
 
             if len(self.confidence_levels) > 0:
                 dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
-
+                
+            dataset = self.classify_bathymetry(dataset)
+                
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
@@ -3416,7 +3418,7 @@ class IceSatFile(ElevationDataset):
         ph_h_classed = np.zeros(photon_h.shape)
         ph_h_classed[:] = -1
 
-        #ph_h_watermask = np.zeros(photon_h.shape)
+        ph_h_watermask = np.zeros(photon_h.shape)
 
         ## ref values
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
@@ -3427,9 +3429,6 @@ class IceSatFile(ElevationDataset):
 
         h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
         ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids)))#.astype(float)
-
-        # h_surf_type_dict = dict(zip(segment_id, surface_type))
-        # ph_h_classed = np.array(list(map((lambda pid: h_surf_type_dict[pid]), ph_segment_ids)))
 
         ## Read in the atl08 data
         if self.atl_08_f is not None:
@@ -3460,24 +3459,7 @@ class IceSatFile(ElevationDataset):
             #         continue
             #     dict_success = True
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
-            # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]
-            
-            ## watermask (land_segments)
-            # atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
-            # atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,] # 100m seg beg
-            # atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,] # 100m seg end
-            #watermask_ = [atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))] for num, x in enumerate(atl_08_watermask)]
-            #watermask_ = [k for num, k in enumerate(atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))])]
-            #watermask_arr = [x for k in atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[num], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[num]))] for num, x in enumerate(atl_08_watermask)]
-            #watermask_arr = []
-            #for i in range(len(atl_08_watermask)):
-            #    for k in atl_08_ph_segment_id[atl_08_segment_id_msk][np.where(np.logical_and(atl_08_ph_segment_id[atl_08_segment_id_msk] >= atl_08_seg_beg[i], atl_08_ph_segment_id[atl_08_segment_id_msk] <= atl_08_seg_end[i]))]:
-            #        watermask_arr.append(atl_08_watermask[i])
-            #        #watermask_arr[k] = atl_08_watermask[i]
-            #ph_h_watermask[atl_08_ph_index[atl_08_ph_index < len(ph_segment_ids)]] = watermask_arr[atl_08_ph_index < len(ph_segment_ids)]
-            #ph_h_watermask = np.array(list(map((lambda pid: watermask_arr[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))            
-            #h_watermask_dict = dict(zip(segment_id, ref_elev))
-            #ph_watermask = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
+            # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]            
 
         dataset = pd.DataFrame(
             {'latitude': latitude,
@@ -3487,23 +3469,25 @@ class IceSatFile(ElevationDataset):
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
-             'ph_h_classed': ph_h_classed},
-             #'ph_h_watermask': ph_h_watermask},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']#, 'ph_h_watermask']
+             'ph_h_classed': ph_h_classed,
+             'ph_h_watermask': ph_h_watermask},
+            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
         )
         
         return(dataset)
         
-    def classify_water(self, dataset):
+    def classify_bathymetry(self, dataset):
         thresh = 30
         min_buffer = -10
         max_buffer = 10
         lat_res = 0.0002777777777777778
         h_res = .5
-        surface_buffer = .5
+        surface_buffer = -.5
         water_temp = 20
         med_water_surface_h = 0
+        bath_height = []
         dataset_1 = dataset[(dataset['photon_height'] > min_buffer) & (dataset['photon_height'] < max_buffer)]
+        dataset_1 = dataset_1[dataset_1['ph_h_classed'] == 2]
         if len(dataset_1) == 0:
             return(dataset)
         
@@ -3512,50 +3496,64 @@ class IceSatFile(ElevationDataset):
             sea_height = cshelph.get_sea_height(binned_dataset, surface_buffer)
             if sea_height is not None:
                 med_water_surface_h = np.nanmedian(sea_height)
-                ## Correct for refraction
-                # ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-                #     water_temp, med_water_surface_h, 532, dataset_1.ref_elevation, dataset_1.ref_azimuth, dataset_1.photon_height,
-                #     dataset_1.longitude, dataset_1.latitude, dataset_1.confidence, dataset_1.ref_sat_alt
-                # )
-                # depth = med_water_surface_h - ref_z
+                utils.echo_msg(med_water_surface_h)
+                
+                # Group data by latitude
+                # Filter out surface data that are two bins below median surface value calculated above
+                binned_data_bath = binned_dataset[(binned_dataset['photon_height'] < med_water_surface_h - (h_res * 2))]
+                grouped_data = binned_data_bath.groupby(['lat_bins'], group_keys=True)
+                data_groups = dict(list(grouped_data))
 
-                # # Create new dataframe with refraction corrected data
-                # dataset_sea = pd.DataFrame({'latitude': raw_y, 'longitude': raw_x, 'cor_latitude':ref_y, 'cor_longitude':ref_x, 'cor_photon_height':ref_z,
-                #                             'photon_height': raw_z, 'confidence':ref_conf, 'depth':depth},
-                #                            columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude', 'cor_photon_height',
-                #                                     'confidence', 'depth'])
+                # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
+                count_threshold = np.percentile(binned_dataset.groupby(['lat_bins', 'height_bins']).size().reset_index().groupby('lat_bins')[[0]].max(), thresh)
 
-                # # Bin dataset again for bathymetry
-                # binned_dataset_sea = cshelph.bin_data(dataset_sea, lat_res, h_res)
+                # Loop through groups and return average bathy height
+                for k,v in data_groups.items():
+                    new_df = pd.DataFrame(v.groupby('height_bins').count())
+                    bath_bin = new_df['latitude'].argmax()
+                    bath_bin_h = new_df.index[bath_bin]
 
-                # if binned_dataset_sea is not None:
-                #     # Find bathymetry
-                #     bath_height, geo_df = cshelph.get_bath_height(binned_dataset_sea, thresh, med_water_surface_h, h_res)
-                #     if bath_height is not None:
-                #         bath_height = [x for x in bath_height if ~np.isnan(x)]
-                #         utils.echo_msg(bath_height)
+                    # Set threshold of photon counts per bin
+                    if new_df.iloc[bath_bin]['latitude'] >= count_threshold:
 
-        dataset['ph_h_classed'][dataset['photon_height'] <= med_water_surface_h] = 4
+                        #utils.echo_msg(v)
+                        #geo_photon_height.append(v.loc[v['height_bins']==bath_bin_h, 'photon_height'].values)
+                        #geo_longitude.append(v.loc[v['height_bins']==bath_bin_h, 'longitude'].values)
+                        #geo_latitude.append(v.loc[v['height_bins']==bath_bin_h, 'latitude'].values)
+
+                        bath_bin_median = v.loc[v['height_bins']==bath_bin_h, 'photon_height'].median()
+                        ids = v.loc[v['height_bins']==bath_bin_h].index.values.astype(int)
+                        #utils.echo_msg(len(dataset))
+                        #utils.echo_msg(ids)
+                        dataset.at[ids, 'ph_h_classed'] = 4
+                        # for id in ids:
+                        #     #dataset[id]['ph_h_classed'] = 4
+                        #     dataset.at[id, 'ph_h_classed'] = 4
+                        #utils.echo_msg(ids)
+                        
+                        bath_height.append(bath_bin_median)
+
+                        del new_df
+
+                    else:
+                        bath_height.append(np.nan)
+                        ids = v.loc[v['height_bins']==bath_bin_h].index.values.astype(int)
+                        dataset.at[ids, 'ph_h_classed'] = 5
+                        del new_df
+
+                #utils.echo_msg(new_df)
+                #utils.echo_msg(len(new_df))
+                               
+                #utils.echo_msg(bath_height)
+                #utils.echo_msg(len(bath_height))
+        #dataset['ph_h_classed'][dataset['photon_height'] <= med_water_surface_h] = 4
         return(dataset)
                 
     def extract_topography(self, dataset):
-        # if len(self.confidence_levels) > 0:
-        #     dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
-
-        # #dataset = self.classify_water(dataset)
-        # #dataset = dataset[dataset['ph_h_watermask']
-        # #dataset = dataset[(dataset['ph_h_watermask'] == 1)]
-                          
-        # if len(self.classes) > 0:
-        #     dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
-        
-        # if len(dataset) != 0:
         topo_ds = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
         topo_ds = np.rec.fromrecords(topo_ds, names='x, y, z')
         topo_ds = topo_ds[~np.isnan(topo_ds['z'])]
         return(topo_ds['y'], topo_ds['x'], topo_ds['z'])
-
-        #return(None)
             
     ## C-Shelph bathymetric processing    
     def extract_bathymetry(
