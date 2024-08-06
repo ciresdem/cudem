@@ -340,7 +340,7 @@ def get_bin_height(binned_data, percentile, surface_buffer=-0.5):
         if new_df.iloc[largest_h_bin]['latitude'] >= count_threshold:        
             
             # Calculate the median value of all values within this bin
-            lat_bin_sea_median = v.loc[v['height_bins']==largest_h, 'photon_height'].median()
+            lat_bin_sea_median = v.loc[v['height_bins']==largest_h, 'photon_height'].max()
             lat_bin_median = v.loc[v['height_bins']==largest_h, 'latitude'].median()
             lon_bin_median = v.loc[v['height_bins']==largest_h, 'longitude'].median()
 

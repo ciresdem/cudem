@@ -3213,7 +3213,7 @@ class IceSatFile(ElevationDataset):
 
     """
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = '2', confidence_levels = '2/3/4', **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
@@ -3519,10 +3519,15 @@ class IceSatFile(ElevationDataset):
 
                 #utils.echo_msg('water temp is {}'.format(water_temp))
                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
+                sea_height1 = cshelph.get_bin_height(binned_data_sea, 60, surface_buffer)[2]
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height) #* -1
+                    med_water_surface_h2 = np.nanmedian(sea_height1) #* -1
                     #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
+                    #utils.echo_msg('med_water_surface2 is {}'.format(med_water_surface_h2))
 
+                    dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
+                    
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
                         water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth, dataset_sea1.photon_height,
