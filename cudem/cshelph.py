@@ -259,6 +259,7 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     geo_photon_height = []
     geo_longitude = []
     geo_latitude = []
+    ids = []
     
     # Group data by latitude
     # Filter out surface data that are two bins below median surface value calculated above
@@ -279,7 +280,7 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
         
         # Set threshold of photon counts per bin
         if new_df.iloc[bath_bin]['latitude'] >= count_threshold:
-            
+            ids.append(v.loc[v['height_bins']==bath_bin_h].index.values.astype(int))            
             geo_photon_height.append(v.loc[v['height_bins']==bath_bin_h, 'cor_photon_height'].values)
             geo_longitude.append(v.loc[v['height_bins']==bath_bin_h, 'cor_longitude'].values)
             geo_latitude.append(v.loc[v['height_bins']==bath_bin_h, 'cor_latitude'].values)
@@ -298,11 +299,12 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     geo_longitude_list = np.concatenate(geo_longitude).ravel().tolist()
     geo_latitude_list = np.concatenate(geo_latitude).ravel().tolist()
     geo_photon_list = np.concatenate(geo_photon_height).ravel().tolist()
+    ids_list = np.concatenate(ids).ravel().tolist()
     geo_depth = WSHeight - geo_photon_list
         
-    geo_df = pd.DataFrame({'longitude': geo_longitude_list, 'latitude':geo_latitude_list, 'photon_height': geo_photon_list, 'depth':geo_depth})
+    geo_df = pd.DataFrame({'longitude': geo_longitude_list, 'latitude':geo_latitude_list, 'photon_height': geo_photon_list, 'depth':geo_depth, 'ids':ids_list})
     
-    del geo_longitude_list, geo_latitude_list, geo_photon_list
+    del geo_longitude_list, geo_latitude_list, geo_photon_list, ids_list
     
     return bath_height, geo_df
 

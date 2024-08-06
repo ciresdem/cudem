@@ -1098,15 +1098,17 @@ def vdatums_cli(argv = sys.argv):
 
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
         src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(src_grid))
-        src_region.src_srs = src_horz
-        
         trans_region = src_region.copy()
-        trans_region.src_srs = src_horz
-        trans_region.warp()
-        trans_region.buffer(pct=2)
-        trans_region._wgs_extremes()
         
-        #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
+        if src_horz is not None:
+            src_region.src_srs = src_horz
+        
+            trans_region.src_srs = src_horz
+            trans_region.warp()
+            trans_region.buffer(pct=2)
+            trans_region._wgs_extremes()
+        
+            #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
         
         x_inc = src_infos['geoT'][1]
         y_inc = -src_infos['geoT'][5]

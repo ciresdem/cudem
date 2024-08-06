@@ -3285,9 +3285,16 @@ class IceSatFile(ElevationDataset):
 
             if len(self.confidence_levels) > 0:
                 dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
+
+            if dataset is None or len(dataset) == 0:
+                continue
                 
-            dataset = self.classify_bathymetry(dataset)
-                
+            #dataset = self.classify_bathymetry(dataset)
+            dataset = self.extract_bathymetry(dataset)
+
+            if dataset is None or len(dataset) == 0:
+                continue
+            
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
@@ -3298,20 +3305,26 @@ class IceSatFile(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
 
-            if self.want_topo:
-                bare_earth_dataset = self.extract_topography(dataset)
-                if bare_earth_dataset is not None:
-                    bare_earth_dataset = np.column_stack((bare_earth_dataset[1], bare_earth_dataset[0], bare_earth_dataset[2]))
-                    bare_earth_points = np.rec.fromrecords(bare_earth_dataset, names='x, y, z')
-                    yield(bare_earth_points)
+            _dataset = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
+            _points = np.rec.fromrecords(_dataset, names='x, y, z')
+            _points = _points[~np.isnan(_points['z'])]
+            
+            yield(_points)
+            
+            # if self.want_topo:
+            #     bare_earth_dataset = self.extract_topography(dataset)
+            #     if bare_earth_dataset is not None:
+            #         bare_earth_dataset = np.column_stack((bare_earth_dataset[1], bare_earth_dataset[0], bare_earth_dataset[2]))
+            #         bare_earth_points = np.rec.fromrecords(bare_earth_dataset, names='x, y, z')
+            #         yield(bare_earth_points)
 
-            ## Bathymetry via C-Shelph
-            if self.want_bathy:
-                bathy_dataset = self.extract_bathymetry(dataset)#, thresh=self.bathy_thresh)
-                if bathy_dataset is not None:
-                    bathy_dataset = np.column_stack((bathy_dataset[1], bathy_dataset[0], bathy_dataset[2]))
-                    bathy_points = np.rec.fromrecords(bathy_dataset, names='x, y, z')
-                    yield(bathy_points)
+            # ## Bathymetry via C-Shelph
+            # if self.want_bathy:
+            #     bathy_dataset = self.extract_bathymetry(dataset)#, thresh=self.bathy_thresh)
+            #     if bathy_dataset is not None:
+            #         bathy_dataset = np.column_stack((bathy_dataset[1], bathy_dataset[0], bathy_dataset[2]))
+            #         bathy_points = np.rec.fromrecords(bathy_dataset, names='x, y, z')
+            #         yield(bathy_points)
 
         self.close_atl_h5()
 
@@ -3477,17 +3490,18 @@ class IceSatFile(ElevationDataset):
         return(dataset)
         
     def classify_bathymetry(self, dataset):
-        thresh = 30
-        min_buffer = -10
-        max_buffer = 10
-        lat_res = 0.0002777777777777778
+        thresh = 60
+        min_buffer = -40
+        max_buffer = 5
+        #lat_res = 0.0002777777777777778
+        lat_res = 9.25925925e-05
         h_res = .5
         surface_buffer = -.5
         water_temp = 20
         med_water_surface_h = 0
         bath_height = []
         dataset_1 = dataset[(dataset['photon_height'] > min_buffer) & (dataset['photon_height'] < max_buffer)]
-        dataset_1 = dataset_1[dataset_1['ph_h_classed'] == 2]
+        #@dataset_1 = dataset_1[dataset_1['ph_h_classed'] == 2]
         if len(dataset_1) == 0:
             return(dataset)
         
@@ -3525,12 +3539,12 @@ class IceSatFile(ElevationDataset):
                         ids = v.loc[v['height_bins']==bath_bin_h].index.values.astype(int)
                         #utils.echo_msg(len(dataset))
                         #utils.echo_msg(ids)
-                        dataset.at[ids, 'ph_h_classed'] = 4
-                        # for id in ids:
-                        #     #dataset[id]['ph_h_classed'] = 4
-                        #     dataset.at[id, 'ph_h_classed'] = 4
+                        #dataset.at[ids, 'ph_h_classed'] = 4
+                        for id in ids:
+                            #dataset[id]['ph_h_classed'] = 4
+                            dataset.at[id, 'ph_h_classed'] = 4
                         #utils.echo_msg(ids)
-                        
+                       
                         bath_height.append(bath_bin_median)
 
                         del new_df
@@ -3538,7 +3552,9 @@ class IceSatFile(ElevationDataset):
                     else:
                         bath_height.append(np.nan)
                         ids = v.loc[v['height_bins']==bath_bin_h].index.values.astype(int)
-                        dataset.at[ids, 'ph_h_classed'] = 5
+                        for id in ids:
+                            dataset.at[id, 'ph_h_classed'] = 5
+                            
                         del new_df
 
                 #utils.echo_msg(new_df)
@@ -3557,7 +3573,7 @@ class IceSatFile(ElevationDataset):
             
     ## C-Shelph bathymetric processing    
     def extract_bathymetry(
-            self, dataset, thresh = 60, min_buffer = -40, max_buffer = 5,
+            self, dataset, thresh = 75, min_buffer = -40, max_buffer = 5,
             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
             surface_buffer = -.5, water_temp = None
     ):
@@ -3615,7 +3631,7 @@ class IceSatFile(ElevationDataset):
                 #utils.echo_msg('water temp is {}'.format(water_temp))
                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
                 if sea_height is not None:
-                    med_water_surface_h = np.nanmedian(sea_height) * -1
+                    med_water_surface_h = np.nanmedian(sea_height) #* -1
                     #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
 
                     ## Correct for refraction
@@ -3645,7 +3661,15 @@ class IceSatFile(ElevationDataset):
                                 lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
 
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
-                                return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
+                                
+                                for n, id in enumerate(geo_df.ids.values):
+                                    dataset.at[id, 'ph_h_classed'] = 4
+                                    dataset.at[id, 'latitude'] = lat_wgs84[n]
+                                    dataset.at[id, 'longitude'] = lon_wgs84[n]
+                                    dataset.at[id, 'photon_height'] = geo_df.depth.values[n] * -1
+                                
+                                #return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
+                                return(dataset)
             
         return(None)
                 
