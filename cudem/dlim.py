@@ -3213,10 +3213,8 @@ class IceSatFile(ElevationDataset):
 
     """
     
-    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = '4', confidence_levels = '3/4', **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', **kwargs):
         super().__init__(**kwargs)
-        self.want_topo = want_topo
-        self.want_bathy = want_bathy
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
             self.water_surface = 'mean_tide'
@@ -3289,19 +3287,13 @@ class IceSatFile(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
                 
-            #dataset = self.classify_bathymetry(dataset)
             dataset = self.extract_bathymetry(dataset)
-
             if dataset is None or len(dataset) == 0:
                 continue
             
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
-            #except Exception as e:
-            #    utils.echo_warning_msg('could not read ATL data from {} for laser {}, {}'.format(self.fn, i, e))
-            #    continue
-            
             if dataset is None or len(dataset) == 0:
                 continue
 
@@ -3310,21 +3302,6 @@ class IceSatFile(ElevationDataset):
             _points = _points[~np.isnan(_points['z'])]
             
             yield(_points)
-            
-            # if self.want_topo:
-            #     bare_earth_dataset = self.extract_topography(dataset)
-            #     if bare_earth_dataset is not None:
-            #         bare_earth_dataset = np.column_stack((bare_earth_dataset[1], bare_earth_dataset[0], bare_earth_dataset[2]))
-            #         bare_earth_points = np.rec.fromrecords(bare_earth_dataset, names='x, y, z')
-            #         yield(bare_earth_points)
-
-            # ## Bathymetry via C-Shelph
-            # if self.want_bathy:
-            #     bathy_dataset = self.extract_bathymetry(dataset)#, thresh=self.bathy_thresh)
-            #     if bathy_dataset is not None:
-            #         bathy_dataset = np.column_stack((bathy_dataset[1], bathy_dataset[0], bathy_dataset[2]))
-            #         bathy_points = np.rec.fromrecords(bathy_dataset, names='x, y, z')
-            #         yield(bathy_points)
 
         self.close_atl_h5()
 
@@ -3502,8 +3479,6 @@ class IceSatFile(ElevationDataset):
         """
         
         water_temp = utils.float_or(water_temp)
-        #latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count, ph_h_classed = dataset
-        #latitude, longitude, photon_h, conf, ph_ref_elev, ph_ref_azimuth, ph_index_beg, segment_id, ph_alt_sc, seg_ph_count, ph_h_classed = dataset
         epsg_code = cshelph.convert_wgs_to_utm(dataset.latitude.iloc[0], dataset.longitude.iloc[0])
         epsg_num = int(epsg_code.split(':')[-1])
         utm_proj = pyproj.Proj(epsg_code)
@@ -3521,11 +3496,7 @@ class IceSatFile(ElevationDataset):
              'ph_h_classed': dataset.ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
-        #dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
         dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
-        
-        # if len(self.classes) > 0:
-        #     dataset_sea1 = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
         
         if self.region is not None:
             xyz_region = self.region.copy()
@@ -3566,7 +3537,6 @@ class IceSatFile(ElevationDataset):
                                                          'confidence', 'depth'])
 
                     # Bin dataset again for bathymetry
-                    #print(len(dataset_bath))
                     if len(dataset_bath) > 0:
                         binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
 
