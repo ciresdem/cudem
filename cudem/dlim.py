@@ -3213,7 +3213,7 @@ class IceSatFile(ElevationDataset):
 
     """
     
-    def __init__(self, water_surface = 'geoid', classes = '2', confidence_levels = '2/3/4', **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
