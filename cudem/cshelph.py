@@ -260,7 +260,7 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
     geo_longitude = []
     geo_latitude = []
     ids = []
-    
+
     # Group data by latitude
     # Filter out surface data that are two bins below median surface value calculated above
     binned_data_bath = binned_data[(binned_data['photon_height'] < WSHeight - (height_resolution * 2))]
@@ -291,6 +291,7 @@ def get_bath_height(binned_data, percentile, WSHeight, height_resolution):
             
         else:
             bath_height.append(np.nan)
+
             del new_df
 
     if len(geo_longitude) == 0 or len(geo_latitude) == 0:
