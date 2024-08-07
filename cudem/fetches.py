@@ -888,7 +888,14 @@ class ETOPO(FetchModule):
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='etopo', **kwargs)
+        
         self.etopo_urls = {
+            'netcdf': {
+                'bed': 'https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/15s/15s_bed_elev_netcdf/',
+                'bed_sid': 'https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/15s/15s_bed_sid_netcdf/',
+                'surface': 'https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/15s/15s_surface_elev_netcdf/',
+                'surface_sid': 'https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/15s/15s_surface_sid_netcdf/',
+                },
             15: {
                 'bed': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_bed_elev_gtif/',
                 'bed_sid': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_bed_sid_gtif/',
@@ -935,6 +942,7 @@ class ETOPO(FetchModule):
         #for res in self.etopo_urls.keys():
         for dtype in self.etopo_urls[res].keys():
             this_url = self.etopo_urls[res][dtype]
+            netcdf_url = self.etopo_urls['netcdf'][dtype]
 
             page = Fetch(this_url, verbose=True).fetch_html()
             rows = page.xpath('//a[contains(@href, ".tif")]/@href')
@@ -975,7 +983,25 @@ class ETOPO(FetchModule):
                                     'DataType': dtype,
                                     'DataSource': 'etopo',
                                     'HorizontalDatum': 'epsg:4326',
-                                    'VerticalDatum': 'msl',
+                                    'VerticalDatum': 'EGM2008',
+                                    'Info': '',
+                                    'geom': geom
+                                }
+                            )
+                            # netcdf (thredds)
+                            surveys.append(
+                                {
+                                    'Name': row.split('.')[0],
+                                    'ID': sid,
+                                    'Agency': 'NOAA',
+                                    'Date': utils.this_date(),
+                                    'MetadataLink': self.etopo_aux_url,
+                                    'MetadataDate': utils.this_date(),
+                                    'DataLink': netcdf_url + row.split('.')[0] + '.nc',
+                                    'DataType': '{}_netcdf'.format(dtype),
+                                    'DataSource': 'etopo',
+                                    'HorizontalDatum': 'epsg:4326',
+                                    'VerticalDatum': 'EGM2008',
                                     'Info': '',
                                     'geom': geom
                                 }
@@ -1001,7 +1027,6 @@ class ETOPO(FetchModule):
                 pbar.update()
                 for i in surv['DataLink'].split(','):
                     self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
-                    #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                 
         return(self)
     
