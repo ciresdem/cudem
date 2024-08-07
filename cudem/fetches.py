@@ -881,6 +881,130 @@ https://www.gebco.net
                 
         return(self)
 
+## ETOPO
+class ETOPO(FetchModule):
+    """
+< etopo >"""
+    
+    def __init__(self, where='', datatype=None, **kwargs):
+        super().__init__(name='etopo', **kwargs)
+        self.etopo_urls = {
+            15: {
+                'bed': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_bed_elev_gtif/',
+                'bed_sid': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_bed_sid_gtif/',
+                'surface': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_surface_elev_gtif/',
+                'surface_sid': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/15s/15s_surface_sid_gtif/',
+            },
+            30: {
+                'bed': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/30s/30s_bed_elev_gtif/ETOPO_2022_v1_30s_N90W180_bed.tif',
+                'ice_elevation': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/30s/30s_surface_elev_gtif/ETOPO_2022_v1_30s_N90W180_surface.tif',
+            },
+            60: {
+                'bed_elevation': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/60s/60s_bed_elev_gtif/ETOPO_2022_v1_60s_N90W180_bed.tif',
+                'ice_elevation': 'https://www.ngdc.noaa.gov/mgg/global/relief/ETOPO2022/data/60s/60s_surface_elev_gtif/ETOPO_2022_v1_60s_N90W180_surface.tif',
+            },
+        }
+        self.etopo_aux_url = 'https://data.noaa.gov/metaview/page?xml=NOAA/NESDIS/NGDC/MGG/DEM//iso/xml/etopo_2022.xml&view=getDataView&header=none'
+        self.where = [where] if len(where) > 0 else []
+        self.datatype = datatype        
+        self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
+
+        self.data_format = -2
+        self.src_srs = 'epsg:4326+3855'
+        
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                         'referer': 'https://opentopography.s3.sdsc.edu/minio/raster/COP30/COP30_hh/' }
+        
+        self.update_if_not_in_FRED()
+
+    def update_if_not_in_FRED(self):
+        self.FRED._open_ds()
+        self.FRED._attribute_filter(["DataSource = '{}'".format(self.name)])
+        if len(self.FRED.layer) == 0:
+            self.FRED._close_ds()
+            self.update()
+            
+        self.FRED._close_ds()
+
+    def update(self):
+        """Crawl the COP30 database and update/generate the COPERNICUS reference vector."""
+        
+        self.FRED._open_ds(1)
+        surveys = []
+        res = 15
+        #for res in self.etopo_urls.keys():
+        for dtype in self.etopo_urls[res].keys():
+            this_url = self.etopo_urls[res][dtype]
+
+            page = Fetch(this_url, verbose=True).fetch_html()
+            rows = page.xpath('//a[contains(@href, ".tif")]/@href')
+            with tqdm(
+                    desc='scanning for ETOPO {} datasets'.format(dtype),
+                    leave=self.verbose
+            ) as pbar:            
+                for i, row in enumerate(rows):
+                    pbar.update()
+                    sid = row.split('.')[0]
+                    self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                    if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                        spat = row.split('.')[0].split('_{}'.format(dtype))[0].split('_')[-1]
+                        xsplit = 'E' if 'E' in spat else 'W'
+                        ysplit = 'S' if 'S' in spat else 'N'
+                        x = int(spat.split(xsplit)[-1])
+                        y = int(spat.split(xsplit)[0].split(ysplit)[-1])
+
+                        if xsplit == 'W':
+                            x = x * -1
+                        if ysplit == 'S':
+                            y = y * -1
+
+                        this_region = regions.Region().from_list(
+                            [x, x + 15, y, y - 15]
+                        )
+                        geom = this_region.export_as_geom()
+                        if geom is not None:
+                            surveys.append(
+                                {
+                                    'Name': row.split('.')[0],
+                                    'ID': sid,
+                                    'Agency': 'NOAA',
+                                    'Date': utils.this_date(),
+                                    'MetadataLink': self.etopo_aux_url,
+                                    'MetadataDate': utils.this_date(),
+                                    'DataLink': this_url + row,
+                                    'DataType': dtype,
+                                    'DataSource': 'etopo',
+                                    'HorizontalDatum': 'epsg:4326',
+                                    'VerticalDatum': 'msl',
+                                    'Info': '',
+                                    'geom': geom
+                                }
+                            )
+
+
+        self.FRED._add_surveys(surveys)
+        self.FRED._close_ds()
+
+    def run(self):
+        '''Run the ETOPO DEM fetching module'''
+
+        if self.datatype is not None:
+            self.where.append("DataType = '{}'".format(self.datatype))
+
+        _results = FRED._filter_FRED(self)
+        with tqdm(
+                total=len(_results),
+                desc='scanning ETOPO datasets',
+                leave=self.verbose
+        ) as pbar:
+            for surv in _results:
+                pbar.update()
+                for i in surv['DataLink'].split(','):
+                    self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
+                    #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
+                
+        return(self)
+    
 ## Copernicus
 class CopernicusDEM(FetchModule):
     """COPERNICUS sattelite elevation data
@@ -1033,7 +1157,7 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
                     #self.results.append([i, i.split('/')[-1].split('?')[0], surv['DataType']])
                 
         return(self)
-
+    
 ## FABDEM
 class FABDEM(FetchModule):
     """FABDEM elevation data
@@ -1944,7 +2068,7 @@ Fields:
                         utils.echo_msg(Name)
                         utils.echo_msg(ID)
                         utils.echo_msg(link)
-
+                        
                         page = Fetch(link).fetch_xml()
                         print(page)
                         sys.exit()
@@ -1966,7 +2090,8 @@ Fields:
                     #         if geodas:
                     #             xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
                     #             self.results.append([xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'])                
-                                
+
+                    
 ## NOAA Trackline
 class Trackline(FetchModule):
     """NOAA TRACKLINE bathymetric data.
@@ -4505,6 +4630,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'ngs': {'call': NGS},
         'hydronos': {'call': HydroNOS},
         'ncei_thredds': {'call': NCEIThreddsCatalog},
+        'etopo': {'call': ETOPO},
         'tnm': {'call': TheNationalMap},
         'ned': {'call': NED},
         'ned1': {'call': NED1},
