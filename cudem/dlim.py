@@ -3468,7 +3468,7 @@ class IceSatFile(ElevationDataset):
             
     ## C-Shelph bathymetric processing    
     def extract_bathymetry(
-            self, dataset, thresh = 75, min_buffer = -40, max_buffer = 5,
+            self, dataset, thresh = 60, min_buffer = -40, max_buffer = 5,
             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
             surface_buffer = -.5, water_temp = None
     ):
