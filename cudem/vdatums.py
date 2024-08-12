@@ -1100,20 +1100,26 @@ def vdatums_cli(argv = sys.argv):
         src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(src_grid))
         trans_region = src_region.copy()
         
-        if src_horz is not None:
-            src_region.src_srs = src_horz
+        #if src_horz is not None:
+        src_region.src_srs = src_horz
         
-            trans_region.src_srs = src_horz
-            trans_region.warp()
-            trans_region.buffer(pct=2)
-            trans_region._wgs_extremes()
-        
-            #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
+        trans_region.src_srs = src_horz
+        trans_region.warp()
+        trans_region.buffer(pct=2)
+        trans_region._wgs_extremes()
+
+        #x_inc, y_inc = trans_region.increments(src_infos['nx']/3, src_infos['ny']/3)
         
         x_inc = src_infos['geoT'][1]
         y_inc = -src_infos['geoT'][5]
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
+
+        utils.echo_msg('input region: {}'.format(src_region))
+        utils.echo_msg('input horizontal proj: {}'.format(src_horz))
+        utils.echo_msg('input vertical proj: {}'.format(src_vert))
+        utils.echo_msg('trans region: {}'.format(trans_region))
+        utils.echo_msg('input inf: {}'.format(src_infos))
         
         vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()

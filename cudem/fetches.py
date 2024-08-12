@@ -3871,6 +3871,8 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
         cdn_ds = None
         #utils.remove_glob(cdn_index)
         return(_results)
+    else:
+        return([])
 
 class VDATUM(FetchModule):
     """NOAA's VDATUM transformation grids
