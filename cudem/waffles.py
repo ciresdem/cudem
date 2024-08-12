@@ -2077,6 +2077,10 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
+        if this_fetches.status != 0:
+            utils.echo_warning_msg('failed to fetch {}!'.format(fetches_module))
+            this_fetches.results = []
+        
         return(this_fetches)
         
     def run(self):
@@ -2173,7 +2177,8 @@ class WafflesCoastline(Waffle):
     def _load_copernicus(self):
         """copernicus"""
 
-        this_cop = self.fetch_data('copernicus:datatype=1', check_size=False)        
+        this_cop = self.fetch_data('copernicus:datatype=1', check_size=False)
+        #if this_cop.status == 0:
         for i, cop_result in enumerate(this_cop.results):
             cop_tif = os.path.join(this_cop._outdir, cop_result[1])
             gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
@@ -2186,6 +2191,8 @@ class WafflesCoastline(Waffle):
             cop_ds_arr[cop_ds_arr != 0] = 1
             self.coast_array += (cop_ds_arr * self.min_weight)
             cop_ds = cop_ds_arr = None
+        #else:
+        #    utils.echo_warning_msg('failed to fetch copernicus data, continuing anyway!')    
 
     def _load_wsf(self):
         """wsf"""

@@ -600,13 +600,15 @@ def fetch_queue(q, c=True):
                         headers=fetch_args[3].headers,
                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                     ).fetch_file(fetch_args[1], check_size=c)
-                except:
-                    if fetch_args[4] > 0:
+                except Exception as e:
+                    if fetch_args[4] > 0 and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                         utils.echo_warning_msg('fetch of {} failed...putting back in the queue'.format(fetch_args[0]))
                         fetch_args[4] -= 1
                         q.put(fetch_args)
                     else:
                         utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
+                        #utils.echo_msg(fetch_args[3].status)
+                        fetch_args[3].status = -1
         q.task_done()
         
 class fetch_results(threading.Thread):
@@ -631,7 +633,7 @@ class fetch_results(threading.Thread):
         self.n_threads = n_threads
         if len(self.mod.results) == 0:
             self.mod.run()
-        
+                    
     def run(self):
         for _ in range(self.n_threads):
             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.check_size))
@@ -694,7 +696,7 @@ class FetchModule:
 
     def fetch_results(self):
         for entry in self.results:
-            self.fetch(entry)
+            status = self.fetch(entry)
 
 ## GMRT
 class GMRT(FetchModule):
@@ -934,7 +936,7 @@ class ETOPO(FetchModule):
         self.FRED._close_ds()
 
     def update(self):
-        """Crawl the COP30 database and update/generate the COPERNICUS reference vector."""
+        """Crawl the ETOPO database and update/generate the ETOPO reference vector."""
         
         self.FRED._open_ds(1)
         surveys = []
