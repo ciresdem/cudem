@@ -2078,7 +2078,7 @@ class WafflesCoastline(Waffle):
         fr.join()
 
         if this_fetches.status != 0:
-            utils.echo_warning_msg('failed to fetch {}!'.format(fetches_module))
+            utils.echo_warning_msg('failed to fetch {}!'.format(fetches_module.split(':')[0]))
             this_fetches.results = []
         
         return(this_fetches)

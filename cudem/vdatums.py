@@ -1105,6 +1105,17 @@ def vdatums_cli(argv = sys.argv):
         
         trans_region.src_srs = src_horz
         trans_region.warp()
+        #if trans_region is None:
+        #    trans_region = src_region.copy()
+        #trans_region.xmin = None
+        #trans_region.xmax = None
+        #trans_region.ymax = None
+        #trans_region.ymin = None
+        #utils.echo_msg(trans_region.valid_p(check_xy = True))
+        if not trans_region.valid_p(check_xy = True):
+            utils.echo_warning_msg('failed to transform source region {}!'.format(src_region))
+            trans_region = src_region.copy()
+            
         trans_region.buffer(pct=2)
         trans_region._wgs_extremes()
 
@@ -1115,11 +1126,11 @@ def vdatums_cli(argv = sys.argv):
         tmp_x_inc = 3/3600
         tmp_y_inc = 3/3600
 
-        utils.echo_msg('input region: {}'.format(src_region))
-        utils.echo_msg('input horizontal proj: {}'.format(src_horz))
-        utils.echo_msg('input vertical proj: {}'.format(src_vert))
-        utils.echo_msg('trans region: {}'.format(trans_region))
-        utils.echo_msg('input inf: {}'.format(src_infos))
+        # utils.echo_msg('input region: {}'.format(src_region))
+        # utils.echo_msg('input horizontal proj: {}'.format(src_horz))
+        # utils.echo_msg('input vertical proj: {}'.format(src_vert))
+        # utils.echo_msg('trans region: {}'.format(trans_region))
+        # utils.echo_msg('input inf: {}'.format(src_infos))
         
         vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()
