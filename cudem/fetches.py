@@ -292,19 +292,13 @@ class Fetch:
         if tries <= 0:
             utils.echo_error_msg('max-tries exhausted {}'.format(self.url))
             raise ConnectionError('Maximum attempts at connecting have failed.')
-            #return(None)
         
         try:
             req = requests.get(
                 self.url, stream=True, params=params, timeout=(timeout,read_timeout), headers=self.headers, verify=self.verify
             )
-        # except requests.exceptions.Timeout:
-        #     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout * 2 if timeout is not None else None, read_timeout=read_timeout * 2 if read_timeout is not None else None)
-            
-        # except requests.exceptions.ReadTimeout:
-        #     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout * 2 if timeout is not None else None, read_timeout=read_timeout * 2 if read_timeout is not None else None)
-
         except Exception as e:
+            ## there was an exception and we'll try again until tries is less than 1
             utils.echo_warning_msg(e)
             req = self.fetch_req(
                 params=params,
@@ -317,13 +311,15 @@ class Fetch:
             if req.status_code == 504:
                 time.sleep(2)
                 req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
-                
+
+            ## server says we have a band Range in the header, so we will
+            ## remove the Range from the header and just try again.
             elif req.status_code == 416:
                 if 'Range' in self.headers.keys():
-                    del self.headers['Range']
-                    
+                    del self.headers['Range']                    
                     req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
-                    
+
+            ## some unaccounted for return status code, report and exit.
             elif req.status_code != 200 and req.status_code != 201:
                 utils.echo_error_msg('request from {} returned {}'.format(req.url, req.status_code))
                 req = None
@@ -382,24 +378,26 @@ class Fetch:
             except: pass
 
         try:
-            try:
-                if not overwrite and os.path.exists(dst_fn):
-                    if not check_size:
-                        raise UnboundLocalError('{} exists, '.format(dst_fn))
-                    else:
-                        dst_fn_size = os.stat(dst_fn).st_size
-                        resume_byte_pos = dst_fn_size
-                        self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
-                        
-            except OSError:
-                pass
+            ## Set the Range header to the size of the existing file, unless check_size
+            ## is False or overwrite is True. Otherwise, exit, FileExistsError will set
+            ## status to 0, as if it completed a fetch.
+            if not overwrite and os.path.exists(dst_fn):
+                if not check_size:
+                    raise FileExistsError('{} exists, '.format(dst_fn))
+                else:
+                    dst_fn_size = os.stat(dst_fn).st_size
+                    resume_byte_pos = dst_fn_size
+                    self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
 
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
                               timeout=(timeout,read_timeout), verify=self.verify) as req:
 
-                if req.status_code == 416:
-                    return(0)
-                
+                ## requested range is not satisfiable, most likely the requested
+                ## range is the complete size of the file, we'll skip here and assume
+                ## that is the case. Set overwrite to True to overwrite instead
+                if req.status_code == 416: 
+                    raise FileExistsError('{} exists, and requested Range is invalid, {}'.format(dst_fn, self.headers['Range']))
+
                 req_h = req.headers
                 if 'Content-Range' in req_h:
                     req_s = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack
@@ -409,28 +407,31 @@ class Fetch:
                     #req_s = -1
                     req_s = int(req_h.get('content-length', 0))
 
-                try:
-                    if not overwrite and check_size and req_s == os.path.getsize(dst_fn):
-                        raise UnboundLocalError('{} exists, '.format(dst_fn))
-                    elif req_s == -1 or req_s == 0 or req_s == 49:
-                        req_s = 0
-                        #raise UnboundLocalError('ivalid req_s {}, '.format(req_s))                        
-                        
-                except OSError:
-                    pass
+                ## raise FileExistsError here if the file exists and the header Range value
+                ## is the same as the requested content-length, unless overwrite is True or
+                ## check_size is False.
 
+                if not overwrite and check_size:
+                    if os.path.exists(dst_fn):
+                        if req_s == os.path.getsize(dst_fn):
+                            raise FileExistsError('{} exists, '.format(dst_fn))
+
+                ## server returned bad content-length
+                elif req_s == -1 or req_s == 0 or req_s == 49:
+                    req_s = 0
+
+                ## redirect response. pass
                 if req.status_code == 300:
                     pass
 
                 ## hack for earthdata credential redirect...
                 ## recursion here may never end with incorrect user/pass
-                timed_out = False
-
                 if req.status_code == 401:
                     ## we're hoping for a redirect url here.
                     if self.url == req.url:
                         raise UnboundLocalError('Incorrect Authentication')
 
+                    ## re-run the Fetch with the new URL
                     status = Fetch(url=req.url, headers=self.headers, verbose=self.verbose).fetch_file(
                         dst_fn,
                         params=params,
@@ -440,10 +441,10 @@ class Fetch:
                         read_timeout=read_timeout
                     )
 
+                ## got a good response, so we'll attempt to fetch the file now.
                 elif (req.status_code == 200) or (req.status_code == 206):# or (req.status_code :
                     curr_chunk = 0
-                    total_size = int(req.headers.get('content-length', 0))
-                    
+                    total_size = int(req.headers.get('content-length', 0))                    
                     with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
                         with tqdm(
                                 desc='fetching: {}'.format(utils._init_msg(self.url, len('fetching: '), 40)),
@@ -462,16 +463,18 @@ class Fetch:
 
                                     local_file.write(chunk)
                                     local_file.flush()
+                                    
                             except Exception as e:
                                 #utils.echo_warning_msg(e)
+                                ## reset the Fetch here if there was an exception in fetching.
+                                ## We'll attempt this `tries` times.
                                 if tries != 0:
                                     if self.verbose:
                                         utils.echo_warning_msg(
-                                            'server returned: {}, and an exception occured: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, e, tries)
+                                            'server returned: {}, and an exception occured: {}, (attempts left: {})...'.format(req.status_code, e, tries)
                                         )
-
-                                        time.sleep(2)
-
+                                        
+                                    time.sleep(2)
                                     status = Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                                         dst_fn,
                                         params=params,
@@ -483,22 +486,22 @@ class Fetch:
                                     )
                                     self.verbose=False
 
-                            # if chunk:
-                            #     local_file.write(chunk)
-                            # except TimeoutError as e:
-                            #     timed_out = True
-
+                    ## something went wrong here and the size of the fetched file does
+                    ## not match the requested content-length
                     if check_size and (total_size != 0) and (total_size != os.stat(dst_fn).st_size):
                         raise UnboundLocalError('sizes do not match!')
-                        timed_out = True
-                        
-                elif (req.status_code == 429) or (req.status_code == 416) or (req.status_code == 504) or (timed_out):
+
+                ## 429: "Too Many Requests!"
+                ## 416: "Bad header Range!"
+                ## 504: "Gateway Timeout!"
+                ## lets try again if we haven't already, these might resolve.
+                elif (req.status_code == 429) or (req.status_code == 416) or (req.status_code == 504):
                     if tries != 0:
                         if self.verbose:
                             utils.echo_warning_msg(
-                                'server returned: {}, taking a nap and trying again (attempts left: {})...'.format(req.status_code, tries)
+                                'server returned: {}, (attempts left: {})...'.format(req.status_code, tries)
                             )
-
+                            
                         time.sleep(10)
                         status = Fetch(url=self.url, headers=self.headers, verbose=self.verbose).fetch_file(
                             dst_fn,
@@ -509,26 +512,35 @@ class Fetch:
                             read_timeout=read_timeout+50 if read_timeout is not None else None,
                             tries=tries-1
                         )
-                        #self.verbose=False
                 else:
+                    ## server returned some non-accounted-for status, report and exit...
                     if self.verbose:
                         utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
                         
                     status = -1
                     raise UnboundLocalError(req.status_code)
 
+        ## file exists, so we return status of 0, as if we were successful!
+        except FileExistsError as e:
+            utils.echo_msg(e)
+            status = 0
+
+        ## other exceptions will return a status of -1, failure.
         except requests.exceptions.ConnectionError as e:
             status = -1
             raise ConnectionError('Connection Aborted!')
         
         except UnboundLocalError as e:
             status = -1
+            #utils.echo_msg(e)
             raise UnboundLocalError(e)
         
         except Exception as e:
             status = -1
             raise Exception(e)
 
+        ## if the file exists now after all the above, make sure the size of
+        ## that file is not zero, if `check_size` is True.
         if not os.path.exists(dst_fn) or os.stat(dst_fn).st_size ==  0:
             if check_size:
                 status = -1
@@ -583,8 +595,9 @@ def fetch_queue(q, c=True):
                 try:
                     os.makedirs(os.path.dirname(fetch_args[1]))
                 except: pass
-            
+
             if fetch_args[0].split(':')[0] == 'ftp':
+                ## FTP
                 Fetch(
                     url=fetch_args[0],
                     callback=fetch_args[3].callback,
@@ -593,6 +606,7 @@ def fetch_queue(q, c=True):
                 ).fetch_ftp_file(fetch_args[1])
             else:
                 try:
+                    ## HTTP
                     Fetch(
                         url=fetch_args[0],
                         callback=fetch_args[3].callback,
@@ -601,7 +615,11 @@ def fetch_queue(q, c=True):
                         verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                     ).fetch_file(fetch_args[1], check_size=c)
                 except Exception as e:
-                    if fetch_args[4] > 0 and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
+                    ## There was an exception in fetch_file, we'll put the request back into
+                    ## the queue to attempt to try again, fetch_args[4] is the number of times
+                    ## we will try to do this, once exhausted, we will give up.
+                    utils.echo_msg(e)
+                    if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                         utils.echo_warning_msg('fetch of {} failed...putting back in the queue'.format(fetch_args[0]))
                         fetch_args[4] -= 1
                         q.put(fetch_args)
