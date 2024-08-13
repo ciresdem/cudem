@@ -6038,9 +6038,11 @@ class DatasetFactory(factory.CUDEMFactory):
     """
     
     _modules = {
+        ## negative values are `datalists`, where they contain various other datasets.
         -1: {'name': 'datalist', 'fmts': ['datalist', 'mb-1', 'dl'], 'call': Datalist},
         -2: {'name': 'zip', 'fmts': ['zip', 'ZIP'], 'call': ZIPlist}, # add other archive formats (gz, tar.gz, 7z, etc.)
         -3: {'name': 'scratch', 'fmts': [''], 'call': Scratch },
+        ## data files
         167: {'name': 'yxz', 'fmts': ['yxz'], 'call': YXZFile},
         168: {'name': 'xyz', 'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'], 'call': XYZFile},
         200: {'name': 'gdal', 'fmts': ['tif', 'tiff', 'img', 'grd', 'nc', 'vrt'], 'call': GDALFile},
@@ -6599,9 +6601,6 @@ def datalists_cli(argv=sys.argv):
                 elif want_region: # get the region and warp it if necessary
                     this_inf = this_datalist.inf()
                     this_region = regions.Region().from_list(this_inf.minmax)
-                    #print(this_region)
-                    #print(dst_srs)
-                    #print(this_inf.src_srs)
                     if dst_srs is not None:
                         if src_srs is not None:
                             this_region.src_srs = src_srs
@@ -6613,19 +6612,19 @@ def datalists_cli(argv=sys.argv):
                 elif want_archive:
                     this_datalist.archive_xyz() # archive the datalist as xyz
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
 ### End
