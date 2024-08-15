@@ -1,3 +1,38 @@
+# Overview
+
+"dlim" is the elevation data processing tool using various dataset modules (Table 1). dlim's native dataset format is a "datalist". A datalist is similar to an MBSystem datalist; it is a space-delineated file containing the following columns:
+data-path data-format data-weight data-uncertainty data-name data-source data-date data-resolution data-type data-horz data-vert data-url
+Minimally, data-path (column 1) is all that is needed.
+
+an associated inf and geojson file will be gerenated for each datalist
+only an associated inf file will be genereated for individual datasets
+
+Parse various dataset types by region/increments and yield data as xyz or array
+recursive data-structures which point to datasets (datalist, zip, fetches, etc) are negative format numbers, e.g. -1 for datalist
+
+supported datasets include: xyz, gdal, ogr, las/laz (laspy), mbs (MBSystem), fetches (see cudem.fetches)
+
+Initialize a datalist/dataset using init_data(list-of-datalist-entries) where the list of datalist entries can
+be any of the supported dataset formats. init_data will combine all the input datafiles into an internal scratch
+datalist and process that.
+
+If region, x_inc, and y_inc are set, all processing will go through Dataset._stacks() where the data will be combined
+either using the 'supercede', 'weighted-mean', 'min' or 'max' method. Dataset._stacks will output a multi-banded gdal file with the following
+bands: 1: z, 2: count, 3: weight, 4: uncerainty, 5: source-uncertainty
+
+If want_mask is set, _stacks() will also generate a multi-band gdal raster file where each
+mask band contains the mask (0/1) of a specific dataset/datalist, depending on the input data. For a datalist, each band will
+contain a mask for each of the top-level datasets. If want_sm is also set, the multi-band mask
+will be processed to an OGR supported vector, with a feature for each band and the metadata items (cols > 4 in the datalist entry) as fields.
+
+Transform data between horizontal/vertical projections/datums by setting src_srs and dst_srs as 'EPSG:<>'
+if src_srs is not set, but dst_srs is, dlim will attempt to obtain the source srs from the data file itself
+or its respective inf file; otherwise, it will be assumed the source data file is in the same srs as dst_srs
+
+A dataset module should have at least an `__init__` and a `yield_ds` method. `yield_ds` should yield a numpy rec array with at least
+'x', 'y' and 'z' fields, and optionally 'w' and 'u' fields. Other methods that can be re-written include `parse` which yields
+dlim dataset module(s).
+
 ### Code Syntax:
 ```
 dlim (2.3.6): DataLists IMproved; Process and generate datalists
