@@ -485,7 +485,11 @@ Options:
   --version		Print the version information
 
 Supported FETCHES modules (see fetches --modules <module-name> for more info): 
-  gmrt, mar_grav, srtm_plus, charts, digital_coast, SLR, CoNED, CUDEM, multibeam, gebco, mgds, trackline, ehydro, ngs, hydronos, ncei_thredds, etopo, tnm, ned, ned1, emodnet, chs, hrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, buoys, earthdata, icesat, mur_sst, swot, usiei, wsf, hydrolakes, https, bing_bfp, waterservices, csb, cpt_city  
+  gmrt, mar_grav, srtm_plus, charts, digital_coast, SLR, CoNED, CUDEM, multibeam, gebco,
+  mgds, trackline, ehydro, ngs, hydronos, ncei_thredds, etopo, tnm, ned, ned1, emodnet,
+  chs, hrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, buoys,
+  earthdata, icesat, mur_sst, swot, usiei, wsf, hydrolakes, https, bing_bfp, waterservices,
+  csb, cpt_city  
 ```
 ### Dlim Module:
 ```
@@ -536,7 +540,13 @@ Options:
   --version		Print the version information
 
 Supported datalist formats (see dlim --modules <dataset-key> for more info): 
-  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),  swot (-216),  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
+  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),
+  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),
+  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),
+  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),  ehydro (-203),
+  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),
+  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),  swot (-216),
+  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
 ```
 ### Waffles Module:
 ```
@@ -621,10 +631,18 @@ Datalists and data formats:
   `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
 
 Supported datalist formats: 
-  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),  swot (-216),  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
+  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),
+  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),
+  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),
+  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),
+  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),
+  tnm (-209),  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),
+  swot (-216),  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),
+  hydrolakes (-600)
 
 Modules (see waffles --modules <module-name> for more info):
-  stacks, IDW, linear, cubic, nearest, gmt-surface, gmt-triangulate, gmt-nearneighbor, mbgrid, gdal-linear, gdal-nearest, gdal-average, gdal-invdst, vdatum, coastline, lakes, cudem, uncertainty, scratch, flatten
+  stacks, IDW, linear, cubic, nearest, gmt-surface, gmt-triangulate, gmt-nearneighbor, mbgrid, gdal-linear,
+  gdal-nearest, gdal-average, gdal-invdst, vdatum, coastline, lakes, cudem, uncertainty, scratch, flatten
 ```
 
 ## Code License
