@@ -1,3 +1,5 @@
+# Overview
+
 Fetches is the data download tool for obtaining publicly available elevation data froma variety of sources and can optionally list, download or process thefetched data for use in DEM generation. We download a variety of data types, e.g., topographic-bathymetry lidar, multibeam swath sonar bathymetry, hydrographic soundings, compiled grids, etc., from a variety of sources, e.g., NOAA Office for Coastal Management (OCM) Digital Coast, NOAA NCEI NOS Hydro Surveys, NOAA NCEI Multibeam, USGS The National Map, and U.S. Army Corps of Engineers (USACE) Navigation Condition Surveys. Other data sources include digitized bathymetric charts or topographic maps, shorelines, satellite-derived elevations, and precisely surveyed geodetic monuments (Table 1).
 
 **Table 1.** Data source modules available in the CUDEM software tool
@@ -43,6 +45,8 @@ Fetches is the data download tool for obtaining publicly available elevation dat
 | wsf | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
 
+# Usage
+
 ## Code Syntax
 ```
 fetches (2.3.6): Fetches; Fetch and process remote elevation data
@@ -73,3 +77,7 @@ Supported FETCHES modules (see fetches --modules <module-name> for more info):
   earthdata, icesat, mur_sst, swot, usiei, wsf, hydrolakes, https, bing_bfp, waterservices,
   csb, cpt_city  
 ```
+
+## Python API
+
+## Examples
