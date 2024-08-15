@@ -1,4 +1,4 @@
-
+Fetches is the data download tool for obtaining publicly available elevation data froma variety of sources and can optionally list, download or process thefetched data for use in DEM generation. We download a variety of data types, e.g., topographic-bathymetry lidar, multibeam swath sonar bathymetry, hydrographic soundings, compiled grids, etc., from a variety of sources, e.g., NOAA Office for Coastal Management (OCM) Digital Coast, NOAA NCEI NOS Hydro Surveys, NOAA NCEI Multibeam, USGS The National Map, and U.S. Army Corps of Engineers (USACE) Navigation Condition Surveys. Other data sources include digitized bathymetric charts or topographic maps, shorelines, satellite-derived elevations, and precisely surveyed geodetic monuments (Table 1).
 
 **Table 1.** Data source modules available in the CUDEM software tool
 "fetches*.*"
