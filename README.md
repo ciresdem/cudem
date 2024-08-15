@@ -156,7 +156,6 @@ between adjacent DEM tiles.
 | wsf | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
 
-
 "Waffles" is the data gridding tool for DEM generation using various
 gridding modules (Table 2). We leverage existing open-source software
 packages from a variety of sources including GMT, GDAL, and MB-System.
