@@ -83,7 +83,7 @@ pip install --no-deps git+https://github.com/ciresdem/cudem.git
 | dlim | process data from a variety of data types |
 | waffles | generate Digital Elevation Models from scattered data using a variety of methods|
 | regions | process REGIONS |
-| fetches | fetch elevation data from a variety of public online sources |
+| [fetches](docs/fetches.md) | fetch elevation data from a variety of public online sources |
 | vdatums | generate vertical transformation grids |
 | perspecto | generate images of DEMs |
 | grits | filter DEMs |
