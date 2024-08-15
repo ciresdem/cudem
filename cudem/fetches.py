@@ -959,13 +959,15 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
 class ETOPO(FetchModule):
     """Fetch ETOPO 2022 data. 
 
-    We have bedrock or surface in both geotiff and netcdf. Use `datatype` to specify which to fetch.
-    datatype options are:
-    'bed', 'bed_sid', 'surface', 'surface_sid', 'bed_netcdf', 'bed_sid_netcdf', 'surface_netcdf', 'surface_sid_netcdf'
+The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. The model is designed to support tsunami forecasting, modeling, and warning, as well as ocean circulation modeling and Earth visualization.  The current version, ETOPO 2022, is available in Ice Surface and Bedrock versions that portray either the top layer of the ice sheets covering Greenland and Antarctica, or the bedrock below. For more information, email dem.info@noaa.gov
 
-    e.g.  datatype=surface_netcdf
+We have bedrock or surface in both geotiff and netcdf. Use `datatype` to specify which to fetch.
+datatype options are:
+'bed', 'bed_sid', 'surface', 'surface_sid', 'bed_netcdf', 'bed_sid_netcdf', 'surface_netcdf', 'surface_sid_netcdf'
 
-    https://www.ncei.noaa.gov/products/etopo-global-relief-model
+e.g.  datatype=surface_netcdf
+
+https://www.ncei.noaa.gov/products/etopo-global-relief-model
     
 < etopo:datatype=None >"""
     

@@ -63,7 +63,7 @@ conda activate cudem
 
 ```
 git config --global http.sslVerify false
-pip install windows-curses pyproj
+pip install windows-curses
 ```
 
 - install HTDP and MB-System
@@ -130,6 +130,7 @@ between adjacent DEM tiles.
 | earthdata | NASA Earthdata | https://cmr.earthdata.nasa.gov |
 | ehydro | USACE hydrographic surveys | https://navigation.usace.army.mil/Survey/Hydro |
 | emodnet | EmodNET European Bathymetric/Topographic DEM | https://portal.emodnet-bathymetry.eu/ |
+| etopo | The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. | https://www.ncei.noaa.gov/products/etopo-global-relief-model |
 | fabdem | FABDEM  (Forest And Buildings removed Copernicus DEM) | https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn |
 | gebco | A global continuous terrain model for ocean and land with a spatial resolution of 15 arc seconds. | https://www.gebco.net/data_and_products/gridded_bathymetry_data/ |
 | gmrt | The Global MultiResolution Topography synthesis | https://www.gmrt.org |
