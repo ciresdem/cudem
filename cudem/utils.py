@@ -60,11 +60,8 @@ import cudem
 ## General Utility Functions, definitions, etc.
 ##
 ## ==============================================
-
-#cudem_cache = os.path.join(os.path.expanduser('~'), '.cudem_cache')
-#cudem_cache = os.path.abspath('./.cudem_cache')
 this_dir, this_filename = os.path.split(__file__)
-cudem_cache = lambda: os.path.abspath('./.cudem_cache')#, datetime.datetime.now().strftime('%Y%m%H%M%S%f'))
+cudem_cache = lambda: os.path.abspath('./.cudem_cache')
 cudem_data = os.path.join(this_dir, 'data')
 
 ## heaps of thanks to https://github.com/fitnr/stateplane

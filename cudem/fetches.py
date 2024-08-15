@@ -87,6 +87,13 @@ thredds_namespaces = {
     'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
 }
 
+## callback for use in fetches. currently, only the coastline and hydrolakes modules use
+## fetches processes...Change this funtion to better handle failed fetches. `r` is the
+## fetches results as a list: [url, local-fn, data-type, fetch-status-or-error-code]
+## this code is run in fetches.fetch_results() after a successful or failed download.
+def fetches_callback(r):
+    pass
+
 def urlencode(opts):
     try:
         url_enc = urllib.urlencode(opts)
@@ -279,7 +286,7 @@ class iso_xml:
         return(dd)
 
 class Fetch:
-    def __init__(self, url=None, callback=lambda: False, verbose=None, headers=r_headers, verify=True):
+    def __init__(self, url=None, callback=fetches_callback, verbose=None, headers=r_headers, verify=True):
         self.url = url
         self.callback = callback
         self.verbose = verbose
@@ -454,9 +461,6 @@ class Fetch:
                         ) as pbar:
                             try:
                                 for chunk in req.iter_content(chunk_size = 8196):
-                                    if self.callback():
-                                        break
-
                                     pbar.update(len(chunk))
                                     if not chunk:
                                         break
@@ -518,7 +522,7 @@ class Fetch:
                         utils.echo_error_msg('server returned: {} ({})'.format(req.status_code, req.url))
                         
                     status = -1
-                    raise UnboundLocalError(req.status_code)
+                    raise ConnectionError(req.status_code)
 
         ## file exists, so we return status of 0, as if we were successful!
         except FileExistsError as e:
@@ -526,18 +530,22 @@ class Fetch:
             status = 0
 
         ## other exceptions will return a status of -1, failure.
+        except ConnectionError as e:
+            status = -1
+            raise e
+        
         except requests.exceptions.ConnectionError as e:
             status = -1
-            raise ConnectionError('Connection Aborted!')
+            raise e#ConnectionError('Connection Aborted!')
         
         except UnboundLocalError as e:
             status = -1
             #utils.echo_msg(e)
-            raise UnboundLocalError(e)
+            raise e#UnboundLocalError(e)
         
         except Exception as e:
             status = -1
-            raise Exception(e)
+            raise e#Exception(e)
 
         ## if the file exists now after all the above, make sure the size of
         ## that file is not zero, if `check_size` is True.
@@ -583,51 +591,54 @@ def fetch_queue(q, c=True):
     """fetch queue `q` of fetch results
 
     each fetch queue `q` should be a list of the following:
-    [remote_data_url, local_data_path, data-type, fetches-module, number-of-attempts]    
+    [remote_data_url, local_data_path, data-type, fetches-module, number-of-attempts, results-list]    
 
     set c to False to skip size-checking
     """
 
     while True:
         fetch_args = q.get()
-        ## callback() should return False to keep-going. Set to a function
-        ## that returns True, we will exit to queue.
-        if not fetch_args[3].callback():
-            if not os.path.exists(os.path.dirname(fetch_args[1])):
-                try:
-                    os.makedirs(os.path.dirname(fetch_args[1]))
-                except: pass
+        if not os.path.exists(os.path.dirname(fetch_args[1])):
+            try:
+                os.makedirs(os.path.dirname(fetch_args[1]))
+            except: pass
 
-            ## fetch either FTP or HTTP
-            if fetch_args[0].split(':')[0] == 'ftp':
+        ## fetch either FTP or HTTP
+        if fetch_args[0].split(':')[0] == 'ftp':
+            Fetch(
+                url=fetch_args[0],
+                callback=fetch_args[3].callback,
+                verbose=fetch_args[3].verbose,
+                headers=fetch_args[3].headers
+            ).fetch_ftp_file(fetch_args[1])
+            fetch_args[5].append([fetch_args[0], fetch_args[1], fetch_args[2]])
+        else:
+            try:
                 Fetch(
                     url=fetch_args[0],
                     callback=fetch_args[3].callback,
                     verbose=fetch_args[3].verbose,
-                    headers=fetch_args[3].headers
-                ).fetch_ftp_file(fetch_args[1])
-            else:
-                try:
-                    Fetch(
-                        url=fetch_args[0],
-                        callback=fetch_args[3].callback,
-                        verbose=fetch_args[3].verbose,
-                        headers=fetch_args[3].headers,
-                        verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
-                    ).fetch_file(fetch_args[1], check_size=c)
-                except Exception as e:
-                    ## There was an exception in fetch_file, we'll put the request back into
-                    ## the queue to attempt to try again, fetch_args[4] is the number of times
-                    ## we will try to do this, once exhausted, we will give up.
-                    utils.echo_msg(e)
-                    if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
-                        utils.echo_warning_msg('fetch of {} failed...putting back in the queue'.format(fetch_args[0]))
-                        fetch_args[4] -= 1
-                        q.put(fetch_args)
-                    else:
-                        utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
-                        #utils.echo_msg(fetch_args[3].status)
-                        fetch_args[3].status = -1
+                    headers=fetch_args[3].headers,
+                    verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
+                ).fetch_file(fetch_args[1], check_size=c)
+                fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], 0]
+                fetch_args[3].callback(fetch_results)
+                fetch_args[5].append(fetch_results)
+            except Exception as e:
+                ## There was an exception in fetch_file, we'll put the request back into
+                ## the queue to attempt to try again, fetch_args[4] is the number of times
+                ## we will try to do this, once exhausted, we will give up.
+                #utils.echo_msg(e)
+                if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
+                    utils.echo_warning_msg('fetch of {} failed...putting back in the queue'.format(fetch_args[0]))
+                    fetch_args[4] -= 1
+                    q.put(fetch_args)
+                else:
+                    utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
+                    fetch_args[3].status = -1
+                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], e]
+                    fetch_args[3].callback(fetch_results)
+                    fetch_args[5].append(fetch_results)
         q.task_done()
         
 class fetch_results(threading.Thread):
@@ -642,14 +653,21 @@ class fetch_results(threading.Thread):
     run this on an initialized fetches module:
     >>> fetch_result(fetches_module, n_threads=3).run()
     and this will fill a queue for data fetching, using 'n_threads' threads.
+
+    entry should be a single results entry to fetch a single entry from the fetch module.
     """
     
-    def __init__(self, mod, check_size=True, n_threads=3):
+    def __init__(self, mod, check_size=True, n_threads=3, attempts=5, entry=None):
         threading.Thread.__init__(self)
         self.fetch_q = queue.Queue()
         self.mod = mod
         self.check_size = check_size
         self.n_threads = n_threads
+        self.attempts = attempts
+        self.entry = entry
+        ## results holds the same list as mod.results,
+        ## with the addition of the fetching status at the end.
+        self.results = []
         if len(self.mod.results) == 0:
             self.mod.run()
                     
@@ -658,9 +676,13 @@ class fetch_results(threading.Thread):
             t = threading.Thread(target=fetch_queue, args=(self.fetch_q, self.check_size))
             t.daemon = True
             t.start()
-        for row in self.mod.results:
-            # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries]
-            self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod, 5])
+            
+        # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries, results]
+        if self.entry is not None:
+            self.fetch_q.put([self.entry[0], os.path.join(self.mod._outdir, self.entry[1]), self.entry[2], self.mod, self.attempts, self.results])
+        else:
+            for row in self.mod.results:
+                self.fetch_q.put([row[0], os.path.join(self.mod._outdir, row[1]), row[2], self.mod, self.attempts, self.results])
             
         self.fetch_q.join()
 
@@ -677,7 +699,7 @@ class FetchModule:
     The `results` should be a list of [remote-url, destination-file, data-type]
     """
     
-    def __init__(self, src_region = None, callback = lambda: False, verbose = True,
+    def __init__(self, src_region = None, callback = fetches_callback, verbose = True,
                  outdir = None, name = 'fetches', params = {}):
         self.region = src_region
         self.callback = callback
@@ -718,23 +740,15 @@ class FetchModule:
         """given the `entry` obtained in the sub-class, fetch that entry.
         status should be 0 if successful, -1 otherwise.
         """
+
+        _results = []
         
-        ## make sure this fetches correctly and retry if it doesn't!
-        if retries == 0:
-            return(-1)
-        
-        try:
-            status = Fetch(
-                entry[0],
-                callback=self.callback,
-                verbose=self.verbose,
-                headers=self.headers,
-            ).fetch_file(os.path.join(self._outdir, entry[1]), check_size=check_size)
-        except Exception as e:
-            utils.echo_msg(e)
-            status = self.fetch(entry, check_size=check_size, retries=retries-1)
-            
-        return(status)
+        fr = fetch_results(self, check_size=check_size, attempts=retries, entry=entry)
+        fr.daemon = True
+        fr.start()
+        fr.join()
+
+        return(fr.results[0][-1])
 
     def fetch_results(self):
         """fetch the gathered `results` from the sub-class"""
@@ -4908,7 +4922,7 @@ class FetchesFactory(factory.CUDEMFactory):
 ## fetches cli
 fetches_usage = """{cmd} ({version}): Fetches; Fetch and process remote elevation data
 
-usage: {cmd} [ -hlqzHR [ args ] ] MODULE ...
+usage: {cmd} [ -hlqzAHR [ args ] ] MODULE ...
 
 Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -4918,6 +4932,7 @@ Options:
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
   -H, --threads\t\tSet the number of threads (1)
+  -A, --attempts\tSet the number of fetching attempts (5)
   -l, --list\t\tReturn a list of fetch URLs in the given region.
   -z, --no_check_size\tDon't check the size of remote data if local data exists.
   -q, --quiet\t\tLower the verbosity to a quiet
@@ -4947,6 +4962,7 @@ See `fetches_cli_usage` for full cli options.
     stop_threads = False
     check_size = True
     num_threads = 1
+    fetch_attempts = 5
     
     ## parse command line arguments.
     i = 1
@@ -4959,6 +4975,9 @@ See `fetches_cli_usage` for full cli options.
             i_regions.append(str(arg[2:]))
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             num_threads = utils.int_or(argv[i + 1], 1)
+            i = i + 1
+        elif arg == '-attempts' or arg == '--attempts' or arg == '-A':
+            fetch_attempts = utils.int_or(argv[i + 1], 1)
             i = i + 1
         elif arg == '--list' or arg == '-l':
             want_list = True
@@ -5029,7 +5048,7 @@ See `fetches_cli_usage` for full cli options.
                     print(result[0])
             else:
                 try:
-                    fr = fetch_results(x_f, n_threads=num_threads, check_size=check_size)
+                    fr = fetch_results(x_f, n_threads=num_threads, check_size=check_size, attempts=fetch_attempts)
                     fr.daemon = True
                 
                     fr.start()

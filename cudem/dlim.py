@@ -668,7 +668,7 @@ class ElevationDataset:
 
         return(self)
     
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate an inf file for the data source. this is generic and
         will parse through all the data via yield_xyz to get point count
         and region. if the datasource has a better way to do this, such as
@@ -2407,7 +2407,7 @@ class LASFile(ElevationDataset):
                     return(src_srs)
             return(None)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate an inf file for a lidar dataset."""
         
         with lp.open(self.fn) as lasf:
@@ -2505,7 +2505,7 @@ class GDALFile(ElevationDataset):
         else:
             return(self.src_srs)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
 
@@ -2945,7 +2945,7 @@ class BAGFile(ElevationDataset):
         else:
             return(self.src_srs)
                     
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         if self.src_srs is None:
             self.infos.src_srs = self.init_srs()
         else:
@@ -3977,7 +3977,7 @@ class Scratch(ElevationDataset):
         super().__init__(**kwargs)
         self.metadata['name'] = 'scratch'
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate and return the infos blob of the datalist.
 
         datasets parsed from the datalist may have variable srs, so
@@ -3990,9 +3990,6 @@ class Scratch(ElevationDataset):
         out_regions = []
         out_srs = []
         for entry in self.parse():
-            if self.verbose:
-                callback()
-
             entry_minmax = entry.infos.minmax
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
@@ -4126,7 +4123,7 @@ class Datalist(ElevationDataset):
             
         self.layer.CreateFeature(out_feat)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate and return the infos blob of the datalist.
 
         datasets parsed from the datalist may have variable srs, so
@@ -4145,9 +4142,6 @@ class Datalist(ElevationDataset):
         if self._init_datalist_vector() == 0:
             for entry in self.parse():
                 #utils.echo_msg_bold(entry.mask)
-                if self.verbose:
-                    callback()
-
                 entry_minmax = entry.infos.minmax
                 #utils.echo_msg(entry.params)
                 if entry.mask is not None: ## add all duplicat params???
@@ -4392,7 +4386,7 @@ class ZIPlist(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate and return the infos blob of the datalist.
 
         datasets parsed from the datalist may have variable srs, so
@@ -4405,10 +4399,7 @@ class ZIPlist(ElevationDataset):
         out_regions = []
         out_srs = []
         self.infos.file_hash = self.infos.generate_hash()
-        for entry in self.parse():
-            if self.verbose:
-                callback()
-                
+        for entry in self.parse():            
             entry_minmax = entry.infos.minmax
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
@@ -4529,11 +4520,11 @@ class Fetcher(ElevationDataset):
     sub-class for it.
     """
 
-    def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, **kwargs):
-        super().__init__(remote=True, **kwargs)        
+    def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, callback = fetches.fetches_callback, **kwargs):
+        super().__init__(remote=True, **kwargs)
         self.outdir = outdir if outdir is not None else self.cache_dir # cache directory to store fetched data
         self.fetch_module = fetches.FetchesFactory(
-            mod=self.fn, src_region=self.region, verbose=self.verbose, outdir=self.outdir#outdir=self.cache_dir
+            mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir#outdir=self.cache_dir
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
@@ -4549,7 +4540,7 @@ class Fetcher(ElevationDataset):
         #                  'vdatum':src_vert, 'url':None}
 
         
-    def generate_inf(self, callback=lambda: False):
+    def generate_inf(self):
         """generate a infos dictionary from the Fetches dataset"""
 
         tmp_region = self.fetch_module.region if self.region is None else self.region.copy()

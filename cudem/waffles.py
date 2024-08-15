@@ -2069,7 +2069,7 @@ class WafflesCoastline(Waffle):
         
     def fetch_data(self, fetches_module, check_size=True):
         this_fetches = fetches.FetchesFactory(
-            mod=fetches_module, src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir
+            mod=fetches_module, src_region=self.wgs_region, verbose=self.verbose, outdir=self.cache_dir, callback=fetches.fetches_callback
         )._acquire_module()        
         this_fetches.run()
         fr = fetches.fetch_results(this_fetches, check_size=check_size)
@@ -2077,11 +2077,8 @@ class WafflesCoastline(Waffle):
         fr.start()
         fr.join()
 
-        if this_fetches.status != 0:
-            utils.echo_warning_msg('failed to fetch {}!'.format(fetches_module.split(':')[0]))
-            this_fetches.results = []
-        
-        return(this_fetches)
+        #return(this_fetches)
+        return(fr)
         
     def run(self):
         self.f_region = self.p_region.copy()
@@ -2165,51 +2162,54 @@ class WafflesCoastline(Waffle):
         
         this_gmrt = self.fetch_data('gmrt:layer=topo')        
         gmrt_result = this_gmrt.results[0]
-        gmrt_tif = os.path.join(this_gmrt._outdir, gmrt_result[1])
-        gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', src_srs=self.wgs_srs, co=self.co)
-        gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=self.cst_srs, resampleAlg=self.sample)
-        gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
-        gmrt_ds_arr[gmrt_ds_arr > 0] = 1
-        gmrt_ds_arr[gmrt_ds_arr < 0] = 0
-        self.coast_array += (gmrt_ds_arr * self.min_weight)
-        gmrt_ds = gmrt_ds_arr = None
+        if gmrt_result[-1] == 0:
+            #gmrt_tif = os.path.join(this_gmrt._outdir, gmrt_result[1])
+            gmrt_tif = gmrt_result[1]
+            gmrt_ds = gdalfun.gdal_mem_ds(self.ds_config, name='gmrt', src_srs=self.wgs_srs, co=self.co)
+            gdal.Warp(gmrt_ds, gmrt_tif, dstSRS=self.cst_srs, resampleAlg=self.sample)
+            gmrt_ds_arr = gmrt_ds.GetRasterBand(1).ReadAsArray()
+            gmrt_ds_arr[gmrt_ds_arr > 0] = 1
+            gmrt_ds_arr[gmrt_ds_arr < 0] = 0
+            self.coast_array += (gmrt_ds_arr * self.min_weight)
+            gmrt_ds = gmrt_ds_arr = None
         
     def _load_copernicus(self):
         """copernicus"""
 
         this_cop = self.fetch_data('copernicus:datatype=1', check_size=False)
-        #if this_cop.status == 0:
         for i, cop_result in enumerate(this_cop.results):
-            cop_tif = os.path.join(this_cop._outdir, cop_result[1])
-            gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
-            cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', src_srs=self.wgs_srs, co=self.co)
-            gdal.Warp(
-                cop_ds, cop_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
-                callback=False, srcNodata=0
-            )
-            cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
-            cop_ds_arr[cop_ds_arr != 0] = 1
-            self.coast_array += (cop_ds_arr * self.min_weight)
-            cop_ds = cop_ds_arr = None
-        #else:
-        #    utils.echo_warning_msg('failed to fetch copernicus data, continuing anyway!')    
+            if cop_result[-1] == 0:
+                #cop_tif = os.path.join(this_cop._outdir, cop_result[1])
+                cop_tif = cop_result[1]
+                gdalfun.gdal_set_ndv(cop_tif, 0, verbose=False)
+                cop_ds = gdalfun.gdal_mem_ds(self.ds_config, name='copernicus', src_srs=self.wgs_srs, co=self.co)
+                gdal.Warp(
+                    cop_ds, cop_tif, dstSRS=self.cst_srs, resampleAlg=self.sample,
+                    callback=False, srcNodata=0
+                )
+                cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
+                cop_ds_arr[cop_ds_arr != 0] = 1
+                self.coast_array += (cop_ds_arr * self.min_weight)
+                cop_ds = cop_ds_arr = None
 
     def _load_wsf(self):
         """wsf"""
 
         this_wsf = self.fetch_data('wsf', check_size=False)        
         for i, wsf_result in enumerate(this_wsf.results):
-            wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
-            gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
-            wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs, co=self.co)
-            gdal.Warp(
-                wsf_ds, wsf_tif, dstSRS=self.cst_srs, resampleAlg='cubicspline',
-                callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
-            )
-            wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
-            wsf_ds_arr[wsf_ds_arr != 0 ] = -1
-            self.coast_array += (wsf_ds_arr * self.min_weight)
-            wsf_ds = wsf_ds_arr = None
+            if wsf_result[-1] == 0:
+                #wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
+                wsf_tif = wsf_result[1]
+                gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
+                wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs, co=self.co)
+                gdal.Warp(
+                    wsf_ds, wsf_tif, dstSRS=self.cst_srs, resampleAlg='cubicspline',
+                    callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
+                )
+                wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
+                wsf_ds_arr[wsf_ds_arr != 0 ] = -1
+                self.coast_array += (wsf_ds_arr * self.min_weight)
+                wsf_ds = wsf_ds_arr = None
             
     def _load_nhd(self):
         """USGS NHD (HIGH-RES U.S. Only)
@@ -2221,81 +2221,85 @@ class WafflesCoastline(Waffle):
         if len(this_tnm.results) > 0:
             tnm_ds = gdalfun.gdal_mem_ds(self.ds_config, name='nhd', src_srs=self.wgs_srs, co=self.co)
             for i, tnm_result in enumerate(this_tnm.results):
-                tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
-                if not os.path.exists(tnm_zip):
-                    break
-                
-                tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
-                gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
+                if tnm_result[-1] == 0:
+                    #tnm_zip = os.path.join(this_tnm._outdir, tnm_result[1])
+                    tnm_zip = tnm_result[1]
+                    if not os.path.exists(tnm_zip):
+                        break
 
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
-                utils.run_cmd(
-                    'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
-                        gdb, self.p_region.format('ul_lr')
-                    ),
-                    verbose=self.verbose
-                )
+                    tnm_zips = utils.unzip(tnm_zip, self.cache_dir, verbose=False)
+                    gdb = '.'.join(tnm_zip.split('.')[:-1]) + '.gdb'
 
-                if self.want_nhd_plus:
                     utils.run_cmd(
-                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
+                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDArea -where "FType=312 OR FType=336 OR FType=445 OR FType=460 OR FType=537" -clipdst {} 2>/dev/null'.format(
+                            gdb, self.p_region.format('ul_lr')
+                        ),
+                        verbose=self.verbose
+                    )
+                    utils.run_cmd(
+                        'ogr2ogr -update -append nhdArea_merge.shp {} NHDWaterbody -where "FType=493 OR FType=466" -clipdst {} 2>/dev/null'.format(
                             gdb, self.p_region.format('ul_lr')
                         ),
                         verbose=self.verbose
                     )
 
-            try:
-                utils.run_cmd(
-                    'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
-                        self.p_region.format('te'),
-                        self.ds_config['nx'],
-                        self.ds_config['ny'],
-                    ),
-                    verbose=self.verbose
-                )
+                    if self.want_nhd_plus:
+                        utils.run_cmd(
+                            'ogr2ogr -update -append nhdArea_merge.shp {} NHDPlusBurnWaterbody -clipdst {} 2>/dev/null'.format(
+                                gdb, self.p_region.format('ul_lr')
+                            ),
+                            verbose=self.verbose
+                        )
 
-                gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
-            except:
-                tnm_ds = None
-                
-            if tnm_ds is not None:
-                tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
-                tnm_ds_arr[tnm_ds_arr < 1] = 0
-                self.coast_array -= (tnm_ds_arr * self.min_weight)
-                #self.coast_array[tnm_ds_arr < 1] = 0
-                tnm_ds = tnm_ds_arr = None
-                
-            utils.remove_glob('nhdArea_merge.*')
+                try:
+                    utils.run_cmd(
+                        'gdal_rasterize -burn 1 nhdArea_merge.shp nhdArea_merge.tif -te {} -ts {} {} -ot Int32'.format(
+                            self.p_region.format('te'),
+                            self.ds_config['nx'],
+                            self.ds_config['ny'],
+                        ),
+                        verbose=self.verbose
+                    )
+
+                    gdal.Warp(tnm_ds, 'nhdArea_merge.tif', dstSRS=self.cst_srs, resampleAlg=self.sample)
+                except:
+                    tnm_ds = None
+
+                if tnm_ds is not None:
+                    tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
+                    tnm_ds_arr[tnm_ds_arr < 1] = 0
+                    self.coast_array -= (tnm_ds_arr * self.min_weight)
+                    #self.coast_array[tnm_ds_arr < 1] = 0
+                    tnm_ds = tnm_ds_arr = None
+
+                utils.remove_glob('nhdArea_merge.*')
 
     def _load_lakes(self):
         """HydroLakes -- Global Lakes"""
         
         this_lakes = self.fetch_data('hydrolakes')
         lakes_shp = None
-        lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
-        lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
-        for i in lakes_shps:
-            if i.split('.')[-1] == 'shp':
-                lakes_shp = i
+        #lakes_zip = os.path.join(this_lakes._outdir, this_lakes.results[0][1])
+        if this_lakes.results[0][-1] == 0:
+            lakes_zip = this_lakes.results[0][1]
+            lakes_shps = utils.unzip(lakes_zip, self.cache_dir)
+            for i in lakes_shps:
+                if i.split('.')[-1] == 'shp':
+                    lakes_shp = i
 
-        lakes_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs, co=self.co)
-        lakes_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs, co=self.co)
-        lk_ds = ogr.Open(lakes_shp)
-        if lk_ds is not None:
-            lk_layer = lk_ds.GetLayer()
-            lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
-            gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
-            gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
-            lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
-            self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1 # update for weights
-            lakes_ds = lk_ds = lakes_warp_ds = None
-        else:
-            utils.echo_error_msg('could not open {}'.format(lakes_shp))
+            lakes_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs, co=self.co)
+            lakes_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='lakes', src_srs=self.wgs_srs, co=self.co)
+            lk_ds = ogr.Open(lakes_shp)
+            if lk_ds is not None:
+                lk_layer = lk_ds.GetLayer()
+                lk_layer.SetSpatialFilter(self.f_region.export_as_geom())
+                gdal.RasterizeLayer(lakes_ds, [1], lk_layer, burn_values=[-1])
+                gdal.Warp(lakes_warp_ds, lakes_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+                lakes_ds_arr = lakes_warp_ds.GetRasterBand(1).ReadAsArray()
+                self.coast_array[lakes_ds_arr == -1] = 0 if not self.invert_lakes else 1 # update for weights
+                lakes_ds = lk_ds = lakes_warp_ds = None
+            else:
+                utils.echo_error_msg('could not open {}'.format(lakes_shp))
 
     def _load_bldgs(self):
         """load buildings from OSM
@@ -2315,48 +2319,50 @@ class WafflesCoastline(Waffle):
                 leave=self.verbose
         ) as pbar:
             for n, osm_result in enumerate(this_osm.results):
-                pbar.update()
-                osm_z = os.path.join(this_osm._outdir, osm_result[1])
-                # if fetches.Fetch(osm_result[0], verbose=True).fetch_file(
-                #         osm_z, check_size=False, tries=self.osm_tries, read_timeout=3600
-                # ) >= 0:
-                #if True:
-                if osm_result[-1] == 'bz2':
-                    osm_planet = utils.unbz2(osm_z, self.cache_dir)
-                    osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
-                    _clipped = True
-                elif osm_result[-1] == 'pbf':
-                    osm_file = utils.ogr_clip(osm_z, self.wgs_region, 'multipolygons')
-                    _clipped = True
-                else:
-                    osm_file = osm_z
-                    _clipped = False
+                if osm_result[-1] == 0:
+                    pbar.update()
+                    #osm_z = os.path.join(this_osm._outdir, osm_result[1])
+                    osm_z = osm_result[1]
+                    # if fetches.Fetch(osm_result[0], verbose=True).fetch_file(
+                    #         osm_z, check_size=False, tries=self.osm_tries, read_timeout=3600
+                    # ) >= 0:
+                    #if True:
+                    if osm_result[-1] == 'bz2':
+                        osm_planet = utils.unbz2(osm_z, self.cache_dir)
+                        osm_file = utils.ogr_clip(osm_planet, self.wgs_region)
+                        _clipped = True
+                    elif osm_result[-1] == 'pbf':
+                        osm_file = utils.ogr_clip(osm_z, self.wgs_region, 'multipolygons')
+                        _clipped = True
+                    else:
+                        osm_file = osm_z
+                        _clipped = False
 
-                if os.path.getsize(osm_file) == 366:
-                    continue
+                    if os.path.getsize(osm_file) == 366:
+                        continue
 
-                out, status = utils.run_cmd(
-                    'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
-                        osm_file,
-                        self.p_region.format('te'),
-                        self.ds_config['nx'],
-                        self.ds_config['ny'],
-                    ),
-                    verbose=False
-                )
+                    out, status = utils.run_cmd(
+                        'gdal_rasterize -burn -1 -l multipolygons {} bldg_osm.tif -te {} -ts {} {} -ot Int32 -q'.format(
+                            osm_file,
+                            self.p_region.format('te'),
+                            self.ds_config['nx'],
+                            self.ds_config['ny'],
+                        ),
+                        verbose=False
+                    )
 
-                if status == 0:
-                    bldg_ds = gdal.Open('bldg_osm.tif')
-                    if bldg_ds is not None:
-                        bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
-                        self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
-                        bldg_ds = bldg_ds_arr = None
+                    if status == 0:
+                        bldg_ds = gdal.Open('bldg_osm.tif')
+                        if bldg_ds is not None:
+                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                            self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
+                            bldg_ds = bldg_ds_arr = None
 
-                    bldg_ds = None
-                else:
-                    utils.echo_warning_msg('could not parse buildings!')
+                        bldg_ds = None
+                    else:
+                        utils.echo_warning_msg('could not parse buildings!')
 
-                utils.remove_glob('bldg_osm.tif*')
+                    utils.remove_glob('bldg_osm.tif*')
 
         bldg_ds = bldg_warp_ds = None
         
