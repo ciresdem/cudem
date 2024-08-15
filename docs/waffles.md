@@ -1,3 +1,64 @@
+# Overview
+
+"Waffles" is the data gridding tool for DEM generation using various
+gridding modules (Table 1). We leverage existing open-source software
+packages from a variety of sources including GMT, GDAL, and MB-System.
+From these sources, there are also multiple gridding algorithms, e.g.,
+spline, inverse distance weighting (IDW), triangulate, average,
+near-neighbor, etc. Previous research at NOAA NCEI indicates spline
+interpolation is the most accurate gridding algorithm for generating
+DEMs (Amante and Eakins, 2016). However, the measurement density and
+terrain characteristics (e.g. terrain slope and curvature) may influence
+the accuracy of the various gridding algorithms and multiple algorithms
+should be evaluated. We then generate DEMs by a combination of data
+masking, weighting, and interpolation.
+
+**Table 1.** Gridding modules available in the CUDEM software tool
+"waffles."
+
+|  ***Name***          |                ***Description*** |
+|----------------------|----------------------------------|
+|  gdal-average        |                Generate an average DEM using GDAL\'s *gdal_grid* command. |
+|  coastline           |                Generate a coastline (land/sea mask) using a variety of data sources. |
+|  cudem               |                CUDEM integrated DEM generation. Generate an topographic-bathymetric integrated DEM using a variety of data sources. |
+|  IDW                 |                Generate a DEM using an Inverse Distance Weighted algorithm. If weights are used, will generate a UIDW DEM, using weight values as inverse uncertainty, as described [here](https://ir.library.oregonstate.edu/concern/graduate_projects/79407x932), and [here](https://stackoverflow.com/questions/3104781/inverse-distance-weighted-idw-interpolation-with-python) |
+|  gdal-invdst         |                Generate an inverse distance DEM using GDAL\'s *gdal_grid* command. |
+|  gdal-linear         |                Generate a linear DEM using GDAL\'s *gdal_grid* command. |
+|  mbgrid              |                Generate a DEM using MB-System\'s *mbgrid* command. |
+|  gdal-nearest        |                Generate a nearest DEM using GDAL\'s *gdal_grid* command. |
+|  gmt-nearneighbor    |                Generate a DEM using GMT\'s *nearneighbor* command |
+|  num                 |                Generate an uninterpolated DEM using various gridding modes, including options from GMT's *xyz2grd* command. |
+|  linear               |               Generate a DEM using Scipy's linear gridding algorithm) |
+|  cubic               |                Generate a DEM using Scipy's cubic gridding algorithm |
+|  nearest              |               Generate a DEM using Scipy's nearest gridding algorithm |
+|  stacks              |                Generate a DEM using a raster stacking method. By default, calculate the \[weighted\]-mean where overlapping cells occur. Set supercede to True to overwrite overlapping cells with higher weighted data. | 
+|  gmt-surface         |               Generate a DEM using GMT\'s *surface* command | 
+|  gmt-triangulate     |               Generate a DEM using GMT\'s *triangulate* command | 
+|  vdatum              |                Generate a vertical datum conversion grid. |
+|  flatten              |               Generate a DEM by flattening nodata areas. |
+|  lakes              |               Estimate/interpolate Lake bathymetry. |
+|  uncertainty         |               Estimate interpolation uncertainty. |
+
+# Uncertainty Grid Generation
+
+We generate uncertainty grids that represent an estimate of potential
+interpolation errors based on a split-sample approach and distance to
+the nearest measurement. Using a split-sample approach, a percentage of
+the data is omitted, an interpolation method is applied, and the
+differences between the interpolated elevations and the original omitted
+elevations are calculated. We omit a percentage of the measurements,
+apply an interpolation method, and calculate the differences between the
+interpolated values and the omitted elevations. We repeat this process
+and aggregate the differences between the original measurements and the
+interpolated elevations and then we derive a best-fit equation of
+interpolation uncertainty as a function of distance to the nearest
+measurement.
+
+# Spatial Metadata
+
+We generate spatial metadata for our DEMs that document the data sources
+that went into the DEM generation process.
+
 ### Code Syntax:
 ```
 waffles (2.3.6): Generate DEMs and derivatives.
