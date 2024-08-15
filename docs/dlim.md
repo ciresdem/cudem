@@ -33,6 +33,56 @@ A dataset module should have at least an `__init__` and a `yield_ds` method. `yi
 'x', 'y' and 'z' fields, and optionally 'w' and 'u' fields. Other methods that can be re-written include `parse` which yields
 dlim dataset module(s).
 
+**Table 1.** Dataset modules available in the CUDEM software tool
+"dlim
+
+|  ***Name***          |                | ***dlim dataset module code*** | ***Description*** |
+| datalist | -1 | An extended MB-System style datalist containting dlim-compatible datasets |
+| zip | -2 | A zipfile containing dlim-compatible datasets |
+| scratch | -3 | A scratch dataset, including a python list of dlim-compatible datasets |
+| yxz | 167 | An ascii DSV datafile formatted as y,x,z |
+| xyz | 168 | An ascii DSV datafile formatted as x,y,z |
+| gdal | 200 | A gdal-compatible raster dataset |
+| bag | 201 | A BAG bathymetry dataset |
+| swot_pixc | 202 | An HDF5 SWOT PIXC datafile |
+| swot_hr_raster | 203 | an HDF5 SWOT HR Raster datafile |
+| las | 300 | An las or laz lidar datafile |
+| mbs | 301 | An MB-System-compatible multibeam datafile |
+| ogr | 302 | An ogr-compatible vector datafile |
+| icesat_atl | 303 | An HDF5 IceSat ATL03 datafile |
+| https | -100 | a URL pointing to a dlim-compatible datafile |
+| gmrt | -101 | The GMRT fetches module |
+| gebco | -102 | The GEBCO fetches module |
+| copernicus | -103 | The Copernicus fetches module |
+| fabdem | -104 | The FABDEM fetches module |
+| nasadem | -105 | The NASADEM fetches module |
+| mar_grav | -106 | The mar_grav fetches module |
+| srtm_plus | -107 | The srtm_plus fetches module |
+| charts | -200 | The charts fetches module |
+| multibeam | -201 | The multibeam fetches module | 
+| hydronos | -202 | The hydronos fetches module |
+| ehydro | -203 | The ehydro fetches module |
+| bluetopo | -204 | The bluetopo fetches module |
+| ngs | -205 | The ngs fetches module |
+| tides | -206 | The tids fetches module |
+| digital_coast | -207 | The digital_coast fetches module |
+| ncei_thredds | -208 | The ncei_thredds fetches module |
+| tnm | -209 | The TNM fetches module |
+| CUDEM | -210 | The CUDEM fetches module |
+| CoNED | -211 | The CoNED fetches module |
+| SLR | -212 | The SLR fetches module |
+| waterservies | -213 | The waterservices fetches module |
+| icesat | -214 | The IceSat fetches module |
+| ned | -215 | The NED fetches module |
+| swot | -216 | The SWOT fetches module |
+| csb | -217 | the CSB fetches module |
+| emodnet | -300 | The emodnet fetches module |
+| chs | -301 | The chs fetches module |
+| hrdem | -302 | The hrdem fetches module | 
+| arcticdem | -303 | The arcticdem fetches module |
+| vdatum | -500 | The vdatum fetches module | 
+| hydrolakes | -600 | The hydrolakes fetches module | 
+
 ### Code Syntax:
 ```
 dlim (2.3.6): DataLists IMproved; Process and generate datalists
