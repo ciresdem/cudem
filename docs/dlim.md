@@ -33,10 +33,9 @@ A dataset module should have at least an `__init__` and a `yield_ds` method. `yi
 'x', 'y' and 'z' fields, and optionally 'w' and 'u' fields. Other methods that can be re-written include `parse` which yields
 dlim dataset module(s).
 
-**Table 1.** Dataset modules available in the CUDEM software tool
-"dlim
+**Table 1.** Dataset modules available in the CUDEM software tool "dlim"
 
-|  ***Name***          |                | ***dlim dataset module code*** | ***Description*** |
+|  ***Name***  |  ***dlim dataset module code*** | ***Description*** |
 | datalist | -1 | An extended MB-System style datalist containting dlim-compatible datasets |
 | zip | -2 | A zipfile containing dlim-compatible datasets |
 | scratch | -3 | A scratch dataset, including a python list of dlim-compatible datasets |
