@@ -463,9 +463,9 @@ For additional questions, please contact:
 
 ### Fetches Module:
 ```
-fetches (2.0.4): Fetches; Fetch and process remote elevation data
+fetches (2.3.6): Fetches; Fetch and process remote elevation data
 
-usage: fetches [ -hlqzHR [ args ] ] MODULE ...
+usage: fetches [ -hlqzAHR [ args ] ] MODULE ...
 
 Options:
   -R, --region		Restrict processing to the desired REGION 
@@ -475,6 +475,7 @@ Options:
 			Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 			If a vector file is supplied, will use each region found therein.
   -H, --threads		Set the number of threads (1)
+  -A, --attempts	Set the number of fetching attempts (5)
   -l, --list		Return a list of fetch URLs in the given region.
   -z, --no_check_size	Don't check the size of remote data if local data exists.
   -q, --quiet		Lower the verbosity to a quiet
@@ -484,16 +485,13 @@ Options:
   --version		Print the version information
 
 Supported FETCHES modules (see fetches --modules <module-name> for more info): 
-  gmrt, mar_grav, srtm_plus, charts, digital_coast, multibeam, gebco, mgds, trackline,
-  ehydro, ngs, hydronos, ncei_thredds, tnm, emodnet, chs, hrdem, arcticdem, bluetopo,
-  osm, copernicus, fabdem, nasadem, tides, vdatum, buoys, earthdata, usiei, wsf, hydrolakes,
-  https, bing_bfp
+  gmrt, mar_grav, srtm_plus, charts, digital_coast, SLR, CoNED, CUDEM, multibeam, gebco, mgds, trackline, ehydro, ngs, hydronos, ncei_thredds, etopo, tnm, ned, ned1, emodnet, chs, hrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, buoys, earthdata, icesat, mur_sst, swot, usiei, wsf, hydrolakes, https, bing_bfp, waterservices, csb, cpt_city  
 ```
 ### Dlim Module:
 ```
-dlim (2.0.4): DataLists IMproved; Process and generate datalists
+dlim (2.3.6): DataLists IMproved; Process and generate datalists
 
-usage: dlim [ -acdghijquwEJPR [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
+usage: dlim [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
 
 Options:
   -R, --region		Restrict processing to the desired REGION 
@@ -513,6 +511,15 @@ Options:
   -P, --t_srs		Set the TARGET projection. (REGION should be in target projection) 
   -D, --cache-dir	CACHE Directory for storing temp and output data.
   -Z, --z-precision	Set the target precision of dumped z values. (default is 4)
+  -A, --stack-mode	Set the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+  -T, --stack_filter	FILTER the data stack using one or multiple filters. 
+			Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)
+			The -T switch may be set multiple times to perform multiple filters.
+			Available FILTERS: blur, grdfilter, outliers, flats
+  -F, --point_filter	FILTER the POINT data using one or multiple filters. 
+			Where FILTER is fltr_name[:opts] 
+			The -F switch may be set multiple times to perform multiple filters.
+			Available FILTERS: bin_z
 
   --mask		MASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata	Generate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
@@ -521,23 +528,19 @@ Options:
   --info		Generate and return an INFO dictionary of the dataset
   --weights		Output WEIGHT values along with xyz
   --uncertainties	Output UNCERTAINTY values along with xyz
+  --stack-node		Output stacked x/y data rather than pixel
   --quiet		Lower the verbosity to a quiet
 
   --modules		Display the datatype descriptions and usage
   --help		Print the usage text
   --version		Print the version information
 
-Supported datalist formats (see dlim --modules <dataset-key> for more info):
-  datalist (-1),  zip (-2),  scratch   (-3),  xyz (168),  gdal (200),  bag (201),  las (300),
-  mbs (301),  ogr (302),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),
-  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),
-  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),
-  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  emodnet (-300),  chs (-301),
-  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
+Supported datalist formats (see dlim --modules <dataset-key> for more info): 
+  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),  swot (-216),  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
 ```
 ### Waffles Module:
 ```
-waffles (2.0.4): Generate DEMs and derivatives.
+waffles (2.3.6): Generate DEMs and derivatives.
 
 usage: waffles [OPTIONS] DATALIST
 
@@ -562,33 +565,35 @@ Options:
 				e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10
 				percent of the input REGION.
   -T, --filter			FILTER the output DEM using one or multiple filters. 
-				Where FILTER is fltr_id[:fltr_val[:split_value=z]]
-				Available FILTERS:
-				1: perform a Gaussian Filter at -T1:<factor>.
-				2: use a Cosine Arch Filter at -T2:<dist(km)> search distance.
-				3: perform an Outlier Filter at -T3:<aggression<1-9>>.
+				Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)
 				The -T switch may be set multiple times to perform multiple filters.
-				Append :split_value=<num> to only filter values below z-value <num>.
-				e.g. -T1:10:split_value=0 to smooth bathymetry (z<0) using Gaussian filter
+				Append `:stacks=True` to the filter to perform the filter on the data stack instead 
+				of the final DEM.
+				Available FILTERS: blur, grdfilter, outliers, flats
   -L, --limits			LIMIT the output elevation or interpolation values, append 
 				'u<value>' to set the upper elevation limit, 
 				'l<value>' to set the lower elevation limit,
+				'n<value>' to set the count per cell limit.
 				'p<value>' to set an interpolation limit by proximity, or 
-				's<value>' to set an interpolation limit by size.
+				's<value>' to set an interpolation limit by size, or
+				'c<value>' to set an interpolation limit by nodata-size percentile.
 				e.g. -Lu0 to set all values above 0 to zero, or 
-				-Ls100 to limit interpolation to nodata zones smaller than 100 pixels.
+				-Ls100 to limit interpolation to nodata zones smaller than 100 pixels, or
+				-Ln2 to limit stacked cells to those with at least 2 contributing data records.
   -C, --clip			CLIP the output to the clip polygon -C<clip_ply.shp:invert=False>
   -K, --chunk			Generate the DEM in CHUNKs.
   -F, --format			Output grid FORMAT. [GTiff]
   -O, --output-name		BASENAME for all outputs.
   -P, --t_srs			Projection of REGION and output DEM.
   -N, --nodata			The NODATA value of output DEM.
+  -A, --stack-mode		Set the STACK MODE to 'mean', 'min', 'max' or 'supercede' (higher weighted data supercedes lower weighted data).
   -G, --wg-config		A waffles config JSON file. If supplied, will overwrite all other options.
 				Generate a waffles_config JSON file using the --config flag.
   -H, --threads			Set the number of THREADS (1). Each input region will be run in up to THREADS threads. 
   -D, --cache-dir		CACHE Directory for storing temp data.
 				Default Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session.
 				to retain the data, use the --keep-cache flag.
+  -CO, --creation-options	GDAL CREATION OPTIONS to use in raster creation.
 
   -f, --transform		Transform all data to PROJECTION value set with --t_srs/-P where applicable.
   -p, --prefix			Set BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
@@ -601,7 +606,6 @@ Options:
   -a, --archive			ARCHIVE the datalist to the given region.
   -k, --keep-cache		KEEP the cache data intact after run
   -x, --keep-auxiliary		KEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
-  -d, --supercede		higher weighted data supercedes lower weighted data.
   -s, --spatial-metadata	Generate SPATIAL-METADATA.
   -c, --continue		Don't clobber existing files.
   -q, --quiet			Lower verbosity to a quiet.
@@ -617,17 +621,10 @@ Datalists and data formats:
   `path [format weight uncertainty [name source date type resolution hdatum vdatum url]]`
 
 Supported datalist formats: 
-  datalist (-1),  zip (-2),  scratch   (-3),  xyz (168),  gdal (200),  bag (201),  las (300),
-  mbs (301),  ogr (302),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),
-  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),
-  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),
-  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  emodnet (-300),  chs (-301),
-  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
+  datalist (-1),  zip (-2),  scratch (-3),  yxz (167),  xyz (168),  gdal (200),  bag (201),  swot_pixc (202),  swot_hr_raster (203),  las (300),  mbs (301),  ogr (302),  icesat_atl (303),  https (-100),  gmrt (-101),  gebco (-102),  copernicus (-103),  fabdem (-104),  nasadem (-105),  mar_grav (-106),  srtm_plus (-107),  charts (-200),  multibeam (-201),  hydronos (-202),  ehydro (-203),  bluetopo (-204),  ngs (-205),  tides (-206),  digital_coast (-207),  ncei_thredds (-208),  tnm (-209),  CUDEM (-210),  CoNED (-211),  SLR (-212),  waterservies (-213),  icesat (-214),  ned (-215),  swot (-216),  csb (-217),  emodnet (-300),  chs (-301),  hrdem (-302),  arcticdem (-303),  vdatum (-500),  hydrolakes (-600)
 
 Modules (see waffles --modules <module-name> for more info):
-  stacks, IDW, linear, cubic, nearest, gmt-surface, gmt-triangulate, gmt-nearneighbor, mbgrid,
-  gdal-linear, gdal-nearest, gdal-average, gdal-invdst, vdatum, coastline, lakes, cudem,
-  uncertainty, scratch, flatten
+  stacks, IDW, linear, cubic, nearest, gmt-surface, gmt-triangulate, gmt-nearneighbor, mbgrid, gdal-linear, gdal-nearest, gdal-average, gdal-invdst, vdatum, coastline, lakes, cudem, uncertainty, scratch, flatten
 ```
 
 ## Code License
