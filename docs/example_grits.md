@@ -1,7 +1,7 @@
 # Automatic gridding and filtering of Multibeam data
 
 First, we use the 'multibeam' fetches module as a datalist entry in a waffles command to fetch and grid the
-multibeam data in our region, the using that result as a datalist entry in a waffles command to grid the data
+multibeam data in our region, then using that result as a datalist entry in a waffles command to grid the data
 using the 'IDW' waffles gridding module.
 
 ```
