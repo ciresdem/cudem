@@ -126,7 +126,6 @@ def _set_params(mc, mod=None, mod_name=None, mod_args={}):
     if 'kwargs' not in mc.params.keys():
         mc.params['kwargs'] = mc.__dict__.copy()
 
-
 def _set_mod_params(mc, mf=None, mod=None, mod_name=None):
     if mod is not None:
         mc.params['mod'] = mod

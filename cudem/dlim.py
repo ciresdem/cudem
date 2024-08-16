@@ -899,7 +899,10 @@ class ElevationDataset:
             )
 
     def export_xyz_as_list(self, z_only = False):
-        """return the XYZ data from the dataset as python list"""
+        """return the XYZ data from the dataset as python list
+
+        This may get very large, depending on the input data.
+        """
 
         return([xyz.z if z_only else xyz.copy() for xyz in self.xyz_yield])
             
@@ -1913,6 +1916,42 @@ class ElevationDataset:
                         yield(points)
         
         self.transformer = None
+
+    def export_data_as_pandas(self):
+        """export the point data as a pandas dataframe.
+        
+        This may get very large, depending on the input data.
+        """
+        
+        dataset = pd.DataFrame({}, columns=['x', 'y', 'z', 'weight', 'uncertainty'])
+        for points in self.yield_points():
+            try:
+                points_w = points['w']
+            except:
+                points_w = np.ones(points['z'].shape)
+
+            points_w *= self.weight if self.weight is not None else 1
+            points_w[np.isnan(points_w)] = 1
+                
+            try:
+                points_u = points['u']
+            except:
+                points_u = np.zeros(points['z'].shape)
+
+            points_u = np.sqrt(points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
+            points_u[np.isnan(points_u)] = 0
+            points_dataset = pd.DataFrame(
+                {'x': points['x'],
+                 'y': points['y'],
+                 'z': points['z'],
+                 'weight': points_w,
+                 'uncertainty': points_u,
+                },
+                columns=['x', 'y', 'z', 'weight', 'uncertainty']
+            )
+            dataset = pd.concat([dataset, points_dataset], ignore_index=True)
+
+        return(dataset)
         
     def yield_xyz(self):
         """Yield the data as xyz points
