@@ -612,6 +612,12 @@ def fetch_queue(q, c=True):
                 headers=fetch_args[3].headers
             ).fetch_ftp_file(fetch_args[1])
             fetch_args[5].append([fetch_args[0], fetch_args[1], fetch_args[2]])
+            
+            ## call the fetches callback function, does nothing
+            ## unless reset by user, must be defined with a single
+            ## argument, which is the fetch_results just populated
+            if callable(fetch_args[3].callback):
+                fetch_args[3].callback(fetch_results)
         else:
             try:
                 Fetch(
@@ -622,8 +628,14 @@ def fetch_queue(q, c=True):
                     verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                 ).fetch_file(fetch_args[1], check_size=c)
                 fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], 0]
-                fetch_args[3].callback(fetch_results)
                 fetch_args[5].append(fetch_results)
+
+                ## call the fetches callback function, does nothing
+                ## unless reset by user, must be defined with a single
+                ## argument, which is the fetch_results just populated
+                if callable(fetch_args[3].callback):
+                    fetch_args[3].callback(fetch_results)
+                    
             except Exception as e:
                 ## There was an exception in fetch_file, we'll put the request back into
                 ## the queue to attempt to try again, fetch_args[4] is the number of times
@@ -637,8 +649,14 @@ def fetch_queue(q, c=True):
                     utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
                     fetch_args[3].status = -1
                     fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], e]
-                    fetch_args[3].callback(fetch_results)
                     fetch_args[5].append(fetch_results)
+
+                    ## call the fetches callback function, does nothing
+                    ## unless reset by user, must be defined with a single
+                    ## argument, which is the fetch_results just populated
+                    if callable(fetch_args[3].callback):
+                        fetch_args[3].callback(fetch_results)
+                        
         q.task_done()
         
 class fetch_results(threading.Thread):
