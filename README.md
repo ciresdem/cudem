@@ -194,3 +194,5 @@ topography along US coasts. In Proc. US Hydro. Conf (pp. 16-19).
 
 Hare, R., Eakins, B., & Amante, C. J. (2011). Modelling bathymetric
 uncertainty. The International Hydrographic Review.
+
+### [Project Board](https://github.com/ciresdem/cudem/discussions).

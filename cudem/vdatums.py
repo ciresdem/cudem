@@ -640,7 +640,7 @@ class VerticalTransform:
                     cdn_results = [_result]
                     break
                     
-        if len(cdn_results) > 0:
+            #if len(cdn_results) > 0:
             for _result in cdn_results:
                 src_code = _result['source_crs_code']
                 dst_code = _result['target_crs_code']
@@ -682,6 +682,9 @@ class VerticalTransform:
 
                             return(_tmp_array, src_code)
 
+        ## if we make it here, this failed, most likely due to not retrieving the
+        ## proj cdn data. It will continue to loop forever, as the output epsg
+        ## is the same as the input :(
         utils.echo_error_msg('failed to locate transformation for {}'.format(epsg))
         return(np.zeros( (self.ycount, self.xcount) ), epsg)
 
