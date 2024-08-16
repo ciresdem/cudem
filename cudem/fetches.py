@@ -76,13 +76,14 @@ except ImportError:
 ## Some servers don't like custom user agents...
 #r_headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
 r_headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
+
+## Namespaces for vaious XML files
 namespaces = {
     'gmd': 'http://www.isotc211.org/2005/gmd', 
     'gmi': 'http://www.isotc211.org/2005/gmi', 
     'gco': 'http://www.isotc211.org/2005/gco',
     'gml': 'http://www.isotc211.org/2005/gml',
 }
-
 thredds_namespaces = {
     'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
 }
@@ -95,10 +96,13 @@ def fetches_callback(r):
     pass
 
 def urlencode(opts):
+    """encode `opts` for use in a URL"""
+    
     try:
         url_enc = urllib.urlencode(opts)
     except:
         url_enc = urllib.parse.urlencode(opts)
+        
     return(url_enc)
 
 def xml2py(node):
@@ -140,7 +144,7 @@ def xml2py(node):
     return(texts)
 
 def get_credentials(url, authenticator_url = 'https://urs.earthdata.nasa.gov'):
-    """Get user credentials from .netrc or prompt for input."""
+    """Get user credentials from .netrc or prompt for input. Used for EarthData."""
     
     credentials = None
     errprefix = ''
@@ -286,6 +290,8 @@ class iso_xml:
         return(dd)
 
 class Fetch:
+    """Fetch class to fetch ftp/http data files"""
+    
     def __init__(self, url=None, callback=fetches_callback, verbose=None, headers=r_headers, verify=True):
         self.url = url
         self.callback = callback
@@ -372,7 +378,7 @@ class Fetch:
                 read_timeout=read_timeout+50 if read_timeout is not None else None,
                 tries=tries-1
             )
-        
+            
         status = 0
         dst_fn_size = 0
         if 'Range' in self.headers:
@@ -719,14 +725,15 @@ class FetchModule:
     
     def __init__(self, src_region = None, callback = fetches_callback, verbose = True,
                  outdir = None, name = 'fetches', params = {}):
-        self.region = src_region
-        self.callback = callback
-        self.verbose = verbose
-        self.outdir = outdir
-        self.params = params
-        self.status = 0
-        self.results = []
-        self.name = name
+        self.region = src_region # fetching region
+        self.callback = callback # callback, run after a fetch attempt
+        self.verbose = verbose # verbosity
+        self.outdir = outdir # the directoy to place the fetched data
+        self.params = params # FetchesFactory parameters
+        self.status = 0 # fetching status
+        self.results = [] # fetching results
+        self.name = name # the name of the fetch module
+        
         ## some servers don't like us, or any 'bot' at all, so let's pretend we're
         ## just a Mozilla user on Linux.
         #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
@@ -756,7 +763,7 @@ class FetchModule:
 
     def fetch(self, entry, check_size = True, retries=5):
         """given the `entry` obtained in the sub-class, fetch that entry.
-        status should be 0 if successful, -1 otherwise.
+        status should be 0 if successful, -1 or return-code otherwise.
         """
 
         _results = []
@@ -807,10 +814,10 @@ https://www.gmrt.org
     
     def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', want_swath = False, **kwargs):
         super().__init__(name='gmrt', **kwargs) 
-        self.res = res
-        self.fmt = fmt
-        self.want_swath = want_swath
-        self.layer = 'topo' if (layer != 'topo' and layer != 'topo-mask') else layer
+        self.res = res # GMRT resolution
+        self.fmt = fmt # GMRT format
+        self.want_swath = want_swath # fetch the swath vector along with the data, used to clip non-swath data
+        self.layer = 'topo' if (layer != 'topo' and layer != 'topo-mask') else layer # GMRT layer
 
         ## The various urls to use for GMRT
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
@@ -866,7 +873,7 @@ https://www.gmrt.org
                 self.results.append([url, outf, 'gmrt'])
 
                 ## if want_swath is True, we will download the swath polygons so that we can
-                ## clip the data to that in dlim.
+                ## clip the data to that in dlim or elsewhere.
                 if self.want_swath:
                     self.results.append([self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt'])
                 
@@ -910,9 +917,9 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
             }
         }
 
-        self.want_ice = utils.str_or(want_ice, 'geotiff') if want_ice else False
-        self.want_sub_ice = utils.str_or(want_sub_ice, 'geotiff') if want_sub_ice else False
-        self.want_tid = utils.str_or(want_tid, 'geotiff') if want_tid else False
+        self.want_ice = utils.str_or(want_ice, 'geotiff') if want_ice else False # ice surface
+        self.want_sub_ice = utils.str_or(want_sub_ice, 'geotiff') if want_sub_ice else False # sub-ice surface
+        self.want_tid = utils.str_or(want_tid, 'geotiff') if want_tid else False # source id grid
 
         ## see tid_dic for a list of the tid values/descriptions.
         exclude_tid = utils.str_or(exclude_tid)
@@ -923,8 +930,7 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
                 
         try:
             self.exclude_tid.remove(None)
-        except:
-            pass
+        except: pass
 
         ## this dictionary holds the TID values as the keys, and the values are a list of [description, weight]
         ## the weights are used in dlim/waffles for processing different TID values appropriately.
@@ -950,6 +956,7 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
             72:	['Steering points - depth value used to constrain the grid in areas of poor data coverage', .1]
         }
 
+        ## set the fetching region, restrict by z-region if desired.
         self.gebco_region = self.region.copy()
         self.gebco_region.zmax = utils.float_or(upper_limit)
         self.gebco_region.zmin = utils.float_or(lower_limit)
@@ -977,7 +984,12 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
 class ETOPO(FetchModule):
     """Fetch ETOPO 2022 data. 
 
-The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. The model is designed to support tsunami forecasting, modeling, and warning, as well as ocean circulation modeling and Earth visualization.  The current version, ETOPO 2022, is available in Ice Surface and Bedrock versions that portray either the top layer of the ice sheets covering Greenland and Antarctica, or the bedrock below. For more information, email dem.info@noaa.gov
+The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global 
+datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. 
+The model is designed to support tsunami forecasting, modeling, and warning, as well as ocean circulation 
+modeling and Earth visualization.  The current version, ETOPO 2022, is available in Ice Surface and Bedrock 
+versions that portray either the top layer of the ice sheets covering Greenland and Antarctica, or the bedrock below. 
+For more information, email dem.info@noaa.gov
 
 We have bedrock or surface in both geotiff and netcdf. Use `datatype` to specify which to fetch.
 datatype options are:
@@ -990,8 +1002,10 @@ https://www.ncei.noaa.gov/products/etopo-global-relief-model
 < etopo:datatype=None >"""
     
     def __init__(self, where='', datatype=None, **kwargs):
-        super().__init__(name='etopo', **kwargs)
-
+        super().__init__(name='etopo', **kwargs)        
+        self.where = [where] if len(where) > 0 else []
+        self.datatype = datatype
+        
         ## The various etopo URLs.
         self.etopo_urls = {
             'netcdf': {
@@ -1016,8 +1030,6 @@ https://www.ncei.noaa.gov/products/etopo-global-relief-model
             },
         }
         self.etopo_aux_url = 'https://data.noaa.gov/metaview/page?xml=NOAA/NESDIS/NGDC/MGG/DEM//iso/xml/etopo_2022.xml&view=getDataView&header=none'
-        self.where = [where] if len(where) > 0 else []
-        self.datatype = datatype        
 
         ## for dlim, data_format is -2 for zip files.
         self.data_format = -2
@@ -1050,7 +1062,6 @@ https://www.ncei.noaa.gov/products/etopo-global-relief-model
         for dtype in self.etopo_urls[res].keys():
             this_url = self.etopo_urls[res][dtype]
             netcdf_url = self.etopo_urls['netcdf'][dtype]
-
             page = Fetch(this_url, verbose=True).fetch_html()
             rows = page.xpath('//a[contains(@href, ".tif")]/@href')
             with tqdm(
@@ -1114,7 +1125,6 @@ https://www.ncei.noaa.gov/products/etopo-global-relief-model
                                 }
                             )
 
-
         self.FRED._add_surveys(surveys)
         self.FRED._close_ds()
 
@@ -1152,6 +1162,8 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='copernicus', **kwargs)
+        self.where = [where] if len(where) > 0 else []
+        self.datatype = datatype        
 
         ## various Copernicus URLs
         self.cop30_rurl = 'https://opentopography.s3.sdsc.edu/minio/raster/COP30/COP30_hh/'
@@ -1160,8 +1172,6 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         self.cop_10_url = 'https://gisco-services.ec.europa.eu/dem/copernicus/outD/'
         self.cop_10_aux_url = 'https://gisco-services.ec.europa.eu/dem/copernicus/outA/'
         self.cop_10_web = 'https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation'
-        self.where = [where] if len(where) > 0 else []
-        self.datatype = datatype        
 
         ## for dlim, data_format of -2 is zipfile
         self.data_format = -2
@@ -1315,14 +1325,17 @@ https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
         self._fabdem_footprints_url = 'https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn/FABDEM_v1-2_tiles.geojson'
         self._fabdem_info_url = 'https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn'
         self._fabdem_data_url = 'https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn'
-        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-                         'referer': self._fabdem_info_url }
 
         ## for dlim, data_format of -2 is zipfile
         self.data_format = -2
         self.src_srs = 'epsg:4326+3855'
+
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                         'referer': self._fabdem_info_url }
         
     def run(self):
+        """run the FABDEM fetches module"""
+        
         ## use the fabdem footprints vector to find the files to fetch
         v_json = os.path.basename(self._fabdem_footprints_url)
         try:
@@ -1356,9 +1369,11 @@ class FABDEM_FRED(FetchModule):
     
     def __init__(self, where='', **kwargs):
         super().__init__(name='fabdem', **kwargs)
-        self._fabdem_footprints_url = 'https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn/FABDEM_v1-2_tiles.geojson'
-        self._fabdem_info_url = 'https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn'
         self.where = [where] if len(where) > 0 else []
+
+        ## The various FABDEM urls
+        self._fabdem_footprints_url = 'https://data.bris.ac.uk/datasets/s5hqmjcdj8yo2ibzi9b4ew3sn/FABDEM_v1-2_tiles.geojson'
+        self._fabdem_info_url = 'https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn'        
 
         ## for dlim, data_format of -2 is zipfile
         self.data_format = -2
@@ -1406,6 +1421,8 @@ class FABDEM_FRED(FetchModule):
         self.FRED._close_ds()
 
     def run(self):
+        """Run the FABDEM fetches module"""
+        
         for surv in FRED._filter_FRED(self):
             v_json = os.path.basename(self._fabdem_footprints_url)
             status = Fetch(surv['IndexLink']).fetch_file(v_json, verbose=self.verbose)
@@ -1424,6 +1441,7 @@ class FABDEM_FRED(FetchModule):
                     if geom.Intersects(self.region.export_as_geom()):
                         zipfile_name = feature.GetField('zipfile_name')
                         self.results.append(['/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster'])
+                        
             utils.remove_glob(v_zip)
 
 ## NASADEM
@@ -1443,17 +1461,13 @@ This module fetches NASADEM via OpenTopography. You can also use the EarthData m
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='nasadem', **kwargs)
-
+        self.where = [where] if len(where) > 0 else []
+        self.datatype = datatype
+        
         ## various NASADEM urls in opentopography
         self.nasadem_rurl = 'https://opentopography.s3.sdsc.edu/minio/raster/NASADEM/NASADEM_be/'
         self.nasadem_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/NASADEM/NASADEM_be/'
         self.nasadem_vrt_url = 'https://opentopography.s3.sdsc.edu/minio/download/raster/NASADEM/NASADEM_be.vrt?token='
-        self.where = [where] if len(where) > 0 else []
-        self.datatype = datatype
-
-        ## We need an opentopography referer here.
-        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-                         'referer': 'https://opentopography.s3.sdsc.edu/minio/raster/NASADEM/NASADEM_be/' }
 
         ## for dlim, data_format of 200 is a GDAL file.
         self.data_format = 200
@@ -1462,6 +1476,10 @@ This module fetches NASADEM via OpenTopography. You can also use the EarthData m
         ## NASADEM is in FRED, so set that up here.
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
+
+        ## We need an opentopography referer here.
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+                         'referer': 'https://opentopography.s3.sdsc.edu/minio/raster/NASADEM/NASADEM_be/' }
         
     def update_if_not_in_FRED(self):
         """update the fetches module in FRED if it's not already in there."""
@@ -1546,16 +1564,18 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
 < mar_grav:upper_limit=None:lower_limit=None:raster=False:mag=1 >"""
     
     def __init__(self, mag=1, upper_limit=None, lower_limit=None, raster=False, **kwargs):
-        super().__init__(name='mar_grav', **kwargs) 
-        self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
+        super().__init__(name='mar_grav', **kwargs)
         self.mag = mag if mag == 1 else 0.1
+        self.raster = raster # if True, grid the data and return as a raster in dlim
+        
+        ## The mar_grav URl
+        self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
 
-        ## set up the region
+        ## set up the region, restrict by z-region if desired
         self.grav_region = self.region.copy()
         self.grav_region._wgs_extremes(just_below=True)
         self.grav_region.zmax = utils.float_or(upper_limit)
         self.grav_region.zmin = utils.float_or(lower_limit)
-        self.raster = raster
 
         ## for dlim, data_format of 168 is xyz-file, skip the first line and reset
         ## the x values from 360 to 180
@@ -1594,7 +1614,9 @@ https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
 """
     
     def __init__(self, **kwargs):
-        super().__init__(name='srtm_plus', **kwargs) 
+        super().__init__(name='srtm_plus', **kwargs)
+
+        ## The srtm_plus URL
         self._srtm_url = 'https://topex.ucsd.edu/cgi-bin/get_srtm15.cgi'
 
         ## for dlim, data_format of 168 is xyz-file, skip the first line
@@ -1630,12 +1652,12 @@ https://www.charts.noaa.gov/
     
     def __init__(self, where = '1=1', want_rnc = False, **kwargs):
         super().__init__(name='charts', **kwargs)
+        self.where = where
+        self.want_rnc = want_rnc
 
         ## charts URLs
         self._charts_url = 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/MapServer'
         self._charts_query_url = '{0}/queryDatasets?'.format(self._charts_url)
-        self.where = where
-        self.want_rnc = want_rnc
         
     def run(self):
         if self.region is None:
@@ -1655,7 +1677,7 @@ https://www.charts.noaa.gov/
             _req_json = _req.json()
             print(len(_req_json['charts']))
             print(_req_json['charts'][0])
-            #print(_req.text)
+            print(_req.text)
             
 class NauticalCharts(FetchModule):
     """NOAA Nautical CHARTS
@@ -1670,7 +1692,9 @@ https://www.charts.noaa.gov/
 
     def __init__(self, where='', want_rnc = False, **kwargs):
         super().__init__(name='charts', **kwargs)
-
+        self.where = [where] if len(where) > 0 else []
+        self.want_rnc = want_rnc
+        
         ## various charts URLs
         self._charts_url = 'https://www.charts.noaa.gov/'
         self._enc_data_catalog = 'https://charts.noaa.gov/ENCs/ENCProdCat_19115.xml'
@@ -1678,12 +1702,8 @@ https://www.charts.noaa.gov/
         self._ienc_charts_data_catalog = 'https://ienccloud.us/ienc/products/catalog/IENCU37ProductsCatalog.xml'
         self._ienc_buoys_data_catalog = 'https://ienccloud.us/ienc/products/catalog/IENCBuoyProductsCatalog.xml'
         self._urls = [self._enc_data_catalog, self._rnc_data_catalog]
-        
-        self._outdir = os.path.join(os.getcwd(), 'charts')
         self._dt_xml = {'ENC':self._enc_data_catalog, 'RNC':self._rnc_data_catalog}
-        self.where = [where] if len(where) > 0 else []
-        self.want_rnc = want_rnc
-
+        
         ## for dlim, ENC data comes as .000 files, parse with OGR
         self.v_datum = 'mllw'
         #self.data_format = 302
@@ -1759,7 +1779,6 @@ https://www.charts.noaa.gov/
         Search for data in the reference vector file (FRED).
         """
 
-        #if self.datatype is not None:
         if self.want_rnc:
             self.where.append("DataType = 'RNC'")
         else:
@@ -1783,14 +1802,18 @@ class MBDB(FetchModule):
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='multibeam', **kwargs)
+        self.where = where
+        
+        ## The various MBDB URLs
         #self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam_dynamic/MapServer/0'
         #self._mb_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/multibeam/MapServer/0'
         #self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
         self._mb_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/multibeam_footprints/MapServer/0'
         self._mb_query_url = '{0}/query?'.format(self._mb_dynamic_url)
-        self.where = where
         
     def run(self):
+        """Run the MBDB fetching module"""
+        
         if self.region is None:
             return([])
 
@@ -1805,11 +1828,8 @@ class MBDB(FetchModule):
         }
         _req = Fetch(self._mb_query_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            #print(_req.text)
-            #print(_req.url)
             features = _req.json()
             for feature in features['features']:
-                #pass
                 print(feature)
 
 class Multibeam(FetchModule):
@@ -1826,23 +1846,12 @@ https://data.ngdc.noaa.gov/platforms/
 <exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, using a '/' as a seperator.
 
 < multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >"""
-
     
     def __init__(
-            self, processed=True, survey_id=None, exclude_survey_id=None, ship_id=None, exclude_ship_id=None, min_year=None, max_year=None,
-            exclude=None, make_datalist=False, **kwargs
+            self, processed = True, survey_id = None, exclude_survey_id = None, ship_id = None, exclude_ship_id = None,
+            min_year = None, max_year = None, exclude = None, make_datalist = False, **kwargs
     ):
         super().__init__(name='multibeam', **kwargs)
-
-        ## various multibeam URLs
-        self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
-        self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
-        self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
-        self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
-        self._mb_html = "https://www.ngdc.noaa.gov/"
-        #self._outdir = os.path.join(os.getcwd(), 'mb')
-        self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]
-        
         self.processed_p = processed
         self.min_year = utils.int_or(min_year)
         self.max_year = utils.int_or(max_year)
@@ -1852,6 +1861,14 @@ https://data.ngdc.noaa.gov/platforms/
         self.exclude_ship_id = exclude_ship_id
         self.exclude = exclude
         self.make_datalist = make_datalist
+        
+        ## various multibeam URLs
+        self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
+        self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
+        self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
+        self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
+        self._mb_html = "https://www.ngdc.noaa.gov/"
+        self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]        
 
         ## for dlim, data_format of 301 is multibeam data parsed with MBSystem.
         self.data_format = 301
@@ -1888,6 +1905,8 @@ https://data.ngdc.noaa.gov/platforms/
                         return(til[1].split()[-1].split('%')[0])
                     
     def run(self):
+        """Run the multibeam fetches module"""
+        
         these_surveys = {}
         these_versions = {}
         if self.region is None:
@@ -2045,21 +2064,23 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
     
     def __init__(self, where='1=1', layer=1, datatype=None, index=False, **kwargs):
         super().__init__(name='hydronos', **kwargs)
+        self.where = where
+        self.datatype = datatype
+        self.index = index
 
         ## various NOS URLs
         self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
         self._nos_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro/MapServer'
         self._nos_data_url = 'https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/'
         self._nos_query_url = '{0}/{1}/query?'.format(self._nos_dynamic_url, layer)
-        self.where = where
-        self.datatype = datatype
-        self.index = index
 
         ## for dlim
         self.data_format = None # bag/xyz data are different, reset later
         self.src_srs = None # bag/xyz data are different, reset later
         
     def run(self):
+        """Run the hydronos fetches module"""
+        
         if self.region is None:
             return([])
 
@@ -2105,15 +2126,14 @@ class CSB(FetchModule):
     
     def __init__(self, where='1=1', layer=1, index=False, **kwargs):
         super().__init__(name='csb', **kwargs)
+        self.where = where
+        self.index = index
 
         ## various CSB URLs
         self._csb_data_url = 'https://noaa-dcdb-bathymetry-pds.s3.amazonaws.com'
         self._csb_map_server = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/csb/MapServer'
         self._csb_query_url = '{0}/{1}/query?'.format(self._csb_map_server, layer)
         
-        self.where = where
-        self.index = index
-
         ## for dlim
         #self.data_format = None
         self.src_srs = None
@@ -2124,6 +2144,8 @@ class CSB(FetchModule):
         #self.s3._request_signer.sign = (lambda *args, **kwargs: None)
         
     def run(self):
+        """Run the CSB fetches module"""
+        
         if self.region is None:
             return([])
 
@@ -2167,13 +2189,17 @@ class NSW_TB(FetchModule):
     
     def __init__(self, where='1=1', layer=2, index=False, **kwargs):
         super().__init__(name='csb', **kwargs)
-        self._nsw_map_server = 'https://mapprod2.environment.nsw.gov.au/arcgis/rest/services/Coastal_Marine/NSW_Marine_Lidar_Bathymetry_Data_2018/MapServer'
-        self._nsw_query_url = '{0}/{1}/query?'.format(self._nsw_map_server, layer)
         self.where = where
         self.index = index
         self.src_srs = None
+
+        ## The various NSW_TB URLs
+        self._nsw_map_server = 'https://mapprod2.environment.nsw.gov.au/arcgis/rest/services/Coastal_Marine/NSW_Marine_Lidar_Bathymetry_Data_2018/MapServer'
+        self._nsw_query_url = '{0}/{1}/query?'.format(self._nsw_map_server, layer)
         
     def run(self):
+        """Run the NSW_TB fetching module"""
+        
         if self.region is None:
             return([])
 
@@ -2235,15 +2261,21 @@ Fields:
     
     def __init__(self, where='1=1', layer=1, index=False, **kwargs):
         super().__init__(name='hydronos', **kwargs)
+        self.where = where
+        self.index = index
+        
+        ## The various DEMMosaic URLs
         self._dem_mosaic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_all/ImageServer'
         #self._dem_mosaic_query_url = '{0}/{1}/query?'.format(self._dem_mosaic_url, layer)
         self._dem_mosaic_query_url = '{0}/query?'.format(self._dem_mosaic_url)
-        self.where = where
-        self.index = index
+        
+        ## for dlim
         self.data_format = None # bag/xyz data are different, reset later
         self.src_srs = None # dems vary, set later
         
     def run(self):
+        """Run the DEMMosaic fetching module"""
+        
         if self.region is None:
             return([])
 
@@ -2305,11 +2337,15 @@ http://www.ngdc.noaa.gov/trackline/
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='trackline', **kwargs)
-        self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_combined_dynamic/MapServer/1'
-        self._trackline_query_url = '{0}/query?'.format(self._trackline_url)
         self.where = where
         
+        ## The various trackline URLs
+        self._trackline_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/trackline_combined_dynamic/MapServer/1'
+        self._trackline_query_url = '{0}/query?'.format(self._trackline_url)
+        
     def run(self):
+        """Run the trackline fetching module"""
+        
         if self.region is None:
             return([])
 
@@ -2378,14 +2414,14 @@ Fields:
 
     def __init__(self, where='1=1', inc=None, survey_name=None, **kwargs):
         super().__init__(name='ehydro', **kwargs)
+        self.where = where
+        self.survey_name = survey_name
+        self.inc = utils.str2inc(inc)
 
         ## Various EHydro URLs
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
         self._ehydro_api_url = 'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0'
         self._ehydro_query_url = '{0}/query?'.format(self._ehydro_api_url)
-        self.where = where
-        self.survey_name = survey_name
-        self.inc = utils.str2inc(inc)
 
     def run(self):
         '''Run the eHydro fetching module'''
@@ -2402,10 +2438,10 @@ Fields:
                 for feature in features['features']:
                     fetch_fn = feature['attributes']['sourcedatalocation']
                     #survey_type = feature['attributes']['surveytype']
-                    #utils.echo_msg(survey_type)
                     if self.survey_name is not None:
                         if self.survey_name in fetch_fn:
                             self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                            
                     else:
                         self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
@@ -2504,13 +2540,15 @@ data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Anci
 < mgds:data_type=Bathymetry >"""
     
     def __init__(self, data_type='Bathymetry', **kwargs):
-        super().__init__(name='mgds', **kwargs) 
+        super().__init__(name='mgds', **kwargs)
+        self.data_type = data_type.replace(',', ':')
+        
+        ## The various MGDS URLs
         self._mgds_file_url = "https://www.marine-geo.org/services/FileServer?"
         self._mgds_filedownload_url = "http://www.marine-geo.org/services/FileDownloadServer?"
         self._mgds_filemetadata_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
         self._mgds_archive_url = "http://www.marine-geo.org/services/FileDownloadServer/metadata?"
         self._mgds_search_url = "http://www.marine-geo.org/services/search/datasets??"
-        self.data_type = data_type.replace(',', ':')
         
     def run(self):
         '''Run the MGDS fetching module'''
@@ -2550,12 +2588,14 @@ http://geodesy.noaa.gov/
     
     def __init__(self, datum='geoidHt', **kwargs):
         super().__init__(name='ngs', **kwargs)
-        self._ngs_search_url = 'http://geodesy.noaa.gov/api/nde/bounds?'
         if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
             utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
             self.datum = 'geoidHt'
         else:
             self.datum = datum
+
+        ## The various NGS URLs
+        self._ngs_search_url = 'http://geodesy.noaa.gov/api/nde/bounds?'
 
     def run(self, csv=False):
         """Run the NGS (monuments) fetching module."""
@@ -2565,7 +2605,6 @@ http://geodesy.noaa.gov/
         
         _data = {'maxlon':self.region.xmax, 'minlon':self.region.xmin,
                  'maxlat':self.region.ymax, 'minlat':self.region.ymin}
-
         _req = Fetch(self._ngs_search_url).fetch_req(params=_data)
         if _req is not None:
             self.results.append([_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'])
@@ -2614,20 +2653,21 @@ Fields:
 https://tidesandcurrents.noaa.gov/
 
 < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""
-
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
         super().__init__(name='tides', **kwargs)
-        #self._stations_api_url = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
-        #self._stations_api_url = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'
-        self._stations_api_url = 'https://mapservices.weather.noaa.gov/static/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
         self.s_datum = s_datum
         self.t_datum = t_datum
         self.units = units
         self.station_id = station_id
         
+        ## Various TIDES URLs
+        self._stations_api_url_rest = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+        self._stations_api_url_tnc = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'
+        self._stations_api_url = 'https://mapservices.weather.noaa.gov/static/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
+        
     def run(self):
-        '''Run the TIDES fetching module'''
+        """Run the TIDES fetching module"""
         
         if self.region is None:
             return([])
@@ -2657,8 +2697,10 @@ https://waterservices.usgs.gov/
     
     def __init__(self, printout = False, **kwargs):
         super().__init__(name='waterservices', **kwargs)
-        self._water_services_api_url = 'https://waterservices.usgs.gov/nwis/iv/?'
         self.printout = printout
+        
+        ## The various waterservices URLs
+        self._water_services_api_url = 'https://waterservices.usgs.gov/nwis/iv/?'
         
     def run(self):
         '''Run the WATERSERVICES fetching module'''
@@ -2716,7 +2758,8 @@ https://www.ndbc.noaa.gov
     
     def __init__(self, buoy_id=None, **kwargs):
         super().__init__(name='buoys', **kwargs)
-
+        self.buoy_id = buoy_id
+        
         ## various buoy URLs
         self._ndbc_url = 'https://www.ndbc.noaa.gov'
         self._buoy_box_search_url = 'https://www.ndbc.noaa.gov/box_search.php?'
@@ -2724,7 +2767,6 @@ https://www.ndbc.noaa.gov
         self._buoy_stations_url = 'https://www.ndbc.noaa.gov/to_station.shtml'
         self._buoy_station_kml = 'https://www.ndbc.noaa.gov/kml/marineobs_by_owner.kml'
         self._buoy_station_realtime = 'https://www.ndbc.noaa.gov/data/realtime2/'
-        self.buoy_id = buoy_id
 
     def run(self):
         '''Run the BOUYS fetching module'''
@@ -2855,10 +2897,12 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
     
     def __init__(self, where='1=1', index=False, datatype=None, **kwargs):
         super().__init__(name='digital_coast', **kwargs)
-        self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
         self.where = where
         self.index = index
         self.datatype = datatype
+    
+        ## The various DAV URLs
+        self._dav_api_url = 'https://maps.coast.noaa.gov/arcgis/rest/services/DAV/ElevationFootprints/MapServer/0/query?'
 
         ## data formats vary
         self.data_format = None
@@ -3061,18 +3105,17 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
 
     def __init__(self, where=[], want_wcs=False, datatype=None, **kwargs):
         super().__init__(name='ncei_thredds', **kwargs)
-
-        ## Various NCEI THREDDS URLs
-        self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
-        self._ngdc_url = "https://www.ngdc.noaa.gov"
-        self._urls = [self._nt_catalog, self._ngdc_url]
-        
         self.where = [where] if len(where) > 0 else []
         self.want_wcs = want_wcs
         self.datatype = datatype
         if self.datatype is not None:
             self.where.append("ID LIKE '%{}%'".format(datatype))
 
+        ## Various NCEI THREDDS URLs
+        self._nt_catalog = "https://www.ngdc.noaa.gov/thredds/catalog/demCatalog.xml"
+        self._ngdc_url = "https://www.ngdc.noaa.gov"
+        self._urls = [self._nt_catalog, self._ngdc_url]
+        
         ## ncei_thredss is in FRED, set that up here
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
@@ -3205,13 +3248,18 @@ http://tnmaccess.nationalmap.gov/
 
     def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
         super().__init__(name='tnm', **kwargs)
+        self.where = [where] if len(where) > 0 else []        
+        self.formats = formats
+        self.extents = extents
+        self.q = q
 
         ## various TNM URLs
         self._tnm_api_url = 'http://tnmaccess.nationalmap.gov/api/v1'
         self._tnm_dataset_url = 'https://tnmaccess.nationalmap.gov/api/v1/datasets?'
         self._tnm_product_url = 'https://tnmaccess.nationalmap.gov/api/v1/products?'
         self._tnm_meta_base = 'https://www.sciencebase.gov/catalog/item/'
-
+        self._urls = [self._tnm_api_url]
+        
         ## The relevant TNM datasets
         self._elev_ds = ['National Elevation Dataset (NED) 1 arc-second', 'Digital Elevation Model (DEM) 1 meter',
                          'National Elevation Dataset (NED) 1/3 arc-second', 'National Elevation Dataset (NED) 1/9 arc-second',
@@ -3222,16 +3270,9 @@ http://tnmaccess.nationalmap.gov/
                          'National Watershed Boundary Dataset (WBD)', 'USDA National Agriculture Imagery Program (NAIP)',
                          'Topobathymetric Lidar DEM', 'Topobathymetric Lidar Point Cloud']
 
-        self.where = [where] if len(where) > 0 else []        
-        self._urls = [self._tnm_api_url]
-
         ## TNM is in FRED, set that up here
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
-
-        self.formats = formats
-        self.extents = extents
-        self.q = q
 
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -3628,8 +3669,10 @@ https://open.canada.ca
     
     def __init__(self, **kwargs):
         super().__init__(name='chs', **kwargs)
+
+        ## The various CHS URLs
         self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
-        #self._chs_url = 'https://data.chs-shc.ca/geoserver/wcs?'
+        self._chs_url_geoserver = 'https://data.chs-shc.ca/geoserver/wcs?'
         self._chs_url = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?' # new
         
     def run(self):
@@ -3687,7 +3730,9 @@ https://open.canada.ca
         self._hrdem_info_url = 'https://open.canada.ca/data/en/dataset/957782bf-847c-4644-a757-e383c0057995#wb-auto-6'
 
     def run(self):
-        v_zip = os.path.join(self._outdir, 'Datasets_Footprints.zip')
+        """Run the HRDEM fetches module"""
+        
+        v_zip = os.path.join(self._outdir, 'Datasets_Footprints.zip') # use the remote footprints to discover data.
         status = Fetch(self._hrdem_footprints_url, verbose=self.verbose).fetch_ftp_file(v_zip)
         v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'])
         v_shp = None
@@ -3746,11 +3791,16 @@ https://www.pgc.umn.edu/data/arcticdem/
     
     def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='arcticdem', **kwargs)
-        self._arctic_dem_index_url = 'https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/indexes/ArcticDEM_Tile_Index_Rel7.zip'
         self.where = [where] if len(where) > 0 else []
+        
+        ## Warp the input region to 3413 for the arctic
         self.arctic_region = self.region.copy()
         self.arctic_region.warp('epsg:3413')
-        
+
+        ## The various Arctic DEM URLs
+        self._arctic_dem_index_url = 'https://data.pgc.umn.edu/elev/dem/setsm/ArcticDEM/indexes/ArcticDEM_Tile_Index_Rel7.zip'
+
+        ## Arctic DEM is in FRED, set that up here.
         self.FRED = FRED.FRED(name=self.name, verbose = self.verbose)
         self.update_if_not_in_FRED()
 
@@ -3802,8 +3852,9 @@ https://www.pgc.umn.edu/data/arcticdem/
         self.FRED._close_ds()
 
     def run(self):
+        """Run the ArcticDEM fetches module"""
+        
         #for surv in FRED._filter_FRED(self):
-
         v_zip = os.path.join(self._outdir, os.path.basename(self._arctic_dem_index_url))
         try:
             status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
@@ -3856,22 +3907,11 @@ https://wiki.openstreetmap.org/
     
     def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
         super().__init__(name='osm', **kwargs)
-
-        ## various OSM URLs
-        self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
-        self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
-        self._osm_api3 = 'https://overpass.openstreetmap.fr/api/interpreter'
-        self._osm_planet_bz2 = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
-        self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/pbf/planet-latest.osm.pbf'
-        self._osm_continents = 'https://download.geofabrik.de/'
-        
         self.q = q
         self.fmt = fmt
         self.planet = planet
         self.chunks = chunks
-
-        self.h = ''
-        
+        self.h = ''        
         if self.q == 'buildings':
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'
@@ -3882,11 +3922,22 @@ https://wiki.openstreetmap.org/
             (._;>;);
             out meta;
             '''.format('(if: length() > {})'.format(min_length) if min_length is not None else '')
-        
+            
+        ## various OSM URLs
+        self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
+        self._osm_api2 = 'https://overpass.kumi.systems/api/interpreter'
+        self._osm_api3 = 'https://overpass.openstreetmap.fr/api/interpreter'
+        self._osm_planet_bz2 = 'https://ftpmirror.your.org/pub/openstreetmap/planet/planet-latest.osm.bz2'
+        self._osm_planet = 'https://ftpmirror.your.org/pub/openstreetmap/pbf/planet-latest.osm.pbf'
+        self._osm_continents = 'https://download.geofabrik.de/'
+
+        ## Set user-agent and referer
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
                          'referer': 'https://lz4.overpass-api.de/' }
         
     def run(self):
+        """Run the OSM fetches module"""
+        
         if self.region is None:
             return([])
 
@@ -3967,12 +4018,17 @@ https://github.com/microsoft/GlobalMLBuildingFootprints
     
     def __init__(self, **kwargs):
         super().__init__(name='bingbfp', **kwargs)
+
+        ## The various BING-BFP URLs
         self._bing_bfp_csv = 'https://minedbuildings.blob.core.windows.net/global-buildings/dataset-links.csv'
-        
+
+        ## Set the user-agent and referer
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
                          'referer': 'https://lz4.overpass-api.de/' }
         
     def run(self):
+        """Run the Bing BFP fetches module"""
+        
         if self.region is None:
             return([])
 
@@ -4009,11 +4065,12 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
         if len(line_list) > 1:
             if line_list[0] not in _inf_areas.keys():
                 _inf_areas[line_list[0]] = {}
+                
             if len(line_list) > 1:
                 line_val = '.'.join(line_list[1:]).strip()
                 utils.args2dict([line_val], _inf_areas[line_list[0]])
+                
     _inf.close()
-
     _inf_areas_fmt = {}
 
     for key in _inf_areas.keys():
@@ -4031,8 +4088,8 @@ def proc_vdatum_inf(vdatum_inf, name='vdatum'):
         ymax = float(_inf_areas[key]['maxlat'])
         _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
         _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
-
-        if 'AK' in _out_key: print(_inf_areas_fmt[_out_key])
+        if 'AK' in _out_key:
+            print(_inf_areas_fmt[_out_key])
         
     return(_inf_areas_fmt)
 
@@ -4123,7 +4180,6 @@ https://cdn.proj.org
 
 < vdatum:datatype=None:gtx=False >"""
     
-
     _tidal_references = {
         1089: {'name': 'mllw',
                'description': 'Mean Lower Low Water Height',
@@ -4157,9 +4213,6 @@ https://cdn.proj.org
     def __init__(self, where=[], datatype=None, gtx=False, epsg=None, **kwargs):
         super().__init__(name='vdatum', **kwargs)
         
-        self._vdatum_data_url = 'https://vdatum.noaa.gov/download/data/'
-        self._proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
-        
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
         self._vdatums = ['TIDAL', 'CRD', 'IGLD85']
@@ -4168,9 +4221,17 @@ https://cdn.proj.org
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
         self.gtx = gtx
-        self.v_datum = 'varies'
+
+        ## The various vdatum URLs
+        self._vdatum_data_url = 'https://vdatum.noaa.gov/download/data/'
+        self._proj_vdatum_index = 'https://cdn.proj.org/files.geojson'
+
+        ## vdatums is in FRED, set that up here
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
+
+        ## for dlim
+        self.v_datum = 'varies'
         self.src_srs = 'epsg:4326'
         
     def update_if_not_in_FRED(self):
@@ -4422,9 +4483,6 @@ https://cmr.earthdata.nasa.gov
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter=None, egi=False, **kwargs):
         super().__init__(name='cmr', **kwargs)
-        self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
-        self._egi_url = 'https://n5eil02u.ecs.nsidc.org/egi/request?'
-        self._egi_zip_url = 'https://n5eil02u.ecs.nsidc.org/esir/'
         self.short_name = short_name
         self.provider = provider
         self.time_start = time_start
@@ -4433,6 +4491,12 @@ https://cmr.earthdata.nasa.gov
         self.filename_filter = filename_filter
         self.egi = egi
 
+        ## The various EarthData URLs
+        self._cmr_url = 'https://cmr.earthdata.nasa.gov/search/granules.json?'
+        self._egi_url = 'https://n5eil02u.ecs.nsidc.org/egi/request?'
+        self._egi_zip_url = 'https://n5eil02u.ecs.nsidc.org/esir/'
+
+        ## Set up the earthdata credentials, and add it to our headers
         credentials = get_credentials(None)
         self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
 
@@ -4446,6 +4510,8 @@ https://cmr.earthdata.nasa.gov
         return(in_str)
         
     def run(self):
+        """Run the earthdata fetches module"""
+        
         if self.region is None:
             return([])
 
@@ -4541,7 +4607,9 @@ you might need to `chmod 0600 ~/.netrc`
                 utils.echo_warning_msg('{} is not a valid icesat short_name, using ATL03'.format(short_name))
                 short_name = 'ATL03'
                 
-        super().__init__(short_name=short_name, egi=subset, **kwargs)   
+        super().__init__(short_name=short_name, egi=subset, **kwargs)
+
+        ## for dlim
         self.data_format = 202
         self.src_srs = 'epsg:4326+3855'
 
@@ -4660,12 +4728,16 @@ https://coast.noaa.gov/inventory/
     
     def __init__(self, where='1=1', want_geometry=False, layer=0, **kwargs):
         super().__init__(name='usiei', **kwargs)
-        self._usiei_api_url = 'https://coast.noaa.gov/arcgis/rest/services/USInteragencyElevationInventory/USIEIv2/MapServer'
-        self._usiei_query_url = '{0}/{1}/query?'.format(self._usiei_api_url, layer)
         self.where = where
         self.want_geometry = want_geometry
+
+        ## The various USIEI URLs
+        self._usiei_api_url = 'https://coast.noaa.gov/arcgis/rest/services/USInteragencyElevationInventory/USIEIv2/MapServer'
+        self._usiei_query_url = '{0}/{1}/query?'.format(self._usiei_api_url, layer)
         
     def run(self):
+        """Run the USIEI fetches module"""
+        
         if self.region is None:
             return([])
         
@@ -4701,16 +4773,18 @@ https://geoservice.dlr.de/web/services
 
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='wsf', **kwargs)
-
-        self._wsf_url = 'https://download.geoservice.dlr.de/WSF2019/files/'
         self.where = [where] if len(where) > 0 else []
         self.datatype = datatype
 
-        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }
+        ## The various WSF URLs
+        self._wsf_url = 'https://download.geoservice.dlr.de/WSF2019/files/'
 
         ## WSF is in FRED, set that up here
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
         self.update_if_not_in_FRED()
+
+        ## set user agent
+        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }
         
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -4811,13 +4885,17 @@ add globathy output with the 'want_globathy' flag set to True
     def __init__(self, where='1=1', want_globathy=False, **kwargs):
         super().__init__(name='hydrolakes', **kwargs)
         self.want_globathy = want_globathy
+        self.where = [where] if len(where) > 0 else []
+        
+        ## The various hydrolakes/globathy URLs
         self._hydrolakes_prods = 'https://www.hydrosheds.org/products/hydrolakes'
         self._hydrolakes_poly_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip'
         self._hydrolakes_gdb_zip = 'https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_gdb.zip'
         self._globathy_url = 'https://springernature.figshare.com/ndownloader/files/28919991'
-        self.where = [where] if len(where) > 0 else []
 
     def run(self):
+        """Run the hydrolakes URLs"""
+        
         self.results.append(
             [self._hydrolakes_poly_zip, self._hydrolakes_poly_zip.split('/')[-1], 'hydrolakes']
         )
@@ -4849,12 +4927,18 @@ Fetch various CPT files for DEM hillshades, etc.
     def __init__(self, q = None, **kwargs):
         super().__init__(name='cpt_city', **kwargs)
         self.q = q
+
+        ## The various cpt-city URLs
         self.cpt_pub_url = 'http://soliton.vm.bytemark.co.uk/pub/'
         self.cpt_pkg_url = self.cpt_pub_url + 'cpt-city/pkg/'
 
     def run(self):
+        """Run the cpt-city fetches module"""
+
+        ## some special imports for cpt-city
         import zipfile
         from io import BytesIO
+        
         cpt_xml = iso_xml(self.cpt_pkg_url + "package.xml")
         cpt_url_bn = cpt_xml.xml_doc.find('cpt').text
         cpt_zip = requests.get(self.cpt_pkg_url + cpt_url_bn)
@@ -4879,11 +4963,12 @@ class HttpDataset(FetchModule):
 
     def run(self):
         self.results.append([self.params['mod'], os.path.basename(self.params['mod']), 'https'])
-        return(self)
         
 ## Fetches Module Parser
 class FetchesFactory(factory.CUDEMFactory):
-    """Acquire a fetches module."""
+    """Acquire a fetches module. Add a new fetches module here to expose it in the CLI or API via FetchesFactory.
+    
+    Use the Factory in python by calling: FetchesFactory()"""
     
     _modules = {
         'gmrt': {'call': GMRT},
