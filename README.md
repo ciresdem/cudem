@@ -113,6 +113,14 @@ between adjacent DEM tiles.
 | grits | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
+# Usage Examples
+
+- [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
+- [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
+- [Generate a DEM and Uncertainty grid of The Bahamas](/docs/example_uncertainty.md)
+- [Filter Multibeam data](/docs/example_grits.md)
+
+
 # Additional Information
 
 The CUDEM code repository is frequently updated, and code syntax is
@@ -128,13 +136,6 @@ For additional questions, please contact:
 [Matthew.Love@noaa.gov](mailto:Matthew.Love@noaa.gov)
 
 [Christopher.Amante@noaa.gov](mailto:Christopher.Amante@noaa.gov)
-
-## Usage Examples
-
-- [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
-- [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
-- [Generate a DEM and Uncertainty grid of The Bahamas](/docs/example_uncertainty.md)
-- [Filter Multibeam data](/docs/example_grits.md)
 
 ## License
 
