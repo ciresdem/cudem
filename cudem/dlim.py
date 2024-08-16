@@ -191,6 +191,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
         utils.echo_error_msg('could not initialize data, {}: {}'.format(data_list, e))
         return(None)
 
+## TODO: move pointfilter/binz/etc to own file
 class PointFilter:
     def __init__(self, points = None, params = {}, **kwargs):
         self.points = points
@@ -217,6 +218,7 @@ class PointFilter:
 
             return(epsg)
 
+## Adapted from CShelph
 class BinZ(PointFilter):
     def __init__(self, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None, **kwargs):
         super().__init__(**kwargs)
@@ -277,7 +279,6 @@ class BinZ(PointFilter):
         # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
         #count_threshold = np.percentile(binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
         count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), self.percentile)
-        #utils.echo_msg(count_threshold)
         # Loop through groups and return average sea height
         for k,v in data_groups.items():
             # Create new dataframe based on occurance of photons per height bin
@@ -291,20 +292,9 @@ class BinZ(PointFilter):
 
             # Set threshold of photon counts per bin
             if new_df.iloc[largest_h_bin]['y'] >= count_threshold:
-
                 [bin_lat.append(x) for x in v.loc[v['z_bins']==largest_h, 'y']]
                 [bin_lon.append(x) for x in v.loc[v['z_bins']==largest_h, 'x']]
-                [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]
-                
-                # # Calculate the median value of all values within this bin
-                # lat_bin_sea_median = v.loc[v['z_bins']==largest_h, 'z'].median()
-                # lat_bin_median = v.loc[v['z_bins']==largest_h, 'y'].median()
-                # lon_bin_median = v.loc[v['z_bins']==largest_h, 'x'].median()
-
-                # # Append to sea height list
-                # bin_height.append(lat_bin_bin_median)
-                # bin_lat.append(lat_bin_median)
-                # bin_lon.append(lon_bin_median)
+                [bin_height.append(x) for x in v.loc[v['z_bins']==largest_h, 'z']]                
                 del new_df
             else:
                 del new_df
@@ -381,8 +371,7 @@ class PointFilterFactory(factory.CUDEMFactory):
         super().__init__(**kwargs)
     
 class INF:
-    """INF Files contain information about datasets
-    """
+    """INF Files contain information about datasets"""
     
     def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
                  fmt = None, src_srs = None):
@@ -654,18 +643,8 @@ class ElevationDataset:
             self.stack_fltrs = [self.stack_fltrs]
 
         if isinstance(self.pnt_fltrs, str):
-            #self.pnt_fltrs = [self.pnt_fltrs]
             self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
             
-        # if isinstance(self.fltrs, list):
-        #     for f in self.fltrs:
-        #         if f.split(':')[0] in grits.GritsFactory()._modules.keys():
-        #             self.stack_filters.append(f)
-        #         elif f.split(':')[0] in self.dlim_filters:
-        #             self.point_filters.append(f)            
-        # else:
-        #     self.fltrs = []    
-
         return(self)
     
     def generate_inf(self):
@@ -1809,20 +1788,9 @@ class ElevationDataset:
         for f in self.stack_fltrs:
             grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
             if grits_filter is not None:
-                #if 'stacks' in grits_filter.kwargs.keys():
-                #if grits_filter.kwargs['stacks']:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
             
-        # if isinstance(self.fltrs, list):
-        #     for f in self.fltrs:
-        #         grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
-        #         if grits_filter is not None:
-        #             if 'stacks' in grits_filter.kwargs.keys():
-        #                 if grits_filter.kwargs['stacks']:
-        #                     grits_filter()
-        #                     os.replace(grits_filter.dst_dem, out_file)
-        
         return(out_file)        
     
     def stacks_yield_xyz(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
@@ -1933,34 +1901,13 @@ class ElevationDataset:
                             points =  points[(points['z'] < xyz_region.zmax)]
 
                 if len(points) > 0:
-
                     ## apply any dlim filters to the points
-                    #if isinstance(self.fltrs, list):
-                    #for f in self.fltrs:
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
                             #utils.echo_msg(f)
                             point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
                             if point_filter is not None:
                                 points = point_filter()
-
-                    # for f in self.pnt_fltrs:
-                    #     opts = f.split(':')
-                    #     if len(opts) > 1:
-                    #         fltr_args = utils.args2dict(list(opts[1:]), {})
-                    #         fltr_args_1 = {}
-                    #         for k in fltr_args.keys():
-                    #             if k in ['y_res', 'z_res', 'percentile', 'z_max', 'z_min']:
-                    #                 arg_val = utils.float_or(fltr_args[k])
-                    #                 if arg_val is not None:
-                    #                     fltr_args_1[k] = arg_val
-                    #     else:
-                    #         fltr_args_1 = {}            
-
-                    #     ## bin-filter the incoming points
-                    #     b_points = self.bin_z_points(points, **fltr_args_1)
-                    #     if b_points is not None:
-                    #         points = b_points
 
                     if len(points) > 0:
                         yield(points)
@@ -4895,444 +4842,6 @@ class IceSatFetcher(Fetcher):
                                 src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
             yield(sub_ds)
-
-        
-# class _IceSatFetcher(Fetcher):
-#     """IceSat data from NASA
-
-#     See `fetches --modules icesat` for fetching parameters
-
-#     -----------
-#     Parameters:
-    
-#     want_topo (bool): extract topography
-#     want_bathy (bool): extract bathymetry
-#     bathy_thresh (int): bathymetry extraction threshhold.
-#     topo_thresh (int): topography extraction threshhold.
-#     water_surface (str): 'mean_tide', 'geoid' or 'ellipsoid' water surface
-#     """
-
-#     __doc__ = '''{}
-    
-#     -----------
-#     Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
-    
-#     def __init__(self, want_bathy=True, want_topo=False, water_surface='mean_tide', bathy_thresh = 50, topo_thresh = 30, **kwargs):
-#         super().__init__(**kwargs)
-#         self.want_topo = want_topo
-#         self.want_bathy = want_bathy
-#         self.water_surface = water_surface
-#         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
-#             self.water_surface = 'mean_tide'
-
-#         self.bathy_thresh = utils.float_or(bathy_thresh, 30)
-#         self.topo_thresh = utils.float_or(topo_thresh, 30)
-#         self.atl_fn = None
-
-#     def parse(self):
-#         self.fetch_module.run()
-#         yield(self)
-
-#     def close_atl_h5(self):
-#         self.atl_03_fn = None
-#         self.atl_08_fn = None
-#         self.atl_03_f.close()
-#         if self.atl_08_f is not None:
-#             self.atl_08_f.close()
-    
-#     def init_atl_03_h5(self):
-#         """initialize the atl03 and atl08 h5 files"""
-        
-#         self.atl_03_f = h5.File(self.atl_03_fn, 'r')
-#         if 'short_name' not in self.atl_03_f.attrs.keys():
-#             utils.echo_error_msg('this file does not appear to be an ATL file')
-#             self.atl_03_f.close()
-#             return(None)
-        
-#     def init_atl_h5(self):
-#         """initialize the atl03 and atl08 h5 files"""
-
-#         self.atl_03_f = h5.File(self.atl_03_fn, 'r')
-#         if 'short_name' not in self.atl_03_f.attrs.keys():
-#             utils.echo_error_msg('this file does not appear to be an ATL file')
-#             self.atl_03_f.close()
-        
-#         if self.atl_08_fn is not None:
-#             self.atl_08_f = h5.File(self.atl_08_fn, 'r')
-        
-#             if 'short_name' not in self.atl_08_f.attrs.keys():
-#                 utils.echo_error_msg('this file does not appear to be an ATL file')
-#                 self.atl_08_f.close()
-#         else:
-#             self.atl_08_f = None
-
-#     def fetch_and_yield_results(self, fetch_data = True):
-#         for result in self.fetch_module.results:
-#             if fetch_data:
-#                 if self.fetch_module.fetch(result, check_size=self.check_size) == 0:
-#                     yield(result)
-#                 else:
-#                     self.fetch_module.results.append(result)
-#             else:
-#                 yield(result)
-            
-#     def yield_ds(self):
-#         with tqdm(
-#                 total=len(self.fetch_module.results),
-#                 desc='parsing datasets from datalist fetches {} @ {}'.format(self.fetch_module, self.weight),
-#                 leave=self.verbose
-#         ) as pbar:
-#             for result in self.fetch_and_yield_results(fetch_data=True):
-#                 ## load the atl 03 data
-#                 self.atl_03_fn = os.path.join(self.fetch_module._outdir, result[1])
-                
-#                 ## load the atl 08 data
-#                 atl_08_result = self.fetch_atl_08()
-#                 self.atl_08_fn = atl_08_result
-
-#                 try:
-#                     self.init_atl_h5()
-#                 except Exception as e:
-#                     utils.echo_error_msg('could not initialize data {}'.format(e))
-#                     pbar.update()
-#                     self.close_atl_h5()
-#                     continue
-                                                                                   
-#                 dataset = None
-
-#                 ## Fetch the associated ATL08 dataset for bare-earth processing
-#                 for i in range(1, 4):
-#                     ## read the data from the atl03
-#                     dataset = self.read_atl_data('{}'.format(i))
-#                     ## Bare-Earth topography (class 1)
-#                     if self.want_topo:
-#                         bare_earth_dataset = self.extract_topography(dataset, thresh=self.bathy_thresh)
-#                         if bare_earth_dataset is not None:
-#                             bare_earth_dataset = np.column_stack((bare_earth_dataset[1], bare_earth_dataset[0], bare_earth_dataset[2]))
-#                             bare_earth_points = np.rec.fromrecords(bare_earth_dataset, names='x, y, z')
-#                             yield(bare_earth_points)
-
-#                     ## Bathymetry via C-Shelph
-#                     if self.want_bathy:
-#                         bathy_dataset = self.extract_bathymetry(dataset, thresh=self.bathy_thresh)
-#                         if bathy_dataset is not None:
-#                             bathy_dataset = np.column_stack((bathy_dataset[1], bathy_dataset[0], bathy_dataset[2]))
-#                             bathy_points = np.rec.fromrecords(bathy_dataset, names='x, y, z')
-#                             yield(bathy_points)
-
-#                 pbar.update()
-#                 self.close_atl_h5()
-
-#     def read_atl_data(self, laser_num):
-#         """Read data from an ATL03 file
-
-#         Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
-#         and 'iVert' https://github.com/ciresdem/ivert.git
-
-#         laser_num is 1, 2 or 3
-#         surface is 'mean_tide', 'geoid' or 'ellipsoid'
-#         """
-
-#         orientation = self.atl_03_f['/orbit_info/sc_orient'][0]
-#         # selects the strong beams only [we can include weak beams later on]
-#         orientDict = {0:'l', 1:'r', 21:'error'}
-#         laser = 'gt' + laser_num + orientDict[orientation]
-
-#         ## Read in the required photon level data
-#         photon_h = self.atl_03_f['/' + laser + '/heights/h_ph'][...,]
-#         latitude = self.atl_03_f['/' + laser + '/heights/lat_ph'][...,]
-#         longitude = self.atl_03_f['/' + laser + '/heights/lon_ph'][...,]
-#         conf = self.atl_03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
-#         dist_ph_along = self.atl_03_f['/' + laser + '/heights/dist_ph_along'][...,]
-#         this_N = latitude.shape[0]
-
-#         ## Read in the geolocation level data
-#         segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
-#         segment_id = self.atl_03_f['/' + laser + '/geolocation/segment_id'][...,]
-#         segment_dist_x = self.atl_03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-#         seg_ph_count = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
-#         ref_elev = self.atl_03_f['/' + laser + '/geolocation/ref_elev'][...,]
-#         ref_azimuth = self.atl_03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
-#         ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
-#         altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
-
-#         ## Read in the geoid data
-#         photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
-#         photon_geoid_f2m = self.atl_03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
-
-#         ## Create a dictionary with (segment_id --> index into ATL03 photons)
-#         ## lookup pairs, for the starting photon of each segment
-#         segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
-#         segment_index_dict = dict(zip(segment_id, segment_indices))
-
-#         ## Compute the total along-track distances.
-#         segment_dist_dict = dict(zip(segment_id, segment_dist_x))
-
-#         ## Determine where in the array each segment index needs to look.
-#         ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, this_N, 1))-1]
-#         ph_segment_dist_x = np.array(list(map((lambda pid: segment_dist_dict[pid]), ph_segment_ids)))
-#         dist_x = ph_segment_dist_x + dist_ph_along
-
-#         ## meantide/geoid heights
-#         h_geoid_dict = dict(zip(segment_id, photon_geoid))
-#         ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))
-
-#         h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
-#         ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
-
-#         photon_h_geoid = photon_h - ph_h_geoid
-#         photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
-
-#         ph_h_classed = np.zeros(photon_h.shape)
-#         ## Read in the atl08 data
-#         if self.atl_08_f is not None:
-#             atl_08_classed_pc_flag  = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_flag'][...,]
-#             atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,]
-#             atl_08_classed_pc_indx = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
-
-#             # atl_08_seg_beg = self.atl_08_f['/' + laser + '/land_segments/segment_id_beg'][...,]
-#             # atl_08_seg_end = self.atl_08_f['/' + laser + '/land_segments/segment_id_end'][...,]
-#             # atl_08_watermask = self.atl_08_f['/' + laser + '/land_segments/segment_watermask'][...,]
-            
-#             # Type codes:
-#             # -1 : uncoded
-#             #  0 : noise
-#             #  1 : ground
-#             #  2 : canopy
-#             #  3 : top of canopy
-
-#             dict_success = False
-#             while not dict_success:
-#                 try:
-#                     atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id)))
-#                 except KeyError as e:
-#                     # One of the atl08_ph_segment_id entries does not exist in the atl03 granule, which
-#                     # causes problems here. Eliminate it from the list and try again.
-#                     problematic_id = e.args[0]
-#                     good_atl08_mask = (atl_08_ph_segment_id != problematic_id)
-#                     atl_08_classed_pc_flag = atl_08_classed_pc_flag[good_atl08_mask]
-#                     atl_08_ph_segment_id = atl_08_ph_segment_id[good_atl08_mask]
-#                     atl_08_classed_pc_indx = atl_08_classed_pc_indx[good_atl08_mask]
-#                     # Then, try the loop again.
-#                     continue
-#                 dict_success = True
-
-#             atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
-#             ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag
-            
-#         return(latitude, longitude, photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
-#                conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, altitude_sc, seg_ph_count, ph_h_classed)
-
-#     def fetch_atl_08(self):
-#         atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
-#         this_atl08 = fetches.IceSat(
-#             src_region=None, verbose=self.verbose, outdir=self.fetch_module._outdir, short_name='ATL08', filename_filter=atl_08_filter
-#         )
-#         this_atl08.run()
-#         if len(this_atl08.results) == 0:
-#             utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl_08_filter))
-#             return(None)
-#         else:
-#             if this_atl08.fetch(this_atl08.results[0], check_size=self.check_size) == 0:
-#                 return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
-
-#     def extract_topography(self, dataset, thresh=None, min_buffer = 0, surface_buffer = 1.1, lat_res = 10 , h_res = .5):
-#         latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count, ph_h_classed = dataset
-
-#         epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
-#         epsg_num = int(epsg_code.split(':')[-1])
-#         utm_proj = pyproj.Proj(epsg_code)
-#         lon_utm, lat_utm = utm_proj(longitude, latitude)
-#         ph_num_per_seg = seg_ph_count[ph_index_beg>0]
-#         ph_num_per_seg = ph_num_per_seg.astype(np.int64)
-#         ph_ref_elev = cshelph.ref_linear_interp(ph_num_per_seg, ref_elev[ph_index_beg>0])
-#         ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
-#         ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
-
-#         ## Aggregate data into dataframe
-#         dataset_sea = pd.DataFrame(
-#             {'latitude': lat_utm,
-#              'longitude': lon_utm,
-#              'photon_height': photon_h,
-#              'confidence':conf,
-#              'ref_elevation':ph_ref_elev,
-#              'ref_azimuth':ph_ref_azimuth,
-#              'ref_sat_alt':ph_sat_alt,
-#              'ph_h_classed': ph_h_classed},
-#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
-#         )
-#         dataset_sea1 = dataset_sea[dataset_sea.confidence == 4]
-#         dataset_sea1 = dataset_sea1[(dataset_sea1['ph_h_classed'] == 1)]
-#         dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer)]
-#         if self.region is not None:
-#             xyz_region = self.region.copy()
-#             xyz_region.epsg = 'epsg:4326'
-#             xyz_region.warp('epsg:{}'.format(epsg_num))
-#             dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > xyz_region.ymin) & (dataset_sea1['latitude'] < xyz_region.ymax)]
-#             dataset_sea1 = dataset_sea1[(dataset_sea1['longitude'] > xyz_region.xmin) & (dataset_sea1['longitude'] < xyz_region.xmax)]
-
-#         if len(dataset_sea1) != 0:
-#             binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
-#             if binned_data_sea is not None:
-#                 #sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
-#                 lats, lons, sea_height = cshelph.get_bin_height(binned_data_sea, surface_buffer)
-#                 topo_ds = np.column_stack((lons, lats, sea_height))
-#                 topo_ds = np.rec.fromrecords(topo_ds, names='x, y, z')
-#                 topo_ds = topo_ds[~np.isnan(topo_ds['z'])]
-#                 med_water_surface_h = np.nanmedian(topo_ds['z'])
-#                 topo_ds = topo_ds[topo_ds['z'] > med_water_surface_h + (h_res * 2)]
-
-#                 transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-#                 lon_wgs84, lat_wgs84 = transformer.transform(topo_ds['x'], topo_ds['y'])
-
-#                 return(lat_wgs84, lon_wgs84, topo_ds['z'])
-
-#         return(None)
-            
-#     ## C-Shelph bathymetric processing
-#     def get_water_temp(self):
-#         #import xarray as xr
-#         #from eosdis_store import EosdisStore
-
-#         if self.region is not None:
-#             this_region = self.region.copy()
-#         else:
-#             this_region = regions.Region().from_list(self.infos.minmax)
-            
-#         time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
-#         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-#         this_sst = fetches.MUR_SST(src_region = this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
-#         this_sst.run()
-
-#         return(20)
-#         ## todo do this wityout eosdis-store!
-#         # datasets = [xr.open_zarr(EosdisStore(x[0]), consolidated=False) for x in this_sst.results]
-#         # if len(datasets) > 1:
-#         #     ds = xr.concat(datasets, 'time')
-#         # else:
-#         #     ds = datasets[0]
-
-#         # lats = slice(this_region.ymin, this_region.ymax)
-#         # lons = slice(this_region.xmin, this_region.xmax)
-#         # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
-#         # sst = round(np.nanmedian(sea_temp.values)-273,2)
-        
-#         # return(sst)
-    
-#     def extract_bathymetry(
-#             self, dataset, thresh = None, min_buffer = -40, max_buffer = 5,
-#             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
-#             surface_buffer = -.5, water_temp = None
-#     ):
-#         """Extract bathymetry from an ATL03 file. 
-
-#         This uses C-Shelph to locate, extract and process bathymetric photons.
-#         This function is adapted from the C-Shelph CLI
-#         """
-        
-#         water_temp = utils.float_or(water_temp)
-#         latitude, longitude, photon_h, conf, ref_elev, ref_azimuth, ph_index_beg, segment_id, alt_sc, seg_ph_count, ph_h_classed = dataset
-#         epsg_code = cshelph.convert_wgs_to_utm(latitude[0], longitude[0])
-#         epsg_num = int(epsg_code.split(':')[-1])
-#         utm_proj = pyproj.Proj(epsg_code)
-#         lon_utm, lat_utm = utm_proj(longitude, latitude)
-#         ph_num_per_seg = seg_ph_count[ph_index_beg>0]
-#         ph_num_per_seg = ph_num_per_seg.astype(np.int64)
-#         ph_ref_elev = cshelph.ref_linear_interp(ph_num_per_seg, ref_elev[ph_index_beg>0])
-#         ph_ref_azimuth = cshelph.ref_linear_interp(ph_num_per_seg, ref_azimuth[ph_index_beg>0])
-#         ph_sat_alt = cshelph.ref_linear_interp(ph_num_per_seg, alt_sc[ph_index_beg>0])
-
-#         ## Aggregate data into dataframe
-#         dataset_sea = pd.DataFrame(
-#             {'latitude': lat_utm,
-#              'longitude': lon_utm,
-#              'photon_height': photon_h,
-#              'confidence':conf,
-#              'ref_elevation':ph_ref_elev,
-#              'ref_azimuth':ph_ref_azimuth,
-#              'ref_sat_alt':ph_sat_alt,
-#              'ph_h_classed': ph_h_classed},
-#             columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
-#         )
-#         dataset_sea1 = dataset_sea[(dataset_sea.confidence != 0)  & (dataset_sea.confidence != 1)]
-#         dataset_sea1 = dataset_sea1[(dataset_sea1['photon_height'] > min_buffer) & (dataset_sea1['photon_height'] < max_buffer)]
-#         if self.region is not None:
-#             xyz_region = self.region.copy()
-#             xyz_region.epsg = 'epsg:4326'
-#             xyz_region.warp('epsg:{}'.format(epsg_num))
-#             dataset_sea1 = dataset_sea1[(dataset_sea1['latitude'] > xyz_region.ymin) & (dataset_sea1['latitude'] < xyz_region.ymax)]
-#             dataset_sea1 = dataset_sea1[(dataset_sea1['longitude'] > xyz_region.xmin) & (dataset_sea1['longitude'] < xyz_region.xmax)]
-
-#         if len(dataset_sea1) > 0:
-#             binned_data_sea = cshelph.bin_data(dataset_sea1, lat_res, h_res)
-#             if binned_data_sea is not None:
-#                 if water_temp is None:
-#                     try:
-#                         #water_temp = cshelph.get_water_temp(self.fn, latitude, longitude)
-#                         ## water_temp via fetches instead of earthaccess
-#                         water_temp = self.get_water_temp()
-#                     except Exception as e:
-#                         #utils.echo_warning_msg('NO SST PROVIDED OR RETRIEVED: 20 degrees C assigned')
-#                         water_temp = 20
-
-#                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
-#                 if sea_height is not None:
-#                     med_water_surface_h = np.nanmedian(sea_height)
-
-#                     ## Correct for refraction
-#                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-#                         water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth, dataset_sea1.photon_height,
-#                         dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
-#                     )
-#                     depth = med_water_surface_h - ref_z
-
-#                     # Create new dataframe with refraction corrected data
-#                     dataset_bath = pd.DataFrame({'latitude': raw_y, 'longitude': raw_x, 'cor_latitude':ref_y, 'cor_longitude':ref_x, 'cor_photon_height':ref_z,
-#                                                  'photon_height': raw_z, 'confidence':ref_conf, 'depth':depth},
-#                                                 columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude', 'cor_photon_height',
-#                                                          'confidence', 'depth'])
-
-#                     # Bin dataset again for bathymetry
-#                     binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
-
-#                     if binned_data is not None:
-#                         # Find bathymetry
-#                         bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
-#                         if bath_height is not None:
-
-#                             transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
-#                             lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
-
-#                             bath_height = [x for x in bath_height if ~np.isnan(x)]
-#                             return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
-            
-#         return(None)
-                            
-# class DAVFetcher_CUDEM(Fetcher):
-#     """CUDEM from the digital coast 
-
-#     This is a wrapper shortcut for fetching CUDEMs from the Digital Coast,
-#     mainly so we can pull the remove the flattened ring around the actual data.
-#     """
-    
-#     def __init__(self, keep_fetched_data = True, **kwargs):
-#         super().__init__(**kwargs)
-
-#     def set_ds(self, result):
-
-#         # with gdalfun.gdal_datasource(os.path.join(self.fetch_module._outdir, result[1]), update=True) as src_ds:
-#         #     if src_ds is not None:
-#         #         ds_config = gdalfun.gdal_infos(src_ds)
-#         #         curr_nodata = ds_config['ndv']
-
-#         ## this doesn't work in all cases, update to find and remove flattened areas
-#         gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
-        
-#         ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-#                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-#                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, src_srs=self.fetch_module.src_srs,
-#                             dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
-#         yield(ds)        
                 
 class GMRTFetcher(Fetcher):
     """GMRT Gridded data.
@@ -5371,9 +4880,6 @@ class GMRTFetcher(Fetcher):
                     exts=['shp', 'shx', 'prj', 'dbf'],
                     outdir=self.cache_dir
                 )
-                #swath_shp = None
-                #swath_mask = os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.tif')
-                
                 for v in swath_shps:
                     if '.shp' in v:
                         #swath_shp = v
@@ -5384,23 +4890,6 @@ class GMRTFetcher(Fetcher):
                     utils.echo_error_msg('could not find gmrt swath polygons...')
                     self.swath_only = False
                     swath_mask = None
-                # else:
-                #     import shutil
-                #     tmp_gmrt = '{}_clip.tif'.format(utils.fn_basename2(gmrt_fn))
-                #     shutil.copyfile(gmrt_fn, tmp_gmrt)
-                    
-                #     gi = gdalfun.gdal_infos(gmrt_fn)
-                #     gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}'\
-                #         .format(gi['ndv'], os.path.basename(swath_shp).split('.')[0], swath_shp, tmp_gmrt)
-                #     out, status = utils.run_cmd(gr_cmd, verbose=self.verbose)
-
-                #     with gdalfun.gdal_datasource(tmp_gmrt, update=True) as tmp_ds:
-                #         b = tmp_ds.GetRasterBand(1)
-                #         a = b.ReadAsArray()
-                #         a[a != gi['ndv']] = 0
-                #         a[a == gi['ndv']] = 1
-                #         b.WriteArray(a)
-                #         gdalfun.gdal_set_ndv(tmp_ds, ndv = 0)
 
         yield(DatasetFactory(mod=gmrt_fn, data_format=200, mask=swath_mask,
                              #data_format='200:mask={}'.format(swath_mask) if self.swath_only else '200', #mask=self.mask, invert_mask=self.invert_mask,
