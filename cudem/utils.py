@@ -60,9 +60,18 @@ import cudem
 ## General Utility Functions, definitions, etc.
 ##
 ## ==============================================
+
+## Cahce directory, for use in dlim/waffles/fetches
 this_dir, this_filename = os.path.split(__file__)
 cudem_cache = lambda: os.path.abspath('./.cudem_cache')
 cudem_data = os.path.join(this_dir, 'data')
+def set_cache(cache_dir: str):
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+def remove_cache(cache_dir: str):
+    if os.path.exists(cache_dir):
+        remove_glob(cache_dir)
 
 ## heaps of thanks to https://github.com/fitnr/stateplane
 FIPS_TO_EPSG = {
@@ -99,14 +108,7 @@ FIPS_TO_EPSG = {
     "5103": "26963", "5104": "26964", "5105": "26965", "5200": "32161"
 }
 
-def set_cache(cache_dir: str):
-    if not os.path.exists(cache_dir):
-        os.makedirs(cache_dir)
-
-def remove_cache(cache_dir: str):
-    if os.path.exists(cache_dir):
-        remove_glob(cache_dir)
-        
+## General file-name helper functions
 def append_fn(fn, src_region, inc, version=None, year=None, res=None, high_res=False):
     """append the src_region, inc and version to a string filename"""
     
@@ -131,7 +133,6 @@ def fn_basename(fn, ext):
 def fn_basename2(fn):
     """return the basename of fn"""
     
-    #return('.'.join(os.path.basename(fn).split('.')[:-1]))
     t = fn.split('.')
     if len(t) > 1:
         return('.'.join(fn.split('.')[:-1]))
@@ -149,12 +150,13 @@ def fn_ext(fn):
     return(ext)
 
 def make_temp_fn(fn, temp_dir = cudem_cache()):
+    """make a temporary unique filename"""
+    
     if temp_dir is None:
         temp_dir = cudem_cache()
         
     fn_bn = fn_basename2(os.path.basename(fn))
     fn_et = fn_ext(fn)
-    #if not os.path.exists(os.path.dirname(temp_dir)):
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
                     
@@ -177,7 +179,7 @@ def fn_url_p(fn):
             return(False)
         
     return(False)
-    
+
 def inc2str(inc):
     """convert a WGS84 geographic increment to a str_inc (e.g. 0.0000925 ==> `13`)
 
@@ -225,11 +227,7 @@ def str2inc(inc_str):
         inc = float(inc_str[:-1]) / 360.
     else:
         try:
-            inc = float_or(inc_str)
-            #if inc < 0:
-            #    echo_warning_msg('increment {} is negative, switching to {}'.format(inc, inc*-1))
-            #    inc = inc*-1
-
+            inc = float_or(inc_str)            
         except ValueError as e:
             echo_error_msg('could not parse increment {}, {}'.format(inc_str, e))
             return(None)
@@ -303,6 +301,8 @@ def args2dict(args, dict_args={}):
     return(dict_args)
 
 def dict2args(in_dict):
+    """convert a dictionary to an args string"""
+    
     out_args = ''
     for i, key in enumerate(in_dict.keys()):
         out_args += '{}={}{}'.format(key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else '')
@@ -402,6 +402,7 @@ def str_or(instr, or_val=None, replace_quote=True):
 def convert_size(size_bytes):
    if size_bytes == 0:
        return('0B')
+   
    size_name = ('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
    i = int(math.floor(math.log(size_bytes, 1024)))
    p = math.pow(1024, i)
@@ -448,25 +449,29 @@ def hav_dst(pnt0, pnt1):
     dx = math.radians(x1 - x0)
     dy = math.radians(y1 - y0)
     a = math.sin(dx/2)*math.sin(dx/2)+math.cos(math.radians(x0))*math.cos(math.radians(x1))*math.sin(dy/2)*math.sin(dy/2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a)) 
     return(rad_m*c)
 
 def wgs_inc2meter(src_inc):
+    """return a wgs increment as meters"""
+    
     gds_equator = 111321.543
     degree_to_radian = lambda d: math.pi * (d / 180)
     return(math.cos(degree_to_radian(src_inc)) * (gds_equator * src_inc))
 
 def lll(src_lat):
+    """return the lon/lat length in meters"""
+    
     gds_equator = 111321.543
     gds_pi = 3.14159265358979323846
     degree_to_radian = lambda d: gds_pi * (d / 180)
     lonl_ = math.cos(degree_to_radian(src_lat)) * gds_equator
     latl_ = gds_equator
-
     return(lonl_, latl_)
 
 def touch(fname, times = None):
+    """touch a file to make sure it exists"""
+    
     with open(fname, 'a'):
         os.utime(fname, times)
         
@@ -873,7 +878,6 @@ def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
 ## srcwin functions
 ##
 ## ==============================================
-
 def fix_srcwin(srcwin, xcount, ycount):
     ## geo_transform is considered in grid-node to properly capture the region
 
@@ -1320,6 +1324,8 @@ _command_name = lambda: os.path.basename(sys.argv[0])
 ##
 ## Progress indicator...
 ##
+## Depreciated, just using tqdm now...
+##
 ## ==============================================
 class CliProgress():
     """Cudem Absolute Minimum Progress Indicator
@@ -1498,9 +1504,6 @@ class CliProgress():
 
         return(True)
 
-import multiprocessing as mp
-import numpy
-
 def physical_cpu_count():
     """On this machine, get the number of physical cores.
 
@@ -1508,6 +1511,8 @@ def physical_cpu_count():
     Things such as multiprocessing.cpu_count often give us the logical cores, which
     means we'll spin off twice as many processes as really helps us when we're
     multiprocessing for performance. We want the physical cores."""
+
+    import multiprocessing as mp
     if sys.platform == "linux" or sys.platform == "linux2":
         # On linux. The "linux2" variant is no longer used but here for backward-compatibility.
         lines = os.popen('lscpu').readlines()
@@ -1537,27 +1542,27 @@ def physical_cpu_count():
 # A dictionary for converting numpy array dtypes into carray identifiers.
 # For integers & floats, does not hangle character/string arrays.
 # Reference: https://docs.python.org/3/library/array.html
-dtypes_dict = {numpy.int8:    'b',
-               numpy.uint8:   'B',
-               numpy.int16:   'h',
-               numpy.uint16:  'H',
-               numpy.int32:   'l',
-               numpy.uint32:  'L',
-               numpy.int64:   'q',
-               numpy.uint64:  'Q',
-               numpy.float32: 'f',
-               numpy.float64: 'd',
+dtypes_dict = {np.int8:    'b',
+               np.uint8:   'B',
+               np.int16:   'h',
+               np.uint16:  'H',
+               np.int32:   'l',
+               np.uint32:  'L',
+               np.int64:   'q',
+               np.uint64:  'Q',
+               np.float32: 'f',
+               np.float64: 'd',
                # Repeat for these expressions of dtype as well.
-               numpy.dtype('int8'):    'b',
-               numpy.dtype('uint8'):   'B',
-               numpy.dtype('int16'):   'h',
-               numpy.dtype('uint16'):  'H',
-               numpy.dtype('int32'):   'l',
-               numpy.dtype('uint32'):  'L',
-               numpy.dtype('int64'):   'q',
-               numpy.dtype('uint64'):  'Q',
-               numpy.dtype('float32'): 'f',
-               numpy.dtype('float64'): 'd'}
+               np.dtype('int8'):    'b',
+               np.dtype('uint8'):   'B',
+               np.dtype('int16'):   'h',
+               np.dtype('uint16'):  'H',
+               np.dtype('int32'):   'l',
+               np.dtype('uint32'):  'L',
+               np.dtype('int64'):   'q',
+               np.dtype('uint64'):  'Q',
+               np.dtype('float32'): 'f',
+               np.dtype('float64'): 'd'}
 
 ## test
 def _err_fit_plot(
