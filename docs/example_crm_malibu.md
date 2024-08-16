@@ -24,4 +24,5 @@ Output:
 mugu_crm_test_hs.tif
 
 ![](/media/mugu_crm_test_hs.png)
+
 **Figure 1.** DEM hillshade generated from CUDEM code example.
