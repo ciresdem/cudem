@@ -2062,11 +2062,12 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
 
 < nos:where=None:layer=0:datatype=None:index=False >"""
     
-    def __init__(self, where='1=1', layer=1, datatype=None, index=False, **kwargs):
+    def __init__(self, where='1=1', layer=1, datatype=None, index=False, tables=False,**kwargs):
         super().__init__(name='hydronos', **kwargs)
         self.where = where
         self.datatype = datatype
         self.index = index
+        self.tables = tables
 
         ## various NOS URLs
         self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
@@ -2094,6 +2095,14 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
                 for feature in features['features']:
                     if self.index:
                         print(json.dumps(feature['attributes'], indent=4))
+                    elif self.tables:
+                        sid = feature['attributes']['SURVEY_ID']
+                        year = utils.int_or(feature['attributes']['SURVEY_YEAR'])
+                        url = feature['attributes']['DOWNLOAD_URL']
+                        has_bag = feature['attributes']['BAGS_EXIST']
+                        dtype = 'bag' if has_bag is not None else 'hydro'
+                        line = '{},{}'.format(sid,year)
+                        print(line)
                     else:
                         ID = feature['attributes']['SURVEY_ID']
                         link = feature['attributes']['DOWNLOAD_URL']
@@ -2412,11 +2421,13 @@ Fields:
         
 < ehydro:where=None:inc=None >"""
 
-    def __init__(self, where='1=1', inc=None, survey_name=None, **kwargs):
+    def __init__(self, where='1=1', inc=None, survey_name=None, index=False, tables=False,**kwargs):
         super().__init__(name='ehydro', **kwargs)
         self.where = where
         self.survey_name = survey_name
         self.inc = utils.str2inc(inc)
+        self.index = index
+        self.tables = tables
 
         ## Various EHydro URLs
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
@@ -2436,14 +2447,28 @@ Fields:
             features = _req.json()
             if 'features' in features.keys():
                 for feature in features['features']:
-                    fetch_fn = feature['attributes']['sourcedatalocation']
-                    #survey_type = feature['attributes']['surveytype']
-                    if self.survey_name is not None:
-                        if self.survey_name in fetch_fn:
-                            self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
-                            
+
+                    if self.index:
+                        print(json.dumps(feature['attributes'], indent=4))
+                    elif self.tables:
+                        #utils.echo_msg(int(str(feature['attributes']['surveydatestart']).rstrip('0')))
+                        sid = feature['attributes']['sdsmetadataid']
+                        #year = datetime.datetime.utcfromtimestamp(int(str(feature['attributes']['surveydatestart']).rstrip('0'))).year
+                        year = time.gmtime(int(str(feature['attributes']['surveydatestart'])[:10])).tm_year
+                        url = feature['attributes']['sourcedatalocation']
+                        dtype = feature['attributes']['surveytype']
+                        line = '{},{}'.format(sid,year)
+                        if sid is not None:
+                            print(line)
                     else:
-                        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                        fetch_fn = feature['attributes']['sourcedatalocation']
+                        #survey_type = feature['attributes']['surveytype']
+                        if self.survey_name is not None:
+                            if self.survey_name in fetch_fn:
+                                self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                            
+                        else:
+                            self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
 
