@@ -35,6 +35,10 @@ CUDEMs are a shift from project-based DEM specifications, to a
 comprehensive program that systematically and continuously develops and
 updates DEMs across all spatial scales.
 
+## CUDEM Framework
+
+The CUDEM framework provides a set of powerful open-source command-line tools as well as a Python-3-based application programming interface (API) for (1) identifying and downloading topographic and bathymetric source data from more than forty different publicly available datasets, (2) filtering data, (3) ranking and merging multiple datasets using a variety of algorithms, (4) generating DEMs from those source datasets in a variety of data formats and projections/datums, and (5) generating metadata documentation of those DEMs. Individual components are modular and may be run standalone; for example, the CUDEM “fetches” module can download airborne lidar data, multi-beam sonar data, or nautical charts covering specific geographic regions; or the “stacks” module can efficiently combine and gap-fill raster datasets of varying qualities using customizable data lists. The CUDEM tools may also be conjoined in end-to-end workflows ensuring permanent traceability and reproducibility in DEM generation. The Coastal DEM Team uses the CUDEM framework to accurately inform and map risk assessments of coastal regions (e.g. Amante et al.)
+
 # Installation and Setup
 
 ## pip

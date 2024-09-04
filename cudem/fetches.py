@@ -299,7 +299,7 @@ class Fetch:
         self.headers = headers
         self.verify = verify
 
-    def fetch_req(self, params=None, tries=5, timeout=2, read_timeout=10):
+    def fetch_req(self, params=None, tries=5, timeout=None, read_timeout=None):
         """fetch src_url and return the requests object"""
         
         if tries <= 0:
@@ -2060,7 +2060,7 @@ Layer 1: Surveys with digital sounding data available for download (including th
 
 https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
 
-< nos:where=None:layer=0:datatype=None:index=False >"""
+< nos:where=None:layer=0:datatype=None:index=False:tables=False >"""
     
     def __init__(self, where='1=1', layer=1, datatype=None, index=False, tables=False,**kwargs):
         super().__init__(name='hydronos', **kwargs)
@@ -2419,7 +2419,7 @@ Fields:
     Shape__Area (type: esriFieldTypeDouble, alias: Shape__Area, SQL Type: sqlTypeDouble, nullable: true, editable: false)
     Shape__Length (type: esriFieldTypeDouble, alias: Shape__Length, SQL Type: sqlTypeDouble, nullable: true, editable: false)
         
-< ehydro:where=None:inc=None >"""
+< ehydro:where=None:inc=None:index=False:tables=False >"""
 
     def __init__(self, where='1=1', inc=None, survey_name=None, index=False, tables=False,**kwargs):
         super().__init__(name='ehydro', **kwargs)
