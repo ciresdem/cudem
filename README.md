@@ -65,7 +65,7 @@ conda activate cudem
 ```
 
 ## Extras
-- If on Windows, install windows-curses with pip inside conda environment
+- If on Windows, install windows-curses with pip
 
 ```
 git config --global http.sslVerify false
