@@ -25,12 +25,12 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 
 `-R, --region`
 
-     Restrict processing to the desired REGION 
-     Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-     Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-     OR an OGR-compatible vector file with regional polygons. 
-     Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-     If a vector file is supplied, will use each region found therein.
+Restrict processing to the desired REGION 
+Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
+Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
+OR an OGR-compatible vector file with regional polygons. 
+Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
+If a vector file is supplied, will use each region found therein.
      
 `-E, --increment`
 
