@@ -113,7 +113,7 @@ between adjacent DEM tiles.
 | [fetches](docs/fetches.md) | fetch elevation data from a variety of public online sources |
 | [regions](docs/regions.md) | process REGIONS |
 | [vdatums](docs/vdatums.md) | generate vertical transformation grids |
-| perspecto | generate images of DEMs |
+| [perspecto](docs/perspecto.md) | generate images of DEMs |
 | grits | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
