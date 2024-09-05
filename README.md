@@ -61,8 +61,10 @@ pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 ```
 conda create -n cudem -c conda-forge gdal gmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git
 conda activate cudem
+(cudem) pip install --no-deps git+https://github.com/ciresdem/cudem.git
 ```
 
+## Extras
 - If on Windows, install windows-curses with pip inside conda environment
 
 ```
@@ -74,11 +76,7 @@ pip install windows-curses
 
 Installation of HTDP and MB-System are system dependent, see their respective installation instructions for your system.
 
-- Install cudem with pip ignoring the dependencies
 
-```
-pip install --no-deps git+https://github.com/ciresdem/cudem.git
-```
 
 # Modules
 
