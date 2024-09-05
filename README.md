@@ -111,8 +111,8 @@ between adjacent DEM tiles.
 | [dlim](docs/dlim.md) | process data from a variety of data types |
 | [waffles](docs/waffles.md) | generate Digital Elevation Models from scattered data using a variety of methods|
 | [fetches](docs/fetches.md) | fetch elevation data from a variety of public online sources |
-| regions | process REGIONS |
-| vdatums | generate vertical transformation grids |
+| [regions](docs/regions.md) | process REGIONS |
+| [vdatums](docs/vdatums.md) | generate vertical transformation grids |
 | perspecto | generate images of DEMs |
 | grits | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
