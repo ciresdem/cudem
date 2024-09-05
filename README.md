@@ -114,7 +114,7 @@ between adjacent DEM tiles.
 | [regions](docs/regions.md) | process REGIONS |
 | [vdatums](docs/vdatums.md) | generate vertical transformation grids |
 | [perspecto](docs/perspecto.md) | generate images of DEMs |
-| grits | filter DEMs |
+| [grits](/docs/grits.md) | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
 # Usage Examples
