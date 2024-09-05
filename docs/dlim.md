@@ -21,7 +21,7 @@ An associated `inf` and geojson file will be gerenated for each datalist while o
 Parse various dataset types by region/increments and yield data as xyz or array
 recursive data-structures which point to datasets (datalist, zip, fetches, etc) are negative format numbers, e.g. -1 for datalist
 
-### Options:
+### Options
 
 `-R, --region`
      Restrict processing to the desired REGION 
