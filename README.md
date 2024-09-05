@@ -147,7 +147,7 @@ For additional questions, please contact:
          MIT License
   -----------------------------------------------------------------------
          
-         Copyright (c) 2010 - 2023 Regents of the University of Colorado
+         Copyright (c) 2010 - 2024 Regents of the University of Colorado
          
          Permission is hereby granted, free of charge, to any person
          obtaining a copy
