@@ -70,7 +70,7 @@ git config --global http.sslVerify false
 pip install windows-curses
 ```
 
-- install HTDP and MB-System
+- install [HTDP](https://geodesy.noaa.gov/TOOLS/Htdp/Htdp.shtml) and [MB-System](https://www.mbari.org/technology/mb-system/installation/)
 
 Installation of HTDP and MB-System are system dependent, see their respective installation instructions for your system.
 
