@@ -155,3 +155,7 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 | arcticdem | -303 | The arcticdem fetches module |
 | vdatum | -500 | The vdatum fetches module | 
 | hydrolakes | -600 | The hydrolakes fetches module | 
+
+## Python API
+
+## Example
