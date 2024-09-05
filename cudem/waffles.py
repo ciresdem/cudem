@@ -584,7 +584,9 @@ class Waffle:
                                               y_inc=self.yinc, src_region=self.p_region, weight=1,
                                               verbose=self.verbose).initialize()
 
-        utils.echo_msg('output files: {}'.format(output_files))
+        if self.verbose:
+            utils.echo_msg('output files: {}'.format(output_files))
+            
         return(self)
 
     def run(self):
@@ -3653,6 +3655,7 @@ class WafflesUncertainty(Waffle):
                 
             while True:
                 sim += 1
+                
                 ## run the split-sample simulation(s)
                 sample_dp = self._split_sample(trainers, num_perc)
                 if len(s_dp) == 0:
@@ -3692,9 +3695,9 @@ class WafflesUncertainty(Waffle):
                     np.savetxt(self.prox_errs_local, s_dp, '%f', ' ')
 
                 max_dist = np.nanpercentile(s_dp[:,1], 95)
-                if self.verbose:
-                    utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
-                    utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
+                # if self.verbose:
+                #     utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
+                #     utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
 
                 ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
                 pre_ec_d = ec_d

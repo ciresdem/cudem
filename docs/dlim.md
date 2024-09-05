@@ -1,19 +1,27 @@
-# Overview
+# Synopsis
 
-"dlim" is the elevation data processing tool using various dataset modules (Table 1). dlim's native dataset format is a "datalist". A datalist is similar to an MBSystem datalist; it is a space-delineated file containing the following columns:
-data-path data-format data-weight data-uncertainty data-name data-source data-date data-resolution data-type data-horz data-vert data-url
+```
+usage: dlim [ -acdghijnquwEJPRT [ args ] ] DATALIST,FORMAT,WEIGHT,UNCERTAINTY ...
+```
+
+
+# Description
+
+`dlim` is the elevation data processing tool using various dataset modules (Table 1). `dlim`'s native dataset format is a "datalist". A datalist is similar to an MBSystem datalist; it is a space-delineated file containing the following columns:
+
+```data-path data-format data-weight data-uncertainty data-name data-source data-date data-resolution data-type data-horz data-vert data-url```
+
 Minimally, data-path (column 1) is all that is needed.
 
-an associated inf and geojson file will be gerenated for each datalist
-only an associated inf file will be genereated for individual datasets
+An associated `inf` and geojson file will be gerenated for each datalist while only an associated `inf` file will be genereated for individual datasets
 
 Parse various dataset types by region/increments and yield data as xyz or array
 recursive data-structures which point to datasets (datalist, zip, fetches, etc) are negative format numbers, e.g. -1 for datalist
 
-supported datasets include: xyz, gdal, ogr, las/laz (laspy), mbs (MBSystem), fetches (see cudem.fetches)
+Supported datasets include: xyz, gdal, ogr, las/laz (laspy), mbs (MBSystem), fetches (see cudem.fetches)
 
-Initialize a datalist/dataset using init_data(list-of-datalist-entries) where the list of datalist entries can
-be any of the supported dataset formats. init_data will combine all the input datafiles into an internal scratch
+Initialize a datalist/dataset using ```init_data(list-of-datalist-entries)``` where the list of datalist entries can
+be any of the supported dataset formats. `init_data` will combine all the input datafiles into an internal scratch
 datalist and process that.
 
 If region, x_inc, and y_inc are set, all processing will go through Dataset._stacks() where the data will be combined

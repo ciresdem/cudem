@@ -1479,8 +1479,10 @@ class ElevationDataset:
             mode = 'mean'
         else:
             mode = self.stack_mode
+
+        if self.verbose:
+            utils.echo_msg('stacking using {} mode'.format(mode))
             
-        utils.echo_msg('stacking using {} mode'.format(mode))        
         ## initialize the output rasters
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
@@ -4117,19 +4119,17 @@ class Datalist(ElevationDataset):
         exists, in order to properly fill the datalist/json srs and regions...
         """
 
-        _region = self.region
         self.region = None
+        self.infos.file_hash = self.infos.generate_hash()
+        _region = self.region
         out_regions = []
         out_srs = []
-        self.infos.file_hash = self.infos.generate_hash()
 
         ## attempt to generate a datalist-vector geojson and
         ## if successful, fill it wil the datalist entries, using `parse`
         if self._init_datalist_vector() == 0:
             for entry in self.parse():
-                #utils.echo_msg_bold(entry.mask)
                 entry_minmax = entry.infos.minmax
-                #utils.echo_msg(entry.params)
                 if entry.mask is not None: ## add all duplicat params???
                     entry.params['mod_args'] = {'mask': entry.mask}
                     
@@ -4137,17 +4137,14 @@ class Datalist(ElevationDataset):
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
                     if self.dst_srs is not None:
-                        entry_region = regions.Region().from_list(entry_minmax)
-                        entry_region.src_srs = entry.src_srs
-                        #entry_region.warp(gdalfun.epsg_from_input(self.dst_srs)[0])
-                        entry_region.warp(self.dst_srs)
+                        entry_region = regions.Region(src_srs=entry.src_srs).from_list(entry_minmax).warp(gdalfun.epsg_from_input(self.dst_srs)[0])
                         entry_minmax = entry_region.export_as_list(include_z=True)
 
                 ## create the feature for the geojson
                 entry_region = regions.Region().from_list(entry_minmax)
                 if entry_region.valid_p():
-                    self._create_entry_feature(entry, entry_region)
                     out_regions.append(entry_region)
+                    self._create_entry_feature(entry, entry_region)
                     self.infos.numpts += entry.infos.numpts
 
             self.ds = self.layer = None # close the geojson ogr dataset
@@ -4205,7 +4202,7 @@ class Datalist(ElevationDataset):
             driver = ogr.GetDriverByName('GeoJSON')
             dl_ds = driver.Open('{}.json'.format(self.fn))
             if dl_ds is None:
-                utils.echo_error_msg('could not open {}.json'.format(self.fn))
+                utils.echo_warning_msg('could not open {}.json'.format(self.fn))
                 status = -1
         else:
             status = -1
