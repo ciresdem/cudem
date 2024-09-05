@@ -106,12 +106,12 @@ between adjacent DEM tiles.
 
 | Module | Description |
 |---|---|
-| [dlim](https://github.com/ciresdem/cudem/wiki/dlim) | process data from a variety of data types |
-| [waffles](docs/waffles.md) | generate Digital Elevation Models from scattered data using a variety of methods|
-| [fetches](docs/fetches.md) | fetch elevation data from a variety of public online sources |
-| [regions](docs/regions.md) | process REGIONS |
-| [vdatums](docs/vdatums.md) | generate vertical transformation grids |
-| [perspecto](docs/perspecto.md) | generate images of DEMs |
+| [dlim](/docs/dlim.md) | process data from a variety of data types |
+| [waffles](/docs/waffles.md) | generate Digital Elevation Models from scattered data using a variety of methods|
+| [fetches](/docs/fetches.md) | fetch elevation data from a variety of public online sources |
+| [regions](/docs/regions.md) | process REGIONS |
+| [vdatums](/docs/vdatums.md) | generate vertical transformation grids |
+| [perspecto](/docs/perspecto.md) | generate images of DEMs |
 | [grits](/docs/grits.md) | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
