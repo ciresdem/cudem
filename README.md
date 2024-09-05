@@ -106,7 +106,7 @@ between adjacent DEM tiles.
 
 | Module | Description |
 |---|---|
-| [dlim](docs/dlim.md) | process data from a variety of data types |
+| [dlim](https://github.com/ciresdem/cudem/wiki/dlim) | process data from a variety of data types |
 | [waffles](docs/waffles.md) | generate Digital Elevation Models from scattered data using a variety of methods|
 | [fetches](docs/fetches.md) | fetch elevation data from a variety of public online sources |
 | [regions](docs/regions.md) | process REGIONS |
