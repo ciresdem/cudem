@@ -25,7 +25,7 @@
 ## data-path data-format data-weight data-uncertainty data-name data-source data-date data-resolution data-type data-horz data-vert data-url
 ## Minimally, data-path (column 1) is all that is needed.
 ##
-## an associated inf and geojson file will be gerenated for each datalist
+## An associated inf and geojson file will be gerenated for each datalist
 ## only an associated inf file will be genereated for individual datasets
 ##
 ## Parse various dataset types by region/increments and yield data as xyz or array
