@@ -189,3 +189,7 @@ Print the version information
 |  flatten              |               Generate a DEM by flattening nodata areas. |
 |  lakes              |               Estimate/interpolate Lake bathymetry. |
 |  uncertainty         |               Estimate interpolation uncertainty. |
+
+## Python API
+
+## Example

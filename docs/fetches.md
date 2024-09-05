@@ -1,6 +1,50 @@
-# Overview
+# fetches
 
-Fetches is the data download tool for obtaining publicly available elevation data froma variety of sources and can optionally list, download or process thefetched data for use in DEM generation. We download a variety of data types, e.g., topographic-bathymetry lidar, multibeam swath sonar bathymetry, hydrographic soundings, compiled grids, etc., from a variety of sources, e.g., NOAA Office for Coastal Management (OCM) Digital Coast, NOAA NCEI NOS Hydro Surveys, NOAA NCEI Multibeam, USGS The National Map, and U.S. Army Corps of Engineers (USACE) Navigation Condition Surveys. Other data sources include digitized bathymetric charts or topographic maps, shorelines, satellite-derived elevations, and precisely surveyed geodetic monuments (Table 1).
+Access remote elevation datasets
+
+## Synopsis
+
+```
+fetches [ -hlqzAHR [ args ] ] MODULE ...
+```
+
+## Description
+
+Fetches is a data download tool for obtaining publicly available elevation data from a variety of sources and can optionally list or download the fetched data for use in DEM generation. Common elevation datasets are available for a variety of data types, e.g., topographic-bathymetry lidar, multibeam swath sonar bathymetry, hydrographic soundings, compiled grids, etc., from a variety of sources, e.g., NOAA Office for Coastal Management (OCM) Digital Coast, NOAA NCEI NOS Hydro Surveys, NOAA NCEI Multibeam, USGS The National Map, and U.S. Army Corps of Engineers (USACE) Navigation Condition Surveys. Other data sources include digitized bathymetric charts or topographic maps, shorelines, satellite-derived elevations, and precisely surveyed geodetic monuments (Table 1).
+
+## Options
+
+`-R, --region`
+Restrict processing to the desired REGION 
+Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+OR an OGR-compatible vector file with regional polygons. 
+Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+If a vector file is supplied, will use each region found therein.
+
+`-H, --threads`
+Set the number of threads (1)
+
+`-A, --attempts`
+Set the number of fetching attempts (5)
+
+`-l, --list`
+Return a list of fetch URLs in the given region.
+
+`-z, --no_check_size`
+Don't check the size of remote data if local data exists.
+
+`-q, --quiet`
+Lower the verbosity to a quiet
+
+`--modules`
+Display the module descriptions and usage
+
+`--help`
+Print the usage text
+
+`--version`
+Print the version information
 
 **Table 1.** Data source modules available in the CUDEM software tool
 "fetches*.*"
@@ -44,39 +88,6 @@ Fetches is the data download tool for obtaining publicly available elevation dat
 | waterservices | WaterServices station information from USGS | https://waterservices.usgs.gov/ |
 | wsf | World Settlement Footprint from DLR (German Aerospace Center) | https://download.geoservice.dlr.de/WSF2019/ |
 | vdatum | Vertical Datum transformation grids | https://vdatum.noaa.gov https://cdn.proj.org/ |
-
-# Usage
-
-## Code Syntax
-```
-fetches (2.3.6): Fetches; Fetch and process remote elevation data
-
-usage: fetches [ -hlqzAHR [ args ] ] MODULE ...
-
-Options:
-  -R, --region		Restrict processing to the desired REGION 
-			Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
-			Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
-			OR an OGR-compatible vector file with regional polygons. 
-			Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
-			If a vector file is supplied, will use each region found therein.
-  -H, --threads		Set the number of threads (1)
-  -A, --attempts	Set the number of fetching attempts (5)
-  -l, --list		Return a list of fetch URLs in the given region.
-  -z, --no_check_size	Don't check the size of remote data if local data exists.
-  -q, --quiet		Lower the verbosity to a quiet
-
-  --modules		Display the module descriptions and usage
-  --help		Print the usage text
-  --version		Print the version information
-
-Supported FETCHES modules (see fetches --modules <module-name> for more info): 
-  gmrt, mar_grav, srtm_plus, charts, digital_coast, SLR, CoNED, CUDEM, multibeam, gebco,
-  mgds, trackline, ehydro, ngs, hydronos, ncei_thredds, etopo, tnm, ned, ned1, emodnet,
-  chs, hrdem, arcticdem, bluetopo, osm, copernicus, fabdem, nasadem, tides, vdatum, buoys,
-  earthdata, icesat, mur_sst, swot, usiei, wsf, hydrolakes, https, bing_bfp, waterservices,
-  csb, cpt_city  
-```
 
 ## Python API
 
