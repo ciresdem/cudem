@@ -1,6 +1,6 @@
 # dlim
 
-process various datasets.
+process various elevation datasets.
 
 ## Synopsis
 
