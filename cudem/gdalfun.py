@@ -68,6 +68,9 @@ def split_srs(srs, as_epsg = False):
     if srs is None:
         return(None, None)
 
+    if np.any(['geoid' in x for x in srs.split('+')]):
+        srs = '+'.join(srs.split('+')[:-1])
+    
     if srs.split(':')[0] == 'ESRI':
         esri_split = srs.split('+')
         if len(esri_split) > 1:
@@ -174,6 +177,9 @@ def epsg_from_input(in_srs):
     """
 
     src_vert = None
+    if np.any(['geoid' in x for x in in_srs.split('+')]):
+        in_srs = '+'.join(in_srs.split('+')[:-1])
+        
     if in_srs.split(':')[0] == 'ESRI':
         esri_split = in_srs.split('+')
         if len(esri_split) > 1:
