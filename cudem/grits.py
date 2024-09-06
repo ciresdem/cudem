@@ -46,7 +46,11 @@ from cudem import regions
 from cudem import factory
 
 class Grits:
-    """DEM Filtering
+    """DEM Filtering.
+
+    Filter DEMs using various filtering methods. 
+
+    Define a sub-class to make a new grits filter.
     """
     
     def __init__(
@@ -981,11 +985,24 @@ class Flats(Grits):
         return(self.dst_dem, 0)
 
 class GritsFactory(factory.CUDEMFactory):
+    """Grits Factory Settings and Generator
+    
+    Parse a grits module and return the filtering object
+    """
+    
     _modules = {
-        'blur': {'name': 'blur', 'call': Blur},
-        'grdfilter': {'name': 'grdfilter', 'call': GMTgrdfilter},
-        'outliers': {'name': 'outliers', 'call': Outliers},
-        'flats': {'name': 'flats', 'call': Flats},
+        'blur': {'name': 'blur',
+                 'description': 'Filter with a Gaussian Blur',
+                 'call': Blur},
+        'grdfilter': {'name': 'grdfilter',
+                      'description': 'Filter using GMTs `grdfilter` command',
+                      'call': GMTgrdfilter},
+        'outliers': {'name': 'outliers',
+                     'description': 'Remove outliers from the DEM',
+                     'call': Outliers},
+        'flats': {'name': 'flats',
+                  'description': 'Remove flat areas from the DEM',
+                  'call': Flats},
     }
     
     def __init__(self, **kwargs):
