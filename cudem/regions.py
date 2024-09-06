@@ -33,6 +33,7 @@ from osgeo import ogr
 
 import cudem
 from cudem import utils
+from cudem import srsfun
 
 ogr.DontUseExceptions()
 
@@ -623,9 +624,10 @@ class Region:
         return(o_chunks)
 
     def warp(self, dst_crs = 'epsg:4326', include_z = True):
-        in_crs = pyproj.CRS.from_user_input(self.src_srs)
-        out_crs = pyproj.CRS.from_user_input(dst_crs)
-
+        in_horz_epsg = srsfun.epsg_from_input(self.src_srs)[0]        
+        in_crs = pyproj.CRS.from_user_input(in_horz_epsg)
+        out_horz_epsg = srsfun.epsg_from_input(dst_crs)[0]        
+        out_crs = pyproj.CRS.from_user_input(out_horz_epsg)
         transformer = pyproj.Transformer.from_crs(in_crs, out_crs, always_xy=True)
 
         if transformer is None or not self.valid_p():

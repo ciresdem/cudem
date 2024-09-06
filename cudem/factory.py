@@ -81,15 +81,15 @@ import sys
 import json
 from cudem import utils
 
-def args2dict(args, dict_args={}):
+def args2dict(args, dict_args: dict = {}):
     """convert list of arg strings to dict.
     
-    Args:
+    Parameter:
       args (list): a list of ['key=val'] pairs
       dict_args (dict): a dict to append to
 
     Returns:
-      dict: a dictionary of the key/values
+      dict_args: a dictionary of the key/values
     """
     
     for arg in args:
@@ -104,13 +104,25 @@ def args2dict(args, dict_args={}):
         
     return(dict_args)
 
-def dict2args(in_dict):
+def dict2args(in_dict: dict):
+    """convert a dict of key:val pairs to a module factory string
+
+    Parameter:
+      in_dict (dict): the dictionary to convert
+
+    Returns:
+      out_args (str): a string representatino of in_dict, suitable for a factory cli
+    """
+    
     out_args = ''
     for i, key in enumerate(in_dict.keys()):
         out_args += '{}={}{}'.format(key, in_dict[key], ':' if i+1 < len(in_dict.keys()) else '')
+        
     return(out_args)
 
-def _set_params(mc, mod=None, mod_name=None, mod_args={}):
+def _set_params(mc: any, mod: any = None, mod_name: str = None, mod_args: dict = {}):
+    """set module parameters into mc module class"""
+        
     if 'params' not in mc.__dict__.keys():
         mc.params = {}
         
@@ -126,7 +138,9 @@ def _set_params(mc, mod=None, mod_name=None, mod_args={}):
     if 'kwargs' not in mc.params.keys():
         mc.params['kwargs'] = mc.__dict__.copy()
 
-def _set_mod_params(mc, mf=None, mod=None, mod_name=None):
+def _set_mod_params(mc: any, mf: any = None, mod: any = None, mod_name: str = None):
+    """set module parameters into mc module class"""
+        
     if mod is not None:
         mc.params['mod'] = mod
         
@@ -144,7 +158,13 @@ def _set_mod_params(mc, mf=None, mod=None, mod_name=None):
             if k not in mc.params['kwargs'].keys():
                 mc.params['mod_args'][k] = mc.__dict__[k]
 
-def _factory_module_check(mf, mc):
+def _factory_module_check(mf: any, mc: any):
+    """check if factory module exists in the module class
+
+    Returns:
+      k: module key
+    """
+    
     for k in mf._modules.keys():
         if isinstance(mf._modules[k]['call'](), mc):
             return(k)
@@ -168,7 +188,9 @@ _cudem_module_md = lambda m: '# {cmd} modules:\n% {cmd} ... <mod>:key=val:key=va
 _cudem_module_md_table = lambda m: '| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n'.format(cmd=os.path.basename(sys.argv[0])) + '\n'.join(
     ['| {} | {} | {} |'.format(str(m[key]['name']), str(key), m[key]['description']) for key in m])
 
-def echo_modules(module_dict, key, md = False):
+def echo_modules(module_dict: dict, key: any, md: bool = False):
+    """print out the existing modules from module_dict and their descriptions."""
+    
     if key is None:
         if not md:
             sys.stderr.write(_cudem_module_long_desc(module_dict))
@@ -199,7 +221,10 @@ def echo_modules(module_dict, key, md = False):
     sys.stderr.flush()
 
 class CUDEMModule:
-    """cudem module factory"""
+    """cudem factory module.
+
+    Template for a compatible factory module setup, together with CUDEMFactory.
+    """
     
     def __init__(self, params = {}, **kwargs):
         self.params = params
@@ -220,23 +245,26 @@ class CUDEMModule:
         raise NotImplementedError('the module {} could not be parsed by the sub factory'.format(self.params['mod']))
 
 class CUDEMFactory:
-    ## optional modules, should be dictionary of dictionaries
-    ## where each key is the module name and has at least a 'name', 'description' and 'call' key pointing
-    ## to a function/class with a __call__ functions defined
-    ## e.g from waffles { 'surface': {'name': 'surface', 'datalist-p': True, 'call':waffles.GMTSurface}, ...
-    ## the function/class to call should have at least a 'params={}' paramter.
-    _factory_module = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}
-    _modules = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}
+    """cudem module factory.
+
+    Template for a compatible module factory setup, together with CUDEMModule
     
-    def __init__(self, mod: str = None, **kwargs):
+    optional modules, should be dictionary of dictionaries
+    where each key is the module name and has at least a 'name', 'description' and 'call' key pointing
+    to a function/class with a __call__ functions defined
+    e.g from waffles { 'surface': {'name': 'surface', 'datalist-p': True, 'call':waffles.GMTSurface}, ...
+    the function/class to call should have at least a 'params={}' paramter.
+    """
+    
+    _factory_module = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}
+    _modules = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}    
+    def __init__(self, mod: str = None, **kwargs: any):
         """
         Initialize the factory default settings
         
-        ----------
-        Parameters
-
-        mod - A string of a module name and optional module arguments in the format: 'mod_name:mod_arg0=mod_val0:mod_arg1=mod_val1'
-        params - A parameters object. Should hold all factory global arguments
+        Parameters:
+          mod - A string of a module name and optional module arguments in the format: 'mod_name:mod_arg0=mod_val0:mod_arg1=mod_val1'
+          params - A parameters object. Should hold all factory global arguments
         """
         
         self.mod = mod
@@ -257,7 +285,13 @@ class CUDEMFactory:
     def __repr__(self):
         return('<{}>'.format(self.__dict__))
     
-    def _parse_mod(self, mod):
+    def _parse_mod(self, mod: str):
+        """parse the module string.
+
+        Returns:
+          (module-name, module-arguments)
+        """
+        
         opts = mod.split(':')
         if opts[0] in self._modules.keys():
             if len(opts) > 1:
@@ -267,18 +301,24 @@ class CUDEMFactory:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
             )
-            #return(None)
+
         return(self.mod_name, self.mod_args)
 
-    def add_module(self, type_def={}):
+    def add_module(self, type_def: dict = {}):
+        """Add a module to the factory `_modules` dict"""
+        
         for key in type_def.keys():
             self._modules[key] = type_def[key]
     
     def _acquire_module(self):
-        ## only put params in if its a defined parameter
-        ##    if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
-        ## KeyError: '_factory'
+        """Acquire the module from the factory.
+
+        only put params in if its a defined parameter
+           if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
+        KeyError: '_factory'
         #if 'params' in self._modules[self.mod_name]['call']().__dict__.keys():
+        """
+        
         self.kwargs['params'] = self.__dict__
         for k in self.kwargs.keys():
             if k in self.mod_args.keys():
@@ -291,10 +331,16 @@ class CUDEMFactory:
                 m = lambda m, k: self._modules[self.mod_name]['call'](**m, **k)
                 return(m(self.mod_args, self.kwargs))
             except Exception as e:
-                utils.echo_error_msg('could not acquire module, {}'.format(e))                
+                utils.echo_error_msg('could not acquire module, {}'.format(e))
+                
         #return(self._modules[self.mod_name]['call'](self.mod_args, self.kwargs))
 
     def load_parameter_dict(self, param_dict: dict):
+        """load a module parameter dictionary. 
+
+        Can be used to read a stored json representation of the module.
+        """
+        
         valid_data = False
 
         for ky, val in param_dict.items():
@@ -310,6 +356,8 @@ class CUDEMFactory:
         return(self)
         
     def write_parameter_file(self, param_file: str):
+        """write a module parameter file to disk."""
+        
         try:
             with open(param_file, 'w') as outfile:
                 json.dump(self.__dict__, outfile, indent=4)
@@ -319,6 +367,8 @@ class CUDEMFactory:
             raise ValueError('CUDEMFactory: Unable to write new parameter file to {}'.format(param_file))
         
     def open_parameter_file(self, param_file: str):
+        """Open and read a saved parameter file"""
+        
         valid_data = False
         with open(param_file, 'r') as infile:
             try:
@@ -335,7 +385,6 @@ class CUDEMFactory:
                 utils.echo_msg('CUDEMFactory read successfully from {}'.format(param_file))
             else:
                 utils.echo_warning_msg('Unable to find any valid data in {}'.format(param_file))
-
 
 if __name__ == 'main':
     f = CUDEMFactory()

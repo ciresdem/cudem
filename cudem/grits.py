@@ -56,18 +56,18 @@ class Grits:
     """
     
     def __init__(
-            self, src_dem = None, dst_dem = None, band = 1, min_z = None, max_z = None,
-            count_mask = None, weight_mask = None, uncertainty_mask = None, cache_dir = './',
-            verbose = True, params = {}, **kwargs
+            self, src_dem: str = None, dst_dem: str = None, band: int = 1, min_z: float = None, max_z: float = None,
+            count_mask: any = None, weight_mask: any = None, uncertainty_mask: any = None, cache_dir: str = './',
+            verbose: bool = True, params: dict = {}, **kwargs: any
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
         self.band = band
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
+        self.count_mask = count_mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
-        self.count_mask = count_mask
         self.cache_dir = cache_dir
         self.verbose = verbose
         self.params = params
@@ -84,7 +84,7 @@ class Grits:
     def __call__(self):
         return(self.generate())
 
-    def init_ds(self, src_ds = None):
+    def init_ds(self, src_ds: any = None):
         self.ds_config = gdalfun.gdal_infos(src_ds)
         self.ds_band = src_ds.GetRasterBand(self.band)
         self.gt = self.ds_config['geoT']
@@ -142,7 +142,7 @@ class Grits:
                             s_band.WriteArray(smoothed_array)
         return(self)
 
-    def get_outliers(self, in_array, percentile=75, k=1.5, verbose=False):
+    def get_outliers(self, in_array: any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
         """get the outliers from in_array based on the percentile
 
         https://en.wikipedia.org/wiki/Interquartile_range
@@ -187,11 +187,11 @@ class Blur(Grits):
     blur_factor(int) - the blur factor
     """
     
-    def __init__(self, blur_factor = 1, **kwargs):
+    def __init__(self, blur_factor: float = 1, **kwargs: any):
         super().__init__(**kwargs)
         self.blur_factor = utils.float_or(blur_factor, 1)
 
-    def np_gaussian_blur(self, in_array, size):
+    def np_gaussian_blur(self, in_array: any, size: float):
         """blur an array using fftconvolve from scipy.signal
         size is the blurring scale-factor.
 
@@ -250,7 +250,7 @@ class GMTgrdfilter(Grits):
     node(str) - Either 'grid' or 'pixel'
     """
     
-    def __init__(self, filter_type = 'c3s', dist='1', node='pixel', **kwargs):
+    def __init__(self, filter_type: str = 'c3s', dist: any = '1', node: str = 'pixel', **kwargs: any):
         super().__init__(**kwargs)
         self.filter_type = filter_type
         self.dist = dist

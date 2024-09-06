@@ -4134,7 +4134,7 @@ class Datalist(ElevationDataset):
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
                     if self.dst_srs is not None:
-                        entry_region = regions.Region(src_srs=entry.src_srs).from_list(entry_minmax).warp(gdalfun.epsg_from_input(self.dst_srs)[0])
+                        entry_region = regions.Region(src_srs=entry.src_srs).from_list(entry_minmax).warp(self.dst_srs)
                         entry_minmax = entry_region.export_as_list(include_z=True)
 
                 ## create the feature for the geojson
