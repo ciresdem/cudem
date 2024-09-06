@@ -2654,7 +2654,7 @@ class NGS(FetchModule):
 class Tides(FetchModule):
     """TIDE station information from NOAA/NOS
 
-    Fetch NOS Tide Stations
+    Fetch NOS Tide Stations, fetched file is a geojson with all included records
     
     Fields:
 
@@ -2692,16 +2692,12 @@ class Tides(FetchModule):
     
     https://tidesandcurrents.noaa.gov/
 
-    < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >
+    < tides >
     """
     
-    def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(name='tides', **kwargs)
-        self.s_datum = s_datum
-        self.t_datum = t_datum
-        self.units = units
-        self.station_id = station_id
-        
+
         ## Various TIDES URLs
         self._stations_api_url_rest = 'https://idpgis.ncep.noaa.gov/arcgis/rest/services/NOS_Observations/CO_OPS_Products/FeatureServer/0/query?'
         self._stations_api_url_tnc = 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'

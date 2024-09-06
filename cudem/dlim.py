@@ -5404,6 +5404,7 @@ class TidesFetcher(Fetcher):
                         if self.fetch_module.station_id is not None:
                             if self.fetch_module.station_id != feature['attributes']['id']:
                                 continue
+                            
                         lon = feature['attributes']['longitude']
                         lat = feature['attributes']['latitude']
                         if feature['attributes'][self.s_datum] != -99999.99 and feature['attributes'][self.t_datum] != -99999.99:
