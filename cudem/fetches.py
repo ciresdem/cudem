@@ -785,31 +785,32 @@ class FetchModule:
 class GMRT(FetchModule):
     """The Global Multi-Resolution Topography synthesis.
     
-The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
-compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
-reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
-of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
-to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
-the global and coastal oceans.
+    The Global Multi-Resolution Topography (GMRT) synthesis is a multi-resolutional 
+    compilation of edited multibeam sonar data collected by scientists and institutions worldwide, that is 
+    reviewed, processed and gridded by the GMRT Team and merged into a single continuously updated compilation 
+    of global elevation data. The synthesis began in 1992 as the Ridge Multibeam Synthesis (RMBS), was expanded 
+    to include multibeam bathymetry data from the Southern Ocean, and now includes bathymetry from throughout 
+    the global and coastal oceans.
 
-Data Formats
+    Data Formats
     GMT v3 Compatible NetCDF (GMT id=cf)
     COARDS/CF1.6 Compliant NetCDF (GMT id=nd)
     ESRI ArcASCII
     GeoTIFF
-Metadata Formats
+
+    Metadata Formats
     XML (metadata)
     JSON (metadata)
     Plain text (metadata)
     
-layers: 'topo' or 'topo-mask'
-fmt: 'geotiff', 'netcdf'
+    layers: 'topo' or 'topo-mask'
+    fmt: 'geotiff', 'netcdf'
     
-Data is assumed instantaneous MSL (5773?)
+    Data is assumed instantaneous MSL (5773?)
+    
+    https://www.gmrt.org
 
-https://www.gmrt.org
-
-< gmrt:res=max:fmt=geotiff:layer=topo >
+    < gmrt:res=max:fmt=geotiff:layer=topo >
     """
     
     def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', want_swath = False, **kwargs):
@@ -883,16 +884,16 @@ https://www.gmrt.org
 class GEBCO(FetchModule):
     """GEneral Bathymetric Chart of the Oceans (GEBCO)
     
-GEBCO’s current gridded bathymetric data set, the GEBCO_2022 Grid, is a global terrain model for ocean and land, 
-providing elevation data, in meters, on a 15 arc-second interval grid. It is accompanied by a Type Identifier 
-(TID) Grid that gives information on the types of source data that the GEBCO_2022 Grid is based. 
+    GEBCO’s current gridded bathymetric data set, the GEBCO_2022 Grid, is a global terrain model for ocean and land, 
+    providing elevation data, in meters, on a 15 arc-second interval grid. It is accompanied by a Type Identifier 
+    (TID) Grid that gives information on the types of source data that the GEBCO_2022 Grid is based. 
 
-https://www.gebco.net
+    https://www.gebco.net
 
-Currently only fetches entire grid. Subset in dlim, or elsewhere.
+    Currently only fetches entire grid. Subset in dlim, or elsewhere.
 
-< gebco:want_ice=geotiff:want_sub_ice=False:want_tid=False:exclude_tid=None:upper_limit=None:lower_limit=None >
-"""
+    < gebco:want_ice=geotiff:want_sub_ice=False:want_tid=False:exclude_tid=None:upper_limit=None:lower_limit=None >
+    """
     
     def __init__(self, want_ice = 'geotiff', want_sub_ice = False, want_tid = False,
                  exclude_tid = None, upper_limit = None, lower_limit = None, **kwargs):
@@ -984,22 +985,23 @@ Currently only fetches entire grid. Subset in dlim, or elsewhere.
 class ETOPO(FetchModule):
     """Fetch ETOPO 2022 data. 
 
-The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global 
-datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. 
-The model is designed to support tsunami forecasting, modeling, and warning, as well as ocean circulation 
-modeling and Earth visualization.  The current version, ETOPO 2022, is available in Ice Surface and Bedrock 
-versions that portray either the top layer of the ice sheets covering Greenland and Antarctica, or the bedrock below. 
-For more information, email dem.info@noaa.gov
+    The ETOPO Global Relief Model integrates topography, bathymetry, and shoreline data from regional and global 
+    datasets to enable comprehensive, high resolution renderings of geophysical characteristics of the earth’s surface. 
+    The model is designed to support tsunami forecasting, modeling, and warning, as well as ocean circulation 
+    modeling and Earth visualization.  The current version, ETOPO 2022, is available in Ice Surface and Bedrock 
+    versions that portray either the top layer of the ice sheets covering Greenland and Antarctica, or the bedrock below. 
+    For more information, email dem.info@noaa.gov
 
-We have bedrock or surface in both geotiff and netcdf. Use `datatype` to specify which to fetch.
-datatype options are:
-'bed', 'bed_sid', 'surface', 'surface_sid', 'bed_netcdf', 'bed_sid_netcdf', 'surface_netcdf', 'surface_sid_netcdf'
+    We have bedrock or surface in both geotiff and netcdf. Use `datatype` to specify which to fetch.
+    datatype options are:
+    'bed', 'bed_sid', 'surface', 'surface_sid', 'bed_netcdf', 'bed_sid_netcdf', 'surface_netcdf', 'surface_sid_netcdf'
 
-e.g.  datatype=surface_netcdf
+    e.g.  datatype=surface_netcdf
 
-https://www.ncei.noaa.gov/products/etopo-global-relief-model
+    https://www.ncei.noaa.gov/products/etopo-global-relief-model
     
-< etopo:datatype=None >"""
+    < etopo:datatype=None >
+    """
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='etopo', **kwargs)        
@@ -1151,14 +1153,15 @@ https://www.ncei.noaa.gov/products/etopo-global-relief-model
 class CopernicusDEM(FetchModule):
     """COPERNICUS sattelite elevation data
     
-The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
-infrastructure and vegetation.
+    The Copernicus DEM is a Digital Surface Model (DSM) which represents the surface of the Earth including buildings, 
+    infrastructure and vegetation.
 
-datatype of 1 is 10 m and datatype of 3 is 30 m
+    datatype of 1 is 10 m and datatype of 3 is 30 m
     
-https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation
+    https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/copernicus-dem/elevation
 
-< copernicus:datatype=None >"""
+    < copernicus:datatype=None >
+    """
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='copernicus', **kwargs)
@@ -1288,8 +1291,8 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
         self.FRED._close_ds()
 
     def run(self):
-        '''Run the COPERNICUS DEM fetching module'''
-
+        """Run the COPERNICUS DEM fetching module"""
+        
         if self.datatype is not None:
             self.where.append("DataType = '{}'".format(self.datatype))
 
@@ -1310,13 +1313,14 @@ https://ec.europa.eu/eurostat/web/gisco/geodata/reference-data/elevation/coperni
 class FABDEM(FetchModule):
     """FABDEM elevation data
     
-FABDEM (Forest And Buildings removed Copernicus DEM) is a global elevation map that removes building and tree height
-biases from the Copernicus GLO 30 Digital Elevation Model (DEM). The data is available at 1 arc second
-grid spacing (approximately 30m at the equator) for the globe.
-
-https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
-
-< fabdem >"""
+    FABDEM (Forest And Buildings removed Copernicus DEM) is a global elevation map that removes building and tree height
+    biases from the Copernicus GLO 30 Digital Elevation Model (DEM). The data is available at 1 arc second
+    grid spacing (approximately 30m at the equator) for the globe.
+    
+    https://data.bris.ac.uk/data/dataset/s5hqmjcdj8yo2ibzi9b4ew3sn
+    
+    < fabdem >
+    """
     
     def __init__(self, **kwargs):
         super().__init__(name='fabdem', **kwargs)
@@ -1448,16 +1452,17 @@ class FABDEM_FRED(FetchModule):
 class NASADEM(FetchModule):
     """NASA Digital Elevation Model
     
-Our objective is to provide the scientific and civil communities with a state-of-the-art global 
-digital elevation model (DEM) derived from a combination of Shuttle Radar Topography Mission (SRTM) 
-processing improvements, elevation control, void-filling and merging with data unavailable at the 
-time of the original SRTM production.
+    Our objective is to provide the scientific and civil communities with a state-of-the-art global 
+    digital elevation model (DEM) derived from a combination of Shuttle Radar Topography Mission (SRTM) 
+    processing improvements, elevation control, void-filling and merging with data unavailable at the 
+    time of the original SRTM production.
 
-https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
+    https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem
+    
+    This module fetches NASADEM via OpenTopography. You can also use the EarthData module to fetch this data.
 
-This module fetches NASADEM via OpenTopography. You can also use the EarthData module to fetch this data.
-
-< nasadem:datatype=None >"""
+    < nasadem:datatype=None >
+    """
     
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='nasadem', **kwargs)
@@ -1554,14 +1559,15 @@ This module fetches NASADEM via OpenTopography. You can also use the EarthData m
 class MarGrav(FetchModule):
     """MARine GRAVity Satellite Altimetry Topography from Scripps.
 
-Fetch mar_grav sattelite altimetry topography
+    Fetch mar_grav sattelite altimetry topography
 
-https://topex.ucsd.edu/WWW_html/mar_grav.html
-ftp://topex.ucsd.edu/pub/global_grav_1min/
-https://topex.ucsd.edu/marine_grav/explore_grav.html
-https://topex.ucsd.edu/marine_grav/white_paper.pdf
+    https://topex.ucsd.edu/WWW_html/mar_grav.html
+    ftp://topex.ucsd.edu/pub/global_grav_1min/
+    https://topex.ucsd.edu/marine_grav/explore_grav.html
+    https://topex.ucsd.edu/marine_grav/white_paper.pdf
     
-< mar_grav:upper_limit=None:lower_limit=None:raster=False:mag=1 >"""
+    < mar_grav:upper_limit=None:lower_limit=None:raster=False:mag=1 >
+    """
     
     def __init__(self, mag=1, upper_limit=None, lower_limit=None, raster=False, **kwargs):
         super().__init__(name='mar_grav', **kwargs)
@@ -1605,13 +1611,13 @@ https://topex.ucsd.edu/marine_grav/white_paper.pdf
 class SRTMPlus(FetchModule):
     """SRTM15+: GLOBAL BATHYMETRY AND TOPOGRAPHY AT 15 ARCSECONDS.
 
-https://topex.ucsd.edu/WWW_html/srtm15_plus.html
-http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
-https://topex.ucsd.edu/pub/srtm15_plus/
-https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
+    https://topex.ucsd.edu/WWW_html/srtm15_plus.html
+    http://topex.ucsd.edu/sandwell/publications/180_Tozer_SRTM15+.pdf
+    https://topex.ucsd.edu/pub/srtm15_plus/
+    https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
     
-< srtm_plus >
-"""
+    < srtm_plus >
+    """
     
     def __init__(self, **kwargs):
         super().__init__(name='srtm_plus', **kwargs)
@@ -1641,14 +1647,15 @@ https://topex.ucsd.edu/pub/srtm15_plus/SRTM15_V2.3.nc
 class Charts(FetchModule):
     """NOAA Nautical CHARTS
 
-Here we can fetch either ENC or RNC
+    Here we can fetch either ENC or RNC
     
-Use the NauticalCharts module instead of this one. The arcgis rest server doesn't always
-work as expected.
-
-https://www.charts.noaa.gov/
+    Use the NauticalCharts module instead of this one. The arcgis rest server doesn't always
+    work as expected.
     
-< charts:want_rnc=False >"""
+    https://www.charts.noaa.gov/
+    
+    < charts:want_rnc=False >
+    """
     
     def __init__(self, where = '1=1', want_rnc = False, **kwargs):
         super().__init__(name='charts', **kwargs)
@@ -1682,13 +1689,14 @@ https://www.charts.noaa.gov/
 class NauticalCharts(FetchModule):
     """NOAA Nautical CHARTS
 
-Fetch digital chart data from NOAA
-
-set the 'want_rnc' flag to True to fetch RNC along with ENC data
-
-https://www.charts.noaa.gov/
-
-< charts:want_rnc=False >"""
+    Fetch digital chart data from NOAA
+    
+    set the 'want_rnc' flag to True to fetch RNC along with ENC data
+    
+    https://www.charts.noaa.gov/
+    
+    < charts:want_rnc=False >
+    """
 
     def __init__(self, where='', want_rnc = False, **kwargs):
         super().__init__(name='charts', **kwargs)
@@ -1835,17 +1843,18 @@ class MBDB(FetchModule):
 class Multibeam(FetchModule):
     """NOAA MULTIBEAM bathymetric data.
 
-Fetch multibeam data from NOAA NCEI
+    Fetch multibeam data from NOAA NCEI
         
-NCEI is the U.S. national archive for multibeam bathymetric data and holds more than 9 million 
-nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
-worldwide.
+    NCEI is the U.S. national archive for multibeam bathymetric data and holds more than 9 million 
+    nautical miles of ship trackline data recorded from over 2400 cruises and received from sources 
+    worldwide.
 
-https://data.ngdc.noaa.gov/platforms/
+    https://data.ngdc.noaa.gov/platforms/
 
-<exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, using a '/' as a seperator.
+    <exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, using a '/' as a seperator.
 
-< multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >"""
+    < multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >
+    """
     
     def __init__(
             self, processed = True, survey_id = None, exclude_survey_id = None, ship_id = None, exclude_ship_id = None,
@@ -2029,38 +2038,39 @@ https://data.ngdc.noaa.gov/platforms/
 class HydroNOS(FetchModule):
     """NOS Soundings (bag/hydro)
     
-NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
-Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
-Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
-and its territories. 
+    NCEI maintains the National Ocean Service Hydrographic Data Base (NOSHDB) and Hydrographic 
+    Survey Meta Data Base (HSMDB). Both are populated by the Office of Coast Survey and National 
+    Geodetic Service, and provide coverage of coastal waters and the U.S. exclusive economic zone 
+    and its territories. 
 
-Fields:
+    Fields:
 
-SURVEY_ID ( type: esriFieldTypeString, alias: Survey ID, length: 10 )
-DATE_SURVEY_BEGIN ( type: esriFieldTypeDate, alias: Begin Date, length: 8 )
-DATE_SURVEY_END ( type: esriFieldTypeDate, alias: End Date, length: 8 )
-DATE_MODIFY_DATA ( type: esriFieldTypeDate, alias: Modify Data Date, length: 8 )
-DATE_SURVEY_APPROVAL ( type: esriFieldTypeDate, alias: Survey Approval Date, length: 8 )
-DATE_ADDED ( type: esriFieldTypeDate, alias: Date Added, length: 8 )
-SURVEY_YEAR ( type: esriFieldTypeDouble, alias: Survey Year )
-DIGITAL_DATA ( type: esriFieldTypeString, alias: Digital Data?, length: 15 )
-LOCALITY ( type: esriFieldTypeString, alias: Locality, length: 150 )
-SUBLOCALITY ( type: esriFieldTypeString, alias: Sublocality, length: 150 )
-PLATFORM ( type: esriFieldTypeString, alias: Platform Name, length: 150 )
-PRODUCT_ID ( type: esriFieldTypeString, alias: Product ID, length: 24 )
-BAGS_EXIST ( type: esriFieldTypeString, alias: BAGS_EXIST, length: 4 )
-DOWNLOAD_URL ( type: esriFieldTypeString, alias: Download URL, length: 256 )
-DECADE ( type: esriFieldTypeDouble, alias: Decade )
-PUBLISH ( type: esriFieldTypeString, alias: PUBLISH, length: 1 )
-OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
-SHAPE ( type: esriFieldTypeGeometry, alias: SHAPE )
+    SURVEY_ID ( type: esriFieldTypeString, alias: Survey ID, length: 10 )
+    DATE_SURVEY_BEGIN ( type: esriFieldTypeDate, alias: Begin Date, length: 8 )
+    DATE_SURVEY_END ( type: esriFieldTypeDate, alias: End Date, length: 8 )
+    DATE_MODIFY_DATA ( type: esriFieldTypeDate, alias: Modify Data Date, length: 8 )
+    DATE_SURVEY_APPROVAL ( type: esriFieldTypeDate, alias: Survey Approval Date, length: 8 )
+    DATE_ADDED ( type: esriFieldTypeDate, alias: Date Added, length: 8 )
+    SURVEY_YEAR ( type: esriFieldTypeDouble, alias: Survey Year )
+    DIGITAL_DATA ( type: esriFieldTypeString, alias: Digital Data?, length: 15 )
+    LOCALITY ( type: esriFieldTypeString, alias: Locality, length: 150 )
+    SUBLOCALITY ( type: esriFieldTypeString, alias: Sublocality, length: 150 )
+    PLATFORM ( type: esriFieldTypeString, alias: Platform Name, length: 150 )
+    PRODUCT_ID ( type: esriFieldTypeString, alias: Product ID, length: 24 )
+    BAGS_EXIST ( type: esriFieldTypeString, alias: BAGS_EXIST, length: 4 )
+    DOWNLOAD_URL ( type: esriFieldTypeString, alias: Download URL, length: 256 )
+    DECADE ( type: esriFieldTypeDouble, alias: Decade )
+    PUBLISH ( type: esriFieldTypeString, alias: PUBLISH, length: 1 )
+    OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
+    SHAPE ( type: esriFieldTypeGeometry, alias: SHAPE )
     
-Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
-Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
+    Layer 0: Surveys with BAGs available (Bathymetric Attributed Grids).
+    Layer 1: Surveys with digital sounding data available for download (including those with BAGs).
 
-https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
-
-< nos:where=None:layer=0:datatype=None:index=False:tables=False >"""
+    https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
+    
+    < nos:where=None:layer=0:datatype=None:index=False:tables=False >
+    """
     
     def __init__(self, where='1=1', layer=1, datatype=None, index=False, tables=False,**kwargs):
         super().__init__(name='hydronos', **kwargs)
@@ -2131,7 +2141,8 @@ https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html
 class CSB(FetchModule):
     """crowd sourced bathymetry from NOAA
 
-< csv:where=None:layer=0:index=False >"""
+    < csv:where=None:layer=0:index=False >
+    """
     
     def __init__(self, where='1=1', layer=1, index=False, **kwargs):
         super().__init__(name='csb', **kwargs)
@@ -2194,7 +2205,8 @@ class NSW_TB(FetchModule):
 
     **testing**
 
-< nsw_tb:where=None:layer=0:index=False >"""
+    < nsw_tb:where=None:layer=0:index=False >
+    """
     
     def __init__(self, where='1=1', layer=2, index=False, **kwargs):
         super().__init__(name='csb', **kwargs)
@@ -2236,7 +2248,7 @@ class NSW_TB(FetchModule):
 ## doesn't really work well, use ncei_thredds or digital_coast instead...
 class DEMMosaic(FetchModule):
     """
-Fields:
+    Fields:
 
     OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
     Shape ( type: esriFieldTypeGeometry, alias: Shape )
@@ -2265,7 +2277,6 @@ Fields:
     https://gis.ngdc.noaa.gov/arcgis/rest/services/DEM_mosaics/DEM_global_mosaic/ImageServer
 
     ** doesn't really work well, use ncei_thredds or digital_coast instead...
-
     """
     
     def __init__(self, where='1=1', layer=1, index=False, **kwargs):
@@ -2338,11 +2349,12 @@ Fields:
 class Trackline(FetchModule):
     """NOAA TRACKLINE bathymetric data.
 
-http://www.ngdc.noaa.gov/trackline/
+    http://www.ngdc.noaa.gov/trackline/
 
-** This module won't fetch data ATM. Just returns a URL for a basket that has to then be submitted. :(
+    ** This module won't fetch data ATM. Just returns a URL for a basket that has to then be submitted. :(
 
-< trackline >"""
+    < trackline >
+    """
     
     def __init__(self, where='1=1', **kwargs):
         super().__init__(name='trackline', **kwargs)
@@ -2377,22 +2389,22 @@ http://www.ngdc.noaa.gov/trackline/
 class eHydro(FetchModule):
     """USACE eHydro bathymetric data.
     
-Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
-harbors throughout the United States requires extensive surveying and mapping services, including 
-boundary, topographic, hydrographic, terrestrial lidar, and multispectral and hyperspectral aerial 
-imagery collection as well as airborne topographic and bathymetric lidar acquisition, project-level 
-GIS implementation, development of file-based geodatabases, and GIS tool development.
+    Maintenance responsibility for more than 25,000 miles of navigation channels and 400 ports and 
+    harbors throughout the United States requires extensive surveying and mapping services, including 
+    boundary, topographic, hydrographic, terrestrial lidar, and multispectral and hyperspectral aerial 
+    imagery collection as well as airborne topographic and bathymetric lidar acquisition, project-level 
+    GIS implementation, development of file-based geodatabases, and GIS tool development.
 
-Three representative survey and mapping datasets include the National Channel Framework (NCF)—an enterprise 
-geodatabase of information on all 61 USACE-maintained high-tonnage channels —hydrographic surveys, which 
-provide assistance in locating navigable channels, determining dredging requirements, verifying dredging 
-accuracy, and maintaining harbors and rivers —and Inland Electronic Navigational Charts(IENC), accurate 
-navigational charts provided in a highly structured data format for use in navigation systems and to increase 
-overall navigational safety.. 
+    Three representative survey and mapping datasets include the National Channel Framework (NCF)—an enterprise 
+    geodatabase of information on all 61 USACE-maintained high-tonnage channels —hydrographic surveys, which 
+    provide assistance in locating navigable channels, determining dredging requirements, verifying dredging 
+    accuracy, and maintaining harbors and rivers —and Inland Electronic Navigational Charts(IENC), accurate 
+    navigational charts provided in a highly structured data format for use in navigation systems and to increase 
+    overall navigational safety.. 
 
-https://navigation.usace.army.mil/Survey/Hydro
+    https://navigation.usace.army.mil/Survey/Hydro
 
-Fields:
+    Fields:
 
     objectid (type: esriFieldTypeOID, alias: objectid, SQL Type: sqlTypeOther, length: 0, nullable: false, editable: false)
     surveyjobidpk (type: esriFieldTypeString, alias: SURVEYJOBIDPK, SQL Type: sqlTypeOther, length: 100, nullable: true, editable: true)
@@ -2419,7 +2431,8 @@ Fields:
     Shape__Area (type: esriFieldTypeDouble, alias: Shape__Area, SQL Type: sqlTypeDouble, nullable: true, editable: false)
     Shape__Length (type: esriFieldTypeDouble, alias: Shape__Length, SQL Type: sqlTypeDouble, nullable: true, editable: false)
         
-< ehydro:where=None:inc=None:index=False:tables=False >"""
+    < ehydro:where=None:inc=None:index=False:tables=False >
+    """
 
     def __init__(self, where='1=1', inc=None, survey_name=None, index=False, tables=False,**kwargs):
         super().__init__(name='ehydro', **kwargs)
@@ -2476,30 +2489,30 @@ Fields:
 class BlueTopo(FetchModule):
     """BlueTOPO DEM
     
-BlueTopo is a compilation of the nation's best available bathymetric data. 
-In the same way that topographic map details the height of land, BlueTopo details the depth of 
-lake beds and seafloor beneath navigationally significant U.S. waters. Created as part of the 
-Office of Coast Survey nautical charting mission and its National Bathymetric Source project, 
-BlueTopo is curated bathymetric source data to provide a definitive nationwide model of the seafloor 
-and the Great Lakes.
+    BlueTopo is a compilation of the nation's best available bathymetric data. 
+    In the same way that topographic map details the height of land, BlueTopo details the depth of 
+    lake beds and seafloor beneath navigationally significant U.S. waters. Created as part of the 
+    Office of Coast Survey nautical charting mission and its National Bathymetric Source project, 
+    BlueTopo is curated bathymetric source data to provide a definitive nationwide model of the seafloor 
+    and the Great Lakes.
 
-Output 'tiff' files are 3 bands
-1 - Elevation
-2 - Uncertainty
-3 - Data Source Table
+    Output 'tiff' files are 3 bands
+    1 - Elevation
+    2 - Uncertainty
+    3 - Data Source Table
 
-yield_xyz outputs elevation (band 1)
-elevation data is in NAVD88
+    yield_xyz outputs elevation (band 1)
+    elevation data is in NAVD88
 
-
-https://nauticalcharts.noaa.gov/data/bluetopo_specs.html
-https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#
-https://www.nauticalcharts.noaa.gov/data/bluetopo.html
-https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/
+    https://nauticalcharts.noaa.gov/data/bluetopo_specs.html
+    https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#
+    https://www.nauticalcharts.noaa.gov/data/bluetopo.html
+    https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/index.html#BlueTopo/
     
-https://www.nauticalcharts.noaa.gov/data/bluetopo.html
-
-< bluetopo:want_interpolation=False:unc_weights=False:keep_index=False >"""
+    https://www.nauticalcharts.noaa.gov/data/bluetopo.html
+    
+    < bluetopo:want_interpolation=False:unc_weights=False:keep_index=False >
+    """
     
     def __init__(self, want_interpolation=False, unc_weights=False, keep_index=False, **kwargs):
         super().__init__(name='bluetopo', **kwargs)
@@ -2552,17 +2565,18 @@ https://www.nauticalcharts.noaa.gov/data/bluetopo.html
 class MGDS(FetchModule):
     """The Marine Geoscience Data System (MGDS)
 
-Fetch marine data from MGDS
+    Fetch marine data from MGDS
     
-MGDS is a trusted data repository that provides free public access to a curated collection of marine geophysical 
-data products and complementary data related to understanding the formation and evolution 
-of the seafloor and sub-seafloor.
+    MGDS is a trusted data repository that provides free public access to a curated collection of marine geophysical 
+    data products and complementary data related to understanding the formation and evolution 
+    of the seafloor and sub-seafloor.
 
-https://www.marine-geo.org
+    https://www.marine-geo.org
 
-data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Ancillary, Bathymetry:Singlebeam, Bathymetry:BPI, Bathymetry:ReferenceSurface, Bathymetry:Paelobathymetry]
+    data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Ancillary, Bathymetry:Singlebeam, Bathymetry:BPI, Bathymetry:ReferenceSurface, Bathymetry:Paelobathymetry]
             
-< mgds:data_type=Bathymetry >"""
+    < mgds:data_type=Bathymetry >
+    """
     
     def __init__(self, data_type='Bathymetry', **kwargs):
         super().__init__(name='mgds', **kwargs)
@@ -2601,16 +2615,16 @@ data_tpye=[Bathymetry, Bathymetry:Phase, Bathymetry:Swath, Bathymetry:Swath:Anci
 class NGS(FetchModule):
     """NGS Monuments
     
-NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
-Note some survey markers installed by other organizations may not be available through NGS.
+    NGS provides Information about survey marks (including bench marks) in text datasheets or in GIS shapefiles. 
+    Note some survey markers installed by other organizations may not be available through NGS.
 
-Fetch NGS monuments from NOAA
+    Fetch NGS monuments from NOAA
     
-http://geodesy.noaa.gov/
+    http://geodesy.noaa.gov/
 
-< ngs:datum=geoidHt >"""
+    < ngs:datum=geoidHt >
+    """
 
-    
     def __init__(self, datum='geoidHt', **kwargs):
         super().__init__(name='ngs', **kwargs)
         if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
@@ -2640,9 +2654,10 @@ http://geodesy.noaa.gov/
 class Tides(FetchModule):
     """TIDE station information from NOAA/NOS
 
-Fetch NOS Tide Stations
+    Fetch NOS Tide Stations
+    
+    Fields:
 
-Fields:
     objectid ( type: esriFieldTypeOID , alias: objectid , editable: false , nullable: false )
     id ( type: esriFieldTypeString , alias: id , editable: true , nullable: true , length: 50 )
     name ( type: esriFieldTypeString , alias: name , editable: true , nullable: true , length: 50 )
@@ -2675,9 +2690,10 @@ Fields:
     wl_min ( type: esriFieldTypeDouble , alias: wl_min , editable: true , nullable: true )
     min_date ( type: esriFieldTypeString , alias: min_date , editable: true , nullable: true , length: 50 )
     
-https://tidesandcurrents.noaa.gov/
+    https://tidesandcurrents.noaa.gov/
 
-< tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >"""
+    < tides:station_id=None:s_datum=mllw:t_datum=msl:units=m >
+    """
     
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', station_id=None, **kwargs):
         super().__init__(name='tides', **kwargs)
@@ -2715,10 +2731,10 @@ https://tidesandcurrents.noaa.gov/
 class WaterServices(FetchModule):
     """WaterServices station information from USGS
 
-https://waterservices.usgs.gov/
+    https://waterservices.usgs.gov/
 
-< waterservices:printout=False >"""
-
+    < waterservices:printout=False >
+    """
     
     def __init__(self, printout = False, **kwargs):
         super().__init__(name='waterservices', **kwargs)
@@ -2770,16 +2786,17 @@ https://waterservices.usgs.gov/
 class BUOYS(FetchModule):
     """NOAA BUOY data (beta)
 
-Fetch NOS Tide Stations
+    Fetch NOS Tide Stations
 
-A sustainable and resilient marine observation and monitoring infrastructure which enhances healthy 
-ecosystems, communities, and economies in the face of change and To provide quality observations in 
-the marine environment in a safe and sustainable manner to support the understanding of and predictions 
-to changes in weather, climate, oceans and coast. 
+    A sustainable and resilient marine observation and monitoring infrastructure which enhances healthy 
+    ecosystems, communities, and economies in the face of change and To provide quality observations in 
+    the marine environment in a safe and sustainable manner to support the understanding of and predictions 
+    to changes in weather, climate, oceans and coast. 
 
-https://www.ndbc.noaa.gov
+    https://www.ndbc.noaa.gov
 
-< buoys:buoy_id=None >"""
+    < buoys:buoy_id=None >
+    """
     
     def __init__(self, buoy_id=None, **kwargs):
         super().__init__(name='buoys', **kwargs)
@@ -2837,22 +2854,21 @@ https://www.ndbc.noaa.gov
 class DAV(FetchModule):
     """Fetch NOAA lidar data from DAV
 
-Uses Digital Coasts Data Access Viewer Mapserver to discover
-dataset footprints.
+    Uses Digital Coasts Data Access Viewer Mapserver to discover
+    dataset footprints.
 
-This map service presents spatial information about Elevation Data Access Viewer services across the United States
-and Territories in the Web Mercator projection. The service was developed by the National Oceanic and Atmospheric
-Administration (NOAA), but may contain data and information from a variety of data sources, including non-NOAA data.
-NOAA provides the information “as-is” and shall incur no responsibility or liability as to the completeness or accuracy
-of this information. NOAA assumes no responsibility arising from the use of this information. The NOAA Office for Coastal
-Management will make every effort to provide continual access to this service but it may need to be taken down during
-routine IT maintenance or in case of an emergency. If you plan to ingest this service into your own application and would
-like to be informed about planned and unplanned service outages or changes to existing services, please register for our
-Data Services Newsletter (http://coast.noaa.gov/digitalcoast/publications/subscribe). For additional information, please
-contact the NOAA Office for Coastal Management (coastal.info@noaa.gov).
+    This map service presents spatial information about Elevation Data Access Viewer services across the United States
+    and Territories in the Web Mercator projection. The service was developed by the National Oceanic and Atmospheric
+    Administration (NOAA), but may contain data and information from a variety of data sources, including non-NOAA data.
+    NOAA provides the information “as-is” and shall incur no responsibility or liability as to the completeness or accuracy
+    of this information. NOAA assumes no responsibility arising from the use of this information. The NOAA Office for Coastal
+    Management will make every effort to provide continual access to this service but it may need to be taken down during
+    routine IT maintenance or in case of an emergency. If you plan to ingest this service into your own application and would
+    like to be informed about planned and unplanned service outages or changes to existing services, please register for our
+    Data Services Newsletter (http://coast.noaa.gov/digitalcoast/publications/subscribe). For additional information, please
+    contact the NOAA Office for Coastal Management (coastal.info@noaa.gov).
 
-
-Fields:
+    Fields:
 
     OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
     Shape ( type: esriFieldTypeGeometry, alias: Shape )
@@ -2908,17 +2924,18 @@ Fields:
     Shape_Length ( type: esriFieldTypeDouble, alias: Shape_Length )
     Shape_Area ( type: esriFieldTypeDouble, alias: Shape_Area )
     
-https://coast.noaa.gov
+    https://coast.noaa.gov
     
-Use where=SQL_QUERY to query the MapServer to filter datasets
+    Use where=SQL_QUERY to query the MapServer to filter datasets
 
-* For CUDEM tiles, use where="ID=8483" (1/9) or where="ID=8580" (1/3) or where="Name LIKE '%CUDEM%'" for all available.
-* For OCM SLR DEMs, use where="ID=6230" or where="Name LIKE '%Sea Level Rise%'"
-* For USGS CoNED DEMs, use where="ID=9181" or where="Name LIKE '%CoNED%'"
-* To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
-* datatype is either 'lidar', 'dem' or 'sm'
+    * For CUDEM tiles, use where="ID=8483" (1/9) or where="ID=8580" (1/3) or where="Name LIKE '%CUDEM%'" for all available.
+    * For OCM SLR DEMs, use where="ID=6230" or where="Name LIKE '%Sea Level Rise%'"
+    * For USGS CoNED DEMs, use where="ID=9181" or where="Name LIKE '%CoNED%'"
+    * To only return lidar data, use datatype=lidar, for only raster, use datatype=dem
+    * datatype is either 'lidar', 'dem' or 'sm'
 
-< digital_coast:where=None:datatype=None >"""
+    < digital_coast:where=None:datatype=None >
+    """
     
     def __init__(self, where='1=1', index=False, datatype=None, **kwargs):
         super().__init__(name='digital_coast', **kwargs)
@@ -3083,7 +3100,7 @@ Use where=SQL_QUERY to query the MapServer to filter datasets
 class SLR(DAV):
     """Sea Level Rise DEMs via Digital Coast.
 
-< SLR >
+    < SLR >
     """
     
     def __init__(self, **kwargs):
@@ -3093,7 +3110,7 @@ class SLR(DAV):
 class CoNED(DAV):
     """Coastal NED (CoNED) DEMs via Digital Coast
 
-< CoNED >
+    < CoNED >
     """
     
     def __init__(self, **kwargs):
@@ -3103,7 +3120,7 @@ class CoNED(DAV):
 class CUDEM(DAV):
     """CUDEM Tiled DEMs via Digital Coast
 
-< CUDEM >
+    < CUDEM >
     """
     
     def __init__(self, **kwargs):
@@ -3113,20 +3130,21 @@ class CUDEM(DAV):
 class NCEIThreddsCatalog(FetchModule):
     """NOAA NCEI DEMs via THREDDS
 
-Fetch DEMs from NCEI THREDDS Catalog
+    Fetch DEMs from NCEI THREDDS Catalog
     
-Digital Elevation Models around the world at various resolutions and extents.
-NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
-bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
-and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
+    Digital Elevation Models around the world at various resolutions and extents.
+    NCEI builds and distributes high-resolution, coastal digital elevation models (DEMs) that integrate ocean 
+    bathymetry and land topography supporting NOAA's mission to understand and predict changes in Earth's environment, 
+    and conserve and manage coastal and marine resources to meet our Nation's economic, social, and environmental needs.
 
-DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
-etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
-community preparedness.
+    DEMs are used for coastal process modeling (tsunami inundation, storm surge, sea-level rise, contaminant dispersal, 
+    etc.), ecosystems management and habitat research, coastal and marine spatial planning, and hazard mitigation and 
+    community preparedness.
 
-https://www.ngdc.noaa.gov/thredds/demCatalog.xml
+    https://www.ngdc.noaa.gov/thredds/demCatalog.xml
 
-< ncei_thredds:where=None:want_wcs=False >"""
+    < ncei_thredds:where=None:want_wcs=False >
+    """
 
     def __init__(self, where=[], want_wcs=False, datatype=None, **kwargs):
         super().__init__(name='ncei_thredds', **kwargs)
@@ -3261,15 +3279,16 @@ https://www.ngdc.noaa.gov/thredds/demCatalog.xml
 class TheNationalMap(FetchModule):
     """USGS' The National Map
 
-Fetch elevation data from The National Map
+    Fetch elevation data from The National Map
         
-Various datasets from USGS's National Map. The National Map is a 
-collaborative effort among the USGS and other Federal, State, and local partners to improve
-and deliver topographic information for the Nation.
+    Various datasets from USGS's National Map. The National Map is a 
+    collaborative effort among the USGS and other Federal, State, and local partners to improve
+    and deliver topographic information for the Nation.
+    
+    http://tnmaccess.nationalmap.gov/
 
-http://tnmaccess.nationalmap.gov/
-
-< tnm:formats=None:extents=None:q=None >"""
+    < tnm:formats=None:extents=None:q=None >
+    """
 
     def __init__(self, where=[], formats=None, extents=None, q=None, **kwargs):
         super().__init__(name='tnm', **kwargs)
@@ -3564,7 +3583,7 @@ http://tnmaccess.nationalmap.gov/
 class NED(TheNationalMap):
     """National Elevation Dataset (NED) via The National Map (TNM)
 
-< NED >
+    < NED >
     """
     
     def __init__(self, **kwargs):
@@ -3575,7 +3594,7 @@ class NED(TheNationalMap):
 class NED1(TheNationalMap):
     """National Elevation Dataset (NED) (1 meter) via The National Map (TNM)
 
-< NED1 >
+    < NED1 >
     """
     
     def __init__(self, **kwargs):
@@ -3586,51 +3605,52 @@ class NED1(TheNationalMap):
 class EMODNet(FetchModule):
     """EU elevation data extracts from EMOD DTM.
 
-Fetch raster data from the EMODNET DTM
+    Fetch raster data from the EMODNET DTM
     
-https://portal.emodnet-bathymetry.eu/
-https://erddap.emodnet.eu
+    https://portal.emodnet-bathymetry.eu/
+    https://erddap.emodnet.eu
 
-erddap formats (default is csv):
-https://erddap.emodnet.eu/erddap/griddap/documentation.html#fileType
+    erddap formats (default is csv):
+    https://erddap.emodnet.eu/erddap/griddap/documentation.html#fileType
 
-Data
-fileTypes	Description
-.asc	View OPeNDAP-style ISO-8859-1 comma-separated text.
-.csv	Download a ISO-8859-1 comma-separated text table (line 1: names; line 2: units; ISO 8601 times).
-.csvp	Download a ISO-8859-1 .csv file with line 1: name (units). Times are ISO 8601 strings.
-.csv0	Download a ISO-8859-1 .csv file without column names or units. Times are ISO 8601 strings.
-.das	View the dataset's metadata via an ISO-8859-1 OPeNDAP Dataset Attribute Structure (DAS).
-.dds	View the dataset's structure via an ISO-8859-1 OPeNDAP Dataset Descriptor Structure (DDS).
-.dods	OPeNDAP clients use this to download the data in the DODS binary format.
-.esriAscii	Download an ISO-8859-1 ESRI ASCII file (latitude longitude data only; longitude must be all below or all above 180).
-.fgdc	View the dataset's UTF-8 FGDC .xml metadata.
-.graph	View a Make A Graph web page.
-.help	View a web page with a description of griddap.
-.html	View an OPeNDAP-style HTML Data Access Form.
-.htmlTable	View a UTF-8 .html web page with the data in a table. Times are ISO 8601 strings.
-.iso19115	View the dataset's ISO 19115-2/19139 UTF-8 .xml metadata.
-.itx	Download an ISO-8859-1 Igor Text File. Each axis variable and each data variable becomes a wave.
-.json	View a table-like UTF-8 JSON file (missing value = 'null'; times are ISO 8601 strings).
-.jsonlCSV1	View a UTF-8 JSON Lines CSV file with column names on line 1 (mv = 'null'; times are ISO 8601 strings).
-.jsonlCSV	View a UTF-8 JSON Lines CSV file without column names (mv = 'null'; times are ISO 8601 strings).
-.jsonlKVP	View a UTF-8 JSON Lines file with Key:Value pairs (missing value = 'null'; times are ISO 8601 strings).
-.mat	Download a MATLAB binary file.
-.nc	Download a NetCDF-3 binary file with COARDS/CF/ACDD metadata.
-.ncHeader	View the UTF-8 header (the metadata) for the NetCDF-3 .nc file.
-.ncml	View the dataset's structure and metadata as a UTF-8 NCML .xml file.
-.nccsv	Download a NetCDF-3-like 7-bit ASCII NCCSV .csv file with COARDS/CF/ACDD metadata.
-.nccsvMetadata	View the dataset's metadata as the top half of a 7-bit ASCII NCCSV .csv file.
-.ncoJson	Download a UTF-8 NCO lvl=2 JSON file with COARDS/CF/ACDD metadata.
-.odvTxt	Download time,latitude,longitude,otherVariables as an ODV Generic Spreadsheet File (.txt).
-.timeGaps	View a UTF-8 list of gaps in the time values which are larger than the median gap.
-.tsv	Download a ISO-8859-1 tab-separated text table (line 1: names; line 2: units; ISO 8601 times).
-.tsvp	Download a ISO-8859-1 .tsv file with line 1: name (units). Times are ISO 8601 strings.
-.tsv0	Download a ISO-8859-1 .tsv file without column names or units. Times are ISO 8601 strings.
-.wav	Download a .wav audio file. All columns must be numeric and of the same type.
-.xhtml	View a UTF-8 XHTML (XML) file with the data in a table. Times are ISO 8601 strings.
+    Data
+    fileTypes	Description
+    .asc	View OPeNDAP-style ISO-8859-1 comma-separated text.
+    .csv	Download a ISO-8859-1 comma-separated text table (line 1: names; line 2: units; ISO 8601 times).
+    .csvp	Download a ISO-8859-1 .csv file with line 1: name (units). Times are ISO 8601 strings.
+    .csv0	Download a ISO-8859-1 .csv file without column names or units. Times are ISO 8601 strings.
+    .das	View the dataset's metadata via an ISO-8859-1 OPeNDAP Dataset Attribute Structure (DAS).
+    .dds	View the dataset's structure via an ISO-8859-1 OPeNDAP Dataset Descriptor Structure (DDS).
+    .dods	OPeNDAP clients use this to download the data in the DODS binary format.
+    .esriAscii	Download an ISO-8859-1 ESRI ASCII file (latitude longitude data only; longitude must be all below or all above 180).
+    .fgdc	View the dataset's UTF-8 FGDC .xml metadata.
+    .graph	View a Make A Graph web page.
+    .help	View a web page with a description of griddap.
+    .html	View an OPeNDAP-style HTML Data Access Form.
+    .htmlTable	View a UTF-8 .html web page with the data in a table. Times are ISO 8601 strings.
+    .iso19115	View the dataset's ISO 19115-2/19139 UTF-8 .xml metadata.
+    .itx	Download an ISO-8859-1 Igor Text File. Each axis variable and each data variable becomes a wave.
+    .json	View a table-like UTF-8 JSON file (missing value = 'null'; times are ISO 8601 strings).
+    .jsonlCSV1	View a UTF-8 JSON Lines CSV file with column names on line 1 (mv = 'null'; times are ISO 8601 strings).
+    .jsonlCSV	View a UTF-8 JSON Lines CSV file without column names (mv = 'null'; times are ISO 8601 strings).
+    .jsonlKVP	View a UTF-8 JSON Lines file with Key:Value pairs (missing value = 'null'; times are ISO 8601 strings).
+    .mat	Download a MATLAB binary file.
+    .nc	Download a NetCDF-3 binary file with COARDS/CF/ACDD metadata.
+    .ncHeader	View the UTF-8 header (the metadata) for the NetCDF-3 .nc file.
+    .ncml	View the dataset's structure and metadata as a UTF-8 NCML .xml file.
+    .nccsv	Download a NetCDF-3-like 7-bit ASCII NCCSV .csv file with COARDS/CF/ACDD metadata.
+    .nccsvMetadata	View the dataset's metadata as the top half of a 7-bit ASCII NCCSV .csv file.
+    .ncoJson	Download a UTF-8 NCO lvl=2 JSON file with COARDS/CF/ACDD metadata.
+    .odvTxt	Download time,latitude,longitude,otherVariables as an ODV Generic Spreadsheet File (.txt).
+    .timeGaps	View a UTF-8 list of gaps in the time values which are larger than the median gap.
+    .tsv	Download a ISO-8859-1 tab-separated text table (line 1: names; line 2: units; ISO 8601 times).
+    .tsvp	Download a ISO-8859-1 .tsv file with line 1: name (units). Times are ISO 8601 strings.
+    .tsv0	Download a ISO-8859-1 .tsv file without column names or units. Times are ISO 8601 strings.
+    .wav	Download a .wav audio file. All columns must be numeric and of the same type.
+    .xhtml	View a UTF-8 XHTML (XML) file with the data in a table. Times are ISO 8601 strings.
 
-< emodnet:want_erddap=True:erddap_format=nc >"""
+    < emodnet:want_erddap=True:erddap_format=nc >
+    """
 
     def __init__(self, want_erddap=True, erddap_format='nc', **kwargs):
         super().__init__(name='emodnet', **kwargs)
@@ -3684,13 +3704,14 @@ fileTypes	Description
 class CHS(FetchModule):
     """High-Resolution Digital Elevation Model data for Canada
 
-Fetch bathymetric soundings from the CHS
+    Fetch bathymetric soundings from the CHS
     
-https://open.canada.ca
+    https://open.canada.ca
 
-** broken
+    ** broken
 
-< chs >"""
+    < chs >
+    """
     
     def __init__(self, **kwargs):
         super().__init__(name='chs', **kwargs)
@@ -3741,11 +3762,12 @@ https://open.canada.ca
 class HRDEM(FetchModule):
     """High-Resolution Digital Elevation Model data for Canada
 
-Fetch HRDEM data from Canada (NRCAN)
+    Fetch HRDEM data from Canada (NRCAN)
     
-https://open.canada.ca
+    https://open.canada.ca
 
-< hrdem >"""
+    < hrdem >
+    """
     
     def __init__(self, **kwargs):
         super().__init__(name='hrdem', **kwargs)
@@ -3788,31 +3810,32 @@ https://open.canada.ca
 class ArcticDEM(FetchModule):
     """Arctic DEM
 
-ArcticDEM is an NGA-NSF public-private initiative to automatically produce a high-resolution, 
-high quality, digital surface model (DSM) of the Arctic using optical stereo imagery, 
-high-performance computing, and open source photogrammetry software.
-
- objectid (Integer64)
- name (String)
- tile (String)
- nd_value (Real)
- resolution (Real)
- creationda (Date)
- raster (String)
- fileurl (String)
- spec_type (String)
- qual (Real)
- reg_src (String)
- num_gcps (Integer)
- meanresz (Real)
- active (Integer)
- qc (Integer)
- rel_ver (String)
- num_comp (Integer)
+    ArcticDEM is an NGA-NSF public-private initiative to automatically produce a high-resolution, 
+    high quality, digital surface model (DSM) of the Arctic using optical stereo imagery, 
+    high-performance computing, and open source photogrammetry software.
     
-https://www.pgc.umn.edu/data/arcticdem/
+    objectid (Integer64)
+    name (String)
+    tile (String)
+    nd_value (Real)
+    resolution (Real)
+    creationda (Date)
+    raster (String)
+    fileurl (String)
+    spec_type (String)
+    qual (Real)
+    reg_src (String)
+    num_gcps (Integer)
+    meanresz (Real)
+    active (Integer)
+    qc (Integer)
+    rel_ver (String)
+    num_comp (Integer)
+    
+    https://www.pgc.umn.edu/data/arcticdem/
 
-< arcticdem >"""
+    < arcticdem >
+    """
     
     def __init__(self, where='1=1', layer=0, **kwargs):
         super().__init__(name='arcticdem', **kwargs)
@@ -3922,13 +3945,14 @@ https://www.pgc.umn.edu/data/arcticdem/
 class OpenStreetMap(FetchModule):
     """OpenStreetMap data.
     
-OpenStreetMap is a free, editable map of the whole world that is 
-being built by volunteers largely from scratch and released with an 
-open-content license.
+    OpenStreetMap is a free, editable map of the whole world that is 
+    being built by volunteers largely from scratch and released with an 
+    open-content license.
+    
+    https://wiki.openstreetmap.org/
 
-https://wiki.openstreetmap.org/
-
-< osm:q=None:fmt=osm:planet=False:chunks=True:min_length=None >"""
+    < osm:q=None:fmt=osm:planet=False:chunks=True:min_length=None >
+    """
     
     def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
         super().__init__(name='osm', **kwargs)
@@ -4038,8 +4062,8 @@ https://wiki.openstreetmap.org/
 class BingBFP(FetchModule):
     """Bing Building Footprints
 
-https://github.com/microsoft/GlobalMLBuildingFootprints
-"""
+    https://github.com/microsoft/GlobalMLBuildingFootprints
+    """
     
     def __init__(self, **kwargs):
         super().__init__(name='bingbfp', **kwargs)
@@ -4190,20 +4214,21 @@ def search_proj_cdn(region, epsg=None, crs_name=None, name=None, verbose=True, c
 class VDATUM(FetchModule):
     """NOAA's VDATUM transformation grids
 
-Fetch vertical datum conversion grids from NOAA, etc.
+    Fetch vertical datum conversion grids from NOAA, etc.
     
-VDatum is a free software tool being developed jointly by NOAA's National Geodetic Survey (NGS), 
-Office of Coast Survey (OCS), and Center for Operational Oceanographic Products and Services (CO-OPS). 
+    VDatum is a free software tool being developed jointly by NOAA's National Geodetic Survey (NGS), 
+    Office of Coast Survey (OCS), and Center for Operational Oceanographic Products and Services (CO-OPS). 
 
-VDatum is designed to vertically transform geospatial data among a variety of tidal, orthometric and 
-ellipsoidal vertical datums - allowing users to convert their data from different horizontal/vertical 
-references into a common system and enabling the fusion of diverse geospatial data in desired reference 
-levels.
+    VDatum is designed to vertically transform geospatial data among a variety of tidal, orthometric and 
+    ellipsoidal vertical datums - allowing users to convert their data from different horizontal/vertical 
+    references into a common system and enabling the fusion of diverse geospatial data in desired reference 
+    levels.
 
-https://vdatum.noaa.gov
-https://cdn.proj.org
+    https://vdatum.noaa.gov
+    https://cdn.proj.org
 
-< vdatum:datatype=None:gtx=False >"""
+    < vdatum:datatype=None:gtx=False >
+    """
     
     _tidal_references = {
         1089: {'name': 'mllw',
@@ -4433,42 +4458,42 @@ https://cdn.proj.org
 class EarthData(FetchModule):
     """ACCESS NASA EARTH SCIENCE DATA
     
-NASA promotes the full and open sharing of all its data to research and applications communities, 
-private industry, academia, and the general public. In order to meet the needs of these different 
-communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
-ways to discover, access, and use the data.
+    NASA promotes the full and open sharing of all its data to research and applications communities, 
+    private industry, academia, and the general public. In order to meet the needs of these different 
+    communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
+    ways to discover, access, and use the data.
 
-If version is omitted, will fetch all versions
-Use wildcards in 'short_name' to return granules for all matching short_name entries.
+    If version is omitted, will fetch all versions
+    Use wildcards in 'short_name' to return granules for all matching short_name entries.
 
-Commentary from nsidc_download.py
-Tested in Python 2.7 and Python 3.4, 3.6, 3.7
+    Commentary from nsidc_download.py
+    Tested in Python 2.7 and Python 3.4, 3.6, 3.7
 
-To run the script at a Linux, macOS, or Cygwin command-line terminal:
-  $ python nsidc-data-download.py
+    To run the script at a Linux, macOS, or Cygwin command-line terminal:
+    $ python nsidc-data-download.py
 
-On Windows, open Start menu -> Run and type cmd. Then type:
+    On Windows, open Start menu -> Run and type cmd. Then type:
     python nsidc-data-download.py
 
-The script will first search Earthdata for all matching files.
-You will then be prompted for your Earthdata username/password
-and the script will download the matching files.
+    The script will first search Earthdata for all matching files.
+    You will then be prompted for your Earthdata username/password
+    and the script will download the matching files.
 
-If you wish, you may store your Earthdata username/password in a .netrc
-file in your $HOME directory and the script will automatically attempt to
-read this file. The .netrc file should have the following format:
-   machine urs.earthdata.nasa.gov login myusername password mypassword
-where 'myusername' and 'mypassword' are your Earthdata credentials.
+    If you wish, you may store your Earthdata username/password in a .netrc
+    file in your $HOME directory and the script will automatically attempt to
+    read this file. The .netrc file should have the following format:
+    machine urs.earthdata.nasa.gov login myusername password mypassword
+    where 'myusername' and 'mypassword' are your Earthdata credentials.
 
-you might need to `chmod 0600 ~/.netrc`
+    you might need to `chmod 0600 ~/.netrc`
 
-NASA promotes the full and open sharing of all its data to research and applications communities, 
-private industry, academia, and the general public. In order to meet the needs of these different 
-communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
-ways to discover, access, and use the data.
+    NASA promotes the full and open sharing of all its data to research and applications communities, 
+    private industry, academia, and the general public. In order to meet the needs of these different 
+    communities, NASA’s Earth Observing System Data and Information System (EOSDIS) has provided various 
+    ways to discover, access, and use the data.
 
-nsidc_download.py updated for fetches integration 12/21
-Updated from nsidc.py to earthdata.py to support all earthdata datasets
+    nsidc_download.py updated for fetches integration 12/21
+    Updated from nsidc.py to earthdata.py to support all earthdata datasets
 
     time_start: A Zulu-time date string. e.g. '2020-05-04T00:00:00Z'
 
@@ -4477,7 +4502,8 @@ Updated from nsidc.py to earthdata.py to support all earthdata datasets
                 default to searching from the start and/or end of the entire
                 dataset collection, respectively.
 
-some notable datasets:
+    some notable datasets:
+
     ATL03
     ATL06
     ATL07
@@ -4502,9 +4528,10 @@ some notable datasets:
     NASADEM_NUMNC
     NASADEM_SIM
     
-https://cmr.earthdata.nasa.gov
+    https://cmr.earthdata.nasa.gov
 
-< earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >"""
+    < earthdata:short_name=ATL08:version=004:time_start='':time_end='':filename_filter='' >
+    """
 
     def __init__(self, short_name='ATL03', provider='', time_start='', time_end='', version='', filename_filter=None, egi=False, **kwargs):
         super().__init__(name='cmr', **kwargs)
@@ -4613,17 +4640,18 @@ https://cmr.earthdata.nasa.gov
 class IceSat(EarthData):
     """Access IceSat2 data.
 
-By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
+    By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
 
-If you wish, you may store your Earthdata username/password in a .netrc
-file in your $HOME directory and the script will automatically attempt to
-read this file. The .netrc file should have the following format:
-   machine urs.earthdata.nasa.gov login myusername password mypassword
-where 'myusername' and 'mypassword' are your Earthdata credentials.
+    If you wish, you may store your Earthdata username/password in a .netrc
+    file in your $HOME directory and the script will automatically attempt to
+    read this file. The .netrc file should have the following format:
+    machine urs.earthdata.nasa.gov login myusername password mypassword
+    where 'myusername' and 'mypassword' are your Earthdata credentials.
 
-you might need to `chmod 0600 ~/.netrc`
-   
-< icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >"""
+    you might need to `chmod 0600 ~/.netrc`
+    
+    < icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >
+    """
     
     def __init__(self, short_name='ATL03', subset=False, **kwargs):
         if short_name is not None:
@@ -4643,51 +4671,52 @@ you might need to `chmod 0600 ~/.netrc`
 class SWOT(EarthData):
     """Access SWOT data.
 
-https://podaac.jpl.nasa.gov/SWOT?tab=datasets-information
+    https://podaac.jpl.nasa.gov/SWOT?tab=datasets-information
 
-set `product` to one of:
+    set `product` to one of:
 
-Land-based KaRIn (HR mode)
-L2_HR_PIXC	netCDF
-L2_HR_PIXC_2	netCDF
-L2_HR_PIXC_1	netCDF
-L2_HR_PIXCVec	netCDF
-L2_HR_Raster	netCDF
-L2_HR_Raster_2	netCDF
-L2_HR_Raster_1	netCDF
-L2_HR_Raster_100m	netCDF
-L2_HR_Raster_250m	netCDF
-L2_HR_RiverSP	shapefile
-L2_HR_RiverSP_node	shapefile
-L2_HR_RiverSP_reach	shapefile
-L2_HR_LakeSP	shapefile
-L2_HR_LakeSP_obs	shapefile
-L2_HR_LakeSP_prior	shapefile
-L2_HR_LakeSP_unassigned	shapefile
-L2_HR_RiverAvg	shapefile
-L2_HR_LakeAvg	shapefile
+    Land-based KaRIn (HR mode)
+    L2_HR_PIXC	netCDF
+    L2_HR_PIXC_2	netCDF
+    L2_HR_PIXC_1	netCDF
+    L2_HR_PIXCVec	netCDF
+    L2_HR_Raster	netCDF
+    L2_HR_Raster_2	netCDF
+    L2_HR_Raster_1	netCDF
+    L2_HR_Raster_100m	netCDF
+    L2_HR_Raster_250m	netCDF
+    L2_HR_RiverSP	shapefile
+    L2_HR_RiverSP_node	shapefile
+    L2_HR_RiverSP_reach	shapefile
+    L2_HR_LakeSP	shapefile
+    L2_HR_LakeSP_obs	shapefile
+    L2_HR_LakeSP_prior	shapefile
+    L2_HR_LakeSP_unassigned	shapefile
+    L2_HR_RiverAvg	shapefile
+    L2_HR_LakeAvg	shapefile
+    
+    Ocean-based KaRIn (LR mode)
+    L2_LR_SSH (2 km grid)	netCDF
+    L2_LR_SSH_BASIC	netCDF
+    L2_LR_SSH_WINDWAVE	netCDF
+    L2_LR_SSH_EXPERT	netCDF
+    L2_LR_SSH_UNSMOOTHED (250m)	netCDF
 
-Ocean-based KaRIn (LR mode)
-L2_LR_SSH (2 km grid)	netCDF
-L2_LR_SSH_BASIC	netCDF
-L2_LR_SSH_WINDWAVE	netCDF
-L2_LR_SSH_EXPERT	netCDF
-L2_LR_SSH_UNSMOOTHED (250m)	netCDF
+    Continuation of nadir altimetry
+    L2_NALT_OGDR	netCDF
+    L2_NALT_OGDR_SSHA	netCDF
+    L2_NALT_OGDR_GDR	netCDF
+    L2_NALT_IGDR	netCDF
+    L2_NALT_IGDR_SSHA	netCDF
+    L2_NALT_IGDR_GDR	netCDF
+    L2_NALT_IGDR_SGDR	netCDF
+    L2_NALT_GDR	netCDF
+    L2_NALT_GDR_SSHA	netCDF
+    L2_NALT_GDR_GDR	netCDF
+    L2_NALT_GDR_SGDR	netCDF
 
-Continuation of nadir altimetry
-L2_NALT_OGDR	netCDF
-L2_NALT_OGDR_SSHA	netCDF
-L2_NALT_OGDR_GDR	netCDF
-L2_NALT_IGDR	netCDF
-L2_NALT_IGDR_SSHA	netCDF
-L2_NALT_IGDR_GDR	netCDF
-L2_NALT_IGDR_SGDR	netCDF
-L2_NALT_GDR	netCDF
-L2_NALT_GDR_SSHA	netCDF
-L2_NALT_GDR_GDR	netCDF
-L2_NALT_GDR_SGDR	netCDF
-
-< swot:time_start='':time_end='':filename_filter='':product='' >"""
+    < swot:time_start='':time_end='':filename_filter='':product='' >
+    """
     
     def __init__(self, product='L2_HR_Raster_2', **kwargs):
         super().__init__(short_name='SWOT_{}*'.format(product), **kwargs)   
@@ -4697,7 +4726,8 @@ L2_NALT_GDR_SGDR	netCDF
 class MUR_SST(EarthData):
     """Access SST data.
 
-< mur_sst:time_start='':time_end='':filename_filter='' >"""
+    < mur_sst:time_start='':time_end='':filename_filter='' >
+    """
     
     def __init__(self, **kwargs):
         super().__init__(short_name='MUR-JPL-L4-GLOB-v4.1', **kwargs)   
@@ -4706,50 +4736,53 @@ class MUR_SST(EarthData):
 class USIEI(FetchModule):
     """US Interagency Elevation Inventory
 
-No data is fetched with this module. Will list out query results from the USIEI.
-Set 'want_geometry' to True to output a geojson formatted vector.
+    No data is fetched with this module. Will list out query results from the USIEI.
+    Set 'want_geometry' to True to output a geojson formatted vector.
 
-Fields:
-OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
-Shape ( type: esriFieldTypeGeometry, alias: Shape )
-ID ( type: esriFieldTypeInteger, alias: ID )
-Title ( type: esriFieldTypeString, alias: Title, length: 250 )
-DataType ( type: esriFieldTypeString, alias: DataType, length: 20 )
-Status ( type: esriFieldTypeString, alias: Status, length: 20 )
-Links ( type: esriFieldTypeString, alias: Links, length: 8000 )
-pointspacing ( type: esriFieldTypeString, alias: pointspacing, length: 50 )
-verticalaccuracy ( type: esriFieldTypeString, alias: verticalaccuracy, length: 8000 )
-horizontalaccuracy ( type: esriFieldTypeString, alias: horizontalaccuracy, length: 300 )
-collectiondate ( type: esriFieldTypeString, alias: collectiondate, length: 200 )
-collectionyear ( type: esriFieldTypeSmallInteger, alias: collectionyear )
-InfoContact ( type: esriFieldTypeString, alias: InfoContact, length: 500 )
-qualitylevel ( type: esriFieldTypeSmallInteger, alias: qualitylevel )
-meets3dep ( type: esriFieldTypeString, alias: meets3dep, length: 50 )
-reasons3dep ( type: esriFieldTypeString, alias: reasons3dep, length: 150 )
-meets3dep_lpc ( type: esriFieldTypeString, alias: meets3dep_lpc, length: 255 )
-productsavailable ( type: esriFieldTypeString, alias: productsavailable, length: 300 )
-pointclasses ( type: esriFieldTypeString, alias: pointclasses, length: 1000 )
-verticaldatum ( type: esriFieldTypeString, alias: verticaldatum, length: 300 )
-horizontaldatum ( type: esriFieldTypeString, alias: horizontaldatum, length: 300 )
-restrictions ( type: esriFieldTypeString, alias: restrictions, length: 20 )
-leafOnOff ( type: esriFieldTypeString, alias: leafOnOff, length: 255 )
-AlternateTitle ( type: esriFieldTypeString, alias: AlternateTitle, length: 500 )
-notes ( type: esriFieldTypeString, alias: notes, length: 500 )
-RecordOwner ( type: esriFieldTypeString, alias: RecordOwner, length: 100 )
-ContractSpec ( type: esriFieldTypeString, alias: ContractSpec, length: 255 )
-Shape_Length ( type: esriFieldTypeDouble, alias: Shape_Length )
-Shape_Area ( type: esriFieldTypeDouble, alias: Shape_Area )
+    Fields:
+
+    OBJECTID ( type: esriFieldTypeOID, alias: OBJECTID )
+    Shape ( type: esriFieldTypeGeometry, alias: Shape )
+    ID ( type: esriFieldTypeInteger, alias: ID )
+    Title ( type: esriFieldTypeString, alias: Title, length: 250 )
+    DataType ( type: esriFieldTypeString, alias: DataType, length: 20 )
+    Status ( type: esriFieldTypeString, alias: Status, length: 20 )
+    Links ( type: esriFieldTypeString, alias: Links, length: 8000 )
+    pointspacing ( type: esriFieldTypeString, alias: pointspacing, length: 50 )
+    verticalaccuracy ( type: esriFieldTypeString, alias: verticalaccuracy, length: 8000 )
+    horizontalaccuracy ( type: esriFieldTypeString, alias: horizontalaccuracy, length: 300 )
+    collectiondate ( type: esriFieldTypeString, alias: collectiondate, length: 200 )
+    collectionyear ( type: esriFieldTypeSmallInteger, alias: collectionyear )
+    InfoContact ( type: esriFieldTypeString, alias: InfoContact, length: 500 )
+    qualitylevel ( type: esriFieldTypeSmallInteger, alias: qualitylevel )
+    meets3dep ( type: esriFieldTypeString, alias: meets3dep, length: 50 )
+    reasons3dep ( type: esriFieldTypeString, alias: reasons3dep, length: 150 )
+    meets3dep_lpc ( type: esriFieldTypeString, alias: meets3dep_lpc, length: 255 )
+    productsavailable ( type: esriFieldTypeString, alias: productsavailable, length: 300 )
+    pointclasses ( type: esriFieldTypeString, alias: pointclasses, length: 1000 )
+    verticaldatum ( type: esriFieldTypeString, alias: verticaldatum, length: 300 )
+    horizontaldatum ( type: esriFieldTypeString, alias: horizontaldatum, length: 300 )
+    restrictions ( type: esriFieldTypeString, alias: restrictions, length: 20 )
+    leafOnOff ( type: esriFieldTypeString, alias: leafOnOff, length: 255 )
+    AlternateTitle ( type: esriFieldTypeString, alias: AlternateTitle, length: 500 )
+    notes ( type: esriFieldTypeString, alias: notes, length: 500 )
+    RecordOwner ( type: esriFieldTypeString, alias: RecordOwner, length: 100 )
+    ContractSpec ( type: esriFieldTypeString, alias: ContractSpec, length: 255 )
+    Shape_Length ( type: esriFieldTypeDouble, alias: Shape_Length )
+    Shape_Area ( type: esriFieldTypeDouble, alias: Shape_Area )
     
-layers:
-  0 - Lidar-Topobathy
-  1 - Lidar-Bathy
-  2 - Lidar-Topo
-  3 - IfSAR/InSAR
-  4 - Other Bathy
+    layers:
 
-https://coast.noaa.gov/inventory/
+    0 - Lidar-Topobathy
+    1 - Lidar-Bathy
+    2 - Lidar-Topo
+    3 - IfSAR/InSAR
+    4 - Other Bathy
 
-< usiei:where=None:layer=0:want_geometry=False >"""
+    https://coast.noaa.gov/inventory/
+
+    < usiei:where=None:layer=0:want_geometry=False >
+    """
     
     def __init__(self, where='1=1', want_geometry=False, layer=0, **kwargs):
         super().__init__(name='usiei', **kwargs)
@@ -4789,12 +4822,13 @@ https://coast.noaa.gov/inventory/
 class WSF(FetchModule):
     """WSF from German Aerospace Service (DLR)
 
-World Settlement Footprint (WSF) 2019
+    World Settlement Footprint (WSF) 2019
 
-https://www.dlr.de/EN/Home/home_node.html
-https://geoservice.dlr.de/web/services
+    https://www.dlr.de/EN/Home/home_node.html
+    https://geoservice.dlr.de/web/services
     
-< wsf >"""
+    < wsf >
+    """
 
     def __init__(self, where='', datatype=None, **kwargs):
         super().__init__(name='wsf', **kwargs)
@@ -4887,25 +4921,26 @@ https://geoservice.dlr.de/web/services
 class HydroLakes(FetchModule):
     """HydroLakes vector and derived elevations
     
-HydroLAKES aims to provide the shoreline polygons of all global lakes with a surface area 
-of at least 10 ha. HydroLAKES has been developed using a suite of auxiliary data sources of 
-lake polygons and gridded lake surface areas. All lakes are co-registered to the global 
-river network of the HydroSHEDS database via their lake pour points. The global coverage of 
-HydroLAKES encompasses 1.4 million individual lakes or reservoirs representing a total 
-surface area of 2.67 million km², a total shoreline length of 7.2 million km, and a total 
-storage volume of 181,900 km³.
+    HydroLAKES aims to provide the shoreline polygons of all global lakes with a surface area 
+    of at least 10 ha. HydroLAKES has been developed using a suite of auxiliary data sources of 
+    lake polygons and gridded lake surface areas. All lakes are co-registered to the global 
+    river network of the HydroSHEDS database via their lake pour points. The global coverage of 
+    HydroLAKES encompasses 1.4 million individual lakes or reservoirs representing a total 
+    surface area of 2.67 million km², a total shoreline length of 7.2 million km, and a total 
+    storage volume of 181,900 km³.
+    
+    hydrolakes:
+    https://wp.geog.mcgill.ca/hydrolab/data/
+    https://www.hydrosheds.org/products/hydrolakes
+    https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip
 
-hydrolakes:
-https://wp.geog.mcgill.ca/hydrolab/data/
-https://www.hydrosheds.org/products/hydrolakes
-https://data.hydrosheds.org/file/hydrolakes/HydroLAKES_polys_v10_shp.zip
+    globathy:
+    https://springernature.figshare.com/collections/GLOBathy_the_Global_Lakes_Bathymetry_Dataset/5243309
 
-globathy:
-https://springernature.figshare.com/collections/GLOBathy_the_Global_Lakes_Bathymetry_Dataset/5243309
+    add globathy output with the 'want_globathy' flag set to True
 
-add globathy output with the 'want_globathy' flag set to True
-
-< hydrolakes:want_globathy=False >"""
+    < hydrolakes:want_globathy=False >
+    """
     
     def __init__(self, where='1=1', want_globathy=False, **kwargs):
         super().__init__(name='hydrolakes', **kwargs)
@@ -4934,9 +4969,9 @@ add globathy output with the 'want_globathy' flag set to True
 class ShallowBathyEverywhere(FetchModule):
     """Shallow Bathy Everywhere
 
-Derived bathymetry for various locations
+    Derived bathymetry for various locations
 
-< sbe >
+    < sbe >
     """
     
     def __init__(self, **kwargs):
@@ -4946,7 +4981,7 @@ Derived bathymetry for various locations
 class CPTCity(FetchModule):
     """CPT City
 
-Fetch various CPT files for DEM hillshades, etc.
+    Fetch various CPT files for DEM hillshades, etc.
     """
     
     def __init__(self, q = None, **kwargs):

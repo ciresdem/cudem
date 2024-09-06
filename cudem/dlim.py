@@ -467,49 +467,51 @@ class INF:
 class ElevationDataset:
     """representing an Elevation Dataset
     
-This is the super class for all datalist (dlim) datasets .    
-Each dataset sub-class should define a dataset-specific    
-data parser <self.parse> and a <self.generate_inf> function to generate
-inf files. 
+    This is the super class for all datalist (dlim) datasets .    
+    Each dataset sub-class should define a dataset-specific    
+    data parser <self.parse> and a <self.generate_inf> function to generate
+    inf files. 
 
-Specifically, each sub-dataset should minimally define the following functions:
+    Specifically, each sub-dataset should minimally define the following functions:
 
-sub_ds.__init__
-sub_ds.yield_ds
-    
-Where:
+    sub_ds.__init__
+    sub_ds.yield_ds
+
+    -----------
+    Where:
+
     generate_inf generates a dlim compatible inf file,
     parse yields the dlim dataset module
     yield_ds yields the data as a numpy rec-array with 'x', 'y', 'z' and optionally 'w' and 'u'
 
-----
-Parameters:
+    -----------
+    Parameters:
 
-fn: dataset filename or fetches module
-data_format: dataset format
-weight: dataset weight
-uncertainty: dataset uncertainty
-mask: mask the dataset
-src_srs: dataset source srs
-dst_srs: dataset target srs
-src_geoid: dataset source geoid (if applicable)
-dst_geoid: dataset target geoid
-x_inc: target dataset x/lat increment
-y_inc: target dataset y/lon increment
-want_mask: generate a mask of the data
-want_sm: generate spatial metadata vector
-sample_alg: the gdal resample algorithm
-parent: dataset parent obj
-region: ROI
-invert_region: invert the region
-stack_node: output x/y data as mean of input x/y instead of cell center
-stack_mode: 'min', 'max', 'supercede', 'mean'
-cache_dir: cache_directory
-verbose: be verbose
-remote: dataset is remote
-dump_precision: specify the float precision of the dumped xyz data
-params: the factory parameters
-metadata: dataset metadata
+    fn: dataset filename or fetches module
+    data_format: dataset format
+    weight: dataset weight
+    uncertainty: dataset uncertainty
+    mask: mask the dataset
+    src_srs: dataset source srs
+    dst_srs: dataset target srs
+    src_geoid: dataset source geoid (if applicable)
+    dst_geoid: dataset target geoid
+    x_inc: target dataset x/lat increment
+    y_inc: target dataset y/lon increment
+    want_mask: generate a mask of the data
+    want_sm: generate spatial metadata vector
+    sample_alg: the gdal resample algorithm
+    parent: dataset parent obj
+    region: ROI
+    invert_region: invert the region
+    stack_node: output x/y data as mean of input x/y instead of cell center
+    stack_mode: 'min', 'max', 'supercede', 'mean'
+    cache_dir: cache_directory
+    verbose: be verbose
+    remote: dataset is remote
+    dump_precision: specify the float precision of the dumped xyz data
+    params: the factory parameters
+    metadata: dataset metadata
     """
 
     gdal_sample_methods = [
@@ -2140,27 +2142,27 @@ metadata: dataset metadata
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
-Parse data from an xyz file/stdin
+    Parse data from an xyz file/stdin
 
-generate_inf - generate an inf file for the xyz data
-yield_xyz - yield the xyz data as xyz
-yield_array - yield the xyz data as an array must set the x_inc/y_inc in the super class
+    generate_inf - generate an inf file for the xyz data
+    yield_xyz - yield the xyz data as xyz
+    yield_array - yield the xyz data as an array must set the x_inc/y_inc in the super class
     
------------
-Parameters:
+    -----------
+    Parameters:
     
-delim: the delimiter of the xyz data (str)
-xpos: the position (int) of the x value
-ypos: the position (int) of the y value
-zpos: the position (int) of the z value
-wpos: the position (int) of the w value (weight)
-upos: the position (int) of the u value (uncertainty)
-skip: number of lines to skip
-x_scale: scale the x value
-y_scale: scale the y value
-z_scale: scale the z value
-x_offset: offset the x value
-y_offset: offset the y value    
+    delim: the delimiter of the xyz data (str)
+    xpos: the position (int) of the x value
+    ypos: the position (int) of the y value
+    zpos: the position (int) of the z value
+    wpos: the position (int) of the w value (weight)
+    upos: the position (int) of the u value (uncertainty)
+    skip: number of lines to skip
+    x_scale: scale the x value
+    y_scale: scale the y value
+    z_scale: scale the z value
+    x_offset: offset the x value
+    y_offset: offset the y value    
     """
             
     def __init__(self, delim = None, xpos = 0, ypos = 1, zpos = 2,
@@ -2341,17 +2343,17 @@ class YXZFile(XYZFile):
 class LASFile(ElevationDataset):
     """representing an LAS/LAZ dataset.
 
-Process LAS/LAZ lidar files using pylas.
+    Process LAS/LAZ lidar files using pylas.
     
-get_epsg - attempt to parse the EPSG from the LAS file header
-generate_inf - generate an inf file for the LAS data
-yield_xyz - yield the LAS data as xyz
-yield_array - yield the LAS data as an array must set the x_inc/y_inc in the super class
+    get_epsg - attempt to parse the EPSG from the LAS file header
+    generate_inf - generate an inf file for the LAS data
+    yield_xyz - yield the LAS data as xyz
+    yield_array - yield the LAS data as an array must set the x_inc/y_inc in the super class
     
------------
-Parameters:
+    -----------
+    Parameters:
     
-classes (str): a list of classes to parse, being a string with `/` seperator 
+    classes (str): a list of classes to parse, being a string with `/` seperator 
     """
 
     def __init__(self, classes='2/29/40', **kwargs):
@@ -2420,29 +2422,29 @@ classes (str): a list of classes to parse, being a string with `/` seperator
 class GDALFile(ElevationDataset):
     """providing a GDAL raster dataset parser.
 
-Process/Parse GDAL supported raster files.
-See GDAL for more information regarding supported formats.
+    Process/Parse GDAL supported raster files.
+    See GDAL for more information regarding supported formats.
     
-generate_inf - generate an inf file for the RASTER data
-yield_xyz - yield the RASTER data as xyz
-yield_array - yield the RASTER data as an array
+    generate_inf - generate an inf file for the RASTER data
+    yield_xyz - yield the RASTER data as xyz
+    yield_array - yield the RASTER data as an array
 
------------
-Parameters:
+    -----------
+    Parameters:
 
-mask: raster dataset to use as MASK dataset OR a band number
-weight_mask: raster dataset to use as weights (per-cell) OR a band number
-otherwise will use single value (weight) from superclass.
-uncertainty_mask: raster dataset to use as uncertainty (per-cell) OR a band number
-uncertainty_mask_to_meter: conversion value for uncertainty data to meter
-otherwise will use a single value (uncertainty) from superclass.
-open_options: GDAL open_options for raster dataset
-sample: sample method to use in resamplinig
-check_path: check to make sure path exists
-super_grid: Force processing of a supergrid (BAG files) (True/False)
-band_no: the band number of the elevation data
-remove_flat: remove flattened data from the input
-node: force node registration of either 'pixel' or 'grid'
+    mask: raster dataset to use as MASK dataset OR a band number
+    weight_mask: raster dataset to use as weights (per-cell) OR a band number
+    otherwise will use single value (weight) from superclass.
+    uncertainty_mask: raster dataset to use as uncertainty (per-cell) OR a band number
+    uncertainty_mask_to_meter: conversion value for uncertainty data to meter
+    otherwise will use a single value (uncertainty) from superclass.
+    open_options: GDAL open_options for raster dataset
+    sample: sample method to use in resamplinig
+    check_path: check to make sure path exists
+    super_grid: Force processing of a supergrid (BAG files) (True/False)
+    band_no: the band number of the elevation data
+    remove_flat: remove flattened data from the input
+    node: force node registration of either 'pixel' or 'grid'
     """
     
     def __init__(self, weight_mask = None, uncertainty_mask = None,  x_band = None, y_band = None, uncertainty_mask_to_meter = 1,
@@ -2889,19 +2891,19 @@ node: force node registration of either 'pixel' or 'grid'
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
-Process supergrids at native resolution if they
-exist, otherwise process as normal grid.
+    Process supergrids at native resolution if they
+    exist, otherwise process as normal grid.
 
-generate_inf - generate an inf file for the BAG data
-init_srs - discover the srs of the BAG file
-parse - parse the gdal datasets out of the BAG file
+    generate_inf - generate an inf file for the BAG data
+    init_srs - discover the srs of the BAG file
+    parse - parse the gdal datasets out of the BAG file
 
------------
-Parameters:
+    -----------
+    Parameters:
 
-explode (bool): Explode the BAG and process each super grid seperately.
-force_vr (bool): Force VR processing (if BAG file has bad header info)
-vr_strategy (str): VR strategy to use (MIN/MAX/AUTO)
+    explode (bool): Explode the BAG and process each super grid seperately.
+    force_vr (bool): Force VR processing (if BAG file has bad header info)
+    vr_strategy (str): VR strategy to use (MIN/MAX/AUTO)
     """
 
     def __init__(
@@ -3027,8 +3029,8 @@ vr_strategy (str): VR strategy to use (MIN/MAX/AUTO)
 class SWOTFile(ElevationDataset):
     """NASA SWOT Data super class
 
-Uses h5py to parse data. Make a subclass of this to 
-process various types of SWOT data
+    Uses h5py to parse data. Make a subclass of this to 
+    process various types of SWOT data
     """
     
     def __init__(self, **kwargs):
@@ -3062,16 +3064,16 @@ process various types of SWOT data
 class SWOT_PIXC(SWOTFile):
     """NASA SWOT PIXC data file.
 
-Extract data from a SWOT PIXC file.
+    Extract data from a SWOT PIXC file.
 
-classes: 1UB, 2UB, 3UB, 4UB, 5UB, 6UB, 7UB
-"land, land_near_water, water_near_land, open_water, dark_water, low_coh_water_near_land, open_low_coh_water"
+    classes: 1UB, 2UB, 3UB, 4UB, 5UB, 6UB, 7UB
+    "land, land_near_water, water_near_land, open_water, dark_water, low_coh_water_near_land, open_low_coh_water"
 
-classes_qual: 1U, 2U, 4U, 8U, 16U, 2048U, 8192U, 16384U, 32768U, 262144U, 524288U, 134217728U, 536870912U, 1073741824U, 2147483648U
-"no_coherent_gain power_close_to_noise_floor detected_water_but_no_prior_water detected_water_but_bright_land water_false_detection_rate_suspect coherent_power_suspect tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad large_karin_gap"
+    classes_qual: 1U, 2U, 4U, 8U, 16U, 2048U, 8192U, 16384U, 32768U, 262144U, 524288U, 134217728U, 536870912U, 1073741824U, 2147483648U
+    "no_coherent_gain power_close_to_noise_floor detected_water_but_no_prior_water detected_water_but_bright_land water_false_detection_rate_suspect coherent_power_suspect tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad large_karin_gap"
 
-anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB 
-"open_ocean land continental_water aquatic_vegetation continental_ice_snow floating_ice salted_basin"  		
+    anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB 
+    "open_ocean land continental_water aquatic_vegetation continental_ice_snow floating_ice salted_basin"  		
     """
     
     def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, classes_qual = None,
@@ -3144,7 +3146,7 @@ anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB
 class SWOT_HR_Raster(ElevationDataset):
     """NASA SWOT HR_Raster data file.
 
-Extract data from a SWOT HR_Raster file.
+    Extract data from a SWOT HR_Raster file.
     """
         
     def __init__(self, data_set='wse', **kwargs):
@@ -3184,16 +3186,15 @@ Extract data from a SWOT HR_Raster file.
 class IceSatFile(ElevationDataset):
     """IceSat data from NASA
 
-Classes:
+    Classes:
     -1 : uncoded
     0 : noise
     1 : ground
     2 : canopy
     3 : top of canopy
 
-Confidence Levels:
+    Confidence Levels:
     0, 1, 2, 3, 4
-
     """
     
     def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', **kwargs):
@@ -3552,19 +3553,19 @@ Confidence Levels:
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
-Process MB-System supported multibeam data files.
-See MB-System for more information regarding supported
-file formats, etc.
+    Process MB-System supported multibeam data files.
+    See MB-System for more information regarding supported
+    file formats, etc.
     
-generate_inf - generate an inf file for the MBS data
-yield_xyz - yield the MBS data as xyz
-yield_array - yield the MBS data as an array
- 
------------
-Parameters:
-
-mb_fmt=[]
-mb_exclude=[]
+    generate_inf - generate an inf file for the MBS data
+    yield_xyz - yield the MBS data as xyz
+    yield_array - yield the MBS data as an array
+    
+    -----------
+    Parameters:
+    
+    mb_fmt=[]
+    mb_exclude=[]
     """
 
     def __init__(
@@ -3837,17 +3838,17 @@ mb_exclude=[]
 class OGRFile(ElevationDataset):
     """providing an OGR 3D point dataset parser.
 
-Useful for data such as S-57, ENC, E-Hydro, Etc.
+    Useful for data such as S-57, ENC, E-Hydro, Etc.
 
------------
-Parameters:
+    -----------
+    Parameters:
 
-ogr_layer (str/int): the OGR layer containing elevation data
-elev_field (str): the field containing the z values
-weight_field (str): the field containing weight values
-uncertainty_field (str): the field containing uncertainty_values
-z_scale (float): scale the output z values    
-"""
+    ogr_layer (str/int): the OGR layer containing elevation data
+    elev_field (str): the field containing the z values
+    weight_field (str): the field containing weight values
+    uncertainty_field (str): the field containing uncertainty_values
+    z_scale (float): scale the output z values    
+    """
 
     _known_layer_names = ['SOUNDG', 'SurveyPoint_HD', 'SurveyPoint']
     _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'surveyPointElev', 'Z_depth', 'Z_height']
@@ -3954,7 +3955,7 @@ z_scale (float): scale the output z values
 class Scratch(ElevationDataset):
     """Scratch Dataset
 
-Process a python list of valid dataset entries
+    Process a python list of valid dataset entries
     """
     
     def __init__(self, **kwargs):
@@ -4032,15 +4033,15 @@ Process a python list of valid dataset entries
 class Datalist(ElevationDataset):
     """representing a datalist parser
     
-A datalist is an extended MB-System style datalist.
+    A datalist is an extended MB-System style datalist.
     
-Each datalist consists of datalist-entries, where a datalist entry has the following columns:
-path format weight uncertainty title source date data_type resolution hdatum vdatum url
+    Each datalist consists of datalist-entries, where a datalist entry has the following columns:
+    path format weight uncertainty title source date data_type resolution hdatum vdatum url
 
-the datalist can contain datalist-entries to other datalist files, distributed across a
-file-system.
+    the datalist can contain datalist-entries to other datalist files, distributed across a
+    file-system.
 
-see `cudem.dlim.datasets` for superclass ElevationDataset
+    see `cudem.dlim.datasets` for superclass ElevationDataset
     """
 
     _datalist_json_cols = ['path', 'format', 'weight', 'uncertainty', 'name', 'title', 'source',
@@ -4359,7 +4360,7 @@ see `cudem.dlim.datasets` for superclass ElevationDataset
 class ZIPlist(ElevationDataset):
     """Zip file parser.
 
-Parse supported datasets from a zipfile.
+    Parse supported datasets from a zipfile.
     """
     
     def __init__(self, **kwargs):
@@ -4480,23 +4481,23 @@ Parse supported datasets from a zipfile.
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class
 
-This is used in waffles/dlim for on-the-fly remote data
-parsing and processing.
+    This is used in waffles/dlim for on-the-fly remote data
+    parsing and processing.
     
-See `fetches`, `cudem.fetches` for more information on usage and the
-various fetches modules supported.
+    See `fetches`, `cudem.fetches` for more information on usage and the
+    various fetches modules supported.
 
-If a fetch module needs special processing define a sub-class
-of Fetcher and redefine the set_ds(self, result) function which yields a
-list of dlim dataset objects, where result is an item from the fetch result list.
-Otherwise, this Fetcher class can be used as default if the fetched data comes
-in a normal sort of way.
+    If a fetch module needs special processing define a sub-class
+    of Fetcher and redefine the set_ds(self, result) function which yields a
+    list of dlim dataset objects, where result is an item from the fetch result list.
+    Otherwise, this Fetcher class can be used as default if the fetched data comes
+    in a normal sort of way.
 
-Generally, though not always, if the fetched data is a raster then
-there is no need to redefine set_ds, though if the raster has insufficient
-information, such as with Copernicus, whose nodata value is not
-specified in the geotiff files, it may be best to create a simple
-sub-class for it.
+    Generally, though not always, if the fetched data is a raster then
+    there is no need to redefine set_ds, though if the raster has insufficient
+    information, such as with Copernicus, whose nodata value is not
+    specified in the geotiff files, it may be best to create a simple
+    sub-class for it.
     """
 
     def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, callback = fetches.fetches_callback, **kwargs):
@@ -4596,11 +4597,11 @@ sub-class for it.
 class NEDFetcher(Fetcher):
     """National Elevation Dataset from USGS
 
-This is a wrapper shortcut for fetching NED DEMs from USGS' The National Map (TNM)
+    This is a wrapper shortcut for fetching NED DEMs from USGS' The National Map (TNM)
     """
 
     __doc__ = '''{}    
-Fetches Module: <ned> - {}'''.format(__doc__, fetches.NED.__doc__)
+    Fetches Module: <ned> - {}'''.format(__doc__, fetches.NED.__doc__)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -4618,13 +4619,13 @@ Fetches Module: <ned> - {}'''.format(__doc__, fetches.NED.__doc__)
 class DAVFetcher_CoNED(Fetcher):
     """CoNED from the digital coast 
 
-This is a wrapper shortcut for fetching CoNED DEMs from the Digital Coast,
-mainly so we can pull the vertical datum info from the DAV metadata since the
-CoNED doesn't assign one to their DEMs.
+    This is a wrapper shortcut for fetching CoNED DEMs from the Digital Coast,
+    mainly so we can pull the vertical datum info from the DAV metadata since the
+    CoNED doesn't assign one to their DEMs.
     """
 
     __doc__ = '''{}    
-Fetches Module: <CoNED> - {}'''.format(__doc__, fetches.CoNED.__doc__)
+    Fetches Module: <CoNED> - {}'''.format(__doc__, fetches.CoNED.__doc__)
     
     
     def __init__(self, keep_fetched_data = True, cog = True, **kwargs):
@@ -4685,12 +4686,12 @@ Fetches Module: <CoNED> - {}'''.format(__doc__, fetches.CoNED.__doc__)
 class DAVFetcher_SLR(Fetcher):
     """SLR DEM from the digital coast 
 
-This is a wrapper shortcut for fetching SLR DEMs from the Digital Coast,
-mainly so we can pull the remove the flattened ring around the actual data.
+    This is a wrapper shortcut for fetching SLR DEMs from the Digital Coast,
+    mainly so we can pull the remove the flattened ring around the actual data.
     """
 
     __doc__ = '''{}    
-Fetches Module: <SLR> - {}'''.format(__doc__, fetches.SLR.__doc__)
+    Fetches Module: <SLR> - {}'''.format(__doc__, fetches.SLR.__doc__)
     
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(**kwargs)
@@ -4709,7 +4710,7 @@ Fetches Module: <SLR> - {}'''.format(__doc__, fetches.SLR.__doc__)
 class SWOTFetcher(Fetcher):
     """SWOT L2_HR_Raster data from NASA
 
-set `data_set` to one of (for L2_HR_Raster):
+    set `data_set` to one of (for L2_HR_Raster):
     1 - longitude (64-bit floating-point)
     2 - latitude (64-bit floating-point)
     3 - wse (32-bit floating-point)
@@ -4749,7 +4750,7 @@ set `data_set` to one of (for L2_HR_Raster):
     37 - model_wet_tropo_cor (32-bit floating-point)
     38 - iono_cor_gim_ka (32-bit floating-point)
 
-currently supported SWOT products and product options:
+    currently supported SWOT products and product options:
     - L2_HR_Raster
       apply_geoid
       data_set
@@ -4760,7 +4761,7 @@ currently supported SWOT products and product options:
     """
 
     __doc__ = '''{}    
-Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
+    Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
     def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None,
@@ -4812,16 +4813,16 @@ Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
 class IceSatFetcher(Fetcher):
     """IceSat data from NASA
 
-See `fetches --modules icesat` for fetching parameters
+    See `fetches --modules icesat` for fetching parameters
 
------------
-Parameters:
+    -----------
+    Parameters:
     
-water_surface (str): 'mean_tide', 'geoid' or 'ellipsoid' water surface
+    water_surface (str): 'mean_tide', 'geoid' or 'ellipsoid' water surface
     """
 
     __doc__ = '''{}    
-Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
+    Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
     
     def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = None, confidence_levels = None, **kwargs):
         super().__init__(**kwargs)
@@ -4868,14 +4869,14 @@ Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
 class GMRTFetcher(Fetcher):
     """GMRT Gridded data.
 
------------
-Parameters:
+    -----------
+    Parameters:
     
-swath_only: onlt return MB swath data
+    swath_only: onlt return MB swath data
     """
     
     __doc__ = '''{}    
-Fetches Module: <gmrt> - {}'''.format(__doc__, fetches.GMRT.__doc__)
+    Fetches Module: <gmrt> - {}'''.format(__doc__, fetches.GMRT.__doc__)
     
     def __init__(self, swath_only = False, **kwargs):
         super().__init__(**kwargs)
@@ -4921,11 +4922,11 @@ Fetches Module: <gmrt> - {}'''.format(__doc__, fetches.GMRT.__doc__)
 class GEBCOFetcher(Fetcher):
     """GEBCO Gridded data
 
-Note: Fetches entire zip file.
+    Note: Fetches entire zip file.
     """
     
     __doc__ = '''{}    
-Fetches Module: <gebco> - {}'''.format(__doc__, fetches.GEBCO.__doc__)
+    Fetches Module: <gebco> - {}'''.format(__doc__, fetches.GEBCO.__doc__)
         
     def __init__(self, exclude_tid = None, **kwargs):
         super().__init__(**kwargs)
@@ -5025,7 +5026,7 @@ class CopernicusFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-Fetches Module: <copernicus> - {}'''.format(__doc__, fetches.CopernicusDEM.__doc__)
+    Fetches Module: <copernicus> - {}'''.format(__doc__, fetches.CopernicusDEM.__doc__)
     
     def __init__(self, datatype=None, **kwargs):
         super().__init__(**kwargs)
@@ -5051,7 +5052,7 @@ class FABDEMFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-Fetches Module: <fabdem> - {}'''.format(__doc__, fetches.FABDEM.__doc__)
+    Fetches Module: <fabdem> - {}'''.format(__doc__, fetches.FABDEM.__doc__)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -5074,7 +5075,7 @@ class MarGravFetcher(Fetcher):
     """
     
     __doc__ = '''{}    
-Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
+    Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
     
     def __init__(self, rasterize=False, bathy_only=False, upper_limit=None, lower_limit=None, **kwargs):
         super().__init__(**kwargs)
@@ -5121,11 +5122,11 @@ Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
 class ChartsFetcher(Fetcher):
     """NOAA ENC Charts Fetcher
 
-Digital Soundings
+    Digital Soundings
     """
     
     __doc__ = '''{}
-Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
+    Fetches Module: <charts> - {}'''.format(__doc__, fetches.Charts.__doc__)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -5148,7 +5149,7 @@ class MBSFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
+    Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
 
     def __init__(self, mb_exclude = 'A', want_binned = False, **kwargs):
         super().__init__(**kwargs)
@@ -5171,7 +5172,7 @@ class HydroNOSFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.HydroNOS.__doc__)
+    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.HydroNOS.__doc__)
 
     def __init__(self, explode=False, **kwargs):
         super().__init__(**kwargs)
@@ -5208,7 +5209,7 @@ class CSBFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.CSB.__doc__)
+    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.CSB.__doc__)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -5226,7 +5227,7 @@ class EMODNetFetcher(Fetcher):
     """
     
     __doc__ = '''{}
-Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
+    Fetches Module: <emodnet> - {}'''.format(__doc__, fetches.EMODNet.__doc__)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -5250,7 +5251,7 @@ class eHydroFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
+    Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
         
     def __init__(self, want_contours = False, **kwargs):
         super().__init__(**kwargs)
@@ -5308,15 +5309,15 @@ Fetches Module: <ehydro> - {}'''.format(__doc__, fetches.eHydro.__doc__)
 class BlueTopoFetcher(Fetcher):
     """BlueTopo Gridded bathymetric data Fetcher
 
------------
-Parameters:
+    -----------
+    Parameters:
     
-want_interpolation: True/False to include interpolated cells
-unc_weights: use the uncertainty mask as weights
+    want_interpolation: True/False to include interpolated cells
+    unc_weights: use the uncertainty mask as weights
     """
 
     __doc__ = '''{}
-Fetches Module: <bluetopo> - {}'''.format(__doc__, fetches.BlueTopo.__doc__)
+    Fetches Module: <bluetopo> - {}'''.format(__doc__, fetches.BlueTopo.__doc__)
 
     def __init__(self, want_interpolation=False, unc_weights=False, **kwargs):
         super().__init__(**kwargs)
@@ -5354,7 +5355,7 @@ class NGSFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-Fetches Module: <ngs> - {}'''.format(__doc__, fetches.NGS.__doc__)
+    Fetches Module: <ngs> - {}'''.format(__doc__, fetches.NGS.__doc__)
     
     def __init__(self, datum = 'geoidHt', **kwargs):
         super().__init__(**kwargs)
@@ -5386,8 +5387,8 @@ class TidesFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
-
+    Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
+    
     def __init__(self, s_datum='mllw', t_datum='msl', units='m', **kwargs):
         super().__init__(**kwargs)
         self.s_datum = s_datum
@@ -5421,13 +5422,13 @@ Fetches Module: <tides> - {}'''.format(__doc__, fetches.Tides.__doc__)
 class WaterServicesFetcher(Fetcher):
     """USGS Water Services
 
------------
-Parameters:
+    -----------
+    Parameters:
     
-site_code: the site code to fetch
-units: 'm' for meters
+    site_code: the site code to fetch
+    units: 'm' for meters
 
-site_codes:
+    site_codes:
     00065 - Gate Height
     00060 - StreamFlow
     63160 - Stream water level elevation above NAVD 1988
@@ -5436,7 +5437,7 @@ site_codes:
     """
 
     __doc__ = '''{}
-Fetches Module: <waterservices> - {}'''.format(__doc__, fetches.WaterServices.__doc__)
+    Fetches Module: <waterservices> - {}'''.format(__doc__, fetches.WaterServices.__doc__)
     
     def __init__(self, site_code='00065', units='m', **kwargs):
         super().__init__(**kwargs)
@@ -5471,7 +5472,7 @@ class VDatumFetcher(Fetcher):
     """
 
     __doc__ = '''{}
-Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.VDATUM.__doc__)
+    Fetches Module: <vdatum> - {}'''.format(__doc__, fetches.VDATUM.__doc__)
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
