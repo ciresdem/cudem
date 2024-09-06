@@ -21,6 +21,8 @@
 ##
 ## filter grids using various methods
 ##
+## Grits modules are sub-classes of the Grits class. Define a new sub-class to create a new DEM filter.
+##
 ### Code:
 
 import os

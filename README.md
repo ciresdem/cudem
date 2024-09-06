@@ -65,6 +65,11 @@ conda activate cudem
 ```
 
 ## Extras
+- For laszip support:
+```
+pip install laspy[laszip]
+```
+
 - If on Windows, install windows-curses with pip
 
 ```
