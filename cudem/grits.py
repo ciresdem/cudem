@@ -953,8 +953,6 @@ class Flats(Grits):
 
                 for srcwin in gdalfun.gdal_yield_srcwin(src_ds, n_chunk=self.n_chunk, step=self.n_chunk, verbose=True):
                     src_arr = self.ds_band.ReadAsArray(*srcwin).astype(float)
-                    #src_arr[src_arr == src_config['ndv']] = np.nan
-
                     uv, uv_counts = np.unique(src_arr, return_counts=True)
                     if self.size_threshold is None:
                         _size_threshold = self.get_outliers(uv_counts, 99)[0]
@@ -962,20 +960,23 @@ class Flats(Grits):
                         _size_threshold = self.size_threshold
 
                     uv_ = uv[uv_counts > _size_threshold]
-                    if len(uv_) > 0:
-                        for i in trange(
-                                0,
-                                len(uv_),
-                                desc='{}: removing flattened data greater than {} cells'.format(
-                                    os.path.basename(sys.argv[0]), _size_threshold
-                                ),
-                                leave=self.verbose
-                        ):
-                            mask = src_arr == uv_[i]
-                            count += np.count_nonzero(mask)
-                            src_arr[mask] = self.ds_config['ndv']
+                    mask = np.isin(src_arr, uv_)
+                    count += np.count_nonzero(mask)
+                    src_arr[mask] = self.ds_config['ndv']
+                    
+                    # if len(uv_) > 0:
+                    #     for i in trange(
+                    #             0,
+                    #             len(uv_),
+                    #             desc='{}: removing flattened data greater than {} cells'.format(
+                    #                 os.path.basename(sys.argv[0]), _size_threshold
+                    #             ),
+                    #             leave=self.verbose
+                    #     ):
+                    #         mask = src_arr == uv_[i]
+                    #         count += np.count_nonzero(mask)
+                    #         src_arr[mask] = self.ds_config['ndv']
 
-                    #with gdalfun.gdal_datasource(self.dst_dem, update=True) as dst_ds:
                     dst_band = dst_ds.GetRasterBand(self.band)
                     dst_band.WriteArray(src_arr, srcwin[0], srcwin[1])
                 
