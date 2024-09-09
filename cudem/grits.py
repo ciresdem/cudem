@@ -181,7 +181,6 @@ class Grits:
 class Blur(Grits):
     """Blur DEM values using a Gaussian Blur
 
-    -----------
     Parameters:
 
     blur_factor(int) - the blur factor
@@ -310,7 +309,6 @@ class Outliers(Grits):
     Most datasets should be fine with using only the default parameters, however, closer refinement of the parameters may
     yield more acceptable results.
 
-    -----------
     Parameters:
 
     percentile(float) - the percentile to use to define Q3
@@ -931,7 +929,6 @@ class Outliers(Grits):
 class Flats(Grits):
     """Remove flat areas from the input DEM
 
-    -----------
     Parameters:
 
     size_threshold(int) - the minimum flat area in pixels to remove
@@ -940,8 +937,8 @@ class Flats(Grits):
     
     def __init__(self, size_threshold = None, n_chunk = None, **kwargs):
         super().__init__(**kwargs)
-        self.size_threshold = size_threshold
-        self.n_chunk = n_chunk
+        self.size_threshold = utils.int_or(size_threshold)
+        self.n_chunk = utils.int_or(n_chunk)
         
     def run(self):
         """Discover and remove flat zones"""
