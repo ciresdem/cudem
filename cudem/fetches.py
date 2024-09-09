@@ -2072,12 +2072,14 @@ class HydroNOS(FetchModule):
     < nos:where=None:layer=0:datatype=None:index=False:tables=False >
     """
     
-    def __init__(self, where='1=1', layer=1, datatype=None, index=False, tables=False,**kwargs):
+    def __init__(self, where='1=1', layer=1, datatype=None, index=False, tables=False, survey_id=None, exclude_survey_id=None, **kwargs):
         super().__init__(name='hydronos', **kwargs)
         self.where = where
         self.datatype = datatype
         self.index = index
         self.tables = tables
+        self.survey_id = survey_id
+        self.exclude_survey_id = exclude_survey_id
 
         ## various NOS URLs
         self._nos_dynamic_url = 'https://gis.ngdc.noaa.gov/arcgis/rest/services/web_mercator/nos_hydro_dynamic/MapServer'
@@ -2119,6 +2121,14 @@ class HydroNOS(FetchModule):
 
                         if link is None:
                             continue
+
+                        if self.survey_id is not None:
+                            if ID not in self.survey_id.split('/'):
+                                continue
+
+                        if self.exclude_survey_id is not None:
+                            if ID in self.exclude_survey_id.split('/'):
+                                continue
                         
                         nos_dir = link.split('/')[-2]
                         data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
