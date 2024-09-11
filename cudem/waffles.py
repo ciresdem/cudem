@@ -2005,10 +2005,11 @@ class WafflesCoastline(Waffle):
     want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
     want_lakes=[True/False] - mask LAKES using HYDROLAKES
     invert_lakes=[True/False] - invert the lake mask (invert=True to remove lakes from the waterbodies)
-    want_buildings=[True/False] - mask BUILDINGS using OSM
+    want_osm_buildings=[True/False] - mask BUILDINGS using OSM
+    want_bing_buildings=[True/False] - mask BUILDINGS using BING
+    want_wsf_buildings=[True/False] - mask BUILDINGS using WSF
     osm_tries=[val] - OSM max server attempts
     min_building_length=[val] - only use buildings larger than val
-    want_wsf=[True/False] - mask BUILDINGS using WSF
     invert=[True/False] - invert the output results
     polygonize=[True/False] - polygonize the output
     min_weight=[val] - weight applied to fetched coastal data
@@ -2027,6 +2028,9 @@ class WafflesCoastline(Waffle):
             want_buildings=False,
             min_building_length=None,
             want_osm_planet=False,
+            want_bing_buildings=False,
+            want_osm_buildings=False,
+            want_wsf_buildings=False,
             invert=False,
             polygonize=True, # float(True) is 1.0
             osm_tries=5,
@@ -2060,6 +2064,9 @@ class WafflesCoastline(Waffle):
         self.invert_lakes = invert_lakes
         self.want_buildings = want_buildings
         self.want_wsf = want_wsf
+        self.want_bing_buildings = want_bing_buildings
+        self.want_osm_buildings = want_osm_buildings
+        self.want_wsf_buildings = want_wsf_buildings
         self.min_building_length = min_building_length
         self.want_osm_planet = want_osm_planet
         self.invert = invert
@@ -2111,11 +2118,14 @@ class WafflesCoastline(Waffle):
         if self.want_lakes:
             self._load_lakes()
 
-        if self.want_buildings:
-            self._load_bldgs()
+        if self.want_buildings or self.want_bing_buildings:
+            self._load_bing_bldgs()
 
-        if self.want_wsf:
-            self._load_wsf()
+        if self.want_osm_buildings:
+            self._load_osm_bldgs()
+
+        if self.want_wsf or self.want_wsf_buildings:
+            self._load_wsf_bldgs()
             
         if self.want_stack:
             self._load_data()
@@ -2193,25 +2203,6 @@ class WafflesCoastline(Waffle):
                 cop_ds_arr[cop_ds_arr != 0] = 1
                 self.coast_array += (cop_ds_arr * self.min_weight)
                 cop_ds = cop_ds_arr = None
-
-    def _load_wsf(self):
-        """wsf"""
-
-        this_wsf = self.fetch_data('wsf', check_size=False)        
-        for i, wsf_result in enumerate(this_wsf.results):
-            if wsf_result[-1] == 0:
-                #wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
-                wsf_tif = wsf_result[1]
-                gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
-                wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs, co=self.co)
-                gdal.Warp(
-                    wsf_ds, wsf_tif, dstSRS=self.cst_srs, resampleAlg='cubicspline',
-                    callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
-                )
-                wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
-                wsf_ds_arr[wsf_ds_arr != 0 ] = -1
-                self.coast_array += (wsf_ds_arr * self.min_weight)
-                wsf_ds = wsf_ds_arr = None
             
     def _load_nhd(self):
         """USGS NHD (HIGH-RES U.S. Only)
@@ -2303,7 +2294,26 @@ class WafflesCoastline(Waffle):
             else:
                 utils.echo_error_msg('could not open {}'.format(lakes_shp))
 
-    def _load_bldgs(self):
+    def _load_wsf_bldgs(self):
+        """wsf"""
+
+        this_wsf = self.fetch_data('wsf', check_size=False)        
+        for i, wsf_result in enumerate(this_wsf.results):
+            if wsf_result[-1] == 0:
+                #wsf_tif = os.path.join(this_wsf._outdir, wsf_result[1])
+                wsf_tif = wsf_result[1]
+                gdalfun.gdal_set_ndv(wsf_tif, 0, verbose=False)
+                wsf_ds = gdalfun.gdal_mem_ds(self.ds_config, name='wsf', src_srs=self.wgs_srs, co=self.co)
+                gdal.Warp(
+                    wsf_ds, wsf_tif, dstSRS=self.cst_srs, resampleAlg='cubicspline',
+                    callback=gdal.TermProgress, srcNodata=0, outputType=gdal.GDT_Float32
+                )
+                wsf_ds_arr = wsf_ds.GetRasterBand(1).ReadAsArray()
+                wsf_ds_arr[wsf_ds_arr != 0 ] = -1
+                self.coast_array += (wsf_ds_arr * self.min_weight)
+                wsf_ds = wsf_ds_arr = None
+                
+    def _load_osm_bldgs(self):
         """load buildings from OSM
         
         OSM has a size limit, so will chunk the region and
@@ -2365,6 +2375,54 @@ class WafflesCoastline(Waffle):
                         utils.echo_warning_msg('could not parse buildings!')
 
                     utils.remove_glob('bldg_osm.tif*')
+
+        bldg_ds = bldg_warp_ds = None
+
+    def _load_bing_bldgs(self):
+        """load buildings from BING      
+        """
+
+        this_bing = self.fetch_data("bing_bfp")
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(this_bing.results),
+                desc='processing BING buildings',
+                leave=self.verbose
+        ) as pbar:
+            for n, bing_result in enumerate(this_bing.results):                
+                if bing_result[-1] == 0:
+                    pbar.update()
+
+                    bing_gz = bing_result[1]
+                    bing_gj = utils.gunzip(bing_gz, self.cache_dir)
+
+                    os.rename(bing_gj, bing_gj + '.geojson')
+                    bing_gj = bing_gj + '.geojson'
+
+                    out, status = utils.run_cmd(
+                        'gdal_rasterize -burn -1 -l {} {} bldg_bing.tif -te {} -ts {} {} -ot Int32'.format(
+                            os.path.basename(utils.fn_basename2(bing_gj)),
+                            bing_gj,
+                            self.p_region.format('te'),
+                            self.ds_config['nx'],
+                            self.ds_config['ny'],
+                        ),
+                        verbose=True
+                    )
+
+                    if status == 0:
+                        bldg_ds = gdal.Open('bldg_bing.tif')
+                        if bldg_ds is not None:
+                            bldg_ds_arr = bldg_ds.GetRasterBand(1).ReadAsArray()
+                            self.coast_array[bldg_ds_arr == -1] = 0 # update for weights
+                            bldg_ds = bldg_ds_arr = None
+
+                        bldg_ds = None
+                    else:
+                        utils.echo_warning_msg('could not parse buildings!')
+
+                    utils.remove_glob('bldg_bing.tif*')
 
         bldg_ds = bldg_warp_ds = None
         
