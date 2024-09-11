@@ -4096,7 +4096,7 @@ class BingBFP(FetchModule):
         quad_keys = list(quad_keys)
         print(f"The input area spans {len(quad_keys)} tiles: {quad_keys}")
 
-        bing_csv = os.path.basename(self._bing_bfp_csv)
+        bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
         try:
             status = Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
         except:
@@ -4107,6 +4107,7 @@ class BingBFP(FetchModule):
             next(reader)
             bd = [row[2] for row in reader if int(row[1]) in quad_keys]
 
+        utils.remove_glob(bing_csv)
         self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
         
 ## VDATUM
