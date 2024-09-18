@@ -3207,7 +3207,7 @@ class IceSat2File(ElevationDataset):
     water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in yield_points (as mentioned previously)
+    columns: {} # the additional columns to export in yield_points
     cshelph: True # extract bathymetry with CShelph
 
     Classes:
@@ -4871,7 +4871,7 @@ class IceSat2Fetcher(Fetcher):
     water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in yield_points (as mentioned previously)
+    columns: {} # the additional columns to export in yield_points
     cshelph: True # extract bathymetry with CShelph
 
     Classes:
