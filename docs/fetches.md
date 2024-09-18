@@ -95,7 +95,7 @@ Print the version information
 
 ### Fetch IceSat2 data with the fetches Python API
 
-```
+```python
 from cudem import regions
 from cudem import fetches
 r = regions.Region().from_list([-121.25, -121.0, 37.5, 37.75])
