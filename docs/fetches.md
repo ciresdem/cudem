@@ -112,6 +112,6 @@ fr.join()
 
 ### Fetch IceSat2 data as a subset with the fetches CLI
 
-```
+```bash
 fetches -R -121.25/-121/37.5/37.75 icesat2:subset=True:time_start=2020-05-04:time_end=2021-05-04
 ```
