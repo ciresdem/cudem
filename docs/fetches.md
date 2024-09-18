@@ -92,3 +92,17 @@ Print the version information
 ## Python API
 
 ## Examples
+
+### Fetch IceSat2 data with the fetches Python API
+
+>>> from cudem import regions
+>>> from cudem import fetches
+>>> r = regions.Region().from_list([-121.25, -121.0, 37.5, 37.75])
+>>> f = fetches.IceSat2(subset=False, time_start='2020-05-04', time_end='2021-05-04', src_region=r)
+>>> f.run()
+>>> f.results
+[['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/05/19/ATL03_20200519193744_08290702_006_01.h5', 'ATL03_20200519193744_08290702_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/06/16/ATL03_20200616062933_12480706_006_01.h5', 'ATL03_20200616062933_12480706_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/07/15/ATL03_20200715050536_03030806_006_01.h5', 'ATL03_20200715050536_03030806_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/07/20/ATL03_20200720164127_03870802_006_01.h5', 'ATL03_20200720164127_03870802_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/09/15/ATL03_20200915020921_12480806_006_02.h5', 'ATL03_20200915020921_12480806_006_02.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/10/14/ATL03_20201014004522_03030906_006_01.h5', 'ATL03_20201014004522_03030906_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/10/19/ATL03_20201019122113_03870902_006_01.h5', 'ATL03_20201019122113_03870902_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/11/17/ATL03_20201117105718_08290902_006_01.h5', 'ATL03_20201117105718_08290902_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2020/12/14/ATL03_20201214214913_12480906_006_01.h5', 'ATL03_20201214214913_12480906_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2021/01/18/ATL03_20210118080103_03871002_006_01.h5', 'ATL03_20210118080103_03871002_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2021/03/15/ATL03_20210315172905_12481006_006_01.h5', 'ATL03_20210315172905_12481006_006_01.h5', 'ATL03'], ['https://data.nsidc.earthdatacloud.nasa.gov/nsidc-cumulus-prod-protected/ATLAS/ATL03/006/2021/04/19/ATL03_20210419034059_03871102_006_02.h5', 'ATL03_20210419034059_03871102_006_02.h5', 'ATL03']]
+>>> fr = fetches.fetch_results(f)
+>>> fr.daemon=True
+>>> fr.start()
+>>> fr.join()
