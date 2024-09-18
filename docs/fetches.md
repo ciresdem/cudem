@@ -115,3 +115,48 @@ fr.join()
 ```bash
 fetches -R -121.25/-121/37.5/37.75 icesat2:subset=True:time_start=2020-05-04:time_end=2021-05-04
 ```
+
+### List the available HydroNOS data files in a given region
+
+```sh
+fetches -R-119.25/-119/34/34.25 hydronos -l
+
+fetches: parsed 1 region(s): [-119.25 -119.0 34.0 34.25 None None None None None None]
+fetches: running fetch module hydronos on region -119.25/-119.0/34.0/34.25...
+fetches: found 34 data files.
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05392/GEODAS/H05392.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05420/GEODAS/H05420.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05425/GEODAS/H05425.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05426/GEODAS/H05426.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05507/GEODAS/H05507.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05446/GEODAS/H05446.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H04001-H06000/H05851/GEODAS/H05851.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H08001-H10000/H09600/GEODAS/H09600.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H08001-H10000/H09666/GEODAS/H09666.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H08001-H10000/H09667/GEODAS/H09667.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H08001-H10000/H09725/GEODAS/H09725.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11501/BAG/H11501_MB_1m_MLLW_2of4.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11501/BAG/H11501_MB_4m_MLLW_3of4.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11501/BAG/H11501_MB_50cm_MLLW_1of4.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11501/BAG/H11501_MB_8m_MLLW_4of4.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11501/GEODAS/H11501.xyz.gz
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_16m_MLLW_5of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_1m_MLLW_1of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_2m_MLLW_2of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_32m_MLLW_6of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_4m_MLLW_3of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/H10001-H12000/H11891/BAG/H11891_MB_8m_MLLW_4of6.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_128m_MLLW_5of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_128m_MLLW_Combined.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_16m_MLLW_2of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_32m_MLLW_3of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_64m_MLLW_4of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00431/BAG/W00431_MB_8m_MLLW_1of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_128m_MLLW_5of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_128m_MLLW_Combined.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_16m_MLLW_2of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_32m_MLLW_3of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_64m_MLLW_4of5.bag
+https://data.ngdc.noaa.gov/platforms/ocean/nos/coast/W00001-W02000/W00432/BAG/W00432_MB_8m_MLLW_1of5.bag
+
+```
