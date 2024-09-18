@@ -113,14 +113,13 @@ fr.join()
 ### Fetch IceSat2 data as a subset with the fetches CLI
 
 ```bash
-fetches -R -121.25/-121/37.5/37.75 icesat2:subset=True:time_start=2020-05-04:time_end=2021-05-04
+$ fetches -R -121.25/-121/37.5/37.75 icesat2:subset=True:time_start=2020-05-04:time_end=2021-05-04
 ```
 
 ### List the available HydroNOS data files in a given region
 
-```sh
-fetches -R-119.25/-119/34/34.25 hydronos -l
-
+```bash
+$ fetches -R-119.25/-119/34/34.25 hydronos -l
 fetches: parsed 1 region(s): [-119.25 -119.0 34.0 34.25 None None None None None None]
 fetches: running fetch module hydronos on region -119.25/-119.0/34.0/34.25...
 fetches: found 34 data files.
