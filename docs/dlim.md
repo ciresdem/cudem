@@ -122,7 +122,7 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 | las | 300 | An las or laz lidar datafile |
 | mbs | 301 | An MB-System-compatible multibeam datafile |
 | ogr | 302 | An ogr-compatible vector datafile |
-| icesat_atl | 303 | An HDF5 IceSat ATL03 datafile |
+| icesat2_atl | 303 | An HDF5 IceSat2 ATL03 datafile |
 | https | -100 | a URL pointing to a dlim-compatible datafile |
 | gmrt | -101 | The GMRT fetches module |
 | gebco | -102 | The GEBCO fetches module |
@@ -145,7 +145,7 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 | CoNED | -211 | The CoNED fetches module |
 | SLR | -212 | The SLR fetches module |
 | waterservies | -213 | The waterservices fetches module |
-| icesat | -214 | The IceSat fetches module |
+| icesat2 | -214 | The IceSat2 fetches module |
 | ned | -215 | The NED fetches module |
 | swot | -216 | The SWOT fetches module |
 | csb | -217 | the CSB fetches module |

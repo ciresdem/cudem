@@ -69,7 +69,7 @@ Print the version information
 | gmrt | The Global MultiResolution Topography synthesis | https://www.gmrt.org |
 | hrdem | High-Resolution DEMs from Canada | https://open.canada.ca |
 | hydrolakes | HydroLakes vector and derived elevations | https://www.hydrosheds.org/products/hydrolakes |
-| icesat | IceSat2 granules from NASA (requires NASA credentials) | https://cmr.earthdata.nasa.gov |
+| icesat2 | IceSat2 granules from NASA (requires NASA credentials) | https://cmr.earthdata.nasa.gov |
 | mar_grav | Marine Gravity Satellite Altimetry Topography from Scripps. | https://topex.ucsd.edu/WWW_html/mar_grav.html |
 | mgds | Marine Geoscience Data System | https://www.marine-geo.org |
 | multibeam | NOAA Multibeam bathymetric data | https://data.ngdc.noaa.gov/platforms/ |

@@ -3202,6 +3202,14 @@ class SWOT_HR_Raster(ElevationDataset):
 class IceSat2File(ElevationDataset):
     """IceSat2 data from NASA
 
+    Parameters:
+    
+    water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
+    classes: None # return only data with the specified classes, e.g. '2/3/4'
+    confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
+    columns: {} # the additional columns to export in yield_points (as mentioned previously)
+    cshelph: True # extract bathymetry with CShelph
+
     Classes:
     -1 : uncoded
     0 : noise
@@ -4865,6 +4873,19 @@ class IceSat2Fetcher(Fetcher):
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
     columns: {} # the additional columns to export in yield_points (as mentioned previously)
     cshelph: True # extract bathymetry with CShelph
+
+    Classes:
+    -1 : uncoded
+    0 : noise
+    1 : ground
+    2 : canopy
+    3 : top of canopy
+    # with cshelph
+    4 : bathymetry
+    5 : water surface
+
+    Confidence Levels:
+    0, 1, 2, 3, 4
     """
 
     __doc__ = '''{}    
