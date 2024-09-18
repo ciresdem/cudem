@@ -3235,7 +3235,7 @@ class IceSat2File(ElevationDataset):
         self.columns = columns
         self.atl_fn = None
         self.cshelph = cshelph
-
+        
     def init_atl_03_h5(self):
         """initialize the atl03 and atl08 h5 files"""
         
@@ -3304,6 +3304,8 @@ class IceSat2File(ElevationDataset):
                 if dataset is None or len(dataset) == 0:
                     continue
 
+            #self.classify_buildings(dataset)
+                
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
@@ -3341,7 +3343,7 @@ class IceSat2File(ElevationDataset):
             
         time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.MUR_SST(src_region = this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
+        this_sst = fetches.MUR_SST(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
         this_sst.run()
         
         # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
@@ -3350,7 +3352,24 @@ class IceSat2File(ElevationDataset):
         return(20)
         
         # return(sst)
-            
+
+    def fetch_buildings(self):
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+
+        utils.echo_msg('fetching buildings')
+        this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
+        this_bldg.run()
+        
+        fr = fetches.fetch_results(this_bldg)
+        fr.daemon=True
+        fr.start()
+        fr.join()
+        
+        return(fr)
+        
     def read_atl_data(self, laser_num):
         """Read data from an ATL03 file
 
@@ -3600,7 +3619,43 @@ class IceSat2File(ElevationDataset):
                                 return(dataset)
             
         return(dataset)
-                
+
+    def classify_buildings(self, dataset):
+        """classify building photons using BING building footprints 
+        """
+
+        def xyz2wkt(xyz):
+            return('POINT ({} {})'.format(xyz[0], xyz[1]))
+        
+        this_bing = self.fetch_buildings()
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(this_bing.results),
+                desc='processing BING buildings',
+                leave=self.verbose
+        ) as pbar:
+            for n, bing_result in enumerate(this_bing.results):                
+                if bing_result[-1] == 0:
+                    pbar.update()
+
+                    bing_gz = bing_result[1]
+                    bing_gj = utils.gunzip(bing_gz, self.cache_dir)
+
+                    os.rename(bing_gj, bing_gj + '.geojson')
+                    bing_gj = bing_gj + '.geojson'
+
+                    ds = driver.Open(bing_gj, 0)
+                    layer = ds.GetLayer()
+
+                    #pt_wkts = dataset['x'], dataset['y']
+                    bldg_wkt = ogr.CreateGeometryFromWkt(gdalfun.ogr_union_geom(layer))
+                    print(bldg_wkt)
+
+                    ds = None
+                    #p_geoms = dataset['x'], dataset['y']
+                    #dataset['ph_h_classed'] = 11 where dataset['x'] and dataset['y'] p_geom.Within(bldg_wkt)
+    
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
 
