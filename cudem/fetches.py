@@ -4094,8 +4094,8 @@ class BingBFP(FetchModule):
             quad_keys.add(int(mercantile.quadkey(tile)))
             
         quad_keys = list(quad_keys)
-        print(f"The input area spans {len(quad_keys)} tiles: {quad_keys}")
-
+        utils.echo_msg('The input area spans {len()} tiles: {}'.format(quad_keys))
+        
         bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
         try:
             status = Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
@@ -4599,6 +4599,7 @@ class EarthData(FetchModule):
                 'bbox': self.region.format('bbox'),
                 'page_size': 10,
                 'page_num': 1,
+                'temporal': f'{self.time_start}, {self.time_end}',
             }
             ## add time if specified
             #'time': f'{self.time_start}, {self.time_end}',
@@ -4607,7 +4608,7 @@ class EarthData(FetchModule):
             while True:
                 _req = Fetch(self._egi_url).fetch_req(params=_egi_data, timeout=None, read_timeout=None)
                 if _req is not None and _req.status_code == 200:
-                    utils.echo_msg(_req.headers)
+                    #utils.echo_msg(_req.headers)
                     if 'Content-Disposition' in _req.headers.keys():
                         zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
                         zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
@@ -4644,7 +4645,7 @@ class EarthData(FetchModule):
 ## This module allows us to use icesat2 data in dlim/waffles
 ##
 ## todo: dmrpp
-class IceSat(EarthData):
+class IceSat2(EarthData):
     """Access IceSat2 data.
 
     By default access ATL03 data, specify 'short_name' to fetch specific ATL data.
@@ -4657,14 +4658,14 @@ class IceSat(EarthData):
 
     you might need to `chmod 0600 ~/.netrc`
     
-    < icesat:short_name=ATL03:time_start='':time_end='':filename_filter='' >
+    < icesat2:short_name=ATL03:time_start='':time_end='':filename_filter='' >
     """
     
     def __init__(self, short_name='ATL03', subset=False, **kwargs):
         if short_name is not None:
             short_name = short_name.upper()
             if not short_name.startswith('ATL'):
-                utils.echo_warning_msg('{} is not a valid icesat short_name, using ATL03'.format(short_name))
+                utils.echo_warning_msg('{} is not a valid icesat2 short_name, using ATL03'.format(short_name))
                 short_name = 'ATL03'
                 
         super().__init__(short_name=short_name, egi=subset, **kwargs)
@@ -5071,7 +5072,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'vdatum': {'call': VDATUM},
         'buoys': {'call': BUOYS},
         'earthdata': {'call': EarthData},
-        'icesat': {'call': IceSat},
+        'icesat2': {'call': IceSat2},
         'mur_sst': {'call': MUR_SST},
         'swot': {'call': SWOT},
         'usiei': {'call': USIEI},

@@ -1880,10 +1880,25 @@ class ElevationDataset:
         after the points are transformed, the data will pass through the region, if it exists and finally
         yield the transformed and reduced points.
         """
-
+            
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            for points in self.yield_ds(): 
+            for points in self.yield_ds():
+                # if x_col != 'x':
+                #     points.rename(columns={x_col: 'x'}, inplace=True)
+
+                # if y_col != 'y':
+                #     points.rename(columns={y_col: 'y'}, inplace=True)
+
+                # if z_col != 'z':
+                #     points.rename(columns={z_col: 'x'}, inplace=True)
+
+                # if w_col != 'w':
+                #     points.rename(columns={w_col: 'w'}, inplace=True)
+
+                # if u_col != 'u':
+                #     points.rename(columns={u_col: 'u'}, inplace=True)
+                
                 if self.transformer is not None:
                     points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
                     points = points[~np.isinf(points['z'])]
@@ -1921,6 +1936,7 @@ class ElevationDataset:
         
         self.transformer = None
 
+    #
     def export_data_as_pandas(self):
         """export the point data as a pandas dataframe.
         
@@ -3183,8 +3199,8 @@ class SWOT_HR_Raster(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
-class IceSatFile(ElevationDataset):
-    """IceSat data from NASA
+class IceSat2File(ElevationDataset):
+    """IceSat2 data from NASA
 
     Classes:
     -1 : uncoded
@@ -3192,12 +3208,15 @@ class IceSatFile(ElevationDataset):
     1 : ground
     2 : canopy
     3 : top of canopy
+    # with cshelph
+    4 : bathymetry
+    5 : water surface
 
     Confidence Levels:
     0, 1, 2, 3, 4
     """
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', columns={}, cshelph=True, **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
@@ -3205,8 +3224,9 @@ class IceSatFile(ElevationDataset):
 
         self.classes = [int(x) for x in classes.split('/')] if classes is not None else []
         self.confidence_levels = [int(x) for x in confidence_levels.split('/')] if confidence_levels is not None else []
-        
+        self.columns = columns
         self.atl_fn = None
+        self.cshelph = cshelph
 
     def init_atl_03_h5(self):
         """initialize the atl03 and atl08 h5 files"""
@@ -3270,28 +3290,31 @@ class IceSatFile(ElevationDataset):
 
             if dataset is None or len(dataset) == 0:
                 continue
-                
-            dataset = self.extract_bathymetry(dataset)
-            if dataset is None or len(dataset) == 0:
-                continue
-            
+
+            if self.cshelph:
+                dataset = self.extract_bathymetry(dataset)
+                if dataset is None or len(dataset) == 0:
+                    continue
+
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
             if dataset is None or len(dataset) == 0:
                 continue
 
-            _dataset = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
-            _points = np.rec.fromrecords(_dataset, names='x, y, z')
-            _points = _points[~np.isnan(_points['z'])]
+            dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
+            #_dataset = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
+            #_points = np.rec.fromrecords(_dataset, names='x, y, z')
+            #_points = _points[~np.isnan(_points['z'])]
             
-            yield(_points)
+            #yield(_points)
+            yield(dataset)
 
         self.close_atl_h5()
 
     def fetch_atl_08(self):
         atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
-        this_atl08 = fetches.IceSat(
+        this_atl08 = fetches.IceSat2(
             src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08', filename_filter=atl_08_filter
         )
         this_atl08.run()
@@ -3393,7 +3416,9 @@ class IceSatFile(ElevationDataset):
         ph_h_classed[:] = -1
 
         ph_h_watermask = np.zeros(photon_h.shape)
-
+        laser_arr = np.empty(photon_h.shape, dtype="S4")
+        laser_arr[:] = laser
+        
         ## ref values
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
         ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
@@ -3439,15 +3464,32 @@ class IceSatFile(ElevationDataset):
             {'latitude': latitude,
              'longitude': longitude,
              'photon_height': photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
-             'confidence':conf,
+             'laser': laser_arr,
+             'confidence': conf,
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
              'ph_h_classed': ph_h_classed,
              'ph_h_watermask': ph_h_watermask},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
+            columns=['latitude', 'longitude', 'photon_height', 'laser', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
         )
-        
+
+        for col in self.columns.keys():
+            #try:
+            col_arr = self.atl_03_f['/' + laser + col][...,]
+            if 'heights' not in col:
+                col_dict = dict(zip(segment_id, col_arr))
+                col_arr = np.array(list(map((lambda pid: col_dict[pid]), ph_segment_ids)))
+
+            extra_dataset = pd.DataFrame(
+                {self.columns[col]: col_arr},
+                columns = [self.columns[col]]
+            )
+            dataset = dataset.join(extra_dataset)
+            #except:
+            #    utils.echo_warning_msg('could not find {} in atl03 file'.format(col))
+
+        #print(dataset.columns.tolist())
         return(dataset)        
             
     ## C-Shelph bathymetric processing    
@@ -3473,12 +3515,13 @@ class IceSatFile(ElevationDataset):
             {'latitude': lat_utm,
              'longitude': lon_utm,
              'photon_height': dataset.photon_height,
+             'laser': dataset.laser,
              'confidence': dataset.confidence,
              'ref_elevation': dataset.ref_elevation,
              'ref_azimuth': dataset.ref_azimuth,
              'ref_sat_alt': dataset.ref_sat_alt,
              'ph_h_classed': dataset.ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
+            columns=['latitude', 'longitude', 'photon_height', 'laser', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
         dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
         
@@ -3548,7 +3591,7 @@ class IceSatFile(ElevationDataset):
                                 #return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
                                 return(dataset)
             
-        return(None)
+        return(dataset)
                 
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
@@ -4810,60 +4853,63 @@ class SWOTFetcher(Fetcher):
             
         yield(sub_ds)
 
-class IceSatFetcher(Fetcher):
-    """IceSat data from NASA
+class IceSat2Fetcher(Fetcher):
+    """IceSat2 data from NASA
 
-    See `fetches --modules icesat` for fetching parameters
+    See `fetches --modules icesat2` for fetching parameters
 
-    -----------
     Parameters:
     
-    water_surface (str): 'mean_tide', 'geoid' or 'ellipsoid' water surface
+    water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
+    classes: None # return only data with the specified classes, e.g. '2/3/4'
+    confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
+    columns: {} # the additional columns to export in yield_points (as mentioned previously)
+    cshelph: True # extract bathymetry with CShelph
     """
 
     __doc__ = '''{}    
-    Fetches Module: <icesat> - {}'''.format(__doc__, fetches.IceSat.__doc__)
+    Fetches Module: <icesat2> - {}'''.format(__doc__, fetches.IceSat2.__doc__)
     
-    def __init__(self, want_topo = True, want_bathy = False, water_surface = 'geoid', classes = None, confidence_levels = None, **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = None, columns = {}, cshelph = True, **kwargs):
         super().__init__(**kwargs)
-        self.want_topo = want_topo
-        self.want_bathy = want_bathy
         self.water_surface = water_surface
-        self.classes=classes
-        self.confidence_levels=confidence_levels
+        self.classes = classes
+        self.confidence_levels = confidence_levels
+        self.columns = columns
+        self.cshelph = cshelph
 
         self.atl_fn = None
 
     def set_ds(self, result):
         utils.echo_msg(result)
-        icesat_fn= os.path.join(self.fetch_module._outdir, result[1])
+        icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
         if 'processed_zip' in result[-1]:
             ## unzip
-            icesat_h5s = utils.p_unzip(
-                icesat_fn,#os.path.join(self.fetch_module._outdir, ),
+            icesat2_h5s = utils.p_unzip(
+                icesat2_fn,#os.path.join(self.fetch_module._outdir, ),
                 exts=['h5'],
                 outdir=self.cache_dir
             )
 
             #ATL03:
             #if 'ATL03' in result[-1]:
-            for icesat_h5 in icesat_h5s:
-                utils.echo_msg(icesat_h5)
-                sub_ds = IceSatFile(fn=icesat_h5, data_format=303, want_topo=self.want_topo, want_bathy=self.want_bathy,
-                                    water_surface=self.water_surface, classes=self.classes, confidence_levels=self.confidence_levels,
-                                    src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                                    src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                    pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
+            for icesat2_h5 in icesat2_h5s:
+                utils.echo_msg(icesat2_h5)
+                sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
+                                     confidence_levels=self.confidence_levels, columns=self.columns, cshelph=self.cshelph,
+                                     src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
+                                     src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
 
                 yield(sub_ds)
             
         else:
             #if 'ATL03' in result[-1]:
-            sub_ds = IceSatFile(fn=icesat_fn, data_format=303, want_topo=self.want_topo, want_bathy=self.want_bathy,
-                                water_surface=self.water_surface, classes=self.classes, confidence_levels=self.confidence_levels,
-                                src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                                src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
+            sub_ds = IceSat2File(fn=icesat2_fn, data_format=303, water_surface=self.water_surface, classes=self.classes,
+                                 confidence_levels=self.confidence_levels, columns=self.columns, cshelph=self.cshelph,
+                                 src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
+                                 src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
             yield(sub_ds)
                 
 class GMRTFetcher(Fetcher):
@@ -5560,10 +5606,10 @@ class DatasetFactory(factory.CUDEMFactory):
               'fmts': ['000', 'shp', 'geojson', 'gpkg', 'gdb/'],
               'description': 'An ogr-compatible vector datafile',
               'call': OGRFile},
-        303: {'name': 'icesat_atl',
+        303: {'name': 'icesat2_atl',
               'fmts': ['h5'],
-              'description': 'An HDF5 IceSat ATL03 datafile',
-              'call': IceSatFile},
+              'description': 'An HDF5 IceSat2 ATL03 datafile',
+              'call': IceSat2File},
         ## fetches modules
         -100: {'name': 'https',
                'fmts': ['https'],
@@ -5653,10 +5699,10 @@ class DatasetFactory(factory.CUDEMFactory):
                'fmts': ['waterservices'],
                'description': 'The waterservices fetches module',
                'call': WaterServicesFetcher},
-        -214: {'name': "icesat",
-               'fmts': ['icesat'],
-               'description': 'The IceSat fetches module',
-               'call': IceSatFetcher},
+        -214: {'name': "icesat2",
+               'fmts': ['icesat2'],
+               'description': 'The IceSat2 fetches module',
+               'call': IceSat2Fetcher},
         -215: {'name': 'ned',
                'fmts': ['ned', 'ned1'],
                'description': 'The NED fetches module',
