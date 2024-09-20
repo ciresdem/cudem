@@ -4966,7 +4966,8 @@ class IceSat2Fetcher(Fetcher):
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
     columns: {} # the additional columns to export in yield_points
-    cshelph: True # extract bathymetry with CShelph
+    classify_bathymetry: True # extract bathymetry with CShelph
+    classify_buildings: True # classify buildings with BING BFP
 
     Classes:
     -1 - no classification (ATL08)
@@ -4987,13 +4988,15 @@ class IceSat2Fetcher(Fetcher):
     __doc__ = '''{}    
     Fetches Module: <icesat2> - {}'''.format(__doc__, fetches.IceSat2.__doc__)
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = None, columns = {}, cshelph = True, **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = None, columns = {},
+                 classify_bathymetry = True, classify_buildings = True, **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         self.classes = classes
         self.confidence_levels = confidence_levels
         self.columns = columns
-        self.cshelph = cshelph
+        self.want_bathymetry = classify_bathymetry
+        self.want_buildings = classify_buildings
 
         self.atl_fn = None
 
@@ -5013,9 +5016,9 @@ class IceSat2Fetcher(Fetcher):
             for icesat2_h5 in icesat2_h5s:
                 utils.echo_msg(icesat2_h5)
                 sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
-                                     confidence_levels=self.confidence_levels, columns=self.columns, cshelph=self.cshelph,
-                                     src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                                     src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                                     confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
+                                     classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
+                                     uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
                                      pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
 
                 yield(sub_ds)
@@ -5023,9 +5026,9 @@ class IceSat2Fetcher(Fetcher):
         else:
             #if 'ATL03' in result[-1]:
             sub_ds = IceSat2File(fn=icesat2_fn, data_format=303, water_surface=self.water_surface, classes=self.classes,
-                                 confidence_levels=self.confidence_levels, columns=self.columns, cshelph=self.cshelph,
-                                 src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                                 src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                                 confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
+                                 classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
+                                 uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
                                  pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
             yield(sub_ds)
                 
