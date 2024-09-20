@@ -417,13 +417,15 @@ def ogr_union_geom(src_layer):
         
     multi = ogr.Geometry(ogr.wkbMultiPolygon)
     feats = len(src_layer)
-    if feats > 0:
-        with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
-            for n, f in enumerate(src_layer):
-                pbar.update()
-                f_geom = f.geometry()
-                f_geom_valid = f_geom
-                multi.AddGeometry(f_geom_valid)
+    [multi.AddGeometry(f.geometry()) for f in src_layer]
+    utils.echo_msg('unioned {} features'.format(feats))
+    # if feats > 0:
+    #     with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
+    #         for n, f in enumerate(src_layer):
+    #             pbar.update()
+    #             f_geom = f.geometry()
+    #             f_geom_valid = f_geom
+    #             multi.AddGeometry(f_geom_valid)
 
     return(multi)
 

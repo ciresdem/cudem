@@ -3211,20 +3211,23 @@ class IceSat2File(ElevationDataset):
     cshelph: True # extract bathymetry with CShelph
 
     Classes:
-    -1 : uncoded
-    0 : noise
-    1 : ground
-    2 : canopy
-    3 : top of canopy
-    # with cshelph
-    4 : bathymetry
-    5 : water surface
+    -1 - no classification (ATL08)
+    0 - noise / atmosphere (ATL08)
+    1 - ground surface (ATL08)
+    2 - canopy (ATL08)
+    3 - canopy top (ATL08)
+    4 - bathymetry floor surface (CShelph, future ATL24)
+    5 - bathymetry water surface (CShelph, future ATL24)
+    6 - ice surface (ATL06) (unused for now, just planning ahead for possible future ATL06 integration)
+    7 - built structure (OSM or Bing)
+    8 - "urban" (WSF, if used)
 
     Confidence Levels:
     0, 1, 2, 3, 4
     """
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', columns={}, cshelph=True, **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', columns={},
+                 classify_bathymetry=True, classify_buildings=True, **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
@@ -3234,7 +3237,8 @@ class IceSat2File(ElevationDataset):
         self.confidence_levels = [int(x) for x in confidence_levels.split('/')] if confidence_levels is not None else []
         self.columns = columns
         self.atl_fn = None
-        self.cshelph = cshelph
+        self.want_bathymetry = classify_bathymetry
+        self.want_buildings = classify_buildings
         
     def init_atl_03_h5(self):
         """initialize the atl03 and atl08 h5 files"""
@@ -3286,6 +3290,9 @@ class IceSat2File(ElevationDataset):
             return
             
         dataset = None
+        if self.want_buildings:
+            this_bing = self.fetch_buildings()
+        
         for i in range(1, 4):
             #try:
             dataset = self.read_atl_data('{}'.format(i))
@@ -3299,13 +3306,14 @@ class IceSat2File(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
 
-            if self.cshelph:
-                dataset = self.extract_bathymetry(dataset)
+            if self.want_bathymetry:
+                dataset = self.classify_bathymetry(dataset)
                 if dataset is None or len(dataset) == 0:
                     continue
 
-            #self.classify_buildings(dataset)
-                
+            if self.want_buildings:
+                dataset = self.classify_buildings(dataset, this_bing)
+            
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
@@ -3363,7 +3371,7 @@ class IceSat2File(ElevationDataset):
         this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
         this_bldg.run()
         
-        fr = fetches.fetch_results(this_bldg)
+        fr = fetches.fetch_results(this_bldg)#, check_size=False)
         fr.daemon=True
         fr.start()
         fr.join()
@@ -3519,13 +3527,12 @@ class IceSat2File(ElevationDataset):
         #print(dataset.columns.tolist())
         return(dataset)        
             
-    ## C-Shelph bathymetric processing    
-    def extract_bathymetry(
+    def classify_bathymetry(
             self, dataset, thresh = 60, min_buffer = -40, max_buffer = 5,
             start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
             surface_buffer = -.5, water_temp = None
     ):
-        """Extract bathymetry from an ATL03 file. 
+        """Classify bathymetry in an ATL03 file. 
 
         This uses C-Shelph to locate, extract and process bathymetric photons.
         This function is adapted from the C-Shelph CLI
@@ -3620,14 +3627,42 @@ class IceSat2File(ElevationDataset):
             
         return(dataset)
 
-    def classify_buildings(self, dataset):
+    def _vectorize_df(self, dataset):
+        """Make a point vector OGR DataSet Object from a pandas dataframe
+        """
+
+        dst_ogr = '{}'.format('icesat_dataframe')
+        ogr_ds = gdal.GetDriverByName('Memory').Create(
+            '', 0, 0, 0, gdal.GDT_Unknown
+        )
+        layer = ogr_ds.CreateLayer(
+            dst_ogr, geom_type=ogr.wkbPoint
+        )
+        fd = ogr.FieldDefn('index', ogr.OFTInteger)
+        layer.CreateField(fd)
+        # for x in dataset.columns.to_list():
+        #     fd = ogr.FieldDefn(x, ogr.OFTReal)
+        #     fd.SetWidth(12)
+        #     fd.SetPrecision(8)
+        #     layer.CreateField(fd)
+            
+        f = ogr.Feature(feature_def=layer.GetLayerDefn())        
+        with tqdm(desc='vectorizing dataframe', leave=self.verbose) as pbar:
+            for index, this_row in dataset.iterrows():
+                pbar.update()
+                f.SetField(0, index)
+                #[f.SetField(n+1, this_row[x]) for n,x in enumerate(dataset.columns.to_list())]
+                g = ogr.CreateGeometryFromWkt('POINT ({} {})'.format(this_row['longitude'], this_row['latitude']))
+                f.SetGeometryDirectly(g)
+                layer.CreateFeature(f)
+            
+        return(ogr_ds)
+    
+    def classify_buildings(self, dataset, this_bing):
         """classify building photons using BING building footprints 
         """
 
-        def xyz2wkt(xyz):
-            return('POINT ({} {})'.format(xyz[0], xyz[1]))
-        
-        this_bing = self.fetch_buildings()
+        ogr_df = self._vectorize_df(dataset)
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
@@ -3641,20 +3676,24 @@ class IceSat2File(ElevationDataset):
 
                     bing_gz = bing_result[1]
                     bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-
                     os.rename(bing_gj, bing_gj + '.geojson')
                     bing_gj = bing_gj + '.geojson'
+                    bldg_ds = ogr.Open(bing_gj, 0)
+                    bldg_layer = bldg_ds.GetLayer()
+                    bldg_geom = gdalfun.ogr_union_geom(bldg_layer)
 
-                    ds = driver.Open(bing_gj, 0)
-                    layer = ds.GetLayer()
+                    icesat_layer = ogr_df.GetLayer()
+                    icesat_layer.SetSpatialFilter(bldg_geom)
 
-                    #pt_wkts = dataset['x'], dataset['y']
-                    bldg_wkt = ogr.CreateGeometryFromWkt(gdalfun.ogr_union_geom(layer))
-                    print(bldg_wkt)
+                    for f in icesat_layer:
+                        idx = f.GetField('index')
+                        dataset.at[idx, 'ph_h_classed'] = 7
+                    
+                    icesat_layer.SetSpatialFilter(None)
+                    bldg_ds = None
 
-                    ds = None
-                    #p_geoms = dataset['x'], dataset['y']
-                    #dataset['ph_h_classed'] = 11 where dataset['x'] and dataset['y'] p_geom.Within(bldg_wkt)
+        ogr_df = None
+        return(dataset)
     
 class MBSParser(ElevationDataset):
     """providing an mbsystem parser
@@ -4930,14 +4969,16 @@ class IceSat2Fetcher(Fetcher):
     cshelph: True # extract bathymetry with CShelph
 
     Classes:
-    -1 : uncoded
-    0 : noise
-    1 : ground
-    2 : canopy
-    3 : top of canopy
-    # with cshelph
-    4 : bathymetry
-    5 : water surface
+    -1 - no classification (ATL08)
+    0 - noise / atmosphere (ATL08)
+    1 - ground surface (ATL08)
+    2 - canopy (ATL08)
+    3 - canopy top (ATL08)
+    4 - bathymetry floor surface (CShelph, future ATL24)
+    5 - bathymetry water surface (CShelph, future ATL24)
+    6 - ice surface (ATL06) (unused for now, just planning ahead for possible future ATL06 integration)
+    7 - built structure (OSM or Bing)
+    8 - "urban" (WSF, if used)
 
     Confidence Levels:
     0, 1, 2, 3, 4

@@ -4599,10 +4599,11 @@ class EarthData(FetchModule):
                 'bbox': self.region.format('bbox'),
                 'page_size': 10,
                 'page_num': 1,
-                'temporal': f'{self.time_start}, {self.time_end}',
             }
             ## add time if specified
-            #'time': f'{self.time_start}, {self.time_end}',
+            if self.time_start != '' or self.time_end != '':
+                _egi_data['temporal'] = f'{self.time_start}, {self.time_end}'
+                #'time': f'{self.time_start}, {self.time_end}',
 
             utils.echo_msg('requesting data subsets, please wait...')
             while True:
