@@ -3208,7 +3208,8 @@ class IceSat2File(ElevationDataset):
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
     columns: {} # the additional columns to export in yield_points
-    cshelph: True # extract bathymetry with CShelph
+    classify_bathymetry: True # extract bathymetry with CShelph
+    classify_buildings: True # classify buildings using BING BFP
 
     Classes:
     -1 - no classification (ATL08)
@@ -3267,6 +3268,8 @@ class IceSat2File(ElevationDataset):
             self.atl_08_f = None
 
     def close_atl_h5(self):
+        """close all open atl files"""
+        
         self.atl_03_fn = None
         self.atl_08_fn = None
         self.atl_03_f.close()
@@ -3274,6 +3277,10 @@ class IceSat2File(ElevationDataset):
             self.atl_08_f.close()
             
     def yield_ds(self):
+        """yield the points from the dataset.
+
+        In this case, it will yield a pandas dataframe"""
+        
         self.atl_03_fn = self.fn
 
         if len(self.classes) > 0:
@@ -3331,6 +3338,8 @@ class IceSat2File(ElevationDataset):
         self.close_atl_h5()
 
     def fetch_atl_08(self):
+        """fetch an associate atl08 file"""
+        
         atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
         this_atl08 = fetches.IceSat2(
             src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08', filename_filter=atl_08_filter
@@ -3344,6 +3353,8 @@ class IceSat2File(ElevationDataset):
                 return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
 
     def fetch_water_temp(self):
+        """fetch and return the average water temperature over the region"""
+        
         if self.region is not None:
             this_region = self.region.copy()
         else:
@@ -3362,6 +3373,8 @@ class IceSat2File(ElevationDataset):
         # return(sst)
 
     def fetch_buildings(self):
+        """fetch building footprints from BING"""
+        
         if self.region is not None:
             this_region = self.region.copy()
         else:
@@ -5004,15 +5017,11 @@ class IceSat2Fetcher(Fetcher):
         utils.echo_msg(result)
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
         if 'processed_zip' in result[-1]:
-            ## unzip
             icesat2_h5s = utils.p_unzip(
                 icesat2_fn,#os.path.join(self.fetch_module._outdir, ),
                 exts=['h5'],
                 outdir=self.cache_dir
             )
-
-            #ATL03:
-            #if 'ATL03' in result[-1]:
             for icesat2_h5 in icesat2_h5s:
                 utils.echo_msg(icesat2_h5)
                 sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
@@ -5024,7 +5033,6 @@ class IceSat2Fetcher(Fetcher):
                 yield(sub_ds)
             
         else:
-            #if 'ATL03' in result[-1]:
             sub_ds = IceSat2File(fn=icesat2_fn, data_format=303, water_surface=self.water_surface, classes=self.classes,
                                  confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                  classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
