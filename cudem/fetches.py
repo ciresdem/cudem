@@ -4094,7 +4094,8 @@ class BingBFP(FetchModule):
             quad_keys.add(int(mercantile.quadkey(tile)))
             
         quad_keys = list(quad_keys)
-        utils.echo_msg('The input area spans {} tiles: {}'.format(len(quad_keys), quad_keys))
+        #utils.echo_msg('The input area spans {} tiles: {}'.format(len(quad_keys), quad_keys))
+        utils.echo_msg('The input area spans {} tiles.'.format(len(quad_keys)))
         
         bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
         try:

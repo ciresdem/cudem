@@ -3275,6 +3275,73 @@ class IceSat2File(ElevationDataset):
         self.atl_03_f.close()
         if self.atl_08_f is not None:
             self.atl_08_f.close()
+
+    # def parse_region(self):
+    #     self.atl_03_fn = self.fn
+    #     self.atl_08_fn = None
+    #     try:
+    #         self.init_atl_h5()
+    #     except Exception as e:
+    #         utils.echo_error_msg('could not initialize data {}'.format(e))
+    #         self.close_atl_h5()
+    #         return
+            
+    #     dataset = None
+    #     for i in range(1, 4):
+    #         #try:
+    #         dataset = self.read_atl_data('{}'.format(i))
+
+    #         if dataset is None or len(dataset) == 0:
+    #             continue
+
+    #         dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
+    #         yield(dataset)
+
+    #     self.close_atl_h5()        
+            
+    # def generate_inf(self):
+    #     if self.src_srs is None:
+    #         self.infos.src_srs = 'epsg:4326'
+    #     else:
+    #         self.infos.src_srs = self.src_srs
+
+    #     point_count = 0
+    #     for points in self.parse_region():
+    #         if point_count == 0:
+    #             this_region.from_list(
+    #                 [
+    #                     points['x'].min(), points['x'].max(),
+    #                     points['y'].min(), points['y'].max(),
+    #                     points['z'].min(), points['z'].max()
+    #                 ]
+    #             )
+    #         else:
+    #             if points['x'].min() < this_region.xmin:
+    #                 this_region.xmin = points['x'].min()
+    #             elif points['x'].max() > this_region.xmax:
+    #                 this_region.xmax = points['x'].max()
+                    
+    #             if points['y'].min() < this_region.ymin:
+    #                 this_region.ymin = points['y'].min()
+    #             elif points['y'].max() > this_region.ymax:
+    #                 this_region.ymax = points['y'].max()
+                    
+    #             if points['z'].min() < this_region.zmin:
+    #                 this_region.zmin = points['z'].min()
+    #             elif points['z'].min() > this_region.zmax:
+    #                 this_region.zmax = points['z'].min()
+                
+    #         point_count += len(points)
+
+    #     self.infos.numpts = point_count
+        
+    #     if point_count > 0:
+    #         self.infos.minmax = this_region.export_as_list(include_z=True)
+    #         self.infos.wkt = this_region.export_as_wkt()
+
+    #     #self.infos.numpts = ds_infos['nb']
+    #     #utils.echo_msg(self.infos)
+    #     return(self.infos)
             
     def yield_ds(self):
         """yield the points from the dataset.
@@ -3318,7 +3385,7 @@ class IceSat2File(ElevationDataset):
                 if dataset is None or len(dataset) == 0:
                     continue
 
-            if self.want_buildings:
+            if self.want_buildings and this_bing is not None:
                 dataset = self.classify_buildings(dataset, this_bing)
             
             if len(self.classes) > 0:
@@ -3380,16 +3447,19 @@ class IceSat2File(ElevationDataset):
         else:
             this_region = regions.Region().from_list(self.infos.minmax)
 
-        utils.echo_msg('fetching buildings')
-        this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
-        this_bldg.run()
+        if this_region.valid_p():
+            utils.echo_msg('fetching buildings')
+            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
+            this_bldg.run()
+            
+            fr = fetches.fetch_results(this_bldg)#, check_size=False)
+            fr.daemon=True
+            fr.start()
+            fr.join()
+            
+            return(fr)
         
-        fr = fetches.fetch_results(this_bldg)#, check_size=False)
-        fr.daemon=True
-        fr.start()
-        fr.join()
-        
-        return(fr)
+        return(None)
         
     def read_atl_data(self, laser_num):
         """Read data from an ATL03 file
@@ -5028,7 +5098,7 @@ class IceSat2Fetcher(Fetcher):
                                      confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                      classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
                                      uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
+                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
 
                 yield(sub_ds)
             
@@ -5037,7 +5107,7 @@ class IceSat2Fetcher(Fetcher):
                                  confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                  classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
                                  uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata))
+                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
             yield(sub_ds)
                 
 class GMRTFetcher(Fetcher):
