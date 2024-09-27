@@ -3382,12 +3382,16 @@ class IceSat2File(ElevationDataset):
 
             if self.want_bathymetry:
                 dataset = self.classify_bathymetry(dataset)
-                if dataset is None or len(dataset) == 0:
-                    continue
+                
+            if dataset is None or len(dataset) == 0:
+                continue
 
             if self.want_buildings and this_bing is not None:
                 dataset = self.classify_buildings(dataset, this_bing)
-            
+
+            if dataset is None or len(dataset) == 0:
+                continue
+                
             if len(self.classes) > 0:
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
@@ -3395,6 +3399,7 @@ class IceSat2File(ElevationDataset):
                 continue
 
             dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
+            #dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'ph_h_classed': 'z'}, inplace=True)
             #_dataset = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
             #_points = np.rec.fromrecords(_dataset, names='x, y, z')
             #_points = _points[~np.isnan(_points['z'])]
@@ -3536,6 +3541,9 @@ class IceSat2File(ElevationDataset):
         ph_h_watermask = np.zeros(photon_h.shape)
         laser_arr = np.empty(photon_h.shape, dtype="S4")
         laser_arr[:] = laser
+
+        fn_arr = np.empty(photon_h.shape, dtype="S54")
+        fn_arr[:] = self.fn
         
         ## ref values
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
@@ -3583,13 +3591,14 @@ class IceSat2File(ElevationDataset):
              'longitude': longitude,
              'photon_height': photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
              'laser': laser_arr,
+             'fn': fn_arr,
              'confidence': conf,
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
              'ph_h_classed': ph_h_classed,
              'ph_h_watermask': ph_h_watermask},
-            columns=['latitude', 'longitude', 'photon_height', 'laser', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
+            columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
         )
 
         for col in self.columns.keys():
@@ -3633,12 +3642,13 @@ class IceSat2File(ElevationDataset):
              'longitude': lon_utm,
              'photon_height': dataset.photon_height,
              'laser': dataset.laser,
+             'fn': dataset.fn,
              'confidence': dataset.confidence,
              'ref_elevation': dataset.ref_elevation,
              'ref_azimuth': dataset.ref_azimuth,
              'ref_sat_alt': dataset.ref_sat_alt,
              'ph_h_classed': dataset.ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'laser', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
+            columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
         dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
         
@@ -3663,14 +3673,16 @@ class IceSat2File(ElevationDataset):
 
                 #utils.echo_msg('water temp is {}'.format(water_temp))
                 sea_height = cshelph.get_sea_height(binned_data_sea, surface_buffer)
-                sea_height1 = cshelph.get_bin_height(binned_data_sea, 60, surface_buffer)[2]
+                sea_height1 = cshelph.get_bin_height(binned_data_sea, 60, surface_buffer)
+                
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height) #* -1
-                    med_water_surface_h2 = np.nanmedian(sea_height1) #* -1
-                    #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
-                    #utils.echo_msg('med_water_surface2 is {}'.format(med_water_surface_h2))
+                    if sea_height1 is not None:
+                        med_water_surface_h2 = np.nanmedian(sea_height1[2]) #* -1
+                        #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
+                        #utils.echo_msg('med_water_surface2 is {}'.format(med_water_surface_h2))
 
-                    dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
+                        dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
                     
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
@@ -3700,6 +3712,8 @@ class IceSat2File(ElevationDataset):
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
                                 
                                 for n, id in enumerate(geo_df.ids.values):
+                                    #print(dataset.at[id, 'latitude'], dataset.at[id, 'longitude'])
+                                    #print(lat_wgs84[n], lon_wgs84[n])
                                     dataset.at[id, 'ph_h_classed'] = 4
                                     dataset.at[id, 'latitude'] = lat_wgs84[n]
                                     dataset.at[id, 'longitude'] = lon_wgs84[n]
@@ -5116,7 +5130,7 @@ class GMRTFetcher(Fetcher):
     -----------
     Parameters:
     
-    swath_only: onlt return MB swath data
+    swath_only: only return MB swath data
     """
     
     __doc__ = '''{}    

@@ -2935,6 +2935,7 @@ class WafflesCUDEM(Waffle):
         if weight_levels is not None:
             self.weight_levels = [utils.float_or(w) for w in weight_levels.split('/')]
             self.weight_levels = self.weight_levels[:self.pre_count]
+            #self.weight_levels.insert(0, self.
         else:
             self.weight_levels = []
             
@@ -2989,9 +2990,10 @@ class WafflesCUDEM(Waffle):
                 tmp_yinc = float(self.inc_levels[-1] * 3)
                 self.inc_levels.append(tmp_xinc)
 
-        if self.inc_levels[0] != self.xinc:
+        if self.inc_levels[0] != self.xinc or len(self.inc_levels) < self.pre_count+1:
             self.inc_levels.insert(0, self.xinc)
             self.inc_levels = self.inc_levels[:self.pre_count+1]
+            self.inc_levels.sort()
                 
     ## todo: remove coastline after processing...
     def generate_coastline(self, pre_data=None):
@@ -3098,7 +3100,7 @@ class WafflesCUDEM(Waffle):
                 pre_clip = coastline
 
         ## Grid/Stack the data `pre` times concluding in full resolution with data > min_weight
-        for pre in range(self.pre_count, -1, -1):
+        for pre in range(self.pre_count, -1, -1): # pre_count - 1
             pre_xinc = self.inc_levels[pre]
             pre_yinc = self.inc_levels[pre]
             xsample = self.inc_levels[pre-1] if pre != 0 else self.xinc

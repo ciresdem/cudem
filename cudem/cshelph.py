@@ -107,7 +107,7 @@ def bin_data(dataset, lat_res, height_res):
 
         # Add height bins to dataframe
         dataset1['height_bins'] = height_bins
-        dataset1 = dataset1.reset_index(drop=True)
+        #dataset1 = dataset1.reset_index(drop=True)
 
         return dataset1
 
