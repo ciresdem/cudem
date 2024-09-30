@@ -5121,7 +5121,7 @@ class IceSat2Fetcher(Fetcher):
         self.atl_fn = None
     
     def set_ds(self, result):
-        utils.echo_msg(result)
+        #utils.echo_msg(result)
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
 
         if self.want_buildings:
@@ -5134,7 +5134,7 @@ class IceSat2Fetcher(Fetcher):
                 outdir=self.cache_dir
             )
             for icesat2_h5 in icesat2_h5s:
-                utils.echo_msg(icesat2_h5)
+                #utils.echo_msg(icesat2_h5)
                 sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
                                      confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                      classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
