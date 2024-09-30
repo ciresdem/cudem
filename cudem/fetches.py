@@ -532,7 +532,7 @@ class Fetch:
 
         ## file exists, so we return status of 0, as if we were successful!
         except FileExistsError as e:
-            utils.echo_msg(e)
+            #utils.echo_msg(e)
             status = 0
 
         ## other exceptions will return a status of -1, failure.

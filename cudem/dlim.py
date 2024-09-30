@@ -2154,6 +2154,73 @@ class ElevationDataset:
                     count, self.fn, ' @{}'.format(self.weight) if self.weight is not None else ''
                 )
             )    
+
+    def fetch_water_temp(self):
+        """fetch and return the average water temperature over the region"""
+        
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+            
+        time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
+        time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
+        this_sst = fetches.MUR_SST(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
+        this_sst.run()
+        
+        # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
+        # sst = round(np.nanmedian(sea_temp.values)-273,2)
+        
+        return(20)
+        
+        # return(sst)
+
+            
+    def fetch_buildings(self):
+        """fetch building footprints from BING"""
+        
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+
+        if this_region.valid_p():
+            utils.echo_msg('fetching buildings for region {}'.format(this_region))
+            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
+            this_bldg.run()
+
+            fr = fetches.fetch_results(this_bldg)#, check_size=False)
+            fr.daemon=True
+            fr.start()
+            fr.join()
+
+            return(fr)
+        
+        return(None)
+
+    def process_buildings(self, this_bing):
+        bldg_geoms = []
+        if this_bing is not None:
+            with tqdm(
+                    total=len(this_bing.results),
+                    desc='unioning BING buildings',
+                    leave=self.verbose
+            ) as pbar:
+                for n, bing_result in enumerate(this_bing.results):                
+                    if bing_result[-1] == 0:
+                        pbar.update()
+
+                        bing_gz = bing_result[1]
+                        bing_gj = utils.gunzip(bing_gz, self.cache_dir)
+                        os.rename(bing_gj, bing_gj + '.geojson')
+                        bing_gj = bing_gj + '.geojson'
+                        bldg_ds = ogr.Open(bing_gj, 0)
+                        bldg_layer = bldg_ds.GetLayer()
+                        bldg_geom = gdalfun.ogr_union_geom(bldg_layer)
+                        bldg_geoms.append(bldg_geom)
+                        bldg_ds = None
+
+        return(bldg_geoms)
             
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
@@ -3365,7 +3432,15 @@ class IceSat2File(ElevationDataset):
             
         dataset = None
         if self.want_buildings:
-            this_bing = self.fetch_buildings()
+            if isinstance(self.want_buildings, bool):
+                this_bing = self.process_buildings(self.fetch_buildings())                
+            elif isinstance(self.want_buildings, list):
+                this_bing = self.want_buildings                
+            else:
+                this_bing = None    
+
+        else:
+            this_bing = None    
         
         for i in range(1, 4):
             #try:
@@ -3423,49 +3498,7 @@ class IceSat2File(ElevationDataset):
         else:
             if this_atl08.fetch(this_atl08.results[0], check_size=True) == 0:
                 return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
-
-    def fetch_water_temp(self):
-        """fetch and return the average water temperature over the region"""
-        
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-            
-        time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
-        time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.MUR_SST(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
-        this_sst.run()
-        
-        # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
-        # sst = round(np.nanmedian(sea_temp.values)-273,2)
-        
-        return(20)
-        
-        # return(sst)
-
-    def fetch_buildings(self):
-        """fetch building footprints from BING"""
-        
-        if self.region is not None:
-            this_region = self.region.copy()
-        else:
-            this_region = regions.Region().from_list(self.infos.minmax)
-
-        if this_region.valid_p():
-            utils.echo_msg('fetching buildings')
-            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
-            this_bldg.run()
-            
-            fr = fetches.fetch_results(this_bldg)#, check_size=False)
-            fr.daemon=True
-            fr.start()
-            fr.join()
-            
-            return(fr)
-        
-        return(None)
-        
+    
     def read_atl_data(self, laser_num):
         """Read data from an ATL03 file
 
@@ -3744,7 +3777,7 @@ class IceSat2File(ElevationDataset):
         #     layer.CreateField(fd)
             
         f = ogr.Feature(feature_def=layer.GetLayerDefn())        
-        with tqdm(desc='vectorizing dataframe', leave=self.verbose) as pbar:
+        with tqdm(desc='vectorizing dataframe', leave=False) as pbar:
             for index, this_row in dataset.iterrows():
                 pbar.update()
                 f.SetField(0, index)
@@ -3755,7 +3788,7 @@ class IceSat2File(ElevationDataset):
             
         return(ogr_ds)
     
-    def classify_buildings(self, dataset, this_bing):
+    def classify_buildings(self, dataset, these_bldgs):
         """classify building photons using BING building footprints 
         """
 
@@ -3763,31 +3796,21 @@ class IceSat2File(ElevationDataset):
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
-                total=len(this_bing.results),
-                desc='processing BING buildings',
-                leave=self.verbose
+                total=len(these_bldgs),
+                desc='classifying building photons',
+                leave=False
         ) as pbar:
-            for n, bing_result in enumerate(this_bing.results):                
-                if bing_result[-1] == 0:
-                    pbar.update()
+            for n, bldg_geom in enumerate(these_bldgs):                
+                pbar.update()
+                icesat_layer = ogr_df.GetLayer()
+                icesat_layer.SetSpatialFilter(bldg_geom)
 
-                    bing_gz = bing_result[1]
-                    bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-                    os.rename(bing_gj, bing_gj + '.geojson')
-                    bing_gj = bing_gj + '.geojson'
-                    bldg_ds = ogr.Open(bing_gj, 0)
-                    bldg_layer = bldg_ds.GetLayer()
-                    bldg_geom = gdalfun.ogr_union_geom(bldg_layer)
+                #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
+                for f in icesat_layer:
+                    idx = f.GetField('index')
+                    dataset.at[idx, 'ph_h_classed'] = 7
 
-                    icesat_layer = ogr_df.GetLayer()
-                    icesat_layer.SetSpatialFilter(bldg_geom)
-
-                    for f in icesat_layer:
-                        idx = f.GetField('index')
-                        dataset.at[idx, 'ph_h_classed'] = 7
-                    
-                    icesat_layer.SetSpatialFilter(None)
-                    bldg_ds = None
+                icesat_layer.SetSpatialFilter(None)
 
         ogr_df = None
         return(dataset)
@@ -5096,10 +5119,14 @@ class IceSat2Fetcher(Fetcher):
         self.want_buildings = classify_buildings
 
         self.atl_fn = None
-
+    
     def set_ds(self, result):
         utils.echo_msg(result)
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
+
+        if self.want_buildings:
+            self.want_buildings = self.process_buildings(self.fetch_buildings())
+        
         if 'processed_zip' in result[-1]:
             icesat2_h5s = utils.p_unzip(
                 icesat2_fn,#os.path.join(self.fetch_module._outdir, ),
