@@ -4615,6 +4615,8 @@ class EarthData(FetchModule):
                         zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
                         zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
 
+                        ## NSIDC sometimes returns a url for a single processed h5 granule. This file apparently doesn't
+                        ## exist and would result ins a failed fetch, so we skip non zip-files here to bypass that.
                         if zip_url.endswith('.zip'):
                             self.results.append([zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)])
                             

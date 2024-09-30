@@ -939,8 +939,10 @@ class ElevationDataset:
             
         #if check_path:
         if self.fn is not None:
-            if self.fn not in fmts:
-                if not isinstance(self.fn, list):
+            if not isinstance(self.fn, list) and \
+               not isinstance(self.fn, np.ndarray) and \
+               not isinstance(self.fn, np.core.records.recarray):
+                if self.fn not in fmts:
                     if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
                         if not utils.fn_url_p(self.fn):
                             if self.data_format > -10:
@@ -1154,7 +1156,7 @@ class ElevationDataset:
                 
                 vd_region.zmin = None
                 vd_region.zmax = None
-                vd_region.buffer(pct=5)
+                vd_region.buffer(pct=10)
                 
                 ## trans_fn is the transformation grid, used in gdalwarp
                 self.trans_fn = os.path.join(
@@ -3297,6 +3299,7 @@ class IceSat2File(ElevationDataset):
     def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', columns={},
                  classify_bathymetry=True, classify_buildings=True, **kwargs):
         super().__init__(**kwargs)
+        self.data_format = 303
         self.water_surface = water_surface
         if self.water_surface not in ['mean_tide', 'geoid', 'ellipsoid']:
             self.water_surface = 'mean_tide'
@@ -4217,6 +4220,24 @@ class OGRFile(ElevationDataset):
                             
             ds_ogr = layer_s = None
 
+class Points(ElevationDataset):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.metadata['name'] = 'points'
+        self.data_format = -4
+
+    def yield_ds(self):
+        points = self.fn
+        if isinstance(points, np.ndarray):
+            points = np.rec.fromrecords(points, names='x, y, z')
+        elif isinstance(points, np.core.records.recarray):
+            points = points
+        elif isinstance(points, pd.DataFrame):
+            points = points
+        
+        yield(points)
+            
 class Scratch(ElevationDataset):
     """Scratch Dataset
 
@@ -4226,6 +4247,7 @@ class Scratch(ElevationDataset):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.metadata['name'] = 'scratch'
+        self.data_format = -3
 
     def generate_inf(self):
         """generate and return the infos blob of the datalist.
@@ -5808,6 +5830,10 @@ class DatasetFactory(factory.CUDEMFactory):
              'fmts': [''],
              'description': 'A scratch dataset, including a python list of dlim-compatible datasets',
              'call': Scratch},
+        -4: {'name': 'points',
+             'fmts': [''],
+             'description': 'A points dataset, a numpy rec-array or a pandas dataframe, defining x, y and z data columns',
+             'call': Points},
         ## data files
         167: {'name': 'yxz',
               'fmts': ['yxz'],
