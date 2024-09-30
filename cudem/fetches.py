@@ -4095,7 +4095,7 @@ class BingBFP(FetchModule):
             
         quad_keys = list(quad_keys)
         #utils.echo_msg('The input area spans {} tiles: {}'.format(len(quad_keys), quad_keys))
-        utils.echo_msg('The input area spans {} tiles.'.format(len(quad_keys)))
+        #utils.echo_msg('The input area spans {} tiles.'.format(len(quad_keys)))
         
         bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
         try:
@@ -4614,8 +4614,10 @@ class EarthData(FetchModule):
                     if 'Content-Disposition' in _req.headers.keys():
                         zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
                         zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
-                
-                        self.results.append([zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)])
+
+                        if zip_url.endswith('.zip'):
+                            self.results.append([zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)])
+                            
                         _egi_data['page_num'] += 1
                         #break
                 else:
