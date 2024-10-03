@@ -3575,10 +3575,10 @@ class IceSat2File(ElevationDataset):
         ph_h_classed[:] = -1
 
         ph_h_watermask = np.zeros(photon_h.shape)
-        laser_arr = np.empty(photon_h.shape, dtype="S4")
+        laser_arr = np.empty(photon_h.shape, dtype='object')
         laser_arr[:] = laser
 
-        fn_arr = np.empty(photon_h.shape, dtype="S54")
+        fn_arr = np.empty(photon_h.shape, dtype='object')
         fn_arr[:] = self.fn
         
         ## ref values
