@@ -5003,7 +5003,8 @@ class CPTCity(FetchModule):
         self.q = q
 
         ## The various cpt-city URLs
-        self.cpt_pub_url = 'http://soliton.vm.bytemark.co.uk/pub/'
+        #self.cpt_pub_url = 'http://soliton.vm.bytemark.co.uk/pub/' # dead url
+        self.cpt_pub_url = 'http://seaviewsensing.com/pub/'
         self.cpt_pkg_url = self.cpt_pub_url + 'cpt-city/pkg/'
 
     def run(self):
