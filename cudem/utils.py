@@ -1200,6 +1200,20 @@ def get_terminal_size_stderr(fallback=(80, 24)):
         
     return(size)
     
+def _init_msg2(msg, prefix_len, buff_len=6):
+    width = int(_terminal_width()) - (prefix_len+buff_len)
+    msg_len = len(msg)
+    if msg_len > (width / 2):
+        while msg_len > (width / 2):
+            msg_beg = msg[:int(msg_len / 3)]
+            msg_end = msg[-1*int(msg_len / 3):]
+            msg_len = len(msg_beg + msg_end)
+
+        msg = '{}...{}'.format(msg_beg, msg_end)
+        return(msg)
+    else:
+        return('{}'.format(msg))
+
 def _init_msg(msg, prefix_len, buff_len=6):
     width = int(_terminal_width()) - (prefix_len+buff_len)
     try:
@@ -1209,7 +1223,7 @@ def _init_msg(msg, prefix_len, buff_len=6):
             return('{}'.format(msg))
     except:
         return('{}'.format(msg))
-
+    
 def echo_warning_msg2(msg, prefix = 'waffles'):
     """echo warning msg to stderr using `prefix`
 
@@ -1224,6 +1238,7 @@ def echo_warning_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix) + 9)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
+    #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[33m\033[1mwarning\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[33m\033[1mwarning\033[m, {}'.format(prefix, msg), file=sys.stderr)
     sys.stderr.flush()
@@ -1242,6 +1257,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix) + 7)
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
+    #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg), file=sys.stderr)
     sys.stderr.flush()
@@ -1261,6 +1277,7 @@ def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.flush()
     sys.stderr.write('\x1b[2K\r')
+    #msg = _init_msg(msg, len(prefix))
     if bold:
         #sys.stderr.write('{}: \033[1m{}\033[m{}'.format(prefix, msg, '\n' if nl else ''))
         tqdm.write('{}: \033[1m{}\033[m'.format(prefix, msg), file=sys.stderr)

@@ -57,14 +57,16 @@ class Grits:
     
     def __init__(
             self, src_dem: str = None, dst_dem: str = None, band: int = 1, min_z: float = None, max_z: float = None,
-            count_mask: any = None, weight_mask: any = None, uncertainty_mask: any = None, cache_dir: str = './',
-            verbose: bool = True, params: dict = {}, **kwargs: any
+            min_weight: float = None, max_weight: float = None, count_mask: any = None, weight_mask: any = None,
+            uncertainty_mask: any = None, cache_dir: str = './', verbose: bool = True, params: dict = {}, **kwargs: any
     ):
         self.src_dem = src_dem
         self.dst_dem = dst_dem
         self.band = band
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
+        self.min_weight = utils.float_or(min_weight)
+        self.max_weight = utils.float_or(max_weight)
         self.count_mask = count_mask
         self.weight_mask = weight_mask
         self.uncertainty_mask = uncertainty_mask
@@ -89,12 +91,25 @@ class Grits:
         self.ds_band = src_ds.GetRasterBand(self.band)
         self.gt = self.ds_config['geoT']
 
+        ## setup the uncertainty data if wanted
+        if self.weight_mask is not None:
+            self.weight_is_band = False
+            self.weight_is_fn = False
+            if utils.int_or(self.weight_mask) is not None:
+                self.weight_is_band = True
+                self.weight_mask = utils.int_or(self.weight_mask)
+            elif os.path.exists(self.weight_mask):
+                self.weight_is_fn = True
+            else:
+                self.weight_mask = None        
+
     def generate(self):
         if self.verbose:
             utils.echo_msg('filtering {} using {}'.format(self.src_dem, self))
             
         self.run()
         self.split_by_z()
+        self.split_by_weight()
         return(self)        
         
     def run(self):
@@ -142,6 +157,53 @@ class Grits:
                             s_band.WriteArray(smoothed_array)
         return(self)
 
+    def split_by_weight(self):
+        """Split the filtered DEM by z-value"""
+
+        if self.weight_mask is not None:            
+            with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+                if src_ds is not None:
+                    self.init_ds(src_ds)
+                    elev_array = self.ds_band.ReadAsArray()
+
+                    # uncertainty ds
+                    weight_band = None
+                    if self.weight_is_fn:
+                        weight_ds = gdal.Open(self.weight_mask)
+                        weight_band = weight_ds.GetRasterBand(1)
+                    elif self.weight_is_band:
+                        weight_band = src_ds.GetRasterBand(self.weight_mask)
+
+                    if weight_band is not None:
+                        weight_array = weight_band.ReadAsArray()
+                        weight_array[(weight_array == self.ds_config['ndv'])] = 0
+                    
+                    mask_array = np.zeros((self.ds_config['ny'], self.ds_config['nx']))                
+                    mask_array[elev_array == self.ds_config['ndv']] = np.nan
+                    mask_array[weight_array == self.ds_config['ndv']] = np.nan
+
+                    if self.min_weight is not None:
+                        mask_array[weight_array > self.min_weight] = 1
+                        if self.max_weight is not None:
+                            mask_array[weight_array > self.max_weight] = 0
+                        
+                    elif self.max_weight is not None:
+                        mask_array[weight_array < self.max_weight] = 1
+                        if self.min_weight is not None:
+                            mask_array[weight_array < self.min_weight] = 0
+                        
+                    elev_array[mask_array == 1] = 0
+                    
+                    with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
+                        if s_ds is not None:
+                            s_band = s_ds.GetRasterBand(1)
+                            s_array = s_band.ReadAsArray()
+                            s_array = s_array * mask_array
+                            smoothed_array = s_array + elev_array
+                            elev_array = None
+                            s_band.WriteArray(smoothed_array)
+        return(self)
+    
     def get_outliers(self, in_array: any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
         """get the outliers from in_array based on the percentile
 

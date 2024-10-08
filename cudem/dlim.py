@@ -1795,7 +1795,7 @@ class ElevationDataset:
 
         ## apply any filters to the stack
         for f in self.stack_fltrs:
-            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4)._acquire_module()
+            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3)._acquire_module()
             if grits_filter is not None:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
@@ -1928,7 +1928,7 @@ class ElevationDataset:
                     ## apply any dlim filters to the points
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
-                            #utils.echo_msg(f)
+                            utils.echo_msg(f)
                             point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
                             if point_filter is not None:
                                 points = point_filter()
@@ -2141,7 +2141,7 @@ class ElevationDataset:
             
             out_arrays['weight'] = np.ones((this_srcwin[3], this_srcwin[2]))
             out_arrays['weight'][:] = self.weight if self.weight is not None else 1
-            out_arrays['weight'][unq[:,0], unq[:,1]] *= (ww * unq_cnt)
+            out_arrays['weight'][unq[:,0], unq[:,1]] *= ww #*unq_cnt
             #out_arrays['weight'][unq[:,0], unq[:,1]] *= unq_cnt
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -4052,7 +4052,11 @@ class MBSParser(ElevationDataset):
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
 
             if self.want_binned:
-                mb_points = self.bin_z_points(mb_points)
+                point_filter = PointFilterFactory(mod='bin_z', points=mb_points)._acquire_module()
+                if point_filter is not None:
+                    mb_points = point_filter()
+
+                #mb_points = self.bin_z_points(mb_points)
 
             if mb_points is not None:
                 yield(mb_points)
@@ -4085,7 +4089,10 @@ class MBSParser(ElevationDataset):
             mb_points = None
 
         if self.want_binned:
-            mb_points = self.bin_z_points(mb_points)
+            #mb_points = self.bin_z_points(mb_points)
+            point_filter = PointFilterFactory(mod='bin_z', points=mb_points)._acquire_module()
+            if point_filter is not None:
+                mb_points = point_filter()
 
         if mb_points is not None:
             yield(mb_points)
