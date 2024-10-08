@@ -1088,6 +1088,8 @@ Options:
 
   -N, --min_z\t\t\tMinimum z value (filter data above this value)
   -X, --max_z\t\t\tMaximum z value (filter data below this value)
+  -Wn, --min_weight\t\tMinimum weight value (filter data above this value)
+  -Wx, --max_weight\t\tMaximum weight value (filter data below this value)
   -U, --uncertainty_mask\tAn associated uncertainty raster or band number
   -W, --weight_mask\t\tAn associated weight raster or band number
   -C, --count_mask\t\tAn associated count raster or band number
@@ -1114,6 +1116,8 @@ def grits_cli(argv = sys.argv):
     wg_user = None
     min_z = None
     max_z = None
+    min_weight = None
+    max_weight = None
     uncertainty_mask = None
     weight_mask = None
     count_mask = None
@@ -1152,14 +1156,22 @@ def grits_cli(argv = sys.argv):
         elif arg == '--max_z' or arg == '-X':
             max_z = utils.float_or(argv[i + 1])
             i += 1
-        elif arg[:2] == 'X':
-            max_z = utils.float_or(arg[2:])            
+        elif arg == '--min_weight' or arg == '-Wn':
+            min_weight = utils.float_or(argv[i + 1])
+            i += 1
+        elif arg[:3] == '-Wn':
+            min_weight = utils.float_or(arg[3:])
+        elif arg == '--max_weight' or arg == '-Wx':
+            max_weight = utils.float_or(argv[i + 1])
+            i += 1
+        elif arg[:3] == 'Wx':
+            max_weight = utils.float_or(arg[3:])            
         elif arg == '--uncertainty_mask' or arg == '-U':
             uncertainty_mask = argv[i + 1]
             i += 1
         elif arg[:2] == '-U':
             uncertainty_mask = arg[2:]
-        elif arg == '--weight_mask' or arg == '-@':
+        elif arg == '--weight_mask' or arg == '-W':
             weight_mask = argv[i + 1]
             i += 1
         elif arg[:2] == '-W':
@@ -1255,23 +1267,23 @@ def grits_cli(argv = sys.argv):
             continue
         
         this_grits = GritsFactory(
-            mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, uncertainty_mask=uncertainty_mask, weight_mask=weight_mask,
-            count_mask=count_mask, dst_dem=dst_dem
+            mod=module, src_dem=src_dem, min_z=min_z, max_z=max_z, min_weight=min_weight, max_weight=max_weight,
+            uncertainty_mask=uncertainty_mask, weight_mask=weight_mask, count_mask=count_mask, dst_dem=dst_dem
         )
-        #try:
-        this_grits_module = this_grits._acquire_module()
-        if this_grits_module is not None:
-            out_dem = this_grits_module()
-            utils.echo_msg('filtered DEM to {}'.format(out_dem.dst_dem))
-            #os.replace(out_dem.dst_dem, src_dem)
-        else:
-            utils.echo_error_msg('could not acquire grits module {}'.format(module))
+        try:
+            this_grits_module = this_grits._acquire_module()
+            if this_grits_module is not None:
+                out_dem = this_grits_module()
+                utils.echo_msg('filtered DEM to {}'.format(out_dem.dst_dem))
+                #os.replace(out_dem.dst_dem, src_dem)
+            else:
+                utils.echo_error_msg('could not acquire grits module {}'.format(module))
                 
-        # except KeyboardInterrupt:
-        #     utils.echo_error_msg('Killed by user')
+        except KeyboardInterrupt:
+            utils.echo_error_msg('Killed by user')
             
-        # except Exception as e:
-        #     utils.echo_error_msg(e)
-        #     print(traceback.format_exc())
+        except Exception as e:
+            utils.echo_error_msg(e)
+            print(traceback.format_exc())
         
 ### End
