@@ -122,9 +122,8 @@ between adjacent DEM tiles.
 - [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
 - [Generate a DEM and Uncertainty grid of The Bahamas](/docs/example_uncertainty.md)
 - [Filter Multibeam data](/docs/example_grits.md)
-
-- [Canada-US elevation model collaboration to improve tsunami inundation mapping](https://www.youtube.com/watch?v=fc4ibBim_k0)
 - [CSSP DEM Workshop](/docs/CSSP_DEM_Workshop_Report.pdf)
+- [Canada-US elevation model collaboration to improve tsunami inundation mapping](https://www.youtube.com/watch?v=fc4ibBim_k0)
 
 
 # Additional Information
