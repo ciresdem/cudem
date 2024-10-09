@@ -323,7 +323,12 @@ class Fetch:
         if req is not None:
             if req.status_code == 504:
                 time.sleep(2)
-                req = self.fetch_req(params=params, tries=tries - 1, timeout=timeout + 1, read_timeout=read_timeout + 10)
+                req = self.fetch_req(
+                    params=params,
+                    tries=tries - 1,
+                    timeout=timeout + 1 if timeout is not None else None,
+                    read_timeout=read_timeout + 10 if read_timeout is not None else None
+                )
 
             ## server says we have a band Range in the header, so we will
             ## remove the Range from the header and just try again.
