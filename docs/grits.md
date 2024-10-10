@@ -65,7 +65,7 @@ grits_filter = grits.GritsFactory(
     count_mask=2
 )._acquire_module()
 if grits_filter is not None:
-   grits_filter()
+    grits_filter()
 ```
 
 ## Examples
