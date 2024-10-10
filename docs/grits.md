@@ -53,6 +53,15 @@ Print the version information
 
 ## Python API
 
+### Filter outliers with a weight below 1.2 from a 1/9 arc-second `stacks` DEM (generated with `waffles`)
+
+```python
+from cudem import grits
+grits_filter = grits.GritsFactory(mod='outliers', src_dem='ncei19_n38x25_w123x50_2024v1_stack.tif', uncertainty_mask=4, weight_mask=3, count_mask=2)._acquire_module()
+if grits_filter is not None:
+   grits_filter()
+```
+
 ## Examples
 
 ### Filter outliers with a weight below 1.2 from a 1/9 arc-second `stacks` DEM (generated with `waffles`)
