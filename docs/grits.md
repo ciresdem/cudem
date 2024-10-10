@@ -81,3 +81,9 @@ $ grits -M outliers --max_weight 1.2 -U 4 -W 3 -C 2 ncei19_n38x25_w123x50_2024v1
 ```bash
 $ grits -M flats USGS_1_n45w125_20130911.tif
 ```
+
+![](/media/USGS_1_n45w125_20130911_hs.png)
+**Figure 1.** USGS NED 1 arc-second DEM
+
+![](/media/USGS_1_n45w125_20130911_filtered_hs.png)
+**Figure 2.** USGS NED 1 arc-second DEM with flattened areas removed
