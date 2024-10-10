@@ -54,3 +54,9 @@ Print the version information
 ## Python API
 
 ## Examples
+
+### Filter outliers with a weight below 1.2 from a CUDEM 1/9 arc-second `stacks` DEM (generated with `waffles`)
+
+```bash
+$ grits -M outliers --max_weight 1.2 -U 4 -W 3 -C 2 ncei19_n38x25_w123x50_2024v1_stack.tif
+```
