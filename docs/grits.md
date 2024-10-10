@@ -60,7 +60,7 @@ from cudem import grits
 grits_filter = grits.GritsFactory(
     mod='outliers',
     src_dem='ncei19_n38x25_w123x50_2024v1_stack.tif',
-	uncertainty_mask=4,
+    uncertainty_mask=4,
     weight_mask=3,
     count_mask=2
 )._acquire_module()
