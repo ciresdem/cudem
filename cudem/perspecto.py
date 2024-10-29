@@ -993,7 +993,7 @@ def perspecto_cli(argv = sys.argv):
             sys.stdout.write('{}\n'.format(cudem.__version__))
             sys.exit(0)
         elif arg[0] == '-':
-            sys.stdout.write(uncertainties_cli_usage)
+            sys.stdout.write(perspecto_cli_usage)
             utils.echo_error_msg('{} is not a valid perspecto cli switch'.format(arg))
             sys.exit(0)
         else:

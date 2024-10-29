@@ -642,7 +642,8 @@ class ElevationDataset:
 
         ## initialize filters
         if isinstance(self.stack_fltrs, str):
-            self.stack_fltrs = [self.stack_fltrs]
+            self.stack_fltrs = [':'.join(self.stack_fltrs.split('/'))]
+            #self.stack_fltrs = [self.stack_fltrs]
 
         if isinstance(self.pnt_fltrs, str):
             self.pnt_fltrs = [':'.join(self.pnt_fltrs.split('/'))]
@@ -1084,8 +1085,12 @@ class ElevationDataset:
                 src_srs = srs_split[0]
                 if len(srs_split) > 1:
                     in_vertical_epsg_esri = srs_split[1]
-                
-            in_crs = pyproj.CRS.from_user_input(src_srs)
+
+            try:
+                in_crs = pyproj.CRS.from_user_input(src_srs)
+            except:
+                utils.echo_error_msg(src_srs)
+                    
             out_crs = pyproj.CRS.from_user_input(dst_srs)
 
             if in_crs.is_compound:
@@ -1793,7 +1798,7 @@ class ElevationDataset:
 
         m_ds = msk_ds = dst_ds = None
 
-        ## apply any filters to the stack
+        ## apply any grits filters to the stack
         for f in self.stack_fltrs:
             grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3)._acquire_module()
             if grits_filter is not None:
@@ -2147,7 +2152,61 @@ class ElevationDataset:
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] = np.sqrt(uu**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
-            
+
+            # ## apply any filters to the array
+            # for f in self.stack_fltrs:
+            #     ## write out array to a temp grid
+
+            #     out_name = os.path.join(self.cache_dir, '{}'.format(
+            #         utils.append_fn('_tmp_dlim_stacks', self.region, self.x_inc)
+            #     ))
+            #     tmp_file = '{}.tif'.format(out_name)
+            #     gdt = gdal.GDT_Float32
+            #     driver = gdal.GetDriverByName('GTiff')
+            #     if os.path.exists(tmp_file):
+            #         status = driver.Delete(tmp_file)
+            #         if status != 0:
+            #             utils.remove_glob('{}*'.format(tmp_file))
+                
+            #     dst_ds = driver.Create(tmp_file, this_srcwin[2], this_srcwin[3], 3, gdt,
+            #                            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'])
+            #     dst_ds.SetGeoTransform(dst_gt)
+            #     z_band = dst_ds.GetRasterBand(1)
+            #     w_band = dst_ds.GetRasterBand(2)
+            #     u_band = dst_ds.GetRasterBand(3)
+            #     z_band.SetNoDataValue(-9999)
+            #     w_band.SetNoDataValue(-9999)
+            #     u_band.SetNoDataValue(-9999)
+                                                                
+            #     z_band.WriteArray(out_arrays['z'])
+            #     w_band.WriteArray(out_arrays['weight'])
+            #     u_band.WriteArray(out_arrays['uncertainty'])
+                                                                
+            #     dst_ds = None
+                
+            #     ## filter the temp grid
+            #     grits_filter = grits.GritsFactory(mod=f, src_dem=tmp_file, uncertainty_mask=3, weight_mask=2)._acquire_module()
+            #     if grits_filter is not None:
+            #         grits_filter()
+            #         os.replace(grits_filter.dst_dem, tmp_file)
+                    
+            #     ## extract filtered array from filtered grid
+            #     with gdalfun.gdal_datasource(tmp_file) as tmp_ds:
+            #         out_arrays['z'] = tmp_ds.GetRasterBand(1).ReadAsArray()
+            #         out_arrays['weight'] = tmp_ds.GetRasterBand(2).ReadAsArray()
+            #         out_arrays['uncertainty'] = tmp_ds.GetRasterBand(3).ReadAsArray()
+
+            #         out_arrays['z'][out_arrays['z'] == -9999] = np.nan
+            #         for key in out_arrays.keys():
+            #             if key !='mask':
+            #                 out_arrays[key][np.isnan(out_arrays['z'])] = np.nan
+
+            #         # for key in out_arrays.keys():
+            #         #     if key !='mask':
+            #         #         out_arrays[key] = out_arrays[key][~np.isnan(out_arrays[key])]
+
+            #     utils.remove_glob(tmp_file)
+
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
@@ -3987,11 +4046,18 @@ class MBSParser(ElevationDataset):
             mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
                               weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
                               src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+            #stack_fltrs=self.stack_fltrs)
 
-            yield(mbs_ds)
+            mbs_ds.initialize()
+            for gdal_ds in mbs_ds.parse():
+                for pts in gdal_ds.yield_points():
+                    yield(pts)
+            
+            #yield(mbs_ds)
             utils.remove_glob('{}.tif*'.format(ofn))
-        except:
-            pass
+        except Exception as e:
+            #pass
+            raise(e)
 
     def yield_mblist_ds(self):
         """use mblist to process the multibeam data"""
@@ -4031,7 +4097,6 @@ class MBSParser(ElevationDataset):
             heave = this_line[11]
             speed = this_line[12]
 
-            #this_xyz = xyzfun.XYZPoint().from_string(line, delim='\t')
             if int(beamflag) == 0:# and abs(this_line[4]) < .15:
                 u_depth = ((2+(0.02*(z*-1)))*0.51)
                 #u_depth = 0
@@ -4052,12 +4117,10 @@ class MBSParser(ElevationDataset):
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
 
             if self.want_binned:
-                point_filter = PointFilterFactory(mod='bin_z', points=mb_points)._acquire_module()
+                point_filter = PointFilterFactory(mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points)._acquire_module()
                 if point_filter is not None:
                     mb_points = point_filter()
-
-                #mb_points = self.bin_z_points(mb_points)
-
+                    
             if mb_points is not None:
                 yield(mb_points)
 
@@ -4065,7 +4128,7 @@ class MBSParser(ElevationDataset):
         """use mblist to process the multibeam data"""
         
         mb_fn = os.path.join(self.fn)
-        if self.region is None or self.data_region is None:
+        if self.region is None and self.data_region is None:
             self.want_mbgrid = False
 
         if self.region is not None:
@@ -5428,8 +5491,9 @@ class MarGravFetcher(Fetcher):
                                  parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
         else:
-            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:x_offset=REM', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask,
+            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:x_offset=REM',
+                                 src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                                 weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask,
                                  parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
                                  cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
@@ -5465,10 +5529,11 @@ class MBSFetcher(Fetcher):
     __doc__ = '''{}
     Fetches Module: <multibeam> - {}'''.format(__doc__, fetches.Multibeam.__doc__)
 
-    def __init__(self, mb_exclude = 'A', want_binned = False, **kwargs):
+    def __init__(self, mb_exclude = 'A', want_binned = False, want_mbgrid = False, **kwargs):
         super().__init__(**kwargs)
         self.mb_exclude = mb_exclude
         self.want_binned = want_binned
+        self.want_mbgrid = want_mbgrid
 
     def set_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
@@ -5477,7 +5542,7 @@ class MBSFetcher(Fetcher):
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
                             mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, want_binned=self.want_binned,
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            remote=True)._acquire_module()
+                            pnt_fltrs=self.pnt_fltrs, stack_fltrs=self.stack_fltrs, remote=True, want_mbgrid=self.want_mbgrid)._acquire_module()
 
         yield(ds)
                 
@@ -5500,7 +5565,8 @@ class HydroNOSFetcher(Fetcher):
                 outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
             )
             for nos_fn in nos_fns:
-                yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
+                yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866',
+                                     dst_srs=self.dst_srs, pnt_fltrs=self.pnt_fltrs, stack_fltrs=self.stack_fltrs,
                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
                                      parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())

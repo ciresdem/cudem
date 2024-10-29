@@ -79,6 +79,10 @@ $ grits -M outliers --max_weight 1.2 -U 4 -W 3 -C 2 ncei19_n38x25_w123x50_2024v1
 ### Remove 'flattened' areas from a USGS NED DEM
 
 ```bash
+# fetch the USGS NED DEM
+$ fetches ned:q=USGS_1_n45w125_20130911
+
+# filter the flattened areas from the DEM
 $ grits -M flats USGS_1_n45w125_20130911.tif
 ```
 

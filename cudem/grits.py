@@ -160,48 +160,49 @@ class Grits:
     def split_by_weight(self):
         """Split the filtered DEM by z-value"""
 
-        if self.weight_mask is not None:            
-            with gdalfun.gdal_datasource(self.src_dem) as src_ds:
-                if src_ds is not None:
-                    self.init_ds(src_ds)
-                    elev_array = self.ds_band.ReadAsArray()
+        if self.max_weight is not None or self.min_weight is not None:
+            if self.weight_mask is not None:            
+                with gdalfun.gdal_datasource(self.src_dem) as src_ds:
+                    if src_ds is not None:
+                        self.init_ds(src_ds)
+                        elev_array = self.ds_band.ReadAsArray()
 
-                    # uncertainty ds
-                    weight_band = None
-                    if self.weight_is_fn:
-                        weight_ds = gdal.Open(self.weight_mask)
-                        weight_band = weight_ds.GetRasterBand(1)
-                    elif self.weight_is_band:
-                        weight_band = src_ds.GetRasterBand(self.weight_mask)
+                        # uncertainty ds
+                        weight_band = None
+                        if self.weight_is_fn:
+                            weight_ds = gdal.Open(self.weight_mask)
+                            weight_band = weight_ds.GetRasterBand(1)
+                        elif self.weight_is_band:
+                            weight_band = src_ds.GetRasterBand(self.weight_mask)
 
-                    if weight_band is not None:
-                        weight_array = weight_band.ReadAsArray()
-                        weight_array[(weight_array == self.ds_config['ndv'])] = 0
-                    
-                    mask_array = np.zeros((self.ds_config['ny'], self.ds_config['nx']))                
-                    mask_array[elev_array == self.ds_config['ndv']] = np.nan
-                    mask_array[weight_array == self.ds_config['ndv']] = np.nan
+                        if weight_band is not None:
+                            weight_array = weight_band.ReadAsArray()
+                            weight_array[(weight_array == self.ds_config['ndv'])] = 0
 
-                    if self.min_weight is not None:
-                        mask_array[weight_array > self.min_weight] = 1
-                        if self.max_weight is not None:
-                            mask_array[weight_array > self.max_weight] = 0
-                        
-                    elif self.max_weight is not None:
-                        mask_array[weight_array < self.max_weight] = 1
+                        mask_array = np.zeros((self.ds_config['ny'], self.ds_config['nx']))                
+                        mask_array[elev_array == self.ds_config['ndv']] = np.nan
+                        mask_array[weight_array == self.ds_config['ndv']] = np.nan
+
                         if self.min_weight is not None:
-                            mask_array[weight_array < self.min_weight] = 0
-                        
-                    elev_array[mask_array == 1] = 0
-                    
-                    with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
-                        if s_ds is not None:
-                            s_band = s_ds.GetRasterBand(1)
-                            s_array = s_band.ReadAsArray()
-                            s_array = s_array * mask_array
-                            smoothed_array = s_array + elev_array
-                            elev_array = None
-                            s_band.WriteArray(smoothed_array)
+                            mask_array[weight_array > self.min_weight] = 1
+                            if self.max_weight is not None:
+                                mask_array[weight_array > self.max_weight] = 0
+
+                        elif self.max_weight is not None:
+                            mask_array[weight_array < self.max_weight] = 1
+                            if self.min_weight is not None:
+                                mask_array[weight_array < self.min_weight] = 0
+
+                        elev_array[mask_array == 1] = 0
+
+                        with gdalfun.gdal_datasource(self.dst_dem, update=True) as s_ds:
+                            if s_ds is not None:
+                                s_band = s_ds.GetRasterBand(1)
+                                s_array = s_band.ReadAsArray()
+                                s_array = s_array * mask_array
+                                smoothed_array = s_array + elev_array
+                                elev_array = None
+                                s_band.WriteArray(smoothed_array)
         return(self)
     
     def get_outliers(self, in_array: any, percentile: float = 75, k: float = 1.5, verbose: bool = False):
@@ -386,14 +387,16 @@ class Outliers(Grits):
     max_step(int) - the maximum moving window step in pixels (multipass) (append `m` to set the size in meters)
     acuumulate(bool) - accumulate outliers with multipass, set to `False` to remove outliers after each pass in multipass
     return_mask(bool) - save the generated outlier mask
+    size_is_step(bool) - the chunk_step and max_step will be set to the chunk_size and chunk_step, respectively
+    mode(str) - the mode to use when calculating the outliers (average, scaled, None)
     """
     
     def __init__(self, percentile = None, max_percentile = None, outlier_percenitle = None, chunk_size = None,
                  chunk_step = None, max_chunk = None, max_step = None, k = None, max_k = None,
                  outlier_k = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
                  slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1,
-                 multipass = 1, accumulate = True, interpolation = 'nearest', aggressive = True,
-                 units_are_degrees = True, **kwargs):
+                 multipass = 1, accumulate = False, interpolation = 'nearest', aggressive = True,
+                 units_are_degrees = True, size_is_step = True, mode = 'scaled', **kwargs):
         
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile)
@@ -417,7 +420,9 @@ class Outliers(Grits):
         self.max_k = utils.float_or(max_k)
         self.aggressive = aggressive
         self.units_are_degrees = units_are_degrees
-        
+        self.size_is_step = size_is_step
+        self.mode = mode
+
         ## setup the uncertainty data if wanted
         if self.uncertainty_mask is not None:
             self.unc_is_band = False
@@ -465,8 +470,8 @@ class Outliers(Grits):
         if self.units_are_degrees:
             cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
-        m_size = 1000
-        mm_size = 10000
+        m_size = 1000#500 # 1000
+        mm_size = 8000#8000 # 10000
         if self.chunk_size is not None:
             if self.chunk_size[-1] == 'm':
                 m_size = utils.int_or(self.chunk_size[:-1])
@@ -480,30 +485,33 @@ class Outliers(Grits):
         if self.max_chunk is not None:
             if self.max_chunk[-1] == 'm':
                 mm_size = utils.int_or(self.max_chunk[:-1])
-                cm_size = m_size / cell_size
+                cm_size = mm_size / cell_size
 
         if self.max_step is not None:
             if self.max_step[-1] == 'm':
                 mm_step = utils.int_or(self.max_step[:-1])
                 cm_step = mm_step / cell_size
                 
-
-        self.n_chunk = utils.int_or(self.chunk_size, ((m_size * (1/n_den)) / cell_size))
-        self.max_chunk = utils.int_or(self.max_chunk, ((mm_size * (1/n_den)) / cell_size))
-                
         #self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den * self.multipass))) / cell_size))
         #self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den))) / cell_size))
         #self.max_chunk = utils.int_or(self.max_chunk, ((50000*(1/n_den)) / cell_size))
+
+        self.n_chunk = utils.int_or(self.chunk_size, ((m_size * (1/n_den)) / cell_size))
+        self.max_chunk = utils.int_or(self.max_chunk, ((mm_size * (1/n_den)) / cell_size))
         if self.n_chunk < 15:
             self.n_chunk = 15
             
         # if self.max_chunk > math.sqrt(src_arr.size):
         #     self.max_chunk = math.sqrt(src_arr.size)
 
-        self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 4))
-        self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk / 4))
-        if self.max_step > self.max_chunk:
-            self.max_step = self.max_chunk
+        if self.size_is_step:
+            self.n_step = utils.int_or(self.chunk_step, self.n_chunk)
+            self.max_step = utils.int_or(self.max_step, self.max_chunk)
+        else:
+            self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 4))
+            self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk / 4))
+            if self.max_step > self.max_chunk:
+                self.max_step = self.max_chunk
 
         if self.verbose:
             utils.echo_msg(
@@ -673,7 +681,7 @@ class Outliers(Grits):
 
     def mask_outliers(
             self, src_data=None, mask_data=None, count_data=None, percentile=75, upper_only=False,
-            src_weight=1, k=1.5, verbose=False, other_data=None
+            src_weight=1, k=1.5, verbose=False, other_data=None, mask_clumps=False
     ):
         """mask outliers and assign an outlier 'score' to each affected cell.
 
@@ -684,47 +692,100 @@ class Outliers(Grits):
 
         Set `upper_only` to True to only mask data which falls above the UL.
         """
-        
+        #mask_clumps=True
         if src_data is not None and mask_data is not None and count_data is not None:
             src_data[((np.isnan(src_data)) | (np.isinf(src_data)) | (src_data == self.ds_config['ndv']))] = np.nan
             upper_limit, lower_limit = self.get_outliers(src_data, percentile, k)
+            src_size = src_data.size
                 
             if verbose:
                 utils.echo_msg('{} {}'.format(upper_limit, lower_limit))
 
             src_upper = src_data[src_data > upper_limit]
+            src_upper_mask = (src_data > upper_limit)
             if src_upper.size > 0:
-                #src_max = (upper_limit + (upper_limit))
-                #src_max = np.nanmax(src_upper)
-                
                 if (upper_limit - lower_limit) != 0:
-                    #mask_data[(src_data > upper_limit)] = np.sqrt(
-                    #    (np.power(mask_data[(src_data > upper_limit)], 2) +
-                    #     np.power(src_weight * np.abs((src_upper - upper_limit) / (src_max - upper_limit)), 2))
-                    #)
-                    #utils.echo_msg('{} {} {}'.format(src_upper, upper_limit, lower_limit))
-                    mask_data[(src_data > upper_limit)] = np.sqrt(
-                        (np.power(mask_data[(src_data > upper_limit)], 2) +
-                         np.power(src_weight * np.abs((src_upper - lower_limit) / (upper_limit - lower_limit)), 2))
-                    )
-                    count_data[(src_data > upper_limit)] += src_weight
+                    # if mask_clumps:
+                    l, n = scipy.ndimage.label(src_upper_mask)
+                    uv, uv_counts = np.unique(l[l!=0], return_counts=True)
+                    _size_threshold = src_size * .001
+                    uv_ = uv[uv_counts > _size_threshold]
+                    mask = np.isin(l, uv_)
+                    src_upper_mask[mask] = False
+                        
+                    try:
+                        #     src_max = np.nanmax(src_data[src_upper_mask])
+                        if self.mode == 'average':
+                            src_max = np.nanmax(src_data[src_upper_mask])
+                            mask_data[src_upper_mask] += (src_weight * np.abs((src_data[src_upper_mask] - upper_limit) / (src_max - upper_limit)))
+                            count_data[src_upper_mask] += src_weight
+                        elif self.mode == 'scaled':
+                            src_max = np.nanmax(src_data[src_upper_mask])
+                            mask_data[src_upper_mask] = np.sqrt(
+                                (np.power(mask_data[src_upper_mask], 2) +
+                                 np.power(src_weight * np.abs((src_data[src_upper_mask] - upper_limit) / (src_max - upper_limit)), 2))
+                            )
+                            count_data[src_upper_mask] += src_weight
+                        else:                            
+                            mask_data[src_upper_mask] = np.sqrt(
+                                (np.power(mask_data[src_upper_mask], 2) +
+                                 np.power(src_weight * np.abs((src_data[src_upper_mask] - lower_limit) / (upper_limit - lower_limit)), 2))
+                            )
+                            count_data[src_upper_mask] += src_weight
+
+                        # mask_data[(src_data > upper_limit)] = np.sqrt(
+                        #     (np.power(mask_data[(src_data > upper_limit)], 2) +
+                        #      np.power(src_weight * np.abs((src_upper - lower_limit) / (upper_limit - lower_limit)), 2))
+                        # )
+                        # count_data[(src_data > upper_limit)] += src_weight
+                    except ValueError as e:
+                        pass
+                    except Exception as e:
+                        raise(e)
 
             if not upper_only:
+                src_lower_mask = src_data < lower_limit
                 src_lower = src_data[src_data < lower_limit]
                 if src_lower.size > 0:
-                    #src_min = (lower_limit - (abs(lower_limit)))
-                    #src_min = np.nanmin(src_lower)
                     if (lower_limit - upper_limit) != 0:
-                        # mask_data[(src_data < lower_limit)] = np.sqrt(
-                        #     (np.power(mask_data[(src_data < lower_limit)], 2) +
-                        #      np.power(src_weight * np.abs((src_lower - lower_limit) / (src_min - lower_limit)), 2))
-                        # )
-                        mask_data[(src_data < lower_limit)] = np.sqrt(
-                            (np.power(mask_data[(src_data < lower_limit)], 2) +
-                             np.power(src_weight * np.abs((src_lower - upper_limit) / (lower_limit - upper_limit)), 2))
-                        )
-                        count_data[(src_data < lower_limit)] += src_weight
+                        # if mask_clumps:
+                        l, n = scipy.ndimage.label(src_lower_mask)
+                        uv, uv_counts = np.unique(l[l!=0], return_counts=True)
+                        _size_threshold = src_size * .001
+                        uv_ = uv[uv_counts > _size_threshold]                            
+                        mask = np.isin(l, uv_)
+                        src_lower_mask[mask] = False
 
+                        try:
+                            #     src_min = np.nanmin(src_data[src_lower_mask])
+                            if self.mode == 'average':
+                                src_min = np.nanmin(src_data[src_lower_mask])
+                                mask_data[src_lower_mask] += (src_weight * np.abs((src_data[src_lower_mask] - lower_limit) / (src_min - lower_limit)))
+                                count_data[src_lower_mask] += src_weight
+                            elif self.mode == 'scaled':
+                                src_min = np.nanmin(src_data[src_lower_mask])
+                                mask_data[src_lower_mask] = np.sqrt(
+                                    (np.power(mask_data[src_lower_mask], 2) +
+                                     np.power(src_weight * np.abs((src_data[src_lower_mask] - lower_limit) / (src_min - lower_limit)), 2))
+                                )
+                                count_data[src_lower_mask] += src_weight
+                            else:
+                                mask_data[src_lower_mask] = np.sqrt(
+                                    (np.power(mask_data[src_lower_mask], 2) +
+                                     np.power(src_weight * np.abs((src_data[src_lower_mask] - upper_limit) / (lower_limit - upper_limit)), 2))
+                                )
+                                count_data[src_lower_mask] += src_weight
+
+                            # mask_data[(src_data < lower_limit)] = np.sqrt(
+                            #     (np.power(mask_data[(src_data < lower_limit)], 2) +
+                            #      np.power(src_weight * np.abs((src_lower - upper_limit) / (lower_limit - upper_limit)), 2))
+                            # )
+                            # count_data[(src_data < lower_limit)] += src_weight 
+                        except ValueError as e:
+                            pass
+                        except Exception as e:
+                            raise(e)
+                        
     def mask_gdal_dem_outliers(
             self, srcwin_ds = None, band_data = None, mask_mask_data = None, mask_count_data = None,
             var = None, percentile = 75, upper_only = False, src_weight = None, k = 1.5
@@ -792,11 +853,14 @@ class Outliers(Grits):
         cp,ck,cpp = self.get_pk(src_ds, var='curvature')
         #print('curvature', cp,ck,cpp)
 
-        k = (rk + sk + tk + ek + ck) / 5
-        p = (rp + sp + tp + ep + cp) / 5
-        pp = (rpp + spp + tpp + epp + cpp) / 5
-        #print(p, k, pp)
-        return(p, k, pp)
+        try:
+            k = (rk + sk + tk + ek + ck) / 5
+            p = (rp + sp + tp + ep + cp) / 5
+            pp = (rpp + spp + tpp + epp + cpp) / 5
+            #print(p, k, pp)
+            return(p, k, pp)
+        except:
+            return(np.nan, np.nan, np.nan)
     
     def apply_mask(self, perc=75):
         """apply the generated outlier mask to the source DEM data.
@@ -807,7 +871,7 @@ class Outliers(Grits):
         set perc to adjust the outlier calculations. k in this function is automatically generated based on 
         the roughness of the outlier mask.
         """
-        
+
         src_data = self.ds_band.ReadAsArray()
         mask_mask_data = self.mask_mask_band.ReadAsArray()        
         mask_count_data = self.mask_count_band.ReadAsArray()        
@@ -815,34 +879,45 @@ class Outliers(Grits):
         mask_mask_data[np.isinf(mask_mask_data)] = np.nan
         mask_count_data[mask_count_data == 0] = np.nan
         mask_count_data[np.isinf(mask_count_data)] = np.nan
+
+        if self.mode == 'average':
+            mask_mask_data = mask_mask_data / mask_count_data
+            mask_mask_data[np.isnan(mask_mask_data)] = 0
+            self.mask_mask_band.WriteArray(mask_mask_data)
+            self.mask_mask_band.FlushCache()
+            mask_mask_data[mask_mask_data == 0] = np.nan
         
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
-        # if perc is None or np.isnan(perc):
-        #     perc = 75
-            
-        # if self.k is None or np.isnan(self.k):
-        #     self.k = 1.5
-            
-        #if self.aggressive:
-        #    perc = perc1
-            
-        #count_upper_limit = np.nanpercentile(mask_count_data, perc)
-        #mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
-        #utils.echo_msg(mask_count_data)
-        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
-        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)
-        outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
-        #outlier_mask = (mask_count_data > count_upper_limit)
+        if perc is None or np.isnan(perc):
+            perc = 75
 
+        if perc1 is None or np.isnan(perc1) or perc1 > 100 or perc1 < 0:
+            perc1 = 65
+            
+        if self.k is None or np.isnan(self.k):
+            self.k = 1.5
+            
+        # if self.aggressive:
+        #     perc = perc1
+            
+        if self.mode == 'average':
+            count_upper_limit = np.nanpercentile(mask_count_data, perc1)
+            mask_upper_limit = np.nanpercentile(mask_mask_data, perc1)
+            outlier_mask = (mask_mask_data > mask_upper_limit)
+        else:
+            count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
+            mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)
+            outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
+            
         src_data[outlier_mask] = self.ds_config['ndv']
         self.ds_band.WriteArray(src_data)
         self.ds_band.FlushCache()
-        
+
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ <{}:{}>{}:{}.'.format(
                 np.count_nonzero(outlier_mask), perc, self.k, mask_upper_limit, count_upper_limit
             ))
-
+        
         src_data = mask_mask_data = mask_count_data = None
 
         return(np.count_nonzero(outlier_mask))
@@ -870,10 +945,7 @@ class Outliers(Grits):
             steps_it = np.ceil(np.linspace(self.n_step, self.max_step, self.multipass))
             percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
             ks_it = np.linspace(self.k, self.max_k, self.multipass)
-            #percs_it = np.linspace(75, 75, self.multipass)
-            #ks_it = np.linspace(1.5, 3, self.multipass)
             weights_it = np.linspace(1, 1/self.multipass, self.multipass)
-
             if self.accumulate:
                 self.generate_mask_ds(src_ds=src_ds)
                 
@@ -893,7 +965,7 @@ class Outliers(Grits):
                
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
-                        step=step, verbose=self.verbose, start_at_edge=False,
+                        step=step, verbose=self.verbose, start_at_edge=True if self.n_chunk == self.n_step else False,
                         msg='scanning for outliers ({}:{})'.format(perc, k),
                 ):
                     band_data = self.ds_band.ReadAsArray(*srcwin)
@@ -921,7 +993,8 @@ class Outliers(Grits):
                     #     utils.remove_glob(slp_fn, rough_fn)
                     #     continue
 
-                    #perc,k,p = self.get_pk(srcwin_ds, var='elevation')                    
+                    ## apply elevation outliers
+                    #perc,k,p = self.get_pk(srcwin_ds, var='elevation')
                     self.mask_outliers(
                         src_data=band_data, mask_data=mask_mask_data, count_data=mask_count_data, percentile=perc, 
                         src_weight=elevation_weight, k=k
@@ -937,6 +1010,7 @@ class Outliers(Grits):
                                                 mask_count_data=mask_count_data, percentile=perc,
                                                 upper_only=False, src_weight=tri_weight, var='TRI', k=k)
                     ## apply curvature outliers
+                    #perc,k,p = self.get_pk(slp_ds, var='slope')
                     # self.mask_gdal_dem_outliers(srcwin_ds=srcwin_ds, band_data=band_data, mask_mask_data=mask_mask_data,
                     #                             mask_count_data=mask_count_data, percentile=perc,
                     #                             upper_only=True, src_weight=curvature_weight, var='curvature', k=k)
@@ -981,7 +1055,7 @@ class Outliers(Grits):
                 self.mask_mask_ds = None
                 
             unc_ds = src_ds = None
-            if not self.return_mask or not self.accumulate:
+            if not self.return_mask and not self.accumulate:
                 utils.remove_glob(self.mask_mask_fn)
 
             return(self.dst_dem, 0)
