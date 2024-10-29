@@ -3,7 +3,7 @@
 While generating a DEM from independent scattered data sources we optionally calculate the uncertainty for each cell of the resulting DEM.
 And auxiliary Uncertainty Raster can be generated along with a DEM by using the --uncertainty switch in the [waffles](/docs/waffles.md) command. The waffles module 'uncertainty' can also be used to only generate an uncertainty raster without generating a DEM.
 
-Types of uncertainty:
+## Types of uncertainty:
 
 - Source uncertainty (dataset-wide)
 - Source uncertainty (per data value)
@@ -16,27 +16,27 @@ The various uncertainty types are combined to report a Total Value Uncertainty (
 
 Uncertainty values are combined using the Root Sum Squared (RSS).
 
-1. Source Uncertainty (dataset-wide)
+### Source Uncertainty (dataset-wide)
 
 The dataset-wide source uncertainty is a single value that will be applied to an entire dataset. This is specified by the user in the 4th column of the dataset entry. Typically this value is provided by the data collector or processor in the datasets metadata. This can sometimes be reported as an RMSE or data Accuracy. If the value is reported as being in the 95th percentile confidence level, first divide that value by 1.96 to obtain an uncertainty value suitable for combining with other uncertainty values.
 
-2. Source Uncertainty (per data value)
+### Source Uncertainty (per data value)
 
 Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for each data value in the dataset. Other times a user may independently calculate the uncertainty for each data value in their dataset. These uncertainty data can be used to inform the final TVU by specifying the uncertainty data of the dataset as either a seperate product or integrated into the dataset, such as with raster data or xyz data, respsectively.
 
-3. Bathymetric Depth Uncertainty
+### Bathymetric Depth Uncertainty
 
 For bathymetric data, the IHO standard can be used to calculate the uncertainty of each data value as a function of it's depth.
 
-4. Sub-pixel Uncertainty
+### Sub-pixel Uncertainty
 
 The Sub-pixel uncertainty, or sub-pixel variance, is calculated by default when combing the various datasets together into a DEM. Whenever there is more that one data value contributing a resulting DEM data cell, the (optionally weighted) variance of the input data is calculated.
 
-5. Interpolation Uncertainty
+### Interpolation Uncertainty
 
 The interpolation uncertainty is calculated for all interpolated cells in a resulting DEM using a split-sample method.
 
-6. Vertical Datum Transformation Uncertainty
+### Vertical Datum Transformation Uncertainty
 
 Whenever data is vertically transformed while processing a DEM, the uncertainty of that transformation is accumulated into the final TVU.
 
