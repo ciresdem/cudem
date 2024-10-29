@@ -29,8 +29,11 @@ Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for eac
 For bathymetric data, the [IHO standards](https://ihr.iho.int/articles/international-hydrographic-survey-standards/) can be used to calculate the uncertainty of each data value as a function of it's depth.
 
 2 metres for Special Order
+
 5 metres + 5 % of depth for Order 1
+
 20 metres + 5 % of depth for Order 2
+
 150 metres + 5 % of depth for Order 3
 
 ### Sub-pixel Uncertainty
