@@ -68,24 +68,19 @@ Either gather the relevant datasets from USGS or use the ```fetches``` command t
 
 #### gather data with fetches
 
-- transform the region to WGS84 and buffer it for fetching
+Transform the region to WGS84 and buffer it for fetching
 
 ```bash
-$ regions -R379500.00/389500.00/4875000.00/4890000.00 -J epsg:6348 -P epsg:4326 -e -b 0.01
--R-70.5134339872672626/-70.3718452152417626/44.0082631048639996/44.1648478550347789
-```
-
-```bash
-$ fetches $(regions -R379500.00/389500.00/4875000.00/4890000.00 -J epsg:6348 -P epsg:4326 -e -b 0.01) tnm:formats=lidar
+$ fetches $(regions -R379500.00/389500.00/4875000.00/4890000.00 -J epsg:6348 -P epsg:4326 -e -b 0.01) tnm:q=LPC
 ```
 
 At the time of this example, we end up with 5 lidar datasets:
 
-ME_Maine_LiDAR_NRCS_14
-ME_SouthCoastal_2020_A20
-ME_Western_2016
-NH_Connecticut_River_2015
-NH_Umbagog
+- ME_Maine_LiDAR_NRCS_14
+- ME_SouthCoastal_2020_A20
+- ME_Western_2016
+- NH_Connecticut_River_2015
+- NH_Umbagog
 
 Move them all to '../data' for processing and storage.
 
@@ -119,7 +114,7 @@ cd ..
 cd NH_Umbagog
 dlim -g > NH_Umbagog.datalist
 dlim -i NH_Umbagog.datalist
-cd ../dem
+cd ../software
 ```
 
 ##### Create the main datalist which points to each of the lidar dataset datalists, assigning weights and source uncertainty to each

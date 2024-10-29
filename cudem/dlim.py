@@ -785,14 +785,13 @@ class ElevationDataset:
         mask_infos = None
 
         if self.mask is not None:
-            utils.echo_msg(self.mask)
             if os.path.exists(self.mask['mask']):            
                 utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                     #dst_srs = self.dst_srs.split('+geoid')[0]
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
-                        src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs,
+                        src_region=self.region, sample_alg='nearest', dst_srs=self.dst_srs.split('+')[0],
                         ndv=gdalfun.gdal_get_ndv(self.mask['mask']), verbose=self.verbose,
                         co=["COMPRESS=DEFLATE", "TILED=YES"]
                     )[0]
@@ -4486,7 +4485,10 @@ class Datalist(ElevationDataset):
             for entry in self.parse():
                 entry_minmax = entry.infos.minmax
                 if entry.mask is not None: ## add all duplicat params???
-                    entry.params['mod_args'] = {'mask': entry.mask}
+                    entry.params['mod_args']['mask'] = entry.mask['mask']
+                    for key in entry.mask.keys():
+                        entry.params['mod_args'][key] = entry.mask[key]
+                        #entry.params['mod_args'] = {'mask': entry.mask}
                     
                 ## entry has an srs and dst_srs is set, so lets transform the region to suit
                 if entry.src_srs is not None:
