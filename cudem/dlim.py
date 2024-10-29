@@ -785,6 +785,7 @@ class ElevationDataset:
         mask_infos = None
 
         if self.mask is not None:
+            utils.echo_msg(self.mask)
             if os.path.exists(self.mask['mask']):            
                 utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:

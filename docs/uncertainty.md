@@ -44,15 +44,85 @@ Whenever data is vertically transformed while processing a DEM, the uncertainty 
 
 ### Androscoggin
 
-In this example we will generate tiled uncertainty rasters of the Androscoggin region using input elevation data from the USGS.
+In this example we will generate tiled uncertainty rasters of the Androscoggin region using input lidar elevation data from the USGS.
 
-- Define regions
+#### Setup directories to hold data and dems
 
-- Obtain the USGS elevation data
+```bash
+mkdir androscoggin
+cd androscoggin
+mkdir data software
+```
 
-- Create a Datalist
+#### Define regions
+
+Generate a tile-set vector for the Androscoggin test region with tiles at 5000x5000 meters
+
+```
+regions -R -R379500.00/389500.00/4875000.00/4890000.00 -T 5000
+```
+
+#### Obtain the USGS elevation data
+
+Either gather the relevant datasets from USGS or use the ```fetches``` command to fetch them
+
+#### gather data with fetches
+
+- transform the region to WGS84 and buffer it for fetching
+
+```bash
+$ regions -R379500.00/389500.00/4875000.00/4890000.00 -J epsg:6348 -P epsg:4326 -e -b 0.01
+-R-70.5134339872672626/-70.3718452152417626/44.0082631048639996/44.1648478550347789
+```
+
+```bash
+$ fetches $(regions -R379500.00/389500.00/4875000.00/4890000.00 -J epsg:6348 -P epsg:4326 -e -b 0.01) tnm:formats=lidar
+```
+
+At the time of this example, we end up with 5 lidar datasets:
+
+ME_Maine_LiDAR_NRCS_14
+ME_SouthCoastal_2020_A20
+ME_Western_2016
+NH_Connecticut_River_2015
+NH_Umbagog
+
+Move them all to '../data' for processing and storage.
+
+#### Create Datalists
 
 See [dlim](/docs/dlim.md) for more information of datlist formatting.
+
+##### Create a datalist for each of the lidar datasets and generate their associated inf and geojson files
+
+```bash
+cd ME_Maine_LiDAR_NRCS_14
+dlim -g > ME_Maine_LiDAR_NRCS_14.datalist
+dlim -i ME_Maine_LiDAR_NRCS_14.datalist
+cd ..
+
+cd ME_SouthCoastal_2020_A20
+dlim -g > ME_SouthCoastal_2020_A20.datalist
+dlim -i ME_SouthCoastal_2020_A20.datalist
+cd ..
+
+cd ME_Western_2016
+dlim -g > ME_Western_2016.datalist
+dlim -i ME_Western_2016.datalist
+cd ..
+
+cd NH_Connecticut_River_2015
+dlim -g > NH_Connecticut_River_2015.datalist
+dlim -i NH_Connecticut_River_2015.datalist
+cd ..
+
+cd NH_Umbagog
+dlim -g > NH_Umbagog.datalist
+dlim -i NH_Umbagog.datalist
+cd ../dem
+```
+
+##### Create the main datalist which points to each of the lidar dataset datalists, assigning weights and source uncertainty to each
 
 ```
 "../data/ME_Maine_LiDAR_NRCS_14/ME_Maine_LiDAR_NRCS_14.datalist" -1 1 0
@@ -62,7 +132,7 @@ See [dlim](/docs/dlim.md) for more information of datlist formatting.
 "../data/NH_Umbagog/NH_Umbagog.datalist" -1 1.5 0
 ```
 
-- Generate Uncertainty Rasters
+#### Generate Uncertainty Rasters
 
 See [waffles](/docs/waffles.md) for more information on the syntax of the waffles command for generating DEMs.
 
