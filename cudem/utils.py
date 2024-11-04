@@ -910,7 +910,7 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
     assert step > 0    
     with tqdm(
             total=(math.ceil((n_size[0] + (n_chunk-n_edge)) / step) * math.ceil((n_size[1] +  (n_chunk-n_edge)) / step)),
-            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, n_chunk, step),
+            desc='{}: {} @ chunk:{}/step:{}...'.format(_command_name(), msg, int_or(n_chunk), int_or(step)),
             leave=verbose
     ) as pbar:
         while True:

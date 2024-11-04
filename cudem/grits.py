@@ -129,6 +129,7 @@ class Grits:
         """Split the filtered DEM by z-value"""
         
         if self.max_z is not None or self.min_z is not None:
+            utils.echo_msg('split by z:{} {}'.format(self.min_z, self.max_z))
             with gdalfun.gdal_datasource(self.src_dem) as src_ds:
                 if src_ds is not None:
                     self.init_ds(src_ds)
@@ -161,7 +162,8 @@ class Grits:
         """Split the filtered DEM by z-value"""
 
         if self.max_weight is not None or self.min_weight is not None:
-            if self.weight_mask is not None:            
+            if self.weight_mask is not None:
+                utils.echo_msg('split by weight: {} {}'.format(self.min_weight, self.max_weight))
                 with gdalfun.gdal_datasource(self.src_dem) as src_ds:
                     if src_ds is not None:
                         self.init_ds(src_ds)
@@ -470,8 +472,8 @@ class Outliers(Grits):
         if self.units_are_degrees:
             cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
-        m_size = 1000#500 # 1000
-        mm_size = 8000#8000 # 10000
+        m_size = (src_arr.shape[0] / n_den) / 24#800#500 # 1000
+        mm_size = (src_arr.shape[1] / n_den) / 12#8000 # 10000
         if self.chunk_size is not None:
             if self.chunk_size[-1] == 'm':
                 m_size = utils.int_or(self.chunk_size[:-1])
@@ -491,32 +493,25 @@ class Outliers(Grits):
             if self.max_step[-1] == 'm':
                 mm_step = utils.int_or(self.max_step[:-1])
                 cm_step = mm_step / cell_size
-                
-        #self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den * self.multipass))) / cell_size))
-        #self.n_chunk = utils.int_or(self.chunk_size, ((5000*(1/(n_den))) / cell_size))
-        #self.max_chunk = utils.int_or(self.max_chunk, ((50000*(1/n_den)) / cell_size))
 
         self.n_chunk = utils.int_or(self.chunk_size, ((m_size * (1/n_den)) / cell_size))
         self.max_chunk = utils.int_or(self.max_chunk, ((mm_size * (1/n_den)) / cell_size))
         if self.n_chunk < 15:
             self.n_chunk = 15
             
-        # if self.max_chunk > math.sqrt(src_arr.size):
-        #     self.max_chunk = math.sqrt(src_arr.size)
-
         if self.size_is_step:
             self.n_step = utils.int_or(self.chunk_step, self.n_chunk)
             self.max_step = utils.int_or(self.max_step, self.max_chunk)
         else:
-            self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 4))
-            self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk / 4))
+            self.n_step = utils.int_or(self.chunk_step, math.ceil(self.n_chunk / 2))
+            self.max_step = utils.int_or(self.max_step, math.ceil(self.max_chunk / 2))
             if self.max_step > self.max_chunk:
                 self.max_step = self.max_chunk
 
         if self.verbose:
             utils.echo_msg(
-                'outlier chunks ({}): {} {} < {} {}'.format(
-                    n_den, self.n_chunk, self.n_step, self.max_chunk, self.max_step
+                'outlier chunks ({} {}): {} {} < {} {}'.format(
+                    n_den, src_arr.shape, self.n_chunk, self.n_step, self.max_chunk, self.max_step
                 )
             )
         
@@ -718,7 +713,8 @@ class Outliers(Grits):
                         if self.mode == 'average':
                             src_max = np.nanmax(src_data[src_upper_mask])
                             mask_data[src_upper_mask] += (src_weight * np.abs((src_data[src_upper_mask] - upper_limit) / (src_max - upper_limit)))
-                            count_data[src_upper_mask] += src_weight
+                            #mask_data[src_upper_mask] += (src_weight * np.abs((src_data[src_upper_mask] - lower_limit) / (upper_limit - lower_limit)))
+                            count_data[src_upper_mask] += 1#src_weight
                         elif self.mode == 'scaled':
                             src_max = np.nanmax(src_data[src_upper_mask])
                             mask_data[src_upper_mask] = np.sqrt(
@@ -752,7 +748,7 @@ class Outliers(Grits):
                         l, n = scipy.ndimage.label(src_lower_mask)
                         uv, uv_counts = np.unique(l[l!=0], return_counts=True)
                         _size_threshold = src_size * .001
-                        uv_ = uv[uv_counts > _size_threshold]                            
+                        uv_ = uv[uv_counts > _size_threshold]              
                         mask = np.isin(l, uv_)
                         src_lower_mask[mask] = False
 
@@ -761,7 +757,8 @@ class Outliers(Grits):
                             if self.mode == 'average':
                                 src_min = np.nanmin(src_data[src_lower_mask])
                                 mask_data[src_lower_mask] += (src_weight * np.abs((src_data[src_lower_mask] - lower_limit) / (src_min - lower_limit)))
-                                count_data[src_lower_mask] += src_weight
+                                #mask_data[src_lower_mask] += (src_weight * np.abs((src_data[src_lower_mask] - upper_limit) / (lower_limit - upper_limit)))
+                                count_data[src_lower_mask] += 1#src_weight
                             elif self.mode == 'scaled':
                                 src_min = np.nanmin(src_data[src_lower_mask])
                                 mask_data[src_lower_mask] = np.sqrt(
@@ -874,11 +871,11 @@ class Outliers(Grits):
 
         src_data = self.ds_band.ReadAsArray()
         mask_mask_data = self.mask_mask_band.ReadAsArray()        
-        mask_count_data = self.mask_count_band.ReadAsArray()        
+        mask_count_data = self.mask_count_band.ReadAsArray()
+        mask_mask_data[np.isinf(mask_mask_data)] = 0
         mask_mask_data[mask_mask_data == 0] = np.nan
-        mask_mask_data[np.isinf(mask_mask_data)] = np.nan
+        mask_count_data[np.isinf(mask_count_data)] = 0
         mask_count_data[mask_count_data == 0] = np.nan
-        mask_count_data[np.isinf(mask_count_data)] = np.nan
 
         if self.mode == 'average':
             mask_mask_data = mask_mask_data / mask_count_data
@@ -900,19 +897,18 @@ class Outliers(Grits):
         # if self.aggressive:
         #     perc = perc1
             
-        if self.mode == 'average':
-            count_upper_limit = np.nanpercentile(mask_count_data, perc1)
-            mask_upper_limit = np.nanpercentile(mask_mask_data, perc1)
-            outlier_mask = (mask_mask_data > mask_upper_limit)
-        else:
-            count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
-            mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)
-            outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
+        #if self.mode == 'average':
+        #    count_upper_limit = np.nanpercentile(mask_count_data, perc)
+        #    mask_upper_limit = np.nanpercentile(mask_mask_data, perc)
+        #    #outlier_mask = (mask_mask_data > mask_upper_limit)
+        #else:
+        count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
+        mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)            
+        outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
             
         src_data[outlier_mask] = self.ds_config['ndv']
         self.ds_band.WriteArray(src_data)
         self.ds_band.FlushCache()
-
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ <{}:{}>{}:{}.'.format(
                 np.count_nonzero(outlier_mask), perc, self.k, mask_upper_limit, count_upper_limit
@@ -965,7 +961,7 @@ class Outliers(Grits):
                
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
-                        step=step, verbose=self.verbose, start_at_edge=True if self.n_chunk == self.n_step else False,
+                        step=step, verbose=self.verbose, start_at_edge=False,
                         msg='scanning for outliers ({}:{})'.format(perc, k),
                 ):
                     band_data = self.ds_band.ReadAsArray(*srcwin)

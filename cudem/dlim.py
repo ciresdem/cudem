@@ -1800,7 +1800,8 @@ class ElevationDataset:
 
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
-            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3)._acquire_module()
+            utils.echo_msg('filtering stacks module with {}'.format(f))
+            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3, count_mask=2)._acquire_module()
             if grits_filter is not None:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
@@ -3335,7 +3336,7 @@ class IceSat2File(ElevationDataset):
     water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in yield_points
+    columns: {} # the additional columns to export in yield_points {'/h5/atl/path', column_name}
     classify_bathymetry: True # extract bathymetry with CShelph
     classify_buildings: True # classify buildings using BING BFP
 
@@ -3355,8 +3356,9 @@ class IceSat2File(ElevationDataset):
     0, 1, 2, 3, 4
     """
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4', columns={},
-                 classify_bathymetry=True, classify_buildings=True, **kwargs):
+    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4',
+                 columns={}, classify_bathymetry=True, classify_buildings=True, reject_failed_qa=True,
+                 **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
         self.water_surface = water_surface
@@ -3369,6 +3371,7 @@ class IceSat2File(ElevationDataset):
         self.atl_fn = None
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
+        self.reject_failed_qa = reject_failed_qa
         
     def init_atl_03_h5(self):
         """initialize the atl03 and atl08 h5 files"""
@@ -3383,18 +3386,24 @@ class IceSat2File(ElevationDataset):
         """initialize the atl03 and atl08 h5 files"""
 
         self.atl_03_f = h5.File(self.atl_03_fn, 'r')
+        self.atl_08_f = None
         if 'short_name' not in self.atl_03_f.attrs.keys():
-            utils.echo_error_msg('this file does not appear to be an ATL file')
-            self.atl_03_f.close()
+            raise UnboundLocalError('this file does not appear to be an ATL03 file')
+            #utils.echo_error_msg('this file does not appear to be an ATL file')
+            #self.atl_03_f.close()
+        if self.reject_failed_qa:
+            if self.atl_03_f['/quality_assessment/qa_granule_pass_fail'][...,][0] != 0:
+                raise UnboundLocalError(
+                    'this granule has failed qa {}'.format(
+                        self.atl_03_f['/quality_assessment/qa_granule_pass_fail'][...,][0]
+                    )
+                )
         
         if self.atl_08_fn is not None:
-            self.atl_08_f = h5.File(self.atl_08_fn, 'r')
-        
+            self.atl_08_f = h5.File(self.atl_08_fn, 'r')        
             if 'short_name' not in self.atl_08_f.attrs.keys():
-                utils.echo_error_msg('this file does not appear to be an ATL file')
+                utils.echo_warning_msg('this file does not appear to be an ATL file')
                 self.atl_08_f.close()
-        else:
-            self.atl_08_f = None
 
     def close_atl_h5(self):
         """close all open atl files"""
@@ -3404,73 +3413,6 @@ class IceSat2File(ElevationDataset):
         self.atl_03_f.close()
         if self.atl_08_f is not None:
             self.atl_08_f.close()
-
-    # def parse_region(self):
-    #     self.atl_03_fn = self.fn
-    #     self.atl_08_fn = None
-    #     try:
-    #         self.init_atl_h5()
-    #     except Exception as e:
-    #         utils.echo_error_msg('could not initialize data {}'.format(e))
-    #         self.close_atl_h5()
-    #         return
-            
-    #     dataset = None
-    #     for i in range(1, 4):
-    #         #try:
-    #         dataset = self.read_atl_data('{}'.format(i))
-
-    #         if dataset is None or len(dataset) == 0:
-    #             continue
-
-    #         dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
-    #         yield(dataset)
-
-    #     self.close_atl_h5()        
-            
-    # def generate_inf(self):
-    #     if self.src_srs is None:
-    #         self.infos.src_srs = 'epsg:4326'
-    #     else:
-    #         self.infos.src_srs = self.src_srs
-
-    #     point_count = 0
-    #     for points in self.parse_region():
-    #         if point_count == 0:
-    #             this_region.from_list(
-    #                 [
-    #                     points['x'].min(), points['x'].max(),
-    #                     points['y'].min(), points['y'].max(),
-    #                     points['z'].min(), points['z'].max()
-    #                 ]
-    #             )
-    #         else:
-    #             if points['x'].min() < this_region.xmin:
-    #                 this_region.xmin = points['x'].min()
-    #             elif points['x'].max() > this_region.xmax:
-    #                 this_region.xmax = points['x'].max()
-                    
-    #             if points['y'].min() < this_region.ymin:
-    #                 this_region.ymin = points['y'].min()
-    #             elif points['y'].max() > this_region.ymax:
-    #                 this_region.ymax = points['y'].max()
-                    
-    #             if points['z'].min() < this_region.zmin:
-    #                 this_region.zmin = points['z'].min()
-    #             elif points['z'].min() > this_region.zmax:
-    #                 this_region.zmax = points['z'].min()
-                
-    #         point_count += len(points)
-
-    #     self.infos.numpts = point_count
-        
-    #     if point_count > 0:
-    #         self.infos.minmax = this_region.export_as_list(include_z=True)
-    #         self.infos.wkt = this_region.export_as_wkt()
-
-    #     #self.infos.numpts = ds_infos['nb']
-    #     #utils.echo_msg(self.infos)
-    #     return(self.infos)
             
     def yield_ds(self):
         """yield the points from the dataset.
@@ -3478,7 +3420,6 @@ class IceSat2File(ElevationDataset):
         In this case, it will yield a pandas dataframe"""
         
         self.atl_03_fn = self.fn
-
         if len(self.classes) > 0:
             atl_08_result = self.fetch_atl_08()
             self.atl_08_fn = atl_08_result
@@ -3697,19 +3638,24 @@ class IceSat2File(ElevationDataset):
         )
 
         for col in self.columns.keys():
-            #try:
-            col_arr = self.atl_03_f['/' + laser + col][...,]
-            if 'heights' not in col:
-                col_dict = dict(zip(segment_id, col_arr))
-                col_arr = np.array(list(map((lambda pid: col_dict[pid]), ph_segment_ids)))
+            try:
+                if 'gtx' in col:
+                    _col = col.replace('/gtx', '/' + laser)
+                    col_arr = self.atl_03_f[_col][...,]                
+                    if 'heights' not in _col:
+                        col_dict = dict(zip(segment_id, col_arr))
+                        col_arr = np.array(list(map((lambda pid: col_dict[pid]), ph_segment_ids)))
+                else:
+                    col_arr = np.empty(photon_h.shape, dtype='object')
+                    col_arr[:] = self.atl_03_f[col][...,]
 
-            extra_dataset = pd.DataFrame(
-                {self.columns[col]: col_arr},
-                columns = [self.columns[col]]
-            )
-            dataset = dataset.join(extra_dataset)
-            #except:
-            #    utils.echo_warning_msg('could not find {} in atl03 file'.format(col))
+                extra_dataset = pd.DataFrame(
+                    {self.columns[col]: col_arr},
+                    columns = [self.columns[col]]
+                )
+                dataset = dataset.join(extra_dataset)
+            except:
+                utils.echo_warning_msg('could not find {} in atl03 file'.format(col))
 
         #print(dataset.columns.tolist())
         return(dataset)        
@@ -5245,6 +5191,8 @@ class IceSat2Fetcher(Fetcher):
                                  uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
                                  pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
             yield(sub_ds)
+            
+        self.want_buildings = None
                 
 class GMRTFetcher(Fetcher):
     """GMRT Gridded data.
