@@ -3634,15 +3634,18 @@ class IceSat2File(ElevationDataset):
              'ref_sat_alt':ph_altitude_sc,
              'ph_h_classed': ph_h_classed,
              'ph_h_watermask': ph_h_watermask},
-            columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed', 'ph_h_watermask']
+            columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
+                     'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
+                     'ph_h_classed', 'ph_h_watermask']
         )
 
+        ## Process extra columns specified in self.columns
         for col in self.columns.keys():
             try:
                 if 'gtx' in col:
                     _col = col.replace('/gtx', '/' + laser)
                     col_arr = self.atl_03_f[_col][...,]                
-                    if 'heights' not in _col:
+                    if 'heights' not in _col: 
                         col_dict = dict(zip(segment_id, col_arr))
                         col_arr = np.array(list(map((lambda pid: col_dict[pid]), ph_segment_ids)))
                 else:
@@ -3655,9 +3658,8 @@ class IceSat2File(ElevationDataset):
                 )
                 dataset = dataset.join(extra_dataset)
             except:
-                utils.echo_warning_msg('could not find {} in atl03 file'.format(col))
+                utils.echo_warning_msg('could not find and/or process {}'.format(col))
 
-        #print(dataset.columns.tolist())
         return(dataset)        
             
     def classify_bathymetry(

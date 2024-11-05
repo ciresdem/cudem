@@ -5,12 +5,15 @@ And auxiliary Uncertainty Raster can be generated along with a DEM by using the 
 
 ## Types of uncertainty:
 
-- Source uncertainty (dataset-wide)
-- Source uncertainty (per data value)
-- Bathymetric depth uncertainty (IHO function of depth)
-- Sub-pixel uncertainty (variance)
-- Interpolation uncertainty (split-sample)
-- vertical datum transformation uncertainty
+- Source Dataset Uncertainty
+  - Source uncertainty (dataset-wide)
+  - Source uncertainty (per data value)
+  - Bathymetric depth uncertainty (IHO function of depth)
+- Transformation Uncertainty
+  - Vertical datum transformation uncertainty
+- Gridding Uncertainty
+  - Sub-pixel uncertainty (variance)
+  - Interpolation uncertainty (split-sample)
 
 The various uncertainty types are combined to report a Total Value Uncertainty (TVU) as supplemental raster product.
 
