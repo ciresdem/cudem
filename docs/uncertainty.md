@@ -32,6 +32,30 @@ For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/stan
 
 | **Order 2** | **Order 1b** | **Order 1a** | **Special Order** | **Exclusive Order** |
 |-------------|--------------|--------------|-------------------|---------------------|
+Areas where a
+general description of
+the sea floor is
+considered adequate. |
+Areas where
+underkeel clearance
+is not considered to
+be an issue for the
+type of surface
+shipping expected to
+transit the area. |
+Areas where
+underkeel clearance
+is considered not to
+be critical but
+features of concern
+to surface shipping
+may exist. |
+Areas where
+underkeel clearance
+is critical |
+Areas where there is strict
+minimum underkeel clearance
+and manoeuvrability criteria |
 | a = 1.0m, b = 0.023 | a = 0.5m, b = 0.013 | a = 0.5m, b = 0.013 | a = 0.25m, b = 0.0075 | a = 0.15m, b = 0.0075 |
 
 ### Sub-pixel Uncertainty
