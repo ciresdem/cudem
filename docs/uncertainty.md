@@ -28,12 +28,11 @@ Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for eac
 
 ### Bathymetric Depth Uncertainty
 
-For bathymetric data, the [IHO standards](https://ihr.iho.int/articles/international-hydrographic-survey-standards/) can be used to calculate the uncertainty of each data value as a function of it's depth.
+For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/standards/s-44/S-44_Edition_6.1.0.pdf) can be used to calculate the uncertainty of each data value as a function of it's depth, where TVU(d) = sqrt(a**2 + (b * d)**2)
 
-- 2 metres for Special Order
-- 5 metres + 5 % of depth for Order 1
-- 20 metres + 5 % of depth for Order 2
-- 150 metres + 5 % of depth for Order 3
+| **Order 2** | **Order 1b** | **Order 1a** | **Special Order** | **Exclusive Order** |
+|-------------|--------------|--------------|-------------------|---------------------|
+| a = 1.0m, b = 0.023 | a = 0.5m, b = 0.013 | a = 0.5m, b = 0.013 | a = 0.25m, b = 0.0075 | a = 0.15m, b = 0.0075 |
 
 ### Sub-pixel Uncertainty
 

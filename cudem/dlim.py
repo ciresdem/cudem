@@ -182,8 +182,10 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                                     cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
                                     dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
                                     stack_mode=stack_mode)
-        else:
+        elif len(xdls) > 0:
             this_datalist = xdls[0]
+        else:
+            this_datalist = None
 
         return(this_datalist)
     
@@ -463,7 +465,7 @@ class INF:
                 json.dump(self.__dict__, outfile)
         except:
             pass
-    
+        
 class ElevationDataset:
     """representing an Elevation Dataset
     
@@ -2234,9 +2236,7 @@ class ElevationDataset:
         # sst = round(np.nanmedian(sea_temp.values)-273,2)
         
         return(20)
-        
         # return(sst)
-
             
     def fetch_buildings(self):
         """fetch building footprints from BING"""
@@ -2248,14 +2248,11 @@ class ElevationDataset:
 
         if this_region.valid_p():
             utils.echo_msg('fetching buildings for region {}'.format(this_region))
-            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir)
-            this_bldg.run()
-
+            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir).run()
             fr = fetches.fetch_results(this_bldg)#, check_size=False)
             fr.daemon=True
             fr.start()
             fr.join()
-
             return(fr)
         
         return(None)
@@ -2271,7 +2268,6 @@ class ElevationDataset:
                 for n, bing_result in enumerate(this_bing.results):                
                     if bing_result[-1] == 0:
                         pbar.update()
-
                         bing_gz = bing_result[1]
                         bing_gj = utils.gunzip(bing_gz, self.cache_dir)
                         os.rename(bing_gj, bing_gj + '.geojson')
@@ -2283,7 +2279,7 @@ class ElevationDataset:
                         bldg_ds = None
 
         return(bldg_geoms)
-            
+    
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
 
@@ -4914,7 +4910,17 @@ class NEDFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):        
+    def set_ds(self, result):
+
+        ## coastline generation
+        # from cudem import waffles
+        # coast_mask_fn = utils.make_temp_fn('ned_coast')
+        # _coast_mask = waffles.WaffleFactory(mod='coastline', src_region=self.region, xinc=self.x_inc, yinc=self.y_inc,
+        #                                     want_stack=False, name=coast_mask_fn, node='pixel', verbose=True)._acquire_module()()
+
+        # ## merge the coast mask with user input self.mask
+        # self.mask = '{}.shp'.format(_coast_mask.name)
+        
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
