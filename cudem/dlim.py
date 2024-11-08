@@ -5003,7 +5003,6 @@ class NEDFetcher(Fetcher):
         super().__init__(**kwargs)
         
     def set_ds(self, result):
-
         ## coastline generation
         # from cudem import waffles
         # coast_mask_fn = utils.make_temp_fn('ned_coast')

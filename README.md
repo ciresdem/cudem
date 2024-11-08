@@ -122,6 +122,7 @@ between adjacent DEM tiles.
 - [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
 - [Generate a DEM and Uncertainty grid of The Bahamas](/docs/example_uncertainty.md)
 - [Filter Multibeam data](/docs/example_grits.md)
+- [Calculate DEM uncertainty](/docs/uncertainty.md)
 
 ## DEM Workshop, Victoria, B.C., Canada
 
