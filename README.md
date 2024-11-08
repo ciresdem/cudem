@@ -116,6 +116,12 @@ between adjacent DEM tiles.
 | [grits](/docs/grits.md) | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
+**Additional scripts provided with CUDEM:**
+
+| Script | Description |
+|--------|-------------|
+| fetch_osm_coastline.py | Fetch and process a water/landmask from Open Street Map |
+
 # Usage Examples
 
 - [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
