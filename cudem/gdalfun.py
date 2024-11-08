@@ -379,7 +379,10 @@ def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
     layer.Clip(c_layer, dst_layer)
     ds = c_ds = dst_ds = None
 
-def ogr_polygonize_line_to_region(src_ogr, dst_ogr, region=None, include_landmask=True, landmask_is_watermask=False, line_buffer=0.0000001):
+def ogr_polygonize_line_to_region(
+        src_ogr, dst_ogr, region=None, include_landmask=True,
+        landmask_is_watermask=False, line_buffer=0.0000001
+):
     """Polygonize an OSM coastline LineString to the given region
 
     if include_landmask is True, polygon(s) will be returned for the land areas 
@@ -440,18 +443,17 @@ def ogr_polygonize_line_to_region(src_ogr, dst_ogr, region=None, include_landmas
                 out_feature = ogr.Feature(output_layer.GetLayerDefn())
                 out_feature.SetGeometry(split_geom)
 
+                if landmask_is_watermask:
+                    s = False if s else True
+                
                 if s == 0:
-                    if not landmask_is_watermask:
-                        out_feature.SetField('watermask', 1)# if s else 0)
-                        output_layer.CreateFeature(out_feature)
+                    out_feature.SetField('watermask', 1)
+                    output_layer.CreateFeature(out_feature)
 
-                if include_landmask or landmask_is_watermask:
+                if include_landmask:
                     if s == 1:
-                        if landmask_is_watermask:
-                            out_feature.SetField('watermask', 1)
-                        else:
-                            out_feature.SetField('watermask', 0)
-                            output_layer.CreateFeature(out_feature)
+                        out_feature.SetField('watermask', 0)
+                        output_layer.CreateFeature(out_feature)
                 
         if line_type == 6:
             for line_feature in line_layer:

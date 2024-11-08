@@ -46,7 +46,7 @@ def fetch_coastline(this_region):
 _version = '0.0.1'
 _usage = '''fetch_osm_coastline.py ({}): fetch and process the OSM coastline
 
-usage: fetch_osm_coastline.py [-R]
+usage: fetch_osm_coastline.py [-RBli [output-shape-file]]
 
  Options:
   -R, --region\t\tRestrict processing to the desired REGION 
@@ -55,9 +55,13 @@ usage: fetch_osm_coastline.py [-R]
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+  -B, --line_buffer\tBuffer the OSM coastline in degrees
 
-  --help\tPrint the usage text
-  --version\tPrint the version information
+  --include_landmask\tinclude the landmask in the output
+  --invert_watermask\tinvert the watermask to the landmask
+
+  --help\t\tPrint the usage text
+  --version\t\tPrint the version information
 
  Examples:
  % fetch_osm_coastline.py -R -123.5/-123.25/38.5/38.75
@@ -66,21 +70,36 @@ usage: fetch_osm_coastline.py [-R]
 
 if __name__ == '__main__':    
     region = None
-    remove_value = None
+    include_landmask = False
+    invert_watermask = False
+    line_buffer = 0.0000001
+    dst_ogr = None
     i = 1
+    
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg == '-help' or arg == '--help' or arg == '-h':
+        if arg == '--region' or arg == '-R':
+            region = str(sys.argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-R':
+            region = str(arg[2:])
+        elif arg == '--line_buffer' or arg == '-B':
+            line_buffer = utils.float_or(sys.argv[i + 1], line_buffer)
+            i = i + 1
+        elif arg[:2] == '-B':
+            line_buffer = utils.float_or(arg[2:], line_buffer)
+        elif arg == '--include_landmask' or arg == '-l':
+            include_landmask = True
+        elif arg == '--invert_watermask' or arg == 'i':
+            invert_watermask = True
+        elif arg == '-help' or arg == '--help' or arg == '-h':
             sys.stderr.write(_usage)
             sys.exit(1)
         elif arg == '-version' or arg == '--version':
             sys.stderr.write('{}\n'.format(_version))
             sys.exit(1)
-        elif arg == '--region' or arg == '-R':
-            region = str(argv[i + 1])
-            i = i + 1
-        elif arg[:2] == '-R':
-            region = str(arg[2:])
+        elif dst_ogr is None:
+            dst_ogr = arg
         else:
             sys.stderr.write(_usage)
             sys.exit(1)
@@ -91,7 +110,7 @@ if __name__ == '__main__':
 
     if this_region is None or not this_region.valid_p():
         utils.echo_error_msg('invalid region')
-    
+        
     if this_cst is not None:
         with tqdm(
                 total=len(this_cst.results),
@@ -102,8 +121,14 @@ if __name__ == '__main__':
                 if cst_result[-1] == 0:
                     pbar.update()
                     cst_osm = cst_result[1]
+                    if dst_ogr is None:
+                        dst_ogr = os.path.basename(utils.fn_basename2(cst_osm)) + '_coast.shp'
+                        
                     out = gdalfun.ogr_polygonize_line_to_region(
-                        cst_osm, os.path.basename(utils.fn_basename2(cst_osm)) + '_coast.shp', include_landmask = True
+                        cst_osm, dst_ogr,
+                        include_landmask = include_landmask,
+                        landmask_is_watermask = invert_watermask,
+                        line_buffer = line_buffer,
                     )
 ### End
 
