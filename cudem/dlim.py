@@ -2304,7 +2304,10 @@ class ElevationDataset:
         
         return(None)
 
-    def process_coastline(self, this_cst, return_geom=True, landmask_is_watermask=False, line_buffer=0.0000001):
+    def process_coastline(
+            self, this_cst, return_geom=True, landmask_is_watermask=False,
+            line_buffer=0.0000001, include_landmask=False
+    ):
         cst_geoms = []
         if this_cst is not None:
             with tqdm(
