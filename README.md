@@ -77,8 +77,6 @@ pip install windows-curses
 
 Installation of HTDP and MB-System are system dependent, see their respective installation instructions for your system.
 
-
-
 # Modules
 
 The open-access code includes command-line tools and a Python
@@ -115,7 +113,6 @@ between adjacent DEM tiles.
 | [perspecto](/docs/perspecto.md) | generate images of DEMs |
 | [grits](/docs/grits.md) | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
-
 
 **Additional scripts provided with CUDEM:**
 
@@ -166,7 +163,6 @@ between adjacent DEM tiles.
 
 - [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
 - [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
-- [Generate a DEM and Uncertainty grid of The Bahamas](/docs/example_uncertainty.md)
 - [Filter Multibeam data](/docs/example_grits.md)
 - [Calculate DEM uncertainty](/docs/uncertainty.md)
 
