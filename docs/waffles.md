@@ -146,7 +146,7 @@ KEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
 Generate SPATIAL-METADATA.
 
 `-t, --flatten-result`
-Flatten any remaining nodata values
+Flatten any remaining nodata values.
 
 `-c, --continue`
 Don't clobber existing files.
