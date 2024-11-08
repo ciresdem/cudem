@@ -113,7 +113,7 @@ class Waffle:
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, stack_mode: str = 'mean', upper_limit: float = None, lower_limit: float = None,
                  proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, count_limit: int = None,
-                 flatten_result: bool = False, want_stack: bool = True, co: list = [], params: dict = {}):
+                 flatten_nodata_values: bool = False, want_stack: bool = True, co: list = [], params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -163,7 +163,7 @@ class Waffle:
         self.stack = None # multi-banded stacked raster from cudem.dlim
         self.stack_ds = None # the stacked raster as a dlim dataset object
         self.co = co # the gdal creation options
-        self.flatten_result = flatten_result # flatten any remaining nodata values
+        self.flatten_nodata_values = flatten_nodata_values # flatten any remaining nodata values
         
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
@@ -537,7 +537,7 @@ class Waffle:
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr,
-                                   flatten_result=self.flatten_result)
+                                   flatten_nodata_values=self.flatten_nodata_values)
                 output_files['DEM'] = self.fn
                 
             ## post-process the mask, etc.
@@ -4606,7 +4606,7 @@ class WaffleDEM:
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
                 percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
-                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_result = False):
+                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_nodata_values = False):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -4641,7 +4641,7 @@ class WaffleDEM:
         self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
 
         ## flatten all nodata values
-        if flatten_result:
+        if flatten_nodata_values:
             flattened_Fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
             flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
             os.rename(flattened_fn, self.fn)
@@ -5148,7 +5148,7 @@ Options:
   -k, --keep-cache\t\tKEEP the cache data intact after run
   -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
   -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
-  -t, --flatten-result\t\tFlatten any remaining nodata values.
+  -t, --flatten-nodata-values\tFlatten any remaining nodata values.
   -c, --continue\t\tDon't clobber existing files.
   -q, --quiet\t\t\tLower verbosity to a quiet.
 
@@ -5200,7 +5200,7 @@ def waffles_cli(argv = sys.argv):
     wg['name'] = 'waffles'
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
-    wg['flatten_result'] = False
+    wg['flatten_nodata_values'] = False
     wg['co'] = []
 
     #waffle_q = queue.Queue()
@@ -5383,7 +5383,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
-        elif arg == '-t' or arg == '--flatten-result': wg['flatten_result'] = True
+        elif arg == '-t' or arg == '--flatten-ndata-values': wg['flatten_nodata_values'] = True
 
         elif arg == '--quiet' or arg == '-q': wg['verbose'] = False
         elif arg == '--config': want_config = True
