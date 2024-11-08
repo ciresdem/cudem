@@ -5019,7 +5019,7 @@ class NEDFetcher(Fetcher):
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask='{}:invert=False'.format(coast_mask), uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
+                            mask={mask: coast_mask, 'invert': False}, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
         yield(ds)

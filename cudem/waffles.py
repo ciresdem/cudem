@@ -113,7 +113,7 @@ class Waffle:
                  keep_auxiliary: bool = False, want_sm: bool = False, clobber: bool = True, ndv: float = -9999, block: bool = False,
                  cache_dir: str = waffles_cache, stack_mode: str = 'mean', upper_limit: float = None, lower_limit: float = None,
                  proximity_limit: int = None, size_limit: int = None, percentile_limit: float = None, count_limit: int = None,
-                 want_stack: bool = True, co: list = [], params: dict = {}):
+                 flatten_result: bool = False, want_stack: bool = True, co: list = [], params: dict = {}):
         self.params = params # the factory parameters
         self.data = data # list of data paths/fetches modules to grid
         self.datalist = None # the datalist which holds the processed datasets
@@ -163,6 +163,7 @@ class Waffle:
         self.stack = None # multi-banded stacked raster from cudem.dlim
         self.stack_ds = None # the stacked raster as a dlim dataset object
         self.co = co # the gdal creation options
+        self.flatten_result = flatten_result # flatten any remaining nodata values
         
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
@@ -503,6 +504,11 @@ class Waffle:
             else:
                 self.run()    
 
+            if self.flatten_result:
+                flattened_Fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
+                flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
+                os.rename(flattened_fn, self.fn)
+                
             # if self.node == 'grid':
             #     self.region = self.region.buffer(x_bv=-self.xinc*.5, y_bv=-self.yinc*.5)
 
@@ -5140,6 +5146,7 @@ Options:
   -k, --keep-cache\t\tKEEP the cache data intact after run
   -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
   -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
+  -t, --flatten-result\t\tFlatten any remaining nodata values.
   -c, --continue\t\tDon't clobber existing files.
   -q, --quiet\t\t\tLower verbosity to a quiet.
 
@@ -5191,6 +5198,7 @@ def waffles_cli(argv = sys.argv):
     wg['name'] = 'waffles'
     wg['cache_dir'] = waffles_cache
     wg['ndv'] = -9999
+    wg['flatten_result'] = False
     wg['co'] = []
 
     #waffle_q = queue.Queue()
@@ -5373,6 +5381,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
+        elif arg == '-t' or arg == '--flatten-result': wg['flatten_result'] = True
 
         elif arg == '--quiet' or arg == '-q': wg['verbose'] = False
         elif arg == '--config': want_config = True
