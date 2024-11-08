@@ -2321,7 +2321,7 @@ class ElevationDataset:
                         cst_osm = cst_result[1]
                         out = gdalfun.ogr_polygonize_line_to_region(
                             cst_osm, utils.fn_basename2(cst_osm) + '_coast.shp',
-                            region=self.region, include_landmask=False,
+                            region=self.region, include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
                             line_buffer=line_buffer
                         )
