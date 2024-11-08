@@ -43,6 +43,7 @@ def fetch_coastline(this_region):
 
     return(None)
 
+_version = '0.0.1'
 _usage = '''fetch_osm_coastline.py ({}): fetch and process the OSM coastline
 
 usage: fetch_osm_coastline.py [-R]
