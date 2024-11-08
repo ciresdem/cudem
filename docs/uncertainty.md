@@ -54,7 +54,9 @@ uncertainty. Journal of Coastal Research, 34(6), 1382-1397. https://doi.org/10.2
 
 #### Vertical Datum Transformation Uncertainty
 
-Whenever data is vertically transformed while processing a DEM, the uncertainty of that transformation is accumulated into the final TVU.
+Whenever data is vertically transformed while processing a DEM, the uncertainty of that transformation is accumulated into the final TVU. The uncertainty values for these transformations are obtained from NOAA's VDatum
+
+[Estimation of Vertical Uncertainties in VDatum](https://vdatum.noaa.gov/docs/est_uncertainties.html)
 
 ## Examples
 
