@@ -30,51 +30,74 @@ In additon to DEMs and Uncertainty grids, `waffles` generates spatial metadata f
 
 `-R, --region`
 Specifies the desired REGION;
+
 Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]
+
 Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-
+
 OR an OGR-compatible vector file with regional polygons. 
+
 Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+
 If a vector file is supplied, will use each region found therein.
 
 `-E, --increment`
 Gridding INCREMENT and RESAMPLE-INCREMENT in native units.
+
 Where INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
 
 `-M, --module`
 Desired Waffles MODULE and options. (see available Modules below)
+
 Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 
 `-S, --sample_alg`
 ReSAMPLE algorithm to use (from gdalwarp)
+
 Set as 'auto' to use 'average' when down-sampling and 'bilinear' when up-sampling
+
 This switch controls resampling of input raster datasets as well as resampling
 the final DEM if RESAMPLE-INCREMENT is set in -E
 
 `-X, --extend`
 Number of cells with which to EXTEND the output DEM REGION and a 
 percentage to extend the processing REGION.
+
 Where EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
 e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10
 percent of the input REGION.
 
 `-T, --filter`
 FILTER the output DEM using one or multiple filters. 
+
 Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)
+
 The -T switch may be set multiple times to perform multiple filters.
+
 Append `:stacks=True` to the filter to perform the filter on the data stack instead 
 of the final DEM.
+
 Available FILTERS: blur, grdfilter, outliers, flats
 
 `-L, --limits`
 LIMIT the output elevation or interpolation values, append 
+
 'u<value>' to set the upper elevation limit, 
+
 'l<value>' to set the lower elevation limit,
+
 'n<value>' to set the count per cell limit.
+
 'p<value>' to set an interpolation limit by proximity, or 
+
 's<value>' to set an interpolation limit by size, or
+
 'c<value>' to set an interpolation limit by nodata-size percentile.
+
 e.g. -Lu0 to set all values above 0 to zero, or 
+
 -Ls100 to limit interpolation to nodata zones smaller than 100 pixels, or
+
 -Ln2 to limit stacked cells to those with at least 2 contributing data records.
 
 `-C, --clip`
@@ -107,6 +130,7 @@ Set the number of THREADS (1). Each input region will be run in up to THREADS th
 
 `-D, --cache-dir`
 CACHE Directory for storing temp data.
+
 Default Cache Directory is ~/.cudem_cache; cache will be cleared after a waffles session.
 to retain the data, use the --keep-cache flag.
 
@@ -118,6 +142,7 @@ Transform all data to PROJECTION value set with --t_srs/-P where applicable.
 
 `-p, --prefix`
 Set BASENAME (-O) to PREFIX (append <RES>_nYYxYY_wXXxXX_<YEAR>v<VERSION> info to output BASENAME).
+
 note: Set Resolution, Year and Version by setting this to 'res=X:year=XXXX:version=X', 
 leave blank for default of <INCREMENT>, <CURRENT_YEAR> and <1>, respectively.
 
