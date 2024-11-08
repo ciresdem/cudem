@@ -1,7 +1,7 @@
 # DEM and Uncertainty
 
 While generating a DEM from independent scattered data sources we optionally calculate the uncertainty for each cell of the resulting DEM.
-An auxiliary Uncertainty Raster can be generated along with a DEM by using the `--uncertainty` switch in the [waffles](/docs/waffles.md) command. The waffles module 'uncertainty' can also be used to only generate an uncertainty raster without generating a DEM.
+An auxiliary Uncertainty Raster can be generated along with a DEM by using the `--uncertainty` switch in the [waffles](/docs/waffles.md) command. Additionally, the waffles module 'uncertainty' can be used to only generate an uncertainty raster without generating a DEM.
 
 ## Types of uncertainty:
 
