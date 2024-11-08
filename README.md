@@ -116,6 +116,7 @@ between adjacent DEM tiles.
 | [grits](/docs/grits.md) | filter DEMs |
 | cudem   | run CUDEM cli programs and scripts |
 
+
 **Additional scripts provided with CUDEM:**
 
 | Script | Description |
