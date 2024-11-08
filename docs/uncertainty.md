@@ -5,27 +5,27 @@ An auxiliary Uncertainty Raster can be generated along with a DEM by using the `
 
 ## Types of uncertainty:
 
-- Source Data Uncertainty
-  - Source uncertainty (dataset-wide)
-  - Source uncertainty (per data value)
-  - Bathymetric depth uncertainty (IHO function of depth)
-- Gridding Uncertainty
-  - Sub-pixel uncertainty (variance)
-  - Interpolation uncertainty (split-sample)
-  - Vertical datum transformation uncertainty	
+- [Source Data Uncertainty](#source-data-uncertainty)
+  - [Source dataset uncertainty](#source-dataset-uncertainty) (dataset-wide)
+  - [Source value uncertainty](#source-value-uncertainty) (per data value)
+  - [Bathymetric depth uncertainty[](#bathymetric-depth-uncertainty) (IHO function of depth)
+- [Gridding Uncertainty](#gridding-uncertainty)
+  - [Sub-pixel uncertainty](sub-pixel-variance) (variance)
+  - [Interpolation uncertainty](#interpolation-uncertainty) (split-sample)
+  - [Vertical datum transformation uncertainty](#vertical-datum-transformation-uncertainty)
 
 The various uncertainty types are combined to report a Total Value Uncertainty (TVU) as supplemental raster product.
 
 Uncertainty values are combined using the Root Sum Squared (RSS).
 
 ### Source Data Uncertainty
-#### Source Uncertainty (dataset-wide)
+#### Source dataset Uncertainty
 
 The dataset-wide source uncertainty is a single value that will be applied to an entire dataset. This is specified by the user in the 4th column of the dataset entry. Typically this value is provided by the data collector or processor in the datasets metadata. This can sometimes be reported as an RMSE or data Accuracy. If the value is reported as being in the 95th percentile confidence level, first divide that value by 1.96 to obtain an uncertainty value suitable for combining with other uncertainty values.
 
 Specify the source data uncertainty as the 4th column in the datalist data-entry. See [dlim](/docs/dlim.md) for more information about datalist and data-entry formatting.
 
-#### Source Uncertainty (per data value)
+#### Source value Uncertainty
 
 Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for each data value in the dataset. Other times a user may independently calculate the uncertainty for each data value in their dataset. These uncertainty data can be used to inform the final TVU by specifying the uncertainty data of the dataset as either a seperate product or integrated into the dataset, such as with raster data or xyz data, respsectively.
 
@@ -71,6 +71,8 @@ Whenever data is vertically transformed while processing a DEM, the uncertainty 
 [Estimation of Vertical Uncertainties in VDatum](https://vdatum.noaa.gov/docs/est_uncertainties.html)
 
 ## Examples
+
+- [Androscoggin](#androscoggin)
 
 ### Androscoggin
 
