@@ -33,7 +33,7 @@ For XYZ data, we can include per-point uncertainty as the 5th column in the xyz 
 
 For Raster data, we can either specify a band number or a separate raster file that contains the per-pixel uncertainty data.
 
-This is done automatically when using fetches modules as a datalist dataset-entry.
+This is applied automatically when using fetches modules as a datalist dataset-entry.
 
 #### Bathymetric Depth Uncertainty
 
