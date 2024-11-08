@@ -503,11 +503,6 @@ class Waffle:
                     
             else:
                 self.run()    
-
-            if self.flatten_result:
-                flattened_Fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
-                flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
-                os.rename(flattened_fn, self.fn)
                 
             # if self.node == 'grid':
             #     self.region = self.region.buffer(x_bv=-self.xinc*.5, y_bv=-self.yinc*.5)
@@ -541,7 +536,8 @@ class Waffle:
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
-                                   dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr)
+                                   dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr,
+                                   flatten_result=self.flatten_result)
                 output_files['DEM'] = self.fn
                 
             ## post-process the mask, etc.
@@ -4610,7 +4606,7 @@ class WaffleDEM:
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
                 percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
-                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None):
+                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_result = False):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -4643,6 +4639,12 @@ class WaffleDEM:
 
         ## setting limits will change the weights/uncertainty for flattened data
         self.set_limits(upper_limit=upper_limit, lower_limit=lower_limit)
+
+        ## flatten all nodata values
+        if flatten_result:
+            flattened_Fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
+            flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
+            os.rename(flattened_fn, self.fn)
 
         ## put everything in a hdf5
         # if stack_fn is not None:
