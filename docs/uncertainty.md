@@ -29,7 +29,9 @@ Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for eac
 
 #### Bathymetric Depth Uncertainty
 
-For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/standards/s-44/S-44_Edition_6.1.0.pdf) can be used to calculate the uncertainty of each data value as a function of it's depth, where `TVU(d) = sqrt(a**2 + (b * d)**2)`
+For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/standards/s-44/S-44_Edition_6.1.0.pdf) can be used to calculate the uncertainty of each data value as a function of it's depth, where
+
+`TVU(d) = sqrt(a**2 + (b * d)**2)`
 
 | **Order 2** | **Order 1b** | **Order 1a** | **Special Order** | **Exclusive Order** |
 |-------------|--------------|--------------|-------------------|---------------------|
