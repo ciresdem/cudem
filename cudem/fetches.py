@@ -3963,6 +3963,8 @@ class OpenStreetMap(FetchModule):
     
     https://wiki.openstreetmap.org/
 
+    coastline: https://wiki.openstreetmap.org/wiki/Tag:natural=coastline
+
     `q` should be the query to send to the osm interpreter, such as:
     q = '''
     (node;
@@ -3971,6 +3973,8 @@ class OpenStreetMap(FetchModule):
     );
     out meta;
     '''
+    or `q` can be a keyword to fetch specific things, currently we accept:
+    'buildings', 'coastline'
 
     < osm:q=None:fmt=osm:planet=False:chunks=True:min_length=None >
     """

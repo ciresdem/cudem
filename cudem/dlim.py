@@ -3388,6 +3388,8 @@ class IceSat2File(ElevationDataset):
     columns: {} # the additional columns to export in yield_points {'/h5/atl/path', column_name}
     classify_bathymetry: True # extract bathymetry with CShelph
     classify_buildings: True # classify buildings using BING BFP
+    classify_water: True # classify water using OSM
+    reject_failed_qa: True # skip granules that failed QA
 
     Classes:
     -1 - no classification (ATL08)
@@ -3396,7 +3398,7 @@ class IceSat2File(ElevationDataset):
     2 - canopy (ATL08)
     3 - canopy top (ATL08)
     4 - bathymetry floor surface (CShelph, future ATL24)
-    5 - bathymetry water surface (CShelph, future ATL24) (OSM coastline)
+    5 - bathymetry water surface (OSM coastline)
     6 - ice surface (ATL06) (unused for now, just planning ahead for possible future ATL06 integration)
     7 - built structure (OSM or Bing)
     8 - "urban" (WSF, if used)
@@ -5225,6 +5227,8 @@ class IceSat2Fetcher(Fetcher):
     columns: {} # the additional columns to export in yield_points
     classify_bathymetry: True # extract bathymetry with CShelph
     classify_buildings: True # classify buildings with BING BFP
+    classify_water: True # classify water using OSM
+    reject_failed_qa: True # skip granules that failed QA
 
     Classes:
     -1 - no classification (ATL08)
@@ -5246,7 +5250,8 @@ class IceSat2Fetcher(Fetcher):
     Fetches Module: <icesat2> - {}'''.format(__doc__, fetches.IceSat2.__doc__)
     
     def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = None, columns = {},
-                 classify_bathymetry = True, classify_buildings = True, **kwargs):
+                 classify_bathymetry = True, classify_buildings = True, classify_water = True,
+                 reject_failed_qa = True, **kwargs):
         super().__init__(**kwargs)
         self.water_surface = water_surface
         self.classes = classes
@@ -5254,16 +5259,19 @@ class IceSat2Fetcher(Fetcher):
         self.columns = columns
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
+        self.want_water = classify_water
+        self.reject_failed_qa = reject_failed_qa
 
         self.atl_fn = None
     
     def set_ds(self, result):
-        #utils.echo_msg(result)
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
-
         if self.want_buildings:
             self.want_buildings = self.process_buildings(self.fetch_buildings())
-        
+
+        if self.want_water:
+            self.want_water = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=True)
+            
         if 'processed_zip' in result[-1]:
             icesat2_h5s = utils.p_unzip(
                 icesat2_fn,#os.path.join(self.fetch_module._outdir, ),
@@ -5274,8 +5282,9 @@ class IceSat2Fetcher(Fetcher):
                 #utils.echo_msg(icesat2_h5)
                 sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
                                      confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
-                                     classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
-                                     uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
+                                     classify_buildings=self.want_buildings, classify_water=self.want_water, reject_failed_qa=self.reject_failed_qa,
+                                     src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
+                                     src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
                                      pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
 
                 yield(sub_ds)
