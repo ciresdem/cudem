@@ -34,7 +34,7 @@ Specifies the desired REGION;\
 Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax]]\
 Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-\
 OR an OGR-compatible vector file with regional polygons. \
-Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
+Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].\
 If a vector file is supplied, will use each region found therein.
 
 `-E, --increment`
