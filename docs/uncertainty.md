@@ -23,9 +23,17 @@ Uncertainty values are combined using the Root Sum Squared (RSS).
 
 The dataset-wide source uncertainty is a single value that will be applied to an entire dataset. This is specified by the user in the 4th column of the dataset entry. Typically this value is provided by the data collector or processor in the datasets metadata. This can sometimes be reported as an RMSE or data Accuracy. If the value is reported as being in the 95th percentile confidence level, first divide that value by 1.96 to obtain an uncertainty value suitable for combining with other uncertainty values.
 
+Specify the source data uncertainty as the 4th column in the datalist data-entry. See [dlim](/docs/dlim.md) for more information about datalist and data-entry formatting.
+
 #### Source Uncertainty (per data value)
 
 Some datasets, such as NOS BAG or BlueTopo, specify an uncertainty value for each data value in the dataset. Other times a user may independently calculate the uncertainty for each data value in their dataset. These uncertainty data can be used to inform the final TVU by specifying the uncertainty data of the dataset as either a seperate product or integrated into the dataset, such as with raster data or xyz data, respsectively.
+
+For XYZ data, we can include per-point uncertainty as the 5th column in the xyz dataset, where the 4th column is the weight.
+
+For Raster data, we can either specify a band number or a separate raster file that contains the per-pixel uncertainty data.
+
+This is done automatically when using fetches modules as a datalist dataset-entry.
 
 #### Bathymetric Depth Uncertainty
 
@@ -37,6 +45,8 @@ For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/stan
 |-------------|--------------|--------------|-------------------|---------------------|
 | Areas where a general description of the sea floor is considered adequate. | Areas where underkeel clearance is not considered to be an issue for the type of surface shipping expected to transit the area. | Areas where underkeel clearance is considered not to be critical but features of concern to surface shipping may exist. | Areas where underkeel clearance is critical | Areas where there is strict minimum underkeel clearance and manoeuvrability criteria |
 | a = 1.0m, b = 0.023 | a = 0.5m, b = 0.013 | a = 0.5m, b = 0.013 | a = 0.25m, b = 0.0075 | a = 0.15m, b = 0.0075 |
+
+This is applied automatically when using certain fetches modules as a datalist dataset-entry, such as `hydronos` and `multibeam`.
 
 ### Gridding Uncertainty
 #### Sub-pixel variance
