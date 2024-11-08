@@ -47,6 +47,11 @@ The Sub-pixel uncertainty, or sub-pixel variance, is calculated by default when 
 
 The interpolation uncertainty is calculated for all interpolated cells in a resulting DEM using a split-sample method.
 
+The method used to calculate interpolation uncertainty is described in:
+
+Amante, C. J. (2018). Estimating coastal digital elevation model
+uncertainty. Journal of Coastal Research, 34(6), 1382-1397. https://doi.org/10.2112/JCOASTRES-D-17-00211.1
+
 #### Vertical Datum Transformation Uncertainty
 
 Whenever data is vertically transformed while processing a DEM, the uncertainty of that transformation is accumulated into the final TVU.
