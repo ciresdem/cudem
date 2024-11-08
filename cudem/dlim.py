@@ -5009,7 +5009,10 @@ class NEDFetcher(Fetcher):
         # self.mask = '{}.shp'.format(_coast_mask.name)
         
         ## todo: merge the coast mask with user input self.mask
-        coast_mask = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True, line_buffer=0.00001)
+        coast_mask = self.process_coastline(
+            self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
+            include_landmask=False, line_buffer=0.00001
+        )
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
