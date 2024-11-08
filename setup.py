@@ -144,7 +144,8 @@ setuptools.setup(
         'scripts/xyz_vs_dem.sh',
         'scripts/dem_set_metadata.py',
         'scripts/dem_patch.sh',
-        'scripts/xyz2shp.py'
+        'scripts/xyz2shp.py',
+        'scripts/fetch_osm_coastline.py',
     ],
     python_requires = '>=3.0',
     project_urls = {

@@ -2248,7 +2248,10 @@ class ElevationDataset:
 
         if this_region.valid_p():
             utils.echo_msg('fetching buildings for region {}'.format(this_region))
-            this_bldg = fetches.BingBFP(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir).run()
+            this_bldg = fetches.BingBFP(
+                src_region=this_region, verbose=self.verbose, outdir=self.cache_dir
+            )
+            this_bldg.run()
             fr = fetches.fetch_results(this_bldg)#, check_size=False)
             fr.daemon=True
             fr.start()
@@ -2279,6 +2282,56 @@ class ElevationDataset:
                         bldg_ds = None
 
         return(bldg_geoms)
+
+    def fetch_coastline(self, chunks=True):
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+
+        if this_region.valid_p():
+            utils.echo_msg('fetching coastline for region {}'.format(this_region))
+            this_cst = fetches.OpenStreetMap(
+                src_region=this_region, verbose=self.verbose, outdir=self.cache_dir,
+                q='coastline', chunks=chunks,
+            )
+            this_cst.run()
+            fr = fetches.fetch_results(this_cst)
+            fr.daemon=True
+            fr.start()
+            fr.join()
+            return(fr)
+        
+        return(None)
+
+    def process_coastline(self, this_cst, return_geom=True, landmask_is_watermask=False, line_buffer=0.0000001):
+        cst_geoms = []
+        if this_cst is not None:
+            with tqdm(
+                    total=len(this_cst.results),
+                    desc='processing coastline',
+                    leave=True
+            ) as pbar:
+                for n, cst_result in enumerate(this_cst.results):                
+                    if cst_result[-1] == 0:
+                        pbar.update()
+                        cst_osm = cst_result[1]
+                        out = gdalfun.ogr_polygonize_line_to_region(
+                            cst_osm, utils.fn_basename2(cst_osm) + '_coast.shp',
+                            region=self.region, include_landmask=False,
+                            landmask_is_watermask=landmask_is_watermask,
+                            line_buffer=line_buffer
+                        )
+                        
+                        cst_ds = ogr.Open(out, 0)
+                        cst_layer = cst_ds.GetLayer()
+                        cst_geom = gdalfun.ogr_union_geom(cst_layer)
+                        cst_geoms.append(cst_geom)
+                        cst_ds = None
+        if return_geom:
+            return(cst_geoms)
+        else:
+            return(out)
     
 class XYZFile(ElevationDataset):
     """representing an ASCII xyz dataset stream.
@@ -3343,7 +3396,7 @@ class IceSat2File(ElevationDataset):
     2 - canopy (ATL08)
     3 - canopy top (ATL08)
     4 - bathymetry floor surface (CShelph, future ATL24)
-    5 - bathymetry water surface (CShelph, future ATL24)
+    5 - bathymetry water surface (CShelph, future ATL24) (OSM coastline)
     6 - ice surface (ATL06) (unused for now, just planning ahead for possible future ATL06 integration)
     7 - built structure (OSM or Bing)
     8 - "urban" (WSF, if used)
@@ -3354,7 +3407,7 @@ class IceSat2File(ElevationDataset):
     
     def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4',
                  columns={}, classify_bathymetry=True, classify_buildings=True, reject_failed_qa=True,
-                 **kwargs):
+                 classify_water=True, **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
         self.water_surface = water_surface
@@ -3367,6 +3420,7 @@ class IceSat2File(ElevationDataset):
         self.atl_fn = None
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
+        self.want_watermask = classify_water
         self.reject_failed_qa = reject_failed_qa
         
     def init_atl_03_h5(self):
@@ -3432,19 +3486,29 @@ class IceSat2File(ElevationDataset):
         dataset = None
         if self.want_buildings:
             if isinstance(self.want_buildings, bool):
-                this_bing = self.process_buildings(self.fetch_buildings())                
+                this_bing = self.process_buildings(self.fetch_buildings())
             elif isinstance(self.want_buildings, list):
                 this_bing = self.want_buildings                
             else:
                 this_bing = None    
 
         else:
-            this_bing = None    
+            this_bing = None
+
+        if self.want_watermask:
+            if isinstance(self.want_watermask, bool):
+                this_wm = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=True)
+            elif isinstance(self.want_watermask, list):
+                this_wm = self.want_watermask                
+            else:
+                this_wm = None    
+
+        else:
+            this_wm = None 
         
         for i in range(1, 4):
             #try:
             dataset = self.read_atl_data('{}'.format(i))
-
             if dataset is None or len(dataset) == 0:
                 continue
 
@@ -3454,19 +3518,20 @@ class IceSat2File(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
 
+            if self.want_buildings and this_bing is not None:
+                dataset = self.classify_buildings(dataset, this_bing)
+
+            if self.want_watermask and this_wm is not None:
+                dataset = self.classify_water(dataset, this_wm)
+
             if self.want_bathymetry:
                 dataset = self.classify_bathymetry(dataset)
                 
             if dataset is None or len(dataset) == 0:
                 continue
-
-            if self.want_buildings and this_bing is not None:
-                dataset = self.classify_buildings(dataset, this_bing)
-
-            if dataset is None or len(dataset) == 0:
-                continue
                 
             if len(self.classes) > 0:
+                #print(self.classes)
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
             if dataset is None or len(dataset) == 0:
@@ -3659,8 +3724,8 @@ class IceSat2File(ElevationDataset):
         return(dataset)        
             
     def classify_bathymetry(
-            self, dataset, thresh = 60, min_buffer = -40, max_buffer = 5,
-            start_lat = False, end_lat = False, lat_res = 10 , h_res = .5,
+            self, dataset, thresh = 95, min_buffer = -40, max_buffer = 5,
+            start_lat = False, end_lat = False, lat_res = 10, h_res = .5,
             surface_buffer = -.5, water_temp = None
     ):
         """Classify bathymetry in an ATL03 file. 
@@ -3690,6 +3755,7 @@ class IceSat2File(ElevationDataset):
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
         dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
+        dataset_sea1 = dataset_sea1[(dataset_sea1['ph_h_classed'] == 5)]
         
         if self.region is not None:
             xyz_region = self.region.copy()
@@ -3716,12 +3782,9 @@ class IceSat2File(ElevationDataset):
                 
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height) #* -1
-                    if sea_height1 is not None:
-                        med_water_surface_h2 = np.nanmedian(sea_height1[2]) #* -1
-                        #utils.echo_msg('med_water_surface is {}'.format(med_water_surface_h))
-                        #utils.echo_msg('med_water_surface2 is {}'.format(med_water_surface_h2))
-
-                        dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
+                    #if sea_height1 is not None:
+                    #    med_water_surface_h2 = np.nanmedian(sea_height1[2]) #* -1
+                    #    dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
                     
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
@@ -3739,26 +3802,22 @@ class IceSat2File(ElevationDataset):
                     # Bin dataset again for bathymetry
                     if len(dataset_bath) > 0:
                         binned_data = cshelph.bin_data(dataset_bath, lat_res, h_res)
-
                         if binned_data is not None:
                             # Find bathymetry
                             bath_height, geo_df = cshelph.get_bath_height(binned_data, thresh, med_water_surface_h, h_res)
                             if bath_height is not None:
-
                                 transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
                                 lon_wgs84, lat_wgs84 = transformer.transform(geo_df.longitude.values, geo_df.latitude.values)
-
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
                                 
                                 for n, id in enumerate(geo_df.ids.values):
                                     #print(dataset.at[id, 'latitude'], dataset.at[id, 'longitude'])
                                     #print(lat_wgs84[n], lon_wgs84[n])
                                     dataset.at[id, 'ph_h_classed'] = 4
-                                    dataset.at[id, 'latitude'] = lat_wgs84[n]
-                                    dataset.at[id, 'longitude'] = lon_wgs84[n]
+                                    #dataset.at[id, 'latitude'] = lat_wgs84[n]
+                                    #dataset.at[id, 'longitude'] = lon_wgs84[n]
                                     dataset.at[id, 'photon_height'] = geo_df.depth.values[n] * -1
-                                
-                                #return(lat_wgs84, lon_wgs84, geo_df.depth.values*-1)
+                            
                                 return(dataset)
             
         return(dataset)
@@ -3797,7 +3856,8 @@ class IceSat2File(ElevationDataset):
     def classify_buildings(self, dataset, these_bldgs):
         """classify building photons using BING building footprints 
         """
-
+        
+        #print(these_bldgs)
         ogr_df = self._vectorize_df(dataset)
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
@@ -3815,6 +3875,33 @@ class IceSat2File(ElevationDataset):
                 for f in icesat_layer:
                     idx = f.GetField('index')
                     dataset.at[idx, 'ph_h_classed'] = 7
+
+                icesat_layer.SetSpatialFilter(None)
+
+        ogr_df = None
+        return(dataset)
+
+    def classify_water(self, dataset, these_wms):
+        """classify water photons using OSM coastline 
+        """
+
+        ogr_df = self._vectorize_df(dataset)
+        os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
+        os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
+        with tqdm(
+                total=len(these_wms),
+                desc='classifying water photons',
+                leave=False
+        ) as pbar:
+            for n, wm_geom in enumerate(these_wms):                
+                pbar.update()
+                icesat_layer = ogr_df.GetLayer()
+                icesat_layer.SetSpatialFilter(wm_geom)
+
+                #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
+                for f in icesat_layer:
+                    idx = f.GetField('index')
+                    dataset.at[idx, 'ph_h_classed'] = 5
 
                 icesat_layer.SetSpatialFilter(None)
 
@@ -4909,22 +4996,23 @@ class NEDFetcher(Fetcher):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        
     def set_ds(self, result):
 
         ## coastline generation
         # from cudem import waffles
         # coast_mask_fn = utils.make_temp_fn('ned_coast')
         # _coast_mask = waffles.WaffleFactory(mod='coastline', src_region=self.region, xinc=self.x_inc, yinc=self.y_inc,
-        #                                     want_stack=False, name=coast_mask_fn, node='pixel', verbose=True)._acquire_module()()
-
-        # ## merge the coast mask with user input self.mask
+        #                                     want_stack=False, name=coast_mask_fn, node='pixel', verbose=True)._acquire_module()()        
         # self.mask = '{}.shp'.format(_coast_mask.name)
+        
+        ## todo: merge the coast mask with user input self.mask
+        coast_mask = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True, line_buffer=0.00001)
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
+                            mask='{}:invert=False'.format(coast_mask), uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
         yield(ds)

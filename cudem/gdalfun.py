@@ -379,6 +379,99 @@ def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
     layer.Clip(c_layer, dst_layer)
     ds = c_ds = dst_ds = None
 
+def ogr_polygonize_line_to_region(src_ogr, dst_ogr, region=None, include_landmask=True, landmask_is_watermask=False, line_buffer=0.0000001):
+    """Polygonize an OSM coastline LineString to the given region
+
+    if include_landmask is True, polygon(s) will be returned for the land areas 
+    with a `watermask` valule of 0, otherwise, only the watermask polygon will
+    be returned with a `watermask` value of 1.
+    """
+
+    # Open the input line layer
+    line_ds = ogr.Open(src_ogr)
+    line_layer = line_ds.GetLayer()
+    region_geom = regions.Region().from_list(line_layer.GetExtent()).export_as_geom()
+    ## todo: check if input region is larger than the line region, if so,
+    ##       reduce the region to the size of the line region...
+    if region is not None and region.valid_p():
+        region_geom = region.export_as_geom()
+    
+    # Create the output layer
+    driver = ogr.GetDriverByName("ESRI Shapefile")
+    output_ds = driver.CreateDataSource(dst_ogr)
+    output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+    output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+
+    for line_layer in line_ds:
+        line_type = line_layer.GetGeomType()
+        if line_type == 2:
+            line_geometries = ogr_union_geom(line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon)##
+            poly_line = line_geometries.Buffer(line_buffer)
+            split_geoms = region_geom.Difference(poly_line)
+            for split_geom in split_geoms:
+                ss = []
+                for line_geometry in line_geometries:
+                    if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
+                        point_count = line_geometry.GetPointCount()
+
+                        for point_n in range(0, point_count-1):
+                            x_beg = line_geometry.GetX(point_n)
+                            y_beg = line_geometry.GetY(point_n)
+                            x_end = line_geometry.GetX(point_n+1)
+                            y_end = line_geometry.GetY(point_n+1)
+
+                            poly_center = split_geom.Centroid()
+                            poly_center_x = poly_center.GetX(0)
+                            poly_center_y = poly_center.GetY(0)
+
+                            s = (x_end - x_beg)*(poly_center_y - y_beg) > (y_end - y_beg)*(poly_center_x - x_beg)
+                            ss.append(s)
+
+                if all(ss):
+                    s = True
+                elif not any(ss):
+                    s = False
+                else:
+                    if np.count_nonzero(ss) > len(ss) / 2:
+                        s = True
+                    else:
+                        s = False
+
+                out_feature = ogr.Feature(output_layer.GetLayerDefn())
+                out_feature.SetGeometry(split_geom)
+
+                if s == 0:
+                    if not landmask_is_watermask:
+                        out_feature.SetField('watermask', 1)# if s else 0)
+                        output_layer.CreateFeature(out_feature)
+
+                if include_landmask or landmask_is_watermask:
+                    if s == 1:
+                        if landmask_is_watermask:
+                            out_feature.SetField('watermask', 1)
+                        else:
+                            out_feature.SetField('watermask', 0)
+                            output_layer.CreateFeature(out_feature)
+                
+        if line_type == 6:
+            for line_feature in line_layer:
+                line_geometry = line_feature.geometry()
+                line_geometry = ogr.ForceTo(line_geometry, ogr.wkbLinearRing)
+                for feature in output_layer:
+                    feature_geom = feature.geometry()
+                    if feature_geom.Contains(line_geometry):
+                        feature_geoms = feature_geom.Difference(line_geometry)
+                        feature.SetGeometry(feature_geoms)
+                        output_layer.SetFeature(feature)
+                        
+                out_feature = ogr.Feature(output_layer.GetLayerDefn())
+                out_feature.SetGeometry(line_geometry)
+                out_feature.SetField('watermask', 1)
+                output_layer.CreateFeature(out_feature)
+
+    line_ds = output_ds = None
+    return(dst_ogr)
+    
 def ogr_mask_union(src_layer, src_field=None, dst_defn=None):
     """`union` a `src_layer`'s features based on `src_field` where
     `src_field` holds a value of 0 or 1. optionally, specify
@@ -413,10 +506,10 @@ def ogr_mask_union(src_layer, src_field=None, dst_defn=None):
     
     return(out_feat)
 
-def ogr_union_geom(src_layer):
+def ogr_union_geom(src_layer, geom_type = ogr.wkbMultiPolygon):
         
-    multi = ogr.Geometry(ogr.wkbMultiPolygon)
-    feats = len(src_layer)
+    multi = ogr.Geometry(geom_type)
+    feats = src_layer.GetFeatureCount()#len(src_layer)
     [multi.AddGeometry(f.geometry()) for f in src_layer]
     utils.echo_msg('unioned {} features'.format(feats))
     # if feats > 0:

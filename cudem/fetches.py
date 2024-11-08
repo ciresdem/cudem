@@ -3953,6 +3953,7 @@ class ArcticDEM(FetchModule):
         return(self)
 
 ## OSM - Open Street Map
+## todo: make wrapper modules for 'buildings' and 'coastline' and whaterver else...perhaps
 class OpenStreetMap(FetchModule):
     """OpenStreetMap data.
     
@@ -3962,22 +3963,42 @@ class OpenStreetMap(FetchModule):
     
     https://wiki.openstreetmap.org/
 
+    `q` should be the query to send to the osm interpreter, such as:
+    q = '''
+    (node;
+    <;
+    >;
+    );
+    out meta;
+    '''
+
     < osm:q=None:fmt=osm:planet=False:chunks=True:min_length=None >
     """
     
-    def __init__(self, q=None, fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
+    def __init__(self, q=None, h='', fmt='osm', planet=False, chunks=True, min_length=None, **kwargs):
         super().__init__(name='osm', **kwargs)
         self.q = q
         self.fmt = fmt
         self.planet = planet
         self.chunks = chunks
-        self.h = ''        
+        self.h = h
         if self.q == 'buildings':
             #self.h = '[maxsize:2000000000]'
             self.h = '[timeout:3600]'
             self.q = '''
             (way["building"]{};
             relation["building"]["type"="multipolygon"];
+            );
+            (._;>;);
+            out meta;
+            '''.format('(if: length() > {})'.format(min_length) if min_length is not None else '')
+            
+        if self.q == 'coastline':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            (way["natural"="coastline"]{};
+            relation["type"="lines"];
             );
             (._;>;);
             out meta;
@@ -4047,9 +4068,7 @@ class OpenStreetMap(FetchModule):
                 #utils.echo_msg('using query: {}'.format(osm_q_))
                 osm_data = urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
-                
                 self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
-
         else:
             c_bbox = self.region.format('osm_bbox')
             out_fn = 'osm_{}'.format(self.region.format('fn_full'))
@@ -4080,7 +4099,8 @@ class BingBFP(FetchModule):
         super().__init__(name='bingbfp', **kwargs)
 
         ## The various BING-BFP URLs
-        self._bing_bfp_csv = 'https://minedbuildings.blob.core.windows.net/global-buildings/dataset-links.csv'
+        #self._bing_bfp_csv = 'https://minedbuildings.blob.core.windows.net/global-buildings/dataset-links.csv'
+        self._bing_bfp_csv = 'https://minedbuildings.z5.web.core.windows.net/global-buildings/dataset-links.csv'
 
         ## Set the user-agent and referer
         self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
@@ -4107,14 +4127,15 @@ class BingBFP(FetchModule):
             status = Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
         except:
             status = -1
+            
+        if status == 0:
+            with open(bing_csv, mode='r') as bc:
+                reader = csv.reader(bc)
+                next(reader)
+                bd = [row[2] for row in reader if int(row[1]) in quad_keys]
 
-        with open(bing_csv, mode='r') as bc:
-            reader = csv.reader(bc)
-            next(reader)
-            bd = [row[2] for row in reader if int(row[1]) in quad_keys]
-
-        utils.remove_glob(bing_csv)
-        self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
+            utils.remove_glob(bing_csv)            
+            self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
         
 ## VDATUM
 def proc_vdatum_inf(vdatum_inf, name='vdatum'):
