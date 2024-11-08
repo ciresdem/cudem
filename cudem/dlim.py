@@ -2320,7 +2320,9 @@ class ElevationDataset:
                         pbar.update()
                         cst_osm = cst_result[1]
                         out = gdalfun.ogr_polygonize_line_to_region(
-                            cst_osm, utils.fn_basename2(cst_osm) + '_coast.shp',
+                            cst_osm, utils.make_temp_fn(
+                                utils.fn_basename2(cst_osm) + '_coast.shp', temp_dir=self.cache_dir
+                            ),
                             region=self.region, include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
                             line_buffer=line_buffer
@@ -5013,7 +5015,7 @@ class NEDFetcher(Fetcher):
         ## todo: merge the coast mask with user input self.mask
         coast_mask = self.process_coastline(
             self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
-            include_landmask=False, line_buffer=0.0001#0.00001
+            include_landmask=False, line_buffer=0.00001
         )
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
