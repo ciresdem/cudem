@@ -73,6 +73,7 @@ Whenever data is vertically transformed while processing a DEM, the uncertainty 
 ## Examples
 
 - [Androscoggin](#androscoggin)
+- [Point Reyes](#point-reyes)
 
 ### Androscoggin
 
@@ -191,3 +192,5 @@ See [waffles](/docs/waffles.md) for more information on the syntax of the waffle
 In this command we use the previously defined regional tile set 'regions_tile_set.shp' to generate a 1 meter Uncertainty DEM. We use the waffles 'uncertainty' module specifying the interpolation method as 'linear'. The output will be an accumulated uncertainty raster with 1 meter cell-spacing with a horizontal projection of UTM Zone 19N and a vertical projection of NAVD88 (geoid2018). With the `-m` switch we also generate an auxiliary data mask raster.
 
 ![](/media/androscoggin_unc.png)
+
+### Point Reyes
