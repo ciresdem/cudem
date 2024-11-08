@@ -8,7 +8,7 @@ An auxiliary Uncertainty Raster can be generated along with a DEM by using the `
 - [Source Data Uncertainty](#source-data-uncertainty)
   - [Source dataset uncertainty](#source-dataset-uncertainty) (dataset-wide)
   - [Source value uncertainty](#source-value-uncertainty) (per data value)
-  - [Bathymetric depth uncertainty[](#bathymetric-depth-uncertainty) (IHO function of depth)
+  - [Bathymetric depth uncertainty](#bathymetric-depth-uncertainty) (IHO function of depth)
 - [Gridding Uncertainty](#gridding-uncertainty)
   - [Sub-pixel uncertainty](sub-pixel-variance) (variance)
   - [Interpolation uncertainty](#interpolation-uncertainty) (split-sample)
