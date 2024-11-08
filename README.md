@@ -120,6 +120,45 @@ between adjacent DEM tiles.
 
 | Script | Description |
 |--------|-------------|
+| bag2tif2chunks2xyz.sh  |  convert a BAG to chunked XYZ |
+| clip_xyz.sh            |  clip an xyz file based on a vector |
+| coastline2xyz.sh       |  convert a coastline vector to XYZ |
+| colortable.py          |  generate a colortable |
+| create_datalist.sh     |  create a datalist from data in the current directory |
+| create_outliers.sh     |  identify outliers in a DEM |
+| create_povray_template.sh | generate a POVray template from a DEM |
+| create_coastline.py    |  generate a coastline |
+| ddms.py                |  convert between dd and dms |
+| error_distance_plots.py|  generate an error/distance plots |
+| gdal_null.py           |  generate a null grid |
+| gdal_outliers.py       |  filter vertical outliers from a grid |
+| gdal_nan2null.py       |  convert NaN values from a grid |
+| gdal_findreplace.py    |  find/replace values in a grid |
+| gdal_query.py          |  query values from a grid |
+| gdal_chunk.py          |  parse a grid into chunks |
+| gdal_crop.py           |  crop a grid by its nodata value |
+| gdal_cut.py            |  cut a grid to a given region |
+| gdal_clip.py           |  clip a grid to a vector |
+| gdal_split.py          |  split a grid by z value |
+| gdal_percentile.py     |  get a percentile from a grid |
+| gdal_histogram.py      |  generate an historgram from a grid |
+| gdal_hillshade.py      |  generate a hillshade image from a grid |
+| gdal_minmax.py         |  get min/max values from a grid |
+| grd2mesh.py            |  generate an unstructured grid |
+| has_nulls.py           |  check if a grid has nodata values |
+| nsidc_download.py      |  downlaod nsidc data |
+| ogr_edit_field.py      |  edit OGR field values |
+| outliers_shp.sh        |  identify outliers in a DEM |
+| percentiles_minmax.py  |  get percentiles from a grid |
+| rename_shp.py          |  rename a shapefile |
+| smooth_dem_bathy.py    |  smooth a DEM < 0 with a Gaussian filter |
+| spatial-meta.sh        |  generate spatial metadata using BOUNDS |
+| tif2chunks2xyz.sh      |  chunk a DEM and output as chunked XYZ |
+| usace_interp.sh        |  interpolate usace cross surveys |
+| vdatum_cmd.py          |  run NOAAs vdatum from command-line |
+| x360.py                |  flip a DEM |
+| xyz_clip.py            |  clip an xyz file based on a raster mask |
+| xyztindex.py           |  generate a tile index of xyz files. |
 | fetch_osm_coastline.py | Fetch and process a water/landmask from Open Street Map |
 
 # Usage Examples
