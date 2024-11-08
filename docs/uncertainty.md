@@ -41,7 +41,9 @@ For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/stan
 ### Gridding Uncertainty
 #### Sub-pixel variance
 
-The Sub-pixel uncertainty, or sub-pixel variance, is calculated by default when combing the various datasets together into a DEM. Whenever there is more that one data value contributing a resulting DEM data cell, the (optionally weighted) variance of the input data is calculated.
+The Sub-pixel uncertainty is calculated by default when combining the various datasets together into a DEM. Whenever there is more that one data value contributing to a resulting DEM data cell, the (optionally weighted) variance of the input data is calculated.
+
+Uncertainty is measured with a variance or its square root, which is a standard deviation. The standard deviation of a statistic is also (and more commonly) called a standard error.
 
 #### Interpolation Uncertainty
 
