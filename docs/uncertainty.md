@@ -49,7 +49,7 @@ For bathymetric data, the [IHO standards](https://iho.int/uploads/user/pubs/stan
 This is applied automatically when using certain fetches modules as a datalist dataset-entry, such as `hydronos` and `multibeam`.
 
 ### Gridding Uncertainty
-### Sub-pixel Variance and Standard Error
+#### Sub-pixel Variance and Standard Error
 The sub-pixel variance is calculated by default when combining various datasets together into a DEM. DEM values typically represent the (optionally weighted) mean of the data measurements within an individual DEM pixel. The sub-pixel variance is the spread of the measurement values within the pixel from the mean value and the standard deviation is the square root of the variance. The uncertainty of the gridded mean value can be expressed by the standard deviation of the mean, which is also commonly known as the standard error of the mean, or simply the standard error, and is equal to the standard deviation divided by the square root of the number of measurements within the DEM pixel. The number of measurements within each DEM pixel is determined by the spatial resolution of the DEM.
 
 The sub-pixel variance is combined with the Source Data Uncertainty of the individual measurements described in the previous sections to calculate the pooled variance. The pixel-level pooled variance is equal to the square of the weighted mean of the Source Data Uncertainty for all measurements plus the weighted variance of all measurements around the weighted mean elevation. 
