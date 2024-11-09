@@ -4642,7 +4642,7 @@ class WaffleDEM:
 
         ## flatten all nodata values
         if flatten_nodata_values:
-            flattened_Fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
+            flattened_fn = utils.make_temp_fn('{}_flat.tif'.format(utils.fn_basename2(self.fn)), self.cache_dir)
             flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
             os.rename(flattened_fn, self.fn)
 
