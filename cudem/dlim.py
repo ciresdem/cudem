@@ -5024,6 +5024,8 @@ class NEDFetcher(Fetcher):
                             mask={'mask': coast_mask, 'invert_mask': True}, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
+
+        #utils.remove_glob(coast_mask)
         yield(ds)
 
         

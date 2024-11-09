@@ -5378,7 +5378,7 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--mask' or arg == '-m': wg['want_mask'] = True
         elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
-        elif arg == '-t' or arg == '--threads': want_threads = True
+        #elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
         elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
