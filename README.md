@@ -1,3 +1,4 @@
+![](/media/etopo22_northAmerica.png)
 Matthew Love[^1][^2], Christopher Amante[^1][^2]
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)

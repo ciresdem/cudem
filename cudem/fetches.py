@@ -4001,6 +4001,9 @@ def polygonize_osm_coastline(
     
     for line_layer in line_ds:
         line_type = line_layer.GetGeomType()
+        
+        ## feature is a line, polygonize water/land based on which side of
+        ## the line each polygon falls...
         if line_type == 2:
             has_feature = 1
             line_geometries = gdalfun.ogr_union_geom(line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon)##
@@ -4048,7 +4051,8 @@ def polygonize_osm_coastline(
                     if s == 1:
                         out_feature.SetField('watermask', 0)
                         output_layer.CreateFeature(out_feature)
-                
+
+        ## feature is a polygon, which in osm means an island.
         if line_type == 6:
             has_feature = 1
             for line_feature in line_layer:
@@ -4066,6 +4070,8 @@ def polygonize_osm_coastline(
                 out_feature.SetField('watermask', 1)
                 output_layer.CreateFeature(out_feature)
 
+        ## no features in the input osm coastline, so the entire region is either land or water.
+        ## find the center point of the region and check the z value from gmrt.
         if not has_feature:
             center_pnt = region.center()
             if center_pnt is not None:
