@@ -5011,8 +5011,9 @@ class NEDFetcher(Fetcher):
     __doc__ = '''{}    
     Fetches Module: <ned> - {}'''.format(__doc__, fetches.NED.__doc__)
     
-    def __init__(self, **kwargs):
+    def __init__(self, coast_buffer=0.00001, **kwargs):
         super().__init__(**kwargs)
+        self.coast_buffer = utils.float_or(coast_buffer, 0.00001)
         
     def set_ds(self, result):
         ## coastline generation
@@ -5025,7 +5026,7 @@ class NEDFetcher(Fetcher):
         ## todo: merge the coast mask with user input self.mask
         coast_mask = self.process_coastline(
             self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
-            include_landmask=False, line_buffer=0.00001
+            include_landmask=False, line_buffer=self.coast_buffer
         )
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
