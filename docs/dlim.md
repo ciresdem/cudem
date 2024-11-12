@@ -160,8 +160,12 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 
 ## Examples
 
+### Load and process xyz file `my_hydronos.xyz` to xyz using the Python API
+
 ```python
 from cudem import regions, dlim
+
+# set the region
 r = regions.Region().from_string('-R-119.25/-119/34/34.25')
 
 # acquire and initialize the dlim dataset module
