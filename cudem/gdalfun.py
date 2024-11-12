@@ -379,6 +379,7 @@ def ogr_clip3(src_ogr, dst_ogr, clip_region=None, dn="ESRI Shapefile"):
     layer.Clip(c_layer, dst_layer)
     ds = c_ds = dst_ds = None
 
+## in cudem.fetches as `polygonize_osm_coastline`
 def ogr_polygonize_line_to_region(
         src_ogr, dst_ogr, region=None, include_landmask=True,
         landmask_is_watermask=False, line_buffer=0.0000001
@@ -405,9 +406,12 @@ def ogr_polygonize_line_to_region(
     output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
     output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
 
+    has_feature = False
+    
     for line_layer in line_ds:
         line_type = line_layer.GetGeomType()
         if line_type == 2:
+            has_feature = 1
             line_geometries = ogr_union_geom(line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon)##
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
@@ -416,7 +420,6 @@ def ogr_polygonize_line_to_region(
                 for line_geometry in line_geometries:
                     if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
                         point_count = line_geometry.GetPointCount()
-
                         for point_n in range(0, point_count-1):
                             x_beg = line_geometry.GetX(point_n)
                             y_beg = line_geometry.GetY(point_n)
@@ -456,6 +459,7 @@ def ogr_polygonize_line_to_region(
                         output_layer.CreateFeature(out_feature)
                 
         if line_type == 6:
+            has_feature = 1
             for line_feature in line_layer:
                 line_geometry = line_feature.geometry()
                 line_geometry = ogr.ForceTo(line_geometry, ogr.wkbLinearRing)

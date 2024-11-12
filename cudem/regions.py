@@ -553,8 +553,8 @@ class Region:
         """
 
         if self.valid_p():
-            return([self.xmin + (self.xmax-self.xmin/2),
-                    self.ymax + (self.ymax-self.ymin/2)])
+            return([self.xmin + ((self.xmax-self.xmin)/2),
+                    self.ymax + ((self.ymax-self.ymin)/2)])
         
         else:
             return(None)        

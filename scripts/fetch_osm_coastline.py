@@ -43,7 +43,7 @@ def fetch_coastline(this_region):
 
     return(None)
 
-_version = '0.0.1'
+_version = '0.0.2'
 _usage = '''fetch_osm_coastline.py ({}): fetch and process the OSM coastline
 
 usage: fetch_osm_coastline.py [-RBli [output-shape-file]]
@@ -109,6 +109,7 @@ if __name__ == '__main__':
     this_cst = fetch_coastline(this_region)
 
     if this_region is None or not this_region.valid_p():
+        sys.stderr.write(_usage)
         utils.echo_error_msg('invalid region')
         
     if this_cst is not None:
@@ -124,7 +125,7 @@ if __name__ == '__main__':
                     if dst_ogr is None:
                         dst_ogr = os.path.basename(utils.fn_basename2(cst_osm)) + '_coast.shp'
                         
-                    out = gdalfun.ogr_polygonize_line_to_region(
+                    out = fetches.polygonize_osm_coastline(
                         cst_osm, dst_ogr,
                         include_landmask = include_landmask,
                         landmask_is_watermask = invert_watermask,

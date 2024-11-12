@@ -2319,7 +2319,7 @@ class ElevationDataset:
                     if cst_result[-1] == 0:
                         pbar.update()
                         cst_osm = cst_result[1]
-                        out = gdalfun.ogr_polygonize_line_to_region(
+                        out = fetches.polygonize_osm_coastline(
                             cst_osm, utils.make_temp_fn(
                                 utils.fn_basename2(cst_osm) + '_coast.shp', temp_dir=self.cache_dir
                             ),
@@ -2333,6 +2333,9 @@ class ElevationDataset:
                         cst_geom = gdalfun.ogr_union_geom(cst_layer)
                         cst_geoms.append(cst_geom)
                         cst_ds = None
+        else:
+            utils.echo_warning_msg('coast in None')
+            
         if return_geom:
             return(cst_geoms)
         else:

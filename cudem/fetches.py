@@ -44,6 +44,7 @@ from tqdm import tqdm
 import mercantile
 import csv
 import warnings
+import numpy as np
 
 import threading
 try:
@@ -787,6 +788,17 @@ class FetchModule:
             status = self.fetch(entry)
 
 ## GMRT
+def gmrt_fetch_point(latitude = None, longitude = None):
+    gmrt_point_url = "https://www.gmrt.org:443/services/PointServer?"
+    headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'}    
+    data = {'longitude':longitude, 'latitude':latitude}
+    req = Fetch(gmrt_point_url).fetch_req(params=data, tries=10, timeout=2)
+
+    if req is not None:
+        return(req.text)
+    else:
+        return(None)
+    
 class GMRT(FetchModule):
     """The Global Multi-Resolution Topography synthesis.
     
@@ -3954,6 +3966,134 @@ class ArcticDEM(FetchModule):
 
 ## OSM - Open Street Map
 ## todo: make wrapper modules for 'buildings' and 'coastline' and whaterver else...perhaps
+def polygonize_osm_coastline(
+        src_ogr, dst_ogr, region=None, include_landmask=True,
+        landmask_is_watermask=False, line_buffer=0.0000001
+):
+    """Polygonize an OSM coastline LineString to the given region
+
+    if include_landmask is True, polygon(s) will be returned for the land areas 
+    with a `watermask` valule of 0, otherwise, only the watermask polygon will
+    be returned with a `watermask` value of 1.
+    """
+
+    # Open the input line layer
+    line_ds = ogr.Open(src_ogr)
+    line_layer = line_ds.GetLayer()
+    line_region = regions.Region().from_list(line_layer.GetExtent())
+    region_geom = line_region.export_as_geom()
+    #region_geom = regions.Region().from_list(line_layer.GetExtent()).export_as_geom()
+    ## todo: check if input region is larger than the line region, if so,
+    ##       reduce the region to the size of the line region...
+    if region is not None and region.valid_p():
+        region_geom = region.export_as_geom()
+    else:
+        region = line_region.copy()
+
+    print(region)
+    # Create the output layer
+    driver = ogr.GetDriverByName("ESRI Shapefile")
+    output_ds = driver.CreateDataSource(dst_ogr)
+    output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+    output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+
+    has_feature = False
+    
+    for line_layer in line_ds:
+        line_type = line_layer.GetGeomType()
+        if line_type == 2:
+            has_feature = 1
+            line_geometries = gdalfun.ogr_union_geom(line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon)##
+            poly_line = line_geometries.Buffer(line_buffer)
+            split_geoms = region_geom.Difference(poly_line)
+            for split_geom in split_geoms:
+                ss = []
+                for line_geometry in line_geometries:
+                    if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
+                        point_count = line_geometry.GetPointCount()
+                        for point_n in range(0, point_count-1):
+                            x_beg = line_geometry.GetX(point_n)
+                            y_beg = line_geometry.GetY(point_n)
+                            x_end = line_geometry.GetX(point_n+1)
+                            y_end = line_geometry.GetY(point_n+1)
+
+                            poly_center = split_geom.Centroid()
+                            poly_center_x = poly_center.GetX(0)
+                            poly_center_y = poly_center.GetY(0)
+
+                            s = (x_end - x_beg)*(poly_center_y - y_beg) > (y_end - y_beg)*(poly_center_x - x_beg)
+                            ss.append(s)
+
+                if all(ss):
+                    s = True
+                elif not any(ss):
+                    s = False
+                else:
+                    if np.count_nonzero(ss) > len(ss) / 2:
+                        s = True
+                    else:
+                        s = False
+
+                out_feature = ogr.Feature(output_layer.GetLayerDefn())
+                out_feature.SetGeometry(split_geom)
+
+                if landmask_is_watermask:
+                    s = False if s else True
+                
+                if s == 0:
+                    out_feature.SetField('watermask', 1)
+                    output_layer.CreateFeature(out_feature)
+
+                if include_landmask:
+                    if s == 1:
+                        out_feature.SetField('watermask', 0)
+                        output_layer.CreateFeature(out_feature)
+                
+        if line_type == 6:
+            has_feature = 1
+            for line_feature in line_layer:
+                line_geometry = line_feature.geometry()
+                line_geometry = ogr.ForceTo(line_geometry, ogr.wkbLinearRing)
+                for feature in output_layer:
+                    feature_geom = feature.geometry()
+                    if feature_geom.Contains(line_geometry):
+                        feature_geoms = feature_geom.Difference(line_geometry)
+                        feature.SetGeometry(feature_geoms)
+                        output_layer.SetFeature(feature)
+                        
+                out_feature = ogr.Feature(output_layer.GetLayerDefn())
+                out_feature.SetGeometry(line_geometry)
+                out_feature.SetField('watermask', 1)
+                output_layer.CreateFeature(out_feature)
+
+        if not has_feature:
+            center_pnt = region.center()
+            if center_pnt is not None:
+                center_z = utils.int_or(gmrt_fetch_point(latitude=center_pnt[1], longitude=center_pnt[0]))
+
+                out_feature = ogr.Feature(output_layer.GetLayerDefn())
+                out_feature.SetGeometry(region_geom)
+                
+                if center_z >= 0:
+                    s = True
+                else:
+                    s = False
+
+                if landmask_is_watermask:
+                    s = False if s else True
+
+                if s == 0:
+                    out_feature.SetField('watermask', 1)
+                    output_layer.CreateFeature(out_feature)
+
+                if include_landmask:
+                    if s == 1:
+                        out_feature.SetField('watermask', 0)
+                        output_layer.CreateFeature(out_feature)
+                    
+    line_ds = output_ds = None
+    return(dst_ogr)
+
 class OpenStreetMap(FetchModule):
     """OpenStreetMap data.
     
