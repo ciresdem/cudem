@@ -5024,15 +5024,19 @@ class NEDFetcher(Fetcher):
         # self.mask = '{}.shp'.format(_coast_mask.name)
         
         ## todo: merge the coast mask with user input self.mask
-        coast_mask = self.process_coastline(
-            self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
-            include_landmask=False, line_buffer=self.coast_buffer
-        )
+        if self.mask is None:
+            coast_mask = self.process_coastline(
+                self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
+                include_landmask=False, line_buffer=self.coast_buffer
+            )
+            ned_mask = {'mask': coast_mask, 'invert_mask': True}
+        else:
+            ned_mask = self.mask
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
                             parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask={'mask': coast_mask, 'invert_mask': True}, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
+                            mask=ned_mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()
 
