@@ -3997,8 +3997,7 @@ def polygonize_osm_coastline(
     output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
     output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
 
-    has_feature = False
-    
+    has_feature = False    
     for line_layer in line_ds:
         line_type = line_layer.GetGeomType()
         
@@ -4070,32 +4069,32 @@ def polygonize_osm_coastline(
                 out_feature.SetField('watermask', 1)
                 output_layer.CreateFeature(out_feature)
 
-        ## no features in the input osm coastline, so the entire region is either land or water.
-        ## find the center point of the region and check the z value from gmrt.
-        if not has_feature:
-            center_pnt = region.center()
-            if center_pnt is not None:
-                center_z = utils.int_or(gmrt_fetch_point(latitude=center_pnt[1], longitude=center_pnt[0]))
+    ## no features in the input osm coastline, so the entire region is either land or water.
+    ## find the center point of the region and check the z value from gmrt.
+    if not has_feature:
+        center_pnt = region.center()
+        if center_pnt is not None:
+            center_z = utils.int_or(gmrt_fetch_point(latitude=center_pnt[1], longitude=center_pnt[0]))
 
-                out_feature = ogr.Feature(output_layer.GetLayerDefn())
-                out_feature.SetGeometry(region_geom)
-                
-                if center_z >= 0:
-                    s = True
-                else:
-                    s = False
+            out_feature = ogr.Feature(output_layer.GetLayerDefn())
+            out_feature.SetGeometry(region_geom)
 
-                if landmask_is_watermask:
-                    s = False if s else True
+            if center_z >= 0:
+                s = True
+            else:
+                s = False
 
-                if s == 0:
-                    out_feature.SetField('watermask', 1)
+            if landmask_is_watermask:
+                s = False if s else True
+
+            if s == 0:
+                out_feature.SetField('watermask', 1)
+                output_layer.CreateFeature(out_feature)
+
+            if include_landmask:
+                if s == 1:
+                    out_feature.SetField('watermask', 0)
                     output_layer.CreateFeature(out_feature)
-
-                if include_landmask:
-                    if s == 1:
-                        out_feature.SetField('watermask', 0)
-                        output_layer.CreateFeature(out_feature)
                     
     line_ds = output_ds = None
     return(dst_ogr)
