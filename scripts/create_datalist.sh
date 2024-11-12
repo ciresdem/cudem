@@ -15,7 +15,6 @@ then
 	datalist_name=$1
 	ls *.xyz | awk '{print $1, 168}' > $datalist_name".datalist"
 	mbdatalist -F-1 -I$datalist_name".datalist" -O -V
-	#
 	echo
 	echo "All done"
 

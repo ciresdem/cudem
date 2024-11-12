@@ -175,11 +175,13 @@ d = dlim.DatasetFactory(mod='my_hydronos.xyz', src_region=r)._acquire_module().i
 d.dump_xyz()
 
 # make and initialize a datalist object from multiple datasets with the given region at 1 arc-second output blocks
-d = dlim.init_data(['my_hydronos.xyz', 'ned'], region=r, xyinc=('1s','1s')).initialize()
+# this fetches NED data from the USGS using the `ned` fetches module as a dataset
+# set the output projection to WGS84 (epsg:4326)
+d = dlim.init_data(['my_hydronos.xyz', 'ned'], region=r, xyinc=('1s','1s'), dst_srs='epsg:4326').initialize()
 
-# dump the xyz data at 1 arc-second blocks, include the uncertainty
+# dump the xyz data, include the uncertainty
+# the dumped xyz data will be in wgs84 at 1 arc-second blocks
 d.dump_xyz(include_u=True)
-
 ```
 
 ### Process fetches dataset `hydronos` to input region and output to an xyz file, including weights and uncertainty
