@@ -1,5 +1,3 @@
-[//]: # (![](/media/etopo22_northAmerica_1pct.png) **CUDEM**)
-
 Matthew Love[^1][^2], Christopher Amante[^1][^2]
 
 [^1]: Cooperative Institute for Research in Environmental Sciences (CIRES)
