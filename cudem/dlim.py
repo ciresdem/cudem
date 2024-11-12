@@ -2334,7 +2334,7 @@ class ElevationDataset:
                         cst_geoms.append(cst_geom)
                         cst_ds = None
         else:
-            utils.echo_warning_msg('coast in None')
+            utils.echo_warning_msg('coast is None')
             
         if return_geom:
             return(cst_geoms)
@@ -3433,20 +3433,25 @@ class IceSat2File(ElevationDataset):
         self.want_watermask = classify_water
         self.reject_failed_qa = reject_failed_qa
         
-    def init_atl_03_h5(self):
-        """initialize the atl03 and atl08 h5 files"""
-        
-        self.atl_03_f = h5.File(self.atl_03_fn, 'r')
-        if 'short_name' not in self.atl_03_f.attrs.keys():
-            utils.echo_error_msg('this file does not appear to be an ATL file')
-            self.atl_03_f.close()
-            return(None)
-        
+    # def init_atl_03_h5(self):
+    #     """initialize the atl03 and atl08 h5 files"""
+
+    #     #try:
+    #     self.atl_03_f = h5.File(self.atl_03_fn, 'r')
+    #     if 'short_name' not in self.atl_03_f.attrs.keys():
+    #         utils.echo_error_msg('this file does not appear to be an ATL file')
+    #         self.atl_03_f.close()
+    #         return(None)
+    #     # except Exception as e:
+    #     #     utils.echo_warning_msg('could not open {}, {}'.format(self.atl_03_fn, e))
+    #     #     return(None)
+            
     def init_atl_h5(self):
         """initialize the atl03 and atl08 h5 files"""
 
-        self.atl_03_f = h5.File(self.atl_03_fn, 'r')
+        self.atl_03_f = None
         self.atl_08_f = None
+        self.atl_03_f = h5.File(self.atl_03_fn, 'r')
         if 'short_name' not in self.atl_03_f.attrs.keys():
             raise UnboundLocalError('this file does not appear to be an ATL03 file')
             #utils.echo_error_msg('this file does not appear to be an ATL file')
@@ -3470,7 +3475,9 @@ class IceSat2File(ElevationDataset):
         
         self.atl_03_fn = None
         self.atl_08_fn = None
-        self.atl_03_f.close()
+        if self.atl_03_f is not None:
+            self.atl_03_f.close()
+            
         if self.atl_08_f is not None:
             self.atl_08_f.close()
             
@@ -5291,13 +5298,13 @@ class IceSat2Fetcher(Fetcher):
                 outdir=self.cache_dir
             )
             for icesat2_h5 in icesat2_h5s:
-                #utils.echo_msg(icesat2_h5)
                 sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
                                      confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                      classify_buildings=self.want_buildings, classify_water=self.want_water, reject_failed_qa=self.reject_failed_qa,
                                      src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
                                      src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
+                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True,
+                                     cache_dir=self.fetch_module._outdir,)
 
                 yield(sub_ds)
             
@@ -5306,7 +5313,8 @@ class IceSat2Fetcher(Fetcher):
                                  confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
                                  classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
                                  uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True)
+                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True,
+                                 cache_dir=self.fetch_module._outdir)
             yield(sub_ds)
             
         self.want_buildings = None
