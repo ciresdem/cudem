@@ -1,4 +1,4 @@
-![](/media/etopo22_northAmerica_1pct.png)
+![](/media/etopo22_northAmerica_1pct.png) #CUDEM
 
 Matthew Love[^1][^2], Christopher Amante[^1][^2]
 
