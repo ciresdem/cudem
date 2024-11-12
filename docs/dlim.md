@@ -160,8 +160,14 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 
 ## Example
 
-### Process fetches dataset `hydronos` and output to an xyz file
+### Process fetches dataset `hydronos` to input region and output to an xyz file, including weights and uncertainty
 
 ```bash
-$ dlim -R-119.25/-119/34/34.25 hydronos > my_hydronos.xyz
+dlim -R-119.25/-119/34/34.25 hydronos -w -u > my_hydronos.xyz
+```
+
+### Process all local `*.laz` lidar files, transform them from UTM zone 10N to WGS84 and block them to the input region at 1 arc-second increments
+
+```bash
+dlim -R-123.458/-123.448/38.705/38.711 -E1s *.laz -J epsg:26910 -P epsg:4326 > my_lidar_1as.xyz
 ```
