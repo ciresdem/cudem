@@ -1,4 +1,4 @@
-![](/media/etopo22_northAmerica.png)
+![](/media/etopo22_northAmerica_1pct.png)
 
 Matthew Love[^1][^2], Christopher Amante[^1][^2]
 
