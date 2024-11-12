@@ -160,7 +160,7 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 
 ## Example
 
-## Fetch HydroNOS data and output to an xyz file
+### Process fetches dataset `hydronos` and output to an xyz file
 
 ```bash
 $ dlim -R-119.25/-119/34/34.25 hydronos > my_hydronos.xyz
