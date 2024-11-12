@@ -512,12 +512,14 @@ def ogr_mask_union(src_layer, src_field=None, dst_defn=None):
     
     return(out_feat)
 
-def ogr_union_geom(src_layer, geom_type = ogr.wkbMultiPolygon):
+def ogr_union_geom(src_layer, geom_type = ogr.wkbMultiPolygon, verbose = True):
         
     multi = ogr.Geometry(geom_type)
     feats = src_layer.GetFeatureCount()#len(src_layer)
     [multi.AddGeometry(f.geometry()) for f in src_layer]
-    utils.echo_msg('unioned {} features'.format(feats))
+    if verbose:
+        utils.echo_msg('unioned {} features'.format(feats))
+        
     # if feats > 0:
     #     with tqdm(total=len(src_layer), desc='unioning {} features...'.format(feats)) as pbar:
     #         for n, f in enumerate(src_layer):

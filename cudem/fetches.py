@@ -3990,7 +3990,6 @@ def polygonize_osm_coastline(
     else:
         region = line_region.copy()
 
-    print(region)
     # Create the output layer
     driver = ogr.GetDriverByName("ESRI Shapefile")
     output_ds = driver.CreateDataSource(dst_ogr)
@@ -4005,7 +4004,9 @@ def polygonize_osm_coastline(
         ## the line each polygon falls...
         if line_type == 2:
             has_feature = 1
-            line_geometries = gdalfun.ogr_union_geom(line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon)##
+            line_geometries = gdalfun.ogr_union_geom(
+                line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon, verbose=False
+            )
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
             for split_geom in split_geoms:
