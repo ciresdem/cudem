@@ -6184,7 +6184,7 @@ class DatasetFactory(factory.CUDEMFactory):
         ## the format number becomes the mod_name
         ## check for specified data format as well
         if os.path.exists(self.kwargs['fn']):
-            if self.kwargs['data_format'] is None:
+            if 'data_format' not in self.kwargs.keys() or self.kwargs['data_format'] is None:
                 self.mod_name = self.guess_data_format(self.kwargs['fn'])
                 self.mod_args = {}
                 self.kwargs['data_format'] = self.mod_name

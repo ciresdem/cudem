@@ -160,6 +160,17 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 
 ## Examples
 
+```python
+from cudem import regions, dlim
+r = regions.Region().from_string('-R-119.25/-119/34/34.25')
+
+# acquire and initialize the dlim dataset module
+d = dlim.DatasetFactory(mod='my_hydronos.xyz', src_region=r)._acquire_module().initialize()
+
+# dump the xyz data from the dataset to stdout
+d.dump_xyz()
+```
+
 ### Process fetches dataset `hydronos` to input region and output to an xyz file, including weights and uncertainty
 
 ```bash
