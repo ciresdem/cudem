@@ -4008,7 +4008,7 @@ def polygonize_osm_coastline(
             )
             if line_geometries.IsEmpty():
                 continue
-            
+            utils.echo_msg('line')
             has_feature = True
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
@@ -4062,7 +4062,8 @@ def polygonize_osm_coastline(
                 line_geometry = ogr.ForceTo(line_geometry, ogr.wkbLinearRing)
                 if line_geometry.IsEmpty():
                     continue
-
+                
+                utils.echo_msg('poly')
                 has_feature = 1
                 for feature in output_layer:
                     feature_geom = feature.geometry()
@@ -4073,9 +4074,21 @@ def polygonize_osm_coastline(
                         
                 out_feature = ogr.Feature(output_layer.GetLayerDefn())
                 out_feature.SetGeometry(line_geometry)
-                out_feature.SetField('watermask', 1)
-                output_layer.CreateFeature(out_feature)
 
+                s = True
+
+                if landmask_is_watermask:
+                    s = False if s else True
+
+                if s == 0:
+                    out_feature.SetField('watermask', 1)
+                    output_layer.CreateFeature(out_feature)
+
+                if include_landmask:
+                    if s == 1:
+                        out_feature.SetField('watermask', 0)
+                        output_layer.CreateFeature(out_feature)
+                        
     ## no features in the input osm coastline, so the entire region is either land or water.
     ## find the center point of the region and check the z value from gmrt.
     if not has_feature:
