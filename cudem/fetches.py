@@ -4066,7 +4066,7 @@ def polygonize_osm_coastline(
                 has_feature = 1
                 for feature in output_layer:
                     feature_geom = feature.geometry()
-                    if feature_geom.Contains(line_geometry):
+                    if feature_geom.Intersects(line_geometry):
                         feature_geoms = feature_geom.Difference(line_geometry)
                         feature.SetGeometry(feature_geoms)
                         output_layer.SetFeature(feature)
