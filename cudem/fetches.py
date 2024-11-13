@@ -4003,10 +4003,13 @@ def polygonize_osm_coastline(
         ## feature is a line, polygonize water/land based on which side of
         ## the line each polygon falls...
         if line_type == 2:
-            has_feature = 1
             line_geometries = gdalfun.ogr_union_geom(
                 line_layer, ogr.wkbMultiLineString if line_type == 2 else ogr.wkbMultiPolygon, verbose=False
             )
+            if line_geometries.IsEmpty():
+                continue
+            
+            has_feature = True
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
             for split_geom in split_geoms:
@@ -4054,10 +4057,13 @@ def polygonize_osm_coastline(
 
         ## feature is a polygon, which in osm means an island.
         if line_type == 6:
-            has_feature = 1
             for line_feature in line_layer:
                 line_geometry = line_feature.geometry()
                 line_geometry = ogr.ForceTo(line_geometry, ogr.wkbLinearRing)
+                if line_geometry.IsEmpty():
+                    continue
+
+                has_feature = 1
                 for feature in output_layer:
                     feature_geom = feature.geometry()
                     if feature_geom.Contains(line_geometry):

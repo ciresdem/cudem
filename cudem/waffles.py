@@ -688,6 +688,8 @@ def flatten_no_data_zones(src_dem, dst_dem = None, band = 1, size_threshold = 1,
         
         ## get the total number of cells in each group
         mn = scipy.ndimage.sum_labels(msk_arr, labels=l, index=np.arange(1, n+1))
+        #[src_arr[l==i] = np.nanpercentile(src_arr[expand_for(l==i)], 5) if mn[i] >= size_threshold for i in range(0, n)]
+        
         for i in trange(0,
                         n,
                         desc='{}: flattening data voids greater than {} cells'.format(
@@ -3607,7 +3609,7 @@ class WafflesUncertainty(Waffle):
         if self.waffles_module.split(':')[0] not in ['IDW', 'linear', 'cubic', 'nearest', 'gmt-surface',
                                                      'gmt-triangulate', 'gmt-nearneighbor', 'mbgrid',
                                                      'gdal-linear', 'gdal-nearest', 'gdal-average',
-                                                     'gdal-invdst', 'flatten']:
+                                                     'gdal-invdst', 'flatten', 'cudem']:
             utils.echo_warning_msg(
                 'cannot perform interpolation uncertainty estimation with {}'.format(
                 self.waffles_module.split(':')[0]
