@@ -4008,7 +4008,7 @@ def polygonize_osm_coastline(
             )
             if line_geometries.IsEmpty():
                 continue
-            utils.echo_msg('line')
+
             has_feature = True
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
@@ -4063,7 +4063,6 @@ def polygonize_osm_coastline(
                 if line_geometry.IsEmpty():
                     continue
                 
-                utils.echo_msg('poly')
                 has_feature = 1
                 for feature in output_layer:
                     feature_geom = feature.geometry()
