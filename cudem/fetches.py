@@ -4281,7 +4281,6 @@ class BingBFP(FetchModule):
             return([])
 
         bbox = self.region.format('bbox')
-
         quad_keys = set()
         for tile in list(mercantile.tiles(self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax, zooms=9)):
             quad_keys.add(int(mercantile.quadkey(tile)))
@@ -4289,14 +4288,13 @@ class BingBFP(FetchModule):
         quad_keys = list(quad_keys)
         #utils.echo_msg('The input area spans {} tiles: {}'.format(len(quad_keys), quad_keys))
         #utils.echo_msg('The input area spans {} tiles.'.format(len(quad_keys)))
-        
         bing_csv = os.path.join(self._outdir, os.path.basename(self._bing_bfp_csv))
         try:
             status = Fetch(self._bing_bfp_csv, verbose=self.verbose).fetch_file(bing_csv)
         except:
             status = -1
             
-        if status == 0:
+        if status == 0 and os.path.exists(bing_csv):
             with open(bing_csv, mode='r') as bc:
                 reader = csv.reader(bc)
                 next(reader)
@@ -4304,6 +4302,8 @@ class BingBFP(FetchModule):
 
             utils.remove_glob(bing_csv)            
             self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
+        else:
+            utils.echo_error_msg('could not fetch BING dataset-links.csv')
         
 ## VDATUM
 def proc_vdatum_inf(vdatum_inf, name='vdatum'):
