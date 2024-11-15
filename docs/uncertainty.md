@@ -198,3 +198,15 @@ In this command we use the previously defined regional tile set 'regions_tile_se
 ![](/media/androscoggin_unc.png)
 
 ### Point Reyes
+
+In this example we generate a 1/9 arc-second DEM and associated Uncertainty raster of the Point Reyes area on the coast of California.
+
+Here, we only use fetches modules for the datasets and list them all in the command-line instead of creating a datalist.
+
+### Generate the DEM and Uncertainty
+
+see [waffles](/docs/waffles.md) for more information on the syntax of the waffles command.
+
+```bash
+waffles -R noCA_19as_tiles_subset.shp -E .111111111s -O nocal_test -p -P epsg:4326+5703 -X 0:15 -T outliers:stacks=True:multipass=4:accumulate=True:mode=unscaled:max_weight=1.5 -w -k -m -M cudem:pre_mode=mbgrid:landmask=True:polygonize=5:pre_count=3:pre_upper_limit=-.1:min_weight=.6 -c -u mar_grav,-106:bathy_only=True,.001,.85 charts,-200,.01,.75 hydronos:datatype=xyz,-202,.1,.1 multibeam:exclude_survey_id=CNTL14RR/RB1604/NA085,-201,.6,.1 ned,-215:coast_buffer=0.0001,.61,.65 ned1,-215:coast_buffer=0.0001,5,.35 ehydro,-203,.65,0 hydronos:datatype=bag,-202,2,0 CUDEM,-210,15,0 CoNED,-211,14,0
+```
