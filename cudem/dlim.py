@@ -5972,7 +5972,7 @@ class VDatumFetcher(Fetcher):
         
         if result[1].endswith('.zip'):
             v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)[0]
-            utils.run_cmd('gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=True)
+            utils.run_cmd('gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=self.verbose)
         
         yield(DatasetFactory(mod=src_tif, data_format=200, node='pixel', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
