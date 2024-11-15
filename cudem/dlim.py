@@ -5117,7 +5117,7 @@ class DAVFetcher_CoNED(Fetcher):
             if vert_epsg is None:
                 vert_epsg = vdatum
 
-            utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
+            #utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
             if vert_epsg is not None:
                 self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
             else:
