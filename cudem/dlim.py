@@ -1088,6 +1088,12 @@ class ElevationDataset:
                 if len(srs_split) > 1:
                     in_vertical_epsg_esri = srs_split[1]
 
+            if utils.int_or(src_srs.split('+')[-1]) in vdatums._tidal_frames.keys():
+                src_srs = '{}+{}'.format(
+                    src_srs.split('+')[0],
+                    vdatums._tidal_frames[utils.int_or(src_srs.split('+')[-1])]['epsg']
+                )
+                    
             try:
                 in_crs = pyproj.CRS.from_user_input(src_srs)
             except:
@@ -2782,6 +2788,18 @@ class GDALFile(ElevationDataset):
         self.resample_and_warp = True        
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
             self.resample_and_warp = False
+        else:
+            ## only perform 'upsamples' if the input raster is of higher resolution than the target self.x_inc, etc.
+            ## then treat the data as points and do any 'downsampling' in stacks.
+            inf_trans_region = inf_region.copy()
+            inf_trans_region.src_srs = self.src_srs
+
+            if self.dst_srs is not None:
+                inf_trans_region.warp(self.dst_srs)
+
+            raster_is_higher_res = np.prod(inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]) > np.prod(inf_trans_region.geo_transform(x_inc=self.x_inc)[:2])
+            if raster_is_higher_res:
+                self.resample_and_warp = False
 
         if self.node == 'grid':
             self.resample_and_warp = False
@@ -2794,15 +2812,6 @@ class GDALFile(ElevationDataset):
             if self.transformer is not None:
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
-
-        ## only perform 'upsamples' if the input raster is of higher resolution than the target self.x_inc, etc.
-        ## then treat the data as points and do any 'downsampling' in stacks.
-        inf_trans_region = inf_region.copy()
-        inf_trans_region.src_srs = self.src_srs
-        inf_trans_region.warp(self.dst_srs)
-        raster_is_higher_res = np.prod(inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]) > np.prod(inf_trans_region.geo_transform(x_inc=self.x_inc)[:2])
-        if raster_is_higher_res:
-            self.resample_and_warp = False
   
         tmp_elev_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_unc_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
@@ -5959,11 +5968,11 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        src_tif = os.path.join(self.fetch_module._outdir, '{}'.format(utils.fn_basename2(os.path.basename(result[1]))))
+        src_tif = os.path.join(self.fetch_module._outdir, '{}.tif'.format(utils.fn_basename2(os.path.basename(result[1]))))
         
         if result[1].endswith('.zip'):
             v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)[0]
-            utils.run_cmd('gdalwarp {} {} --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=self.verbose)
+            utils.run_cmd('gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=True)
         
         yield(DatasetFactory(mod=src_tif, data_format=200, node='pixel', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
                              x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,

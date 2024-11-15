@@ -48,23 +48,23 @@ _vdatums_cache = utils.cudem_cache()
 ## ==============================================
 _tidal_frames = {
     1089: {'name': 'mllw', 'description': 'Mean Lower Low Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5866},
     5866: {'name': 'mllw', 'description': 'Mean Lower Low Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5866},
     1091: {'name': 'mlw',  'description': 'Mean Low Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 1091},
     1090: {'name': 'mhhw', 'description': 'Mean Higher High Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5869},
     5869: {'name': 'mhhw', 'description': 'Mean Higher High Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5869},
     5868: {'name': 'mhw', 'description': 'Mean High Water',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5868},
     5714: {'name': 'msl', 'description': 'Mean Sea Level',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5714},
     5713: {'name': 'mtl', 'description': 'Mean Tide Level',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 5713},
     0000: {'name': 'crd', 'description': 'Columbia River Datum',
-           'uncertainty': 0},
+           'uncertainty': 0, 'epsg': 0000},
 }
 
 _htdp_reference_frames = {

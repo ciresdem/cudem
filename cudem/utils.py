@@ -848,7 +848,7 @@ def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
             zfs = z.namelist()
             for fn in fns:
                 for zf in zfs:
-                    if fn == os.path.basename(zf):
+                    if fn in os.path.basename(zf):
                         src_procs.append(os.path.join(outdir, os.path.basename(zf)))
                         if not zf.endswith('/'):
                             with open(os.path.join(outdir, os.path.basename(zf)), 'wb') as f:
