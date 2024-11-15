@@ -3658,7 +3658,7 @@ class WafflesUncertainty(Waffle):
             if status != 0:
                 utils.remove_glob('{}*'.format(unc_out))
         
-        dst_ds = driver.Create(unc_out, xcount, ycount, 5, gdt,
+        dst_ds = driver.Create(unc_out, xcount, ycount, 4, gdt,
                                options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'])
 
         if dst_ds is None:
@@ -3667,9 +3667,8 @@ class WafflesUncertainty(Waffle):
 
         dst_ds.SetGeoTransform(dst_gt)
         unc_bands = {'tvu': dst_ds.GetRasterBand(1), 'src_uncertainty': dst_ds.GetRasterBand(2),
-                     'interpolation_uncertainty': dst_ds.GetRasterBand(3), 'proximity': dst_ds.GetRasterBand(4)}#,
-        #'class': dst_ds.GetRasterBand(5)}
-        unc_data = {'tvu': None, 'src_uncertainty': None, 'interpolation_uncertainty': None, 'proximity': None}#, 'class': None}
+                     'interpolation_uncertainty': dst_ds.GetRasterBand(3), 'proximity': dst_ds.GetRasterBand(4)}
+        unc_data = {'tvu': None, 'src_uncertainty': None, 'interpolation_uncertainty': None, 'proximity': None}
         
         for key in unc_bands.keys():
             unc_bands[key].SetNoDataValue(np.nan)
@@ -3719,11 +3718,6 @@ class WafflesUncertainty(Waffle):
                             srcwin[1]:srcwin[1]+srcwin[3]]
                 )
 
-                # unc_bands['class'].WriteArray(
-                #     out_arr[srcwin[0]:srcwin[0]+srcwin[2],
-                #             srcwin[1]:srcwin[1]+srcwin[3]]
-                # )
-            
             # with gdalfun.gdal_datasource(self.stack) as stack_ds:
             #     unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
             #     unc_stack_band = stack_ds.GetRasterBand(4)
