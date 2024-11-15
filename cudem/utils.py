@@ -1808,6 +1808,7 @@ def _err2coeff(err_arr, sampling_den, coeff_guess = [0, 0.1, 0.2], dst_name = 'u
     
     if plots:
         try:
+            utils.echo_msg('plotting error data')
             _err_fit_plot(xdata, ydata, out, fitfunc, bins_orig, std, sampling_den, max_int_dist, dst_name, xa)
             _err_scatter_plot(error, distance, mean, std, max_int_dist, bins_orig, sampling_den, dst_name, xa)
         except:

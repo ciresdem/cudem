@@ -1109,7 +1109,7 @@ def gdal_get_node(src_gdal, node='pixel'):
     return(node)
     
 def gdal_extract_band(src_gdal, dst_gdal, band = 1, exclude = [], srcwin = None, inverse = False):
-    """extract a band from the src_gdal file"""
+    """extract a band from the src_gdal file and put it into dst_gdal"""
     
     band = utils.int_or(band, 1)
     #srcwin = None

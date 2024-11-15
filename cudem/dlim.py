@@ -1633,7 +1633,8 @@ class ElevationDataset:
                     stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
                     #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
+                    #stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
+                    stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
 
                     # ## reset all data where weights are zero to nan
                     # for key in stacked_bands.keys():
@@ -1684,8 +1685,9 @@ class ElevationDataset:
                     stacked_data['z'] += (arrs['z'] * arrs['weight'])
                     stacked_data['x'] += (arrs['x'] * arrs['weight'])
                     stacked_data['y'] += (arrs['y'] * arrs['weight'])
-                    stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
-
+                    #stacked_data['src_uncertainty'] += (arrs['uncertainty'] * arrs['weight'])
+                    stacked_data['src_uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2))
+                    
                     ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
                     stacked_data['weights'] += arrs['weight']
                     stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
@@ -1745,7 +1747,6 @@ class ElevationDataset:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
 
         if not mask_only:
-
             # ## by moving window
             # n_chunk = int(xcount)
             # n_step = n_chunk
@@ -1777,7 +1778,7 @@ class ElevationDataset:
                     
                     ## apply the source uncertainty with the sub-cell variance uncertainty
                     ## caclulate the standard error (sqrt( uncertainty / count))
-                    stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                    #stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
                     #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
@@ -2055,7 +2056,6 @@ class ElevationDataset:
             pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
             # points_x = dst_gt[0] + (pixel_x+0.5) * dst_gt[1] + (pixel_y+0.5) * dst_gt[2]
             # points_y = dst_gt[3] + (pixel_x+0.5) * dst_gt[4] + (pixel_y+0.5) * dst_gt[5]
-
             points_x = np.array(points['x'])
             points_y = np.array(points['y'])
             
@@ -2126,7 +2126,8 @@ class ElevationDataset:
                     dup_stds = [np.std(pixel_z[dup]) for dup in dup_idx]
                     
                 zz[cnt_msk] = dup_stack
-                uu[cnt_msk] = dup_stds
+                #uu[cnt_msk] = np.sqrt(dup_stds)
+                uu[cnt_msk] = np.sqrt(np.power(uu[cnt_msk],2) + np.power(dup_stds,2))
                 
             ## make the output arrays to yield
             out_x = np.zeros((this_srcwin[3], this_srcwin[2]))
@@ -2781,7 +2782,7 @@ class GDALFile(ElevationDataset):
 
         if self.node == 'grid':
             self.resample_and_warp = False
-            
+
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
             self.warp_region = self.region.copy()
@@ -2791,6 +2792,15 @@ class GDALFile(ElevationDataset):
                 self.warp_region.src_srs = self.src_srs
                 self.warp_region.warp(self.dst_srs)
 
+        ## only perform 'upsamples' if the input raster is of higher resolution than the target self.x_inc, etc.
+        ## then treat the data as points and do any 'downsampling' in stacks.
+        inf_trans_region = inf_region.copy()
+        inf_trans_region.src_srs = self.src_srs
+        inf_trans_region.warp(self.dst_srs)
+        raster_is_higher_res = np.prod(inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]) > np.prod(inf_trans_region.geo_transform(x_inc=self.x_inc)[:2])
+        if raster_is_higher_res:
+            self.resample_and_warp = False
+  
         tmp_elev_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_unc_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
@@ -2807,7 +2817,8 @@ class GDALFile(ElevationDataset):
                     self.sample_alg = 'min'
                 elif self.stack_mode == 'max':
                     self.sample_alg = 'max'
-                elif self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
+                elif not raster_is_higher_res:
+                    #elif self.dem_infos['geoT'][1] >= self.x_inc and (self.dem_infos['geoT'][5]*-1) >= self.y_inc:
                     self.sample_alg = 'bilinear'
                 else:
                     self.sample_alg = 'average'
@@ -2856,6 +2867,8 @@ class GDALFile(ElevationDataset):
                 if tmp_ds is None:
                     return(None)
                 
+                ## band is now 1!
+                self.band_no = 1
                 if utils.int_or(self.uncertainty_mask) is not None:
                     self.tmp_unc_band = tmp_unc_fn
                     if self.verbose:
@@ -3077,8 +3090,8 @@ class GDALFile(ElevationDataset):
                 lon_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
                 lon_array[np.isnan(band_data)] = np.nan
 
-                lat_band = self.src_ds.GetRasterBand(self.x_band)
-                lat_array = lon_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
+                lat_band = self.src_ds.GetRasterBand(self.y_band)
+                lat_array = lat_band.ReadAsArray(srcwin[0], y, srcwin[2], 1).astype(float)
                 lat_array[np.isnan(band_data)] = np.nan
                 dataset = np.column_stack((lon_array[0], lat_array[0], band_data[0], weight_data[0], uncertainty_data[0]))
 
@@ -4965,7 +4978,7 @@ class Fetcher(ElevationDataset):
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
-                                #ds.metadata['name'] = os.path.basename(ds.fn).split('.')[0]
+                                ds.metadata['name'] = os.path.basename(ds.fn)#os.path.basename(ds.fn).split('.')[0]
                                 yield(ds)
                         else:
                             utils.echo_warning_msg('could not set fetches datasource {}'.format(result))
@@ -5034,8 +5047,11 @@ class NEDFetcher(Fetcher):
             ned_mask = self.mask
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
+        ned_metadata = copy.deepcopy(self.metadata)
+        ned_metadata['name'] = src_dem
+        #utils.echo_msg(ned_metadata)
         ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
+                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=ned_metadata,#copy.deepcopy(self.metadata),
                             mask=ned_mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
                             remote=True, remove_flat=True)._acquire_module()

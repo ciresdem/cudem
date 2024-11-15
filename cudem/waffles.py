@@ -3117,7 +3117,7 @@ class WafflesCUDEM(Waffle):
                 pre_data_entry = '{}.tif,200:uncertainty_mask={}:sample=cubicspline:check_path=True,{}'.format(
                     _pre_name_plus, '{}_u.tif'.format(_pre_name_plus) if self.want_uncertainty else None, pre_weight
                 )
-                utils.echo_msg(pre_data_entry)
+                #utils.echo_msg(pre_data_entry)
                 pre_data = [stack_data_entry, pre_data_entry]
                 #pre_data = [stack_data_entry]
                 pre_region.wmin = pre_weight
@@ -3149,9 +3149,9 @@ class WafflesCUDEM(Waffle):
         flatten_no_data_zones(pre_surface.fn, dst_dem=self.fn, band=1, size_threshold=1)
 
         ## reset the stack for uncertainty
-        #self.stack = pre_surface.stack
+        ##self.stack = pre_surface.stack
         self.stack = orig_stack
-        utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
+        #utils.remove_glob('{}*'.format(os.path.join(self.cache_dir, '_pre_surface')))
         
         return(self)
 
@@ -3286,6 +3286,21 @@ class WafflesUncertainty(Waffle):
 
         return(out_slope)
 
+    def _generate_interpolated_src_raster(self):
+        """
+        generate an interpolated source uncertainty raster
+        """
+
+        #gdalfun.gdal_get_array(self.stack, band=4)
+        src_unc_name = '{}_src_unc'.format(self.name)
+        src_unc_surface = WaffleFactory(mod='IDW', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
+                                        xinc=self.xinc, yinc=self.yinc, name=src_unc_name, node='pixel', want_weight=False,
+                                        want_uncertainty=False, dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True,
+                                        verbose=self.verbose)._acquire_module()
+        src_unc_surface.initialize()
+        src_unc_surface.generate()
+        return(src_unc_surface.fn)
+    
     def _regions_sort(self, trainers, t_num = 25):
         """sort regions (trainers is a list of regions) by distance from one another; 
         a region is a list: [xmin, xmax, ymin, ymax].
@@ -3421,7 +3436,7 @@ class WafflesUncertainty(Waffle):
             
         stack_ds = prox_ds = slp_ds = None
         return(sub_zones)
-     
+    
     def _split_sample(self, trainers, perc):
         """split-sample simulations and error calculations
 
@@ -3571,7 +3586,7 @@ class WafflesUncertainty(Waffle):
 
         return(pre_ec_d, s_dp)
         
-    def apply_coefficient(self, ec_d):
+    def apply_coefficient_(self, ec_d, want_multi_band=False):
         """apply the error coefficeint `ec_d` to the proximity raster and 
         add it to self.stack band 4 (uncertainty).
         """
@@ -3579,6 +3594,8 @@ class WafflesUncertainty(Waffle):
         if self.prox is None:
             self.prox = self._generate_proximity_raster('{}_u.tif'.format(self.name))
 
+        src_unc_raster = self._generate_interpolated_src_raster()
+            
         if self.verbose:
             utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
             
@@ -3586,13 +3603,23 @@ class WafflesUncertainty(Waffle):
             prox_inf = gdalfun.gdal_infos(prox_ds)
             prox_band = prox_ds.GetRasterBand(1)
             prox_arr = prox_band.ReadAsArray().astype(float)
-            with gdalfun.gdal_datasource(self.stack) as stack_ds:
-                unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
-                unc_band = stack_ds.GetRasterBand(4)
-                unc_arr = unc_band.ReadAsArray()
-                unc_arr[unc_arr == unc_inf['ndv']] = np.nan
+            
+            with gdalfun.gdal_datasource(src_unc_raster) as src_unc_ds:
+                src_unc_inf = gdalfun.gdal_infos(src_unc_ds)
+                src_unc_band = src_unc_ds.GetRasterBand(1)
+                src_unc_arr = src_unc_band.ReadAsArray().astype(float)
+                src_unc_arr[src_unc_arr == src_unc_inf['ndv']] = np.nan
                 out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
-                out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
+                out_arr = np.sqrt(np.power(out_arr, 2), np.power(src_unc_arr, 2))
+                
+                #out_arr[~np.isnan(src_unc_arr)] = unc_arr[~np.isnan(src_unc_arr)]                
+                #with gdalfun.gdal_datasource(self.stack) as stack_ds:
+                #    unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+                #    unc_band = stack_ds.GetRasterBand(4)
+                #    unc_arr = unc_band.ReadAsArray()
+                # unc_arr[unc_arr == unc_inf['ndv']] = np.nan
+                # out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
+                # out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
                 
         unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
         if self.dst_srs is not None:
@@ -3601,6 +3628,128 @@ class WafflesUncertainty(Waffle):
         if self.verbose:
             utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
             
+        return(unc_out)
+
+    def apply_coefficient(self, ec_d, fmt = 'GTiff'):
+        """apply the error coefficeint `ec_d` to the proximity raster and 
+        add it to self.stack band 4 (uncertainty).
+
+        output a multi-banded raster that includes the source uncertainty from
+        self.stack, the proximity from data grid, the interpolation uncertainty
+        and the final TVU.
+        """
+
+        unc_out = '{}.{}'.format(self.name, 'tif')
+        gdt = gdal.GDT_Float32
+        driver = gdal.GetDriverByName(fmt)
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.xinc, y_inc=self.yinc, node='grid'
+        )
+        if xcount <= 0 or ycount <=0:
+            utils.echo_error_msg(
+                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                    xcount, ycount, self.xinc, self.yinc, self.region
+                )
+            )
+            sys.exit(-1)
+        
+        if os.path.exists(unc_out):
+            status = driver.Delete(unc_out)
+            if status != 0:
+                utils.remove_glob('{}*'.format(unc_out))
+        
+        dst_ds = driver.Create(unc_out, xcount, ycount, 4, gdt,
+                               options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'])
+
+        if dst_ds is None:
+            utils.echo_error_msg('failed to create uncertainty grid {} {} {} {} {}...'.format(out_file, xcount, ycount, gdt, fmt))
+            sys.exit(-1)
+
+        dst_ds.SetGeoTransform(dst_gt)
+        unc_bands = {'tvu': dst_ds.GetRasterBand(1), 'src_uncertainty': dst_ds.GetRasterBand(2),
+                     'interpolation_uncertainty': dst_ds.GetRasterBand(3), 'proximity': dst_ds.GetRasterBand(4)}
+        unc_data = {'tvu': None, 'src_uncertainty': None, 'interpolation_uncertainty': None, 'proximity': None}
+        
+        for key in unc_bands.keys():
+            unc_bands[key].SetNoDataValue(np.nan)
+            unc_bands[key].SetDescription(key)
+
+        #dst_inf = gdalfun.gdal_infos(dst_ds)
+        if self.prox is None:
+            self.prox = self._generate_proximity_raster('{}_u.tif'.format(self.name))
+
+        src_unc_raster = self._generate_interpolated_src_raster()
+            
+        if self.verbose:
+            utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
+            
+        with gdalfun.gdal_datasource(self.prox, update=True) as prox_ds:
+            prox_inf = gdalfun.gdal_infos(prox_ds)
+            srcwin = self.region.srcwin(
+                prox_inf['geoT'], prox_ds.RasterXSize, prox_ds.RasterYSize, node='grid'
+            )
+            prox_band = prox_ds.GetRasterBand(1)
+            prox_arr = prox_band.ReadAsArray().astype(float)
+            unc_bands['proximity'].WriteArray(
+                prox_arr[srcwin[0]:srcwin[0]+srcwin[2],
+                         srcwin[1]:srcwin[1]+srcwin[3]]
+            )
+            with gdalfun.gdal_datasource(src_unc_raster) as src_unc_ds:
+                src_unc_inf = gdalfun.gdal_infos(src_unc_ds)
+                src_unc_band = src_unc_ds.GetRasterBand(1)
+                src_unc_arr = src_unc_band.ReadAsArray().astype(float)
+                src_unc_arr[src_unc_arr == src_unc_inf['ndv']] = np.nan
+
+                unc_bands['src_uncertainty'].WriteArray(
+                    src_unc_arr[srcwin[0]:srcwin[0]+srcwin[2],
+                                srcwin[1]:srcwin[1]+srcwin[3]]
+                )
+                
+                interp_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
+                interp_arr[prox_arr == 0] = 0
+                unc_bands['interpolation_uncertainty'].WriteArray(
+                    interp_arr[srcwin[0]:srcwin[0]+srcwin[2],
+                            srcwin[1]:srcwin[1]+srcwin[3]]
+                )
+                
+                out_arr = np.sqrt(np.power(interp_arr, 2) + np.power(src_unc_arr, 2))
+                unc_bands['tvu'].WriteArray(
+                    out_arr[srcwin[0]:srcwin[0]+srcwin[2],
+                            srcwin[1]:srcwin[1]+srcwin[3]]
+                )
+            
+            # with gdalfun.gdal_datasource(self.stack) as stack_ds:
+            #     unc_inf = gdalfun.gdal_infos(stack_ds, band=4)
+            #     unc_stack_band = stack_ds.GetRasterBand(4)
+            #     unc_arr = unc_stack_band.ReadAsArray()
+            #     unc_arr[unc_arr == unc_inf['ndv']] = np.nan
+            #     unc_arr[np.isnan(unc_arr)] = 0
+            #     unc_bands['src_uncertainty'].WriteArray(
+            #         unc_arr[srcwin[0]:srcwin[0]+srcwin[2],
+            #                 srcwin[1]:srcwin[1]+srcwin[3]]
+            #     )
+            #     out_arr = ec_d[0] + ec_d[1] * (prox_arr**ec_d[2])
+            #     out_arr[prox_arr == 0] = 0
+            #     unc_bands['interpolation_uncertainty'].WriteArray(
+            #         out_arr[srcwin[0]:srcwin[0]+srcwin[2],
+            #                 srcwin[1]:srcwin[1]+srcwin[3]]
+            #     )
+            #     unc_arr[unc_arr == 0] = np.nan
+            #     out_arr[~np.isnan(unc_arr)] = unc_arr[~np.isnan(unc_arr)]
+            #     unc_bands['tvu'].WriteArray(
+            #         out_arr[srcwin[0]:srcwin[0]+srcwin[2],
+            #                 srcwin[1]:srcwin[1]+srcwin[3]]
+            #     )
+                
+        #unc_out = gdalfun.gdal_write(out_arr, '{}.{}'.format(self.name, 'tif'), self.ds_config)[0]
+        
+        if self.dst_srs is not None:
+            status = gdalfun.gdal_set_srs(self.prox, src_srs=self.dst_srs)
+
+        if self.verbose:
+            utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
+
+        dst_ds = None
         return(unc_out)
     
     def run(self):
@@ -3618,6 +3767,7 @@ class WafflesUncertainty(Waffle):
             if self.verbose:
                 utils.echo_msg('extracting uncertainty band from stack...')
                 
+            #print(gdalfun.gdal_get_array(self.stack, band=4))
             gdalfun.gdal_extract_band(self.stack, self.fn, band=4) # band 4 is the uncertainty band in stacks
             return(self)
         
@@ -3763,7 +3913,7 @@ class WafflesUncertainty(Waffle):
                 #     utils.echo_msg('max distance is {}'.format(max(s_dp[:,1])))
                 #     utils.echo_msg('max distance 95th percentile is {}'.format(max_dist))
 
-                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d)
+                ec_d = utils._err2coeff(s_dp[s_dp[:,1] <= max_dist], num_perc, coeff_guess=pre_ec_d, plots=True)
                 pre_ec_d = ec_d
                 if self.verbose:
                     utils.echo_msg('{}\t{}\t{}\t{}'.format(sim, len(s_dp), np.mean(s_dp, axis=0)[0], ec_d))
