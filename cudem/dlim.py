@@ -2459,6 +2459,9 @@ class XYZFile(ElevationDataset):
                     if this_xyz is None:
                         continue
 
+                    if len(this_xyz) < 3:
+                        continue
+                    
                     x = utils.float_or(this_xyz[self.xpos])
                     y = utils.float_or(this_xyz[self.ypos])
                     z = utils.float_or(this_xyz[self.zpos])
@@ -4896,8 +4899,8 @@ class ZIPlist(ElevationDataset):
                     for ds in data_set.parse():
                         self.data_entries.append(ds)
                         yield(ds)
-            
-            utils.remove_glob('{}*'.format(this_data))
+            #print(this_data)
+            #utils.remove_glob('{}*'.format(this_data))
         
 class Fetcher(ElevationDataset):
     """The default fetches dataset type; dlim Fetcher dataset class

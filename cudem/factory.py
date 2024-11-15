@@ -256,7 +256,7 @@ class CUDEMFactory:
     the function/class to call should have at least a 'params={}' paramter.
     """
     
-    _factory_module = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}
+    _factory_module = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'fmts': [], 'call': CUDEMModule}}
     _modules = {'_factory': {'name': 'factory', 'description': 'default factory setting', 'call': CUDEMModule}}    
     def __init__(self, mod: str = None, **kwargs: any):
         """

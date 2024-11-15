@@ -850,8 +850,9 @@ def p_f_unzip(src_file, fns = None, outdir = './', verbose = True):
                 for zf in zfs:
                     if fn == os.path.basename(zf):
                         src_procs.append(os.path.join(outdir, os.path.basename(zf)))
-                        with open(os.path.join(outdir, os.path.basename(zf)), 'wb') as f:
-                            f.write(z.read(zf))
+                        if not zf.endswith('/'):
+                            with open(os.path.join(outdir, os.path.basename(zf)), 'wb') as f:
+                                f.write(z.read(zf))
     elif src_file.split('.')[-1] == 'gz':
         try:
             tmp_proc = gunzip(src_file)
