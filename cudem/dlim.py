@@ -4990,7 +4990,7 @@ class Fetcher(ElevationDataset):
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
-                                ds.metadata['name'] = os.path.basename(ds.fn)#os.path.basename(ds.fn).split('.')[0]
+                                #ds.metadata['name'] = os.path.basename(ds.fn)#os.path.basename(ds.fn).split('.')[0]
                                 yield(ds)
                         else:
                             utils.echo_warning_msg('could not set fetches datasource {}'.format(result))
