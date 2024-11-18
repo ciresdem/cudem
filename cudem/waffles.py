@@ -3293,7 +3293,7 @@ class WafflesUncertainty(Waffle):
 
         #gdalfun.gdal_get_array(self.stack, band=4)
         src_unc_name = '{}_src_unc'.format(self.name)
-        src_unc_surface = WaffleFactory(mod='IDW', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
+        src_unc_surface = WaffleFactory(mod='nearest', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
                                         xinc=self.xinc, yinc=self.yinc, name=src_unc_name, node='pixel', want_weight=False,
                                         want_uncertainty=False, dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True,
                                         verbose=self.verbose)._acquire_module()

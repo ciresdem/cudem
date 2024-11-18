@@ -2412,7 +2412,6 @@ class XYZFile(ElevationDataset):
                                          'u' if self.upos is not None else None]
                              if x is not None]
         self.field_formats = [float for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None]
-
         #if self.use_numpy:
         try:
             if self.delim is None:
