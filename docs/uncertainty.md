@@ -191,7 +191,17 @@ dlim -i Androscoggin.datalist
 
 See [waffles](/docs/waffles.md) for more information on the syntax of the waffles command for generating DEMs.
 
-```waffles -R regions_tile_set.shp -E 1 -M uncertainty:waffles_module=linear:accumulate=True -O androscoggin -p res=1m -P epsg:6348+5703+geoid:g2018 Androscoggin.datalist -X 0:25 -m -k```
+```bash
+waffles \
+-R regions_tile_set.shp \
+-E 1 \
+-M uncertainty:waffles_module=linear:accumulate=True \
+-O androscoggin \
+-p res=1m \
+-P epsg:6348+5703+geoid:g2018 Androscoggin.datalist \
+-X 0:25 \
+-m -k
+```
 
 In this command we use the previously defined regional tile set 'regions_tile_set.shp' to generate a 1 meter Uncertainty DEM. We use the waffles 'uncertainty' module specifying the interpolation method as 'linear'. The output will be an accumulated uncertainty raster with 1 meter cell-spacing with a horizontal projection of UTM Zone 19N and a vertical projection of NAVD88 (geoid2018). With the `-m` switch we also generate an auxiliary data mask raster.
 
