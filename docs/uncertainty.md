@@ -208,7 +208,7 @@ Here, we only use fetches modules for the datasets and list them all in the comm
 see [waffles](/docs/waffles.md) for more information on the syntax of the waffles command.
 
 ```bash
-waffles -R noCA_19as_tiles_subset.shp -E .111111111s -O nocal_test -p -P epsg:4326+5703 -X 0:15 -T outliers:stacks=True:multipass=4:accumulate=True:mode=unscaled:max_weight=1.5 -w -k -m -M cudem:pre_mode=mbgrid:landmask=True:polygonize=5:pre_count=3:pre_upper_limit=-.1:min_weight=.6 -c -u mar_grav,-106:bathy_only=True,.001,.85 charts,-200,.01,.75 hydronos:datatype=xyz,-202,.1,.1 multibeam:exclude_survey_id=CNTL14RR/RB1604/NA085,-201,.6,.1 ned,-215:coast_buffer=0.0001,.61,.65 ned1,-215:coast_buffer=0.0001,5,.35 ehydro,-203,.65,0 hydronos:datatype=bag,-202,2,0 CUDEM,-210,15,0 CoNED,-211,14,0
+waffles -R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 -E .111111111s -O nocal_test -p -P epsg:4326+5703 -X 0:15 -T outliers:stacks=True:multipass=4:accumulate=True:mode=unscaled:max_weight=1.5 -w -k -m -M cudem:pre_mode=mbgrid:landmask=True:polygonize=5:pre_count=3:pre_upper_limit=-.1:min_weight=.6 -c -u mar_grav,-106:bathy_only=True,.001,.85 charts,-200,.01,.75 hydronos:datatype=xyz,-202,.1,.1 multibeam:exclude_survey_id=CNTL14RR/RB1604/NA085,-201,.6,.1 ned,-215:coast_buffer=0.0001,.61,.65 ned1,-215:coast_buffer=0.0001,5,.35 ehydro,-203,.65,0 hydronos:datatype=bag,-202,2,0 CUDEM,-210,15,0 CoNED,-211,14,0
 ```
 
 ![](/media/reyes_uncertainty.png)
