@@ -197,11 +197,15 @@ In this command we use the previously defined regional tile set 'regions_tile_se
 
 ![](/media/androscoggin_unc.png)
 
+**Figure 1.** Total estimated uncertainty (Androscoggin) 
+
 ### Point Reyes
 
-In this example we generate a 1/9 arc-second DEM and associated Uncertainty raster of the Point Reyes area on the coast of California.
+In this example we generate 2 1/9 arc-second DEMs and associated Uncertainty rasters of the Point Reyes area on the coast of California.
 
 Here, we only use fetches modules for the datasets and list them all in the command-line instead of creating a datalist.
+
+Also, we list 2 input regions to output DEMs and associated rasters for 2 1/4 degree tiles.
 
 ### Generate the DEM and Uncertainty
 
@@ -212,3 +216,5 @@ waffles -R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 -E .111111111s -O 
 ```
 
 ![](/media/reyes_uncertainty.png)
+
+**Figure 1.** Uncertainty products (Point Reyes) 
