@@ -217,4 +217,4 @@ waffles -R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 -E .111111111s -O 
 
 ![](/media/reyes_uncertainty.png)
 
-**Figure 1.** Uncertainty products (Point Reyes) 
+**Figure 2.** Uncertainty products (Point Reyes) 
