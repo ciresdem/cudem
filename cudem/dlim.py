@@ -2547,8 +2547,7 @@ class XYZFile(ElevationDataset):
                     pass
             break
             
-        self.src_data.close()        
-
+        self.src_data.close()
 
     def line_delim(self, xyz_line):
         """guess a line delimiter and return the split line."""
@@ -2986,7 +2985,9 @@ class GDALFile(ElevationDataset):
                 
         src_dem_x_inc = self.src_dem_infos['geoT'][1]
         src_dem_y_inc = -1*self.src_dem_infos['geoT'][5]
-        src_dem_region = regions.Region().from_geo_transform(self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny'])
+        src_dem_region = regions.Region().from_geo_transform(
+            self.src_dem_infos['geoT'], self.src_dem_infos['nx'], self.src_dem_infos['ny']
+        )
             
         ## todo: always warp these to src_ds
         ## weight mask, each cell should have the corresponding weight
@@ -3082,8 +3083,12 @@ class GDALFile(ElevationDataset):
                 y_precision = 12#len(str(gt[3]).split('.')[-1])
                 #utils.echo_msg(gt)
                 while True:
-                    geo_x_origin, geo_y_origin = utils._pixel2geo(srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision)
-                    geo_x_end, geo_y_end = utils._pixel2geo(srcwin[0] + srcwin[2], y, gt, node='grid', x_precision=x_precision, y_precision=y_precision)
+                    geo_x_origin, geo_y_origin = utils._pixel2geo(
+                        srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision
+                    )
+                    geo_x_end, geo_y_end = utils._pixel2geo(
+                        srcwin[0] + srcwin[2], y, gt, node='grid', x_precision=x_precision, y_precision=y_precision
+                    )
                     lon_array = np.arange(geo_x_origin, geo_x_end, gt[1])
 
                     if lon_array.shape == band_data[0].shape:
@@ -3226,9 +3231,9 @@ class BAGFile(ElevationDataset):
                     for sub_dataset in sub_datasets:
                         pbar.update()
                         sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                                          weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01, src_region=self.region,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, verbose=False, check_path=False, super_grid=True,
-                                          uncertainty_mask=2, metadata=copy.deepcopy(self.metadata))
+                                          weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01,
+                                          src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=False, check_path=False,
+                                          super_grid=True, uncertainty_mask=2, metadata=copy.deepcopy(self.metadata))
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
                         for gdal_ds in sub_ds.parse():
@@ -3239,8 +3244,8 @@ class BAGFile(ElevationDataset):
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
                                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
-                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
-                                  #node='pixel')
+                                  verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01,
+                                  metadata=copy.deepcopy(self.metadata))#node='pixel')
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
@@ -3248,7 +3253,10 @@ class BAGFile(ElevationDataset):
             else: # use vrbag.py
                 tmp_bag_as_tif = utils.make_temp_fn('{}_tmp.tif'.format(utils.fn_basename2(self.fn)))
                 sr_cell_size = None#self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
-                vrbag.interpolate_vr_bag(self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size=sr_cell_size, use_blocks=True, method='linear', nodata=3.4028234663852886e+38)
+                vrbag.interpolate_vr_bag(
+                    self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size=sr_cell_size,
+                    use_blocks=True, method='linear', nodata=3.4028234663852886e+38
+                )
 
                 sub_ds = GDALFile(fn=tmp_bag_as_tif, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
                                   uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
@@ -3313,7 +3321,9 @@ class SWOT_PIXC(SWOTFile):
     "land, land_near_water, water_near_land, open_water, dark_water, low_coh_water_near_land, open_low_coh_water"
 
     classes_qual: 1U, 2U, 4U, 8U, 16U, 2048U, 8192U, 16384U, 32768U, 262144U, 524288U, 134217728U, 536870912U, 1073741824U, 2147483648U
-    "no_coherent_gain power_close_to_noise_floor detected_water_but_no_prior_water detected_water_but_bright_land water_false_detection_rate_suspect coherent_power_suspect tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad large_karin_gap"
+    "no_coherent_gain power_close_to_noise_floor detected_water_but_no_prior_water detected_water_but_bright_land 
+    water_false_detection_rate_suspect coherent_power_suspect tvp_suspect sc_event_suspect small_karin_gap in_air_pixel_degraded 
+    specular_ringing_degraded coherent_power_bad tvp_bad sc_event_bad large_karin_gap"
 
     anc_classes: 0UB, 1UB, 2UB, 3UB, 4UB, 5UB, 6UB 
     "open_ocean land continental_water aquatic_vegetation continental_ice_snow floating_ice salted_basin"  		
@@ -3371,7 +3381,9 @@ class SWOT_PIXC(SWOTFile):
                 
             ## Ancilliary Classification Filter
             if len(self.anc_classes) > 0:
-                anc_class_data = self._get_var_arr(src_h5, '{}/ancillary_surface_classification_flag'.format(self.group))
+                anc_class_data = self._get_var_arr(
+                    src_h5, '{}/ancillary_surface_classification_flag'.format(self.group)
+                )
                 points = points[(np.isin(anc_class_data, self.anc_classes))]
                 
             points = points[points['z'] != -9.969209968386869e+36]
@@ -4208,7 +4220,9 @@ class MBSParser(ElevationDataset):
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
 
             if self.want_binned:
-                point_filter = PointFilterFactory(mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points)._acquire_module()
+                point_filter = PointFilterFactory(
+                    mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points
+                )._acquire_module()
                 if point_filter is not None:
                     mb_points = point_filter()
                     
