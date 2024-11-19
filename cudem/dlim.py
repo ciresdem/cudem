@@ -166,22 +166,26 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
-        xdls = [DatasetFactory(mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
-                               weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                               src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
-                               y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
-                               cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                               dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node, stack_mode=stack_mode
-                               )._acquire_module() for dl in data_list]
+        xdls = [DatasetFactory(
+            mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
+            weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
+            src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
+            y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
+            cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+            dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
+            stack_mode=stack_mode
+        )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
-            this_datalist = Scratch(fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                                    uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                                    src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
-                                    sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
-                                    cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                                    dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
-                                    stack_mode=stack_mode)
+            this_datalist = Scratch(
+                fn=xdls, data_format=-3, weight=None if not want_weight else 1,
+                uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
+                src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
+                sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
+                cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
+                dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
+                stack_mode=stack_mode
+            )
         elif len(xdls) > 0:
             this_datalist = xdls[0]
         else:
@@ -585,7 +589,7 @@ class ElevationDataset:
             self.params['mod'] = self.fn
             self.params['mod_name'] = self.data_format
             self.params['mod_args'] = {}
-            
+        
     def __str__(self):
         return('<Dataset: {} - {}>'.format(self.metadata['name'], self.fn))
     
@@ -594,6 +598,13 @@ class ElevationDataset:
 
     def __call__(self):
         self.initialize()
+
+    def _copy_params(self, **kwargs):
+        _params = {i:self.params['kwargs'][i] for i in self.params['kwargs'] if i!='params'}
+        for kw in kwargs.keys():
+            _params[kw] = kwargs[kw]
+
+        return(_params)
         
     def initialize(self):
         self._fn = None # temp filename holder
@@ -2245,7 +2256,7 @@ class ElevationDataset:
         return(20)
         # return(sst)
             
-    def fetch_buildings(self):
+    def fetch_buildings(self, verbose):
         """fetch building footprints from BING"""
         
         if self.region is not None:
@@ -2254,7 +2265,9 @@ class ElevationDataset:
             this_region = regions.Region().from_list(self.infos.minmax)
 
         if this_region.valid_p():
-            utils.echo_msg('fetching buildings for region {}'.format(this_region))
+            if verbose:
+                utils.echo_msg('fetching buildings for region {}'.format(this_region))
+                
             this_bldg = fetches.BingBFP(
                 src_region=this_region, verbose=self.verbose, outdir=self.cache_dir
             )
@@ -2267,13 +2280,13 @@ class ElevationDataset:
         
         return(None)
 
-    def process_buildings(self, this_bing):
+    def process_buildings(self, this_bing, verbose = True):
         bldg_geoms = []
         if this_bing is not None:
             with tqdm(
                     total=len(this_bing.results),
-                    desc='unioning BING buildings',
-                    leave=self.verbose
+                    desc='processing buildings',
+                    leave=verbose
             ) as pbar:
                 for n, bing_result in enumerate(this_bing.results):                
                     if bing_result[-1] == 0:
@@ -2284,20 +2297,24 @@ class ElevationDataset:
                         bing_gj = bing_gj + '.geojson'
                         bldg_ds = ogr.Open(bing_gj, 0)
                         bldg_layer = bldg_ds.GetLayer()
-                        bldg_geom = gdalfun.ogr_union_geom(bldg_layer)
+                        bldg_geom = gdalfun.ogr_union_geom(bldg_layer, verbose=False)
                         bldg_geoms.append(bldg_geom)
                         bldg_ds = None
 
+                        utils.remove_glob(bing_gz, bing_gj)
+
         return(bldg_geoms)
 
-    def fetch_coastline(self, chunks=True):
+    def fetch_coastline(self, chunks = True, verbose = True):
         if self.region is not None:
             this_region = self.region.copy()
         else:
             this_region = regions.Region().from_list(self.infos.minmax)
 
         if this_region.valid_p():
-            utils.echo_msg('fetching coastline for region {}'.format(this_region))
+            if verbose:
+                utils.echo_msg('fetching coastline for region {}'.format(this_region))
+                
             this_cst = fetches.OpenStreetMap(
                 src_region=this_region, verbose=self.verbose, outdir=self.cache_dir,
                 q='coastline', chunks=chunks,
@@ -2312,15 +2329,15 @@ class ElevationDataset:
         return(None)
 
     def process_coastline(
-            self, this_cst, return_geom=True, landmask_is_watermask=False,
-            line_buffer=0.0000001, include_landmask=False
+            self, this_cst, return_geom = True, landmask_is_watermask = False,
+            line_buffer = 0.0000001, include_landmask = False, verbose = True
     ):
         cst_geoms = []
         if this_cst is not None:
             with tqdm(
                     total=len(this_cst.results),
                     desc='processing coastline',
-                    leave=True
+                    leave=verbose
             ) as pbar:
                 for n, cst_result in enumerate(this_cst.results):                
                     if cst_result[-1] == 0:
@@ -2337,13 +2354,13 @@ class ElevationDataset:
                         
                         cst_ds = ogr.Open(out, 0)
                         cst_layer = cst_ds.GetLayer()
-                        cst_geom = gdalfun.ogr_union_geom(cst_layer)
+                        cst_geom = gdalfun.ogr_union_geom(cst_layer, verbose=False)
                         cst_geoms.append(cst_geom)
                         cst_ds = None
-        else:
-            utils.echo_warning_msg('coast is None')
-            
+                        utils.remove_glob(cst_osm)
+                        
         if return_geom:
+            utils.remove_glob('{}.*'.format(utils.fn_basename2(out)))
             return(cst_geoms)
         else:
             return(out)
@@ -3478,8 +3495,7 @@ class IceSat2File(ElevationDataset):
         self.atl_03_f = h5.File(self.atl_03_fn, 'r')
         if 'short_name' not in self.atl_03_f.attrs.keys():
             raise UnboundLocalError('this file does not appear to be an ATL03 file')
-            #utils.echo_error_msg('this file does not appear to be an ATL file')
-            #self.atl_03_f.close()
+        
         if self.reject_failed_qa:
             if self.atl_03_f['/quality_assessment/qa_granule_pass_fail'][...,][0] != 0:
                 raise UnboundLocalError(
@@ -3497,8 +3513,7 @@ class IceSat2File(ElevationDataset):
     def close_atl_h5(self):
         """close all open atl files"""
         
-        self.atl_03_fn = None
-        self.atl_08_fn = None
+        self.atl_03_fn = self.at_08_fn = None
         if self.atl_03_f is not None:
             self.atl_03_f.close()
             
@@ -3508,7 +3523,8 @@ class IceSat2File(ElevationDataset):
     def yield_ds(self):
         """yield the points from the dataset.
 
-        In this case, it will yield a pandas dataframe"""
+        In this case, it will yield a pandas dataframe
+        """
         
         self.atl_03_fn = self.fn
         if len(self.classes) > 0:
@@ -3523,42 +3539,47 @@ class IceSat2File(ElevationDataset):
             utils.echo_error_msg('could not initialize data {}'.format(e))
             self.close_atl_h5()
             return
-            
+
         dataset = None
+        
+        ## fetch and process buildings, if wanted
+        this_bing = None
         if self.want_buildings:
             if isinstance(self.want_buildings, bool):
-                this_bing = self.process_buildings(self.fetch_buildings())
+                this_bing = self.process_buildings(
+                    self.fetch_buildings(verbose=False),
+                    verbose=False
+                )
             elif isinstance(self.want_buildings, list):
-                this_bing = self.want_buildings                
-            else:
-                this_bing = None    
+                this_bing = self.want_buildings         
 
-        else:
-            this_bing = None
-
+        ## fetch and process watermask, if wanted
+        this_wm = None
         if self.want_watermask:
             if isinstance(self.want_watermask, bool):
-                this_wm = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=True)
+                this_wm = self.process_coastline(
+                    self.fetch_coastline(chunks=False, verbose=False),
+                    return_geom=True,
+                    verbose=False
+                )
             elif isinstance(self.want_watermask, list):
                 this_wm = self.want_watermask                
-            else:
-                this_wm = None    
 
-        else:
-            this_wm = None 
-        
+        ## parse through the icesat2 file by laser number
         for i in range(1, 4):
             #try:
             dataset = self.read_atl_data('{}'.format(i))
             if dataset is None or len(dataset) == 0:
                 continue
 
+            ## keep only photons with confidence levels mentioned in `self.confidence_levels`
             if len(self.confidence_levels) > 0:
                 dataset = dataset[(np.isin(dataset['confidence'], self.confidence_levels))]
 
             if dataset is None or len(dataset) == 0:
                 continue
 
+            ## re-classify photons based on buildings/watermask/bathymetry
             if self.want_buildings and this_bing is not None:
                 dataset = self.classify_buildings(dataset, this_bing)
 
@@ -3570,7 +3591,8 @@ class IceSat2File(ElevationDataset):
                 
             if dataset is None or len(dataset) == 0:
                 continue
-                
+
+            ## keep only photons with a classification mentioned in `self.classes`
             if len(self.classes) > 0:
                 #print(self.classes)
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
@@ -3578,23 +3600,19 @@ class IceSat2File(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
 
+            ## rename the x,y,z columns for `yield_points`
             dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
-            #dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'ph_h_classed': 'z'}, inplace=True)
-            #_dataset = np.column_stack((dataset['longitude'], dataset['latitude'], dataset['photon_height']))
-            #_points = np.rec.fromrecords(_dataset, names='x, y, z')
-            #_points = _points[~np.isnan(_points['z'])]
-            
-            #yield(_points)
             yield(dataset)
 
         self.close_atl_h5()
 
     def fetch_atl_08(self):
-        """fetch an associate atl08 file"""
+        """fetch the associated atl08 file"""
         
         atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
         this_atl08 = fetches.IceSat2(
-            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08', filename_filter=atl_08_filter
+            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08',
+            filename_filter=atl_08_filter
         )
         this_atl08.run()
         if len(this_atl08.results) == 0:
@@ -3615,10 +3633,12 @@ class IceSat2File(ElevationDataset):
         """
 
         orientation = self.atl_03_f['/orbit_info/sc_orient'][0]
-        # selects the strong beams only [we can include weak beams later on]
+        
+        ## selects the strong beams only [we can include weak beams later on]
         orientDict = {0:'l', 1:'r', 21:'error'}
         laser = 'gt' + laser_num + orientDict[orientation]
 
+        ## for 'subsets', where heights don't come through
         if 'heights' not in self.atl_03_f['/{}'.format(laser)].keys():
             return(None)
         
@@ -3636,13 +3656,11 @@ class IceSat2File(ElevationDataset):
         segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         segment_id = self.atl_03_f['/' + laser + '/geolocation/segment_id'][...,]
         segment_dist_x = self.atl_03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-        #seg_ph_count = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
         ref_elev = self.atl_03_f['/' + laser + '/geolocation/ref_elev'][...,]
         ref_azimuth = self.atl_03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
         ref_photon_index = self.atl_03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
         ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
         altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
-        #surface_type = self.atl_03_f['/' + laser + '/geolocation/surf_type'][...,]
 
         ## Read in the geoid data
         photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
@@ -3650,10 +3668,10 @@ class IceSat2File(ElevationDataset):
 
         ## Create a dictionary with (segment_id --> index into ATL03 photons)
         ## lookup pairs, for the starting photon of each segment
-        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
         #segment_indices = ph_index_beg+(ref_photon_index-1)
-        segment_index_dict = dict(zip(segment_id, segment_indices))
         #segment_index_dict = dict(zip(segment_id, ph_index_beg+ref_photon_index-1))
+        segment_indices = np.concatenate(([0], np.cumsum(segment_ph_cnt)[:-1]))
+        segment_index_dict = dict(zip(segment_id, segment_indices))
         ph_segment_ids = segment_id[np.searchsorted(segment_indices, np.arange(0.5, len(photon_h), 1))-1]
         
         ## Compute the total along-track distances.
@@ -3665,31 +3683,29 @@ class IceSat2File(ElevationDataset):
 
         ## meantide/geoid heights
         h_geoid_dict = dict(zip(segment_id, photon_geoid))
-        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))
-
+        ph_h_geoid = np.array(list(map((lambda pid: h_geoid_dict[pid]), ph_segment_ids)))        
         h_meantide_dict = dict(zip(segment_id, photon_geoid_f2m))
         ph_h_meantide = np.array(list(map((lambda pid: h_meantide_dict[pid]), ph_segment_ids)))
-
         photon_h_geoid = photon_h - ph_h_geoid
         photon_h_meantide = photon_h - (ph_h_geoid + ph_h_meantide)
 
+        ## setup classifications
         ph_h_classed = np.zeros(photon_h.shape)
         ph_h_classed[:] = -1
 
-        ph_h_watermask = np.zeros(photon_h.shape)
+        ## append the laser to each record
         laser_arr = np.empty(photon_h.shape, dtype='object')
         laser_arr[:] = laser
 
+        ## append the filename to each record
         fn_arr = np.empty(photon_h.shape, dtype='object')
         fn_arr[:] = self.fn
         
         ## ref values
         h_ref_elev_dict = dict(zip(segment_id, ref_elev))
-        ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)
-        
+        ph_ref_elev = np.array(list(map((lambda pid: h_ref_elev_dict[pid]), ph_segment_ids)))#.astype(float)        
         h_ref_azimuth_dict = dict(zip(segment_id, ref_azimuth))
         ph_ref_azimuth = np.array(list(map((lambda pid: h_ref_azimuth_dict[pid]), ph_segment_ids)))#.astype(float)
-
         h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
         ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids)))#.astype(float)
 
@@ -3700,6 +3716,7 @@ class IceSat2File(ElevationDataset):
             atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,] # photon src 20 m seg id
             atl_08_classed_pc_indx = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
 
+            ## set the classifications from atl08
             atl_08_segment_id_msk = [True if x in segment_id else False for x in atl_08_ph_segment_id]
             atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))
             atl_08_ph_index = np.array(atl_08_ph_segment_indx + (atl_08_classed_pc_indx[atl_08_segment_id_msk] - 1), dtype=int)
@@ -3724,6 +3741,7 @@ class IceSat2File(ElevationDataset):
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]            
 
+        ## create the pandas dataframe
         dataset = pd.DataFrame(
             {'latitude': latitude,
              'longitude': longitude,
@@ -3734,14 +3752,13 @@ class IceSat2File(ElevationDataset):
              'ref_elevation':ph_ref_elev,
              'ref_azimuth':ph_ref_azimuth,
              'ref_sat_alt':ph_altitude_sc,
-             'ph_h_classed': ph_h_classed,
-             'ph_h_watermask': ph_h_watermask},
+             'ph_h_classed': ph_h_classed},
             columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn',
                      'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt',
-                     'ph_h_classed', 'ph_h_watermask']
+                     'ph_h_classed']
         )
 
-        ## Process extra columns specified in self.columns
+        ## Process extra columns specified in `self.columns`
         for col in self.columns.keys():
             try:
                 if 'gtx' in col:
@@ -3823,9 +3840,6 @@ class IceSat2File(ElevationDataset):
                 
                 if sea_height is not None:
                     med_water_surface_h = np.nanmedian(sea_height) #* -1
-                    #if sea_height1 is not None:
-                    #    med_water_surface_h2 = np.nanmedian(sea_height1[2]) #* -1
-                    #    dataset['ph_h_classed'][dataset['photon_height'] <= (med_water_surface_h2 + (h_res*2))] = 5
                     
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
@@ -3852,8 +3866,6 @@ class IceSat2File(ElevationDataset):
                                 bath_height = [x for x in bath_height if ~np.isnan(x)]
                                 
                                 for n, id in enumerate(geo_df.ids.values):
-                                    #print(dataset.at[id, 'latitude'], dataset.at[id, 'longitude'])
-                                    #print(lat_wgs84[n], lon_wgs84[n])
                                     dataset.at[id, 'ph_h_classed'] = 4
                                     #dataset.at[id, 'latitude'] = lat_wgs84[n]
                                     #dataset.at[id, 'longitude'] = lon_wgs84[n]
@@ -3865,6 +3877,8 @@ class IceSat2File(ElevationDataset):
 
     def _vectorize_df(self, dataset):
         """Make a point vector OGR DataSet Object from a pandas dataframe
+
+        This is to allow spatial filtering for watermask and buildings.
         """
 
         dst_ogr = '{}'.format('icesat_dataframe')
@@ -3897,9 +3911,10 @@ class IceSat2File(ElevationDataset):
     def classify_buildings(self, dataset, these_bldgs):
         """classify building photons using BING building footprints 
         """
-        
-        #print(these_bldgs)
+
+        ## vectorize the icesate2 photons
         ogr_df = self._vectorize_df(dataset)
+        
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
@@ -3911,7 +3926,6 @@ class IceSat2File(ElevationDataset):
                 pbar.update()
                 icesat_layer = ogr_df.GetLayer()
                 icesat_layer.SetSpatialFilter(bldg_geom)
-
                 #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
                 for f in icesat_layer:
                     idx = f.GetField('index')
@@ -3926,7 +3940,9 @@ class IceSat2File(ElevationDataset):
         """classify water photons using OSM coastline 
         """
 
+        ## vectorize the photons
         ogr_df = self._vectorize_df(dataset)
+        
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
@@ -3938,7 +3954,6 @@ class IceSat2File(ElevationDataset):
                 pbar.update()
                 icesat_layer = ogr_df.GetLayer()
                 icesat_layer.SetSpatialFilter(wm_geom)
-
                 #[dataset.at[f.GetField('index'), 'ph_h_classed'] = 7 for f in icesat_layer]
                 for f in icesat_layer:
                     idx = f.GetField('index')
@@ -4081,12 +4096,13 @@ class MBSParser(ElevationDataset):
         ), verbose=False)
 
         if status == 0:
-            data_set = DatasetFactory(
-                mod = out_mb, data_format = 168, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
-                verbose=self.verbose
-            )._acquire_module().initialize()
+            data_set = DatasetFactory(**self._copy_params(mod=out_mb, data_foramt=168))._acquire_module.initialize()
+            # data_set = DatasetFactory(
+            #     mod = out_mb, data_format = 168, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+            #     invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+            #     x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+            #     verbose=self.verbose
+            # )._acquire_module().initialize()
             
             for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
                 self.data_entries.append(ds) 
@@ -4115,9 +4131,12 @@ class MBSParser(ElevationDataset):
 
             gdalfun.gdal2gdal('{}.grd'.format(ofn))
             utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
-            mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                              weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
-                              src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
+            mbs_ds = DatasetFactory(
+                **self._copy_params(mod='{}.tif'.format(ofn), data_format=200, metadata=copy.deepcopy(self.metadata))
+            )
+            # mbs_ds = GDALFile(fn='{}.tif'.format(ofn), data_format=200, src_srs=self.src_srs, dst_srs=self.dst_srs,
+            #                   weight=self.weight, x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg,
+            #                   src_region=self.region, verbose=self.verbose, metadata=copy.deepcopy(self.metadata))
             #stack_fltrs=self.stack_fltrs)
 
             mbs_ds.initialize()
@@ -4315,20 +4334,17 @@ class OGRFile(ElevationDataset):
                     g = json.loads(geom.ExportToJson())
                     #utils.echo_msg(g)
                     xyzs = g['coordinates']
-
                     if not geom.GetGeometryName() == 'MULTIPOINT':
                         xyzs = [xyzs]
 
                     out_xyzs = []
                     for xyz in xyzs:
-
                         if not geom.Is3D():
                             if self.elev_field is None:
                                 self.elev_field = self.find_elevation_field(f)
 
                             elev = utils.float_or(f.GetField(self.elev_field))
-                            if elev is not None:
-                                
+                            if elev is not None:                                
                                 if isinstance(xyz[0], list):
                                     for x in xyz:
                                         for xx in x:
@@ -4363,7 +4379,6 @@ class OGRFile(ElevationDataset):
             ds_ogr = layer_s = None
 
 class Points(ElevationDataset):
-
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.metadata['name'] = 'points'
@@ -4693,10 +4708,13 @@ class Datalist(ElevationDataset):
                     data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
                     #utils.echo_msg_bold(self.src_srs)
-                    data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                                              invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                              x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
-                                              stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=self.verbose, **data_set_args)._acquire_module()
+                    data_set = DatasetFactory(
+                        **self._copy_params(mod=data_mod, metadata=md, src_srs=self.src_srs, **data_set_args)
+                    )._acquire_module()
+                    # data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                    #                           invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+                    #                           x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                    #                           stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=self.verbose, **data_set_args)._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                     ):
@@ -4739,11 +4757,14 @@ class Datalist(ElevationDataset):
                             md['name'] = utils.fn_basename2(os.path.basename(self.fn))
                             
                             ## generate the dataset object to yield
-                            data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
-                                                      src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
-                                                      src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
-                                                      stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, sample_alg=self.sample_alg,
-                                                      cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
+                            data_set = DatasetFactory(
+                                **self._copy_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self)
+                            )._acquire_module()
+                            # data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
+                            #                           src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
+                            #                           src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                            #                           stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, sample_alg=self.sample_alg,
+                            #                           cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                             ):
@@ -4870,10 +4891,12 @@ class ZIPlist(ElevationDataset):
                             
         for this_data in datalist:
             this_line = utils.p_f_unzip(self.fn, [this_data])[0]
-            data_set = DatasetFactory(mod=this_line, data_format=None, weight=self.weight, uncertainty=self.uncertainty, parent=self,
-                                      src_region=self.region, invert_region=self.invert_region, x_inc=self.x_inc, mask=self.mask,
-                                      y_inc=self.y_inc, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs,
-                                      dst_srs=self.dst_srs, cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
+            data_set = DatasetFactory(
+                **self._copy_params(
+                    mod=this_line, data_format=None, src_srs = self.src_srs,
+                    parent=self, metadata=copy.deepcopy(self.metadata)
+                )
+            )._acquire_module()
             if data_set is not None and data_set.valid_p(
                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
             ):
@@ -4903,6 +4926,7 @@ class ZIPlist(ElevationDataset):
                     else:
                         if self.verbose:
                             utils.echo_warning_msg('invalid inf file: {}.inf, skipping'.format(data_set.fn))
+                            
                 else:
                     for ds in data_set.parse():
                         self.data_entries.append(ds)
@@ -4933,7 +4957,7 @@ class Fetcher(ElevationDataset):
     """
 
     def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, callback = fetches.fetches_callback, **kwargs):
-        super().__init__(remote=True, **kwargs)
+        super().__init__(**kwargs)
         self.outdir = outdir if outdir is not None else self.cache_dir # cache directory to store fetched data
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir#outdir=self.cache_dir
@@ -4951,7 +4975,17 @@ class Fetcher(ElevationDataset):
         #                  'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
         #                  'vdatum':src_vert, 'url':None}
 
-        
+        try:
+            self.fetch_module.run()
+        except:
+            self.fetch_module.results = []
+
+        self.fetches_params = self._copy_params(
+            data_format=self.fetch_module.data_format, src_srs=self.fetch_module.src_srs,
+            cache_dir=self.fetch_module._outdir, remote=True, parent=self,
+            metadata=copy.deepcopy(self.metadata)
+        )            
+                
     def generate_inf(self):
         """generate a infos dictionary from the Fetches dataset"""
 
@@ -4962,11 +4996,6 @@ class Fetcher(ElevationDataset):
         return(self.infos)
 
     def parse(self):
-        try:
-            self.fetch_module.run()
-        except:
-            self.fetch_module.results = []
-        
         with tqdm(
                 total=len(self.fetch_module.results),
                 desc='parsing datasets from datalist fetches {} @ {}'.format(self.fetch_module, self.weight),
@@ -4975,6 +5004,7 @@ class Fetcher(ElevationDataset):
             for result in self.fetch_module.results:
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
                 if status == 0:
+                    self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1])
                     for this_ds in self.set_ds(result):
                         if this_ds is not None:
                             f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
@@ -4989,7 +5019,6 @@ class Fetcher(ElevationDataset):
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
-                                #ds.metadata['name'] = os.path.basename(ds.fn)#os.path.basename(ds.fn).split('.')[0]
                                 yield(ds)
                         else:
                             utils.echo_warning_msg('could not set fetches datasource {}'.format(result))
@@ -5011,20 +5040,14 @@ class Fetcher(ElevationDataset):
             if vert_epsg is None:
                 vert_epsg = vdatum
 
-            #utils.echo_msg('srs: {}+{}'.format(horz_epsg, vert_epsg))
             if vert_epsg is not None:
                 self.fetch_module.src_srs = '{}+{}'.format(horz_epsg, vert_epsg)
             else:
                 self.fetch_module.src_srs = src_srs
         except:
             pass
-        
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                            pnt_fltrs=self.pnt_fltrs, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose,
-                            cache_dir=self.fetch_module._outdir, remote=True)._acquire_module()
-        yield(ds)
+
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class NEDFetcher(Fetcher):
     """National Elevation Dataset from USGS
@@ -5048,6 +5071,7 @@ class NEDFetcher(Fetcher):
         # self.mask = '{}.shp'.format(_coast_mask.name)
         
         ## todo: merge the coast mask with user input self.mask
+        coast_mask = None
         if self.mask is None:
             coast_mask = self.process_coastline(
                 self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
@@ -5060,17 +5084,13 @@ class NEDFetcher(Fetcher):
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
         ned_metadata = copy.deepcopy(self.metadata)
         ned_metadata['name'] = src_dem
-        #utils.echo_msg(ned_metadata)
-        ds = DatasetFactory(mod=src_dem, data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=ned_metadata,#copy.deepcopy(self.metadata),
-                            mask=ned_mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, 
-                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            remote=True, remove_flat=True)._acquire_module()
+        self.fetches_params['mod'] = src_dem
+        self.fetches_params['mask'] = ned_mask
+        yield(DatasetFactory(**self.fetches_params))
 
-        #utils.remove_glob(coast_mask)
-        yield(ds)
+        if coast_mask is not None:
+            utils.remove_glob('{}.*'.format(utils.fn_basename2(coast_mask)))
 
-        
 class DAVFetcher_CoNED(Fetcher):
     """CoNED from the digital coast 
 
@@ -5089,7 +5109,7 @@ class DAVFetcher_CoNED(Fetcher):
         self.cog = cog
 
     def parse(self):
-        self.fetch_module.run()
+        #self.fetch_module.run()
         for result in self.fetch_module.results:
             if not self.cog:
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
@@ -5099,7 +5119,6 @@ class DAVFetcher_CoNED(Fetcher):
             for this_ds in self.set_ds(result):
                 if this_ds is not None:
                     this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
-                    #this_ds.remote = True
                     this_ds.initialize()
                     yield(this_ds)
             
@@ -5124,25 +5143,17 @@ class DAVFetcher_CoNED(Fetcher):
         except:
             pass
 
-        if not self.cog:
-            ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                                parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
-                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                                remote=True)._acquire_module()
-        else:
-            ds = DatasetFactory(mod=result[0], data_format='200', weight=self.weight,
-                                parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
-                                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                                check_path=False)._acquire_module()
-        yield(ds)
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1]) if not self.cog else result[0]
+        self.fetches_params['check_path'] = False if self.cog else True
+        self.fetches_params['src_srs'] = self.fetch_module.src_srs
+        self.fetches_params['data_format'] = 200
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class DAVFetcher_SLR(Fetcher):
     """SLR DEM from the digital coast 
 
     This is a wrapper shortcut for fetching SLR DEMs from the Digital Coast,
-    mainly so we can pull the remove the flattened ring around the actual data.
+    mainly so we can pull and remove the flattened ring around the actual data.
     """
 
     __doc__ = '''{}    
@@ -5154,13 +5165,8 @@ class DAVFetcher_SLR(Fetcher):
     def set_ds(self, result):
         ## this doesn't work in all cases, update to find and remove flattened areas
         #gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
-        
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc,
-                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            remote=True, remove_flat=True)._acquire_module()
-        yield(ds)
+        self.fetches_params['remove_flats'] = True
+        yield(DatasetFactory(**self.fetches_params))    
         
 class SWOTFetcher(Fetcher):
     """SWOT L2_HR_Raster data from NASA
@@ -5222,13 +5228,13 @@ class SWOTFetcher(Fetcher):
     def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None,
                  anc_classes = None, remove_class_flags = False, **kwargs):
         super().__init__(**kwargs)
-        self.data_set = data_set
-        self.apply_geoid = apply_geoid
-        self.classes = classes
-        self.anc_classes = anc_classes
-        self.classes_qual = classes_qual
-        self.remove_class_flags = remove_class_flags
-
+        self.fetches_params['var'] = data_set
+        self.fetches_params['apply_geoid'] = apply_geoid
+        self.fetches_params['classes'] = classes
+        self.fetches_params['anc_classes'] = anc_classes
+        self.fetches_params['classes_qual'] = clases_qual
+        self.fetches_params['remove_class_flags'] = remove_class_flags
+        
     # def fetch_pixc_vec(self, swot_fn):
     #     pixc_vec_filter = utils.fn_basename2(swot_fn).split('PIXC_')[1]
     #     this_pixc_vec = fetches.SWOT(
@@ -5243,27 +5249,17 @@ class SWOTFetcher(Fetcher):
     #             return(os.path.join(this_pixc_vec._outdir, this_pixc_vec.results[0][1]))
         
     def set_ds(self, result):
-        #utils.echo_msg(result)
-        swot_fn = os.path.join(self.fetch_module._outdir, result[1])
+        #swot_fn = os.path.join(self.fetch_module._outdir, result[1])
         if 'L2_HR_PIXC_' in result[-1]:
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
-            
-            sub_ds = SWOT_PIXC(fn=swot_fn, data_format=202, var=self.data_set, apply_geoid=self.apply_geoid, classes=self.classes, anc_classes=self.anc_classes, classes_qual=self.classes_qual, 
-                               remove_class_flags=self.remove_class_flags, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                               src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=True,
-                               metadata=copy.deepcopy(self.metadata))
-            
+            self.fetches_params['data_format'] = 202
+            yield(DatasetFactory(**self.fetches_params).acquire_module())
         elif 'L2_HR_Raster' in result[-1]:
-            sub_ds = SWOT_HR_Raster(fn=swot_fn, data_format=203, apply_geoid=self.apply_geoid, src_srs=None, dst_srs=self.dst_srs,
-                                    weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                    x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs,
-                                    verbose=True, metadata=copy.deepcopy(self.metadata))
+            self.fetch_module['data_format'] = 203
+            yield(DatasetFactory(**self.fetches_params).acquire_module())
         else:
             utils.echo_warning_msg('{} is not a currently supported dlim dataset'.format(result[-1]))
-            sub_ds = None
-            
-        yield(sub_ds)
 
 class IceSat2Fetcher(Fetcher):
     """IceSat2 data from NASA
@@ -5304,52 +5300,40 @@ class IceSat2Fetcher(Fetcher):
                  classify_bathymetry = True, classify_buildings = True, classify_water = True,
                  reject_failed_qa = True, **kwargs):
         super().__init__(**kwargs)
-        self.water_surface = water_surface
-        self.classes = classes
-        self.confidence_levels = confidence_levels
-        self.columns = columns
-        self.want_bathymetry = classify_bathymetry
-        self.want_buildings = classify_buildings
-        self.want_water = classify_water
-        self.reject_failed_qa = reject_failed_qa
-
-        self.atl_fn = None
+        self.fetches_params['water_suface'] = water_surface
+        self.fetches_params['classes'] = classes
+        self.fetches_params['confidence_levels'] = confidence_levels
+        self.fetches_params['columns'] = columns
+        self.fetches_params['classify_bathymetry'] = classify_bathymetry
+        self.fetches_params['classify_buildings'] = classify_buildings
+        self.fetches_params['classify_water'] = classify_water
+        self.fetches_params['reject_failed_qa'] = reject_failed_qa        
     
     def set_ds(self, result):
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
-        if self.want_buildings:
-            self.want_buildings = self.process_buildings(self.fetch_buildings())
+        if self.fetches_params['classify_buildings']:
+            self.fetches_params['classify_buildings'] = self.process_buildings(self.fetch_buildings())
 
-        if self.want_water:
-            self.want_water = self.process_coastline(self.fetch_coastline(chunks=False), return_geom=True)
+        if self.fetches_params['classify_water']:
+            self.fetches_params['classify_water'] = self.process_coastline(
+                self.fetch_coastline(chunks=False), return_geom=True
+            )
             
         if 'processed_zip' in result[-1]:
             icesat2_h5s = utils.p_unzip(
-                icesat2_fn,#os.path.join(self.fetch_module._outdir, ),
+                icesat2_fn,
                 exts=['h5'],
-                outdir=self.cache_dir
+                outdir=self.cache_dir,
+                verbose=self.verbose
             )
             for icesat2_h5 in icesat2_h5s:
-                sub_ds = IceSat2File(fn=icesat2_h5, data_format=303, water_surface=self.water_surface, classes=self.classes,
-                                     confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
-                                     classify_buildings=self.want_buildings, classify_water=self.want_water, reject_failed_qa=self.reject_failed_qa,
-                                     src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight, uncertainty=self.uncertainty,
-                                     src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                     pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True,
-                                     cache_dir=self.fetch_module._outdir,)
-
+                self.fetches_params['fn'] = icesat2_h5
+                yield(IceSat2File(**self.fetches_params)._acquire_module())
                 yield(sub_ds)
             
         else:
-            sub_ds = IceSat2File(fn=icesat2_fn, data_format=303, water_surface=self.water_surface, classes=self.classes,
-                                 confidence_levels=self.confidence_levels, columns=self.columns, classify_bathymetry=self.want_bathymetry,
-                                 classify_buildings=self.want_buildings, src_srs='epsg:4326+3855', dst_srs=self.dst_srs, weight=self.weight,
-                                 uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, stack_fltrs=self.stack_fltrs,
-                                 pnt_fltrs=self.pnt_fltrs, verbose=True, metadata=copy.deepcopy(self.metadata), remote=True,
-                                 cache_dir=self.fetch_module._outdir)
-            yield(sub_ds)
-            
-        self.want_buildings = None
+            self.fetches_params['fn'] = icesat2_fn
+            yield(IceSat2File(**self.fetches_params)._acquire_module())        
                 
 class GMRTFetcher(Fetcher):
     """GMRT Gridded data.
@@ -5375,7 +5359,7 @@ class GMRTFetcher(Fetcher):
             md['AREA_OR_POINT'] = 'Point'
             src_ds.SetMetadata(md)
             gdalfun.gdal_set_srs(src_ds)
-            gdalfun.gdal_set_ndv(src_ds)
+            gdalfun.gdal_set_ndv(src_ds, verbose=False)
 
         if self.swath_only:
             if fetches.Fetch(
@@ -5384,7 +5368,8 @@ class GMRTFetcher(Fetcher):
                 swath_shps = utils.p_unzip(
                     os.path.join(self.fetch_module._outdir, 'gmrt_swath_polygons.zip'),
                     exts=['shp', 'shx', 'prj', 'dbf'],
-                    outdir=self.cache_dir
+                    outdir=self.cache_dir,
+                    verbose=self.verbose
                 )
                 for v in swath_shps:
                     if '.shp' in v:
@@ -5396,13 +5381,10 @@ class GMRTFetcher(Fetcher):
                     utils.echo_error_msg('could not find gmrt swath polygons...')
                     self.swath_only = False
                     swath_mask = None
+                else:
+                    self.fetches_params['mask'] = swath_mask
 
-        yield(DatasetFactory(mod=gmrt_fn, data_format=200, mask=swath_mask,
-                             #data_format='200:mask={}'.format(swath_mask) if self.swath_only else '200', #mask=self.mask, invert_mask=self.invert_mask,
-                             src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
-                             weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
-                             invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
-                             verbose=self.verbose)._acquire_module())
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
         
 class GEBCOFetcher(Fetcher):
     """GEBCO Gridded data
@@ -5425,7 +5407,8 @@ class GEBCOFetcher(Fetcher):
         gebco_fns = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['tif'],
-            outdir=self.fetch_module._outdir
+            outdir=self.fetch_module._outdir,
+            verbose=self.verbose
         )
         
         ## fetch the TID zip if needed
@@ -5436,26 +5419,23 @@ class GEBCOFetcher(Fetcher):
                 tid_fns = utils.p_unzip(
                     os.path.join(self.fetch_module._outdir, 'gebco_tid.zip'),
                     exts=['tif'],
-                    outdir=self.cache_dir
+                    outdir=self.cache_dir,
+                    verbose=self.verbose
                 )
-
                 for tid_fn in tid_fns:
-                    ds_config = gdalfun.gdal_infos(tid_fn)
-                    
+                    ds_config = gdalfun.gdal_infos(tid_fn)                    
                     if self.region is not None and self.region.valid_p(check_xy=True):
                         inf_region = regions.Region().from_geo_transform(ds_config['geoT'], ds_config['nx'], ds_config['ny'])            
                         inf_region.wmin = self.weight
                         inf_region.wmax = self.weight
                         inf_region.umin = self.uncertainty
                         inf_region.umax = self.uncertainty
-
                         if regions.regions_intersect_p(inf_region, self.region):
                             wanted_gebco_fns.append(tid_fn)
                     else:
                         wanted_gebco_fns.append(tid_fn)
 
                 for tid_fn in wanted_gebco_fns:
-                    utils.echo_msg(tid_fn)
                     tmp_tid = utils.make_temp_fn('tmp_tid.tif', temp_dir=self.fetch_module._outdir)
                     with gdalfun.gdal_datasource(tid_fn) as tid_ds:
                         tid_config = gdalfun.gdal_infos(tid_ds)
@@ -5477,13 +5457,12 @@ class GEBCOFetcher(Fetcher):
                         new_mask = utils.make_temp_fn('test_tmp_mask')
                         gdalfun.gdal_mask(tmp_tid, self.mask['mask'], new_mask, msk_value = 1, verbose = True)
                         os.replace(new_mask, tmp_tid)
-                        
-                    yield(DatasetFactory(mod=tid_fn.replace('tid_', ''), data_format='200:mask={tmp_tid}:weight_mask={tmp_tid}'.format(tmp_tid=tmp_tid),
-                                         src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
-                                         weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, parent=self,
-                                         invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), cache_dir=self.fetch_module._outdir,
-                                         verbose=self.verbose)._acquire_module())
-                    
+
+                    self.fetches_params['mod'] = tid_fn.replace('tid_', '')
+                    self.fetches_params['data_format'] = 200
+                    self.fetches_params['mask'] = tmp_tid
+                    self.fetches_params['weight_mask'] = tmp_tid
+                    yield(DatasetFactory(**self.fetches_params)._acquire_module())
                     utils.remove_glob(tmp_tid)
         else:
             for gebco_fn in gebco_fns:
@@ -5501,10 +5480,9 @@ class GEBCOFetcher(Fetcher):
                     wanted_gebco_fns.append(gebco_fn)    
             
             for gebco_fn in wanted_gebco_fns:
-                yield(DatasetFactory(mod=gebco_fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, src_region=self.region, mask=self.mask, 
-                                     parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                     cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                self.fetches_params['mod'] = gebco_fn
+                self.fetches_params['data_format'] = 200
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
                 
 class CopernicusFetcher(Fetcher):
     """Gridded Copernicus sattelite data.
@@ -5523,14 +5501,15 @@ class CopernicusFetcher(Fetcher):
             src_cop_dems = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
                 exts=['tif'],
-                outdir=self.fetch_module._outdir
+                outdir=self.fetch_module._outdir,
+                verbose=self.verbose
             )
             for src_cop_dem in src_cop_dems:
                 gdalfun.gdal_set_ndv(src_cop_dem, ndv=0, verbose=False)
-                yield(DatasetFactory(mod=src_cop_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                     parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                     cache_dir = self.fetch_module._outdir, verbose=self.verbose, node='pixel')._acquire_module())
+                self.fetches_params['mod'] = src_cop_dem
+                self.fetches_params['data_format'] = 200
+                self.fetches_params['node'] = 'pixel'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class FABDEMFetcher(Fetcher):
     """FABDEM Gridded data
@@ -5546,14 +5525,14 @@ class FABDEMFetcher(Fetcher):
         src_fab_dems = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['tif'],
-            outdir=self.fetch_module._outdir
+            outdir=self.fetch_module._outdir,
+            verbose=self.verbose
         )
         for src_fab_dem in src_fab_dems:
             gdalfun.gdal_set_ndv(src_fab_dem, ndv=0, verbose=False)
-            yield(DatasetFactory(mod=src_fab_dem, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                 parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+            self.fetches_params['mod'] = src_fab_dem
+            self.fetches_params['data_format'] = 200
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class MarGravFetcher(Fetcher):
     """Marine Gravity Bathymetry
@@ -5568,21 +5547,21 @@ class MarGravFetcher(Fetcher):
         self.bathy_only = bathy_only
         self.upper_limit = utils.float_or(upper_limit)
         self.lower_limit = utils.float_or(lower_limit)
-
         if self.bathy_only:
             self.upper_limit = 0
         
-    def set_ds(self, result):
-        mg_region = self.region.copy()
-        mg_region.zmax = self.upper_limit
-        mg_region.zmin = self.lower_limit
-            
+    def set_ds(self, result):            
         if self.rasterize:
             from cudem import waffles
+            mg_region = self.region.copy()
+            mg_region.zmax = self.upper_limit
+            mg_region.zmin = self.lower_limit        
             mar_grav_fn = utils.make_temp_fn('mar_grav')
-            _raster = waffles.WaffleFactory(mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(os.path.join(self.fetch_module._outdir, result[1]))],
-                                            src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'), upper_limit = self.upper_limit,
-                                            name=mar_grav_fn, node='pixel', verbose=True)._acquire_module()()
+            _raster = waffles.WaffleFactory(
+                mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(os.path.join(self.fetch_module._outdir, result[1]))],
+                src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'), upper_limit = self.upper_limit,
+                name=mar_grav_fn, node='pixel', verbose=True
+            )._acquire_module()()            
             if self.upper_limit is not None or self.lower_limit is not None:
                 ds = gdal.Open(_raster.fn)
                 ds_band = ds.GetRasterBand(1)
@@ -5592,18 +5571,13 @@ class MarGravFetcher(Fetcher):
 
                 if self.lower_limit is not None:
                     ds_arr[ds_arr <= self.lower_limit] = ds_band.GetNoDataValue()
+                    
                 ds = None
-                
-            yield(DatasetFactory(mod=_raster.fn, data_format=200, src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                                 x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region,
-                                 parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
-        else:
-            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:x_offset=REM',
-                                 src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
-                                 weight=self.weight, uncertainty=self.uncertainty, src_region=mg_region, mask=self.mask,
-                                 parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata),
-                                 cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+
+            self.fetches_params['mod'] = _raster.fn
+            self.fetches_params['data_format'] = 200
+            
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class ChartsFetcher(Fetcher):
     """NOAA ENC Charts Fetcher
@@ -5621,14 +5595,15 @@ class ChartsFetcher(Fetcher):
         src_000s = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['000'],
-            outdir=self.fetch_module._outdir
+            outdir=self.fetch_module._outdir,
+            verbose=self.verbose            
         )
         for src_000 in src_000s:
-            usace_ds = DatasetFactory(mod=src_000, data_format="302:ogr_layer=SOUNDG:z_scale=-1", src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                      cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-            yield(usace_ds)
+            self.fetches_params['mod'] = src_000
+            self.fetches_params['data_format'] = 302
+            self.fetches_params['ogr_layer'] = 'SOUNDG'
+            self.fetches_params['z_scale'] = -1
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class MBSFetcher(Fetcher):
     """NOAA Multibeam Fetcher
@@ -5639,20 +5614,13 @@ class MBSFetcher(Fetcher):
 
     def __init__(self, mb_exclude = 'A', want_binned = False, want_mbgrid = False, **kwargs):
         super().__init__(**kwargs)
-        self.mb_exclude = mb_exclude
-        self.want_binned = want_binned
-        self.want_mbgrid = want_mbgrid
+        self.fetches_params['mb_exclude'] = mb_exclude
+        self.fetches_params['want_binned'] = want_binned
+        self.fetches_params['want_mbgrid'] = want_mbgrid
 
     def set_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
-        #if mb_infos[2] != '32':
-        ds = DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=self.fetch_module.data_format, weight=self.weight,
-                            parent=self, src_region=self.region, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                            mask=self.mask, uncertainty=self.uncertainty, x_inc=self.x_inc, y_inc=self.y_inc, want_binned=self.want_binned,
-                            src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, verbose=self.verbose, cache_dir=self.fetch_module._outdir,
-                            pnt_fltrs=self.pnt_fltrs, stack_fltrs=self.stack_fltrs, remote=True, want_mbgrid=self.want_mbgrid)._acquire_module()
-
-        yield(ds)
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
                 
 class HydroNOSFetcher(Fetcher):
     """NOAA HydroNOS Data Fetcher
@@ -5670,45 +5638,41 @@ class HydroNOSFetcher(Fetcher):
             nos_fns = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
                 exts=['xyz', 'dat'],
-                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])),
+                verbose=self.verbose
             )
             for nos_fn in nos_fns:
-                yield(DatasetFactory(mod=nos_fn, data_format='168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866',
-                                     dst_srs=self.dst_srs, pnt_fltrs=self.pnt_fltrs, stack_fltrs=self.stack_fltrs,
-                                     x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                     parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                     cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                self.fetches_params['mod'] = nos_fn
+                self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,'
+                self.fetches_params['src_srs'] = 'epsg:4326+5866'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         elif result[2] == 'bag':
             bag_fns = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
                 exts=['bag'],
-                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1]))
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])),
+                verbose=self.verbose
             )
             for bag_fn in bag_fns:
                 if 'ellipsoid' not in bag_fn.lower():
-                    yield(DatasetFactory(mod=bag_fn, data_format=201, explode=self.explode, src_srs=None, dst_srs=self.dst_srs,
-                                         x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                         parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                         cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+                    self.fetches_params['mod'] = bag_fn
+                    self.fetches_params['data_format'] = 201
+                    self.fetches_params['explode'] = self.explode
+                    yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class CSBFetcher(Fetcher):
     """Crowd Sourced Bathymetry data fetcher
     """
     
     __doc__ = '''{}
-    Fetches Module: <hydronos> - {}'''.format(__doc__, fetches.CSB.__doc__)
+    Fetches Module: <csb> - {}'''.format(__doc__, fetches.CSB.__doc__)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-
-        csb_fn = os.path.join(self.fetch_module._outdir, result[1])
-        yield(DatasetFactory(mod=csb_fn, data_format='168:skip=1:xpos=2:ypos=3:zpos=4:z_scale=-1:delimiter=,', src_srs='epsg:4326+5866', dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                             cache_dir=self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class EMODNetFetcher(Fetcher):
     """EMODNet Data Fetcher
@@ -5722,17 +5686,11 @@ class EMODNetFetcher(Fetcher):
 
     def set_ds(self, result):
         if result[2] == 'csv':
-            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format='168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,',
-                                 src_srs='epsg:4326', dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
-                                 uncertainty=self.uncertainty, src_region=self.region, mask=self.mask, parent=self, invert_region = self.invert_region,
-                                 metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
-
+            self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,'
         elif result[2] == 'nc':
-            yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, result[1]), data_format=200,
-                                 src_srs='epsg:4326', dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight,
-                                 uncertainty=self.uncertainty, src_region=self.region, mask=self.mask, parent=self, invert_region = self.invert_region,
-                                 metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+            self.fetches_params['data_format'] = 200
             
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
@@ -5760,39 +5718,38 @@ class eHydroFetcher(Fetcher):
             elev_datum = tmp_layer[1].GetField('elevationDatum')
             tmp_gdb = tmp_layer = None
             v = vdatums.get_vdatum_by_name(elev_datum)
-            
-            usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048",
-                                      src_srs='{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                      x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                      parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                      cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-            yield(usace_ds)
+            self.fetches_params['mod'] = src_gdb
+            self.fetches_params['src_srs'] = '{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None
+            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048'            
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
-                usace_ds = DatasetFactory(mod=src_gdb, data_format="302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048",
-                                          src_srs='{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None, dst_srs=self.dst_srs,
-                                          x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                                          parent=self, invert_region = self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                                          cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-                yield(usace_ds)
+                self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
     def set_ds_XYZ(self, result):
-        src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+        src_gdb = utils.gdb_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            outdir=self.fetch_module._outdir,
+            verbose=False
+        )
         if src_gdb is not None:
             tmp_gdb = ogr.Open(src_gdb)
             tmp_layer = tmp_gdb.GetLayer('SurveyPoint')
             src_srs = tmp_layer.GetSpatialRef()
             src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
-
-            src_usaces = utils.p_unzip(os.path.join(self.fetch_module._outdir, result[1]), ['XYZ', 'xyz', 'dat'], outdir=self.fetch_module._outdir)
+            src_usaces = utils.p_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                ['XYZ', 'xyz', 'dat'],
+                outdir=self.fetch_module._outdir,
+                verbose=self.verbose
+            )
             for src_usace in src_usaces:
-                usace_ds = DatasetFactory(mod=src_usace, data_format='168:z_scale=.3048', src_srs='{}+5866'.format(src_epsg) if src_epsg is not None else None,
-                                          dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, mask=self.mask, 
-                                          src_region=self.region, parent=self, invert_region=self.invert_region,
-                                          metadata=copy.deepcopy(self.metadata), cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module()
-                yield(usace_ds)
-        
+                self.fetches_params['mod'] = src_usace
+                self.fetches_params['data_format'] = '168:z_scale=.3048'
+                self.fetches_params['src_srs'] = '{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None
+                yield(DatasetFactory(**self.fetches_params)._acquire_module())        
         
 class BlueTopoFetcher(Fetcher):
     """BlueTopo Gridded bathymetric data Fetcher
@@ -5824,19 +5781,11 @@ class BlueTopoFetcher(Fetcher):
 
         if self.mask is not None:
             new_mask = utils.make_temp_fn('test_tmp_mask')
-            gdalfun.gdal_mask(sid, self.mask['mask'], new_mask, msk_value = 1, verbose = True)
+            gdalfun.gdal_mask(sid, self.mask['mask'], new_mask, msk_value=1, verbose=True)
             os.replace(new_mask, sid)
-            
-        yield(
-            DatasetFactory(
-                mod=os.path.join(self.fetch_module._outdir, result[1]),
-                data_format='200:band_no=1:mask={}:uncertainty_mask=2{}'.format(sid, ':weight_mask=2' if self.unc_weights else ''),
-                src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs, 
-                x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata),
-                cache_dir = self.fetch_module._outdir, verbose=self.verbose
-            )._acquire_module()
-        ) 
+
+        self.fetches_params['data_format'] = '200:band_no=1:mask={}:uncertainty_mask=2{}'.format(sid, ':weight_mask=2' if self.unc_weights else '')
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())        
 
 class NGSFetcher(Fetcher):
     """NGS Monument data
@@ -5865,10 +5814,11 @@ class NGSFetcher(Fetcher):
                             )
                             xyz.dump(dst_port=tmp_ngs)
 
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz')
+        self.fetches_params['data_format'] = 168
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
+
+        utils.remove_glob(os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'))
 
 class TidesFetcher(Fetcher):
     """NOS Tide Station data
@@ -5889,9 +5839,9 @@ class TidesFetcher(Fetcher):
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), 'w') as tmp_ngs:
                     for feature in r['features']:
-                        if self.fetch_module.station_id is not None:
-                            if self.fetch_module.station_id != feature['attributes']['id']:
-                                continue
+                        # if self.fetch_module.station_id is not None:
+                        #     if self.fetch_module.station_id != feature['attributes']['id']:
+                        #         continue
                             
                         lon = feature['attributes']['longitude']
                         lat = feature['attributes']['latitude']
@@ -5903,11 +5853,12 @@ class TidesFetcher(Fetcher):
                             xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
                             xyz.dump(dst_port=tmp_ngs)
 
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, 
-                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz')
+        self.fetches_params['data_format'] = 168
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
+        utils.remove_glob(os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'))
+        
 class WaterServicesFetcher(Fetcher):
     """USGS Water Services
 
@@ -5950,12 +5901,13 @@ class WaterServicesFetcher(Fetcher):
                             
                             xyz = xyzfun.XYZPoint(src_srs='epsg:4326').from_list([lon, lat, z])
                             xyz.dump(dst_port=tmp_ws)
-                        
-        yield(DatasetFactory(mod=os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'), data_format=168, src_srs='epsg:4326', dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, 
-                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())
 
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz')
+        self.fetches_params['data_format'] = 168
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
+
+        utils.remove_glob(os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'))
+                            
 class VDatumFetcher(Fetcher):
     """VDatum transformation grids.
     """
@@ -5967,17 +5919,16 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        src_tif = os.path.join(self.fetch_module._outdir, '{}.tif'.format(utils.fn_basename2(os.path.basename(result[1]))))
-        
+        src_tif = os.path.join(self.fetch_module._outdir, '{}.tif'.format(utils.fn_basename2(os.path.basename(result[1]))))        
         if result[1].endswith('.zip'):
             v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)[0]
             utils.run_cmd('gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=self.verbose)
-        
-        yield(DatasetFactory(mod=src_tif, data_format=200, node='pixel', src_srs=self.fetch_module.src_srs, dst_srs=self.dst_srs,
-                             x_inc=self.x_inc, y_inc=self.y_inc, weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-                             parent=self, invert_region=self.invert_region, metadata=copy.deepcopy(self.metadata), mask=self.mask, 
-                             cache_dir = self.fetch_module._outdir, verbose=self.verbose)._acquire_module())        
 
+        self.fetches_params['mod'] = src_tif
+        self.fetches_params['data_format'] = 200
+        self.fetches_params['node'] = 'pixel'
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
+        
 ## todo: allow lakes bathymetry
 ## as well as lakes breaklines (shape nodes)
 ## see: https://www.esri.com/arcgis-blog/products/arcgis-pro/3d-gis/hydro-flattening-of-river-shorelines-in-lidar-based-dem-production/
@@ -6160,7 +6111,7 @@ class DatasetFactory(factory.CUDEMFactory):
         -217: {'name': "csb",
                'fmts': ['csb'],
                'description': 'The CSB fetches module',
-               'call': CSBFetcher},
+               'call': Fetcher},
         -300: {'name': 'emodnet',
                'fmts': ['emodnet'],
                'description': 'The emodnet fetches module',

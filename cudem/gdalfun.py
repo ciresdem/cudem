@@ -792,9 +792,16 @@ class gdal_datasource:
             except:
                 self.src_ds = None
 
-        elif utils.str_or(self.src_gdal) is not None and (os.path.exists(self.src_gdal) or utils.fn_url_p(self.src_gdal) or len(self.src_gdal.split(':')) > 1):
+        elif utils.str_or(self.src_gdal) is not None \
+             and (os.path.exists(self.src_gdal) \
+                  or utils.fn_url_p(self.src_gdal) \
+                  or len(self.src_gdal.split(':')) > 1):
             try:
-                self.src_ds = gdal.Open(self.src_gdal, 0 if not self.update else 1)
+                if self.update:
+                    self.src_ds = gdal.OpenEx(self.src_gdal, 1, open_options=['IGNORE_COG_LAYOUT_BREAK=YES'])
+                else:
+                    self.src_ds = gdal.Open(self.src_gdal, 0)
+                    
             except:
                 self.src_ds = None
 
@@ -1010,11 +1017,13 @@ def gdal_get_ndv(src_gdal, band = 1):
 def gdal_set_ndv(src_gdal, ndv = -9999, convert_array = False, verbose = True):
     """set the nodata value of gdal datasource"""
 
-    with gdal_datasource(src_gdal, update=True) as src_ds:        
+    with gdal_datasource(src_gdal, update=True) as src_ds:
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             curr_nodata = ds_config['ndv']
-
+            if verbose:
+                utils.echo_msg('setting nodata value from {} to {}'.format(curr_nodata, ndv))
+                               
             for band in range(1, src_ds.RasterCount+1):
                 this_band = src_ds.GetRasterBand(band)
                 this_band.DeleteNoDataValue()

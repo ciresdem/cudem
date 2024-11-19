@@ -742,9 +742,9 @@ class VerticalTransform:
 
         #utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
-            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
+            #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
+            #utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
