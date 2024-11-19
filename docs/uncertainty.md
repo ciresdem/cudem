@@ -209,10 +209,13 @@ see [waffles](/docs/waffles.md) for more information on the syntax of the waffle
 
 ```bash
 waffles -R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 \
--E .111111111s -O nocal_test -p -P epsg:4326+5703 -X 0:15 \
+-E .111111111s \
+-O nocal_test \
+-P epsg:4326+5703 \
+-X 0:15 \
 -T outliers:stacks=True:multipass=4:accumulate=True:mode=unscaled:max_weight=1.5 \
 -M cudem:pre_mode=mbgrid:landmask=True:polygonize=5:pre_count=3:pre_upper_limit=-.1:min_weight=.6 \
--w -k -m -c -u\
+-p -w -k -m -c -u\
 mar_grav,-106:bathy_only=True,.001,.85 \
 charts,-200,.01,.75 \
 hydronos:datatype=xyz,-202,.1,.1 \
