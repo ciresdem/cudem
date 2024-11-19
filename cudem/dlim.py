@@ -4471,7 +4471,8 @@ class Scratch(ElevationDataset):
                 ):
                     this_ds.initialize()
                     for ds in this_ds.parse():
-                        self.data_entries.append(ds) # fill self.data_entries with each dataset for use outside the yield.
+                        # fill self.data_entries with each dataset for use outside the yield.
+                        self.data_entries.append(ds)
                         yield(ds)
                         
 class Datalist(ElevationDataset):
@@ -4707,19 +4708,15 @@ class Datalist(ElevationDataset):
                     ## generate the dataset object to yield
                     data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
-                    #utils.echo_msg_bold(self.src_srs)
                     data_set = DatasetFactory(
                         **self._copy_params(mod=data_mod, metadata=md, src_srs=self.src_srs, **data_set_args)
                     )._acquire_module()
-                    # data_set = DatasetFactory(mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
-                    #                           invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
-                    #                           x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
-                    #                           stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=self.verbose, **data_set_args)._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                     ):
                         data_set.initialize()
-                        for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
+                        ## fill self.data_entries with each dataset for use outside the yield.
+                        for ds in data_set.parse(): 
                             self.data_entries.append(ds) 
                             yield(ds)
 
@@ -4760,11 +4757,6 @@ class Datalist(ElevationDataset):
                             data_set = DatasetFactory(
                                 **self._copy_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self)
                             )._acquire_module()
-                            # data_set = DatasetFactory(mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
-                            #                           src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
-                            #                           src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
-                            #                           stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, sample_alg=self.sample_alg,
-                            #                           cache_dir=self.cache_dir, verbose=self.verbose)._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                             ):
@@ -4784,17 +4776,20 @@ class Datalist(ElevationDataset):
                                                 inf_region,
                                                 self.region if data_set.transformer is None else data_set.trans_region
                                         ):
-                                            for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
+                                            ## fill self.data_entries with each dataset for use outside the yield.
+                                            for ds in data_set.parse(): 
                                                 self.data_entries.append(ds) 
                                                 yield(ds)
 
                                     else:
-                                        for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
+                                        ## fill self.data_entries with each dataset for use outside the yield.
+                                        for ds in data_set.parse(): 
                                             self.data_entries.append(ds) 
                                             yield(ds)
 
                                 else:
-                                    for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
+                                    ## fill self.data_entries with each dataset for use outside the yield.
+                                    for ds in data_set.parse(): 
                                         self.data_entries.append(ds)
                                         yield(ds)
 
@@ -4834,6 +4829,7 @@ class ZIPlist(ElevationDataset):
         self.infos.file_hash = self.infos.generate_hash()
         for entry in self.parse():            
             entry_minmax = entry.infos.minmax
+            
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
@@ -4956,11 +4952,15 @@ class Fetcher(ElevationDataset):
     sub-class for it.
     """
 
-    def __init__(self, keep_fetched_data = True, outdir = None, check_size = True, callback = fetches.fetches_callback, **kwargs):
+    def __init__(
+            self, keep_fetched_data = True, outdir = None, check_size = True,
+            callback = fetches.fetches_callback, **kwargs
+    ):
         super().__init__(**kwargs)
-        self.outdir = outdir if outdir is not None else self.cache_dir # cache directory to store fetched data
+        # cache directory to store fetched data
+        self.outdir = outdir if outdir is not None else self.cache_dir 
         self.fetch_module = fetches.FetchesFactory(
-            mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir#outdir=self.cache_dir
+            mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
