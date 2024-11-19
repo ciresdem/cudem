@@ -5086,7 +5086,7 @@ class NEDFetcher(Fetcher):
         ned_metadata['name'] = src_dem
         self.fetches_params['mod'] = src_dem
         self.fetches_params['mask'] = ned_mask
-        yield(DatasetFactory(**self.fetches_params))
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         if coast_mask is not None:
             utils.remove_glob('{}.*'.format(utils.fn_basename2(coast_mask)))
@@ -5166,7 +5166,7 @@ class DAVFetcher_SLR(Fetcher):
         ## this doesn't work in all cases, update to find and remove flattened areas
         #gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
         self.fetches_params['remove_flats'] = True
-        yield(DatasetFactory(**self.fetches_params))    
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())    
         
 class SWOTFetcher(Fetcher):
     """SWOT L2_HR_Raster data from NASA

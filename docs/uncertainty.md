@@ -208,7 +208,8 @@ In this example we generate 2 1/9 arc-second DEMs and associated Uncertainty ras
 see [waffles](/docs/waffles.md) for more information on the syntax of the waffles command.
 
 ```bash
-waffles -R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 \
+waffles \
+-R -123.5/-123.25/38/38.25 -R -123.5/-123.25/37.75/38 \
 -E .111111111s \
 -O nocal_test \
 -P epsg:4326+5703 \
