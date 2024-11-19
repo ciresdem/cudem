@@ -201,13 +201,9 @@ In this command we use the previously defined regional tile set 'regions_tile_se
 
 ### Point Reyes
 
-In this example we generate 2 1/9 arc-second DEMs and associated Uncertainty rasters of the Point Reyes area on the coast of California.
+In this example we generate 2 1/9 arc-second DEMs and associated Uncertainty rasters (Figure 2) off the coast of Point Reyes, California using only fetches dataset modules. Instead of creating a datalist, we can just list the fetches modules in the command-line. To create 2 1/4 degree tiles, we input 2 region parameters into the waffles command-line.
 
-Here, we only use fetches modules for the datasets and list them all in the command-line instead of creating a datalist.
-
-Also, we list 2 input regions to output DEMs and associated rasters for 2 1/4 degree tiles.
-
-### Generate the DEM and Uncertainty
+#### Generate the DEM and Uncertainty
 
 see [waffles](/docs/waffles.md) for more information on the syntax of the waffles command.
 
