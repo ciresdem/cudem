@@ -1366,7 +1366,7 @@ class ElevationDataset:
                                 self.trans_fn, in_vertical_epsg, out_vertical_epsg
                             )
                         )
-                    out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
+                    out_src_srs = '{} +proj=vgridshift +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
                     if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_to_meter = True
@@ -1386,14 +1386,13 @@ class ElevationDataset:
                 self.dst_proj4 = out_horizontal_crs.to_proj4()
                 self.aux_src_proj4 = in_horizontal_crs.to_proj4()
                 self.aux_dst_proj4 = out_horizontal_crs.to_proj4()
-                #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
                 if self.region is not None:
                     aoi = pyproj.aoi.AreaOfInterest(
                         self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax
                     )
                 else:
                     aoi = None
-                    
+
                 self.transformer = pyproj.Transformer.from_crs(
                     in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi
                 )
@@ -2120,7 +2119,6 @@ class ElevationDataset:
 
                 # if u_col != 'u':
                 #     points.rename(columns={u_col: 'u'}, inplace=True)
-                
                 if self.transformer is not None:
                     points['x'], points['y'], points['z'] = self.transformer.transform(
                         points['x'], points['y'], points['z']
