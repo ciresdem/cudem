@@ -1267,7 +1267,9 @@ class ElevationDataset:
                     
             ## horizontal Transformation
             try:
-                self.transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
+                self.transformer = pyproj.Transformer.from_crs(
+                    in_horizontal_crs, out_horizontal_crs, always_xy=True
+                )
             except Exception as e:
                 utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
                     in_horizontal_crs.name, out_horizontal_crs.name, e
@@ -1277,7 +1279,7 @@ class ElevationDataset:
 
             if self.region is not None:
                 self.trans_region = self.region.copy()
-                self.trans_region.src_srs = out_horizontal_crs.to_proj4() #'epsg:{}'.format(out_horizontal_epsg)
+                self.trans_region.src_srs = out_horizontal_crs.to_proj4()
                 self.trans_region.warp(in_horizontal_crs.to_proj4())
 
             self.src_proj4 = in_horizontal_crs.to_proj4()
@@ -1329,14 +1331,26 @@ class ElevationDataset:
                             )
 
                         self.trans_fn, self.trans_fn_unc = vdatums.VerticalTransform(
-                            'nearest', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
-                            geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=self.cache_dir, verbose=False
+                            'nearest',
+                            vd_region,
+                            vd_x_inc,
+                            vd_y_inc,
+                            in_vertical_epsg,
+                            out_vertical_epsg,
+                            geoid_in=src_geoid,
+                            geoid_out=dst_geoid,
+                            cache_dir=self.cache_dir,
+                            verbose=False
                         ).run(outfile=self.trans_fn)                        
 
                 if self.trans_fn is not None and os.path.exists(self.trans_fn):
-                    #utils.echo_msg('using vertical tranformation grid {} from {} to {}'.format(self.trans_fn, in_vertical_epsg, out_vertical_epsg))
+                    if self.verbose:
+                        utils.echo_msg(
+                            'using vertical tranformation grid {} from {} to {}'.format(
+                                self.trans_fn, in_vertical_epsg, out_vertical_epsg
+                            )
+                        )
                     out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
-
                     if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_to_meter = True
@@ -1358,11 +1372,15 @@ class ElevationDataset:
                 self.aux_dst_proj4 = out_horizontal_crs.to_proj4()
                 #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
                 if self.region is not None:
-                    aoi = pyproj.aoi.AreaOfInterest(self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax)
+                    aoi = pyproj.aoi.AreaOfInterest(
+                        self.region.xmin, self.region.ymin, self.region.xmax, self.region.ymax
+                    )
                 else:
                     aoi = None
                     
-                self.transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi)
+                self.transformer = pyproj.Transformer.from_crs(
+                    in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi
+                )
 
         ## dataset region
         if self.region is not None and self.region.valid_p():
@@ -1466,7 +1484,10 @@ class ElevationDataset:
 
         self.archive_datalist = '{}.datalist'.format(a_name)
         archive_keys = []
-        with tqdm(desc='archiving datasets to {}'.format(self.archive_datalist), leave=self.verbose) as pbar:
+        with tqdm(
+                desc='archiving datasets to {}'.format(self.archive_datalist),
+                leave=self.verbose
+        ) as pbar:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse():
                     pbar.update()
@@ -1505,8 +1526,6 @@ class ElevationDataset:
                             ), 'a'
                     ) as sub_dlf:
                         pbar.update()
-                        #utils.echo_msg(this_entry)
-                        #utils.echo_msg(this_entry.metadata)
                         if this_entry.remote == True:
                             #sub_xyz_path = '{}_{}.xyz'.format(
                             #    this_entry.metadata['name'], self.region.format('fn')
@@ -1547,7 +1566,11 @@ class ElevationDataset:
                                 archive_keys.append(sub_dirname)
                                 sub_dlf.write('{} -1 1 0\n'.format(os.path.relpath(sub_sub_dlf_path, this_dir)))
 
-                            sub_sub_dlf.write('{} 168 1 0\n'.format(os.path.relpath(this_xyz_path, os.path.dirname(sub_sub_dlf_path))))
+                            sub_sub_dlf.write(
+                                '{} 168 1 0\n'.format(
+                                    os.path.relpath(this_xyz_path, os.path.dirname(sub_sub_dlf_path))
+                                )
+                            )
                             with open(this_xyz_path, 'w') as xp:
                                 for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
                                     #yield(this_xyz) # don't need to yield data here.
@@ -1566,8 +1589,13 @@ class ElevationDataset:
                                                   dst_port=xp, encode=False, precision=self.dump_precision)
                                 
         ## generate datalist inf/json
-        this_archive = DatasetFactory(mod=self.archive_datalist, data_format=-1, parent=None, weight=1,
-                                      uncertainty=0)._acquire_module().initialize()
+        this_archive = DatasetFactory(
+            mod=self.archive_datalist,
+            data_format=-1,
+            parent=None,
+            weight=1,
+            uncertainty=0
+        )._acquire_module().initialize()
         this_archive.inf()
 
     def yield_block_array(self): #*depreciated*
@@ -1662,19 +1690,42 @@ class ElevationDataset:
             if status != 0:
                 utils.remove_glob('{}*'.format(mask_fn))
 
-        dst_ds = driver.Create(out_file, xcount, ycount, 7, gdt,
-                               options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else [])
+        dst_ds = driver.Create(
+            out_file,
+            xcount,
+            ycount,
+            7,
+            gdt,
+            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else []
+        )
 
         if dst_ds is None:
-            utils.echo_error_msg('failed to create stack grid {} {} {} {} {}...'.format(out_file, xcount, ycount, gdt, fmt))
+            utils.echo_error_msg(
+                'failed to create stack grid {} {} {} {} {}...'.format(
+                    out_file, xcount, ycount, gdt, fmt
+                )
+            )
             sys.exit(-1)
 
         dst_ds.SetGeoTransform(dst_gt)
-        stacked_bands = {'z': dst_ds.GetRasterBand(1), 'count': dst_ds.GetRasterBand(2),
-                         'weights': dst_ds.GetRasterBand(3), 'uncertainty': dst_ds.GetRasterBand(4),
-                         'src_uncertainty': dst_ds.GetRasterBand(5), 'x': dst_ds.GetRasterBand(6), 'y': dst_ds.GetRasterBand(7) }
-        stacked_data = {'z': None, 'count': None, 'weights': None, 'uncertainty': None, 'src_uncertainty': None, 'x': None, 'y': None}
-        
+        stacked_bands = {
+            'z': dst_ds.GetRasterBand(1),
+            'count': dst_ds.GetRasterBand(2),
+            'weights': dst_ds.GetRasterBand(3),
+            'uncertainty': dst_ds.GetRasterBand(4),
+            'src_uncertainty': dst_ds.GetRasterBand(5),
+            'x': dst_ds.GetRasterBand(6),
+            'y': dst_ds.GetRasterBand(7)
+        }
+        stacked_data = {
+            'z': None,
+            'count': None,
+            'weights': None,
+            'uncertainty': None,
+            'src_uncertainty': None,
+            'x': None,
+            'y': None
+        }        
         for key in stacked_bands.keys():
             stacked_bands[key].SetNoDataValue(np.nan)
             stacked_bands[key].SetDescription(key)
@@ -1714,7 +1765,11 @@ class ElevationDataset:
                                 
                         m_band.SetMetadata(band_md)
                     except Exception as e:
-                        utils.echo_error_msg('could not set band metadata: {}; {}'.format(band_md, e))
+                        utils.echo_error_msg(
+                            'could not set band metadata: {}; {}'.format(
+                                band_md, e
+                            )
+                        )
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
@@ -1731,7 +1786,9 @@ class ElevationDataset:
                 m_ds.FlushCache()
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stacked_bands.keys():
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    stacked_data[key] = stacked_bands[key].ReadAsArray(
+                        srcwin[0], srcwin[1], srcwin[2], srcwin[3]
+                    )
                     if mode != 'min' and mode != 'max':
                         stacked_data[key][np.isnan(stacked_data[key])] = 0
                     #else:
@@ -1940,7 +1997,9 @@ class ElevationDataset:
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
             utils.echo_msg('filtering stacks module with {}'.format(f))
-            grits_filter = grits.GritsFactory(mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3, count_mask=2)._acquire_module()
+            grits_filter = grits.GritsFactory(
+                mod=f, src_dem=out_file, uncertainty_mask=4, weight_mask=3, count_mask=2
+            )._acquire_module()
             if grits_filter is not None:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
@@ -2047,7 +2106,9 @@ class ElevationDataset:
                 #     points.rename(columns={u_col: 'u'}, inplace=True)
                 
                 if self.transformer is not None:
-                    points['x'], points['y'], points['z'] = self.transformer.transform(points['x'], points['y'], points['z'])
+                    points['x'], points['y'], points['z'] = self.transformer.transform(
+                        points['x'], points['y'], points['z']
+                    )
                     points = points[~np.isinf(points['z'])]
                     
                 if self.region is not None and self.region.valid_p():
@@ -2074,7 +2135,9 @@ class ElevationDataset:
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
                             utils.echo_msg(f)
-                            point_filter = PointFilterFactory(mod=f, points=points)._acquire_module()
+                            point_filter = PointFilterFactory(
+                                mod=f, points=points
+                            )._acquire_module()
                             if point_filter is not None:
                                 points = point_filter()
 
@@ -2083,7 +2146,6 @@ class ElevationDataset:
         
         self.transformer = None
 
-    #
     def export_data_as_pandas(self):
         """export the point data as a pandas dataframe.
         
@@ -2105,7 +2167,9 @@ class ElevationDataset:
             except:
                 points_u = np.zeros(points['z'].shape)
 
-            points_u = np.sqrt(points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
+            points_u = np.sqrt(
+                points_u**2 + (self.uncertainty if self.uncertainty is not None else 0)**2
+            )
             points_u[np.isnan(points_u)] = 0
             points_dataset = pd.DataFrame(
                 {'x': points['x'],
@@ -2366,7 +2430,13 @@ class ElevationDataset:
             
         time_start = self.f.attrs['time_coverage_start'].decode('utf-8')
         time_end = self.f.attrs['time_coverage_end'].decode('utf-8')
-        this_sst = fetches.MUR_SST(src_region=this_region, verbose=self.verbose, outdir=self.cache_dir, time_start=time_start, time_end=time_end)
+        this_sst = fetches.MUR_SST(
+            src_region=this_region,
+            verbose=self.verbose,
+            outdir=self.cache_dir,
+            time_start=time_start,
+            time_end=time_end
+        )
         this_sst.run()
         
         # sea_temp = ds.analysed_sst.sel(lat=lats, lon=lons)
@@ -2464,7 +2534,8 @@ class ElevationDataset:
                         cst_osm = cst_result[1]
                         out = fetches.polygonize_osm_coastline(
                             cst_osm, utils.make_temp_fn(
-                                utils.fn_basename2(cst_osm) + '_coast.shp', temp_dir=self.cache_dir
+                                utils.fn_basename2(cst_osm) + '_coast.shp',
+                                temp_dir=self.cache_dir
                             ),
                             region=self.region, include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
@@ -2557,9 +2628,14 @@ class XYZFile(ElevationDataset):
             with open(self.fn, 'r') as src_data:
                 while True:
                     points = np.loadtxt(
-                        src_data, delimiter=self.delim, comments='#', ndmin = 1, skiprows=skip_,
+                        src_data,
+                        delimiter=self.delim,
+                        comments='#',
+                        ndmin = 1,
+                        skiprows=skip_,
                         usecols=[x for x in [self.xpos, self.ypos, self.zpos, self.wpos, self.upos] if x is not None],
-                        dtype={'names': self.field_names, 'formats': self.field_formats}, max_rows=self.iter_rows
+                        dtype={'names': self.field_names, 'formats': self.field_formats},
+                        max_rows=self.iter_rows
                     )
                     skip_ = 0
 
@@ -2793,9 +2869,20 @@ class GDALFile(ElevationDataset):
     node: force node registration of either 'pixel' or 'grid'
     """
     
-    def __init__(self, weight_mask = None, uncertainty_mask = None,  x_band = None, y_band = None, uncertainty_mask_to_meter = 1,
-                 open_options = None, sample = None, check_path = True, super_grid = False, band_no = 1, remove_flat = False,
-                 node = None, **kwargs):
+    def __init__(self,
+                 weight_mask = None,
+                 uncertainty_mask = None,
+                 x_band = None,
+                 y_band = None,
+                 uncertainty_mask_to_meter = 1,
+                 open_options = None,
+                 sample = None,
+                 check_path = True,
+                 super_grid = False,
+                 band_no = 1,
+                 remove_flat = False,
+                 node = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self.weight_mask = weight_mask # associated raster file/band holding weight data
         self.uncertainty_mask = uncertainty_mask # associated raster file/band holding uncertainty data
@@ -2931,7 +3018,11 @@ class GDALFile(ElevationDataset):
             if self.dst_srs is not None:
                 inf_trans_region.warp(self.dst_srs)
 
-            raster_is_higher_res = np.prod(inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]) > np.prod(inf_trans_region.geo_transform(x_inc=self.x_inc)[:2])
+            raster_is_higher_res = np.prod(
+                inf_region.geo_transform(x_inc=self.dem_infos['geoT'][1])[:2]
+            ) > np.prod(
+                inf_trans_region.geo_transform(x_inc=self.x_inc)[:2]
+            )
             if raster_is_higher_res:
                 self.resample_and_warp = False
 
@@ -3006,7 +3097,11 @@ class GDALFile(ElevationDataset):
 
                 self.tmp_elev_band = tmp_elev_fn
                 if self.verbose:
-                    utils.echo_msg('extracting elevation data from {} to {}'.format(self.fn, self.tmp_elev_band))
+                    utils.echo_msg(
+                        'extracting elevation data from {} to {}'.format(
+                            self.fn, self.tmp_elev_band
+                        )
+                    )
                     
                 self.tmp_elev_band, status = gdalfun.gdal_extract_band(
                     self.src_ds, self.tmp_elev_band,
@@ -3024,7 +3119,11 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.uncertainty_mask) is not None:
                     self.tmp_unc_band = tmp_unc_fn
                     if self.verbose:
-                        utils.echo_msg('extracting uncertainty mask from {} to {}'.format(self.fn, self.tmp_unc_band))
+                        utils.echo_msg(
+                            'extracting uncertainty mask from {} to {}'.format(
+                                self.fn, self.tmp_unc_band
+                            )
+                        )
                         
                     self.tmp_unc_band, status = gdalfun.gdal_extract_band(
                         self.src_ds, self.tmp_unc_band,
@@ -3038,7 +3137,11 @@ class GDALFile(ElevationDataset):
                 if utils.int_or(self.weight_mask) is not None:                    
                     self.tmp_weight_band = tmp_weight_fn
                     if self.verbose:
-                        utils.echo_msg('extracting weight mask from {} to {}'.format(self.fn, self.tmp_weight_band))
+                        utils.echo_msg(
+                            'extracting weight mask from {} to {}'.format(
+                                self.fn, self.tmp_weight_band
+                            )
+                        )
                         
                     self.tmp_weight_band, status = gdalfun.gdal_extract_band(
                         self.src_ds, self.tmp_weight_band,
@@ -3103,7 +3206,11 @@ class GDALFile(ElevationDataset):
                 self.src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
                 if self.src_ds is None:
                     if self.verbose:
-                        utils.echo_warning_msg('could not open file using open options {}'.format(self.open_options))
+                        utils.echo_warning_msg(
+                            'could not open file using open options {}'.format(
+                                self.open_options
+                            )
+                        )
                         
                     self.src_ds = gdal.Open(self.fn)
             else:
@@ -3303,9 +3410,12 @@ class BAGFile(ElevationDataset):
     vr_strategy (str): VR strategy to use (MIN/MAX/AUTO)
     """
 
-    def __init__(
-            self, explode = False, force_vr = False, vr_resampled_grid = True, vr_strategy = 'MIN', **kwargs
-    ):
+    def __init__(self,
+                 explode = False,
+                 force_vr = False,
+                 vr_resampled_grid = True,
+                 vr_strategy = 'MIN',
+                 **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
@@ -3414,7 +3524,8 @@ class BAGFile(ElevationDataset):
                     yield(gdal_ds)
             else: # use vrbag.py
                 tmp_bag_as_tif = utils.make_temp_fn('{}_tmp.tif'.format(utils.fn_basename2(self.fn)))
-                sr_cell_size = None#self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+                #self.x_inc * 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
+                sr_cell_size = None
                 vrbag.interpolate_vr_bag(
                     self.fn, tmp_bag_as_tif, self.cache_dir, sr_cell_size=sr_cell_size,
                     use_blocks=True, method='linear', nodata=3.4028234663852886e+38
@@ -3467,10 +3578,18 @@ class SWOTFile(ElevationDataset):
             if src_h5 is not None:
                 if 'short_name' in src_h5.attrs.keys():
                     if src_h5.attrs['short_name'] != short_name.encode('utf-8'):
-                        utils.echo_error_msg('{} does not appear to be a SWOT {} file'.format(self.fn, short_name))
+                        utils.echo_error_msg(
+                            '{} does not appear to be a SWOT {} file'.format(
+                                self.fn, short_name
+                            )
+                        )
                         self._close_h5File(src_h5)
                 else:
-                    utils.echo_error_msg('{} does not appear to be a SWOT file'.format(self.fn))
+                    utils.echo_error_msg(
+                        '{} does not appear to be a SWOT file'.format(
+                            self.fn
+                        )
+                    )
                     self._close_h5File(src_h5)
                     
         except Exception as e:
@@ -3502,8 +3621,15 @@ class SWOT_PIXC(SWOTFile):
     "open_ocean land continental_water aquatic_vegetation continental_ice_snow floating_ice salted_basin"  		
     """
     
-    def __init__(self, group = 'pixel_cloud', var = 'height', apply_geoid = True, classes = None, classes_qual = None,
-                 anc_classes = None, remove_class_flags = False, **kwargs):
+    def __init__(self,
+                 group = 'pixel_cloud',
+                 var = 'height',
+                 apply_geoid = True,
+                 classes = None,
+                 classes_qual = None,
+                 anc_classes = None,
+                 remove_class_flags = False,
+                 **kwargs):
         super().__init__(**kwargs)
         self.group = group
         self.var = var
@@ -3645,9 +3771,16 @@ class IceSat2File(ElevationDataset):
     0, 1, 2, 3, 4
     """
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = '2/3/4',
-                 columns={}, classify_bathymetry=True, classify_buildings=True, reject_failed_qa=True,
-                 classify_water=True, **kwargs):
+    def __init__(self,
+                 water_surface = 'geoid',
+                 classes = None,
+                 confidence_levels = '2/3/4',
+                 columns = {},
+                 classify_bathymetry = True,
+                 classify_buildings = True,
+                 reject_failed_qa = True,
+                 classify_water = True,
+                 **kwargs):
         super().__init__(**kwargs)
         self.data_format = 303
         self.water_surface = water_surface
@@ -4174,10 +4307,12 @@ class MBSParser(ElevationDataset):
     mb_exclude=[]
     """
 
-    def __init__(
-            self, mb_fmt = None, mb_exclude = 'A', want_mbgrid = False,
-            want_binned = False, **kwargs
-    ):
+    def __init__(self,
+                 mb_fmt = None,
+                 mb_exclude = 'A',
+                 want_mbgrid = False,
+                 want_binned = False,
+                 **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
@@ -4229,7 +4364,6 @@ class MBSParser(ElevationDataset):
                         this_row += 1
 
         mbs_region = regions.Region().from_list(self.infos.minmax)
-
         if len(dims) > 0:
             xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
             yinc = (mbs_region.ymin - mbs_region.ymax) / dims[1]
@@ -4271,7 +4405,9 @@ class MBSParser(ElevationDataset):
         return(self)
 
     def parse_(self):
-        """use mblist to convert data to xyz then set the dataset as xyz and use that to process..."""
+        """use mblist to convert data to xyz then set the dataset as xyz and 
+        use that to process...
+        """
         
         mb_fn = os.path.join(self.fn)
         if self.region is not None:
@@ -4288,7 +4424,11 @@ class MBSParser(ElevationDataset):
         ), verbose=False)
 
         if status == 0:
-            data_set = DatasetFactory(**self._set_params(mod=out_mb, data_foramt=168))._acquire_module.initialize()
+            data_set = DatasetFactory(
+                **self._set_params(
+                    mod=out_mb, data_foramt=168
+                )
+            )._acquire_module.initialize()
             for ds in data_set.parse(): # fill self.data_entries with each dataset for use outside the yield.
                 self.data_entries.append(ds) 
                 yield(ds)
@@ -4317,7 +4457,12 @@ class MBSParser(ElevationDataset):
             )
 
             gdalfun.gdal2gdal('{}.grd'.format(ofn))
-            utils.remove_glob('_mb_grid_tmp.datalist', '{}.cmd'.format(ofn), '{}.mb-1'.format(ofn), '{}.grd*'.format(ofn))
+            utils.remove_glob(
+                '_mb_grid_tmp.datalist',
+                '{}.cmd'.format(ofn),
+                '{}.mb-1'.format(ofn),
+                '{}.grd*'.format(ofn)
+            )
             mbs_ds = DatasetFactory(
                 **self._set_params(mod='{}.tif'.format(ofn), data_format=200)
             )
@@ -4466,8 +4611,13 @@ class OGRFile(ElevationDataset):
     _known_layer_names = ['SOUNDG', 'SurveyPoint_HD', 'SurveyPoint']
     _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'surveyPointElev', 'Z_depth', 'Z_height']
     
-    def __init__(self, ogr_layer = None, elev_field = None, weight_field = None, uncertainty_field = None,
-                 z_scale = None, **kwargs):
+    def __init__(self,
+                 ogr_layer = None,
+                 elev_field = None,
+                 weight_field = None,
+                 uncertainty_field = None,
+                 z_scale = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self.ogr_layer = ogr_layer
         self.elev_field = elev_field
@@ -4723,10 +4873,19 @@ class Datalist(ElevationDataset):
         """
 
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
-        entry_fields = [entry_path, entry.data_format, entry.weight, entry.uncertainty,
-                        entry.metadata['name'], entry.metadata['title'], entry.metadata['source'],
-                        entry.metadata['date'], entry.metadata['data_type'], entry.metadata['resolution'],
-                        entry.metadata['hdatum'], entry.metadata['vdatum'], entry.metadata['url'],
+        entry_fields = [entry_path,
+                        entry.data_format,
+                        entry.weight,
+                        entry.uncertainty,
+                        entry.metadata['name'],
+                        entry.metadata['title'],
+                        entry.metadata['source'],
+                        entry.metadata['date'],
+                        entry.metadata['data_type'],
+                        entry.metadata['resolution'],
+                        entry.metadata['hdatum'],
+                        entry.metadata['vdatum'],
+                        entry.metadata['url'],
                         utils.dict2args(entry.params['mod_args'])]
         dst_defn = self.layer.GetLayerDefn()
         entry_geom = ogr.CreateGeometryFromWkt(entry_region.export_as_wkt())
@@ -4756,7 +4915,7 @@ class Datalist(ElevationDataset):
         if self._init_datalist_vector() == 0:
             for entry in self.parse():
                 entry_minmax = entry.infos.minmax
-                if entry.mask is not None: ## add all duplicat params???
+                if entry.mask is not None: ## add all duplicate params???
                     entry.params['mod_args']['mask'] = entry.mask['mask']
                     for key in entry.mask.keys():
                         entry.params['mod_args'][key] = entry.mask[key]
@@ -4766,7 +4925,9 @@ class Datalist(ElevationDataset):
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
                     if self.dst_srs is not None:
-                        entry_region = regions.Region(src_srs=entry.src_srs).from_list(entry_minmax).warp(self.dst_srs)
+                        entry_region = regions.Region(
+                            src_srs=entry.src_srs
+                        ).from_list(entry_minmax).warp(self.dst_srs)
                         entry_minmax = entry_region.export_as_list(include_z=True)
 
                 ## create the feature for the geojson
@@ -4848,7 +5009,9 @@ class Datalist(ElevationDataset):
             count = len(dl_layer)
             with tqdm(
                     total=len(dl_layer),
-                    desc='parsing {} datasets from datalist json {}.json @ {}'.format(count, self.fn, self.weight),
+                    desc='parsing {} datasets from datalist json {}.json @ {}'.format(
+                        count, self.fn, self.weight
+                    ),
                     leave=self.verbose
             ) as pbar:
                 for l,feat in enumerate(dl_layer):
@@ -4890,8 +5053,12 @@ class Datalist(ElevationDataset):
                         md[key] = feat.GetField(key)
 
                     ## generate the dataset object to yield
-                    data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
-                                                      feat.GetField('weight'), feat.GetField('uncertainty'))
+                    data_mod = '"{}" {} {} {}'.format(
+                        feat.GetField('path'),
+                        feat.GetField('format'),
+                        feat.GetField('weight'),
+                        feat.GetField('uncertainty')
+                    )
                     data_set = DatasetFactory(
                         **self._set_params(mod=data_mod, metadata=md, **data_set_args)
                     )._acquire_module()
@@ -4939,7 +5106,9 @@ class Datalist(ElevationDataset):
                             
                             ## generate the dataset object to yield
                             data_set = DatasetFactory(
-                               **self._set_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self, fn=None)
+                               **self._set_params(
+                                   mod=this_line, metadata=md, src_srs=self.src_srs, parent=self, fn=None
+                               )
                             )._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
@@ -5102,7 +5271,11 @@ class ZIPlist(ElevationDataset):
                                 yield(ds)
                     else:
                         if self.verbose:
-                            utils.echo_warning_msg('invalid inf file: {}.inf, skipping'.format(data_set.fn))
+                            utils.echo_warning_msg(
+                                'invalid inf file: {}.inf, skipping'.format(
+                                    data_set.fn
+                                )
+                            )
                             
                 else:
                     for ds in data_set.parse():
@@ -5133,12 +5306,15 @@ class Fetcher(ElevationDataset):
     sub-class for it.
     """
 
-    def __init__(
-            self, keep_fetched_data = True, outdir = None, check_size = True,
-            callback = fetches.fetches_callback, **kwargs
+    def __init__(self,
+                 keep_fetched_data = True,
+                 outdir = None,
+                 check_size = True,
+                 callback = fetches.fetches_callback,
+                 **kwargs
     ):
         super().__init__(**kwargs)
-        # cache directory to store fetched data
+        ## cache directory to store fetched data
         self.outdir = outdir if outdir is not None else self.cache_dir 
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir
@@ -5180,7 +5356,9 @@ class Fetcher(ElevationDataset):
     def parse(self):
         with tqdm(
                 total=len(self.fetch_module.results),
-                desc='parsing datasets from datalist fetches {} @ {}'.format(self.fetch_module, self.weight),
+                desc='parsing datasets from datalist fetches {} @ {}'.format(
+                    self.fetch_module, self.weight
+                ),
             leave=self.verbose
         ) as pbar:
             for result in self.fetch_module.results:
@@ -5203,9 +5381,13 @@ class Fetcher(ElevationDataset):
                             for ds in this_ds.parse():
                                 yield(ds)
                         else:
-                            utils.echo_warning_msg('could not set fetches datasource {}'.format(result))
+                            utils.echo_warning_msg(
+                                'could not set fetches datasource {}'.format(result)
+                            )
                 else:
-                    utils.echo_warning_msg('data not fetched {}:{}'.format(status, result))
+                    utils.echo_warning_msg(
+                        'data not fetched {}:{}'.format(status, result)
+                    )
                         
                 pbar.update()
                 
@@ -5407,8 +5589,14 @@ class SWOTFetcher(Fetcher):
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
 
-    def __init__(self, data_set = 'wse', apply_geoid = True, classes = None, classes_qual = None,
-                 anc_classes = None, remove_class_flags = False, **kwargs):
+    def __init__(self,
+                 data_set = 'wse',
+                 apply_geoid = True,
+                 classes = None,
+                 classes_qual = None,
+                 anc_classes = None,
+                 remove_class_flags = False,
+                 **kwargs):
         super().__init__(**kwargs)
         self.fetches_params['var'] = data_set
         self.fetches_params['apply_geoid'] = apply_geoid
@@ -5478,9 +5666,16 @@ class IceSat2Fetcher(Fetcher):
     __doc__ = '''{}    
     Fetches Module: <icesat2> - {}'''.format(__doc__, fetches.IceSat2.__doc__)
     
-    def __init__(self, water_surface = 'geoid', classes = None, confidence_levels = None, columns = {},
-                 classify_bathymetry = True, classify_buildings = True, classify_water = True,
-                 reject_failed_qa = True, **kwargs):
+    def __init__(self,
+                 water_surface = 'geoid',
+                 classes = None,
+                 confidence_levels = None,
+                 columns = {},
+                 classify_bathymetry = True,
+                 classify_buildings = True,
+                 classify_water = True,
+                 reject_failed_qa = True,
+                 **kwargs):
         super().__init__(**kwargs)
         self.fetches_params['water_suface'] = water_surface
         self.fetches_params['classes'] = classes
@@ -5723,7 +5918,12 @@ class MarGravFetcher(Fetcher):
     __doc__ = '''{}    
     Fetches Module: <mar_grav> - {}'''.format(__doc__, fetches.MarGrav.__doc__)
     
-    def __init__(self, rasterize=False, bathy_only=False, upper_limit=None, lower_limit=None, **kwargs):
+    def __init__(self,
+                 rasterize = False,
+                 bathy_only = False,
+                 upper_limit = None,
+                 lower_limit = None,
+                 **kwargs):
         super().__init__(**kwargs)
         self.rasterize = rasterize
         self.bathy_only = bathy_only
@@ -5740,9 +5940,17 @@ class MarGravFetcher(Fetcher):
             mg_region.zmin = self.lower_limit        
             mar_grav_fn = utils.make_temp_fn('mar_grav')
             _raster = waffles.WaffleFactory(
-                mod='IDW:min_points=16', data=['{},168:x_offset=REM,1'.format(os.path.join(self.fetch_module._outdir, result[1]))],
-                src_region=mg_region, xinc=utils.str2inc('30s'), yinc=utils.str2inc('30s'), upper_limit = self.upper_limit,
-                name=mar_grav_fn, node='pixel', verbose=True
+                mod='IDW:min_points=16',
+                data=['{},168:x_offset=REM,1'.format(
+                    os.path.join(self.fetch_module._outdir, result[1])
+                )],
+                src_region=mg_region,
+                xinc=utils.str2inc('30s'),
+                yinc=utils.str2inc('30s'),
+                upper_limit = self.upper_limit,
+                name=mar_grav_fn,
+                node='pixel',
+                verbose=True
             )._acquire_module()()            
             if self.upper_limit is not None or self.lower_limit is not None:
                 ds = gdal.Open(_raster.fn)
@@ -5887,7 +6095,11 @@ class eHydroFetcher(Fetcher):
         
     def set_ds(self, result):
         try:
-            src_gdb = utils.gdb_unzip(os.path.join(self.fetch_module._outdir, result[1]), outdir=self.fetch_module._outdir, verbose=False)
+            src_gdb = utils.gdb_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]),
+                outdir=self.fetch_module._outdir,
+                verbose=False
+            )
         except Exception as e:
             utils.echo_error_msg('{}: {}'.format(self.fn, e))
             src_gdb = None
@@ -5901,7 +6113,9 @@ class eHydroFetcher(Fetcher):
             tmp_gdb = tmp_layer = None
             v = vdatums.get_vdatum_by_name(elev_datum)
             self.fetches_params['mod'] = src_gdb
-            self.fetches_params['src_srs'] = '{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None
+            self.fetches_params['src_srs'] = '{}+{}'.format(
+                src_epsg, v if v is not None else '5866'
+            ) if src_epsg is not None else None
             self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048'            
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
@@ -5966,7 +6180,9 @@ class BlueTopoFetcher(Fetcher):
             gdalfun.gdal_mask(sid, self.mask['mask'], new_mask, msk_value=1, verbose=True)
             os.replace(new_mask, sid)
 
-        self.fetches_params['data_format'] = '200:band_no=1:mask={}:uncertainty_mask=2{}'.format(sid, ':weight_mask=2' if self.unc_weights else '')
+        self.fetches_params['data_format'] = '200:band_no=1:mask={}:uncertainty_mask=2{}'.format(
+            sid, ':weight_mask=2' if self.unc_weights else ''
+        )
         yield(DatasetFactory(**self.fetches_params)._acquire_module())        
 
 class NGSFetcher(Fetcher):
@@ -6101,10 +6317,19 @@ class VDatumFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def set_ds(self, result):
-        src_tif = os.path.join(self.fetch_module._outdir, '{}.tif'.format(utils.fn_basename2(os.path.basename(result[1]))))        
+        src_tif = os.path.join(
+            self.fetch_module._outdir, '{}.tif'.format(
+                utils.fn_basename2(os.path.basename(result[1]))
+            )
+        )
         if result[1].endswith('.zip'):
-            v_gtx = utils.p_f_unzip(os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir)[0]
-            utils.run_cmd('gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif), verbose=self.verbose)
+            v_gtx = utils.p_f_unzip(
+                os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir
+            )[0]
+            utils.run_cmd(
+                'gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif),
+                verbose=self.verbose
+            )
 
         self.fetches_params['mod'] = src_tif
         self.fetches_params['data_format'] = 200
@@ -6761,10 +6986,14 @@ See `datalists_usage` for full cli options.
             want_separate = True
 
         elif arg == '--modules':
-            factory.echo_modules(DatasetFactory._modules, None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1])))
+            factory.echo_modules(
+                DatasetFactory._modules, None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
+            )
             sys.exit(0)
         elif arg == '--md_modules':
-            factory.echo_modules(DatasetFactory._modules, None if i+1 >= len(argv) else int(sys.argv[i+1]), True)
+            factory.echo_modules(
+                DatasetFactory._modules, None if i+1 >= len(argv) else int(sys.argv[i+1]), True
+            )
             sys.exit(0)           
         elif arg == '--quiet' or arg == '-q':
             want_verbose = False
@@ -6824,10 +7053,23 @@ See `datalists_usage` for full cli options.
         else:
             ## intiialze the input data. Treat data from CLI as a datalist.
             this_datalist = init_data(
-                dls, region=this_region, src_srs=src_srs, dst_srs=dst_srs, xy_inc=xy_inc, sample_alg='auto',
-                want_weight=want_weights, want_uncertainty=want_uncertainties, want_verbose=want_verbose,
-                want_mask=want_mask, want_sm=want_sm, invert_region=invert_region, cache_dir=cache_dir,
-                dump_precision=z_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
+                dls,
+                region=this_region,
+                src_srs=src_srs,
+                dst_srs=dst_srs,
+                xy_inc=xy_inc,
+                sample_alg='auto',
+                want_weight=want_weights,
+                want_uncertainty=want_uncertainties,
+                want_verbose=want_verbose,
+                want_mask=want_mask,
+                want_sm=want_sm,
+                invert_region=invert_region,
+                cache_dir=cache_dir,
+                dump_precision=z_precision,
+                pnt_fltrs=pnt_fltrs,
+                stack_fltrs=stack_fltrs,
+                stack_node=stack_node,
                 stack_mode=stack_mode
             )
 
