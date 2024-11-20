@@ -354,8 +354,14 @@ class BinZ(PointFilter):
         data_groups = dict(list(grouped_data))
 
         # Create a percentile threshold of photon counts in each grid, grouped by both x and y axes.
-        #count_threshold = np.percentile(binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), percentile)
-        count_threshold = np.percentile(binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(), self.percentile)
+        # count_threshold = np.percentile(
+        #     binned_data.groupby(['y_bins', 'x_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(),
+        #     percentile
+        # )
+        count_threshold = np.percentile(
+            binned_data.groupby(['y_bins', 'z_bins']).size().reset_index().groupby('y_bins')[[0]].max(),
+            self.percentile
+        )
         # Loop through groups and return average sea height
         for k,v in data_groups.items():
             # Create new dataframe based on occurance of photons per height bin
@@ -382,7 +388,9 @@ class BinZ(PointFilter):
 
         mean = np.nanmean(bin_height, axis=0)
         sd = np.nanstd(bin_height, axis=0)
-        bin_height_1 = np.where((bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height).tolist()
+        bin_height_1 = np.where(
+            (bin_height > (mean + 2*sd)) | (bin_height < (mean - 2*sd)), np.nan, bin_height
+        ).tolist()
                 
         return(bin_lat, bin_lon, bin_height_1)
     
@@ -428,7 +436,9 @@ class BinZ(PointFilter):
                 #bin_ds = bin_ds[bin_ds['z'] < med_surface_h + (z_res * 2)]
                 #bin_ds = bin_ds[bin_ds['z'] > med_surface_h - (z_res * 2)]
 
-                transformer = pyproj.Transformer.from_crs("EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True)
+                transformer = pyproj.Transformer.from_crs(
+                    "EPSG:"+str(epsg_num), "EPSG:4326", always_xy=True
+                )
                 lon_wgs84, lat_wgs84 = transformer.transform(bin_ds['x'], bin_ds['y'])
                 bin_points = np.column_stack((lon_wgs84, lat_wgs84, bin_ds['z']))
                 lon_wgs84 = lat_wgs84 = bin_ds = None
@@ -450,8 +460,14 @@ class PointFilterFactory(factory.CUDEMFactory):
 class INF:
     """INF Files contain information about datasets"""
     
-    def __init__(self, name = None, file_hash = None, numpts = 0, minmax = [], wkt = None,
-                 fmt = None, src_srs = None):
+    def __init__(self,
+                 name = None,
+                 file_hash = None,
+                 numpts = 0,
+                 minmax = [],
+                 wkt = None,
+                 fmt = None,
+                 src_srs = None):
         self.name = name
         self.file_hash = file_hash
         self.hash = file_hash
