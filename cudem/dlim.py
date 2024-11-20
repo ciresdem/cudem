@@ -1360,12 +1360,12 @@ class ElevationDataset:
                         ).run(outfile=self.trans_fn)                        
 
                 if self.trans_fn is not None and os.path.exists(self.trans_fn):
-                    if self.verbose:
-                        utils.echo_msg(
-                            'using vertical tranformation grid {} from {} to {}'.format(
-                                self.trans_fn, in_vertical_epsg, out_vertical_epsg
-                            )
-                        )
+                    # if self.verbose:
+                    #     utils.echo_msg(
+                    #         'using vertical tranformation grid {} from {} to {}'.format(
+                    #             self.trans_fn, in_vertical_epsg, out_vertical_epsg
+                    #         )
+                    #     )
                     out_src_srs = '{} +proj=vgridshift +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
                     if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
