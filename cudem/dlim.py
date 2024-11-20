@@ -127,23 +127,39 @@ gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/nu
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
 def make_datalist(data_list, want_weight, want_uncertainty, region,
-                  src_srs, dst_srs, x_inc, y_inc, sample_alg, verbose):
+                  src_srs, dst_srs, x_inc, y_inc, sample_alg,
+                  verbose):
     """Make a datalist object from a list of supported datasets"""
 
     ## Make the datalist object
     xdl = Datalist(
-        fn='scratch', data_format=-1, weight=None if not want_weight else 1,
-        uncertainty=None if not want_uncertainty else 0, src_region=region,
-        verbose=verbose, parent=None, src_srs=src_srs, dst_srs=dst_srs,
-        x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg
+        fn='scratch',
+        data_format=-1,
+        weight=None if not want_weight else 1,
+        uncertainty=None if not want_uncertainty else 0,
+        src_region=region,
+        verbose=verbose,
+        parent=None,
+        src_srs=src_srs,
+        dst_srs=dst_srs,
+        x_inc=x_inc,
+        y_inc=y_inc,
+        sample_alg=sample_alg
     )
 
     ## add the datasets from data_list to the datalist object
     xdl.data_entries = [DatasetFactory(
         fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-        weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-        src_region=region, verbose=verbose, src_srs=src_srs, dst_srs=dst_srs,
-        x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg, parent=xdl,
+        weight=None if not want_weight else 1,
+        uncertainty=None if not want_uncertainty else 0,
+        src_region=region,
+        verbose=verbose,
+        src_srs=src_srs,
+        dst_srs=dst_srs,
+        x_inc=x_inc,
+        y_inc=y_inc,
+        sample_alg=sample_alg,
+        parent=xdl,
         cache_dir=self.cache_dir
     )._acquire_module() for dl in data_list]
     return(xdl)
@@ -163,32 +179,83 @@ def write_datalist(data_list, outname=None):
     return('{}.datalist'.format(outname))
 
 ## initialize a list of datasets into a dataset object
-def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
-              sample_alg='auto', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
-              want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, pnt_fltrs=None, stack_fltrs=None, stack_node=True,
-              stack_mode='mean', mask=None):
+def init_data(data_list,
+              region=None,
+              src_srs=None,
+              dst_srs=None,
+              src_geoid=None,
+              dst_geoid='g2018',
+              xy_inc=(None, None),
+              sample_alg='auto',
+              want_weight=False,
+              want_uncertainty=False,
+              want_verbose=True,
+              want_mask=False,
+              want_sm=False,
+              invert_region=False,
+              cache_dir=None,
+              dump_precision=4,
+              pnt_fltrs=None,
+              stack_fltrs=None,
+              stack_node=True,
+              stack_mode='mean',
+              mask=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
         xdls = [DatasetFactory(
-            mod=" ".join(['-' if x == "" else x for x in dl.split(",")]), data_format = None,
-            weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-            src_srs=src_srs, dst_srs=dst_srs, src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0],
-            y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
-            cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-            dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
-            stack_mode=stack_mode, mask=mask
+            mod=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+            data_format = None,
+            weight=None if not want_weight else 1,
+            uncertainty=None if not want_uncertainty else 0,
+            src_srs=src_srs,
+            dst_srs=dst_srs,
+            src_geoid=src_geoid,
+            dst_geoid=dst_geoid,
+            x_inc=xy_inc[0],
+            y_inc=xy_inc[1],
+            sample_alg=sample_alg,
+            parent=None,
+            src_region=region,
+            invert_region=invert_region,
+            cache_dir=cache_dir,
+            want_mask=want_mask,
+            want_sm=want_sm,
+            verbose=want_verbose,
+            dump_precision=dump_precision,
+            pnt_fltrs=pnt_fltrs,
+            stack_fltrs=stack_fltrs,
+            stack_node=stack_node,
+            stack_mode=stack_mode,
+            mask=mask
         )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
             this_datalist = Scratch(
-                fn=xdls, data_format=-3, weight=None if not want_weight else 1,
-                uncertainty=None if not want_uncertainty else 0, src_srs=src_srs, dst_srs=dst_srs,
-                src_geoid=src_geoid, dst_geoid=dst_geoid, x_inc=xy_inc[0], y_inc=xy_inc[1],
-                sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
-                cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
-                dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
-                stack_mode=stack_mode, mask=mask
+                fn=xdls,
+                data_format=-3,
+                weight=None if not want_weight else 1,
+                uncertainty=None if not want_uncertainty else 0,
+                src_srs=src_srs,
+                dst_srs=dst_srs,
+                src_geoid=src_geoid,
+                dst_geoid=dst_geoid,
+                x_inc=xy_inc[0],
+                y_inc=xy_inc[1],
+                sample_alg=sample_alg,
+                parent=None,
+                src_region=region,
+                invert_region=invert_region,
+                cache_dir=cache_dir,
+                want_mask=want_mask,
+                want_sm=want_sm,
+                verbose=want_verbose,
+                dump_precision=dump_precision,
+                pnt_fltrs=pnt_fltrs,
+                stack_fltrs=stack_fltrs,
+                stack_node=stack_node,
+                stack_mode=stack_mode,
+                mask=mask
             )
         elif len(xdls) > 0:
             this_datalist = xdls[0]
@@ -535,13 +602,36 @@ class ElevationDataset:
     ]
 
     ## todo: add transformation grid option (stacks += transformation_grid), geoids
-    def __init__(self, fn = None, data_format = None, weight = 1, uncertainty = 0, src_srs = None, mask = None,
-                 dst_srs = 'epsg:4326', src_geoid = None, dst_geoid = 'g2018', x_inc = None, y_inc = None, want_mask = False,
-                 want_sm = False, sample_alg = 'auto', parent = None, src_region = None, invert_region = False,
-                 pnt_fltrs=[], stack_fltrs=[], stack_node = True, stack_mode = 'mean', cache_dir = None, verbose = False, remote = False,
-                 dump_precision = 6, params = {}, metadata = {'name':None, 'title':None, 'source':None, 'date':None,
-                                                              'data_type':None, 'resolution':None, 'hdatum':None,
-                                                              'vdatum':None, 'url':None}, **kwargs):
+    def __init__(self,
+                 fn = None,
+                 data_format = None,
+                 weight = 1,
+                 uncertainty = 0,
+                 src_srs = None,
+                 mask = None,
+                 dst_srs = 'epsg:4326',
+                 src_geoid = None,
+                 dst_geoid = 'g2018',
+                 x_inc = None,
+                 y_inc = None,
+                 want_mask = False,
+                 want_sm = False,
+                 sample_alg = 'auto',
+                 parent = None,
+                 src_region = None,
+                 invert_region = False,
+                 pnt_fltrs=[],
+                 stack_fltrs=[],
+                 stack_node = True,
+                 stack_mode = 'mean',
+                 cache_dir = None,
+                 verbose = False,
+                 remote = False,
+                 dump_precision = 6,
+                 params = {},
+                 metadata = {'name':None, 'title':None, 'source':None, 'date':None,
+                             'data_type':None, 'resolution':None, 'hdatum':None,
+                             'vdatum':None, 'url':None}, **kwargs):
         self.fn = fn # dataset filename or fetches module
         self.data_format = data_format # dataset format
         self.weight = weight # dataset weight
@@ -625,15 +715,6 @@ class ElevationDataset:
             _params[kw] = kwargs[kw]
 
         return(_params)
-        
-    def _set_ds(self, mod = None, data_format = None, **kwargs):
-        return(DatasetFactory(
-            mod=mod, data_format=data_format, weight=self.weight, uncertainty=self.uncertainty,
-            parent=self, src_region=self.region, invert_region=self.invert_region, x_inc=self.x_inc,
-            mask=self.mask, y_inc=self.y_inc, metadata=copy.deepcopy(self.metadata),
-            src_srs=self.src_srs, dst_srs=self.dst_srs, cache_dir=self.cache_dir,
-            verbose=self.verbose, **kwargs
-        )._acquire_module())
         
     def _copy_params(self, **kwargs):
         _params = {i:self.params['kwargs'][i] for i in self.params['kwargs'] if i!='params'}
@@ -3099,8 +3180,6 @@ class GDALFile(ElevationDataset):
 
         ## uncertainty from the vertical transformation
         if self.trans_fn_unc is not None:
-            #print(self.trans_fn_unc, src_dem_x_inc, src_dem_y_inc, self.aux_dst_proj4, src_dem_region, self.sample_alg, ndv)
-            #utils.echo_msg(self.sample_alg)
             trans_uncertainty = gdalfun.sample_warp(
                 self.trans_fn_unc, None, src_dem_x_inc, src_dem_y_inc,
                 src_srs='+proj=longlat +datum=WGS84 +ellps=WGS84',
@@ -3156,12 +3235,9 @@ class GDALFile(ElevationDataset):
                 uncertainty_data = np.zeros(band_data.shape)
 
             ## convert grid array to points
-            #utils.echo_msg(band_data[0].shape)
             if self.x_band is None and self.y_band is None:
-
                 x_precision = 12#len(str(gt[0]).split('.')[-1])
                 y_precision = 12#len(str(gt[3]).split('.')[-1])
-                #utils.echo_msg(gt)
                 while True:
                     geo_x_origin, geo_y_origin = utils._pixel2geo(
                         srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision
@@ -3177,16 +3253,9 @@ class GDALFile(ElevationDataset):
                         if x_precision < 0 or y_precision < 0:
                             break
 
-                        #if self.node == 'grid':
                         x_precision -= 1
                         y_precision -= 1
-                        #else:
-                        #    x_precision += 1
-                        #    y_precision += 1
 
-                #utils.echo_msg('{} {}'.format(x_precision, y_precision))
-                #num = round((geo_x_end - geo_x_origin) / gt[1])
-                #lon_array = np.linspace(geo_x_origin, geo_x_end, num)
                 lat_array = np.zeros((lon_array.shape))
                 lat_array[:] = geo_y_origin
                 dataset = np.column_stack((lon_array, lat_array, band_data[0], weight_data[0], uncertainty_data[0]))
@@ -3254,7 +3323,9 @@ class BAGFile(ElevationDataset):
             if src_vert is None:
                 src_vert = '5866'
 
-            self.src_srs = gdalfun.combine_epsgs(src_horz, src_vert, name='BAG Combined')
+            self.src_srs = gdalfun.combine_epsgs(
+                src_horz, src_vert, name='BAG Combined'
+            )
             return(self.src_srs)
         else:
             return(self.src_srs)
@@ -3280,7 +3351,6 @@ class BAGFile(ElevationDataset):
         self.infos.minmax = this_region.export_as_list(include_z=True)
         self.infos.wkt = this_region.export_as_wkt()
         self.infos.numpts = ds_infos['nb']
-        #utils.echo_msg(self.infos)
         return(self.infos)
 
     def parse(self, resample=True):
@@ -3320,10 +3390,6 @@ class BAGFile(ElevationDataset):
                                 super_grid=True,
                                 uncertainty_mask=2)
                         )._acquire_module()
-                        # sub_ds = GDALFile(fn=sub_dataset[0], data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                        #                   weight=self.weight, uncertainty=self.uncertainty, uncertainty_mask_to_meter=0.01,
-                        #                   src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=False, check_path=False,
-                        #                   super_grid=True, uncertainty_mask=2, metadata=copy.deepcopy(self.metadata))
                         self.data_entries.append(sub_ds)
                         sub_ds.initialize()
                         for gdal_ds in sub_ds.parse():
@@ -3342,10 +3408,6 @@ class BAGFile(ElevationDataset):
                         uncertainty_mask_to_meter=0.01
                     )
                 )._acquire_module()
-                # sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, open_options=oo, src_srs=self.src_srs, dst_srs=self.dst_srs,
-                #                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc,
-                #                   verbose=self.verbose, uncertainty_mask=2, uncertainty_mask_to_meter=0.01,
-                #                   metadata=copy.deepcopy(self.metadata))#node='pixel')
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
@@ -3366,9 +3428,6 @@ class BAGFile(ElevationDataset):
                         uncertainty_mask_to_meter=0.01
                     )
                 )._acquire_module()
-                # sub_ds = GDALFile(fn=tmp_bag_as_tif, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
-                #                   uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-                #                   uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
                 self.data_entries.append(sub_ds)
                 sub_ds.initialize()
                 for gdal_ds in sub_ds.parse():
@@ -3384,9 +3443,6 @@ class BAGFile(ElevationDataset):
                     uncertainty_mask_to_meter=0.01
                 )
             )._acquire_module()
-            # sub_ds = GDALFile(fn=self.fn, data_format=200, band_no=1, src_srs=self.src_srs, dst_srs=self.dst_srs, weight=self.weight,
-            #                   uncertainty=self.uncertainty, src_region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, verbose=self.verbose,
-            #                   uncertainty_mask=2, uncertainty_mask_to_meter=0.01, metadata=copy.deepcopy(self.metadata))
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
@@ -3543,15 +3599,17 @@ class SWOT_HR_Raster(ElevationDataset):
             src_ds = None
             src_srs = gdalfun.gdal_get_srs(sub_datasets[idx][0])
             if self.data_set == 'wse':
-                src_srs = gdalfun.combine_epsgs(src_srs, '3855', name='SWOT Combined')
+                src_srs = gdalfun.combine_epsgs(
+                    src_srs, '3855', name='SWOT Combined'
+                )
             sub_ds = DatasetFactory(
-                **self._set_params(mod=sub_datasets[idx][0], data_format=200, node='grid', check_path=False)
+                **self._set_params(
+                    mod=sub_datasets[idx][0],
+                    data_format=200,
+                    node='grid',
+                    check_path=False
+                )
             )._acquire_module()
-            # sub_ds = GDALFile(fn=sub_datasets[idx][0], data_format=200, src_srs=src_srs, dst_srs=self.dst_srs,
-            #                   weight=self.weight, uncertainty=self.uncertainty, src_region=self.region,
-            #                   x_inc=self.x_inc, y_inc=self.y_inc, verbose=True, check_path=False,
-            #                   node='grid', metadata=copy.deepcopy(self.metadata))
-            
             self.data_entries.append(sub_ds)
             sub_ds.initialize()
             for gdal_ds in sub_ds.parse():
@@ -3732,7 +3790,10 @@ class IceSat2File(ElevationDataset):
                 continue
 
             ## rename the x,y,z columns for `yield_points`
-            dataset.rename(columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'}, inplace=True)
+            dataset.rename(
+                columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'},
+                inplace=True
+            )
             yield(dataset)
 
         self.close_atl_h5()
