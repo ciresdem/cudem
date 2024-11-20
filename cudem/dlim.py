@@ -131,17 +131,21 @@ def make_datalist(data_list, want_weight, want_uncertainty, region,
     """Make a datalist object from a list of supported datasets"""
 
     ## Make the datalist object
-    xdl = Datalist(fn='scratch', data_format=-1, weight=None if not want_weight else 1,
-                   uncertainty=None if not want_uncertainty else 0, src_region=region,
-                   verbose=verbose, parent=None, src_srs=src_srs, dst_srs=dst_srs,
-                   x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg)
+    xdl = Datalist(
+        fn='scratch', data_format=-1, weight=None if not want_weight else 1,
+        uncertainty=None if not want_uncertainty else 0, src_region=region,
+        verbose=verbose, parent=None, src_srs=src_srs, dst_srs=dst_srs,
+        x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg
+    )
 
     ## add the datasets from data_list to the datalist object
-    xdl.data_entries = [DatasetFactory(fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
-                                       weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
-                                       src_region=region, verbose=verbose, src_srs=src_srs, dst_srs=dst_srs,
-                                       x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg, parent=xdl,
-                                       cache_dir=self.cache_dir)._acquire_module() for dl in data_list]
+    xdl.data_entries = [DatasetFactory(
+        fn=" ".join(['-' if x == "" else x for x in dl.split(",")]),
+        weight=None if not want_weight else 1, uncertainty=None if not want_uncertainty else 0,
+        src_region=region, verbose=verbose, src_srs=src_srs, dst_srs=dst_srs,
+        x_inc=x_inc, y_inc=y_inc, sample_alg=sample_alg, parent=xdl,
+        cache_dir=self.cache_dir
+    )._acquire_module() for dl in data_list]
     return(xdl)
 
 def write_datalist(data_list, outname=None):
