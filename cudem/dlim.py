@@ -162,7 +162,7 @@ def write_datalist(data_list, outname=None):
 def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None, dst_geoid='g2018', xy_inc=(None, None),
               sample_alg='auto', want_weight=False, want_uncertainty=False, want_verbose=True, want_mask=False,
               want_sm=False, invert_region=False, cache_dir=None, dump_precision=4, pnt_fltrs=None, stack_fltrs=None, stack_node=True,
-              stack_mode='mean'):
+              stack_mode='mean', mask=None):
     """initialize a datalist object from a list of supported dataset entries"""
 
     try:
@@ -173,7 +173,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
             y_inc=xy_inc[1], sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
             cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
             dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
-            stack_mode=stack_mode
+            stack_mode=stack_mode, mask=mask
         )._acquire_module() for dl in data_list]
 
         if len(xdls) > 1:
@@ -184,7 +184,7 @@ def init_data(data_list, region=None, src_srs=None, dst_srs=None, src_geoid=None
                 sample_alg=sample_alg, parent=None, src_region=region, invert_region=invert_region,
                 cache_dir=cache_dir, want_mask=want_mask, want_sm=want_sm, verbose=want_verbose,
                 dump_precision=dump_precision, pnt_fltrs=pnt_fltrs, stack_fltrs=stack_fltrs, stack_node=stack_node,
-                stack_mode=stack_mode
+                stack_mode=stack_mode, mask=mask
             )
         elif len(xdls) > 0:
             this_datalist = xdls[0]
@@ -600,7 +600,17 @@ class ElevationDataset:
         self.initialize()
 
     def _copy_params(self, **kwargs):
+        #utils.echo_msg(self.params['kwargs'])
         _params = {i:self.params['kwargs'][i] for i in self.params['kwargs'] if i!='params'}
+        #_params['mask'] = copy.deepcopy(self.params['kwargs']['mask'])
+        # _params = {}
+        # for k in self.params['kwargs'].keys():
+        #     if k != 'params':
+        #         if isinstance(self.params['kwargs'][k], dict):
+        #             _params[k] = copy.deepcopy(self.params['kwargs'][k])
+        #         else:
+        #             _params[k] = self.params['kwargs'][k]
+            
         for kw in kwargs.keys():
             _params[kw] = kwargs[kw]
 
@@ -4723,8 +4733,14 @@ class Datalist(ElevationDataset):
                     data_mod = '"{}" {} {} {}'.format(feat.GetField('path'), feat.GetField('format'),
                                                       feat.GetField('weight'), feat.GetField('uncertainty'))
                     data_set = DatasetFactory(
-                        **self._copy_params(mod=data_mod, metadata=md, src_srs=self.src_srs, **data_set_args)
+                        mod = data_mod, weight=self.weight, uncertainty=self.uncertainty, parent=self, src_region=self.region,
+                        invert_region=self.invert_region, metadata=md, src_srs=self.src_srs, dst_srs=self.dst_srs, mask=self.mask,
+                        x_inc=self.x_inc, y_inc=self.y_inc, sample_alg=self.sample_alg, cache_dir=self.cache_dir,
+                        stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, verbose=self.verbose, **data_set_args
                     )._acquire_module()
+                    # data_set = DatasetFactory(
+                    #     **self._copy_params(mod=data_mod, metadata=md, src_srs=self.src_srs, **data_set_args)
+                    # )._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                     ):
@@ -4768,8 +4784,16 @@ class Datalist(ElevationDataset):
                             md['name'] = utils.fn_basename2(os.path.basename(self.fn))
                             
                             ## generate the dataset object to yield
+                            #print(self._copy_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self))
+                            #data_set = DatasetFactory(
+                            #    **self._copy_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self, fn=None)
+                            #)._acquire_module()
                             data_set = DatasetFactory(
-                                **self._copy_params(mod=this_line, metadata=md, src_srs=self.src_srs, parent=self)
+                                mod=this_line, weight=self.weight, uncertainty=self.uncertainty, parent=self,
+                                src_region=self.region, invert_region=self.invert_region, metadata=md, mask=self.mask,
+                                src_srs=self.src_srs, dst_srs=self.dst_srs, x_inc=self.x_inc, y_inc=self.y_inc,
+                                stack_fltrs=self.stack_fltrs, pnt_fltrs=self.pnt_fltrs, sample_alg=self.sample_alg,
+                                cache_dir=self.cache_dir, verbose=self.verbose
                             )._acquire_module()
                             if data_set is not None and data_set.valid_p(
                                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
@@ -4902,11 +4926,17 @@ class ZIPlist(ElevationDataset):
         for this_data in datalist:
             this_line = utils.p_f_unzip(self.fn, [this_data])[0]
             data_set = DatasetFactory(
-                **self._copy_params(
-                    mod=this_line, data_format=None, src_srs = self.src_srs,
-                    parent=self, metadata=copy.deepcopy(self.metadata)
-                )
+                mod=this_line, data_format=None, weight=self.weight, uncertainty=self.uncertainty, parent=self,
+                src_region=self.region, invert_region=self.invert_region, x_inc=self.x_inc, mask=self.mask,
+                y_inc=self.y_inc, metadata=copy.deepcopy(self.metadata), src_srs=self.src_srs,
+                dst_srs=self.dst_srs, cache_dir=self.cache_dir, verbose=self.verbose
             )._acquire_module()
+            # data_set = DatasetFactory(
+            #     **self._copy_params(
+            #         mod=this_line, data_format=None, src_srs = self.src_srs,
+            #         parent=self, metadata=copy.deepcopy(self.metadata)
+            #     )
+            # )._acquire_module()
             if data_set is not None and data_set.valid_p(
                     fmts=DatasetFactory._modules[data_set.data_format]['fmts']
             ):
