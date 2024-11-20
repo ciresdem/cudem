@@ -164,7 +164,7 @@ between adjacent DEM tiles.
 - [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
 - [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
 - [Filter Multibeam data](/docs/example_grits.md)
-- [Calculate DEM uncertainty](/docs/uncertainty.md)
+- [Estimate DEM uncertainty](/docs/uncertainty.md)
 
 ## DEM Workshop, Victoria, B.C., Canada
 
