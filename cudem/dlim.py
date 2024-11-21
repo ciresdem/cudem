@@ -1366,7 +1366,9 @@ class ElevationDataset:
                     #             self.trans_fn, in_vertical_epsg, out_vertical_epsg
                     #         )
                     #     )
-                    out_src_srs = '{} +proj=vgridshift +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), self.trans_fn)
+                    out_src_srs = '{} +step +proj=vgridshift +grids={} +geoidgrids={}'.format(
+                        in_horizontal_crs.to_proj4(), self.trans_fn, self.trans_fn
+                    )
                     if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
                         out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
                         self.trans_to_meter = True
@@ -2263,7 +2265,6 @@ class ElevationDataset:
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
-                
             ## convert the points to pixels based on the geotransform
             ## and calculate the local srcwin of the points
             pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
@@ -2285,7 +2286,7 @@ class ElevationDataset:
                 pixel_u = np.zeros(pixel_z.shape)
                 
             ## remove pixels that will break the srcwin
-            out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))            
+            out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))
             pixel_x = np.delete(pixel_x, out_idx)
             pixel_y = np.delete(pixel_y, out_idx)
             pixel_z = np.delete(pixel_z, out_idx)
@@ -2293,11 +2294,13 @@ class ElevationDataset:
             pixel_u = np.delete(pixel_u, out_idx)
             points_x = np.delete(points_x, out_idx)
             points_y = np.delete(points_y, out_idx)
+            if len(pixel_x) == 0 or len(pixel_y) == 0:
+                continue
             
             points = None
             pixel_w[np.isnan(pixel_w)] = 1
             pixel_u[np.isnan(pixel_u)] = 0
-
+            
             ## set the srcwin of the incoming points
             this_srcwin = (int(min(pixel_x)), int(min(pixel_y)),
                            int(max(pixel_x) - min(pixel_x))+1,
@@ -3039,7 +3042,7 @@ class GDALFile(ElevationDataset):
             )
             if raster_is_higher_res:
                 self.resample_and_warp = False
-
+            
         if self.node == 'grid':
             self.resample_and_warp = False
 
@@ -3093,6 +3096,7 @@ class GDALFile(ElevationDataset):
             in_bands = self.src_ds.RasterCount
             src_ds_config = gdalfun.gdal_infos(self.src_ds)
             src_gt = src_ds_config['geoT']
+
             if in_bands > 1:
                 ## the srcwin for to extract data
                 if self.trans_region is not None:
@@ -3401,7 +3405,7 @@ class GDALFile(ElevationDataset):
             points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
             points =  points[~np.isnan(points['z'])]
             dataset = band_data = weight_data = uncertainty_data = lat_array = lon_array = None
-            utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)            
+            utils.remove_glob(tmp_elev_fn, tmp_unc_fn, tmp_weight_fn)
             yield(points)
             
         src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None

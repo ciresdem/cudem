@@ -472,8 +472,10 @@ class Outliers(Grits):
         if self.units_are_degrees:
             cell_size *= 111120 # scale cellsize to meters, todo: check if input is degress/meters/feet
 
-        m_size = (src_arr.shape[0] / n_den) / 24#800#500 # 1000
-        mm_size = (src_arr.shape[1] / n_den) / 12#8000 # 10000
+        m_size = 500
+        mm_size = 10000
+        #m_size = (src_arr.shape[0] / n_den) / 24#800#500 # 1000
+        #mm_size = (src_arr.shape[1] / n_den) / 12#8000 # 10000
         if self.chunk_size is not None:
             if self.chunk_size[-1] == 'm':
                 m_size = utils.int_or(self.chunk_size[:-1])

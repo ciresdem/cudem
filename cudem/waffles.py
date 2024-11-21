@@ -259,11 +259,23 @@ class Waffle:
                     if point_filter is not None:
                         point_fltr.append(f)
 
-        self.data = dlim.init_data(self.data, region=self.p_region, src_srs=None, dst_srs=self.dst_srs,
-                                   xy_inc=(self.xinc, self.yinc), sample_alg=self.sample, want_weight=self.want_weight,
-                                   want_uncertainty=self.want_uncertainty, want_verbose=self.verbose, want_mask=self.want_mask,
-                                   pnt_fltrs=point_fltr, stack_fltrs=stack_fltr, invert_region=False, cache_dir=self.cache_dir,
-                                   stack_mode=self.stack_mode)
+        self.data = dlim.init_data(
+            self.data,
+            region=self.p_region,
+            src_srs=None,
+            dst_srs=self.dst_srs,
+            xy_inc=(self.xinc, self.yinc),
+            sample_alg=self.sample,
+            want_weight=self.want_weight,
+            want_uncertainty=self.want_uncertainty,
+            want_verbose=self.verbose,
+            want_mask=self.want_mask,
+            pnt_fltrs=point_fltr,
+            stack_fltrs=stack_fltr,
+            invert_region=False,
+            cache_dir=self.cache_dir,
+            stack_mode=self.stack_mode
+        )
 
         if self.data is not None:
             self.data.initialize()
