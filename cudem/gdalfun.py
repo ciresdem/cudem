@@ -1455,7 +1455,7 @@ def sample_warp(
         src_dem, dst_dem, x_sample_inc, y_sample_inc,
         src_srs=None, dst_srs=None, src_region=None, sample_alg='bilinear',
         ndv=-9999, tap=False, size=False, co=["COMPRESS=DEFLATE", "TILED=YES"],
-        ot=gdal.GDT_Float32, verbose=False
+        ot=gdal.GDT_Float32, coordinateOperation=None, verbose=False
 ):
     """sample and/or warp the src_dem"""
 
@@ -1504,11 +1504,12 @@ def sample_warp(
     else:
         pbar_update = None
 
+    #src_srs.SetAxisMappingStrategy(osr.OAMS_TRADITIONAL_GIS_ORDER)
     dst_ds = gdal.Warp('' if dst_dem is None else dst_dem, src_dem, format='MEM' if dst_dem is None else 'GTiff',
                        xRes=x_sample_inc, yRes=y_sample_inc, targetAlignedPixels=tap, width=xcount, height=ycount,
                        dstNodata=ndv, outputBounds=out_region, outputBoundsSRS=dst_srs if out_region is not None else None,
                        resampleAlg=sample_alg, errorThreshold=0, creationOptions=co, srcSRS=src_srs, dstSRS=dst_srs,
-                       outputType=ot, callback=pbar_update)
+                       coordinateOperation=coordinateOperation, outputType=ot, callback=pbar_update)
 
     if verbose:
         pbar.close()
@@ -1767,6 +1768,29 @@ def gdal_parse(src_ds, dump_nodata = False, srcwin = None, mask = None, dst_srs 
     src_mask = None
     msk_band = None
     if verbose: utils.echo_msg('parsed {} data records from {}'.format(ln, src_ds.GetDescription()))
+
+def gdal_point_query(points, src_gdal, x = 'x', y = 'y', z = 'z', band = 1):
+    with gdal_datasource(src_gdal) as src_ds:
+        if src_ds is not None:
+            ds_config = gdal_infos(src_ds)
+            ds_band = src_ds.GetRasterBand(band)
+            tgrid = ds_band.ReadAsArray()
+
+    t_region = regions.Region().from_geo_transform(ds_config['geoT'], tgrid.shape[0], tgrid.shape[1])
+    xcount, ycount, dst_gt = t_region.geo_transform(
+        x_inc=ds_config['geoT'][1], y_inc=ds_config['geoT'][5]*-1, node='grid'
+    )
+    pixel_x = np.floor((points['x'] - dst_gt[0]) / dst_gt[1]).astype(int)
+    pixel_y = np.floor((points['y'] - dst_gt[3]) / dst_gt[5]).astype(int)
+
+    out_idx = np.nonzero((pixel_x >= xcount) | (pixel_x < 0) | (pixel_y >= ycount) | (pixel_y < 0))
+    out_idx2 = np.nonzero((pixel_x < xcount) | (pixel_x > 0) | (pixel_y < ycount) | (pixel_y > 0))
+    #pixel_x = np.delete(pixel_x, out_idx)
+    #pixel_y = np.delete(pixel_y, out_idx)
+    
+    pixel_zz = tgrid[pixel_x[out_idx2], pixel_y[out_idx2]]
+    points['z'][out_idx2] = pixel_zz + points['z'][out_idx2]
+    return(points)
     
 def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
     """query a gdal-compatible grid file with xyz data.
@@ -1776,9 +1800,7 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
     """
 
     tgrid = None
-    #print(src_gdal)
     with gdal_datasource(src_gdal) as src_ds:
-        #print(src_ds)
         if src_ds is not None:
             ds_config = gdal_infos(src_ds)
             ds_band = src_ds.GetRasterBand(band)
@@ -1786,8 +1808,6 @@ def gdal_yield_query(src_xyz, src_gdal, out_form, band = 1):
             ds_nd = ds_config['ndv']
             tgrid = ds_band.ReadAsArray()
 
-    #print(src_xyz)
-    #print(tgrid)
     if tgrid is not None:
         for xyz in src_xyz:
             x = xyz[0]
