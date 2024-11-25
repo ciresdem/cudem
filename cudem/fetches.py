@@ -773,7 +773,8 @@ class FetchModule:
         """
 
         _results = []
-        
+
+        ## start the fetching threads
         fr = fetch_results(self, check_size=check_size, attempts=retries, entry=entry)
         fr.daemon = True
         fr.start()
@@ -887,13 +888,19 @@ class GMRT(FetchModule):
                     float(opts['south']),
                     float(opts['north'])
                 ])
-                outf = 'gmrt_{}_{}.{}'.format(opts['layer'], url_region.format('fn'), 'tif' if self.fmt == 'geotiff' else 'grd')
+                outf = 'gmrt_{}_{}.{}'.format(
+                    opts['layer'],
+                    url_region.format('fn'),
+                    'tif' if self.fmt == 'geotiff' else 'grd'
+                )
                 self.results.append([url, outf, 'gmrt'])
 
                 ## if want_swath is True, we will download the swath polygons so that we can
                 ## clip the data to that in dlim or elsewhere.
                 if self.want_swath:
-                    self.results.append([self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt'])
+                    self.results.append(
+                        [self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt']
+                    )
                 
         return(self)
 

@@ -500,6 +500,8 @@ class Outliers(Grits):
         self.max_chunk = utils.int_or(self.max_chunk, ((mm_size * (1/n_den)) / cell_size))
         if self.n_chunk < 15:
             self.n_chunk = 15
+        if self.max_chunk < 15:
+            self.max_chunk = self.n_chunk * 2
             
         if self.size_is_step:
             self.n_step = utils.int_or(self.chunk_step, self.n_chunk)
@@ -582,7 +584,7 @@ class Outliers(Grits):
                 unc_data = unc_band.ReadAsArray()
                 unc_data[(unc_data == self.ds_config['ndv'])] = 0
                 self.mask_outliers(
-                    src_data=unc_data, mask_data=mask_mask, count_data=mask_count, percentile=75, upper_only=True, k=1.5, src_weight=self.unc_weight
+                    src_data=unc_data, mask_data=mask_mask, count_data=mask_count, percentile=self.percentile, upper_only=True, k=self.k, src_weight=self.unc_weight
                 )
                 unc_data = None
                 
@@ -1043,8 +1045,8 @@ class Outliers(Grits):
 
                 if not self.accumulate:
                     outliers = self.apply_mask(self.percentile)
-                    if outliers == 0:
-                        break
+                    #if outliers == 0:
+                    #    break
                     
                     self.mask_mask_ds = None
                     
