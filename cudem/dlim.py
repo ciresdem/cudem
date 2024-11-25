@@ -1384,7 +1384,9 @@ class ElevationDataset:
         ## set the pyproj.Transformer for both horz+vert and vert only
         if self.transform['trans_fn'] is not None and os.path.exists(self.transform['trans_fn']):
             self.transform['pipeline'] = '+proj=pipeline +step {} +inv +step +proj=vgridshift +grids={} +inv +step {}'.format(
-                self.transform['src_horz_crs'].to_proj4(), self.transform['trans_fn'], self.transform['dst_horz_crs'].to_proj4()
+                self.transform['src_horz_crs'].to_proj4(),
+                self.transform['trans_fn'],
+                self.transform['dst_horz_crs'].to_proj4()
             )
             self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
                 '+proj=pipeline +step +proj=vgridshift +grids={} +inv'.format(self.transform['trans_fn'])
@@ -1431,13 +1433,17 @@ class ElevationDataset:
 
             ## dataset region
             if self.region is not None and self.region.valid_p():
-                self.data_region = self.region.copy() if self.transform['trans_region'] is None else self.transform['trans_region'].copy()
+                self.data_region = self.region.copy() \
+                    if self.transform['trans_region'] is None \
+                       else self.transform['trans_region'].copy()
                 inf_region = regions.Region().from_list(self.infos.minmax)
                 self.data_region = regions.regions_reduce(self.data_region, inf_region)
                 self.data_region.src_srs = self.infos.src_srs
 
                 if not self.data_region.valid_p():
-                    self.data_region = self.region.copy() if self.transform['trans_region'] is None else self.transform['trans_region'].copy()
+                    self.data_region = self.region.copy() \
+                        if self.transform['trans_region'] is None \
+                           else self.transform['trans_region'].copy()
             else:
                 self.data_region = regions.Region().from_list(self.infos.minmax)
                 self.data_region.src_srs = self.infos.src_srs
@@ -3050,8 +3056,9 @@ class GDALFile(ElevationDataset):
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
             self.resample_and_warp = False
         else:
-            ## only perform 'upsamples' if the input raster is of higher resolution than the target self.x_inc, etc.
-            ## then treat the data as points and do any 'downsampling' in stacks.
+            ## only perform 'upsamples' if the input raster is of higher resolution than the
+            ## target self.x_inc, etc. then treat the data as points and do any 'downsampling'
+            ## in stacks.
             inf_trans_region = inf_region.copy()
             inf_trans_region.src_srs = self.src_srs
 
@@ -3669,8 +3676,10 @@ class SWOT_PIXC(SWOTFile):
         self.classes_qual = [int(x) for x in classes_qual.split('/')] if classes_qual is not None else []
         self.anc_classes = [int(x) for x in anc_classes.split('/')] if anc_classes is not None else []
         self.remove_class_flags = remove_class_flags
-        #if self.remove_class_flags:
-        #    self.classes_qual = [1, 2, 4, 8, 16, 2048, 8192, 16384, 32768, 262144, 524288, 134217728, 536870912, 1073741824, 2147483648]
+        # if self.remove_class_flags:
+        #     self.classes_qual = [1, 2, 4, 8, 16, 2048, 8192, 16384, 32768,
+        #                          262144, 524288, 134217728, 536870912,
+        #                          1073741824, 2147483648]
 
     def yield_ds(self):
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
@@ -4076,7 +4085,8 @@ class IceSat2File(ElevationDataset):
             atl_08_segment_id_msk = [True if x in segment_id else False for x in atl_08_ph_segment_id]
             atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))
             atl_08_ph_index = np.array(atl_08_ph_segment_indx + (atl_08_classed_pc_indx[atl_08_segment_id_msk] - 1), dtype=int)
-            ph_h_classed[atl_08_ph_index[atl_08_ph_index < len(ph_segment_ids)]] = atl_08_classed_pc_flag[atl_08_segment_id_msk][atl_08_ph_index < len(ph_segment_ids)]
+            class_mask = atl_08_ph_index < len(ph_segment_ids)
+            ph_h_classed[atl_08_ph_index[class_mask]] = atl_08_classed_pc_flag[atl_08_segment_id_msk][class_mask]
 
             ## old from IVERT
             # dict_success = False
@@ -4097,11 +4107,19 @@ class IceSat2File(ElevationDataset):
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]            
 
-        ## create the pandas dataframe
+        ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
+        if self.water_surface == 'mean_tide':
+            ph_height = photon_h_meantide
+        elif self.water_surface == 'geoid':
+            ph_height = photon_h_geoid
+        else:
+            ph_height = photon_h
+            
+        ## create the pandas dataframe            
         dataset = pd.DataFrame(
             {'latitude': latitude,
              'longitude': longitude,
-             'photon_height': photon_h_meantide if self.water_surface=='mean_tide' else photon_h_geoid if self.water_surface=='geoid' else photon_h,
+             'photon_height': ph_height,
              'laser': laser_arr,
              'fn': fn_arr,
              'confidence': conf,
@@ -4166,7 +4184,9 @@ class IceSat2File(ElevationDataset):
              'ref_azimuth': dataset.ref_azimuth,
              'ref_sat_alt': dataset.ref_sat_alt,
              'ph_h_classed': dataset.ph_h_classed},
-            columns=['latitude', 'longitude', 'photon_height', 'laser', 'fn', 'confidence', 'ref_elevation', 'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
+            columns=['latitude', 'longitude', 'photon_height',
+                     'laser', 'fn', 'confidence', 'ref_elevation',
+                     'ref_azimuth', 'ref_sat_alt', 'ph_h_classed']
         )
         dataset_sea1 = dataset_sea[(dataset_sea['photon_height'] > min_buffer) & (dataset_sea['photon_height'] < max_buffer)]
         dataset_sea1 = dataset_sea1[(dataset_sea1['ph_h_classed'] == 5)]
@@ -4199,16 +4219,17 @@ class IceSat2File(ElevationDataset):
                     
                     ## Correct for refraction
                     ref_x, ref_y, ref_z, ref_conf, raw_x, raw_y, raw_z, ph_ref_azi, ph_ref_elev = cshelph.refraction_correction(
-                        water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth, dataset_sea1.photon_height,
-                        dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence, dataset_sea1.ref_sat_alt
+                        water_temp, med_water_surface_h, 532, dataset_sea1.ref_elevation, dataset_sea1.ref_azimuth,
+                        dataset_sea1.photon_height, dataset_sea1.longitude, dataset_sea1.latitude, dataset_sea1.confidence,
+                        dataset_sea1.ref_sat_alt
                     )
                     depth = med_water_surface_h - ref_z
 
                     # Create new dataframe with refraction corrected data
-                    dataset_bath = pd.DataFrame({'latitude': raw_y, 'longitude': raw_x, 'cor_latitude':ref_y, 'cor_longitude':ref_x, 'cor_photon_height':ref_z,
-                                                 'photon_height': raw_z, 'confidence':ref_conf, 'depth':depth},
-                                                columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude', 'cor_photon_height',
-                                                         'confidence', 'depth'])
+                    dataset_bath = pd.DataFrame({'latitude': raw_y, 'longitude': raw_x, 'cor_latitude':ref_y, 'cor_longitude':ref_x,
+                                                 'cor_photon_height':ref_z, 'photon_height': raw_z, 'confidence':ref_conf, 'depth':depth},
+                                                columns=['latitude', 'longitude', 'photon_height', 'cor_latitude','cor_longitude',
+                                                         'cor_photon_height', 'confidence', 'depth'])
 
                     # Bin dataset again for bathymetry
                     if len(dataset_bath) > 0:
@@ -4640,7 +4661,9 @@ class OGRFile(ElevationDataset):
     """
 
     _known_layer_names = ['SOUNDG', 'SurveyPoint_HD', 'SurveyPoint']
-    _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth', 'topography', 'surveyPointElev', 'Z_depth', 'Z_height']
+    _known_elev_fields = ['Elevation', 'elev', 'z', 'height', 'depth',
+                          'topography', 'surveyPointElev', 'Z_depth',
+                          'Z_height']
     
     def __init__(self,
                  ogr_layer = None,
@@ -5034,7 +5057,9 @@ class Datalist(ElevationDataset):
             ldefn = dl_layer.GetLayerDefn()
             _boundsGeom = None
             if self.region is not None:
-                _boundsGeom = self.region.export_as_geom() if self.transform['transformer'] is None else self.transform['trans_region'].export_as_geom()
+                _boundsGeom = self.region.export_as_geom() \
+                    if self.transform['transformer'] is None \
+                       else self.transform['trans_region'].export_as_geom()
 
             dl_layer.SetSpatialFilter(_boundsGeom)
             count = len(dl_layer)
@@ -5108,7 +5133,9 @@ class Datalist(ElevationDataset):
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
             utils.echo_warning_msg(
-                'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
+                'could not load datalist-vector json {}.json, \
+                falling back to parse, generate a json file for \
+                the datalist using `dlim -i`'.format(self.fn)
             )
             for ds in self.parse_no_json():
                 yield(ds)
@@ -5348,7 +5375,8 @@ class Fetcher(ElevationDataset):
         ## cache directory to store fetched data
         self.outdir = outdir if outdir is not None else self.cache_dir 
         self.fetch_module = fetches.FetchesFactory(
-            mod=self.fn, src_region=self.region, callback=callback, verbose=self.verbose, outdir=self.outdir
+            mod=self.fn, src_region=self.region, callback=callback,
+            verbose=self.verbose, outdir=self.outdir
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
@@ -5538,7 +5566,9 @@ class DAVFetcher_CoNED(Fetcher):
         except:
             pass
 
-        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1]) if not self.cog else result[0]
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1]) \
+            if not self.cog \
+               else result[0]
         self.fetches_params['check_path'] = False if self.cog else True
         self.fetches_params['src_srs'] = self.fetch_module.src_srs
         self.fetches_params['data_format'] = 200
@@ -5833,7 +5863,9 @@ class GEBCOFetcher(Fetcher):
                 for tid_fn in tid_fns:
                     ds_config = gdalfun.gdal_infos(tid_fn)                    
                     if self.region is not None and self.region.valid_p(check_xy=True):
-                        inf_region = regions.Region().from_geo_transform(ds_config['geoT'], ds_config['nx'], ds_config['ny'])            
+                        inf_region = regions.Region().from_geo_transform(
+                            ds_config['geoT'], ds_config['nx'], ds_config['ny']
+                        )
                         inf_region.wmin = self.weight
                         inf_region.wmax = self.weight
                         inf_region.umin = self.uncertainty
@@ -5875,7 +5907,9 @@ class GEBCOFetcher(Fetcher):
         else:
             for gebco_fn in gebco_fns:
                 ds_config = gdalfun.gdal_infos(gebco_fn)
-                inf_region = regions.Region().from_geo_transform(ds_config['geoT'], ds_config['nx'], ds_config['ny'])
+                inf_region = regions.Region().from_geo_transform(
+                    ds_config['geoT'], ds_config['nx'], ds_config['ny']
+                )
                 if self.region is not None and self.region.valid_p(check_xy=True):                
                     inf_region.wmin = self.weight
                     inf_region.wmax = self.weight
@@ -6175,7 +6209,9 @@ class eHydroFetcher(Fetcher):
             for src_usace in src_usaces:
                 self.fetches_params['mod'] = src_usace
                 self.fetches_params['data_format'] = '168:z_scale=.3048'
-                self.fetches_params['src_srs'] = '{}+{}'.format(src_epsg, v if v is not None else '5866') if src_epsg is not None else None
+                self.fetches_params['src_srs'] = '{}+{}'.format(src_epsg, v if v is not None else '5866') \
+                    if src_epsg is not None \
+                       else None
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())        
         
 class BlueTopoFetcher(Fetcher):
@@ -7018,12 +7054,14 @@ See `datalists_usage` for full cli options.
 
         elif arg == '--modules':
             factory.echo_modules(
-                DatasetFactory._modules, None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
+                DatasetFactory._modules,
+                None if i+1 >= len(argv) else utils.int_or(sys.argv[i+1], str(sys.argv[i+1]))
             )
             sys.exit(0)
         elif arg == '--md_modules':
             factory.echo_modules(
-                DatasetFactory._modules, None if i+1 >= len(argv) else int(sys.argv[i+1]), True
+                DatasetFactory._modules,
+                None if i+1 >= len(argv) else int(sys.argv[i+1]), True
             )
             sys.exit(0)           
         elif arg == '--quiet' or arg == '-q':
