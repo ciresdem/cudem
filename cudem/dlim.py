@@ -5133,9 +5133,7 @@ class Datalist(ElevationDataset):
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
             utils.echo_warning_msg(
-                'could not load datalist-vector json {}.json, \
-                falling back to parse, generate a json file for \
-                the datalist using `dlim -i`'.format(self.fn)
+                'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
             )
             for ds in self.parse_no_json():
                 yield(ds)
@@ -5185,7 +5183,7 @@ class Datalist(ElevationDataset):
 
                                         if regions.regions_intersect_p(
                                                 inf_region,
-                                                self.region if data_set.transformer is None else data_set.trans_region
+                                                self.region if data_set.transform['transformer'] is None else data_set.transform['trans_region']
                                         ):
                                             ## fill self.data_entries with each dataset for use outside the yield.
                                             for ds in data_set.parse(): 
