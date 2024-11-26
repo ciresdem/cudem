@@ -4334,7 +4334,7 @@ class BingBFP(FetchModule):
                 bd = [[row[2], row[1], row[0]] for row in reader if int(row[1]) in quad_keys]
 
             #utils.remove_glob(bing_csv)
-            self.results = [[line[0], '{}_{}_{}'.format(line[0], line[1], os.path.basename(line[0])), 'bing'] for line in bd]
+            self.results = [[line[0], '{}_{}_{}'.format(line[2], line[1], os.path.basename(line[0])), 'bing'] for line in bd]
         else:
             utils.echo_error_msg('could not fetch BING dataset-links.csv')
         
