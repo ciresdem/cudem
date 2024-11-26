@@ -451,7 +451,8 @@ def get_vdatum_by_name(datum_name):
 ## ==============================================
 class VerticalTransform:    
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
-                 geoid_in=None, geoid_out='g2018', node='pixel', verbose=True, cache_dir=None):
+                 geoid_in=None, geoid_out='g2018', node='pixel', verbose=True,
+                 wm = None, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
@@ -461,11 +462,14 @@ class VerticalTransform:
         self.geoid_out = geoid_out
         self.cache_dir = _vdatums_cache if cache_dir is None else cache_dir
         self.verbose = verbose
-        self.xcount, self.ycount, self.gt = self.src_region.geo_transform(x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid')
+        self.xcount, self.ycount, self.gt = self.src_region.geo_transform(
+            x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid'
+        )
         #utils.echo_msg('transform: {} {}'.format(self.xcount, self.ycount))
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         self.node = node
         self.mode = mode
+        self.wm = wm
         #self.geoid_in = 'geoid09'
         
     def _frames(self, epsg_in, epsg_out):
@@ -562,12 +566,13 @@ class VerticalTransform:
             #     cg = np.zeros((self.ycount, self.xcount))
                 
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
-                _trans_in = waffles.WaffleFactory(mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
-                                                  xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
-                                                  cache_dir=self.cache_dir, dst_srs='epsg:4326', node='pixel', verbose=self.verbose)._acquire_module()
+                _trans_in = waffles.WaffleFactory(
+                    mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
+                    xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_in),
+                    cache_dir=self.cache_dir, dst_srs='epsg:4326', node='pixel', verbose=self.verbose
+                )._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
-
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
                 #_trans_in_array += cg
@@ -665,12 +670,13 @@ class VerticalTransform:
                                 utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                                 
                             utils.run_cmd(
-                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline'.format(
+                                'gdalwarp {} {} -s_srs epsg:4326 -te {} -ts {} {} --config CENTER_LONG 0 -r cubicspline {}'.format(
                                     _trans_grid,
                                     '_{}'.format(os.path.basename(_trans_grid)),
                                     self.src_region.format('te'),
                                     self.xcount,
                                     self.ycount,
+                                    '-wm {}'.format(self.wm) if self.wm is not None else ''
                                 ), verbose=self.verbose
                             )
                             
@@ -914,8 +920,14 @@ class Vdatum:
             self.vdatum_locate_jar()
         if self.jar is not None:
             vdc = 'ihorz:{} ivert:{} ohorz:{} overt:{} -nodata -pt:{},{},{} {}region:{}\
-            '.format(self.ihorz, self.ivert, self.ohorz, self.overt, xyz[0], xyz[1], xyz[2], 'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region)
-            out, status = utils.run_cmd('java -Djava.awt.headless=false -jar {} {}'.format(self.jar, vdc), verbose = False)
+            '.format(
+                self.ihorz, self.ivert, self.ohorz, self.overt, xyz[0], xyz[1], xyz[2],
+                'epoch:{} '.format(self.epoch) if self.epoch is not None else '', self.region
+            )
+            out, status = utils.run_cmd(
+                'java -Djava.awt.headless=false -jar {} {}'.format(self.jar, vdc),
+                verbose = False
+            )
             for i in out.split('\n'):
                 if 'Height/Z' in i:
                     z = float(i.split()[2])
@@ -1032,6 +1044,7 @@ usage: {cmd} [OPTIONS] input_grid output_grid
   -k, --keep-cache\tKEEP the cache data intact after run
   -l, --list-epsg\tList the supported EPSG codes and their names
   -q, --quiet\t\tLower verbosity to a quiet.
+  -wm\t\t\twarp memory, for gdalwarp.
 
   --help\t\tPrint the usage text
   --version\t\tPrint the version information
@@ -1049,6 +1062,7 @@ def vdatums_cli(argv = sys.argv):
     keep_cache = False
     cache_dir = _vdatums_cache
     i = 1
+    wm = None
 
     while i < len(argv):
         arg = argv[i]
@@ -1071,6 +1085,9 @@ def vdatums_cli(argv = sys.argv):
             sys.exit(1)
         elif arg == '-k' or arg == '--keep-cache':
             keep_cache = True
+        elif arg == '-wm':
+            wm = argv[i + 1]
+            i = i + 1
         elif arg == '--quiet':
             verbose = False
         elif arg == '-help' or arg == '--help' or arg == '-h':
@@ -1136,7 +1153,7 @@ def vdatums_cli(argv = sys.argv):
         # utils.echo_msg('trans region: {}'.format(trans_region))
         # utils.echo_msg('input inf: {}'.format(src_infos))
         
-        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, cache_dir=cache_dir)
+        vt = VerticalTransform('IDW', trans_region, tmp_x_inc, tmp_y_inc, vdatum_in, vdatum_out, wm=wm, cache_dir=cache_dir)
         _trans_grid, _trans_grid_unc = vt.run()
         out_trans_grid = utils.make_temp_fn('_trans_grid.tif', cache_dir)
         
@@ -1149,12 +1166,14 @@ def vdatums_cli(argv = sys.argv):
             #print(gdalfun.gdal_get_srs(src_grid))
             out_h, out_v = gdalfun.epsg_from_input(gdalfun.gdal_get_srs(src_grid))
             
-            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {}'.format(
+            utils.run_cmd('gdalwarp {} {} -te {} -ts {} {} -s_srs epsg:4326 -t_srs {} {}'.format(
                 _trans_grid, out_trans_grid,
                 src_region.format('te'),
                 src_infos['nx'],
                 src_infos['ny'],
-                out_h), verbose=verbose)
+                out_h,
+                '-wm {}'.format(wm) if wm is not None else ''
+            ), verbose=verbose)
             
             # utils.run_cmd(
             #     'gdalwarp {} {} -te {} -tr {} {} -s_srs epsg:4326 -t_srs {} -co COMPRESS=LZW -co TILED=YES -co PREDICTOR=3'.format(
