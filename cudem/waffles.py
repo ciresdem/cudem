@@ -2398,7 +2398,7 @@ class WafflesCoastline(Waffle):
         """load buildings from BING      
         """
 
-        this_bing = self.fetch_data("bing_bfp")
+        this_bing = self.fetch_data("bing_bfp", check_size=True)
         os.environ["OGR_OSM_OPTIONS"] = "INTERLEAVED_READING=YES"
         os.environ["OGR_OSM_OPTIONS"] = "OGR_INTERLEAVED_READING=YES"
         with tqdm(
@@ -2412,7 +2412,6 @@ class WafflesCoastline(Waffle):
 
                     bing_gz = bing_result[1]
                     bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-
                     os.rename(bing_gj, bing_gj + '.geojson')
                     bing_gj = bing_gj + '.geojson'
 

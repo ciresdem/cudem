@@ -414,22 +414,21 @@ class Fetch:
                 ## requested range is not satisfiable, most likely the requested
                 ## range is the complete size of the file, we'll skip here and assume
                 ## that is the case. Set overwrite to True to overwrite instead
-                if req.status_code == 416: 
-                    raise FileExistsError('{} exists, and requested Range is invalid, {}'.format(dst_fn, self.headers['Range']))
 
                 req_h = req.headers
                 if 'Content-Range' in req_h:
-                    req_s = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack
+                    content_length = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack
+                    content_range = int(req_h['Content-Range'].split('/')[-1]) # this is wrong/hack                    
                 elif 'Content-Length' in req_h:
-                    req_s = int(req_h['Content-Length'])
+                    content_length = int(req_h['Content-Length'])                    
                 else:
                     #req_s = -1
-                    req_s = int(req_h.get('content-length', 0))
+                    content_length = int(req_h.get('content-length', 0))
 
+                req_s = content_length                
                 ## raise FileExistsError here if the file exists and the header Range value
                 ## is the same as the requested content-length, unless overwrite is True or
                 ## check_size is False.
-
                 if not overwrite and check_size:
                     if os.path.exists(dst_fn):
                         if req_s == os.path.getsize(dst_fn):
@@ -439,6 +438,12 @@ class Fetch:
                 elif req_s == -1 or req_s == 0 or req_s == 49:
                     req_s = 0
 
+                if req.status_code == 416:
+                    overwrite = True
+                    raise FileExistsError(
+                        '{} exists, and requested Range is invalid, {}'.format(dst_fn, self.headers['Range'])
+                    )
+                    
                 ## redirect response. pass
                 if req.status_code == 300:
                     pass
@@ -4326,10 +4331,10 @@ class BingBFP(FetchModule):
             with open(bing_csv, mode='r') as bc:
                 reader = csv.reader(bc)
                 next(reader)
-                bd = [row[2] for row in reader if int(row[1]) in quad_keys]
+                bd = [[row[2], row[1], row[0]] for row in reader if int(row[1]) in quad_keys]
 
-            utils.remove_glob(bing_csv)            
-            self.results = [[url, os.path.basename(url), 'bing'] for url in bd]
+            #utils.remove_glob(bing_csv)
+            self.results = [[line[0], '{}_{}_{}'.format(line[0], line[1], os.path.basename(line[0])), 'bing'] for line in bd]
         else:
             utils.echo_error_msg('could not fetch BING dataset-links.csv')
         
