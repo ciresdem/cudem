@@ -2689,24 +2689,15 @@ class eHydro(FetchModule):
                     if self.index:
                         print(json.dumps(feature['attributes'], indent=4))
                     elif self.tables:
-                        #utils.echo_msg(int(str(feature['attributes']['surveydatestart']).rstrip('0')))
                         sid = feature['attributes']['sdsmetadataid']
-                        #year = datetime.datetime.utcfromtimestamp(int(str(feature['attributes']['surveydatestart']).rstrip('0'))).year
                         year = time.gmtime(int(str(feature['attributes']['surveydatestart'])[:10])).tm_year
                         url = feature['attributes']['sourcedatalocation']
                         dtype = feature['attributes']['surveytype']
                         line = '{},{}'.format(sid,year)
                         if sid is not None:
                             print(line)
+                            
                     else:
-
-                        #survey_type = feature['attributes']['surveytype']
-                            
-                        #if self.survey_name is not None:
-                        #    if self.survey_name in fetch_fn:
-                        #        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
-                            
-                        #else:
                         self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
