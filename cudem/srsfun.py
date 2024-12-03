@@ -182,7 +182,6 @@ def epsg_from_input(in_srs):
             
         in_srs = esri_split[0]
 
-    print(in_srs)
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
     

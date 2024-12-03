@@ -591,6 +591,9 @@ class Waffle:
                                     set_metadata=False)
                     output_files['stack'] = aux_dem.fn
 
+
+            if self.keep_auxiliary:
+                output_files['aux netcdf'] = '{}.nc'.format(self.name)
             ## reset the self.stack to new post-processed fn and ds
             # if self.want_stack and self.keep_auxiliary:
             #     self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
