@@ -167,7 +167,7 @@ def epsg_from_input(in_srs):
     """
 
     src_vert = None
-    if np.any(['geoid' in x for x in in_srs.split('+')]):
+    if in_srs.split('+')[-1].startswith('geoid'):
         in_srs = '+'.join(in_srs.split('+')[:-1])
         
     if in_srs.split(':')[0] == 'ESRI':
@@ -181,10 +181,11 @@ def epsg_from_input(in_srs):
             src_vert = vert_epsg
             
         in_srs = esri_split[0]
-    
+
+    print(in_srs)
     src_srs = osr.SpatialReference()
     src_srs.SetFromUserInput(in_srs)
-
+    
     ## HORZ
     if src_srs.IsGeographic() == 1:
         cstype = 'GEOGCS'

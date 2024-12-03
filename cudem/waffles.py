@@ -3312,8 +3312,8 @@ class WafflesUncertainty(Waffle):
         src_unc_name = '{}_src_unc'.format(self.name)
         src_unc_surface = WaffleFactory(mod='nearest', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
                                         xinc=self.xinc, yinc=self.yinc, name=src_unc_name, node='pixel', want_weight=False,
-                                        want_uncertainty=False, dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True,
-                                        verbose=self.verbose)._acquire_module()
+                                        want_uncertainty=False, dst_srs=self.dst_srs, srs_transform=self.srs_transform,
+                                        clobber=True, verbose=self.verbose, keep_auxiliary=False)._acquire_module()
         src_unc_surface.initialize()
         src_unc_surface.generate()
         return(src_unc_surface.fn)
@@ -3696,7 +3696,7 @@ class WafflesUncertainty(Waffle):
             self.prox = self._generate_proximity_raster('{}_u.tif'.format(self.name))
 
         src_unc_raster = self._generate_interpolated_src_raster()
-            
+
         if self.verbose:
             utils.echo_msg('applying coefficient {} to PROXIMITY grid {}'.format(ec_d, self.prox))
             
@@ -3767,6 +3767,7 @@ class WafflesUncertainty(Waffle):
             utils.echo_msg('applied coefficient {} to PROXIMITY grid'.format(ec_d))
 
         dst_ds = None
+        utils.remove_glob('{}*'.format(src_unc_raster))
         return(unc_out)
     
     def run(self):
@@ -5138,7 +5139,7 @@ class WaffleDEM:
             # ************  LATITUDE  ************
             lat_array = np.arange(lat_start, lat_end, lat_inc)
             lat_dim = grp.createDimension('lat', ny) # lat dim
-            lat_var = grp.createVariable('lat', 'f4', ('lat',), compression='zlib') # lat var
+            lat_var = grp.createVariable('lat', 'd', ('lat',), compression='zlib') # lat var
             lat_var.long_name = 'latitude'
             lat_var.units = 'degrees_north'
             lat_var[:] = lat_array
@@ -5146,7 +5147,7 @@ class WaffleDEM:
             # ************  LONGITUDE  ***********
             lon_array = np.arange(lon_start, lon_end, lon_inc)
             lon_dim = grp.createDimension('lon', nx) # lon dim
-            lon_var = grp.createVariable('lon', 'f4', ('lon',), compression='zlib') # lon_var
+            lon_var = grp.createVariable('lon', 'd', ('lon',), compression='zlib') # lon_var
             lon_var.long_name = 'longitude'
             lon_var.units = 'degrees_east'
             lon_var[:] = lon_array
@@ -5157,7 +5158,13 @@ class WaffleDEM:
             utils.echo_msg('Generateing NetCDF output...')
 
         # ************  DEM GRP **************
-        nc_ds = nc.Dataset(os.path.join(os.path.dirname(self.fn), '{}.nc'.format(os.path.basename(utils.fn_basename2(self.fn)))), 'w', format='NETCDF4')
+        nc_ds = nc.Dataset(
+            os.path.join(
+                os.path.dirname(self.fn), '{}.nc'.format(os.path.basename(utils.fn_basename2(self.fn)))
+            ),
+            'w',
+            format='NETCDF4'
+        )
         lat, lon, crs = generate_dims(self.fn, nc_ds)        
         #dem_grp = nc_ds.createGroup('dem')    
         dem_var = nc_ds.createVariable('z', 'f4', ('lat', 'lon',), compression='zlib') # dem_h var
@@ -5171,52 +5178,62 @@ class WaffleDEM:
 
         # ************  UNC GRP **************
         if unc_fn is not None:
-            unc_grp = nc_ds.createGroup('uncertainty')
-            lat, lon, crs = generate_dims(unc_fn, unc_grp)
-            with gdalfun.gdal_datasource(unc_fn) as unc_ds:
-                if unc_ds is not None:
-                    for b in range(1, unc_ds.RasterCount+1):
-                        unc_band = unc_ds.GetRasterBand(b)
-                        unc_name = unc_band.GetDescription()
-                        unc_var = unc_grp.createVariable(unc_name, 'f4', ('lat', 'lon',), compression='zlib')
-                        unc_var[:] = unc_band.ReadAsArray()
-                        if unc_name != 'proximity':
-                            unc_var.units = 'meters'
-                        else:
-                            unc_var.units = 'cells'
-                            
-                        unc_var.grid_mapping = "crs"
+            if os.path.exists(unc_fn):
+                unc_grp = nc_ds.createGroup('uncertainty')
+                lat, lon, crs = generate_dims(unc_fn, unc_grp)
+                with gdalfun.gdal_datasource(unc_fn) as unc_ds:
+                    if unc_ds is not None:
+                        for b in range(1, unc_ds.RasterCount+1):
+                            unc_band = unc_ds.GetRasterBand(b)
+                            unc_name = unc_band.GetDescription()
+                            unc_var = unc_grp.createVariable(unc_name, 'f4', ('lat', 'lon',), compression='zlib')
+                            unc_var[:] = unc_band.ReadAsArray()
+                            if unc_name != 'proximity':
+                                unc_var.units = 'meters'
+                            else:
+                                unc_var.units = 'cells'
+
+                            unc_var.grid_mapping = "crs"
+            else:
+                utils.echo_warning_msg('{} does not exist'.format(unc_fn))
             
         # ************  MSK GRP ****************
         if mask_fn is not None:
-            mask_grp = nc_ds.createGroup('mask')
-            lat, lon, crs = generate_dims(mask_fn, mask_grp)
-            with gdalfun.gdal_datasource(mask_fn) as mask_ds:
-                if mask_ds is not None:
-                    for b in range(1, mask_ds.RasterCount+1):
-                        mask_band = mask_ds.GetRasterBand(b)
-                        mask_var = mask_grp.createVariable(mask_band.GetDescription(), 'i4', ('lat', 'lon',), compression='zlib')
-                        mask_var.grid_mapping = "crs"
-                        mask_var[:] = mask_band.ReadAsArray()
-                        this_band_md = mask_band.GetMetadata()
-                        for k in this_band_md.keys():
-                            try:
-                                mask_var.__setattr__(k, this_band_md[k])
-                            except:
-                                utils.echo_warning_msg(k)
-                                mask_var.__setattr__('_{}'.format(k), this_band_md[k])
+            if os.path.exists(mask_fn):
+                mask_grp = nc_ds.createGroup('mask')
+                lat, lon, crs = generate_dims(mask_fn, mask_grp)
+                with gdalfun.gdal_datasource(mask_fn) as mask_ds:
+                    if mask_ds is not None:
+                        for b in range(1, mask_ds.RasterCount+1):
+                            mask_band = mask_ds.GetRasterBand(b)
+                            mask_var = mask_grp.createVariable(mask_band.GetDescription(), 'i4', ('lat', 'lon',), compression='zlib')
+                            mask_var.grid_mapping = "crs"
+                            mask_var[:] = mask_band.ReadAsArray()
+                            this_band_md = mask_band.GetMetadata()
+                            for k in this_band_md.keys():
+                                try:
+                                    mask_var.__setattr__(k, this_band_md[k])
+                                except:
+                                    utils.echo_warning_msg(k)
+                                    mask_var.__setattr__('_{}'.format(k), this_band_md[k])
+
+            else:
+                utils.echo_warning_msg('{} does not exist'.format(msk_fn))
 
         # ************  STACK  ***************
         if stack_fn is not None:
-            stack_grp = nc_ds.createGroup('stack')
-            lat, lon, crs = generate_dims(stack_fn, stack_grp)
-            with gdalfun.gdal_datasource(stack_fn) as stack_ds:                
-                for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty', 'x', 'y']):
-                    this_band = stack_ds.GetRasterBand(b+1)
-                    this_var = stack_grp.createVariable(n, 'f4', ('lat', 'lon',), compression='zlib')
-                    this_var[:] = this_band.ReadAsArray()
-                    this_var.short_name = n
-                    #this_var.grid_mapping = "crs"
+            if os.path.exists(stack_fn):
+                stack_grp = nc_ds.createGroup('stack')
+                lat, lon, crs = generate_dims(stack_fn, stack_grp)
+                with gdalfun.gdal_datasource(stack_fn) as stack_ds:                
+                    for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty', 'x', 'y']):
+                        this_band = stack_ds.GetRasterBand(b+1)
+                        this_var = stack_grp.createVariable(n, 'f4', ('lat', 'lon',), compression='zlib')
+                        this_var[:] = this_band.ReadAsArray()
+                        this_var.short_name = n
+                        #this_var.grid_mapping = "crs"
+            else:
+                utils.echo_warning_msg('{} does not exist'.format(stack_fn))                        
                                 
         nc_ds.close()
 

@@ -1761,6 +1761,7 @@ class ElevationDataset:
             sys.exit(-1)
 
         dst_ds.SetGeoTransform(dst_gt)
+        dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
         stacked_bands = {
             'z': dst_ds.GetRasterBand(1),
             'count': dst_ds.GetRasterBand(2),

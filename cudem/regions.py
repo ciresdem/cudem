@@ -624,7 +624,7 @@ class Region:
         return(o_chunks)
 
     def warp(self, dst_crs = 'epsg:4326', include_z = True):
-        in_horz_epsg = srsfun.epsg_from_input(self.src_srs)[0]        
+        in_horz_epsg = srsfun.epsg_from_input(self.src_srs)[0]
         in_crs = pyproj.CRS.from_user_input(in_horz_epsg)
         out_horz_epsg = srsfun.epsg_from_input(dst_crs)[0]        
         out_crs = pyproj.CRS.from_user_input(out_horz_epsg)
