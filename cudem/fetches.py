@@ -2669,6 +2669,23 @@ class eHydro(FetchModule):
             features = _req.json()
             if 'features' in features.keys():
                 for feature in features['features']:
+                    sid = feature['attributes']['sdsmetadataid']
+                    fetch_fn = feature['attributes']['sourcedatalocation']
+                    year = time.gmtime(int(str(feature['attributes']['surveydatestart'])[:10])).tm_year
+                    if self.survey_name is not None:
+                        if sid is None:
+                            sid = fetch_fn
+
+                        s = [x in sid for x in self.survey_name.split('/')]
+                        if not any(s):
+                            continue
+
+                    if self.min_year is not None and int(year) < self.min_year:
+                        continue
+
+                    if self.max_year is not None and int(year) > self.max_year:
+                        continue
+                    
                     if self.index:
                         print(json.dumps(feature['attributes'], indent=4))
                     elif self.tables:
@@ -2682,20 +2699,8 @@ class eHydro(FetchModule):
                         if sid is not None:
                             print(line)
                     else:
-                        sid = feature['attributes']['sdsmetadataid']
-                        fetch_fn = feature['attributes']['sourcedatalocation']
-                        year = time.gmtime(int(str(feature['attributes']['surveydatestart'])[:10])).tm_year
+
                         #survey_type = feature['attributes']['surveytype']
-
-                        if self.survey_name is not None:
-                            if sid not in self.survey_name.split('/'):
-                                continue
-
-                        if self.min_year is not None and int(year) < self.min_year:
-                            continue
-                
-                        if self.max_year is not None and int(year) > self.max_year:
-                            continue
                             
                         #if self.survey_name is not None:
                         #    if self.survey_name in fetch_fn:
