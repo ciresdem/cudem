@@ -154,6 +154,20 @@ def osr_prj_file(dst_fn, src_srs):
     else:
         return(-1)
 
+def srs_get_cstype(in_srs):
+    src_srs = osr.SpatialReference()
+    src_srs.SetFromUserInput(in_srs)
+    
+    ## HORZ
+    if src_srs.IsGeographic() == 1:
+        cstype = 'GEOGCS'
+    else:
+        cstype = 'PROJCS'
+
+    src_srs = None
+
+    return(cstype)
+    
 def epsg_from_input(in_srs):
     """get the epsg(s) from srs suitable as input to SetFromUserInput
 

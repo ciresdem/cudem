@@ -932,40 +932,43 @@ def gdal_infos(src_gdal, region = None, scan = False, band = 1):
 
             dst_gt = (gt[0] + (srcwin[0] * gt[1]), gt[1], 0., gt[3] + (srcwin[1] * gt[5]), 0., gt[5])
             src_band = src_ds.GetRasterBand(band)
-            ds_config = {
-                'nx': srcwin[2],
-                'ny': srcwin[3],
-                'nb': srcwin[2] * srcwin[3],
-                'geoT': dst_gt,
-                'proj': src_ds.GetProjectionRef(),
-                'dt': src_band.DataType,
-                'dtn': gdal.GetDataTypeName(src_band.DataType),
-                'ndv': src_band.GetNoDataValue(),
-                'fmt': src_ds.GetDriver().ShortName,
-                'metadata': src_ds.GetMetadata(),
-                'raster_count': src_ds.RasterCount,
-                #'zr': None,
-            }
-            if ds_config['ndv'] is None:
-                ds_config['ndv'] = -9999
+            if src_band is not None:
+                ds_config = {
+                    'nx': srcwin[2],
+                    'ny': srcwin[3],
+                    'nb': srcwin[2] * srcwin[3],
+                    'geoT': dst_gt,
+                    'proj': src_ds.GetProjectionRef(),
+                    'dt': src_band.DataType,
+                    'dtn': gdal.GetDataTypeName(src_band.DataType),
+                    'ndv': src_band.GetNoDataValue(),
+                    'fmt': src_ds.GetDriver().ShortName,
+                    'metadata': src_ds.GetMetadata(),
+                    'raster_count': src_ds.RasterCount,
+                    #'zr': None,
+                }
+                if ds_config['ndv'] is None:
+                    ds_config['ndv'] = -9999
 
-            if scan:
-                src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                try:
-                    src_arr[src_arr == ds_config['ndv']] = np.nan
-                    if not np.all(np.isnan(src_arr)):
-                        ds_config['zr'] = src_band.ComputeRasterMinMax()
-                    else:
-                        #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
-                        ds_config['zr'] = [np.nan, np.nan]
-                except:
-                    if not np.all(src_arr == ds_config['ndv']):
-                        ds_config['zr'] = src_band.ComputeRasterMinMax()
-                    else:
-                        #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
-                        ds_config['zr'] = [np.nan, np.nan]
-                    
-                src_arr = src_band = None
+                if scan:
+                    src_arr = src_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    try:
+                        src_arr[src_arr == ds_config['ndv']] = np.nan
+                        if not np.all(np.isnan(src_arr)):
+                            ds_config['zr'] = src_band.ComputeRasterMinMax()
+                        else:
+                            #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
+                            ds_config['zr'] = [np.nan, np.nan]
+                    except:
+                        if not np.all(src_arr == ds_config['ndv']):
+                            ds_config['zr'] = src_band.ComputeRasterMinMax()
+                        else:
+                            #utils.echo_warning_msg('{} is all nan'.format(src_ds.GetDescription()))
+                            ds_config['zr'] = [np.nan, np.nan]
+
+                    src_arr = src_band = None
+            else:
+                utils.echo_warning_msg('invalid band {} for data source {}'.format(band, src_gdal))
 
     return(ds_config)
 

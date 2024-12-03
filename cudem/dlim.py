@@ -1330,8 +1330,8 @@ class ElevationDataset:
         if not vd_region.valid_p():
             utils.echo_warning_msg('failed to generate transformation')
             return
-        else:
-            utils.echo_msg('generating vertical transformation to region {}'.format(vd_region))
+        # else:
+        #     utils.echo_msg('generating vertical transformation to region {}'.format(vd_region))
 
         ## set `self.transform.trans_fn`, which is the transformation grid
         self.transform['trans_fn'] = os.path.join(
@@ -1791,6 +1791,7 @@ class ElevationDataset:
         driver = gdal.GetDriverByName('MEM')
         m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
         m_ds.SetGeoTransform(dst_gt)
+        m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
         
         ## initialize data mask        
         ## parse each entry and process it

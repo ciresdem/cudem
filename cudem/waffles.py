@@ -84,6 +84,7 @@ from cudem import factory
 from cudem import fetches
 from cudem import grits
 from cudem import perspecto
+from cudem import srsfun
 
 ## Data cache directory, hold temp data, fetch data, etc here.
 waffles_cache = utils.cudem_cache()
@@ -3788,7 +3789,6 @@ class WafflesUncertainty(Waffle):
             if self.verbose:
                 utils.echo_msg('extracting uncertainty band from stack...')
                 
-            #print(gdalfun.gdal_get_array(self.stack, band=4))
             gdalfun.gdal_extract_band(self.stack, self.fn, band=4) # band 4 is the uncertainty band in stacks
             with gdalfun.gdal_datasource(self.fn, update=True) as unc_ds:
                 unc_band = unc_ds.GetRasterBand(1)
@@ -5116,13 +5116,34 @@ class WaffleDEM:
             nx = dem_infos['nx']
             ny = dem_infos['ny']
             geoT = dem_infos['geoT']
-
+            proj = dem_infos['proj']
+            cstype = srsfun.srs_get_cstype(proj)
+            horz_epsg, vert_epsg = srsfun.epsg_from_input(proj)
+            if cstype == 'GEOGCS':
+                lat_name = 'lat'
+                lat_long_name = 'latitude'
+                lat_units = 'degrees_north'
+                lon_name = 'lon'
+                lon_long_name = 'longitude'
+                lon_units = 'degrees_east'
+            else:
+                lat_name = 'y'
+                lat_long_name = 'northing'
+                lat_units = 'meters'
+                lon_name = 'x'
+                lon_long_name = 'easting'
+                lon_units = 'meters'
+            
             if node == 'pixel': # pixel-node
                 lon_start = geoT[0] + (geoT[1] / 2)
                 lat_start = geoT[3] + (geoT[5] / 2)
+                grp.GDAL_AREA_OR_POINT = 'AREA'
+                grp.node_offset = 1
             else: # grid-node
                 lon_start = geoT[0]
                 lat_start = geoT[3]
+                grp.GDAL_AREA_OR_POINT = 'POINT'
+                grp.node_offset = 0
 
             lon_end = geoT[0] + (geoT[1] * nx)
             lat_end = geoT[3] + (geoT[5] * ny)
@@ -5136,26 +5157,32 @@ class WaffleDEM:
             crs_var = grp.createVariable('crs', 'S1', (), compression='zlib')
             crs_var.long_name = 'CRS definition'
             crs_var.GeoTransfrom = ' '.join([str(x) for x in geoT])
-            crs_var.crs_wkt = dem_infos['proj']
-            crs_var.spatial_ref = dem_infos['proj']
+            crs_var.crs_wkt = proj
+            crs_var.spatial_ref = proj
+            crs_var.horz_crs_epsg = horz_epsg
+            crs_var.vert_crs_epsg = 'EPSG:{}'.format(vert_epsg)
 
             # ************  LATITUDE  ************
             lat_array = np.arange(lat_start, lat_end, lat_inc)
-            lat_dim = grp.createDimension('lat', ny) # lat dim
-            lat_var = grp.createVariable('lat', 'd', ('lat',), compression='zlib') # lat var
-            lat_var.long_name = 'latitude'
-            lat_var.units = 'degrees_north'
+            lat_dim = grp.createDimension(lat_name, ny) # lat dim
+            lat_var = grp.createVariable(lat_name, 'd', (lat_name,), compression='zlib') # lat var
+            lat_var.long_name = lat_long_name
+            lat_var.standard_name = lat_long_name
+            lat_var.units = lat_units
+            lat_var.actual_range = [lat_array.min(), lat_array.max()]
             lat_var[:] = lat_array
 
             # ************  LONGITUDE  ***********
             lon_array = np.arange(lon_start, lon_end, lon_inc)
-            lon_dim = grp.createDimension('lon', nx) # lon dim
-            lon_var = grp.createVariable('lon', 'd', ('lon',), compression='zlib') # lon_var
-            lon_var.long_name = 'longitude'
-            lon_var.units = 'degrees_east'
+            lon_dim = grp.createDimension(lon_name, nx) # lon dim
+            lon_var = grp.createVariable(lon_name, 'd', (lon_name,), compression='zlib') # lon_var
+            lon_var.long_name = lon_long_name
+            lon_var.standard_name = lon_long_name
+            lon_var.units = lon_units
+            lon_var.actual_range = [lon_array.min(), lon_array.max()]
             lon_var[:] = lon_array
 
-            return('lat', 'lon', 'crs')
+            return(lat_name, lon_name, 'crs')
             
         if self.verbose:
             utils.echo_msg('Generateing NetCDF output...')
@@ -5168,12 +5195,18 @@ class WaffleDEM:
             'w',
             format='NETCDF4'
         )
-        lat, lon, crs = generate_dims(self.fn, nc_ds)        
         #dem_grp = nc_ds.createGroup('dem')    
-        dem_var = nc_ds.createVariable('z', 'f4', ('lat', 'lon',), compression='zlib') # dem_h var
+        lat, lon, crs = generate_dims(self.fn, nc_ds)
+        dem_infos = gdalfun.gdal_infos(self.fn, scan=True)
+        horz_epsg, vert_epsg = srsfun.epsg_from_input(dem_infos['proj'])
+        dem_var = nc_ds.createVariable('z', 'f4', (lat, lon,), compression='zlib', fill_value=dem_infos['ndv']) # dem_h var
         dem_var.units = 'meters'
         dem_var.grid_mapping = 'crs'
         dem_var.long_name = 'z'
+        dem_var.standard_name = 'height'
+        dem_var.positive = 'up'
+        dem_var.vert_crs_epsg = 'EPSG:{}'.format(vert_epsg)
+        dem_var.actual_range = dem_infos['zr']
         
         with gdalfun.gdal_datasource(self.fn) as dem_ds:
             dem_band = dem_ds.GetRasterBand(1)
@@ -5187,9 +5220,10 @@ class WaffleDEM:
                 with gdalfun.gdal_datasource(unc_fn) as unc_ds:
                     if unc_ds is not None:
                         for b in range(1, unc_ds.RasterCount+1):
+                            unc_infos = gdalfun.gdal_infos(unc_ds, scan=True, band=b)
                             unc_band = unc_ds.GetRasterBand(b)
                             unc_name = unc_band.GetDescription()
-                            unc_var = unc_grp.createVariable(unc_name, 'f4', ('lat', 'lon',), compression='zlib')
+                            unc_var = unc_grp.createVariable(unc_name, 'f4', (lat, lon,), compression='zlib', fill_value=unc_infos['ndv'])
                             unc_var[:] = unc_band.ReadAsArray()
                             if unc_name != 'proximity':
                                 unc_var.units = 'meters'
@@ -5197,6 +5231,7 @@ class WaffleDEM:
                                 unc_var.units = 'cells'
 
                             unc_var.grid_mapping = "crs"
+                            unc_var.actual_range = unc_infos['zr']
             else:
                 utils.echo_warning_msg('{} does not exist'.format(unc_fn))
             
@@ -5208,8 +5243,9 @@ class WaffleDEM:
                 with gdalfun.gdal_datasource(mask_fn) as mask_ds:
                     if mask_ds is not None:
                         for b in range(1, mask_ds.RasterCount+1):
+                            mask_infos = gdalfun.gdal_infos(mask_ds, scan=True, band=b)
                             mask_band = mask_ds.GetRasterBand(b)
-                            mask_var = mask_grp.createVariable(mask_band.GetDescription(), 'i4', ('lat', 'lon',), compression='zlib')
+                            mask_var = mask_grp.createVariable(mask_band.GetDescription(), 'i4', (lat, lon,), compression='zlib', fill_value=mask_infos['ndv'])
                             mask_var.grid_mapping = "crs"
                             mask_var[:] = mask_band.ReadAsArray()
                             this_band_md = mask_band.GetMetadata()
@@ -5219,7 +5255,8 @@ class WaffleDEM:
                                 except:
                                     utils.echo_warning_msg(k)
                                     mask_var.__setattr__('_{}'.format(k), this_band_md[k])
-
+                                    
+                            mask_var.actual_range = mask_infos['zr']
             else:
                 utils.echo_warning_msg('{} does not exist'.format(msk_fn))
 
@@ -5228,12 +5265,14 @@ class WaffleDEM:
             if os.path.exists(stack_fn):
                 stack_grp = nc_ds.createGroup('stack')
                 lat, lon, crs = generate_dims(stack_fn, stack_grp)
-                with gdalfun.gdal_datasource(stack_fn) as stack_ds:                
+                with gdalfun.gdal_datasource(stack_fn) as stack_ds:
                     for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty', 'x', 'y']):
+                        stack_infos = gdalfun.gdal_infos(stack_ds, scan=True, band=b+1)
                         this_band = stack_ds.GetRasterBand(b+1)
-                        this_var = stack_grp.createVariable(n, 'f4', ('lat', 'lon',), compression='zlib')
+                        this_var = stack_grp.createVariable(n, 'f4', (lat, lon,), compression='zlib', fill_value=stack_infos['ndv'])
                         this_var[:] = this_band.ReadAsArray()
                         this_var.short_name = n
+                        this_var.actual_range = stack_infos['zr']
                         #this_var.grid_mapping = "crs"
             else:
                 utils.echo_warning_msg('{} does not exist'.format(stack_fn))                        
