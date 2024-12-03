@@ -5273,7 +5273,7 @@ class WaffleDEM:
                         this_var[:] = this_band.ReadAsArray()
                         this_var.short_name = n
                         this_var.actual_range = stack_infos['zr']
-                        #this_var.grid_mapping = "crs"
+                        this_var.grid_mapping = "crs"
             else:
                 utils.echo_warning_msg('{} does not exist'.format(stack_fn))                        
                                 
