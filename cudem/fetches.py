@@ -2634,14 +2634,16 @@ class eHydro(FetchModule):
     """
 
     def __init__(self, where = '1=1', inc = None, survey_name = None, index = False,
-                 tables = False,**kwargs):
+                 tables = False, min_year = None, max_year = None, **kwargs):
         super().__init__(name='ehydro', **kwargs)
         self.where = where
         self.survey_name = survey_name
         self.inc = utils.str2inc(inc)
         self.index = index
         self.tables = tables
-
+        self.min_year = utils.int_or(min_year)
+        self.max_year = utils.int_or(max_year)
+        
         ## Various EHydro URLs
         self._ehydro_gj_api_url = 'https://opendata.arcgis.com/datasets/80a394bae6b547f1b5788074261e11f1_0.geojson'
         self._ehydro_api_url = 'https://services7.arcgis.com/n1YM8pTrFmm7L4hs/arcgis/rest/services/eHydro_Survey_Data/FeatureServer/0'
@@ -2680,14 +2682,27 @@ class eHydro(FetchModule):
                         if sid is not None:
                             print(line)
                     else:
+                        sid = feature['attributes']['sdsmetadataid']
                         fetch_fn = feature['attributes']['sourcedatalocation']
+                        year = time.gmtime(int(str(feature['attributes']['surveydatestart'])[:10])).tm_year
                         #survey_type = feature['attributes']['surveytype']
+
                         if self.survey_name is not None:
-                            if self.survey_name in fetch_fn:
-                                self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                            if sid not in self.survey_name.split('/'):
+                                continue
+
+                        if self.min_year is not None and int(year) < self.min_year:
+                            continue
+                
+                        if self.max_year is not None and int(year) > self.max_year:
+                            continue
                             
-                        else:
-                            self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                        #if self.survey_name is not None:
+                        #    if self.survey_name in fetch_fn:
+                        #        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
+                            
+                        #else:
+                        self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                 
         return(self)
 

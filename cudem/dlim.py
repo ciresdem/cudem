@@ -2527,16 +2527,20 @@ class ElevationDataset:
                     if bing_result[-1] == 0:
                         pbar.update()
                         bing_gz = bing_result[1]
-                        bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-                        os.rename(bing_gj, bing_gj + '.geojson')
-                        bing_gj = bing_gj + '.geojson'
-                        bldg_ds = ogr.Open(bing_gj, 0)
-                        bldg_layer = bldg_ds.GetLayer()
-                        bldg_geom = gdalfun.ogr_union_geom(bldg_layer, verbose=False)
-                        bldg_geoms.append(bldg_geom)
-                        bldg_ds = None
+                        try:
+                            bing_gj = utils.gunzip(bing_gz, self.cache_dir)
+                            os.rename(bing_gj, bing_gj + '.geojson')
+                            bing_gj = bing_gj + '.geojson'
+                            bldg_ds = ogr.Open(bing_gj, 0)
+                            bldg_layer = bldg_ds.GetLayer()
+                            bldg_geom = gdalfun.ogr_union_geom(bldg_layer, verbose=False)
+                            bldg_geoms.append(bldg_geom)
+                            bldg_ds = None
+                            utils.remove_glob(bing_gj)
+                        except Exception as e:
+                            utils.echo_error_msg('could not process bing bfp, {}'.format(e))
 
-                        utils.remove_glob(bing_gz, bing_gj)
+                        utils.remove_glob(bing_gz)
 
         return(bldg_geoms)
 

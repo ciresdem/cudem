@@ -58,6 +58,7 @@ from tqdm import trange
 
 import numpy as np
 import h5py as h5
+import netCDF4 as nc
 import scipy
 from scipy import interpolate
 from scipy import spatial
@@ -506,8 +507,8 @@ class Waffle:
                             this_arr[count_mask] = stack_infos['ndv']
                             this_band.WriteArray(this_arr)
                 
-                if self.keep_auxiliary:
-                    self.aux_dems.append(self.stack)
+                # if self.keep_auxiliary:
+                #     self.aux_dems.append(self.stack)
 
                 ## run the waffles module
                 if WaffleDEM(self.stack, cache_dir=self.cache_dir, verbose=self.verbose).initialize().valid_p():
@@ -549,7 +550,7 @@ class Waffle:
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr,
-                                   flatten_nodata_values=self.flatten_nodata_values)
+                                   flatten_nodata_values=self.flatten_nodata_values, want_nc=self.keep_auxiliary, want_h5=self.keep_auxiliary)
                 output_files['DEM'] = self.fn
                 
             ## post-process the mask, etc.
@@ -591,12 +592,12 @@ class Waffle:
                     output_files['stack'] = aux_dem.fn
 
             ## reset the self.stack to new post-processed fn and ds
-            if self.want_stack and self.keep_auxiliary:
-                self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
-                self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
-                                              data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
-                                              y_inc=self.yinc, src_region=self.p_region, weight=1,
-                                              verbose=self.verbose).initialize()
+            # if self.want_stack and self.keep_auxiliary:
+            #     self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
+            #     self.stack_ds = dlim.GDALFile(fn=self.stack, band_no=1, weight_mask=3, uncertainty_mask=4,
+            #                                   data_format=200, src_srs=self.dst_srs, dst_srs=self.dst_srs, x_inc=self.xinc,
+            #                                   y_inc=self.yinc, src_region=self.p_region, weight=1,
+            #                                   verbose=self.verbose).initialize()
 
         if self.verbose:
             utils.echo_msg('output files: {}'.format(output_files))
@@ -2411,21 +2412,26 @@ class WafflesCoastline(Waffle):
                     pbar.update()
 
                     bing_gz = bing_result[1]
-                    bing_gj = utils.gunzip(bing_gz, self.cache_dir)
-                    os.rename(bing_gj, bing_gj + '.geojson')
-                    bing_gj = bing_gj + '.geojson'
-
-                    out, status = utils.run_cmd(
-                        'gdal_rasterize -burn -1 -l {} {} bldg_bing.tif -te {} -ts {} {} -ot Int32'.format(
-                            os.path.basename(utils.fn_basename2(bing_gj)),
-                            bing_gj,
-                            self.p_region.format('te'),
-                            self.ds_config['nx'],
-                            self.ds_config['ny'],
-                        ),
-                        verbose=True
-                    )
-
+                    try:
+                        bing_gj = utils.gunzip(bing_gz, self.cache_dir)
+                        os.rename(bing_gj, bing_gj + '.geojson')
+                        bing_gj = bing_gj + '.geojson'
+                        
+                        out, status = utils.run_cmd(
+                            'gdal_rasterize -burn -1 -l {} {} bldg_bing.tif -te {} -ts {} {} -ot Int32'.format(
+                                os.path.basename(utils.fn_basename2(bing_gj)),
+                                bing_gj,
+                                self.p_region.format('te'),
+                                self.ds_config['nx'],
+                                self.ds_config['ny'],
+                            ),
+                            verbose=True
+                        )
+                    except Exception as e:
+                        utils.remove_glob(bing_gz)
+                        utils.echo_error_msg('could not process bing bfp, {}'.format(e))
+                        status = -1
+                    
                     if status == 0:
                         bldg_ds = gdal.Open('bldg_bing.tif')
                         if bldg_ds is not None:
@@ -3304,7 +3310,7 @@ class WafflesUncertainty(Waffle):
 
         #gdalfun.gdal_get_array(self.stack, band=4)
         src_unc_name = '{}_src_unc'.format(self.name)
-        src_unc_surface = WaffleFactory(mod='IDW', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
+        src_unc_surface = WaffleFactory(mod='nearest', data=['{},200:band_no=4,1'.format(self.stack)], src_region=self._proc_region(),
                                         xinc=self.xinc, yinc=self.yinc, name=src_unc_name, node='pixel', want_weight=False,
                                         want_uncertainty=False, dst_srs=self.dst_srs, srs_transform=self.srs_transform, clobber=True,
                                         verbose=self.verbose)._acquire_module()
@@ -3780,6 +3786,10 @@ class WafflesUncertainty(Waffle):
                 
             #print(gdalfun.gdal_get_array(self.stack, band=4))
             gdalfun.gdal_extract_band(self.stack, self.fn, band=4) # band 4 is the uncertainty band in stacks
+            with gdalfun.gdal_datasource(self.fn, update=True) as unc_ds:
+                unc_band = unc_ds.GetRasterBand(1)
+                unc_band.SetDescription('tvu')
+                
             return(self)
         
         s_dp = s_ds = None
@@ -4769,7 +4779,8 @@ class WaffleDEM:
     def process(self, filter_ = None, ndv = None, xsample = None, ysample = None, region = None, node='pixel',
                 clip_str = None, upper_limit = None, lower_limit = None, size_limit = None, proximity_limit = None,
                 percentile_limit = None, dst_srs = None, dst_fmt = None, dst_fn = None, dst_dir = None,
-                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_nodata_values = False):
+                set_metadata = True, stack_fn = None, mask_fn = None, unc_fn = None, flatten_nodata_values = False,
+                want_nc = False, want_h5 = False):
         """Process the DEM using various optional functions.
 
         set the nodata value, srs, metadata, limits; resample, filter, clip, cut, output.
@@ -4809,10 +4820,6 @@ class WaffleDEM:
             flatten_no_data_zones(self.fn, dst_dem=flattened_fn, band=1, size_threshold=1)
             os.rename(flattened_fn, self.fn)
 
-        ## put everything in a hdf5
-        # if stack_fn is not None:
-        #     self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
-
         ## clip/cut
         self.clip(clip_str=clip_str)
         if region is not None:
@@ -4825,6 +4832,16 @@ class WaffleDEM:
         if set_metadata:
             self.set_metadata(node=node)
 
+        ## put everything in a hdf5
+        if want_h5:
+            if stack_fn is not None:
+                self.stack2hd5(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
+
+        ## put everything in a netcdf
+        if want_nc:
+            if stack_fn is not None:
+                self.stack2nc(stack_fn=stack_fn, mask_fn=mask_fn, unc_fn=unc_fn, node=node)
+            
         ## reformat and move final output
         self.reformat(out_fmt=dst_fmt)
         self.move(out_fn=dst_fn, out_dir=dst_dir)
@@ -5088,21 +5105,129 @@ class WaffleDEM:
             if self.verbose:
                 utils.echo_msg('set DEM metadata: {}.'.format(md))
 
-    def stack2hd5(self, stack_fn = None, mask_fn = None, unc_fn = None, node='pixel'):
+    def stack2nc(self, stack_fn = None, mask_fn = None, unc_fn = None, node = 'pixel'):
+
+        def generate_dims(fn, grp):
+            dem_infos = gdalfun.gdal_infos(fn)
+            nx = dem_infos['nx']
+            ny = dem_infos['ny']
+            geoT = dem_infos['geoT']
+
+            if node == 'pixel': # pixel-node
+                lon_start = geoT[0] + (geoT[1] / 2)
+                lat_start = geoT[3] + (geoT[5] / 2)
+            else: # grid-node
+                lon_start = geoT[0]
+                lat_start = geoT[3]
+
+            lon_end = geoT[0] + (geoT[1] * nx)
+            lat_end = geoT[3] + (geoT[5] * ny)
+            lon_inc = geoT[1]
+            lat_inc = geoT[5]
+
+            grp.Conventions = 'CF-1.5'
+            #nc_ds.node_offset = 1
+
+            # ************  Grid Mapping  ********
+            crs_var = grp.createVariable('crs', 'S1', (), compression='zlib')
+            crs_var.long_name = 'CRS definition'
+            crs_var.GeoTransfrom = ' '.join([str(x) for x in geoT])
+            crs_var.crs_wkt = dem_infos['proj']
+            crs_var.spatial_ref = dem_infos['proj']
+
+            # ************  LATITUDE  ************
+            lat_array = np.arange(lat_start, lat_end, lat_inc)
+            lat_dim = grp.createDimension('lat', ny) # lat dim
+            lat_var = grp.createVariable('lat', 'f4', ('lat',), compression='zlib') # lat var
+            lat_var.long_name = 'latitude'
+            lat_var.units = 'degrees_north'
+            lat_var[:] = lat_array
+
+            # ************  LONGITUDE  ***********
+            lon_array = np.arange(lon_start, lon_end, lon_inc)
+            lon_dim = grp.createDimension('lon', nx) # lon dim
+            lon_var = grp.createVariable('lon', 'f4', ('lon',), compression='zlib') # lon_var
+            lon_var.long_name = 'longitude'
+            lon_var.units = 'degrees_east'
+            lon_var[:] = lon_array
+
+            return('lat', 'lon', 'crs')
+            
+        if self.verbose:
+            utils.echo_msg('Generateing NetCDF output...')
+
+        # ************  DEM GRP **************
+        nc_ds = nc.Dataset(os.path.join(os.path.dirname(self.fn), '{}.nc'.format(os.path.basename(utils.fn_basename2(self.fn)))), 'w', format='NETCDF4')
+        lat, lon, crs = generate_dims(self.fn, nc_ds)        
+        #dem_grp = nc_ds.createGroup('dem')    
+        dem_var = nc_ds.createVariable('z', 'f4', ('lat', 'lon',), compression='zlib') # dem_h var
+        dem_var.units = 'meters'
+        dem_var.grid_mapping = 'crs'
+        dem_var.long_name = 'z'
+        
+        with gdalfun.gdal_datasource(self.fn) as dem_ds:
+            dem_band = dem_ds.GetRasterBand(1)
+            dem_var[:] = dem_band.ReadAsArray()
+
+        # ************  UNC GRP **************
+        if unc_fn is not None:
+            unc_grp = nc_ds.createGroup('uncertainty')
+            lat, lon, crs = generate_dims(unc_fn, unc_grp)
+            with gdalfun.gdal_datasource(unc_fn) as unc_ds:
+                if unc_ds is not None:
+                    for b in range(1, unc_ds.RasterCount+1):
+                        unc_band = unc_ds.GetRasterBand(b)
+                        unc_name = unc_band.GetDescription()
+                        unc_var = unc_grp.createVariable(unc_name, 'f4', ('lat', 'lon',), compression='zlib')
+                        unc_var[:] = unc_band.ReadAsArray()
+                        if unc_name != 'proximity':
+                            unc_var.units = 'meters'
+                        else:
+                            unc_var.units = 'cells'
+                            
+                        unc_var.grid_mapping = "crs"
+            
+        # ************  MSK GRP ****************
+        if mask_fn is not None:
+            mask_grp = nc_ds.createGroup('mask')
+            lat, lon, crs = generate_dims(mask_fn, mask_grp)
+            with gdalfun.gdal_datasource(mask_fn) as mask_ds:
+                if mask_ds is not None:
+                    for b in range(1, mask_ds.RasterCount+1):
+                        mask_band = mask_ds.GetRasterBand(b)
+                        mask_var = mask_grp.createVariable(mask_band.GetDescription(), 'i4', ('lat', 'lon',), compression='zlib')
+                        mask_var.grid_mapping = "crs"
+                        mask_var[:] = mask_band.ReadAsArray()
+                        this_band_md = mask_band.GetMetadata()
+                        for k in this_band_md.keys():
+                            try:
+                                mask_var.__setattr__(k, this_band_md[k])
+                            except:
+                                utils.echo_warning_msg(k)
+                                mask_var.__setattr__('_{}'.format(k), this_band_md[k])
+
+        # ************  STACK  ***************
+        if stack_fn is not None:
+            stack_grp = nc_ds.createGroup('stack')
+            lat, lon, crs = generate_dims(stack_fn, stack_grp)
+            with gdalfun.gdal_datasource(stack_fn) as stack_ds:                
+                for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty', 'x', 'y']):
+                    this_band = stack_ds.GetRasterBand(b+1)
+                    this_var = stack_grp.createVariable(n, 'f4', ('lat', 'lon',), compression='zlib')
+                    this_var[:] = this_band.ReadAsArray()
+                    this_var.short_name = n
+                    #this_var.grid_mapping = "crs"
+                                
+        nc_ds.close()
+
+    def stack2hd5(self, stack_fn = None, mask_fn = None, unc_fn = None, node = 'pixel'):
         """put all the data into an hdf5 file"""
+
+        if self.verbose:
+            utils.echo_msg('Generating H5 output...')
         
         f = h5.File(os.path.join(os.path.dirname(self.fn), '{}.h5'.format(os.path.basename(utils.fn_basename2(self.fn)))), 'w')
-        
-        dem_grp = f.create_group('dem')
         dem_infos = gdalfun.gdal_infos(self.fn)
-        
-        if stack_fn is not None:
-            stack_grp = f.create_group('stack')
-            stack_infos = gdalfun.gdal_infos(stack_fn)
-
-        if mask_fn is not None:
-            mask_grp = f.create_group('mask')
-        
         nx = dem_infos['nx']
         ny = dem_infos['ny']
         geoT = dem_infos['geoT']
@@ -5114,38 +5239,63 @@ class WaffleDEM:
             lon_start = geoT[0]
             lat_start = geoT[3]
 
-        lon_end = geoT[0] + geoT[1] * nx
-        lat_end = geoT[3] + geoT[5] * ny
+        lon_end = geoT[0] + (geoT[1] * nx)
+        lat_end = geoT[3] + (geoT[5] * ny)
         lon_inc = geoT[1]
         lat_inc = geoT[5]
+        
+        # ************  DEM  GRP *************
+        dem_grp = f.create_group('dem')
+        
+        # ************  STACK  GRP ***********
+        if stack_fn is not None:
+            stack_grp = f.create_group('stack')
+            stack_infos = gdalfun.gdal_infos(stack_fn)
 
+        # ************  MSK  GRP *************
+        if mask_fn is not None:
+            mask_grp = f.create_group('mask')
+
+        # ************  METADATA  ************
+        # f.create_dataset('geo_transform', data=geoT) # geo_transform
+        # srs info
+        # other metdata
+
+        # ************  Grid Mapping  ********
+        crs_dset = f.create_dataset('crs', dtype=h5.string_dtype())
+        crs_dset.attrs['GeoTransfrom'] = ' '.join([str(x) for x in geoT])
+        crs_dset.attrs['crs_wkt'] = self.ds_config['proj']
+        
         # ************  LATITUDE  ************
         lat_array = np.arange(lat_start, lat_end, lat_inc)
-        lat_dset = f.create_dataset ('lat', data = lat_array)
+        lat_dset = f.create_dataset ('lat', data=lat_array)
         lat_dset.make_scale('latitude')
         lat_dset.attrs["long_name"] = "latitude"
         lat_dset.attrs["units"] = "degrees_north"
         lat_dset.attrs["standard_name"] = "latitude"
+        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
         #lat_dset.attrs[''] = ''
-
 
         # ************  LONGITUDE  ***********
         lon_array = np.arange(lon_start, lon_end, lon_inc)
-        lon_dset = f.create_dataset ('lon', data = lon_array)
+        lon_dset = f.create_dataset ('lon', data=lon_array)
         lon_dset.make_scale('longitude')
         lon_dset.attrs["long_name"] = "longitude"
         lon_dset.attrs["units"] = "degrees_east" 
         lon_dset.attrs["standard_name"]= "longitude"
+        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
 
-        ## dem
+        # ************  DEM  *****************
         with gdalfun.gdal_datasource(self.fn) as dem_ds:
             dem_band = dem_ds.GetRasterBand(1)
+            #dem_dset = f.create_dataset ('z', data=dem_band.ReadAsArray())
             dem_dset = dem_grp.create_dataset('dem_h', data=dem_band.ReadAsArray())
             dem_dset.attrs['units'] = 'meters'
             dem_dset.dims[0].attach_scale(lat_dset)
             dem_dset.dims[1].attach_scale(lon_dset)
-
-        ## uncertainty
+            dem_dset.attrs['grid_mapping'] = "crs"
+            
+        # ************  Uncertainty  *********
         if unc_fn is not None:
             with gdalfun.gdal_datasource(unc_fn) as unc_ds:
                 unc_band = unc_ds.GetRasterBand(1)
@@ -5153,21 +5303,24 @@ class WaffleDEM:
                 unc_dset.attrs['units'] = 'meters'
                 unc_dset.dims[0].attach_scale(lat_dset)
                 unc_dset.dims[1].attach_scale(lon_dset)
-            
-        ## mask
+                unc_dset.attrs['grid_mapping'] = "crs"
+                
+        # ************  MASK  ****************
         if mask_fn is not None:
             with gdalfun.gdal_datasource(mask_fn) as mask_ds:
-                for b in range(1, mask_ds.RasterCount+1):
-                    mask_band = mask_ds.GetRasterBand(b)
-                    mask_dset = mask_grp.create_dataset(mask_band.GetDescription(), data=mask_band.ReadAsArray())
-                    this_band_md = mask_band.GetMetadata()
-                    for k in this_band_md.keys():
-                        mask_dset.attrs[k] = this_band_md[k]
+                if mask_ds is not None:
+                    for b in range(1, mask_ds.RasterCount+1):
+                        mask_band = mask_ds.GetRasterBand(b)
+                        mask_dset = mask_grp.create_dataset(mask_band.GetDescription(), data=mask_band.ReadAsArray())
+                        this_band_md = mask_band.GetMetadata()
+                        for k in this_band_md.keys():
+                            mask_dset.attrs[k] = this_band_md[k]
 
-                    mask_dset.dims[0].attach_scale(lat_dset)
-                    mask_dset.dims[1].attach_scale(lon_dset)            
+                        mask_dset.dims[0].attach_scale(lat_dset)
+                        mask_dset.dims[1].attach_scale(lon_dset)
+                        mask_dset.attrs['grid_mapping'] = "crs"
             
-        ## stacks
+        # ************  STACK  ***************
         if stack_fn is not None:
             with gdalfun.gdal_datasource(stack_fn) as stack_ds:
                 for b, n in enumerate(['stack_h', 'count', 'weight', 'uncertainty', 'src_uncertainty']):
@@ -5176,6 +5329,7 @@ class WaffleDEM:
                     this_dset.dims[0].attach_scale(lat_dset)
                     this_dset.dims[1].attach_scale(lon_dset)
                     this_dset.attrs['short_name'] = n
+                    this_dset.attrs['grid_mapping'] = "crs"
         f.close()
 
                 
