@@ -6450,7 +6450,7 @@ class DatasetFactory(factory.CUDEMFactory):
               'description': 'ascii DSV datafile formatted as y,x,z',
               'call': YXZFile},
         168: {'name': 'xyz',
-              'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt'],
+              'fmts': ['xyz', 'csv', 'dat', 'ascii', 'txt', 'XYZ'],
               'description': 'An ascii DSV datafile formatted as x,y,z',
               'call': XYZFile},
         200: {'name': 'gdal',
