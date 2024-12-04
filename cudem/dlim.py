@@ -5372,6 +5372,7 @@ class Fetcher(ElevationDataset):
                  keep_fetched_data = True,
                  outdir = None,
                  check_size = True,
+                 want_single_metadata_name = False,
                  callback = fetches.fetches_callback,
                  **kwargs
     ):
@@ -5385,7 +5386,8 @@ class Fetcher(ElevationDataset):
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
             pass
-
+        
+        self.want_single_metadata_name = want_single_metadata_name
         self.metadata['name'] = self.fn # set the metadata name from the input fetches module
         self.check_size = check_size # check the size of the fetched data
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
@@ -5404,7 +5406,8 @@ class Fetcher(ElevationDataset):
             data_format=self.fetch_module.data_format,
             src_srs=self.fetch_module.src_srs,
             cache_dir=self.fetch_module._outdir,
-            remote=True
+            remote=True,
+            metadata=copy.deepcopy(self.metadata)
         )            
                 
     def generate_inf(self):
@@ -5437,8 +5440,12 @@ class Fetcher(ElevationDataset):
                             mod_name = os.path.dirname(utils.fn_basename2(f_name))
                             if mod_name == '':
                                 mod_name = self.fetch_module.name
+
+                            if self.want_single_metadata_name:
+                                this_ds.metadata['name'] = mod_name
+                            else:
+                                this_ds.metadata['name'] = self.fn
                                 
-                            this_ds.metadata['name'] = mod_name
                             this_ds.remote = True
                             this_ds.initialize()
                             for ds in this_ds.parse():
@@ -5545,7 +5552,7 @@ class DAVFetcher_CoNED(Fetcher):
                 
             for this_ds in self.set_ds(result):
                 if this_ds is not None:
-                    this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
+                    #this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
                     this_ds.initialize()
                     yield(this_ds)
             
@@ -6049,7 +6056,8 @@ class ChartsFetcher(Fetcher):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        #self.metadata['name'] = 'charts'
+        
     def set_ds(self, result):
         src_000s = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
@@ -6656,13 +6664,14 @@ class DatasetFactory(factory.CUDEMFactory):
                 self.kwargs['data_format'] = self.mod_name
 
             # inherit metadata from parent if available
+            # something something!
             self.kwargs['metadata'] = {}
             self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
             for key in self._metadata_keys:
                 if key not in self.kwargs['metadata'].keys():
                     self.kwargs['metadata'][key] = None
-
+                    
             return(self.mod_name, self.mod_args)
 
         ## if fn is not a path, parse it as a datalist entry

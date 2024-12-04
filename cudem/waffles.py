@@ -5251,10 +5251,10 @@ class WaffleDEM:
                             this_band_md = mask_band.GetMetadata()
                             for k in this_band_md.keys():
                                 try:
-                                    mask_var.__setattr__(k, this_band_md[k])
+                                    mask_var.__setattr__(os.path.basename(k), os.path.basename(this_band_md[k]))
                                 except:
-                                    utils.echo_warning_msg(k)
-                                    mask_var.__setattr__('_{}'.format(k), this_band_md[k])
+                                    #utils.echo_warning_msg(k)
+                                    mask_var.__setattr__('_{}'.format(os.path.basename(k)), os.path.basename(this_band_md[k]))
                                     
                             mask_var.actual_range = mask_infos['zr']
             else:
