@@ -3191,7 +3191,7 @@ class WafflesUncertainty(Waffle):
     accumulate (bool): accumulate errors
     """
     
-    def __init__(self, waffles_module='IDW', percentile = 95, sims = 1, chnk_lvl = None,
+    def __init__(self, waffles_module='IDW', percentile = 95, sims = 10, chnk_lvl = None,
                  max_sample = None, max_errors = 5000000, accumulate = False, **kwargs):
 
         ## parse the waffles module
@@ -5253,7 +5253,6 @@ class WaffleDEM:
                                 try:
                                     mask_var.__setattr__(os.path.basename(k), os.path.basename(this_band_md[k]))
                                 except:
-                                    #utils.echo_warning_msg(k)
                                     mask_var.__setattr__('_{}'.format(os.path.basename(k)), os.path.basename(this_band_md[k]))
                                     
                             mask_var.actual_range = mask_infos['zr']

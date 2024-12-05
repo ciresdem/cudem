@@ -5444,7 +5444,7 @@ class Fetcher(ElevationDataset):
                             if self.want_single_metadata_name:
                                 this_ds.metadata['name'] = mod_name
                             else:
-                                this_ds.metadata['name'] = self.fn
+                                this_ds.metadata['name'] = self.fn.split(':')[0]
                                 
                             this_ds.remote = True
                             this_ds.initialize()
