@@ -182,11 +182,11 @@ _cudem_module_short_desc = lambda m: ', '.join(
 _cudem_module_name_short_desc = lambda m: ',  '.join(
     ['{} ({})'.format(m[key]['name'] if 'name' in m[key].keys() else None, key) for key in m])
 _cudem_module_long_desc = lambda m: '{cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n  '.format(cmd=os.path.basename(sys.argv[0])) + '\n  '.join(
-    ['\033[1m{:20}\033[0m{}\n'.format('{} ({})'.format(str(key), str(m[key]['name'])), m[key]['call'].__doc__) for key in m]) + '\n'
+    ['\033[1m{:20}\033[0m{}\n'.format('{} ({})'.format(str(key), str(m[key]['name']) if 'name' in m[key].keys() else key), m[key]['call'].__doc__) for key in m]) + '\n'
 _cudem_module_md = lambda m: '# {cmd} modules:\n% {cmd} ... <mod>:key=val:key=val...\n\n'.format(cmd=os.path.basename(sys.argv[0])) + '\n'.join(
     ['## {} ({})\n {}'.format(str(m[key]['name']), str(key), m[key]['description']) for key in m])
 _cudem_module_md_table = lambda m: '| **Name** | **Module-Key** | **Description** |\n|---|---|---|\n'.format(cmd=os.path.basename(sys.argv[0])) + '\n'.join(
-    ['| {} | {} | {} |'.format(str(m[key]['name']), str(key), m[key]['description']) for key in m])
+    ['| {} | {} | {} |'.format(str(m[key]['name']) if 'name' in m[key].keys() else key, str(key), m[key]['description']) for key in m])
 
 def echo_modules(module_dict: dict, key: any, md: bool = False):
     """print out the existing modules from module_dict and their descriptions."""
