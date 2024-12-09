@@ -1696,6 +1696,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
+    ## todo: 'bm' multi-band of each dataset
     def _stacks(self, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):
         """stack and mask incoming arrays (from `array_yield`) together
 
