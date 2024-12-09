@@ -547,6 +547,10 @@ class Waffle:
             ## post-process the DEM(s)
             waffle_dem = WaffleDEM(self.fn, cache_dir=self.cache_dir, verbose=self.verbose, co=self.co).initialize()
             if waffle_dem.valid_p():
+                if mask_fn is not None and os.path.exists(mask_fn):
+                    ## set the projection to the mask, it gets lost in translation from mem to tif
+                    gdalfun.gdal_set_srs(mask_fn, src_srs=self.dst_srs)
+                    
                 waffle_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                    node=self.node, upper_limit=self.upper_limit, lower_limit=self.lower_limit, size_limit=self.size_limit,
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,

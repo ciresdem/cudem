@@ -45,6 +45,7 @@ requirements:
     - mercantile # for MS building footprints
     - utm # for cshelph
     - pandas # for cshelph
+    - netCDF4
 
 about:
   home: https://github.com/ciresdem/cudem

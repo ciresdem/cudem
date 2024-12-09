@@ -4315,6 +4315,10 @@ def polygonize_osm_coastline(
                 for line_geometry in line_geometries:
                     if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
                         point_count = line_geometry.GetPointCount()
+                        # [ss.append((line_geometry.GetX(point_n+1) - line_geometry.GetX(point_n))*(poly_center.GetY(0) - line_geometry.GetY(point_n)) \
+                        #            > (line_geometry.GetY(point_n+1) - line_geometry.GetY(point_n))*(poly_center.GetX(0) - line_geometry.GetX(point_n))) \
+                        #  for point_n in range(0, point_count-1)]
+                        
                         for point_n in range(0, point_count-1):
                             x_beg = line_geometry.GetX(point_n)
                             y_beg = line_geometry.GetY(point_n)

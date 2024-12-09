@@ -510,7 +510,14 @@ class INF:
             self.file_hash = '0'
 
         return(self.file_hash)
+
+    def generate_mini_grid(self):
+        """generate a 'mini-grid' of the data in about a 10x10 grid.
+        this will help us determine the location of data before processing.
+        """
         
+        raise(NotImplementedError)
+    
     def generate(self):
         if self.name is None:
             return(self)
@@ -535,11 +542,14 @@ class INF:
                     #self.check_hash = False
                     mb_inf = True
                 except Exception as e:
-                    raise ValueError('CUDEMFactory: Unable to read data from {} as mb-system inf, {}'.format(inf_fn, e))
+                    raise ValueError(
+                        'CUDEMFactory: Unable to read data from {} as mb-system inf, {}'.format(inf_fn, e)
+                    )
             except:
-                raise ValueError('CUDEMFactory: Unable to read data from {} as json'.format(inf_fn))
+                raise ValueError(
+                    'CUDEMFactory: Unable to read data from {} as json'.format(inf_fn)
+                )
 
-        
         for ky, val in data.items():
             if ky in self.__dict__:
                 self.__setattr__(ky, val)
@@ -943,13 +953,14 @@ class ElevationDataset:
 
         if self.mask is not None:
             if os.path.exists(self.mask['mask']):            
-                utils.echo_msg('using mask dataset: {}'.format(self.mask['mask']))
+                utils.echo_msg('using mask dataset: {} to array'.format(self.mask['mask']))
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                     src_mask = gdalfun.sample_warp(
                         self.mask['mask'], None, self.x_inc, self.y_inc,
                         src_region=self.region,
                         sample_alg='nearest',
-                        dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
+                        dst_srs=self.transform['dst_horz_crs'] if self.transform['dst_horz_crs'] is not None else None,
+                        #dst_srs=self.transform['dst_horz_crs'].to_proj4() if self.transform['dst_horz_crs'] is not None else None,
                         #dst_srs=self.dst_srs.split('+')[0],
                         ndv=gdalfun.gdal_get_ndv(self.mask['mask']),
                         verbose=False,
@@ -974,9 +985,15 @@ class ElevationDataset:
                 for arr in out_arrays.keys():
                     if out_arrays[arr] is not None:
                         if self.mask['invert_mask']:
-                            out_arrays[arr][~np.isnan(mask_data)] = np.nan
+                            if arr == 'count':
+                                out_arrays[arr][~np.isnan(mask_data)] = 0
+                            else:                            
+                                out_arrays[arr][~np.isnan(mask_data)] = np.nan                            
                         else:
-                            out_arrays[arr][np.isnan(mask_data)] = np.nan
+                            if arr == 'count':
+                                out_arrays[arr][np.isnan(mask_data)] = 0
+                            else:
+                                out_arrays[arr][np.isnan(mask_data)] = np.nan
 
             yield(out_arrays, this_srcwin, this_gt)
 
@@ -991,7 +1008,7 @@ class ElevationDataset:
                 for this_xyz in this_entry.yield_xyz():
                     yield(this_xyz)
             else:
-                utils.echo_msg('using mask dataset: {}'.format(this_entry.mask['mask']))
+                utils.echo_msg('using mask dataset: {} to xyz'.format(this_entry.mask['mask']))
                 if this_entry.mask['ogr_or_gdal'] == 0:
                     src_ds = gdal.Open(this_entry.mask['mask'])
                     if src_ds is not None:
@@ -2557,7 +2574,7 @@ class ElevationDataset:
                 utils.echo_msg('fetching coastline for region {}'.format(this_region))
                 
             this_cst = fetches.OpenStreetMap(
-                src_region=this_region, verbose=self.verbose, outdir=self.cache_dir,
+                src_region=this_region, verbose=verbose, outdir=self.cache_dir,
                 q='coastline', chunks=chunks,
             )
             this_cst.run()
@@ -5508,8 +5525,8 @@ class NEDFetcher(Fetcher):
         coast_mask = None
         if self.mask is None:
             coast_mask = self.process_coastline(
-                self.fetch_coastline(chunks=False), return_geom=False, landmask_is_watermask=True,
-                include_landmask=False, line_buffer=self.coast_buffer
+                self.fetch_coastline(chunks=False, verbose=False), return_geom=False, landmask_is_watermask=True,
+                include_landmask=False, line_buffer=self.coast_buffer, verbose=False
             )
             ned_mask = {'mask': coast_mask, 'invert_mask': True}
         else:
@@ -5765,7 +5782,7 @@ class IceSat2Fetcher(Fetcher):
 
         if self.fetches_params['classify_water']:
             self.fetches_params['classify_water'] = self.process_coastline(
-                self.fetch_coastline(chunks=False), return_geom=True
+                self.fetch_coastline(chunks=False, verbose=False), return_geom=True, verbose=False
             )
             
         if 'processed_zip' in result[-1]:

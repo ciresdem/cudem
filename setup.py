@@ -58,14 +58,15 @@ setuptools.setup(
         'mercantile', # for MS building footprints
         'utm', # for cshelph
         'pandas', # for cshelph
+        'netCDF4', # for netcdf outputs
         # 'windows-curses', # for windows
         # 'shapely',
         #'xarray', # for cshelph
         #'geopandas', # for cshelph
-        #'cshelph', # icesat bathymetry extraction
-        #'h5netcdf', # for cshelph sst
+        #'cshelph', # icesat bathymetry extraction        
         #'dask', # for cshelph sst
         #'earthaccess', # for earthdata access sst
+        # 'h5netcdf', # for cshelph sst
         #'zarr',
         #'zarr-eosdis-store',
         
