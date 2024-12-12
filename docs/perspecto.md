@@ -51,8 +51,12 @@ Print the version information
 from cudem import perspecto
 
 dem_path = '/my_dems/dem.tif'
-p = perspecto.PerspectoFactory(mod='hillshade', min_z=-1000, max_z=100)._acquire_module()
+p = perspecto.PerspectoFactory(mod='hillshade', src_dem=dem_path, min_z=-1000, max_z=100)._acquire_module()
 p.run()
 ```
 
 ## Examples
+
+```bash
+perspecto my_dem.tif -C GMT_wysiwyg
+```
