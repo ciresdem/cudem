@@ -68,3 +68,7 @@ p.run()
 ```bash
 perspecto my_dem.tif -M hillshade -C GMT_wysiwyg
 ```
+
+## Gallery
+
+![](/media/etopo22_northAmerica.png)
