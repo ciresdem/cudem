@@ -35,6 +35,8 @@ Display the module descriptions and usage
 `--version`
 Print the version information
 
+## Modules
+
 **Table 1.** Modules available in the CUDEM software tool "perspecto"
 
 |  ***Name***  |  ***Description*** |
@@ -44,6 +46,12 @@ Print the version information
 | sphere | generate a DEM on a sphere |
 | figure1 | generate a DEM figure (req. GMT) |
 | colorbar | generate a colorbar image based on the input DEM/CPT |
+
+### hillshade
+### perspective
+### sphere
+### figure1
+### colorbar
 
 ## Python API
 
