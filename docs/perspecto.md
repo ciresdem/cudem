@@ -58,5 +58,5 @@ p.run()
 ## Examples
 
 ```bash
-perspecto my_dem.tif -C GMT_wysiwyg
+perspecto my_dem.tif -M hillshade -C GMT_wysiwyg
 ```
