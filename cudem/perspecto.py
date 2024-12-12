@@ -244,7 +244,6 @@ def fetch_cpt_city(q='grass/haxby', cache_dir = './'):
     return(this_fetches.results[0][1])
 
 class Perspecto:
-
     def __init__(self, mod = None, src_dem = None, cpt = None, min_z = None, max_z = None, callback = lambda: False,
                  outdir = None, verbose = True, params={}):
         self.mod = mod

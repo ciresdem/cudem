@@ -1,6 +1,6 @@
 # perspecto
 
-Generate images from DEMs
+Generate images of DEMs
 
 ## Synopsis
 
@@ -10,7 +10,7 @@ perspecto [ -hvCM [ args ] ] DEM ...
 
 ## Description
 
-Generate images from DEMs, including perspectives, hillshades, etc. (Table 1)
+Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 
 ## Options
 `-C, --cpt`
@@ -46,5 +46,13 @@ Print the version information
 | colorbar | generate a colorbar image based on the input DEM/CPT |
 
 ## Python API
+
+```python
+from cudem import perspecto
+
+dem_path = '/my_dems/dem.tif'
+p = perspecto.PerspectoFactory(mod='hillshade', min_z=-1000, max_z=100)._acquire_module()
+p.run()
+```
 
 ## Examples
