@@ -71,4 +71,5 @@ perspecto my_dem.tif -M hillshade -C GMT_wysiwyg
 
 ## Gallery
 
+### ETOPO 2022 *sphere*
 ![](/media/etopo22_northAmerica.png)
