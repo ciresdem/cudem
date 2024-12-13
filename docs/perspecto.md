@@ -6,6 +6,8 @@ Generate images of DEMs
 
 ```
 perspecto [ -hvCM [ args ] ] DEM ...
+
+perspecto ... <mod>:key=val:key=val...
 ```
 
 ## Description
@@ -56,23 +58,23 @@ Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 
 ### hillshade
 
-< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
+```hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45```
 
 ### perspective
 
-< perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 >
+```perspective:cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2```
 
 ### sphere
 
-< sphere:cam_azimuth=310:cam_elevation=27:cam_distance=8:cam_view_angle=33:center_lat=None:center_long=None >
+```sphere:cam_azimuth=310:cam_elevation=27:cam_distance=8:cam_view_angle=33:center_lat=None:center_long=None```
 
 ### figure1
 
-< figure1:perspective=False:vertical_exaggeration=1.5:interval=100:azimuth=-130:elevation=30 >
+```figure1:perspective=False:vertical_exaggeration=1.5:interval=100:azimuth=-130:elevation=30```
 
 ### colorbar
 
-< colorbar:colorbar_text='Elevation':widt=10:height=2 >
+```colorbar:colorbar_text='Elevation':widt=10:height=2```
 
 ## Python API
 
