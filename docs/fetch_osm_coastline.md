@@ -51,3 +51,8 @@ fetch_osm_coastline.py -R -123.02/-122.73/37.98/38.27 test_msk
 
 ![](/media/osm_coastpoly.png)
 
+```bash
+fetch_osm_coastline.py -R -123.02/-122.73/37.98/38.27 --invert_watermask test_msk_invert
+```
+
+![](/media/osm_coastpoly_invert.png)
