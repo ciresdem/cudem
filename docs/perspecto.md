@@ -50,11 +50,31 @@ Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 
 |  ***Name***  |  ***Description*** | ***Module Options*** |
 |----------------------|----------------------------------|----------------------------------|
-| hillshade | generate a DEM hillshade (req. gdal/imagemagick) | :vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 |
-| perspective | generate a DEM perspective (req. POVRay) | :cam_azimuth=-130:cam_elevation=30:cam_distance=265:cam_view_angle=40:light_elevation=20:light_distance=10000:vertical_exaggeration=2 |
-| sphere | generate a DEM on a sphere | :cam_azimuth=310:cam_elevation=27:cam_distance=8:cam_view_angle=33:center_lat=None:center_long=None |
-| figure1 | generate a DEM figure (req. GMT) | :perspective=False:vertical_exaggeration=1.5:interval=100:azimuth=-130:elevation=30 | 
-| colorbar | generate a colorbar image based on the input DEM/CPT | :colorbar_text='Elevation':widt=10:height=2 |
+| hillshade | generate a DEM hillshade (req. gdal/imagemagick) | :vertical_exaggeration=1
+:projection=4326
+:azimuth=315
+:altitude=45 |
+| perspective | generate a DEM perspective (req. POVRay) | :cam_azimuth=-130
+:cam_elevation=30
+:cam_distance=265
+:cam_view_angle=40
+:light_elevation=20
+:light_distance=10000
+:vertical_exaggeration=2 |
+| sphere | generate a DEM on a sphere | :cam_azimuth=310
+:cam_elevation=27
+:cam_distance=8
+:cam_view_angle=33
+:center_lat=None
+:center_long=None |
+| figure1 | generate a DEM figure (req. GMT) | :perspective=False
+:vertical_exaggeration=1.5
+:interval=100
+:azimuth=-130
+:elevation=30 | 
+| colorbar | generate a colorbar image based on the input DEM/CPT | :colorbar_text='Elevation'
+:width=10
+:height=2 |
 
 * hillshade
 
