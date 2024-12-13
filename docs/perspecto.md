@@ -56,7 +56,7 @@ Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 | figure1 | generate a DEM figure (req. GMT) | :perspective=False :vertical_exaggeration=1.5 :interval=100 :azimuth=-130 :elevation=30 | 
 | colorbar | generate a colorbar image based on the input DEM/CPT | :colorbar_text='Elevation' :width=10 :height=2 |
 
-* Python API
+## Python API
 
 ```python
 from cudem import perspecto
