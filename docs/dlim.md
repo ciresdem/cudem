@@ -24,86 +24,108 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 ### Options
 
 `-R, --region`
-     Restrict processing to the desired REGION 
-     Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]
-     Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-
-     OR an OGR-compatible vector file with regional polygons. 
-     Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
-     If a vector file is supplied, will use each region found therein.
+
+> Restrict processing to the desired REGION \
+> Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]\
+> Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-\
+> OR an OGR-compatible vector file with regional polygons. \
+> Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].\
+> If a vector file is supplied, will use each region found therein.
      
 `-E, --increment`
-     Block data to INCREMENT in native units.
-     Where INCREMENT is x-inc[/y-inc]
+
+> Block data to INCREMENT in native units.\
+> Where INCREMENT is x-inc[/y-inc]
 
 `-X, --extend`
-     Number of cells with which to EXTEND the output DEM REGION and a 
-     percentage to extend the processing REGION.
-     Where EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]
-     e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 
-     percent of the input REGION.
+
+> Number of cells with which to EXTEND the output DEM REGION and a \
+> percentage to extend the processing REGION.\
+> Where EXTEND is dem-extend(cell-count)[:processing-extend(percentage)]\
+> e.g. -X6:10 to extend the DEM REGION by 6 cells and the processing region by 10 \
+> percent of the input REGION.
      
 `-J, --s_srs`
-     Set the SOURCE projection.
+
+> Set the SOURCE projection.
 
 `-P, --t_srs`
-     Set the TARGET projection. (REGION should be in target projection)
+
+> Set the TARGET projection. (REGION should be in target projection)
      
 `-D, --cache-dir`
-     CACHE Directory for storing temp and output data.
+
+> CACHE Directory for storing temp and output data.
      
 `-Z, --z-precision`
-     Set the target precision of dumped z values. (default is 4)
+
+> Set the target precision of dumped z values. (default is 4)
      
 `-A, --stack-mode`
-     Set the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
+
+> Set the STACK MODE to 'mean', 'min', 'max' or 'supercede' (with -E and -R)
      
 `-T, --stack_filter`
-     FILTER the data stack using one or multiple filters. 
-     Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)
-     The -T switch may be set multiple times to perform multiple filters.
-     Available FILTERS: blur, grdfilter, outliers, flats
+
+> FILTER the data stack using one or multiple filters. \
+> Where FILTER is fltr_name[:opts] (see `grits --modules` for more information)\
+> The -T switch may be set multiple times to perform multiple filters.\
+> Available FILTERS: blur, grdfilter, outliers, flats\
      
 `-F, --point_filter`
-     FILTER the POINT data using one or multiple filters. 
-     Where FILTER is fltr_name[:opts] 
-     The -F switch may be set multiple times to perform multiple filters.
-     Available FILTERS: bin_z
+
+> FILTER the POINT data using one or multiple filters. \
+> Where FILTER is fltr_name[:opts] \
+> The -F switch may be set multiple times to perform multiple filters.\
+> Available FILTERS: bin_z
 
 `--mask`
-	MASK the datalist to the given REGION/INCREMENTs
+
+> MASK the datalist to the given REGION/INCREMENTs
 	
 `--spatial-metadata`
-	Generate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
+
+> Generate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
 	
 `--archive`
-	ARCHIVE the datalist to the given REGION[/INCREMENTs]
+
+> ARCHIVE the datalist to the given REGION[/INCREMENTs]
 	
 `--glob`
-	GLOB the datasets in the current directory to stdout
+
+> GLOB the datasets in the current directory to stdout
 	
 `--info`
-	Generate and return an INFO dictionary of the dataset
+
+> Generate and return an INFO dictionary of the dataset
 	
 `--weights`
-	Output WEIGHT values along with xyz
+
+> Output WEIGHT values along with xyz
 	
 `--uncertainties`
-	Output UNCERTAINTY values along with xyz
+
+> Output UNCERTAINTY values along with xyz
 	
 `--stack-node`
-	Output stacked x/y data rather than pixel
+
+> Output stacked x/y data rather than pixel
 	
 `--quiet`
-	Lower the verbosity to a quiet
+
+> Lower the verbosity to a quiet
 
 `--modules`
-	Display the datatype descriptions and usage
+
+> Display the datatype descriptions and usage
 	
 `--help`
-	Print the usage text
+
+> Print the usage text
 	
 `--version`
-	Print the version information
+
+> Print the version information
 
 
 **Table 1.** Dataset modules available in the CUDEM software tool "dlim"
