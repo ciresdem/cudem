@@ -19,7 +19,7 @@ Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 
 `-M, --module`
 
-> Desired perspecto MODULE and options. (see available Modules below)
+> Desired perspecto MODULE and options. (see available Modules below)\
 > Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 
 `--min_z`
