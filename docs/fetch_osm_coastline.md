@@ -14,7 +14,8 @@ Fetch a coastline from OpenStreetMap and process it to (a) polygon(s).
 
 ## Options
 
-`-R, --region`\
+`-R, --region`
+
 * Restrict processing to the desired REGION \
 * Where a REGION is xmin/xmax/ymin/ymax[/zmin/zmax[/wmin/wmax/umin/umax]]\
 * Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-\
