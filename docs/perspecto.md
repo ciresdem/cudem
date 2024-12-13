@@ -14,26 +14,33 @@ Generate images of DEMs, including perspectives, hillshades, etc. (Table 1)
 
 ## Options
 `-C, --cpt`
-Color Pallette file (if not specified will auto-generate ETOPO CPT)
+
+> Color Pallette file (if not specified will auto-generate ETOPO CPT)
 
 `-M, --module`
-Desired perspecto MODULE and options. (see available Modules below)
-Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+
+> Desired perspecto MODULE and options. (see available Modules below)
+> Where MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
 
 `--min_z`
-Minimum z value to use in CPT
+
+> Minimum z value to use in CPT
 
 `--max_z`
-Maximum z value to use in CPT
+
+> Maximum z value to use in CPT
 
 `--help`
-Print the usage text
+
+> Print the usage text
 
 `--modules`
-Display the module descriptions and usage
+
+> Display the module descriptions and usage
 
 `--version`
-Print the version information
+
+> Print the version information
 
 ## Modules
 
