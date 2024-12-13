@@ -157,7 +157,7 @@ between adjacent DEM tiles.
 | x360.py                |  flip a DEM |
 | xyz_clip.py            |  clip an xyz file based on a raster mask |
 | xyztindex.py           |  generate a tile index of xyz files. |
-| fetch_osm_coastline.py | Fetch and process a water/landmask from Open Street Map |
+| [fetch_osm_coastline.py](/docs/fetch_osm_coastline.md) | Fetch and process a water/landmask from Open Street Map |
 
 # Usage Examples
 
