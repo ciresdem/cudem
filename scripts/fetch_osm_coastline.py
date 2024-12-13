@@ -29,6 +29,7 @@ from cudem import fetches
 from cudem import gdalfun
 from cudem import regions
 from tqdm import tqdm
+from osgeo import ogr
 
 def fetch_coastline(this_region):
     if this_region is not None and this_region.valid_p():
@@ -74,6 +75,7 @@ if __name__ == '__main__':
     invert_watermask = False
     line_buffer = 0.0000001
     dst_ogr = None
+    union_result = False
     i = 1
     
     while i < len(sys.argv):
@@ -111,7 +113,11 @@ if __name__ == '__main__':
     if this_region is None or not this_region.valid_p():
         sys.stderr.write(_usage)
         utils.echo_error_msg('invalid region')
-        
+
+    tmp_dst = utils.make_temp_fn(
+        utils.fn_basename2(dst_ogr),
+        temp_dir=utils.cudem_cache()
+    )
     if this_cst is not None:
         with tqdm(
                 total=len(this_cst.results),
@@ -131,6 +137,27 @@ if __name__ == '__main__':
                         landmask_is_watermask = invert_watermask,
                         line_buffer = line_buffer,
                     )
+
+        ## testing
+        if union_result:
+            cst_ds = ogr.Open(tmp_dst, 0)
+            cst_layer = cst_ds.GetLayer()
+            cst_geom = gdalfun.ogr_union_geom(cst_layer, verbose=True)
+            #cst_geoms.append(cst_geom)
+
+            driver = ogr.GetDriverByName("ESRI Shapefile")
+            out_ds = driver.CreateDataSource(dst_ogr)
+            out_layer = out_ds.CreateLayer("split_polygons", cst_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+            cst_ds = None
+            out_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+            out_feature = ogr.Feature(out_layer.GetLayerDefn())
+            out_feature.SetGeometry(cst_geom)
+            out_feature.SetField('watermask', 1)
+            out_layer.CreateFeature(out_feature)
+
+            utils.echo_msg('ok')
+            out_ds =  None
+
 ### End
 
 

@@ -795,6 +795,11 @@ class GMTImage(Perspecto):
         self.makecpt(self.cpt, output=None)
 
 class colorbar(GMTImage):
+    """Generate a colorbar
+
+< colorbar:colorbar_text='Elevation':widt=10:height=2 >
+    """
+    
     def __init__(self, colorbar_text = 'Elevation', width = 10, height = 2, **kwargs):
         super().__init__(**kwargs)
         self.colorbar_text=colorbar_text
