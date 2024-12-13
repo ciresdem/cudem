@@ -21,22 +21,27 @@ Fetch a coastline from OpenStreetMap and process it to (a) polygon(s).
 > Use '-' to indicate no bounding range; e.g. -R -/-/-/-/-10/10/1/-/-/-\
 > OR an OGR-compatible vector file with regional polygons. \
 > Where the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].\
-> If a vector file is supplied, will use each region found therein.\
+> If a vector file is supplied, will use each region found therein.
 
 `-B, --line_buffer`
-Buffer the OSM coastline in degrees
+
+> Buffer the OSM coastline in degrees
 
 `--include_landmask`
-include the landmask in the output
+
+> include the landmask in the output
 
 `--invert_watermask`
-invert the watermask to the landmask
+
+> invert the watermask to the landmask
 
 `--help`
-Print the usage text
+
+> Print the usage text
 
 `--version`
-Print the version informatio
+
+> Print the version informatio
 
 ## Examples
 
