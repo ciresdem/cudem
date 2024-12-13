@@ -319,14 +319,16 @@ def ogr_get_srs(src_ogr):
     else:
         return(None)
     
-def ogr_clip(src_ogr_fn, dst_region=None, layer=None, overwrite=False):
+def ogr_clip(src_ogr_fn, dst_region = None, layer = None, overwrite = False, verbose = True):
     """clip an ogr file to `dst_region`"""
     
     dst_ogr_bn = '.'.join(src_ogr_fn.split('.')[:-1])
     dst_ogr_fn = '{}_{}.gpkg'.format(dst_ogr_bn, dst_region.format('fn'))
     
     if not os.path.exists(dst_ogr_fn) or overwrite:
-        utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''), verbose=True)
+        utils.run_cmd('ogr2ogr -nlt PROMOTE_TO_MULTI {} {} -clipsrc {} {} '.format(
+            dst_ogr_fn, src_ogr_fn, dst_region.format('te'), layer if layer is not None else ''
+        ), verbose=verbose)
                 
     return(dst_ogr_fn)
 
@@ -754,7 +756,7 @@ def ogr2gdal_mask(
             ds_config = gdal_set_infos(xcount, ycount, xcount * ycount, dst_gt, dst_srs, gdal.GDT_Float32, 0, 'GTiff', {}, 1)
             gdal_nan(ds_config, dst_fn, nodata=0)
             clip_layer = utils.fn_basename2(os.path.basename(mask_fn))
-            mask_fn = ogr_clip(mask_fn, dst_region=region, layer=clip_layer)
+            mask_fn = ogr_clip(mask_fn, dst_region=region, layer=clip_layer, verbose=verbose)
             
             gr_cmd = 'gdal_rasterize -burn {} -l {} {} {}{}'\
                 .format(1, clip_layer, mask_fn, dst_fn, ' -i' if invert else '')

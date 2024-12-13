@@ -773,7 +773,7 @@ class ElevationDataset:
                 if self.region is not None and self.x_inc is not None and self.y_inc is not None:
                     self.mask['mask'] = gdalfun.ogr2gdal_mask(
                         self.mask['mask'], region=self.region, x_inc=self.x_inc, y_inc=self.y_inc, dst_srs=self.dst_srs,
-                        invert=True, verbose=self.verbose, temp_dir=self.cache_dir
+                        invert=True, verbose=False, temp_dir=self.cache_dir
                     )
                     self.mask['ogr_or_gdal'] = 0
 
@@ -5526,18 +5526,26 @@ class NEDFetcher(Fetcher):
         coast_mask = None
         if self.mask is None:
             coast_mask = self.process_coastline(
-                self.fetch_coastline(chunks=False, verbose=False), return_geom=False, landmask_is_watermask=True,
-                include_landmask=False, line_buffer=self.coast_buffer, verbose=False
+                self.fetch_coastline(
+                    chunks=False, verbose=False
+                ),
+                return_geom=False,
+                landmask_is_watermask=True,
+                include_landmask=False,
+                line_buffer=self.coast_buffer,
+                verbose=False
             )
             ned_mask = {'mask': coast_mask, 'invert_mask': True}
         else:
             ned_mask = self.mask
         
         src_dem = os.path.join(self.fetch_module._outdir, result[1])
-        ned_metadata = copy.deepcopy(self.metadata)
-        ned_metadata['name'] = src_dem
+        #ned_metadata = copy.deepcopy(self.metadata)
+        #ned_metadata['name'] = src_dem
+        #self.fetches_params['metadata'] = ned_metadata
         self.fetches_params['mod'] = src_dem
         self.fetches_params['mask'] = ned_mask
+        self.fetches_params['remove_flat'] = True
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         if coast_mask is not None:

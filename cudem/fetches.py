@@ -61,6 +61,7 @@ from cudem import factory
 from cudem import FRED
 from cudem import vdatums
 from cudem import gdalfun
+from cudem import xyzfun
 
 # for get_credentials
 import base64
@@ -491,7 +492,8 @@ class Fetch:
                                 desc='fetching: {}'.format(utils._init_msg(self.url, len('fetching: '), 40)),
                                 total=req_s,
                                 unit='iB',
-                                unit_scale=True
+                                unit_scale=True,
+                                leave=self.verbose
                         ) as pbar:
                             try:
                                 for chunk in req.iter_content(chunk_size = 8196):
@@ -4265,7 +4267,7 @@ class ArcticDEM(FetchModule):
 ## todo: make wrapper modules for 'buildings' and 'coastline' and whaterver else...perhaps
 def polygonize_osm_coastline(
         src_ogr, dst_ogr, region = None, include_landmask = True,
-        landmask_is_watermask = False, line_buffer = 0.0000001
+        landmask_is_watermask = False, line_buffer = 0.0000001, verbose = True
 ):
     """Polygonize an OSM coastline LineString to the given region
 
@@ -4289,9 +4291,14 @@ def polygonize_osm_coastline(
 
     # Create the output layer
     driver = ogr.GetDriverByName("ESRI Shapefile")
-    output_ds = driver.CreateDataSource(dst_ogr)
-    output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
-    output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+    if os.path.exists(dst_ogr):
+        output_ds = driver.Open(dst_ogr, 1)
+        output_layer = output_ds.GetLayer()
+    else:
+        output_ds = driver.CreateDataSource(dst_ogr)
+        output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+        output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
+        
     has_feature = False    
     for line_layer in line_ds:
         line_type = line_layer.GetGeomType()
@@ -4311,24 +4318,35 @@ def polygonize_osm_coastline(
             poly_line = line_geometries.Buffer(line_buffer)
             split_geoms = region_geom.Difference(poly_line)
             for split_geom in split_geoms:
-                ss = []
+                ss = []            
                 for line_geometry in line_geometries:
                     if split_geom.Intersects(line_geometry.Buffer(line_buffer)):
                         point_count = line_geometry.GetPointCount()
-                        # [ss.append((line_geometry.GetX(point_n+1) - line_geometry.GetX(point_n))*(poly_center.GetY(0) - line_geometry.GetY(point_n)) \
-                        #            > (line_geometry.GetY(point_n+1) - line_geometry.GetY(point_n))*(poly_center.GetX(0) - line_geometry.GetX(point_n))) \
+                        # [ss.append((line_geometry.GetX(point_n+1) - line_geometry.GetX(point_n))*(poly_center_y - line_geometry.GetY(point_n)) \
+                        #            > (line_geometry.GetY(point_n+1) - line_geometry.GetY(point_n))*(poly_center_x - line_geometry.GetX(point_n))) \
                         #  for point_n in range(0, point_count-1)]
-                        
+
                         for point_n in range(0, point_count-1):
                             x_beg = line_geometry.GetX(point_n)
                             y_beg = line_geometry.GetY(point_n)
                             x_end = line_geometry.GetX(point_n+1)
                             y_end = line_geometry.GetY(point_n+1)
-                            poly_center = split_geom.Centroid()
-                            poly_center_x = poly_center.GetX(0)
-                            poly_center_y = poly_center.GetY(0)
-                            s = (x_end - x_beg)*(poly_center_y - y_beg) > (y_end - y_beg)*(poly_center_x - x_beg)
-                            ss.append(s)
+                            y_ext = y_end
+                            x_ext = x_beg
+                            #s = (x_end - x_beg)*(poly_center_y - y_beg) > (y_end - y_beg)*(poly_center_x - x_beg)
+                            xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
+                            xyz_wkt = xyz.export_as_wkt()
+                            p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
+                            if not p_geom.Within(split_geom):
+                                y_ext = y_beg
+                                x_ext = x_end
+                                xyz = xyzfun.XYZPoint(x=x_ext, y=y_ext)
+                                xyz_wkt = xyz.export_as_wkt()
+                                p_geom = ogr.CreateGeometryFromWkt(xyz_wkt)
+
+                            if p_geom.Within(split_geom):
+                                s = (x_end - x_beg)*(y_ext - y_beg) > (y_end - y_beg)*(x_ext - x_beg)
+                                ss.append(s)
 
                 if all(ss):
                     s = True
