@@ -1087,7 +1087,7 @@ class GEBCO(FetchModule):
             )
                 
         return(self)
-
+    
 ## ETOPO
 class ETOPO(FetchModule):
     """Fetch ETOPO 2022 data. 
@@ -1790,6 +1790,40 @@ class SRTMPlus(FetchModule):
         if _req is not None:
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
             self.results.append([_req.url, outf, 'srtm'])
+
+## GEBCO
+class SynBath(FetchModule):
+    """UCSD SynBath dataset
+
+    Currently only fetches entire grid. Subset in dlim, or elsewhere.
+    
+    https://topex.ucsd.edu/pub/synbath/
+    https://topex.ucsd.edu/pub/synbath/SYNBATH_publication.pdf
+
+    < gebco:upper_limit=None:lower_limit=None >
+    """
+    
+    def __init__(self, upper_limit = None, lower_limit = None, **kwargs):
+        super().__init__(name='synbath', **kwargs)
+        
+        ## various gebco URLs
+        self._synbath_url_1_2 = 'https://topex.ucsd.edu/pub/synbath/SYNBATH_V1.2.nc'
+        self._synbath_url = 'https://topex.ucsd.edu/pub/synbath/SYNBATH_V2.0.nc'
+
+        ## set the fetching region, restrict by z-region if desired.
+        self.synbath_region = self.region.copy()
+        self.synbath_region.zmax = utils.float_or(upper_limit)
+        self.synbath_region.zmin = utils.float_or(lower_limit)
+
+        ## for dlim
+        self.data_format = 200
+        self.src_srs = 'epsg:4326+3855'
+        
+    def run(self):
+        """Run the SynBath fetching module"""
+
+        self.results.append([self._synbath_url, 'SYNBATH_V2_0.nc', 'synbath'])
+        return(self)
             
 ## Charts - ENC/RNC
 ## the arcgis rest server doesn't filter by bbox for some reason, always returns all data
@@ -5588,6 +5622,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'gmrt': {'call': GMRT},
         'mar_grav': {'call': MarGrav},
         'srtm_plus': {'call': SRTMPlus},
+        'synbath': {'call': SynBath},
         'charts': {'call': NauticalCharts},
 	    'digital_coast': {'call': DAV},
         'SLR': {'call': SLR},
