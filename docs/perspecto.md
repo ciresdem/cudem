@@ -104,7 +104,24 @@ perspecto -C crmVol7.cpt -M perspective --min_z -4500 --max_z 2260 crm_vol7_2024
 
 ![](/media/crm_vol7_2024_perspective.png)
 
-## Gallery
-
 ### ETOPO 2022 *sphere*
+
+- Download the ETOPO 2022 DEM
+
+```bash
+wget https://www.ngdc.noaa.gov/thredds/fileServer/global/ETOPO2022/30s/30s_surface_elev_netcdf/ETOPO_2022_v1_30s_N90W180_surface.nc
+```
+
+- Warp the DEM to 60 arc-seconds for memory management in sphere generation
+
+```bash
+gdalwarp ETOPO_2022_v1_30s_N90W180_surface.nc ETOPO_2022_v1_60s_N90W180_surface.tif -tr 0.016666666666666666 0.016666666666666666
+```
+
+- Generate the Sphere image
+
+```bash
+perspecto -M sphere ETOPO_2022_v1_60s_N90W180_surface.tif
+```
+
 ![](/media/etopo22_northAmerica.png)
