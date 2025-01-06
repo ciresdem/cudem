@@ -88,6 +88,22 @@ perspecto -C crmVol7.cpt -M hillshade --min_z -4500 --max_z 2260 crm_vol7_2024_3
 
 ![](/media/crm_vol7_2024_hs.png)
 
+### Perspective image of CRM volume 7
+
+- Download the CRM Volume 7 DEM
+
+```bash
+wget https://www.ngdc.noaa.gov/thredds/fileServer/crm/cudem/crm_vol7_2024.nc
+```
+
+- Generate the hillshade image
+
+```bash
+perspecto -C crmVol7.cpt -M perspective --min_z -4500 --max_z 2260 crm_vol7_2024_3as.tif
+```
+
+![](/media/crm_vol7_2024_perspective.png)
+
 ## Gallery
 
 ### ETOPO 2022 *sphere*
