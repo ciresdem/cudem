@@ -3287,22 +3287,23 @@ class DAV(FetchModule):
                                 index_zipurl = link['link'] + '/' + index_zipfile
                                 urllist_url = link['link'] + '/' + urllist
                                 urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
-                                # while True:
-                                #     try:
-                                #         status = Fetch(urllist_url, verbose=False).fetch_file(urllist)
-                                #     except:
-                                #         status = -1
+                                #status = Fetch(urllist_url, verbose=True).fetch_file(urllist)
+                                #/
+                                while True:
+                                    try:
+                                        status = Fetch(urllist_url, verbose=False).fetch_file(urllist)
+                                    except:
+                                        status = -1
 
-                                #     if status != 0:
-                                #         #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
-                                #         if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
-                                #             break
+                                    if status != 0:
+                                        #if Fetch(urllist_url, verbose=True).fetch_file(urllist) != 0:
+                                        if urllist_url == '/'.join(link['link'].split('/')[:-1]) + '/' + urllist:
+                                            break
 
-                                #         urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
-                                #     else:
-                                #         break
-
+                                        urllist_url = '/'.join(link['link'].split('/')[:-1]) + '/' + urllist
+                                    else:
+                                        break
+                                #/
                                 if not os.path.exists(urllist):
                                     continue
 

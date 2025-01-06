@@ -1,6 +1,6 @@
 ### dlim.py - DataLists IMproved
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## dlim.py is part of CUDEM
 ##
@@ -102,6 +102,7 @@ import laspy as lp
 from osgeo import gdal
 from osgeo import ogr
 import h5py as h5
+import netCDF4 as nc
 
 import cudem
 from cudem import utils
@@ -3621,6 +3622,38 @@ class BAGFile(ElevationDataset):
             for gdal_ds in sub_ds.parse():
                 yield(gdal_ds)
 
+class CUDEMFile(ElevationDataset):
+    """CUDEM netcdf raster
+
+    the cudem netcdf contains uninterpolated elevation data, uncertainty weight and data mask...
+    """
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+    def yield_ds(self):
+
+        ## extract z, unc and weight grids
+        ## process through gdalfile
+        
+        nc_data = nc.Dataset(self.fn, 'r')
+        stack_lat = nc_data['/stack/lat'][...,]
+        stack_lon = nc_data['/stack/lon'][...,]
+        stack_h = nc_data['/stack/stack_h'][...,]
+
+        stack_u = nc_data['/stack/uncertainty'][...,]
+        stack_w = nc_data['/stack/weight'][...,]
+        counts = nc_data['/stack/count'][...,]
+
+        nc_data.close()
+
+        dataset = np.column_stack((stack_lon.data, stack_lat.data, stack_h.data[0], stack_w.data[0], stack_u.data[0]))
+        points = np.rec.fromrecords(dataset, names='x, y, z, w, u')
+        #points = points[points.z != -9999]
+        
+        yield(points)
+        
 ## NASA SWOT Data class (hdf5)
 ## uses h5py
 class SWOTFile(ElevationDataset):
@@ -6519,6 +6552,10 @@ class DatasetFactory(factory.CUDEMFactory):
               'fmts': ['h5'],
               'description': 'An HDF5 IceSat2 ATL03 datafile',
               'call': IceSat2File},
+        304: {'name': 'cudem',
+              'fmts': ['nc'],
+              'description': 'A netCDF CUDEM file',
+              'call': CUDEMFile},
         ## fetches modules
         -100: {'name': 'https',
                'fmts': ['https'],
