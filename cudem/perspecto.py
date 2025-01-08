@@ -159,7 +159,7 @@ cpt_colors = {
     'white': [255, 255, 255],
 }
 
-def process_cpt(cpt, gmin, gmax):
+def process_cpt(cpt, gmin, gmax, gdal=False):
     trs = []
     colors = []
     with open(cpt, 'r') as cpt:
@@ -187,11 +187,20 @@ def process_cpt(cpt, gmin, gmax):
                 #elev1 = elevs[i+1]
                 #print(elev1)
                 if elev is not None and elev1 is not None:
-                    cpt.write(
-                        '{} {} {} {} {} {} {} {}\n'.format(
-                            elev, colors[i][0], colors[i][1], colors[i][2], elev1, colors[i][0], colors[i][1], colors[i][2]
+                    if not gdal:
+                        cpt.write(
+                            '{} {} {} {} {} {} {} {}\n'.format(
+                                elev, colors[i][0], colors[i][1], colors[i][2], elev1, colors[i][0], colors[i][1], colors[i][2]
+                            )
                         )
-                    )
+                    else:
+                        cpt.write(
+                            '{} {} {} {} 255\n'.format(
+                                elev, colors[i][0], colors[i][1], colors[i][2]
+                            )
+                        )
+        if gdal:
+            cpt.write('ndv 0 0 0 0\n')
     return('tmp.cpt')
     
 def get_correctMap(path, luminosity, contrast):
@@ -262,6 +271,28 @@ class Perspecto:
             self.dem_infos['geoT'], self.dem_infos['nx'], self.dem_infos['ny']
         )
 
+        # min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
+        # max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
+        # if self.cpt is None:
+        #     #self.makecpt('etopo1', output='{}_etopo1.cpt'.format(utils.fn_basename2(self.src_dem)))
+        #     self.cpt = generate_etopo_cpt(min_z, max_z)
+        # #else:
+        # #self.cpt = process_cpt(self.cpt, min_z, max_z)
+        # elif os.path.exists(self.cpt):
+        #     #if has_pygmt:
+        #     #    self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+        #     #else:
+        #     self.cpt = process_cpt(self.cpt, min_z, max_z)
+        # else:
+        #     self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z)
+
+        self.init_cpt()
+            
+    def __call__(self):
+        return(self.run())
+
+    def init_cpt(self, want_gdal=False):
+
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
         if self.cpt is None:
@@ -270,15 +301,15 @@ class Perspecto:
         #else:
         #self.cpt = process_cpt(self.cpt, min_z, max_z)
         elif os.path.exists(self.cpt):
-            # if has_pygmt:
-            #     self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem))) 
-            self.cpt = process_cpt(self.cpt, min_z, max_z)
+            #if has_pygmt:
+            #    self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
+            #else:
+            utils.echo_msg('processing cpt {}, want_gdal is {}'.format(self.cpt, want_gdal))
+            self.cpt = process_cpt(self.cpt, min_z, max_z, gdal=want_gdal)
         else:
-            self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z)
+            self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z, gdal=want_gdal)
         
-    def __call__(self):
-        return(self.run())
-        
+    
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
         min_z = self.min_z if self.min_z is not None else self.dem_infos['zr'][0]
         max_z = self.max_z if self.max_z is not None else self.dem_infos['zr'][1]
@@ -333,6 +364,7 @@ class Perspecto:
             utils.remove_glob('_dem_temp*')
             
         if rgb:
+            self.init_cpt(want_gdal=True)
             utils.run_cmd('gdaldem color-relief {} {} _rgb_temp.tif'.format(self.src_dem, self.cpt), verbose=True)
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _rgb_temp.tif {}_rgb.png'.format(
@@ -476,6 +508,7 @@ class Hillshade(Perspecto):
         return(outfile)
     
     def run(self):
+        self.init_cpt(want_gdal=True)
         hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
         gdal.DEMProcessing(
             hs_fn, self.src_dem, 'hillshade', computeEdges=True, scale=111120, azimuth=self.azimuth,
@@ -486,7 +519,8 @@ class Hillshade(Perspecto):
         self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn, gamma=.5)
         
         cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
-        gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True)
+
+        gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True, addAlpha=True)
 
         cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
         #self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)

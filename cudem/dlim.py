@@ -1434,7 +1434,7 @@ class ElevationDataset:
                 self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
                 self.transform['trans_region'].src_srs = self.infos.src_srs
                 self.transform['trans_region'].warp(self.transform['dst_horz_crs'].to_proj4())
-                
+
             ## vertical Transformation
             if self.transform['want_vertical']:
                 self.set_vertical_transform()
@@ -1465,6 +1465,7 @@ class ElevationDataset:
             else:
                 self.data_region = regions.Region().from_list(self.infos.minmax)
                 self.data_region.src_srs = self.infos.src_srs
+
                     
     def parse(self):
         """parse the datasets from the dataset.
@@ -2164,16 +2165,17 @@ class ElevationDataset:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             for points in self.yield_ds():
+
                 if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
                     #transformer = self.transform['transformer'] if self.transform['transformer'] is not None else self.transform['vert_transformer']
                     if self.transform['transformer'] is not None:
-                        points['x'], points['y'], points['z'] = self.transform['transformer'].transform(
-                            points['x'], points['y'], points['z']
+                        points['x'], points['y'] = self.transform['transformer'].transform(
+                            points['x'], points['y']
                         )
-                    elif self.transform['vert_transformer'] is not None:
+                    if self.transform['vert_transformer'] is not None:
                         _, _, points['z'] = self.transform['vert_transformer'].transform(
                             points['x'], points['y'], points['z']
-                            )
+                        )
                         
                     points = points[~np.isinf(points['z'])]
 
@@ -4816,6 +4818,7 @@ class OGRFile(ElevationDataset):
                                 points = np.rec.fromrecords([x], names='x, y, z')
 
                     #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
+                    #print(points['z'])
                     if self.z_scale is not None:
                         points['z'] *= self.z_scale
 
@@ -6252,10 +6255,11 @@ class eHydroFetcher(Fetcher):
             self.fetches_params['src_srs'] = '{}+{}'.format(
                 src_epsg, v if v is not None else '5866'
             ) if src_epsg is not None else None
-            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048'            
+            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048'
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
+                #self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
                 self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
