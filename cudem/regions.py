@@ -375,6 +375,15 @@ class Region:
 
         region_list = [self.xmin, self.ymin, self.xmax, self.ymax]
         return(tuple(region_list))
+
+    def export_as_polygon(self):
+        eg = [[self.xmin, self.ymin],
+              [self.xmin, self.ymax],
+              [self.xmax, self.ymax],
+              [self.xmax, self.ymin],
+              [self.xmin, self.ymin]]
+
+        return(eg)
     
     def export_as_wkt(self):
         """transform a region to wkt

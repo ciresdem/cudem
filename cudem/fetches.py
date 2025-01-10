@@ -847,7 +847,7 @@ class FetchModule:
         
         for entry in self.results:
             status = self.fetch(entry)
-
+            
 ## GMRT
 def gmrt_fetch_point(latitude = None, longitude = None):
     gmrt_point_url = "https://www.gmrt.org:443/services/PointServer?"
@@ -978,6 +978,117 @@ class GMRT(FetchModule):
                     self.results.append(
                         [self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt']
                     )
+                
+        return(self)
+
+class waDNR(FetchModule):
+    """
+    """
+    
+    def __init__(self, ids=None, **kwargs):
+        super().__init__(name='waDNR', **kwargs) 
+
+        ## The various urls to use for GMRT
+        self._wa_dnr_url = "https://lidarportal.dnr.wa.gov/download?"
+        self._wa_dnr_rest = 'https://lidarportal.dnr.wa.gov/arcgis/rest/services/lidar/wadnr_hillshade/MapServer'
+        self._wa_dnr_ids = 'https://lidarportal.dnr.wa.gov/arcgis/rest/services/lidar/wadnr_hillshade/MapServer/identify'
+        self._wa_dnr_layers = 'https://lidarportal.dnr.wa.gov/arcgis/rest/services/lidar/wadnr_hillshade/MapServer/layers?f=pjson'
+        self._wa_dnr_cap = 'https://lidarportal.dnr.wa.gov/arcgis/services/lidar/wadnr_hillshade/MapServer/WmsServer?service=WMS&request=GetCapabilities'
+        self._wa_dnr_cap = 'https://lidarportal.dnr.wa.gov/arcgis/services/lidar/wadnr_hillshade/MapServer/WmsServer?service=WMS&request=GetMap'
+        
+        ## dlim variables, parse with GDAL and set to WGS84/MSL
+        #self.data_format = 200
+        #self.src_srs = 'epsg:4326+3855'
+
+        ## Firefox on windows for this one.
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+        }
+
+        if ids is not None:
+            self.ids = [int(x) for x in ids.split('/')]
+        else:
+            self.ids = []
+
+    def find_ids(self):
+
+        self.data = {'geometry': self.region.format('bbox'),
+                     'format': 'json',
+                     }
+
+        layers_req = Fetch(
+            self._wa_dnr_layers
+        ).fetch_req(
+            tries=10, timeout=2
+        )
+
+        layer_srs = 'epsg:3857'
+        layers_in_region = []
+        if layers_req is not None:
+            layers_json = layers_req.json()
+            for layer in layers_json['layers']:
+                layer_name = layer['name']
+                layer_id = layer['id']
+                layer_sublayers = layer['subLayers']
+                    
+                if 'parentLayer' in layer.keys():
+                    layer_parent_layer = layer['parentLayer']
+                else:
+                    layer_parent_layer = None
+                    
+                layer_type = layer['type']
+                layer_region = regions.Region(src_srs='epsg:3857').from_list(
+                    [layer['extent']['xmin'], layer['extent']['xmax'], layer['extent']['ymin'], layer['extent']['ymax']]
+                ).warp('epsg:4326')
+
+                if len(layer_sublayers) > 0:
+                    if regions.regions_intersect_ogr_p(layer_region, self.region):
+                        layers_in_region.append([layer_name, min([int(x['name'][:-1])-1 for x in layer_sublayers])])
+                        
+                        # for sub_layer in layer_sublayers:
+                        #     wms_id = sub_layer['name']
+                        #     if len(self.ids) > 0:
+                        #         if wms_id in self.ids:
+                        #             layers_in_region.append([layer_name, wms_id])
+                        #     else:
+                        #         layers_in_region.append([layer_name, wms_id])
+
+
+        if len(self.ids) > 0:
+            layers_in_region = [x for x in layers_in_region if x[1] in self.ids]
+            
+        return(layers_in_region)
+        
+    def run(self):
+        '''Run the GMRT fetching module'''
+
+        if self.region is None:
+            return([])
+
+        layers_in_region = self.find_ids()        
+        data = {}
+        for l in layers_in_region:
+            if 'ids' in data.keys():
+                data['ids'].append(l[1])
+            else:
+                data['ids'] = [int(l[1])]
+
+            data['geojson'] = json.dumps({
+                'type': 'Polygon',
+                'coordinates': [self.region.export_as_polygon()]
+            })
+            #data['coordinates'] = self.region.format('bbox')
+
+            data_req = Fetch(
+                self._wa_dnr_url
+            ).fetch_req(
+                params=data, tries=10, timeout=2
+            )
+
+            if data_req is not None and data_req.status_code == 200:
+                self.results.append([data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr'])
+                
+            data = {}
                 
         return(self)
 
@@ -5666,6 +5777,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'csb': {'call': CSB},
         #'nsw_tb': {'call': NSW_TB},
         'cpt_city': {'call': CPTCity},
+        'wa_dnr': {'call': waDNR},
     }
 
     def __init__(self, **kwargs):

@@ -3115,6 +3115,13 @@ class GDALFile(ElevationDataset):
         tmp_elev_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_unc_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
         tmp_weight_fn = utils.make_temp_fn('{}'.format(self.fn), temp_dir=self.cache_dir)
+
+        if self.remove_flat:
+            grits_filter = grits.GritsFactory(
+                mod='flats', src_dem=self.fn, cache_dir=self.cache_dir, verbose=True
+            )._acquire_module()
+            grits_filter()
+            self.fn = grits_filter.dst_dem
         
         ## resample/warp src gdal file to specified x/y inc/transformer respectively
         if self.resample_and_warp:
@@ -3224,12 +3231,12 @@ class GDALFile(ElevationDataset):
                     )
                     self.weight_mask = self.tmp_weight_band
 
-            if self.remove_flat:
-                grits_filter = grits.GritsFactory(
-                    mod='flats', src_dem=tmp_ds, cache_dir=self.cache_dir
-                )._acquire_module()
-                grits_filter()
-                tmp_ds = grits_filter.dst_dem
+            # if self.remove_flat:
+            #     grits_filter = grits.GritsFactory(
+            #         mod='flats', src_dem=tmp_ds, cache_dir=self.cache_dir, verbose=True
+            #     )._acquire_module()
+            #     grits_filter()
+            #     tmp_ds = grits_filter.dst_dem
                 
             warp_ = gdalfun.sample_warp(
                 tmp_ds, tmp_warp, self.x_inc, self.y_inc,
@@ -3267,6 +3274,13 @@ class GDALFile(ElevationDataset):
                 warp_ds = None
                 utils.remove_glob(tmp_warp)
         else:
+            # if self.remove_flat:
+            #     grits_filter = grits.GritsFactory(
+            #         mod='flats', src_dem=self.fn, cache_dir=self.cache_dir
+            #     )._acquire_module()
+            #     grits_filter()
+            #     self.fn = grits_filter.dst_dem
+            
             if self.open_options:
                 self.src_ds = gdal.OpenEx(self.fn, open_options=self.open_options)
                 if self.src_ds is None:
@@ -3280,7 +3294,7 @@ class GDALFile(ElevationDataset):
                     self.src_ds = gdal.Open(self.fn)
             else:
                 self.src_ds = gdal.Open(self.fn)
-
+                
         self.src_dem_infos = gdalfun.gdal_infos(self.src_ds)
         if self.src_ds is None:
             if self.verbose:
@@ -4818,7 +4832,6 @@ class OGRFile(ElevationDataset):
                                 points = np.rec.fromrecords([x], names='x, y, z')
 
                     #points = np.rec.fromrecords(out_xyzs, names='x, y, z')
-                    #print(points['z'])
                     if self.z_scale is not None:
                         points['z'] *= self.z_scale
 
@@ -5587,6 +5600,33 @@ class NEDFetcher(Fetcher):
         if coast_mask is not None:
             utils.remove_glob('{}.*'.format(utils.fn_basename2(coast_mask)))
 
+class DNRFetcher(Fetcher):
+    """
+    """
+
+    __doc__ = '''{}    
+    Fetches Module: <wadnr> - {}'''.format(__doc__, fetches.waDNR.__doc__)
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.data_format = -2
+        
+    def set_ds(self, result):
+        src_dnr_dems = utils.p_unzip(
+            os.path.join(self.fetch_module._outdir, result[1]),
+            exts=['tif'],
+            outdir=self.fetch_module._outdir,
+            verbose=self.verbose
+        )
+        for src_dnr_dem in src_dnr_dems:
+            self.fetches_params['mod'] = src_dnr_dem
+            #self.fetches_params['data_format'] = 200
+            #self.fetches_params['node'] = 'pixel'
+            self.fetches_params['remove_flat'] = True
+            print(self.fetches_params)
+            yield(DatasetFactory(**self.fetches_params)._acquire_module())
+            
 class DAVFetcher_CoNED(Fetcher):
     """CoNED from the digital coast 
 
@@ -5663,7 +5703,7 @@ class DAVFetcher_SLR(Fetcher):
     def set_ds(self, result):
         ## this doesn't work in all cases, update to find and remove flattened areas
         #gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
-        self.fetches_params['remove_flats'] = True
+        self.fetches_params['remove_flat'] = True
         yield(DatasetFactory(**self.fetches_params)._acquire_module())    
         
 class SWOTFetcher(Fetcher):
@@ -6255,12 +6295,12 @@ class eHydroFetcher(Fetcher):
             self.fetches_params['src_srs'] = '{}+{}'.format(
                 src_epsg, v if v is not None else '5866'
             ) if src_epsg is not None else None
-            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048'
+            self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
                 #self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
-                self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
+                self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
     def set_ds_XYZ(self, result):
@@ -6669,6 +6709,10 @@ class DatasetFactory(factory.CUDEMFactory):
                'fmts': ['synbath'],
                'description': 'The SynBath fetches module',
                'call': Fetcher},
+        -219: {'name': 'wa_dnr',
+               'fmts': ['wa_dnr'],
+               'description': 'The Washington DNR lidar portal',
+               'call': DNRFetcher},
         -300: {'name': 'emodnet',
                'fmts': ['emodnet'],
                'description': 'The emodnet fetches module',
@@ -6761,7 +6805,7 @@ class DatasetFactory(factory.CUDEMFactory):
                      for n, x in enumerate(this_entry)]
 
         except Exception as e:
-            utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
+            utils.echo_error_msg('could not parse entry {}, {}'.format(self.kwargs['fn'], this_entry))
             return(self)
 
         ## data format - entry[1]
