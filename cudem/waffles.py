@@ -1,6 +1,6 @@
 ### waffles.py
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## waffles.py is part of CUDEM
 ##

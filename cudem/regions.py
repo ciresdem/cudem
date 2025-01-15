@@ -1,6 +1,6 @@
 ### regions.py
 ##
-## Copyright (c) 2010 - 2024 CIRES Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 CIRES Regents of the University of Colorado
 ##
 ## regions.py is part of CUDEM
 ##
@@ -37,12 +37,8 @@ from cudem import srsfun
 
 ogr.DontUseExceptions()
 
-## ==============================================
-##
 ## regions
 ## the region class and associated functions.
-##
-## ==============================================
 class Region:
     """Representing a geographic region.
     
@@ -127,6 +123,7 @@ class Region:
 
     def copy(self):
         """return a copy of the region."""
+        
         return(Region(xmin=self.xmin, xmax=self.xmax,
                       ymin=self.ymin, ymax=self.ymax,
                       zmin=self.zmin, zmax=self.zmax,
@@ -377,6 +374,12 @@ class Region:
         return(tuple(region_list))
 
     def export_as_polygon(self):
+        """convert a region to a polygon list
+
+        REturns:
+          list: the region as a 2d polygon
+        """
+        
         eg = [[self.xmin, self.ymin],
               [self.xmin, self.ymax],
               [self.xmax, self.ymax],
@@ -386,7 +389,7 @@ class Region:
         return(eg)
     
     def export_as_wkt(self):
-        """transform a region to wkt
+        """convert a region to wkt
 
         Returns:
           wkt: a wkt polygon geometry
@@ -672,10 +675,8 @@ class Region:
 
         return(self)
          
-## ==============================================
 ## do things to and with regions...
 ## various region related functions
-## ==============================================
 def regions_reduce(region_a, region_b):
     """combine two regions and find their minimum combined region.
 
@@ -1138,9 +1139,10 @@ def region_list_to_ogr(region_list, dst_ogr, dst_fmt = 'ESRI Shapefile'):
     dst_ds = None
 
 ## ==============================================
+## Command-line Interface (CLI)
+## $regions
 ##
 ## regions cli
-##
 ## ==============================================
 regions_usage = '''{cmd} ({version}): regions; Process and generate regions
 
@@ -1191,9 +1193,7 @@ def regions_cli(argv = sys.argv):
     bv = None
     te = False
     
-    ## ==============================================
     ## parse command line arguments.
-    ## ==============================================
     i = 1
     while i < len(argv):
         arg = argv[i]
@@ -1237,12 +1237,14 @@ def regions_cli(argv = sys.argv):
         else: dls.append(arg)
         i = i + 1
 
+    ## parse the input region(s) to a list
     these_regions = parse_cli_region(i_regions)
     if not these_regions:
         print(regions_usage)
         utils.echo_error_msg('you must specify at least one region')
         sys.exit(-1)
 
+    ## generate a tile-set from the input region(s)
     if tile_set is not None:
         for rn, this_region in enumerate(these_regions):
             these_tiles = generate_tile_set(this_region.format('gmt'), tile_set)
@@ -1250,6 +1252,8 @@ def regions_cli(argv = sys.argv):
             
         these_regions = []
 
+    ## merge the input regions together before further processing,
+    ## set the merged region as the default region
     if want_merge:
         region_cnt = len(these_regions)
         merged_region = these_regions[0].copy()
@@ -1259,21 +1263,25 @@ def regions_cli(argv = sys.argv):
         these_regions = [merged_region]
         
     for rn, this_region in enumerate(these_regions):
+        ## set the source srs if specified
         if src_srs is not None:
             this_region.src_srs = src_srs
-            
+
+        ## warp the region to dst_srs if specified
         if dst_srs is not None:
             this_region.warp(dst_srs)
-        
+
+        ## buffer the region to buffer-value `bv`
         if bv is not None:
             this_region.buffer(x_bv=bv, y_bv=bv)
-            
+
+        ## echo the region or file-name to stdout else export as a shapefile
         if echo:
             if te:
                 print(this_region.format('te'))
             else:
                 print(this_region.format('gmt'))
-                
+
         elif echo_fn:
             print(this_region.format('fn'))
         else:

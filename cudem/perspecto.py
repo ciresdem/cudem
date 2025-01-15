@@ -1,6 +1,6 @@
 ### perspecto.py 
 ##
-## Copyright (c) 2023 - 2024 Regents of the University of Colorado
+## Copyright (c) 2023 - 2025 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -200,7 +200,7 @@ def process_cpt(cpt, gmin, gmax, gdal=False):
                             )
                         )
         if gdal:
-            cpt.write('ndv 0 0 0 0\n')
+            cpt.write('nv 0 0 0 0\n')
     return('tmp.cpt')
     
 def get_correctMap(path, luminosity, contrast):
@@ -377,7 +377,7 @@ class Perspecto:
     def run(self):
         raise(NotImplementedError)
 
-class Hillshade(Perspecto):
+class Hillshade_cmd(Perspecto):
     """Generate a Hillshade Image
 
     uses gdal/ImageMagick
@@ -424,7 +424,7 @@ class Hillshade(Perspecto):
 
         return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
 
-class Hillshade_(Perspecto):
+class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
     https://en.wikipedia.org/wiki/Blend_modes#Overlay
@@ -524,9 +524,10 @@ class Hillshade_(Perspecto):
 
         cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
         #self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)
-        self.multiply(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
+        self.multiply(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)
+        #self.screen(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
 
-        utils.remove_glob(hs_fn, hs_gamma_fn, cr_fn)
+        #utils.remove_glob(hs_fn, hs_gamma_fn, cr_fn)
         out_hs = '{}_hs.tif'.format(utils.fn_basename2(self.src_dem))
         os.rename(cr_hs_fn, out_hs)
 
@@ -947,6 +948,7 @@ class PerspectoFactory(factory.CUDEMFactory):
     if has_pygmt:
         _modules = {
             'hillshade': {'call': Hillshade},
+            'hillshade2': {'call': Hillshade_cmd},
             'perspective': {'call': perspective},
             'sphere': {'call': sphere},
             'figure1': {'call': figure1},
@@ -955,6 +957,7 @@ class PerspectoFactory(factory.CUDEMFactory):
     else:
         _modules = {
             'hillshade': {'call': Hillshade},
+            'hillshade2': {'call': Hillshade_cmd},
             'perspective': {'call': perspective},
             'sphere': {'call': sphere},
         }    

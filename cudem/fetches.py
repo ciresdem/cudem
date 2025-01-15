@@ -1,6 +1,6 @@
 ### fetches.py
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## fetches.py is part of CUDEM
 ##
@@ -22,11 +22,11 @@
 ### Commentary:
 ##
 ## Fetch elevation and related data from a variety of sources.
+##
 ## Use CLI command 'fetches'
 ## or use FetchesFactory() to acquire and use a fetch module in python.
 ##
 ### TODO:
-## eurodem
 ##
 ### Code:
 
@@ -205,10 +205,10 @@ class iso_xml:
         return(t.text if t is not None else 'Unknown')
         
     def bounds(self, geom = True):
-        wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces = self.namespaces)
-        el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces = self.namespaces)
-        sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces = self.namespaces)                            
-        nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces = self.namespaces)                           
+        wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces=self.namespaces)
+        el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces=self.namespaces)
+        sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces=self.namespaces)
+        nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces=self.namespaces)
         if wl is not None and el is not None and sl is not None and nl is not None:
             region = [float(wl.text), float(el.text), float(sl.text), float(nl.text)]
             if geom: return(regions.Region().from_list([float(wl.text), float(el.text), float(sl.text), float(nl.text)]).export_as_geom())
@@ -217,9 +217,9 @@ class iso_xml:
 
     def polygon(self, geom = True):
         opoly = []
-        polygon = self.xml_doc.find('.//{*}Polygon', namespaces = self.namespaces)
+        polygon = self.xml_doc.find('.//{*}Polygon', namespaces=self.namespaces)
         if polygon is not None:
-            nodes = polygon.findall('.//{*}pos', namespaces = self.namespaces)
+            nodes = polygon.findall('.//{*}pos', namespaces=self.namespaces)
             [opoly.append([float(x) for x in node.text.split()]) for node in nodes]
             if opoly[0][0] != opoly[-1][0] or opoly[0][1] != opoly[-1][1]:
                 opoly.append(opoly[0])
@@ -231,28 +231,28 @@ class iso_xml:
             return(None)
         
     def date(self):
-        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces = self.namespaces)
+        dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces=self.namespaces)
         if dt is None:
             dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces = self.namespaces)
             
         return(dt.text[:4] if dt is not None else '0000')
 
     def xml_date(self):
-        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces = self.namespaces)
+        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces=self.namespaces)
         
         return(utils.this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
-        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces = self.namespaces)
+        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces=self.namespaces)
         if ref_s is None or len(ref_s) == 0:
             return(None, None)
         
-        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
         if h_epsg is not None:
             h_epsg = h_epsg.text.split(':')[-1]
         
         if len(ref_s) > 1:
-            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces = self.namespaces)
+            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
             if v_epsg is not None:
                 v_epsg = v_epsg.text.split(':')[-1]
                 
@@ -263,7 +263,7 @@ class iso_xml:
 
     def abstract(self):
         try:
-            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces = self.namespaces)
+            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces=self.namespaces)
             abstract = '' if abstract is None else abstract.text
         except:
             abstract = ''
@@ -271,7 +271,7 @@ class iso_xml:
         return(abstract)
 
     def linkages(self):
-        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces = self.namespaces)
+        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces=self.namespaces)
         if linkage is not None:
             linkage = linkage.text
         
@@ -279,8 +279,8 @@ class iso_xml:
     
     def data_links(self):
         dd = {}        
-        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces = self.namespaces)
-        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces =  self.namespaces)
+        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces=self.namespaces)
+        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces=self.namespaces)
 
         if dfs is not None:
             for i,j in enumerate(dfs):
@@ -996,8 +996,8 @@ class waDNR(FetchModule):
         self._wa_dnr_cap = 'https://lidarportal.dnr.wa.gov/arcgis/services/lidar/wadnr_hillshade/MapServer/WmsServer?service=WMS&request=GetCapabilities'
         self._wa_dnr_cap = 'https://lidarportal.dnr.wa.gov/arcgis/services/lidar/wadnr_hillshade/MapServer/WmsServer?service=WMS&request=GetMap'
         
-        ## dlim variables, parse with GDAL and set to WGS84/MSL
-        #self.data_format = 200
+        ## for dlim, data format is -2 for a zip file, projections vary
+        self.data_format = -2
         #self.src_srs = 'epsg:4326+3855'
 
         ## Firefox on windows for this one.
@@ -1045,15 +1045,6 @@ class waDNR(FetchModule):
                     if regions.regions_intersect_ogr_p(layer_region, self.region):
                         layers_in_region.append([layer_name, min([int(x['name'][:-1])-1 for x in layer_sublayers])])
                         
-                        # for sub_layer in layer_sublayers:
-                        #     wms_id = sub_layer['name']
-                        #     if len(self.ids) > 0:
-                        #         if wms_id in self.ids:
-                        #             layers_in_region.append([layer_name, wms_id])
-                        #     else:
-                        #         layers_in_region.append([layer_name, wms_id])
-
-
         if len(self.ids) > 0:
             layers_in_region = [x for x in layers_in_region if x[1] in self.ids]
             
@@ -1077,8 +1068,7 @@ class waDNR(FetchModule):
                 'type': 'Polygon',
                 'coordinates': [self.region.export_as_polygon()]
             })
-            #data['coordinates'] = self.region.format('bbox')
-
+            
             data_req = Fetch(
                 self._wa_dnr_url
             ).fetch_req(
@@ -5782,11 +5772,13 @@ class FetchesFactory(factory.CUDEMFactory):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    
+
+## ==============================================
 ## Command-line Interface (CLI)
 ## $ fetches
 ##
 ## fetches cli
+## ==============================================
 fetches_usage = """{cmd} ({version}): Fetches; Fetch and process remote elevation data
 
 usage: {cmd} [ -hlqzAHR [ args ] ] MODULE ...
