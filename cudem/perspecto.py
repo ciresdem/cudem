@@ -439,6 +439,9 @@ class Hillshade(Perspecto):
             azimuth=315,
             altitude=45,
             modulate=125,
+            alpha=False,
+            mode='multiply',
+            gamma=None,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -447,6 +450,9 @@ class Hillshade(Perspecto):
         self.azimuth = azimuth
         self.altitude = altitude
         self.modulate = utils.float_or(modulate, 115)
+        self.alpha = alpha
+        self.mode = mode
+        self.gamma = utils.float_or(gamma)
         self.cpt_no_slash()
 
     def _modulate(self, gdal_fn):
@@ -482,7 +488,6 @@ class Hillshade(Perspecto):
 
         return(outfile)
 
-
     def multiply(self, rgb_file, color_relief_file, outfile = 'gdaldem_multiply.tif'):
         hs_ds = gdal_calc.Calc(
             "uint8( ((A/255.) * (B/255.)) * 255 )",
@@ -490,11 +495,11 @@ class Hillshade(Perspecto):
         )
         for band in range(1, hs_ds.RasterCount+1):
             this_band = hs_ds.GetRasterBand(band)
-            this_band.DeleteNoDataValue()            
+            this_band.DeleteNoDataValue()             
         hs_ds = None        
 
         return(outfile)
-
+    
     def screen(self, rgb_file, color_relief_file, outfile = 'gdaldem_screen.tif'):
         hs_ds = gdal_calc.Calc(
             "uint8( (1 - (1 - (A/255.)) * (1 - (B/255.))) * 255)",
@@ -506,6 +511,39 @@ class Hillshade(Perspecto):
         hs_ds = None        
 
         return(outfile)
+
+    def blend(self, hs_file, rgb_file, mode = 'multiply', gamma = None, outfile = 'gdaldem_multiply.tif'):
+        modes = ['multiply', 'screen']
+        if mode not in modes:
+            mode = 'multiply'
+            
+        with gdalfun.gdal_datasource(rgb_file, update=True) as rgb_ds:
+            with gdalfun.gdal_datasource(hs_file) as cr_ds:
+                ds_config = gdalfun.gdal_infos(cr_ds)
+                n_chunk = int(ds_config['nx'] * .1)
+                for srcwin in utils.yield_srcwin(
+                        (ds_config['ny'], ds_config['nx']), n_chunk=n_chunk,
+                        msg='Blending rgb and hillshade using {}'.format(mode), end_msg='Generated color hillshade',
+                        verbose=self.verbose
+                ):
+                    cr_band = cr_ds.GetRasterBand(1)
+                    cr_arr = cr_band.ReadAsArray(*srcwin)
+
+                    if gamma is not None:
+                        cr_arr = (((cr_arr / 255.)**(1/gamma)) * 255.).astype(np.uint8)
+
+                    for band_no in [1,2,3]:
+                        band = rgb_ds.GetRasterBand(band_no)
+                        band_arr = band.ReadAsArray(*srcwin)
+                        if mode == 'multiply':
+                            band_arr = (((cr_arr/255.)*(band_arr/255.))*255).astype(np.uint8)
+                        elif mode == 'screen':
+                            band_arr = ((1-(1-(cr_arr/255.))*(1-(band_arr/255.)))*255.).astype(np.uint8)
+                            
+                        band.WriteArray(band_arr, srcwin[0], srcwin[1])
+                        
+        os.rename(rgb_file, outfile)
+        return(outfile)
     
     def run(self):
         self.init_cpt(want_gdal=True)
@@ -515,22 +553,18 @@ class Hillshade(Perspecto):
             altitude=self.altitude, zFactor=self.vertical_exaggeration
         )
 
-        hs_gamma_fn = utils.make_temp_fn('gdaldem_hs_gamma.tif', self.outdir)
-        self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn, gamma=.5)
+        #hs_gamma_fn = utils.make_temp_fn('gdaldem_hs_gamma.tif', self.outdir)
+        #self.gamma_correction(hs_fn=hs_fn, outfile=hs_gamma_fn, gamma=.5)
         
         cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
-
-        gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True, addAlpha=True)
+        gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True, addAlpha=self.alpha)
 
         cr_hs_fn = utils.make_temp_fn('gdaldem_cr_hs.tif', self.outdir)
-        #self.overlay(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)
-        self.multiply(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)
-        #self.screen(hs_gamma_fn, cr_fn, outfile=cr_hs_fn)        
+        self.blend(hs_fn, cr_fn, gamma=self.gamma, mode=self.mode, outfile=cr_hs_fn)
 
-        #utils.remove_glob(hs_fn, hs_gamma_fn, cr_fn)
+        utils.remove_glob(hs_fn, cr_fn)
         out_hs = '{}_hs.tif'.format(utils.fn_basename2(self.src_dem))
         os.rename(cr_hs_fn, out_hs)
-
         self._modulate(out_hs)
         
         return(out_hs)
