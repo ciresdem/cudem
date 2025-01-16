@@ -380,53 +380,6 @@ class Perspecto:
     def run(self):
         raise(NotImplementedError)
 
-class Hillshade_cmd(Perspecto):
-    """Generate a Hillshade Image
-
-    uses gdal/ImageMagick
-
-< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
-    """
-    
-    def __init__(
-            self,
-            vertical_exaggeration=1,
-            projection=None,
-            azimuth=315,
-            altitude=45,
-            **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.vertical_exaggeration = vertical_exaggeration
-        self.projection = projection
-        self.azimuth = azimuth
-        self.altitude = altitude
-        self.cpt_no_slash()
-        
-    def run(self):
-        utils.run_cmd(
-            'gdaldem hillshade -compute_edges -s 111120 -z {} -az {} -alt {} {} hillshade.tif'.format(
-                self.vertical_exaggeration, self.azimuth, self.altitude, self.src_dem
-            ), verbose=self.verbose
-        )
-        # Generate the color-releif
-        utils.run_cmd('gdaldem color-relief {} {} colors.tif'.format(self.src_dem, self.cpt), verbose=self.verbose)
-        # Composite the hillshade and the color-releif
-        utils.run_cmd('composite -compose multiply -depth 8 colors.tif hillshade.tif output.tif', verbose=self.verbose)
-        utils.run_cmd('mogrify -modulate 115 -depth 8 output.tif', verbose=self.verbose)
-        # Generate the combined georeferenced tif
-        utils.run_cmd('gdal_translate -co "TFW=YES" {} temp.tif'.format(self.src_dem), verbose=self.verbose)
-        utils.run_cmd('mv temp.tfw output.tfw')
-        utils.run_cmd('gdal_translate {} output.tif temp2.tif'.format('-a_srs epsg:{}'.format(self.projection) if self.projection is not None else ''))
-        # Cleanup
-        utils.remove_glob('output.tif*', 'temp.tif*', 'hillshade.tif*', 'colors.tif*', 'output.tfw*')
-        #subtract 2 cells from rows and columns 
-        #gdal_translate -srcwin 1 1 $(gdal_rowcol.py $ingrd t) temp2.tif $outgrd
-        utils.run_cmd('gdal_translate temp2.tif {}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
-        utils.remove_glob('temp2.tif')
-
-        return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
-
 class Hillshade(Perspecto):
     """Generate a Hillshade Image
 
@@ -444,7 +397,7 @@ class Hillshade(Perspecto):
             modulate=125,
             alpha=False,
             mode='multiply',
-            gamma=None,
+            gamma=.5,
             **kwargs,
     ):
         super().__init__(**kwargs)
@@ -516,7 +469,7 @@ class Hillshade(Perspecto):
         return(outfile)
 
     def blend(self, hs_file, rgb_file, mode = 'multiply', gamma = None, outfile = 'gdaldem_multiply.tif'):
-        modes = ['multiply', 'screen']
+        modes = ['multiply', 'screen', 'overlay', 'hard_light', 'soft_light']
         if mode not in modes:
             mode = 'multiply'
             
@@ -539,9 +492,36 @@ class Hillshade(Perspecto):
                         band = rgb_ds.GetRasterBand(band_no)
                         band_arr = band.ReadAsArray(*srcwin)
                         if mode == 'multiply':
-                            band_arr = (((cr_arr/255.)*(band_arr/255.))*255).astype(np.uint8)
+                            band_arr = (((cr_arr/255.) * (band_arr/255.)) * 255.).astype(np.uint8)
                         elif mode == 'screen':
-                            band_arr = ((1-(1-(cr_arr/255.))*(1-(band_arr/255.)))*255.).astype(np.uint8)
+                            band_arr = ((1 - ((1 - cr_arr/255.) * (1 - (band_arr/255.)))) * 255.).astype(np.uint8)
+                        elif mode == 'overlay':
+                            out_arr = np.copy(band_arr)
+                            out_arr[cr_arr<128] = (2 * (cr_arr[cr_arr<128]/255.) * (band_arr[cr_arr<128]/255.) *
+                                                   255.).astype(np.uint8)
+                            out_arr[cr_arr>=128] = ((1 - (2 * (1 - (cr_arr[cr_arr>=128]/255.)) *
+                                                          (1 - (band_arr[cr_arr>=128]/255.))))
+                                                    * 255.).astype(np.uint8)
+                            band_arr[:] = out_arr
+                        elif mode == 'hard_light':
+                            out_arr = np.copy(band_arr)
+                            out_arr[band_arr<128] = (2 * (cr_arr[band_arr<128]/255.) * (band_arr[band_arr<128]/255.)
+                                                     * 255.).astype(np.uint8)
+                            out_arr[band_arr>=128] = ((1 - (2 * (1 - (cr_arr[band_arr>=128]/255.)) *
+                                                            (1 - (band_arr[band_arr>=128]/255.))))
+                                                      * 255.).astype(np.uint8)
+                            band_arr[:] = out_arr
+                        elif mode == 'soft_light':
+                            out_arr = np.copy(band_arr)
+                            out_arr[band_arr<128] = (((2 * (cr_arr[band_arr<128]/255.) * (band_arr[band_arr<128]/255.)) +
+                                                      (((cr_arr[band_arr<128]/255.)**2) *
+                                                       (1 - (2 * band_arr[band_arr<128]/255.))))
+                                                     * 255.).astype(np.uint8)
+                            out_arr[band_arr>=128] = (((2 * (cr_arr[band_arr>=128]/255.) * (1 - band_arr[band_arr>=128]/255.)) +
+                                                       (np.sqrt(cr_arr[band_arr>=128]/255.) *
+                                                        ((2 * (band_arr[band_arr>=128]/255.)) - 1)))
+                                                      * 255.).astype(np.uint8)
+                            band_arr[:] = out_arr
                             
                         band.WriteArray(band_arr, srcwin[0], srcwin[1])
                         
@@ -571,8 +551,55 @@ class Hillshade(Perspecto):
         self._modulate(out_hs)
         
         return(out_hs)
+
+class Hillshade_cmd(Perspecto):
+    """Generate a Hillshade Image
+
+    uses gdal/ImageMagick
+
+< hillshade:vertical_exaggeration=1:projection=4326:azimuth=315:altitude=45 >
+    """
     
-class HillShade(Perspecto):
+    def __init__(
+            self,
+            vertical_exaggeration=1,
+            projection=None,
+            azimuth=315,
+            altitude=45,
+            **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.vertical_exaggeration = vertical_exaggeration
+        self.projection = projection
+        self.azimuth = azimuth
+        self.altitude = altitude
+        self.cpt_no_slash()
+        
+    def run(self):
+        utils.run_cmd(
+            'gdaldem hillshade -compute_edges -s 111120 -z {} -az {} -alt {} {} hillshade.tif'.format(
+                self.vertical_exaggeration, self.azimuth, self.altitude, self.src_dem
+            ), verbose=self.verbose
+        )
+        # Generate the color-releif
+        utils.run_cmd('gdaldem color-relief {} {} colors.tif'.format(self.src_dem, self.cpt), verbose=self.verbose)
+        # Composite the hillshade and the color-releif
+        utils.run_cmd('composite -compose multiply -depth 8 colors.tif hillshade.tif output.tif', verbose=self.verbose)
+        utils.run_cmd('mogrify -modulate 115 -depth 8 output.tif', verbose=self.verbose)
+        # Generate the combined georeferenced tif
+        utils.run_cmd('gdal_translate -co "TFW=YES" {} temp.tif'.format(self.src_dem), verbose=self.verbose)
+        utils.run_cmd('mv temp.tfw output.tfw')
+        utils.run_cmd('gdal_translate {} output.tif temp2.tif'.format('-a_srs epsg:{}'.format(self.projection) if self.projection is not None else ''))
+        # Cleanup
+        utils.remove_glob('output.tif*', 'temp.tif*', 'hillshade.tif*', 'colors.tif*', 'output.tfw*')
+        #subtract 2 cells from rows and columns 
+        #gdal_translate -srcwin 1 1 $(gdal_rowcol.py $ingrd t) temp2.tif $outgrd
+        utils.run_cmd('gdal_translate temp2.tif {}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
+        utils.remove_glob('temp2.tif')
+
+        return('{}_hs.tif'.format(utils.fn_basename2(self.src_dem)))
+    
+class HillShade_test(Perspecto):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

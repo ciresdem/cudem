@@ -813,6 +813,14 @@ class FetchModule:
         ## values in the sub-class
         self.data_format = None
         self.src_srs = None
+        self.title = None
+        self.source = None
+        self.date = None
+        self.data_type = None
+        self.resolution = None
+        self.hdatum = None
+        self.vdatum = None
+        self.url = None
 
         ## set a generic region of the entire world in WGS84 if no region
         ## was specified or if its an invalid region...this will result in quite
@@ -900,6 +908,7 @@ class GMRT(FetchModule):
                else layer # GMRT layer
 
         ## The various urls to use for GMRT
+        self._gmrt_url = 'https://www.gmrt.org'
         self._gmrt_grid_url = "https://www.gmrt.org:443/services/GridServer?"
         self._gmrt_grid_urls_url = "https://www.gmrt.org:443/services/GridServer/urls?"
         self._gmrt_grid_metadata_url = "https://www.gmrt.org/services/GridServer/metadata?"        
@@ -913,6 +922,14 @@ class GMRT(FetchModule):
         ## dlim variables, parse with GDAL and set to WGS84/MSL
         self.data_format = 200
         self.src_srs = 'epsg:4326+3855'
+        self.title = 'GMRT'
+        self.source = 'GMRT'
+        self.date = None
+        self.data_type = 'Raster'
+        self.resolution = None
+        self.hdatum = 'wgs84'
+        self.vdatum = 'msl'
+        self.url = self._gmrt_url
 
         ## Firefox on windows for this one.
         self.headers = {
@@ -998,8 +1015,16 @@ class waDNR(FetchModule):
         
         ## for dlim, data format is -2 for a zip file, projections vary
         self.data_format = -2
-        #self.src_srs = 'epsg:4326+3855'
-
+        self.src_srs = None
+        self.title = 'Washington DNR Lidar'
+        self.source = 'Washington DNR'
+        self.date = None
+        self.data_type = 'lidar'
+        self.resolution = None
+        self.hdatum = None
+        self.vdatum = None
+        self.url = self._wa_dnr_url
+        
         ## Firefox on windows for this one.
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
@@ -1827,6 +1852,14 @@ class MarGrav(FetchModule):
         ## the x values from 360 to 180
         self.data_format = '168:x_offset=REM:skip=1'
         self.src_srs = 'epsg:4326+3855'
+        self.title = 'Marine Gravity'
+        self.source = 'USCD'
+        self.date = None
+        self.data_type = 'points'
+        self.resolution = '60 arc-seconds'
+        self.hdatum = 'wgs84'
+        self.vdatum = 'msl'
+        self.url = self._mar_grav_url
         
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
@@ -1997,9 +2030,16 @@ class NauticalCharts(FetchModule):
         self._dt_xml = {'ENC':self._enc_data_catalog, 'RNC':self._rnc_data_catalog}
         
         ## for dlim, ENC data comes as .000 files, parse with OGR
-        self.v_datum = 'mllw'
         #self.data_format = 302
         self.src_srs='epsg:4326+5866'
+        self.title = 'Nautical Charts'
+        self.source = 'NOAA'
+        self.date = None
+        self.data_type = 'points'
+        self.resolution = None
+        self.hdatum = 'wgs84'
+        self.vdatum = 'mllw'
+        self.url = self._charts_url
 
         ## Charts is in FRED, set that up here.
         self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)

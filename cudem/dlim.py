@@ -5455,14 +5455,20 @@ class Fetcher(ElevationDataset):
             pass
         
         self.want_single_metadata_name = want_single_metadata_name
-        self.metadata['name'] = self.fn # set the metadata name from the input fetches module
         self.check_size = check_size # check the size of the fetched data
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
+
+        ## set the metadata from the fetches module
+        #self.metadata['name'] = self.fn # set the metadata name from the input fetches module
+        #self.metadata['title'] = self.fetch_module.title
+        #self.metadata['source'] = self.fetch_module.title
+        
         ## breaks when things not set...
-        # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
-        # self.metadata = {'name':self.fn, 'title':self.fn, 'source':self.fn, 'date':None,
-        #                  'data_type':self.data_format, 'resolution':None, 'hdatum':src_horz,
-        #                  'vdatum':src_vert, 'url':None}
+        ## set the metadata from the fetches module
+        src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
+        self.metadata = {'name':self.fn, 'title':self.fetch_module.title, 'source':self.fetch_module.source,
+                         'date':self.fetch_module.date, 'data_type':self.data_format, 'resolution':self.fetch_module.resolution,
+                         'hdatum':src_horz, 'vdatum':src_vert, 'url':self.fetch_module.url}
 
         try:
             self.fetch_module.run()
