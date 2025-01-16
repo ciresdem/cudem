@@ -365,7 +365,10 @@ class Perspecto:
             
         if rgb:
             self.init_cpt(want_gdal=True)
-            utils.run_cmd('gdaldem color-relief {} {} _rgb_temp.tif'.format(self.src_dem, self.cpt), verbose=True)
+            #cr_fn = utils.make_temp_fn('gdaldem_cr.tif', self.outdir)
+            #gdal.DEMProcessing(cr_fn, self.src_dem, 'color-relief', colorFilename=self.cpt, computeEdges=True, addAlpha=self.alpha)
+            
+            utils.run_cmd('gdaldem color-relief {} {} _rgb_temp.tif -alpha'.format(self.src_dem, self.cpt), verbose=True)
             utils.run_cmd(
                 'gdal_translate -srcwin 1 1 {} {} -of PNG _rgb_temp.tif {}_rgb.png'.format(
                     self.dem_infos['nx']-1, self.dem_infos['ny']-1, utils.fn_basename2(self.src_dem)
@@ -595,10 +598,8 @@ class POVRay(Perspecto):
         self.dem_image = '{}_16bit.png'.format(utils.fn_basename2(self.src_dem))
 
         #if not os.path.exists(self.rgb_image) or not os.path.exists(self.dem_image):
-        self.export_as_png()
-            
+        self.export_as_png()            
         self.output_pov = '{}.pov'.format(utils.fn_basename2(self.src_dem))
-
         
     def run_povray(self, src_pov_template, pov_width=800, pov_height=800):
         utils.run_cmd('povray {} +W{} +H{} -D'.format(src_pov_template, pov_width, pov_height), verbose=True)

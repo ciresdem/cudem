@@ -5624,7 +5624,6 @@ class DNRFetcher(Fetcher):
             #self.fetches_params['data_format'] = 200
             #self.fetches_params['node'] = 'pixel'
             self.fetches_params['remove_flat'] = True
-            print(self.fetches_params)
             yield(DatasetFactory(**self.fetches_params)._acquire_module())
             
 class DAVFetcher_CoNED(Fetcher):
@@ -6296,9 +6295,11 @@ class eHydroFetcher(Fetcher):
                 src_epsg, v if v is not None else '5866'
             ) if src_epsg is not None else None
             self.fetches_params['data_format'] = '302:ogr_layer=SurveyPoint_HD:elev_field=Z_label:z_scale=-0.3048006096012192'
+            self.metadata['name'] = self.fn
             yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
             if self.want_contours:
+                self.metadata['name'] = '{}_contours'.format(utils.fn_basename2(self.fn))
                 #self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048'
                 self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())            
