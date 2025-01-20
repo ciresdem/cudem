@@ -895,7 +895,10 @@ def fix_srcwin(srcwin, xcount, ycount):
 def chunk_srcwin(n_size=(), n_chunk=10, step=None, verbose=True):
     return([s for s in yield_srcwin(n_size, n_chunk, step, verbose)])
 
-def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_msg='chunked srcwin', start_at_edge=True, verbose=True):
+def yield_srcwin(
+        n_size = (), n_chunk = 10, step = None, msg = 'chunking srcwin', end_msg = 'chunked srcwin',
+        start_at_edge = True, verbose = True
+):
     """yield source windows in n_chunks at step"""
     
     if step is None:
@@ -931,7 +934,6 @@ def yield_srcwin(n_size=(), n_chunk=10, step=None, msg='chunking srcwin', end_ms
                     break
 
                 srcwin = (this_x_origin, this_y_origin, this_x_size, this_y_size)
-                #echo_msg(srcwin)
                 pbar.update()
                 yield(srcwin)
                 
@@ -1261,6 +1263,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg), file=sys.stderr)
+    tqdm.write(traceback.format_exc())
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):

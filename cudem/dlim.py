@@ -5465,11 +5465,11 @@ class Fetcher(ElevationDataset):
         
         ## breaks when things not set...
         ## set the metadata from the fetches module
-        src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
+        # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
         self.metadata = {'name':self.fn, 'title':self.fetch_module.title, 'source':self.fetch_module.source,
                          'date':self.fetch_module.date, 'data_type':self.data_format, 'resolution':self.fetch_module.resolution,
-                         'hdatum':src_horz, 'vdatum':src_vert, 'url':self.fetch_module.url}
-
+                         'hdatum':self.fetch_module.hdatum, 'vdatum':self.fetch_module.vdatum, 'url':self.fetch_module.url}
+        
         try:
             self.fetch_module.run()
         except:
