@@ -21,7 +21,7 @@ Add a slight buffer (.1 degree) to ensure coverage of fetched data.
 regions -R -125/-124/47/48.5 -B .1
 ```
 
-will output [region_n48x06_w121x00.shp](region_n48x06_w121x00.geojson)
+will output [region_n48x60_w121x00.shp](region_n48x60_w121x00.geojson)
 
 ### Generate the .25 degree tiles
 
