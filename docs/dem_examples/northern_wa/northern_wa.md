@@ -6,7 +6,7 @@ DEM generation example of Northern Washington.
 
 | Region | Tile-Size | Cell-size | Horz Projection | Vert Projection |
 |---|---|---|---|---|
-| -R-121/-114/31.5/35 | .25 degrees | 1/9 Arc-Second (~3m) | NAD83 | NAVD88 |
+| -R-125/-124/47/48.5 | .25 degrees | 1/9 Arc-Second (~3m) | NAD83 | NAVD88 |
 
 
 ## Generate the region vectors
@@ -18,10 +18,10 @@ This is for data fetching, etc.
 Add a slight buffer (.1 degree) to ensure coverage of fetched data.
 
 ```bash
-regions -R -121/-114/31.5/35 -B .1
+regions -R -125/-124/47/48.5 -B .1
 ```
 
-will output a shapefile named "region_n35x00_w121x00.shp"
+will output ![](region_n48x06_w121x00.geojson)
 
 ### Generate the .25 degree tiles
 

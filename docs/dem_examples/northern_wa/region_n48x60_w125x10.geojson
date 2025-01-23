@@ -1,0 +1,7 @@
+{
+"type": "FeatureCollection",
+"name": "region_n48x60_w125x10",
+"features": [
+{ "type": "Feature", "properties": { "id": 1 }, "geometry": { "type": "Polygon", "coordinates": [ [ [ -125.1, 46.9 ], [ -125.1, 48.6 ], [ -123.9, 48.6 ], [ -123.9, 46.9 ], [ -125.1, 46.9 ] ] ] } }
+]
+}
