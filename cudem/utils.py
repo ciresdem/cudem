@@ -1,6 +1,6 @@
 ### utils.py - CUDEM utilities and functions
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## utils.py is part of CUDEM
 ##
@@ -1123,7 +1123,7 @@ def cmd_check(cmd_str, cmd_vers_str):
     else:
         return("0".encode())
 
-def config_check(chk_vdatum=False, verbose=False):
+def config_check(chk_config_file=True, chk_vdatum=False, verbose=False):
     """check for needed waffles external software.
 
     waffles external software: gdal, gmt, mbsystem
@@ -1138,6 +1138,9 @@ def config_check(chk_vdatum=False, verbose=False):
       dict: a dictionary of gathered results.
     """
 
+    def check_config_file(ccc):
+        pass
+    
     #cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
     cudem_cmd_config = os.path.join(os.path.expanduser('~'), '.cudem_cmd_config.json')
     

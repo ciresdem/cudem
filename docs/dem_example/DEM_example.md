@@ -1,12 +1,12 @@
 # Overview
 
-DEM generation example of Southern California.
+DEM generation example of Northern Washington.
 
 ## Specifications
 
 | Region | Tile-Size | Cell-size | Horz Projection | Vert Projection |
 |---|---|---|---|---|
-| -R-121/-114/31.5/35 | .25 degrees | 1 Arc-Second (~30m) | WGS84 | NAVD88 |
+| -R-121/-114/31.5/35 | .25 degrees | 1/9 Arc-Second (~3m) | NAD83 | NAVD88 |
 
 
 ## Generate the region vectors
@@ -17,7 +17,9 @@ This is for data fetching, etc.
 
 Add a slight buffer (.1 degree) to ensure coverage of fetched data.
 
-```regions -R -121/-114/31.5/35 -B .1```
+```bash
+regions -R -121/-114/31.5/35 -B .1
+```
 
 will output a shapefile named "region_n35x00_w121x00.shp"
 
