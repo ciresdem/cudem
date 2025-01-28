@@ -35,7 +35,7 @@ will output [regions_tile_set.shp](region_tile_set.geojson) with 24 .25 degree t
 
 [tiles_1_9.shp](tiles_1_9.geojson)
 
-## Generate a Coastline vector
+## Generate a Coastline vector (optional)
 
 Check the waffles coastline module options to determine what we need:
 
@@ -70,9 +70,9 @@ waffles modules:
     < coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
 ```
 
-```waffles -R region_n35x10_w121x10.shp -E 1s -M coastline -O socal_coastline -P epsg:4326```
+```waffles -R region_n48x60_w125x10.shp -E .11111111s -M coastline:want_nhd=True:polygonize=True -O wa_coastline -P epsg:4326```
 
-generates socal_coastline.shp and socal_coastline.tif for masking, etc.
+generates wa_coastline.shp and wa_coastline.tif for masking, etc.
 
 ## Make a datalist
 

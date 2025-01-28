@@ -1144,7 +1144,7 @@ def config_check(chk_config_file=True, chk_vdatum=False, verbose=False):
     #cudem_cmd_config = os.path.join(cudem_cache(), '.cudem_cmd_config.json')
     cudem_cmd_config = os.path.join(os.path.expanduser('~'), '.cudem_cmd_config.json')
     
-    if os.path.exists(cudem_cmd_config):
+    if chk_config_file and os.path.exists(cudem_cmd_config):
         with open(cudem_cmd_config, 'r') as ccc:
             _waff_co = json.load(ccc)
     else:
@@ -1266,7 +1266,7 @@ def echo_error_msg2(msg, prefix = 'waffles'):
     #msg = _init_msg(msg, len(prefix))
     #sys.stderr.write('{}: \033[31m\033[1merror\033[m, {}\n'.format(prefix, msg))
     tqdm.write('{}: \033[31m\033[1merror\033[m, {}'.format(prefix, msg), file=sys.stderr)
-    tqdm.write(traceback.format_exc())
+    #tqdm.write(traceback.format_exc())
     sys.stderr.flush()
     
 def echo_msg2(msg, prefix='waffles', nl=True, bold=False):
