@@ -1123,7 +1123,7 @@ def cmd_check(cmd_str, cmd_vers_str):
     else:
         return("0".encode())
 
-def config_check(chk_config_file=True, chk_vdatum=False, verbose=False):
+def config_check(chk_config_file=True, chk_vdatum=False, generate_config_file=True, verbose=False):
     """check for needed waffles external software.
 
     waffles external software: gdal, gmt, mbsystem
@@ -1169,8 +1169,9 @@ def config_check(chk_config_file=True, chk_vdatum=False, verbose=False):
             _waff_co[key] = None if _waff_co[key] == '0' else _waff_co[key]
 
         echo_msg(json.dumps(_waff_co, indent=4, sort_keys=True))
-        with open(cudem_cmd_config, 'w') as ccc:
-            ccc.write(json.dumps(_waff_co, indent=4, sort_keys=True))
+        if generate_config_file:
+            with open(cudem_cmd_config, 'w') as ccc:
+                ccc.write(json.dumps(_waff_co, indent=4, sort_keys=True))
             
     return(_waff_co)
     

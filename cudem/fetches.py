@@ -3201,7 +3201,7 @@ class WaterServices(FetchModule):
 class BUOYS(FetchModule):
     """NOAA BUOY data (beta)
 
-    Fetch NOS Tide Stations
+    Fetch NOS Buoy Stations
 
     A sustainable and resilient marine observation and monitoring infrastructure which enhances healthy 
     ecosystems, communities, and economies in the face of change and To provide quality observations in 
@@ -3220,6 +3220,7 @@ class BUOYS(FetchModule):
         ## various buoy URLs
         self._ndbc_url = 'https://www.ndbc.noaa.gov'
         self._buoy_box_search_url = 'https://www.ndbc.noaa.gov/box_search.php?'
+        self._buoy_radial_search_url = 'https://www.ndbc.noaa.gov/radial_search.php?'
         self._buoy_station_url = 'https://www.ndbc.noaa.gov/station_page.php?'
         self._buoy_stations_url = 'https://www.ndbc.noaa.gov/to_station.shtml'
         self._buoy_station_kml = 'https://www.ndbc.noaa.gov/kml/marineobs_by_owner.kml'
@@ -3231,7 +3232,7 @@ class BUOYS(FetchModule):
         if self.region is None:
             return([])
 
-        _data = {
+        _data_box = {
             'lat1': self.region.ymin,
             'lat2': self.region.ymax,
             'lon1': self.region.xmin,
@@ -3240,13 +3241,28 @@ class BUOYS(FetchModule):
             'ot': 'A',
             'time': 0,
         }
+        rc = self.region.center()
+        print(rc)
+        _data = {
+            'lon1': rc[0],
+            'lat1': rc[1],
+            #'lat1': self.region.ymin,
+            #'lat2': self.region.ymax,
+            'lon1': self.region.xmin,
+            #'lon2': self.region.xmax,
+            'uom': 'M',
+            'ot': 'A',
+            'dist': 100,
+            'time': 0,
+        }
 
         ## Fetch buoy ids from box search
         _req = Fetch(
-            self._buoy_box_search_url, verbose=self.verbose
+            self._buoy_radial_search_url, verbose=self.verbose
         ).fetch_req(params=_data)
         if _req is not None:
             #print(_req.content)
+            print(_req.url)
             doc = lh.document_fromstring(_req.text)
             sp = doc.xpath('//span')
             current_stations = []
