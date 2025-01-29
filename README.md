@@ -8,6 +8,8 @@ Centers for Environmental Information (NCEI)
 
 # Overview
 
+![](/media/perspective.png)
+
 The National Oceanic and Atmospheric Administration (NOAA) National
 Centers for Environmental Information (NCEI), through its collaboration
 with the Cooperative Institute for Research in Environmental Sciences
