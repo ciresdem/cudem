@@ -147,6 +147,7 @@ setuptools.setup(
         'scripts/dem_patch.sh',
         'scripts/xyz2shp.py',
         'scripts/fetch_osm_coastline.py',
+        'scripts/icesat2dump.py',
     ],
     python_requires = '>=3.0',
     project_urls = {

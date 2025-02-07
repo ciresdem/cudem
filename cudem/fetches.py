@@ -806,7 +806,7 @@ class FetchModule:
         if self.outdir is None:
             self._outdir = os.path.join(os.getcwd(), self.name)
         else:
-            self._outdir = self.outdir
+            self._outdir = os.path.join(self.outdir, self.name)
 
         ## for dlim support, we can check these variables for
         ## to do the proper processing. Set these to their correct
@@ -2201,7 +2201,7 @@ class Multibeam(FetchModule):
         ## various multibeam URLs
         self._mb_data_url = "https://data.ngdc.noaa.gov/platforms/"
         self._mb_metadata_url = "https://data.noaa.gov/waf/NOAA/NESDIS/NGDC/MGG/Multibeam/iso/"
-        self._mb_search_url = "https://maps.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
+        self._mb_search_url = "https://gis.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
         self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
         self._mb_html = "https://www.ngdc.noaa.gov/"
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]        
@@ -4829,34 +4829,51 @@ def proc_vdatum_inf(vdatum_inf, name = 'vdatum'):
     _inf = open(vdatum_inf, 'r')
     _inf_areas = {}
     for line in _inf:
+        #utils.args2dict([line.strip()], _inf_areas)
         line_list = line.split('.')
         if len(line_list) > 1:
-            if line_list[0] not in _inf_areas.keys():
-                _inf_areas[line_list[0]] = {}
-                
-            if len(line_list) > 1:
-                line_val = '.'.join(line_list[1:]).strip()
-                utils.args2dict([line_val], _inf_areas[line_list[0]])
-                
+            eq_val = [i for i, x in enumerate(['=' in x for x in line_list]) if x][0]
+            if eq_val != 0:
+                line_key = '.'.join(line_list[:eq_val])
+                #if line_list[0] not in _inf_areas.keys():
+                if line_key not in _inf_areas.keys():
+                    _inf_areas[line_key] = {}
+
+                #if len(line_list) > 1:
+                #if 'pc' in line_list: # xgeoid19b has an extra 'pc' in the vars
+                #    line_val = '.'.join(line_list[2:]).strip()
+                #else:
+                #line_val = '.'.join(line_list[1:]).strip()
+                line_val = '.'.join(line_list[eq_val:]).strip()
+
+                #utils.args2dict([line_val], _inf_areas[line_list[0]])
+                utils.args2dict([line_val], _inf_areas[line_key])
+
+    #print(_inf_areas)
     _inf.close()
     _inf_areas_fmt = {}
     for key in _inf_areas.keys():
-        if name is not None:
-            _out_key = '{}_{}'.format(name, key)
-        else:
-            _out_key = key
-            
-        if _out_key not in _inf_areas_fmt.keys():
-            _inf_areas_fmt[_out_key] = {}
-            
-        xmin = utils.x360(float(_inf_areas[key]['minlon']))
-        xmax = utils.x360(float(_inf_areas[key]['maxlon']))
-        ymin = float(_inf_areas[key]['minlat'])
-        ymax = float(_inf_areas[key]['maxlat'])
-        _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
-        _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
-        if 'AK' in _out_key:
-            print(_inf_areas_fmt[_out_key])
+        #print(key)
+        if 'minlon' in _inf_areas[key].keys():
+            if name is not None:
+                _out_key = '{}_{}'.format(name, key)
+            else:
+                _out_key = key
+
+            if _out_key not in _inf_areas_fmt.keys():
+                _inf_areas_fmt[_out_key] = {}
+
+            #print(_inf_areas)
+            #print(key)
+
+            xmin = utils.x360(float(_inf_areas[key]['minlon']))
+            xmax = utils.x360(float(_inf_areas[key]['maxlon']))
+            ymin = float(_inf_areas[key]['minlat'])
+            ymax = float(_inf_areas[key]['maxlat'])
+            _inf_areas_fmt[_out_key]['region'] = [xmin, xmax, ymin, ymax]
+            _inf_areas_fmt[_out_key]['grid'] = _inf_areas[key]['source'].split('\\')[-1]
+            if 'AK' in _out_key:
+                print(_inf_areas_fmt[_out_key])
         
     return(_inf_areas_fmt)
 
@@ -4988,8 +5005,9 @@ class VDATUM(FetchModule):
         
         ## add others IGLD85
         #self._vdatums = ['VERTCON', 'EGM1984', 'EGM1996', 'EGM2008', 'GEOID03', 'GEOID06', 'GEOID09', 'GEOID12A', 'GEOID12B', 'GEOID96', 'GEOID99', 'TIDAL']
-        self._vdatums = ['TIDAL', 'CRD', 'IGLD85']
+        self._vdatums = ['TIDAL', 'CRD', 'IGLD85', 'XGEOID16B', 'XGEOID17B', 'XGEOID18B', 'XGEOID19B', 'XGEOID20B']
         self._tidal_datums = ['mhw', 'mhhw', 'mlw', 'mllw', 'tss', 'mtl']
+        #self._xgeoids = ['xgeoid20b']
         self.where = where
         self.datatype = datatype
         self.epsg = utils.int_or(epsg)
@@ -5023,8 +5041,8 @@ class VDATUM(FetchModule):
         for vd in self._vdatums:
             surveys = []
 
-            #if vd == 'TIDAL' or vd == 'IGLD85':
-            if vd in self._vdatums:
+            if vd == 'TIDAL' or vd == 'IGLD85' or vd == 'CRD':
+            #if vd in self._vdatums:
                 ## All tidal inf data is in each one, so we only
                 ## have to download one of the tidal zips to process
                 ## them all; lets use the smallest one
@@ -5035,9 +5053,16 @@ class VDATUM(FetchModule):
                 else:
                     vd_ = vd
                     v_inf = '{}.inf'.format(vd_)
-                    
-                vd_zip_url = '{}{}.zip'.format(self._vdatum_data_url, vd_)
 
+                # if 'GEOID' in vd:
+                #     vd_zip_url = '{}vdatum_{}.zip'.format(self._vdatum_data_url, vd)
+                # else:
+                vd_zip_url = '{}{}.zip'.format(self._vdatum_data_url, vd_)
+            elif 'XGEOID' in vd:
+                vd_zip_url = '{}vdatum_{}.zip'.format(self._vdatum_data_url, vd)
+                #v_inf = 'vcn.inf'
+                v_inf = '{}.inf'.format(vd.lower())
+                
             elif vd == 'VERTCON':
                 vd_zip_url = '{}vdatum_{}.zip'.format(self._vdatum_data_url, vd)
                 v_inf = 'vcn.inf'
@@ -5053,7 +5078,7 @@ class VDATUM(FetchModule):
             if status == 0:
                 v_infs = utils.p_unzip('{}.zip'.format(vd), ['inf'])
                 utils.echo_msg(v_infs)
-                v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
+                #v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
                 v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360)
 
                 for key in v_dict.keys():
@@ -5787,6 +5812,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'CoNED': {'call': CoNED},
         'CUDEM': {'call': CUDEM},
         'multibeam': {'call': Multibeam}, # MBDB isn't working!
+        'MBDB': {'call': MBDB},# isn't working!
         'gebco': {'call': GEBCO},
         'mgds': {'call': MGDS},
         'trackline': {'call': Trackline},

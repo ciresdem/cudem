@@ -1387,7 +1387,7 @@ class ElevationDataset:
 
                 ## run `vdatums.VerticalTransform()`, grid using `nearest`
                 self.transform['trans_fn'], self.transform['trans_fn_unc'] = vdatums.VerticalTransform(
-                    'nearest',
+                    'IDW',
                     vd_region,
                     vd_x_inc,
                     vd_y_inc,
@@ -1396,7 +1396,7 @@ class ElevationDataset:
                     geoid_in=self.transform['src_geoid'],
                     geoid_out=self.transform['dst_geoid'],
                     cache_dir=self.cache_dir,
-                    verbose=False
+                    verbose=True
                 ).run(outfile=self.transform['trans_fn'])
 
         ## set the pyproj.Transformer for both horz+vert and vert only
@@ -1445,7 +1445,7 @@ class ElevationDataset:
                 self.transform['transformer'] = pyproj.Transformer.from_pipeline(self.transform['pipeline'])
             except Exception as e:
                 utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
-                    self.transform['src_hroz_crs'].name, self.transform['dst_horz_crs'].name, e
+                    self.transform['src_horz_crs'].name, self.transform['dst_horz_crs'].name, e
                 ))
                 return
 
@@ -2622,8 +2622,10 @@ class ElevationDataset:
                         cst_ds = None
                         utils.remove_glob(cst_osm)
                         
-        if return_geom:
-            utils.remove_glob('{}.*'.format(utils.fn_basename2(out)))
+            if retrun_geom:
+                utils.remove_glob('{}.*'.format(utils.fn_basename2(out)))
+                        
+        if return_geom:            
             return(cst_geoms)
         else:
             return(out)
@@ -3927,6 +3929,7 @@ class IceSat2File(ElevationDataset):
 
         self.atl_03_f = None
         self.atl_08_f = None
+        self.atl_24_f = None
         self.atl_03_f = h5.File(self.atl_03_fn, 'r')
         if 'short_name' not in self.atl_03_f.attrs.keys():
             raise UnboundLocalError('this file does not appear to be an ATL03 file')
@@ -4048,17 +4051,33 @@ class IceSat2File(ElevationDataset):
         """fetch the associated atl08 file"""
         
         atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
-        this_atl08 = fetches.IceSat2(
+        this_atl_08 = fetches.IceSat2(
             src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08',
             filename_filter=atl_08_filter
         )
-        this_atl08.run()
-        if len(this_atl08.results) == 0:
+        this_atl_08.run()
+        if len(this_atl_08.results) == 0:
             utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl_08_filter))
             return(None)
         else:
-            if this_atl08.fetch(this_atl08.results[0], check_size=True) == 0:
-                return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
+            if this_atl_08.fetch(this_atl_08.results[0], check_size=True) == 0:
+                return(os.path.join(this_atl_08._outdir, this_atl_08.results[0][1]))
+
+    def fetch_atl_24(self):
+        """fetch the associated atl08 file"""
+        
+        atl_24_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
+        this_atl24 = fetches.IceSat2(
+            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL24',
+            filename_filter=atl_24_filter
+        )
+        this_atl24.run()
+        if len(this_atl24.results) == 0:
+            utils.echo_warning_msg('could not locate associated atl24 file for {}'.format(atl_24_filter))
+            return(None)
+        else:
+            if this_atl24.fetch(this_atl24.results[0], check_size=True) == 0:
+                return(os.path.join(this_atl24._outdir, this_atl24.results[0][1]))            
     
     def read_atl_data(self, laser_num):
         """Read data from an ATL03 file
@@ -4180,6 +4199,12 @@ class IceSat2File(ElevationDataset):
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]            
 
+        ## Read in the atl24 data
+        if self.atl_24_f is not None:
+            atl_08_classed_pc_flag  = self.atl_24_f['/' + laser + '/class_ph'][...,]
+            atl_08_ph_segment_id = self.atl_24_f['/' + laser + '/index_seg'][...,] # photon src 20 m seg id
+            atl_08_classed_pc_indx = self.atl_24_f['/' + laser + '/index_ph'][...,]
+            
         ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
         if self.water_surface == 'mean_tide':
             ph_height = photon_h_meantide
@@ -5445,10 +5470,10 @@ class Fetcher(ElevationDataset):
     ):
         super().__init__(**kwargs)
         ## cache directory to store fetched data
-        self.outdir = outdir if outdir is not None else self.cache_dir 
+        #self.outdir = outdir if outdir is not None else self.cache_dir 
         self.fetch_module = fetches.FetchesFactory(
             mod=self.fn, src_region=self.region, callback=callback,
-            verbose=self.verbose, outdir=self.outdir
+            verbose=self.verbose, outdir=outdir
         )._acquire_module() # the fetches module
         if self.fetch_module is None:
             utils.echo_warning_msg('fetches modules {} returned None'.format(self.fn))
@@ -5457,7 +5482,9 @@ class Fetcher(ElevationDataset):
         self.want_single_metadata_name = want_single_metadata_name
         self.check_size = check_size # check the size of the fetched data
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
-
+        #self.outdir = outdir if outdir is not None else self.fetch_module._outdir if self.fetch_module._outdir is not None else self.cache_dir
+        self.outdir = self.fetch_module._outdir
+        
         ## set the metadata from the fetches module
         #self.metadata['name'] = self.fn # set the metadata name from the input fetches module
         #self.metadata['title'] = self.fetch_module.title

@@ -1070,7 +1070,7 @@ def parse_cli_region(region_list, verbose = True):
                 'parsed {} region(s): {}'.format(len(these_regions), these_regions)
             )
         else:
-            utils.echo_error_msg(
+            utils.echo_warning_msg(
                 'failed to parse region(s), {}'.format(region_list)
             )
             

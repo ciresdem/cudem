@@ -65,153 +65,191 @@ _tidal_frames = {
            'uncertainty': 0, 'epsg': 5713},
     0000: {'name': 'crd', 'description': 'Columbia River Datum',
            'uncertainty': 0, 'epsg': 0000},
+    1: {'name': 'xgeoid20b', 'description': 'xgeoid 2020 B',
+        'uncertainty': 0, 'epsg': 1},
 }
 
 _htdp_reference_frames = {
     4269: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
            'htdp_id': 1,
-           'uncertainty': .02},
+           'uncertainty': .02,
+           'epoch': 1997.0},
     6781: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
            'htdp_id': 1,
-           'uncertainty': .02},
+           'uncertainty': .02,
+           'epoch': 1997.0},
     6319: {'name': 'NAD_83(2011/CORS96/2007)',
            'description': '(North American plate fixed)',
            'htdp_id': 1,
-           'uncertainty': .02},
+           'uncertainty': .02,
+           'epoch': 1997.0},
     6321: {'name': 'NAD_83(PA11/PACP00)',
            'description': '(Pacific plate fixed)',
            'htdp_id': 2,
-           'uncertainty': .02},
+           'uncertainty': .02,
+           'epoch': 1997.0},
     6324: {'name': 'NAD_83(MA11/MARP00)',
            'description': '(Mariana plate fixed)',
            'htdp_id': 3,
-           'uncertainty': .02},
+           'uncertainty': .02,
+           'epoch': 1997.0},
     4979: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
            'htdp_id': 4,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7815: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
            'htdp_id': 4,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7816: {'name': 'WGS_84(original)',
            'description': '(NAD_83(2011) used)',
            'htdp_id': 4,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7656: {'name': 'WGS_84(G730)',
            'description': '(ITRF91 used)',
            'htdp_id': 5,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7657: {'name': 'WGS_84(G730)',
            'description': '(ITRF91 used)',
            'htdp_id': 5,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7658: {'name': 'WGS_84(G873)',
            'description': '(ITRF94 used)',
            'htdp_id': 6,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7659: {'name': 'WGS_84(G873)',
            'description': '(ITRF94 used)',
            'htdp_id': 6,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7660: {'name': 'WGS_84(G1150)',
            'description': '(ITRF2000 used)',
            'htdp_id': 7,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7661: {'name': 'WGS_84(G1150)',
            'description': '(ITRF2000 used)',
            'htdp_id': 7,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7662: {'name': 'WGS_84(G1674)',
            'description': '(ITRF2008 used)',
            'htdp_id': 8,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7663: {'name': 'WGS_84(G1674)',
            'description': '(ITRF2008 used)',
            'htdp_id': 8,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7664: {'name': 'WGS_84(G1762)',
            'description': '(IGb08 used)',
            'htdp_id': 9,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7665: {'name': 'WGS_84(G1762)',
            'description': '(IGb08 used)',
            'htdp_id': 9,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7666: {'name': 'WGS_84(G2139)',
            'description': '(ITRF2014=IGS14=IGb14 used)',
            'htdp_id': 10,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7667: {'name': 'WGS_84(G2139)',
            'description': '(ITRF2014=IGS14=IGb14 used)',
            'htdp_id': 10,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     4910: {'name': 'ITRF88',
            'description': '',
            'htdp_id': 11,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     4911: {'name': 'ITRF89',
            'description': '',
            'htdp_id': 12,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7901: {'name': 'ITRF89',
            'description': '',
            'htdp_id': 12,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7902: {'name': 'ITRF90',
            'description': '(PNEOS90/NEOS90)',
            'htdp_id': 13,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7903: {'name': 'ITRF91',
            'description': '',
            'htdp_id': 14,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7904: {'name': 'ITRF92',
            'description': '',
            'htdp_id': 15,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7905: {'name': 'ITRF93',
            'description': '',
            'htdp_id': 16,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7906: {'name': 'ITRF94',
            'description': '',
            'htdp_id': 17,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1988.0},
     7907: {'name': 'ITRF96',
            'description': '',
            'htdp_id': 18,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1996.0},
     7908: {'name': 'ITRF97',
            'description': 'IGS97',
            'htdp_id': 19,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 1997.0},
     7909: {'name': 'ITRF2000',
            'description': 'IGS00/IGb00',
            'htdp_id': 20,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7910: {'name': 'ITRF2005',
            'description': 'IGS05',
            'htdp_id': 21,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7911: {'name': 'ITRF2008',
            'description': 'IGS08/IGb08',
            'htdp_id': 22,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7912: {'name': 'ITRF2014',
            'description': 'IGS14/IGb14',
            'htdp_id': 23,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     1322: {'name': 'ITRF2020',
            'description': 'IGS20',
            'htdp_id': 24,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
     7912: {'name': 'ELLIPSOID',
            'description': 'IGS14/IGb14/WGS84/ITRF2014 Ellipsoid',
            'htdp_id': 23,
-           'uncertainty': 0},
+           'uncertainty': 0,
+           'epoch': 2000.0},
 }
 
 _cdn_reference_frames = {
@@ -251,195 +289,37 @@ _geoids = {
     'geoid03': {'name': 'geoid 2003',
                 'uncertainty': .046},
 }
-
-## todo: allow input/output geoids
-#_geoids = ['g2018', 'g2012b', 'g1999', 'geoid09', 'geoid03']
-#_geoids = ['g2018']
-
-def set_transform(src_srs = None, dst_srs = None, region = None, verbose = True, cache_dir = None):        
-    """Set the pyproj horizontal and vertical transformations for the dataset"""
-
-    want_vertical = True
-    src_geoid = None
-    dst_geoid = 'g2018'
-    cache_dir = _vdatums_cache if cache_dir is None else cache_dir
-    if region is None:
-        utils.echo_error_msg('you must suuply a reigon')
-        sys.exit(1)
-
-    if src_srs is not None and dst_srs is not None:
-        tmp_src_srs = src_srs.split('+geoid:')
-        src_srs_ = tmp_src_srs[0]
-        src_srs = src_srs_
-        if len(tmp_src_srs) > 1:
-            src_geoid = tmp_src_srs[1]
-
-        tmp_dst_srs = dst_srs.split('+geoid:')
-        dst_srs_ = tmp_dst_srs[0]
-        dst_srs = dst_srs_
-        if len(tmp_dst_srs) > 1:
-            dst_geoid = tmp_dst_srs[1]
-
-        is_esri = False
-        in_vertical_epsg_esri = None
-        if 'ESRI' in src_srs_.upper():
-            is_esri = True
-            srs_split = src_srs_.split('+')
-            src_srs_ = srs_split[0]
-            if len(srs_split) > 1:
-                in_vertical_epsg_esri = srs_split[1]
-
-        in_crs = pyproj.CRS.from_user_input(src_srs_)
-        out_crs = pyproj.CRS.from_user_input(dst_srs_)
-
-        if in_crs.is_compound:
-            in_crs_list = in_crs.sub_crs_list
-            in_horizontal_crs = in_crs_list[0]
-            in_vertical_crs = in_crs_list[1]
-            in_vertical_name = in_vertical_crs.name
-            in_vertical_epsg = in_vertical_crs.to_epsg()
-            if in_vertical_epsg is None:
-                in_vertical_epsg = in_vertical_name
-        else:
-            in_horizontal_crs = in_crs
-            want_vertical=False
-
-        if out_crs.is_compound:            
-            out_crs_list = out_crs.sub_crs_list
-            out_horizontal_crs = out_crs_list[0]
-            out_vertical_crs = out_crs_list[1]
-            out_vertical_epsg = out_vertical_crs.to_epsg()
-        else:
-            out_horizontal_crs = out_crs
-            want_vertical=False
-            out_vertical_epsg=None
-
-        in_horizontal_epsg = in_horizontal_crs.to_epsg()
-        out_horizontal_epsg = out_horizontal_crs.to_epsg()
-
-        if (in_vertical_epsg_esri is not None and is_esri):
-            in_vertical_epsg = in_vertical_epsg_esri
-            if out_vertical_epsg is not None:
-                want_vertical = True
-
-        if want_vertical:
-            if (in_vertical_epsg == out_vertical_epsg) and src_geoid is None:
-                want_vertical = False
-
-        ## horizontal Transformation
-        try:
-            transformer = pyproj.Transformer.from_crs(in_horizontal_crs, out_horizontal_crs, always_xy=True)
-        except Exception as e:
-            utils.echo_warning_msg('could not set transformation in: {}, out: {}, {}'.format(
-                in_horizontal_crs.name, out_horizontal_crs.name, e
-            ))
-            transformer = None
-            return
-
-        if region is not None:
-            trans_region = region.copy()
-            trans_region.src_srs = out_horizontal_crs.to_proj4() #'epsg:{}'.format(out_horizontal_epsg)
-            trans_region.warp(in_horizontal_crs.to_proj4())
-
-        src_proj4 = in_horizontal_crs.to_proj4()
-        dst_proj4 = out_horizontal_crs.to_proj4()
-
-        ## vertical Transformation
-        if want_vertical:
-            vd_region = region.copy()
-            vd_region.src_srs = out_horizontal_crs.to_proj4()
-
-            vd_region.warp('epsg:4326')
-            if not vd_region.valid_p():
-                utils.echo_warning_msg('failed to generate transformation')
-                return
-
-            vd_region.zmin = None
-            vd_region.zmax = None
-            vd_region.buffer(pct=10)
-
-            ## trans_fn is the transformation grid, used in gdalwarp
-            trans_fn = os.path.join(
-                cache_dir, '_vdatum_trans_{}_{}_{}.tif'.format(
-                    in_vertical_epsg, out_vertical_epsg, vd_region.format('fn')
-                )
-            )
-
-            ## vertical transformation grid is generated in WGS84
-            if not os.path.exists(trans_fn):
-                with tqdm(
-                        desc='generating vertical transformation grid {} from {} to {}'.format(
-                            trans_fn, in_vertical_epsg, out_vertical_epsg
-                        ),
-                        leave=True
-                ) as pbar:
-                    vd_x_inc = vd_y_inc = utils.str2inc('3s')
-                    xcount, ycount, dst_gt = vd_region.geo_transform(
-                        x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
-                    )
-
-                    while (xcount <=10 or ycount <=10):
-                        vd_x_inc /= 2
-                        vd_y_inc /= 2
-                        xcount, ycount, dst_gt = vd_region.geo_transform(
-                            x_inc=vd_x_inc, y_inc=vd_y_inc, node='grid'
-                        )
-
-                    trans_fn, trans_fn_unc = VerticalTransform(
-                        'IDW', vd_region, vd_x_inc, vd_y_inc, in_vertical_epsg, out_vertical_epsg,
-                        geoid_in=src_geoid, geoid_out=dst_geoid, cache_dir=cache_dir, verbose=False
-                    ).run(outfile=trans_fn)                        
-
-            if trans_fn is not None and os.path.exists(trans_fn):
-                out_src_srs = '{} +geoidgrids={}'.format(in_horizontal_crs.to_proj4(), trans_fn)
-
-                if utils.str_or(in_vertical_epsg) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
-                    out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
-                    trans_to_meter = True
-            else:
-                utils.echo_error_msg(
-                    'failed to generate vertical transformation grid between {} and {} for this region!'.format(
-                        in_vertical_epsg, out_vertical_epsg
-                    )
-                )
-
-            in_vertical_crs = pyproj.CRS.from_user_input(out_src_srs)
-            src_proj4 = in_vertical_crs.to_proj4()
-            dst_proj4 = out_horizontal_crs.to_proj4()
-            aux_src_proj4 = in_horizontal_crs.to_proj4()
-            aux_dst_proj4 = out_horizontal_crs.to_proj4()
-            #utils.echo_msg('{} {}'.format(in_vertical_crs, out_horizontal_crs))
-            if region is not None:
-                aoi = pyproj.aoi.AreaOfInterest(region.xmin, region.ymin, region.xmax, region.ymax)
-            else:
-                aoi = None
-
-            transformer = pyproj.Transformer.from_crs(in_vertical_crs, out_horizontal_crs, always_xy=True, area_of_interest=aoi)
-
-    return(transformer)
             
 def get_vdatum_by_name(datum_name):
-    ## tidal
-    if utils.int_or(datum_name) not in _tidal_frames.keys():
-        for t in _tidal_frames.keys():
-            if datum_name.lower() in _tidal_frames[t]['name'].lower():
-                return(t)
-    else:
-        return(int(datum_name))
-    ## htdp
-    if utils.int_or(datum_name) not in _htdp_reference_frames.keys():
-        for t in _htdp_reference_frames.keys():
-            if datum_name.lower() in _htdp_reference_frames[t]['name'].lower():
-                return(t)
-    else:
-        return(int(datum_name))
-    ## cdn
-    if utils.int_or(datum_name) not in _cdn_reference_frames.keys():
-        for t in _cdn_reference_frames.keys():
-            if datum_name.lower() in _cdn_reference_frames[t]['name'].lower():
-                return(t)
-    else:
-        return(int(datum_name))
+    """return the vertical datum epsg based on the vertical datum name
+
+    e.g. 'mhw' or 'navd88', etc.
+    """
+
+    if datum_name is not None:
+        ## tidal
+        if utils.int_or(datum_name) not in _tidal_frames.keys():
+            for t in _tidal_frames.keys():
+                if datum_name.lower() in _tidal_frames[t]['name'].lower():
+                    return(t)
+        else:
+            return(int(datum_name))
+
+        ## htdp
+        if utils.int_or(datum_name) not in _htdp_reference_frames.keys():
+            for t in _htdp_reference_frames.keys():
+                if datum_name.lower() in _htdp_reference_frames[t]['name'].lower():
+                    return(t)
+        else:
+            return(int(datum_name))
+
+        ## cdn
+        if utils.int_or(datum_name) not in _cdn_reference_frames.keys():
+            for t in _cdn_reference_frames.keys():
+                if datum_name.lower() in _cdn_reference_frames[t]['name'].lower():
+                    return(t)
+        else:
+            return(int(datum_name))
 
     return(None)
 
@@ -448,39 +328,53 @@ def get_vdatum_by_name(datum_name):
 ##
 ## generate a vertical transformation grid based on input/output vertical epsg
 ## also generate an associated uncertainty grid
+## [tidal] [-> lmsl] [-> geoid] -> ellipsoid (htdp) -> ellipsoid (htdp) [-> geoid] [-> lmsl] [-> tidal]
 ## ==============================================
-class VerticalTransform:    
+class VerticalTransform:
+    """generate a vertical transformation grid based on input/output vertical epsg
+
+    also generate an associated uncertainty grid
+
+    mode refers to the waffles gridding module to use
+    wm is for warp-memory, set for large grids
+    epsg_in and epsg_out can be either the common vertical datum name or an epsg #
+    geoid_in and geoid_out should be the geoid file-name, such as 'g2018'
+    """
+    
     def __init__(self, mode, src_region, src_x_inc, src_y_inc, epsg_in, epsg_out,
                  geoid_in=None, geoid_out='g2018', node='pixel', verbose=True,
                  wm = None, cache_dir=None):
         self.src_region = src_region
         self.src_x_inc = utils.str2inc(src_x_inc)
         self.src_y_inc = utils.str2inc(src_y_inc)
-        self.epsg_in = self._datum_by_name(str(epsg_in))
-        self.epsg_out = self._datum_by_name(str(epsg_out))
-        self.geoid_in = geoid_in
+        self.epsg_in = get_vdatum_by_name(str(epsg_in))
+        self.epsg_out = get_vdatum_by_name(str(epsg_out))
+        self.geoid_in = geoid_in #'geoid09'
         self.geoid_out = geoid_out
         self.cache_dir = _vdatums_cache if cache_dir is None else cache_dir
         self.verbose = verbose
         self.xcount, self.ycount, self.gt = self.src_region.geo_transform(
             x_inc=self.src_x_inc, y_inc=self.src_y_inc, node='grid'
         )
-        #utils.echo_msg('transform: {} {}'.format(self.xcount, self.ycount))
         self.ref_in, self.ref_out = self._frames(self.epsg_in, self.epsg_out)
         self.node = node
         self.mode = mode
         self.wm = wm
-        #self.geoid_in = 'geoid09'
         
     def _frames(self, epsg_in, epsg_out):
+        """determine the input/output vertical datum frame that of the input/output epsg
+
+        current frames are 'tidal' (noaa vdatum), 'cdn' (proj4 world datums), and 'htdp' (htdp reference frames)
+        """
+
+        ref_in = None
+        ref_out = None
         if epsg_in in _tidal_frames.keys():
             ref_in = 'tidal'
         elif epsg_in in _htdp_reference_frames.keys():
             ref_in = 'htdp'
         elif epsg_in in _cdn_reference_frames.keys():
             ref_in = 'cdn'
-        else:
-            ref_in = None
             
         if epsg_out in _tidal_frames.keys():
             ref_out = 'tidal'
@@ -488,50 +382,31 @@ class VerticalTransform:
             ref_out = 'htdp'
         elif epsg_out in _cdn_reference_frames.keys():
             ref_out = 'cdn'
-        else:
-            ref_out = None
 
         return(ref_in, ref_out)
 
-    def _datum_by_name(self, datum_name):
-        ## tidal
-        if utils.int_or(datum_name) not in _tidal_frames.keys():
-            for t in _tidal_frames.keys():
-                if datum_name.lower() in _tidal_frames[t]['name'].lower():
-                    return(t)
-        else:
-            return(int(datum_name))
-        
-        ## htdp
-        if utils.int_or(datum_name) not in _htdp_reference_frames.keys():
-            for t in _htdp_reference_frames.keys():
-                if datum_name.lower() in _htdp_reference_frames[t]['name'].lower():
-                    return(t)
-        else:
-            return(int(datum_name))
-        
-        ## cdn
-        if utils.int_or(datum_name) not in _cdn_reference_frames.keys():
-            for t in _cdn_reference_frames.keys():
-                if datum_name.lower() in _cdn_reference_frames[t]['name'].lower():
-                    return(t)
-        else:
-            return(int(datum_name))
-        
-        return(None)
-
     def _feet_to_meters(self):
+        """return an array of the vertical datum transformation grid size with the 
+        transformation from feet to meters
+        """
+        
         c_array = np.zeros((self.ycount, self.xcount))
         c_array[:] = .3048
         return(c_array)
 
     def _meters_to_feet(self):
+        """return an array of the vertical datum transformation grid size with the 
+        transformation from meters to feet
+        """
+        
         c_array = np.zeros((self.ycount, self.xcount))
         c_array[:] = 3.28084
         return(c_array)
 
     ## ==============================================
     ## tidal transformation (VDatum)
+    ## all tidal datums from VDatum transform to 'tss'
+    ## TODO: include tide gagues from around the world if outside of VDatum coverage
     ## ==============================================
     def _tidal_transform(self, vdatum_tidal_in, vdatum_tidal_out):
         """generate tidal transformation grid
@@ -539,13 +414,15 @@ class VerticalTransform:
         This will fail over land or outside of US waters...
         """
 
-        from cudem import waffles
+        from cudem import waffles # we want waffles for some interpolation
 
+        ## fetch the input tidal datum from VDatum
         v_in = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_in, verbose=self.verbose)
         v_in._outdir = self.cache_dir
         v_in.run()
 
         if vdatum_tidal_out is not None:
+            ## fetch the output tidal datum from VDatum if necessary
             v_out = fetches.VDATUM(src_region=self.src_region, datatype=vdatum_tidal_out, verbose=self.verbose)
             v_out._outdir = self.cache_dir
             v_out.run()
@@ -564,7 +441,9 @@ class VerticalTransform:
             #     cg, cv = self._cdn_transform(name='geoid', geoid='geoid09', invert=False)
             # else:
             #     cg = np.zeros((self.ycount, self.xcount))
-                
+
+            ## grid the input tidal datum grid from VDatum to the region to fill gaps and make
+            ## it the same size/shape as the output transformation grid
             if vdatum_tidal_in != 5714 and vdatum_tidal_in != 'msl': 
                 _trans_in = waffles.WaffleFactory(
                     mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_in)], src_region=self.src_region,
@@ -573,10 +452,10 @@ class VerticalTransform:
                 )._acquire_module()
                 _trans_in.initialize()
                 _trans_in.generate()
-                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
+                ## extract the array from the gridded tidal datum grid
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
+                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
                 #_trans_in_array += cg
-                #print(_trans_in_array.shape)
                 if _trans_in_array is None:
                     _trans_in = None
                 else:
@@ -594,15 +473,19 @@ class VerticalTransform:
             _trans_out = None
             #return(np.zeros( (self.ycount, self.xcount) ), None)
         else:
+            ## grid the output tidal datum grid from VDatum to the region to fill gaps and make
+            ## it the same size/shape as the output transformation grid
             if vdatum_tidal_out != 5714 and vdatum_tidal_out != 'msl':
-                _trans_out = waffles.WaffleFactory(mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
-                                                   xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
-                                                   cache_dir=self.cache_dir, node='pixel', verbose=self.verbose)._acquire_module()
+                _trans_out = waffles.WaffleFactory(
+                    mod=self.mode, data=['vdatum:datatype={}'.format(vdatum_tidal_out)], src_region=self.src_region,
+                    xinc=self.src_x_inc, yinc=self.src_y_inc, name='{}'.format(vdatum_tidal_out), dst_srs='epsg:4326',
+                    cache_dir=self.cache_dir, node='pixel', verbose=self.verbose
+                )._acquire_module()
                 _trans_out.initialize()
                 _trans_out.generate()
-
-                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
+                ## extract the array from the gridded tidal datum grid
                 _trans_out_array, _trans_out_infos = gdalfun.gdal_get_array(_trans_out.fn)
+                utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
                 if _trans_out_array is None:
                     _trans_out = None
                 else:
@@ -614,12 +497,12 @@ class VerticalTransform:
             if _trans_out is None:
                 return(np.zeros( (self.ycount, self.xcount) ), None)
             else:
-                return(_trans_out_array*-1, self._datum_by_name(vdatum_tidal_out))
+                return(_trans_out_array*-1, get_vdatum_by_name(vdatum_tidal_out))
         else:
             if _trans_out is None:
-                return(_trans_in_array, self._datum_by_name('msl'))#vdatum_tidal_out))
+                return(_trans_in_array, get_vdatum_by_name('msl'))#vdatum_tidal_out))
             else:
-                return(_trans_in_array - _trans_out_array, self._datum_by_name(vdatum_tidal_out))
+                return(_trans_in_array - _trans_out_array, get_vdatum_by_name(vdatum_tidal_out))
 
     ## ==============================================
     ## "CDN" transformation (proj)
@@ -683,7 +566,7 @@ class VerticalTransform:
                             _tmp_array, _tmp_infos = gdalfun.gdal_get_array(
                                 '_{}'.format(os.path.basename(_trans_grid))
                             )
-                            utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
+                            #utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
 
@@ -706,23 +589,24 @@ class VerticalTransform:
             return(np.zeros( (self.ycount, self.xcount) ), epsg_out)
         else:
             htdp = htdpfun.HTDP(verbose=self.verbose)
-            # if self.verbose:
-            #     utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
+            #if self.verbose:
+            utils.echo_msg('{}: HTDP: {}->{}'.format(self.src_region, epsg_in, epsg_out))
 
             griddef = (self.src_region.xmax, self.src_region.ymax,
                        self.src_region.xmin, self.src_region.ymin,
                        self.xcount, self.ycount)
 
             grid = htdp._new_create_grid(griddef)
-
             htdp._write_grid(grid, '_tmp_input.xyz')
             htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz',
-                                _htdp_reference_frames[epsg_in]['htdp_id'], 2012.0,
-                                _htdp_reference_frames[epsg_out]['htdp_id'], 2012.0)
+                                #_htdp_reference_frames[epsg_in]['htdp_id'], _htdp_reference_frames[epsg_in]['epoch'],
+                                #_htdp_reference_frames[epsg_out]['htdp_id'], _htdp_reference_frames[epsg_in]['epoch'])
+                                _htdp_reference_frames[7912]['htdp_id'], 1997., #_htdp_reference_frames[7912]['epoch'],
+                                _htdp_reference_frames[4269]['htdp_id'], 1997.) #_htdp_reference_frames[4269]['epoch'])
             htdp.run('_tmp_control.txt')
 
             out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
-            utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
+            #utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
             return(out_grid, epsg_out)
 
     ## ==============================================
@@ -733,6 +617,8 @@ class VerticalTransform:
         unc_array = np.zeros( (self.ycount, self.xcount) )
         if self.epsg_in == 0:
             self.geoid_in = 'geoid09'
+        # if self.epsg_in in _tidal_frames.keys():
+        #     self.geoid_in = 'xgeoid20b'
             
         if self.geoid_in is not None:# and self.geoid_out is not None:
             if self.epsg_in == 0:
@@ -746,11 +632,11 @@ class VerticalTransform:
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
 
-        #utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
+        utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
-            #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
+            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            #utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
+            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
@@ -780,6 +666,7 @@ class VerticalTransform:
                 if ref_out == 'cdn':
                     ## todo: only do geoid transforms with 5703 (navd88)
                     tmp_trans, cv = self._cdn_transform(epsg=epsg_in, invert=False)
+
                     #if epsg_in == 5703:
                     #    cg, _ = self._cdn_transform(name='geoid', geoid=self.geoid_out, invert=False)
                     #    tmp_trans = tmp_trans + cg
@@ -796,14 +683,6 @@ class VerticalTransform:
                     
                 tmp_trans = np.zeros( (self.ycount, self.xcount) )
                 epsg_in = epsg_out
-
-            #print(unc_array)
-            #print(trans_array.shape)
-            #print(tmp_trans.shape)
-            #print(tmp_trans_geoid.shape)
-            #print(trans_array)
-            #print(tmp_trans)
-            #print(tmp_trans_geoid)
             
             trans_array = trans_array + tmp_trans + tmp_trans_geoid
             tmp_trans = None
@@ -1116,16 +995,15 @@ def vdatums_cli(argv = sys.argv):
         utils.echo_error_msg('Error: {} is not a valid file'.format(src_grid))
     else:
         src_infos = gdalfun.gdal_infos(src_grid)
-
         src_region = regions.Region().from_geo_transform(src_infos['geoT'], src_infos['nx'], src_infos['ny'])
         src_horz, src_vert = gdalfun.split_srs(gdalfun.gdal_get_srs(src_grid))
         trans_region = src_region.copy()
         
-        #if src_horz is not None:
-        src_region.src_srs = src_horz
+        if src_horz is not None:
+            src_region.src_srs = src_horz
         
-        trans_region.src_srs = src_horz
-        trans_region.warp()
+            trans_region.src_srs = src_horz
+            trans_region.warp()
         #if trans_region is None:
         #    trans_region = src_region.copy()
         #trans_region.xmin = None

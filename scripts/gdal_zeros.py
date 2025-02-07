@@ -30,7 +30,8 @@ from osgeo import gdal
 import numpy as np
 from cudem import utils
 from cudem import regions
-from cudem import demfun
+from cudem import gdalfun
+from cudem import srsfun
 
 _version = '0.0.1'
 _usage = '''gdal_zeros.py ({}): generate a zero grid
@@ -52,7 +53,7 @@ def verbosePrint(xcount, ycount, extent, cellsize, outf):
 def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
     '''copy a gdal grid and make a nodata grid'''
     ds = gdal.Open(srcfile)
-    ds_config = demfun.gather_infos(ds)
+    ds_config = gdalfun.gdal_infos(ds)
     gt = ds_config['geoT']
 
     dsArray = np.zeros([ds_config['ny'],ds_config['nx']])
@@ -69,9 +70,9 @@ def createNullCopy(srcfile, outfile, nodata, outformat, verbose, overwrite):
 def createGrid(outfile, extent, cellsize, nodata, outformat, verbose, overwrite):
     '''create a nodata grid'''
     xcount, ycount, gt = extent.geo_transform(x_inc = cellsize)
-    ds_config = demfun.set_infos(xcount, ycount, xcount * ycount, gt, utils.sr_wkt(4326), gdal.GDT_Float32, nodata, outformat)
+    ds_config = gdalfun.gdal_set_infos(xcount, ycount, xcount * ycount, gt, srsfun.osr_wkt(4326), gdal.GDT_Float32, nodata, outformat, {}, 1)
     zeroArray = np.zeros( (ycount, xcount) )
-    utils.gdal_write(nullArray, outfile, ds_config)
+    gdalfun.gdal_write(zeroArray, outfile, ds_config)
 
 if __name__ == '__main__':
 
