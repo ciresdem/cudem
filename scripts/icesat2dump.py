@@ -29,7 +29,7 @@ from cudem import utils
 from cudem import fetches
 from cudem import xyzfun
 
-def read_atl_data(f, laser_num, orientation, f08 = None, f24 = None, water_surface = 'geoid'):
+def read_atl_data(f, laser_num, orientation = None, f08 = None, f24 = None, water_surface = 'geoid'):
     """Read data from an ATL03 file
 
     Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
@@ -39,7 +39,8 @@ def read_atl_data(f, laser_num, orientation, f08 = None, f24 = None, water_surfa
     surface is 'mean_tide', 'geoid' or 'ellipsoid'
     """
 
-    #orientation = f['/orbit_info/sc_orient'][0]
+    if orientation is None:
+        orientation = f['/orbit_info/sc_orient'][0]
 
     ## selects the strong beams only [we can include weak beams later on]
     orientDict = {0:'l', 1:'r', 21:'error'}
@@ -121,13 +122,14 @@ def read_atl_data(f, laser_num, orientation, f08 = None, f24 = None, water_surfa
     ## Read in the atl24 data
     if f24 is not None:        
         atl24_classed_pc_flag  = f24['/' + laser + '/class_ph'][...,]
+        atl24_flags  = f24['/' + laser + '/flags'][...,]
         atl24_classed_pc_indx = f24['/' + laser + '/index_ph'][...,]
         atl24_longitude = f24['/' + laser + '/lon_ph'][...,]
         atl24_latitude = f24['/' + laser + '/lat_ph'][...,]
         atl24_surface_h = f24['/' + laser + '/surface_h'][...,]
         atl24_ellipse_h = f24['/' + laser + '/ellipse_h'][...,]
         atl24_ortho_h = f24['/' + laser + '/ortho_h'][...,]
-
+        
         class_40_mask = atl24_classed_pc_flag == 40
         ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
 
@@ -136,7 +138,7 @@ def read_atl_data(f, laser_num, orientation, f08 = None, f24 = None, water_surfa
         latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
         photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
         photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
-        
+
     
     ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
     if water_surface == 'mean_tide':
@@ -220,20 +222,34 @@ else:
     atl24 = None
 
 # we'll return ground (1) and bathymetry (40)
-classes = [1, 40]
+classes = [40]
 
-for laser_num in range(1, 3):
-    for orientation_num in range(0, 1):
-        dataset = read_atl_data(atl03, str(laser_num), orientation_num, f08=atl08, f24=atl24)
+# laser
+laser_num = utils.int_or(sys.argv[2])
+if laser_num is not None:
+    laser_num = 1 if laser_num < 1 else 3 if laser_num > 3 else laser_num
+    
+#for laser_num in range(1, 4):
+#for orientation_num in range(0, 2):
+dataset = read_atl_data(atl03, str(laser_num), orientation=None, f08=atl08, f24=atl24)
 
-        ## return only classes mentioned in `classes`
-        dataset = dataset[(np.isin(dataset['ph_h_classed'], classes))]
+## return only classes mentioned in `classes`
+dataset = dataset[(np.isin(dataset['ph_h_classed'], classes))]
 
-        ## dump the data to xyz
-        dataset = np.vstack((dataset['longitude'], dataset['latitude'], dataset['photon_height'])).transpose()
-        for point in dataset:
-            this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2])
-            this_xyz.dump(dst_port=sys.stdout, encode=False, include_w=False, include_u=False)
+orientation = atl03['/orbit_info/sc_orient'][0]
+        
+orientDict = {0:'l', 1:'r', 21:'error'}
+laser = 'gt' + str(laser_num) + orientDict[orientation]
+
+out_fn = '{}_{}.xyz'.format(utils.fn_basename2(atl03_fn), laser)
+out_f = open(out_fn, 'w')
+## dump the data to xyz
+dataset = np.vstack((dataset['longitude'], dataset['latitude'], dataset['photon_height'])).transpose()
+for point in dataset:
+    this_xyz = xyzfun.XYZPoint(x=point[0], y=point[1], z=point[2])
+    this_xyz.dump(dst_port=out_f, encode=False, include_w=False, include_u=False)
+
+out_f.close()
 
 # close h5 objs
 atl03.close()

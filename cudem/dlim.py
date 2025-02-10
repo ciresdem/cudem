@@ -3876,8 +3876,8 @@ class IceSat2File(ElevationDataset):
     1 - ground surface (ATL08)
     2 - canopy (ATL08)
     3 - canopy top (ATL08)
-    4 - bathymetry floor surface (CShelph, future ATL24)
-    5 - bathymetry water surface (OSM coastline)
+    40 - bathymetry floor surface (CShelph, ATL24)
+    41 - bathymetry water surface (OSM coastline, ATL24)
     6 - ice surface (ATL06) (unused for now, just planning ahead for possible future ATL06 integration)
     7 - built structure (OSM or Bing)
     8 - "urban" (WSF, if used)
@@ -3911,65 +3911,64 @@ class IceSat2File(ElevationDataset):
         self.want_watermask = classify_water
         self.reject_failed_qa = reject_failed_qa
         
-    # def init_atl_03_h5(self):
-    #     """initialize the atl03 and atl08 h5 files"""
-
-    #     #try:
-    #     self.atl_03_f = h5.File(self.atl_03_fn, 'r')
-    #     if 'short_name' not in self.atl_03_f.attrs.keys():
-    #         utils.echo_error_msg('this file does not appear to be an ATL file')
-    #         self.atl_03_f.close()
-    #         return(None)
-    #     # except Exception as e:
-    #     #     utils.echo_warning_msg('could not open {}, {}'.format(self.atl_03_fn, e))
-    #     #     return(None)
-            
     def init_atl_h5(self):
-        """initialize the atl03 and atl08 h5 files"""
+        """initialize all the relevant ATL h5 files"""
 
-        self.atl_03_f = None
-        self.atl_08_f = None
-        self.atl_24_f = None
-        self.atl_03_f = h5.File(self.atl_03_fn, 'r')
-        if 'short_name' not in self.atl_03_f.attrs.keys():
-            raise UnboundLocalError('this file does not appear to be an ATL03 file')
+        self.atl03_f = None
+        self.atl08_f = None
+        self.atl24_f = None
+
+        if self.atl03_fn is not None and os.path.exists(self.atl03_fn):
+            self.atl03_f = h5.File(self.atl03_fn, 'r')            
+            if 'short_name' not in self.atl03_f.attrs.keys():
+                raise UnboundLocalError('this file does not appear to be an ATL03 file')
         
-        if self.reject_failed_qa:
-            if self.atl_03_f['/quality_assessment/qa_granule_pass_fail'][...,][0] != 0:
-                raise UnboundLocalError(
-                    'this granule has failed qa {}'.format(
-                        self.atl_03_f['/quality_assessment/qa_granule_pass_fail'][...,][0]
+            if self.reject_failed_qa:
+                if self.atl03_f['/quality_assessment/qa_granule_pass_fail'][...,][0] != 0:
+                    raise UnboundLocalError(
+                        'this granule has failed qa {}'.format(
+                            self.atl03_f['/quality_assessment/qa_granule_pass_fail'][...,][0]
+                        )
                     )
-                )
         
-        if self.atl_08_fn is not None:
-            self.atl_08_f = h5.File(self.atl_08_fn, 'r')        
-            if 'short_name' not in self.atl_08_f.attrs.keys():
+        if self.atl08_fn is not None and os.path.exists(self.atl08_fn):
+            self.atl08_f = h5.File(self.atl08_fn, 'r')
+            if 'short_name' not in self.atl08_f.attrs.keys():
                 utils.echo_warning_msg('this file does not appear to be an ATL file')
-                self.atl_08_f.close()
+                self.atl08_f.close()
+
+        if self.atl24_fn is not None and os.path.exists(self.atl24_fn):
+            self.atl24_f = h5.File(self.atl24_fn, 'r')
+            if 'short_name' not in self.atl24_f.attrs.keys():
+                utils.echo_warning_msg('this file does not appear to be an ATL file')
+                self.atl24_f.close()
 
     def close_atl_h5(self):
         """close all open atl files"""
         
-        self.atl_03_fn = self.at_08_fn = None
-        if self.atl_03_f is not None:
-            self.atl_03_f.close()
+        self.atl03_fn = self.atl08_fn = self.atl24_fn = None
+        if self.atl03_f is not None:
+            self.atl03_f.close()
             
-        if self.atl_08_f is not None:
-            self.atl_08_f.close()
+        if self.atl08_f is not None:
+            self.atl08_f.close()
+
+        if self.atl24_f is not None:
+            self.atl24_f.close()
             
     def yield_ds(self):
         """yield the points from the dataset.
 
         In this case, it will yield a pandas dataframe
         """
-        
-        self.atl_03_fn = self.fn
+
+        dataset = None
+        self.atl03_fn = self.fn
+        self.atl08_fn = None
+        self.atl24_fn = None
         if len(self.classes) > 0:
-            atl_08_result = self.fetch_atl_08()
-            self.atl_08_fn = atl_08_result
-        else:
-            self.atl_08_fn = None
+            atl08_result = self.fetch_atl08()
+            self.atl08_fn = atl08_result
 
         try:
             self.init_atl_h5()
@@ -3978,8 +3977,6 @@ class IceSat2File(ElevationDataset):
             self.close_atl_h5()
             return
 
-        dataset = None
-        
         ## fetch and process buildings, if wanted
         this_bing = None
         if self.want_buildings:
@@ -4032,7 +4029,6 @@ class IceSat2File(ElevationDataset):
 
             ## keep only photons with a classification mentioned in `self.classes`
             if len(self.classes) > 0:
-                #print(self.classes)
                 dataset = dataset[(np.isin(dataset['ph_h_classed'], self.classes))]
                 
             if dataset is None or len(dataset) == 0:
@@ -4047,39 +4043,39 @@ class IceSat2File(ElevationDataset):
 
         self.close_atl_h5()
 
-    def fetch_atl_08(self):
-        """fetch the associated atl08 file"""
+    def fetch_atl08(self):
+        """fetch the associated ATL08 file"""
         
-        atl_08_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
-        this_atl_08 = fetches.IceSat2(
+        atl08_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+        this_atl08 = fetches.IceSat2(
             src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08',
-            filename_filter=atl_08_filter
+            filename_filter=atl08_filter
         )
-        this_atl_08.run()
-        if len(this_atl_08.results) == 0:
-            utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl_08_filter))
+        this_atl08.run()
+        if len(this_atl08.results) == 0:
+            utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl08_filter))
             return(None)
         else:
-            if this_atl_08.fetch(this_atl_08.results[0], check_size=True) == 0:
-                return(os.path.join(this_atl_08._outdir, this_atl_08.results[0][1]))
+            if this_atl08.fetch(this_atl08.results[0], check_size=True) == 0:
+                return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
 
-    def fetch_atl_24(self):
-        """fetch the associated atl08 file"""
+    def fetch_atl24(self):
+        """fetch the associated ATL24 file"""
         
-        atl_24_filter = utils.fn_basename2(self.atl_03_fn).split('ATL03_')[1]
+        atl24_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
         this_atl24 = fetches.IceSat2(
             src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL24',
-            filename_filter=atl_24_filter
+            filename_filter=atl24_filter
         )
         this_atl24.run()
         if len(this_atl24.results) == 0:
-            utils.echo_warning_msg('could not locate associated atl24 file for {}'.format(atl_24_filter))
+            utils.echo_warning_msg('could not locate associated atl24 file for {}'.format(atl24_filter))
             return(None)
         else:
             if this_atl24.fetch(this_atl24.results[0], check_size=True) == 0:
                 return(os.path.join(this_atl24._outdir, this_atl24.results[0][1]))            
     
-    def read_atl_data(self, laser_num):
+    def read_atl_data(self, laser_num, orientation = None):
         """Read data from an ATL03 file
 
         Adapted from 'cshelph' https://github.com/nmt28/C-SHELPh.git 
@@ -4089,39 +4085,40 @@ class IceSat2File(ElevationDataset):
         surface is 'mean_tide', 'geoid' or 'ellipsoid'
         """
 
-        orientation = self.atl_03_f['/orbit_info/sc_orient'][0]
-        
+        if orientation is None:
+            orientation = self.atl03_f['/orbit_info/sc_orient'][0]
+            
         ## selects the strong beams only [we can include weak beams later on]
         orientDict = {0:'l', 1:'r', 21:'error'}
         laser = 'gt' + laser_num + orientDict[orientation]
 
         ## for 'subsets', where heights don't come through
-        if 'heights' not in self.atl_03_f['/{}'.format(laser)].keys():
+        if 'heights' not in self.atl03_f['/{}'.format(laser)].keys():
             return(None)
         
         ## Read in the required photon level data
-        photon_h = self.atl_03_f['/' + laser + '/heights/h_ph'][...,]
-        latitude = self.atl_03_f['/' + laser + '/heights/lat_ph'][...,]
-        longitude = self.atl_03_f['/' + laser + '/heights/lon_ph'][...,]
-        ph_count = self.atl_03_f['/' + laser + '/heights/ph_id_count'][...,]
-        conf = self.atl_03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
-        qual = self.atl_03_f['/' + laser + '/heights/quality_ph/'][...,0]
-        dist_ph_along = self.atl_03_f['/' + laser + '/heights/dist_ph_along'][...,]
+        photon_h = self.atl03_f['/' + laser + '/heights/h_ph'][...,]
+        latitude = self.atl03_f['/' + laser + '/heights/lat_ph'][...,]
+        longitude = self.atl03_f['/' + laser + '/heights/lon_ph'][...,]
+        ph_count = self.atl03_f['/' + laser + '/heights/ph_id_count'][...,]
+        conf = self.atl03_f['/' + laser + '/heights/signal_conf_ph/'][...,0]
+        qual = self.atl03_f['/' + laser + '/heights/quality_ph/'][...,0]
+        dist_ph_along = self.atl03_f['/' + laser + '/heights/dist_ph_along'][...,]
         this_N = latitude.shape[0]
 
         ## Read in the geolocation level data
-        segment_ph_cnt = self.atl_03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
-        segment_id = self.atl_03_f['/' + laser + '/geolocation/segment_id'][...,]
-        segment_dist_x = self.atl_03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
-        ref_elev = self.atl_03_f['/' + laser + '/geolocation/ref_elev'][...,]
-        ref_azimuth = self.atl_03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
-        ref_photon_index = self.atl_03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
-        ph_index_beg = self.atl_03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
-        altitude_sc = self.atl_03_f['/' + laser + '/geolocation/altitude_sc'][...,]
+        segment_ph_cnt = self.atl03_f['/' + laser + '/geolocation/segment_ph_cnt'][...,]
+        segment_id = self.atl03_f['/' + laser + '/geolocation/segment_id'][...,]
+        segment_dist_x = self.atl03_f['/' + laser + '/geolocation/segment_dist_x'][...,]
+        ref_elev = self.atl03_f['/' + laser + '/geolocation/ref_elev'][...,]
+        ref_azimuth = self.atl03_f['/' + laser + '/geolocation/ref_azimuth'][...,]
+        ref_photon_index = self.atl03_f['/' + laser + '/geolocation/reference_photon_index'][...,]
+        ph_index_beg = self.atl03_f['/' + laser + '/geolocation/ph_index_beg'][...,]
+        altitude_sc = self.atl03_f['/' + laser + '/geolocation/altitude_sc'][...,]
 
         ## Read in the geoid data
-        photon_geoid = self.atl_03_f['/' + laser + '/geophys_corr/geoid'][...,]
-        photon_geoid_f2m = self.atl_03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
+        photon_geoid = self.atl03_f['/' + laser + '/geophys_corr/geoid'][...,]
+        photon_geoid_f2m = self.atl03_f['/' + laser + '/geophys_corr/geoid_free2mean'][...,]
 
         ## Create a dictionary with (segment_id --> index into ATL03 photons)
         ## lookup pairs, for the starting photon of each segment
@@ -4166,19 +4163,19 @@ class IceSat2File(ElevationDataset):
         h_altitude_sc_dict = dict(zip(segment_id, altitude_sc))
         ph_altitude_sc = np.array(list(map((lambda pid: h_altitude_sc_dict[pid]), ph_segment_ids)))#.astype(float)
 
-        ## Read in the atl08 data
-        if self.atl_08_f is not None:
+        ## Read in the ATL08 data
+        if self.atl08_f is not None:
             ## classed flag (signal_photons)
-            atl_08_classed_pc_flag  = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_flag'][...,]
-            atl_08_ph_segment_id = self.atl_08_f['/' + laser + '/signal_photons/ph_segment_id'][...,] # photon src 20 m seg id
-            atl_08_classed_pc_indx = self.atl_08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
+            atl08_classed_pc_flag  = self.atl08_f['/' + laser + '/signal_photons/classed_pc_flag'][...,]
+            atl08_ph_segment_id = self.atl08_f['/' + laser + '/signal_photons/ph_segment_id'][...,] # photon src 20 m seg id
+            atl08_classed_pc_indx = self.atl08_f['/' + laser + '/signal_photons/classed_pc_indx'][...,]
 
-            ## set the classifications from atl08
-            atl_08_segment_id_msk = [True if x in segment_id else False for x in atl_08_ph_segment_id]
-            atl_08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl_08_ph_segment_id[atl_08_segment_id_msk])))
-            atl_08_ph_index = np.array(atl_08_ph_segment_indx + (atl_08_classed_pc_indx[atl_08_segment_id_msk] - 1), dtype=int)
-            class_mask = atl_08_ph_index < len(ph_segment_ids)
-            ph_h_classed[atl_08_ph_index[class_mask]] = atl_08_classed_pc_flag[atl_08_segment_id_msk][class_mask]
+            ## set the classifications from ATL08
+            atl08_segment_id_msk = [True if x in segment_id else False for x in atl08_ph_segment_id]
+            atl08_ph_segment_indx = np.array(list(map((lambda pid: segment_index_dict[pid]), atl08_ph_segment_id[atl08_segment_id_msk])))
+            atl08_ph_index = np.array(atl08_ph_segment_indx + (atl08_classed_pc_indx[atl08_segment_id_msk] - 1), dtype=int)
+            class_mask = atl08_ph_index < len(ph_segment_ids)
+            ph_h_classed[atl08_ph_index[class_mask]] = atl08_classed_pc_flag[atl08_segment_id_msk][class_mask]
 
             ## old from IVERT
             # dict_success = False
@@ -4199,11 +4196,25 @@ class IceSat2File(ElevationDataset):
             # atl_08_ph_index = np.array(atl_08_ph_segment_indx + atl_08_classed_pc_indx - 1 , dtype=int)
             # ph_h_classed[atl_08_ph_index] = atl_08_classed_pc_flag[atl_08_segment_id_msk]            
 
-        ## Read in the atl24 data
-        if self.atl_24_f is not None:
-            atl_08_classed_pc_flag  = self.atl_24_f['/' + laser + '/class_ph'][...,]
-            atl_08_ph_segment_id = self.atl_24_f['/' + laser + '/index_seg'][...,] # photon src 20 m seg id
-            atl_08_classed_pc_indx = self.atl_24_f['/' + laser + '/index_ph'][...,]
+        ## Read in the ATL24 data
+        ## todo: check re subsets
+        if self.atl24_f is not None:
+            atl24_classed_pc_flag  = self.atl24_f['/' + laser + '/class_ph'][...,]
+            atl24_classed_pc_indx = self.atl24_f['/' + laser + '/index_ph'][...,]
+            atl24_longitude = self.atl24_f['/' + laser + '/lon_ph'][...,]
+            atl24_latitude = self.atl24_f['/' + laser + '/lat_ph'][...,]
+            atl24_surface_h = self.atl24_f['/' + laser + '/surface_h'][...,]
+            atl24_ellipse_h = self.atl24_f['/' + laser + '/ellipse_h'][...,]
+            atl24_ortho_h = self.atl24_f['/' + laser + '/ortho_h'][...,]
+
+            class_40_mask = atl24_classed_pc_flag == 40
+            ph_h_classed[atl24_classed_pc_indx] = atl24_classed_pc_flag
+
+            # we also need to change the lon/lat/height values to the updated bathymetry values (we'll just do it to class 40)
+            longitude[atl24_classed_pc_indx[class_40_mask]] = atl24_longitude[class_40_mask]
+            latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
+            photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
+            photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
             
         ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
         if self.water_surface == 'mean_tide':
@@ -4235,13 +4246,13 @@ class IceSat2File(ElevationDataset):
             try:
                 if 'gtx' in col:
                     _col = col.replace('/gtx', '/' + laser)
-                    col_arr = self.atl_03_f[_col][...,]                
+                    col_arr = self.atl03_f[_col][...,]                
                     if 'heights' not in _col: 
                         col_dict = dict(zip(segment_id, col_arr))
                         col_arr = np.array(list(map((lambda pid: col_dict[pid]), ph_segment_ids)))
                 else:
                     col_arr = np.empty(photon_h.shape, dtype='object')
-                    col_arr[:] = self.atl_03_f[col][...,]
+                    col_arr[:] = self.atl03_f[col][...,]
 
                 extra_dataset = pd.DataFrame(
                     {self.columns[col]: col_arr},
@@ -4262,6 +4273,7 @@ class IceSat2File(ElevationDataset):
 
         This uses C-Shelph to locate, extract and process bathymetric photons.
         This function is adapted from the C-Shelph CLI
+        Depreciated once ATL24 are online
         """
         
         water_temp = utils.float_or(water_temp)
