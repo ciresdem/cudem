@@ -442,12 +442,14 @@ class Outliers(Grits):
             p, k, pp = self.rough_q(src_ds)
             if self.percentile is None:
                 self.percentile = p
-                
+
+            utils.echo_msg_bold(self.percentile)
             if self.k is None:
                 if np.isnan(k):
                     k = 1.5
                 else:
                     self.k = k
+            utils.echo_msg_bold(self.k)
             
         if self.percentile is None or np.isnan(self.percentile):
             self.percentile = 75
@@ -814,7 +816,8 @@ class Outliers(Grits):
         pk_ds, pk_fn = self.gdal_dem(input_ds=ds_ds, var='TPI')
         pk_arr = pk_ds.GetRasterBand(1).ReadAsArray().astype(float)
         pk_arr[(pk_arr == self.ds_config['ndv']) | (pk_arr == -9999) ] = np.nan
-
+        pk_arr[np.isinf(pk_arr)] = np.nan
+        
         if np.all(np.isnan(pk_arr)):
             ds_ds = pk_ds = pk_arr = None
             utils.remove_glob(pk_fn, ds_fn)
@@ -823,6 +826,7 @@ class Outliers(Grits):
         med_pk = np.nanmedian(pk_arr)
         m_pk = np.nanmean(pk_arr)
         std_pk = np.nanstd(pk_arr)
+
         # if std_pk == 0 or med_pk == 0:
         #     pk_arr = pk_ds = ds_ds = None
         #     utils.remove_glob(pk_fn, ds_fn)
@@ -931,7 +935,6 @@ class Outliers(Grits):
             self.init_chunks(src_ds=src_ds)
             self.init_percentiles(src_ds=src_ds)
             src_config = gdalfun.gdal_infos(src_ds)
-
             # uncertainty ds
             unc_band = None
             if self.uncertainty_mask is not None:

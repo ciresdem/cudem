@@ -2471,7 +2471,7 @@ class HydroNOS(FetchModule):
                         data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
                         
                         if self.datatype is None or 'bag' in self.datatype.lower():
-                            if feature['attributes']['BAGS_EXIST'] == 'TRUE':
+                            if feature['attributes']['BAGS_EXIST'] == 'TRUE' or feature['attributes']['BAGS_EXIST'] == 'Y':
                                 page = Fetch(data_link + 'BAG').fetch_html()
                                 bags = page.xpath('//a[contains(@href, ".bag")]/@href')
                                 #[self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join(self._outdir, 'bag', bag), 'bag']) for bag in bags]

@@ -1991,6 +1991,7 @@ class ElevationDataset:
             mm_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
             mm_ds.SetGeoTransform(dst_gt)
 
+            ## masks will crash if too many and not enough mem...
             for band_num in range(1, m_ds.RasterCount+1):
                 band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
                 if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
