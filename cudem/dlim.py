@@ -6259,6 +6259,9 @@ class HydroNOSFetcher(Fetcher):
                 self.fetches_params['mod'] = nos_fn
                 self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,'
                 self.fetches_params['src_srs'] = 'epsg:4326+5866'
+                self.fetches_params['title'] = 'NOAA NOS Hydrographic Soundings'
+                self.fetches_params['data_type'] = 'Hydrographic Soundings'
+                self.fetches_params['resolution'] = '<10m - several kilometers'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         elif result[2] == 'bag':
@@ -6272,6 +6275,9 @@ class HydroNOSFetcher(Fetcher):
                 if 'ellipsoid' not in bag_fn.lower():
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
+                    self.fetches_params['title'] = 'NOAA NOS BAG Surveys'
+                    self.fetches_params['data_type'] = 'Gridded Bathymetry'
+                    self.fetches_params['resolution'] = '<1m - ~10m'
                     self.fetches_params['explode'] = self.explode
                     yield(DatasetFactory(**self.fetches_params)._acquire_module())
 

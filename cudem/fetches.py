@@ -2420,6 +2420,15 @@ class HydroNOS(FetchModule):
         ## for dlim
         self.data_format = None # bag/xyz data are different, reset later
         self.src_srs = None # bag/xyz data are different, reset later
+
+        self.title = 'NOAA Hydrographic Surveys'
+        self.source = 'NOAA/NOS'
+        self.date = '1933 - 2024'
+        self.data_type = 'varies'
+        self.resolution = '<1m to several km'
+        self.hdatum = None
+        self.vdatum = None
+        self.url = 'https://gis_ngdc.noaa.gov/'
         
     def run(self):
         """Run the hydronos fetches module"""
