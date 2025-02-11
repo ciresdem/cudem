@@ -1407,12 +1407,12 @@ class ElevationDataset:
                 self.transform['dst_horz_crs'].to_proj4()
             )
             self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
-                '+proj=pipeline +step +proj=vgridshift +grids={} +inv'.format(self.transform['trans_fn'])
+                '+proj=pipeline +step +proj=vgridshift +grids={} +inv'.format(os.path.abspath(self.transform['trans_fn']))
                 )
         else:
             utils.echo_error_msg(
                 'failed to generate vertical transformation grid between {} and {} for this region!'.format(
-                    self.transform['src_vert_epsg'], self.transform['dst_vert_epsg']
+                    self.transform['src_vert_epsg'], os.path.abspath(self.transform['dst_vert_epsg'])
                 )
             )
             
