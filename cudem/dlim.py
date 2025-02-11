@@ -1403,7 +1403,7 @@ class ElevationDataset:
         if self.transform['trans_fn'] is not None and os.path.exists(self.transform['trans_fn']):
             self.transform['pipeline'] = '+proj=pipeline +step {} +inv +step +proj=vgridshift +grids={} +inv +step {}'.format(
                 self.transform['src_horz_crs'].to_proj4(),
-                self.transform['trans_fn'],
+                os.path.abspath(self.transform['trans_fn']),
                 self.transform['dst_horz_crs'].to_proj4()
             )
             self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(

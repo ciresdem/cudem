@@ -566,7 +566,8 @@ class VerticalTransform:
                             _tmp_array, _tmp_infos = gdalfun.gdal_get_array(
                                 '_{}'.format(os.path.basename(_trans_grid))
                             )
-                            #utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
+                            utils.echo_msg(_trans_grid)
+                            utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
 
@@ -601,12 +602,12 @@ class VerticalTransform:
             htdp._write_control('_tmp_control.txt', '_tmp_output.xyz', '_tmp_input.xyz',
                                 #_htdp_reference_frames[epsg_in]['htdp_id'], _htdp_reference_frames[epsg_in]['epoch'],
                                 #_htdp_reference_frames[epsg_out]['htdp_id'], _htdp_reference_frames[epsg_in]['epoch'])
-                                _htdp_reference_frames[7912]['htdp_id'], 1997., #_htdp_reference_frames[7912]['epoch'],
-                                _htdp_reference_frames[4269]['htdp_id'], 1997.) #_htdp_reference_frames[4269]['epoch'])
+                                _htdp_reference_frames[epsg_in]['htdp_id'], 1997., #_htdp_reference_frames[7912]['epoch'],
+                                _htdp_reference_frames[epsg_out]['htdp_id'], 1997.) #_htdp_reference_frames[4269]['epoch'])
             htdp.run('_tmp_control.txt')
 
             out_grid = htdp._read_grid('_tmp_output.xyz', (griddef[5],griddef[4]))
-            #utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
+            utils.remove_glob('_tmp_output.xyz', '_tmp_input.xyz', '_tmp_control.txt')
             return(out_grid, epsg_out)
 
     ## ==============================================
