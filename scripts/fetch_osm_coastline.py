@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 ### fetch_osm_coastline.py
 ##
-## Copyright (c) 2024 CIRES Coastal DEM Team
+## Copyright (c) 2024, 2025 CIRES Coastal DEM Team
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -108,16 +108,23 @@ if __name__ == '__main__':
         i = i + 1
 
     this_region = regions.parse_cli_region([region])[0]
-    this_cst = fetch_coastline(this_region)
-
     if this_region is None or not this_region.valid_p():
         sys.stderr.write(_usage)
         utils.echo_error_msg('invalid region')
+        sys.exit(1)
 
-    tmp_dst = utils.make_temp_fn(
-        utils.fn_basename2(dst_ogr),
-        temp_dir=utils.cudem_cache()
-    )
+    if dst_ogr is not None:
+        tmp_dst = utils.make_temp_fn(
+            utils.fn_basename2(dst_ogr),
+            temp_dir=utils.cudem_cache()
+        )
+    else:
+        sys.stderr.write(_usage)
+        utils.echo_error_msg('a destination file must be supplied')
+        sys.exit(1)
+
+    this_cst = fetch_coastline(this_region)
+        
     if this_cst is not None:
         with tqdm(
                 total=len(this_cst.results),

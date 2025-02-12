@@ -159,7 +159,7 @@ cpt_colors = {
     'white': [255, 255, 255],
 }
 
-def process_cpt(cpt, gmin, gmax, gdal=False):
+def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
     trs = []
     colors = []
     with open(cpt, 'r') as cpt:
@@ -175,15 +175,25 @@ def process_cpt(cpt, gmin, gmax, gdal=False):
                 elif len(ll[1].split('/')) > 1:
                     colors.append([int(float(x)) for x in ll[1].split('/')])
 
-    elevs = np.linspace(gmin, gmax, len(trs))
+    if split_cpt is not None:
+        trs = np.array(trs)
+        len_b = len(trs[trs<split_cpt])
+        len_t = len(trs[trs>split_cpt])
+        
+        elevs_b = np.linspace(gmin, split_cpt, len_b)
+        elevs_t = np.linspace(split_cpt, gmax, len_t)[1:]
+        elevs = np.concatenate((elevs_b,elevs_t))
+    else:
+        elevs = np.linspace(gmin, gmax, len(trs))
+        
     with open('tmp.cpt', 'w') as cpt:
         for i,j in enumerate(elevs):
             if j != None and i + 1 != len(elevs):
                 #print(j)
-                elev = scale_el(j, gmin, gmax, trs[i], trs)
+                elev = scale_el_(j, gmin, gmax, trs[i], trs)
                 #elev = j
                 #print(elev)
-                elev1 = scale_el(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
+                elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
                 #elev1 = elevs[i+1]
                 #print(elev1)
                 if elev is not None and elev1 is not None:
@@ -254,7 +264,7 @@ def fetch_cpt_city(q='grass/haxby', cache_dir = './'):
 
 class Perspecto:
     def __init__(self, mod = None, src_dem = None, cpt = None, min_z = None, max_z = None, callback = lambda: False,
-                 outfile = None, outdir = None, verbose = True, params={}):
+                 outfile = None, outdir = None, verbose = True, split_cpt = False, params={}):
         self.mod = mod
         self.mod_args = {}
         self.src_dem = src_dem
@@ -262,6 +272,7 @@ class Perspecto:
         self.cpt = cpt
         self.min_z = utils.float_or(min_z)
         self.max_z = utils.float_or(max_z)
+        self.split_cpt = split_cpt
         self.outdir = outdir
         self.callback = callback
         self.verbose = verbose
@@ -273,7 +284,7 @@ class Perspecto:
         if self.outfile is None:
             self.outfile = '{}_{}.tif'.format(utils.fn_basename2(self.src_dem), self.mod)
         
-        self.init_cpt()
+        self.init_cpt(want_gdal=True)
             
     def __call__(self):
         return(self.run())
@@ -291,10 +302,10 @@ class Perspecto:
             #if has_pygmt:
             #    self.makecpt(cmap=self.cpt, color_model='r', output='{}.cpt'.format(utils.fn_basename2(self.src_dem)))
             #else:
-            utils.echo_msg('processing cpt {}, want_gdal is {}'.format(self.cpt, want_gdal))
-            self.cpt = process_cpt(self.cpt, min_z, max_z, gdal=want_gdal)
+            utils.echo_msg('processing cpt {}, want_gdal is {}, split_cpt: {}'.format(self.cpt, want_gdal, self.split_cpt))
+            self.cpt = process_cpt(self.cpt, min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt)
         else:
-            self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z, gdal=want_gdal)
+            self.cpt = process_cpt(fetch_cpt_city(q=self.cpt), min_z, max_z, gdal=want_gdal, split_cpt=self.split_cpt)
         
     
     def makecpt(self, cmap='etopo1', color_model='r', output=None):
@@ -382,7 +393,7 @@ class Hillshade(Perspecto):
             azimuth=315,
             altitude=45,
             modulate=125,
-            alpha=False,
+            alpha=True,
             mode='multiply',
             gamma=.5,
             **kwargs,
@@ -470,7 +481,7 @@ class Hillshade(Perspecto):
         return(outfile)
     
     def run(self):
-        self.init_cpt(want_gdal=True)
+        #self.init_cpt(want_gdal=True)
         hs_fn = utils.make_temp_fn('gdaldem_hs.tif', self.outdir)
         gdal.DEMProcessing(
             hs_fn, self.src_dem, 'hillshade', computeEdges=True, scale=111120, azimuth=self.azimuth,
@@ -971,13 +982,14 @@ class PerspectoFactory(factory.CUDEMFactory):
 ## ==============================================
 perspecto_cli_usage = """{cmd}
 
-usage: {cmd} [ -hvCM [ args ] ] DEM ...
+usage: {cmd} [ -hvCMZ [ args ] ] DEM ...
 
 Options:
 
   -C, --cpt\t\tColor Pallette file (if not specified will auto-generate ETOPO CPT)
   -M, --module\t\tDesired perspecto MODULE and options. (see available Modules below)
 \t\t\tWhere MODULE is module[:mod_opt=mod_val[:mod_opt1=mod_val1[:...]]]
+  -Z, --split-cpt\tSplit the CPT values at zero
 
   --min_z\t\tMinimum z value to use in CPT
   --max_z\t\tMaximum z value to use in CPT
@@ -1000,6 +1012,7 @@ def perspecto_cli(argv = sys.argv):
     src_cpt = None
     min_z = None
     max_z = None
+    split_cpt = None
     
     while i < len(argv):
         arg = argv[i]
@@ -1022,6 +1035,8 @@ def perspecto_cli(argv = sys.argv):
         elif arg == '--max_z':
             max_z = utils.float_or(argv[i + 1])
             i += 1
+        elif arg == '--split-cpt' or arg == '-Z':
+            split_cpt = 0
         
         elif arg == '--modules' or arg == '-m':
             factory.echo_modules(PerspectoFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
@@ -1089,7 +1104,7 @@ def perspecto_cli(argv = sys.argv):
         )
         sys.exit(-1)
 
-    this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt, min_z=min_z, max_z=max_z)
+    this_perspecto = PerspectoFactory(mod=module, src_dem=src_dem, cpt=src_cpt, min_z=min_z, max_z=max_z, split_cpt=split_cpt)
     if this_perspecto is not None:
         this_perspecto_module = this_perspecto._acquire_module()
         if this_perspecto_module is not None:
