@@ -76,7 +76,8 @@ generates wa_coastline.shp and wa_coastline.tif for masking, etc.
 
 ## Fetch common datasets
 
-### Hydronos
+### Bathymetry
+#### HydroNOS
 
 ```bash
 fetches -R tiles_1_9.shp hydronos
@@ -152,8 +153,7 @@ hydronos/
     └── H12223.xyz.gz
 ```
 
-### Multibeam
-### Nautical Charts
+#### Nautical Charts
 ```bash
 fetches -R tiles_1_9.shp charts
 ```
@@ -171,8 +171,25 @@ charts
 └── US5WA60M.zip
 ```
 
-### Digital Coast Lidar
-### 
+#### Multibeam
+```bash
+fetches -R tiles_1_9.shp multibeam
+```
+
+#### Crowd-Sourced Bathymetry
+```bash
+fetches -R tiles_1_9.shp csb
+```
+
+### Topography / Near-shore Bathymetry
+
+#### Digital Coast Lidar
+
+#### USGS Lidar
+
+#### USGS DEMs
+
+#### CUDEMs
 
 ## Make a datalist
 
