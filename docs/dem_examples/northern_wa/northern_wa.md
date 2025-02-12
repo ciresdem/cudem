@@ -82,6 +82,7 @@ generates wa_coastline.shp and wa_coastline.tif for masking, etc.
 fetches -R tiles_1_9.shp hydronos
 ```
 
+```
 hydronos/
 ├── bag
 │   ├── D00165_MB_VR_MSL_1of1.bag
@@ -149,7 +150,7 @@ hydronos/
     ├── H12221.xyz.gz
     ├── H12222.xyz.gz
     └── H12223.xyz.gz
-
+```
 
 ### Multibeam
 ### Nautical Charts
