@@ -74,7 +74,7 @@ waffles modules:
 
 generates wa_coastline.shp and wa_coastline.tif for masking, etc.
 
-## Fetch common data
+## Fetch common datasets
 
 ### Hydronos
 
@@ -154,6 +154,23 @@ hydronos/
 
 ### Multibeam
 ### Nautical Charts
+```bash
+fetches -R tiles_1_9.shp charts
+```
+
+```
+charts
+├── US1WC01M.zip
+├── US2WC03M.zip
+├── US3WA01M.zip
+├── US3WA03M.zip
+├── US4WA36M.zip
+├── US5WA01M.zip
+├── US5WA04M.zip
+├── US5WA20M.zip
+└── US5WA60M.zip
+```
+
 ### Digital Coast Lidar
 ### 
 
