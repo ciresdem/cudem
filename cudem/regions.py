@@ -637,6 +637,10 @@ class Region:
 
     def warp(self, dst_crs = 'epsg:4326', include_z = True):
         ## horizontal only for region
+        if utils.str_or(self.src_srs) is None:
+            utils.echo_warning_msg('region has no valid associated srs: {}'.format(self.src_srs))
+            return(self)
+            
         if self.src_srs.upper().startswith('EPSG'):
             src_srs = self.src_srs.split('+')[0]
         else:

@@ -74,10 +74,91 @@ waffles modules:
 
 generates wa_coastline.shp and wa_coastline.tif for masking, etc.
 
+## Fetch common data
+
+### Hydronos
+
+```bash
+fetches -R tiles_1_9.shp hydronos
+```
+
+hydronos/
+├── bag
+│   ├── D00165_MB_VR_MSL_1of1.bag
+│   ├── H12219_MB_1m_MLLW_1of2.bag
+│   ├── H12219_MB_2m_MLLW_2of2.bag
+│   ├── H12220_MB_2m_MLLW_1of3.bag
+│   ├── H12220_MB_4m_MLLW_2of3.bag
+│   ├── H12220_MB_8m_MLLW_3of3.bag
+│   ├── H12221_MB_1m_MLLW_1of3.bag
+│   ├── H12221_MB_2m_MLLW_2of3.bag
+│   ├── H12221_MB_4m_MLLW_3of3.bag
+│   ├── H12222_MB_2m_MLLW_1of3.bag
+│   ├── H12222_MB_4m_MLLW_2of3.bag
+│   ├── H12222_MB_8m_MLLW_3of3.bag
+│   ├── H12223_MB_VR_MLLW_1of1.bag
+│   ├── H13412_MB_VR_Ellipsoid.bag
+│   ├── H13412_MB_VR_MLLW.bag
+│   ├── W00262_MB_VR_MLLW_1of1.bag
+│   ├── W00442_MB_128m_MLLW_5of5.bag
+│   ├── W00442_MB_128m_MLLW_Combined.bag
+│   ├── W00442_MB_16m_MLLW_2of5.bag
+│   ├── W00442_MB_32m_MLLW_3of5.bag
+│   ├── W00442_MB_64m_MLLW_4of5.bag
+│   ├── W00442_MB_8m_MLLW_1of5.bag
+│   ├── W00445_MB_128m_MLLW_4of4.bag
+│   ├── W00445_MB_128m_MLLW_Combined.bag
+│   ├── W00445_MB_16m_MLLW_1of4.bag
+│   ├── W00445_MB_32m_MLLW_2of4.bag
+│   └── W00445_MB_64m_MLLW_3of4.bag
+└── geodas
+    ├── H02096.xyz.gz
+    ├── H02170.xyz.gz
+    ├── H02869.xyz.gz
+    ├── H04715.xyz.gz
+    ├── H04716.xyz.gz
+    ├── H04728.xyz.gz
+    ├── H04729.xyz.gz
+    ├── H04735.xyz.gz
+    ├── H05068.xyz.gz
+    ├── H05069.xyz.gz
+    ├── H05070.xyz.gz
+    ├── H05107.xyz.gz
+    ├── H05108.xyz.gz
+    ├── H05109.xyz.gz
+    ├── H05110.xyz.gz
+    ├── H05111.xyz.gz
+    ├── H05114.xyz.gz
+    ├── H05146.xyz.gz
+    ├── H05147.xyz.gz
+    ├── H05148.xyz.gz
+    ├── H05155.xyz.gz
+    ├── H05157.xyz.gz
+    ├── H07036.xyz.gz
+    ├── H07037.xyz.gz
+    ├── H08241.xyz.gz
+    ├── H08242.xyz.gz
+    ├── H09413.xyz.gz
+    ├── H09415.xyz.gz
+    ├── H09416.xyz.gz
+    ├── H09418.xyz.gz
+    ├── H11083.xyz.gz
+    ├── H11086.xyz.gz
+    ├── H12219.xyz.gz
+    ├── H12220.xyz.gz
+    ├── H12221.xyz.gz
+    ├── H12222.xyz.gz
+    └── H12223.xyz.gz
+
+
+### Multibeam
+### Nautical Charts
+### Digital Coast Lidar
+### 
+
 ## Make a datalist
 
 - see fetches --help for available datasets, or gather and use your own data.
-
 
 ## Generate a test tile
 

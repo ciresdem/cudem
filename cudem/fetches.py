@@ -741,7 +741,7 @@ class fetch_results(threading.Thread):
         self.results = []
         if len(self.mod.results) == 0:
             self.mod.run()
-                    
+            
     def run(self):
         for _ in range(self.n_threads):
             t = threading.Thread(
@@ -2652,7 +2652,7 @@ class DEMMosaic(FetchModule):
     """
     
     def __init__(self, where = '1=1', layer = 1, index = False, **kwargs):
-        super().__init__(name='hydronos', **kwargs)
+        super().__init__(name='demmosaic', **kwargs)
         self.where = where
         self.index = index
         
