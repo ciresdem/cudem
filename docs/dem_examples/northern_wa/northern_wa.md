@@ -21,7 +21,7 @@ Add a slight buffer (.1 degree) to ensure coverage of fetched data.
 regions -R -125/-124/47/48.5 -B .1
 ```
 
-will output [region_n48x60_w125x10.shp](region_n48x60_w125x10.geojson)
+Outputs: [region_n48x60_w125x10.shp](region_n48x60_w125x10.geojson)
 
 ### Generate the .25 degree tiles
 
@@ -29,7 +29,7 @@ these will be the extents of each DEM generated.
 
 ```regions -R -121/-114/31.5/35 -T .25```
 
-will output [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree tiles.
+Outputs: [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree tiles.
 
 ### Edit the tile set to only include desired tiles (using a GIS)
 
@@ -40,8 +40,7 @@ will output [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree 
 ```bash
 fetch_osm_coastline.py -R region_n48x60_w125x10.geojson wa_coast.shp
 ```
-
-will output [wa_coast.shp](wa_coast.geojson)
+Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ## Fetch common datasets
 
