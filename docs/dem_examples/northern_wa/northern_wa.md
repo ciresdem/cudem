@@ -82,29 +82,6 @@ fetches -R tiles_1_9.shp digital_coast:datatype=lidar
 fetches -R tiles_1_9.shp CUDEM
 ```
 
-```
-digital_coast/
-├── 8483
-│   ├── ncei19_n47x00_w0124x25_2018v1.tif
-│   ├── ncei19_n47x25_w0124x25_2018v1.tif
-│   ├── ncei19_n47x50_w0124x25_2018v1.tif
-│   ├── ncei19_n47x50_w0124x50_2018v1.tif
-│   ├── ncei19_n47x75_w0124x50_2018v1.tif
-│   ├── ncei19_n48x00_w0124x50_2018v1.tif
-│   ├── ncei19_n48x00_w0124x75_2018v1.tif
-│   ├── ncei19_n48x25_w0124x75_2018v1.tif
-│   ├── ncei19_n48x25_w124x25_2021v1.tif
-│   ├── ncei19_n48x25_w124x50_2021v1.tif
-│   ├── ncei19_n48x50_w0124x75_2018v1.tif
-│   └── ncei19_n48x50_w124x50_2021v1.tif
-└── 8580
-    ├── ncei13_n47x25_w0124x50_2018v1.tif
-    ├── ncei13_n47x75_w0124x75_2018v1.tif
-    ├── ncei13_n48x25_w0125x00_2018v1.tif
-    └── ncei13_n48x50_w0125x00_2018v1.tif
-```
-
-
 ## Make a datalist
 
 - see fetches --help for available datasets, or gather and use your own data.
