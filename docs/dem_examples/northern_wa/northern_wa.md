@@ -23,6 +23,8 @@ regions -R -125/-124/47/48.5 -B .1
 
 Outputs: [region_n48x60_w125x10.shp](region_n48x60_w125x10.geojson)
 
+![](wa_region.png)
+
 ### Generate the .25 degree tiles
 
 these will be the extents of each DEM generated.
@@ -34,6 +36,7 @@ Outputs: [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree til
 ### Edit the tile set to only include desired tiles (using a GIS)
 
 [tiles_1_9.shp](tiles_1_9.geojson)
+![](wa_tiles_1_9.png)
 
 ## Generate a Coastline vector (optional)
 
@@ -41,6 +44,7 @@ Outputs: [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree til
 fetch_osm_coastline.py -R region_n48x60_w125x10.geojson wa_coast.shp
 ```
 Outputs: [wa_coast.shp](wa_coast.geojson)
+![](wa_coast.png)
 
 ## Fetch common datasets
 
