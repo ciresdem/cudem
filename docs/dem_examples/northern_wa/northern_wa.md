@@ -29,7 +29,7 @@ these will be the extents of each DEM generated.
 
 ```regions -R -121/-114/31.5/35 -T .25```
 
-will output [regions_tile_set.shp](region_tile_set.geojson) with 24 .25 degree tiles.
+will output [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree tiles.
 
 ### Edit the tile set to only include desired tiles (using a GIS)
 
