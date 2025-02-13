@@ -38,8 +38,10 @@ will output [regions_tile_set.shp](region_tile_set.geojson) with 24 .25 degree t
 ## Generate a Coastline vector (optional)
 
 ```bash
-fetch_osm_coastline.py 
+fetch_osm_coastline.py -R region_n48x60_w125x10.geojson wa_coast.shp
 ```
+
+will output [wa_coast.shp](wa_coast.geojson)
 
 Check the waffles coastline module options to determine what we need:
 

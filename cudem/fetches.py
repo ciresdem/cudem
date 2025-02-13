@@ -4659,7 +4659,7 @@ class OpenStreetMap(FetchModule):
     < osm:q=None:fmt=osm:planet=False:chunks=True:min_length=None >
     """
     
-    def __init__(self, q = None, h = '', fmt = 'osm', planet = False, chunks = True,
+    def __init__(self, q = None, h = '', fmt = 'osm', planet = False, chunks = False,
                  min_length = None, **kwargs):
         super().__init__(name='osm', **kwargs)
         self.q = q
@@ -4720,11 +4720,11 @@ class OpenStreetMap(FetchModule):
         elif self.chunks:
             x_delta = self.region.xmax - self.region.xmin
             y_delta = self.region.ymax - self.region.ymin
-            incs = self.region.increments(10000,10000)
+            incs = self.region.increments(1000,1000)
 
             ## break up the requests into .05 degree chunks for
             ## better usage of the OSM API
-            if x_delta > .05 or y_delta > .05:
+            if x_delta > .25 or y_delta > .25:
                 xcount, ycount, gt = self.region.geo_transform(x_inc=incs[0], y_inc=incs[1])
                 if x_delta >= y_delta:
                     n_chunk = int(xcount*(.1/x_delta))
