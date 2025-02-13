@@ -52,33 +52,35 @@ Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ## Fetch common datasets
 
+Use the fetches command to download common datasets. Use the `-H` switch to fetch data in multiple threads.
+
 ### Bathymetry
 #### HydroNOS
 
 ```bash
-fetches -R tiles_1_9.shp hydronos
+fetches -R tiles_1_9.shp hydronos -H3
 ```
 
 #### Nautical Charts
 ```bash
-fetches -R tiles_1_9.shp charts
+fetches -R tiles_1_9.shp charts -H3
 ```
 
 #### Multibeam
 ```bash
-fetches -R tiles_1_9.shp multibeam
+fetches -R tiles_1_9.shp multibeam -H3
 ```
 
 #### Crowd-Sourced Bathymetry
 ```bash
-fetches -R tiles_1_9.shp csb
+fetches -R tiles_1_9.shp csb -H3
 ```
 
 ### Topography / Near-shore Bathymetry
 
 #### Digital Coast Lidar
 ```bash
-fetches -R tiles_1_9.shp digital_coast:datatype=lidar
+fetches -R tiles_1_9.shp digital_coast:datatype=lidar -H3
 ```
 
 #### USGS Lidar
@@ -87,7 +89,7 @@ fetches -R tiles_1_9.shp digital_coast:datatype=lidar
 
 #### CUDEMs
 ```bash
-fetches -R tiles_1_9.shp CUDEM
+fetches -R tiles_1_9.shp CUDEM -H3
 ```
 
 ## Make a datalist
