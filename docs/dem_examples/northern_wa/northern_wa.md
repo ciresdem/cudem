@@ -33,6 +33,8 @@ these will be the extents of each DEM generated.
 
 Outputs: [regions_tile_set.shp](regions_tile_set.geojson) with 24 .25 degree tiles.
 
+![](wa_region_tiles.png)
+
 ### Edit the tile set to only include desired tiles (using a GIS)
 
 [tiles_1_9.shp](tiles_1_9.geojson)
