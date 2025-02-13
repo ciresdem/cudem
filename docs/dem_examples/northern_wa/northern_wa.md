@@ -52,7 +52,7 @@ Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ## Fetch common datasets
 
-Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads.
+Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module.
 
 ### Bathymetry
 #### HydroNOS
