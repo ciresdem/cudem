@@ -5926,9 +5926,13 @@ See `fetches_cli_usage` for full cli options.
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             num_threads = utils.int_or(argv[i + 1], 1)
             i = i + 1
+        elif arg[:2] == '-H':
+            num_threads = utils.int_or(argv[2:], 1)
         elif arg == '-attempts' or arg == '--attempts' or arg == '-A':
             fetch_attempts = utils.int_or(argv[i + 1], 1)
             i = i + 1
+        elif arg[:2] == '-A':
+            fetch_attempts = utils.int_or(argv[2:], 1)
         elif arg == '--list' or arg == '-l':
             want_list = True
         elif arg == '--no_check_size' or arg == '-z':

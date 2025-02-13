@@ -71,6 +71,11 @@ fetches -R tiles_1_9.shp charts -H3
 fetches -R tiles_1_9.shp multibeam -H3
 ```
 
+#### EHydro
+```bash
+fetches -R tiles_1_9.shp ehydro -H3
+```
+
 #### Crowd-Sourced Bathymetry
 ```bash
 fetches -R tiles_1_9.shp csb -H3
@@ -86,6 +91,13 @@ fetches -R tiles_1_9.shp digital_coast:datatype=lidar -H3
 #### USGS Lidar
 
 #### USGS DEMs
+```bash
+fetches -R tiles_1_9.shp ned1
+```
+
+```bash
+fetches -R tiles_1_9.shp CoNED
+```
 
 #### CUDEMs
 ```bash
