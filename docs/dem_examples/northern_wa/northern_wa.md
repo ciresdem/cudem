@@ -43,43 +43,6 @@ fetch_osm_coastline.py -R region_n48x60_w125x10.geojson wa_coast.shp
 
 will output [wa_coast.shp](wa_coast.geojson)
 
-Check the waffles coastline module options to determine what we need:
-
-```
-$ waffles --modules coastline
-waffles modules:
-% waffles ... <mod>:key=val:key=val...
-
-  coastline     COASTLINE (land/etc-mask) generation
-    
-    Generate a coastline (land/etc-mask) using a variety of sources. 
-    User data can be provided to provide source for further land masking. 
-    Output raster will mask land-areas as 1 and oceans/(lakes/buildings) as 0.
-    Output vector will polygonize land-areas.
-    
-    -----------
-    Parameters:
-    
-    want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
-    want_copernicus=[True/False] - use COPERNICUS to fill background
-    want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
-    want_lakes=[True/False] - mask LAKES using HYDROLAKES
-    invert_lakes=[True/False] - invert the lake mask (invert=True to remove lakes from the waterbodies)
-    want_buildings=[True/False] - mask BUILDINGS using OSM
-    osm_tries=[val] - OSM max server attempts
-    min_building_length=[val] - only use buildings larger than val
-    want_wsf=[True/False] - mask BUILDINGS using WSF
-    invert=[True/False] - invert the output results
-    polygonize=[True/False] - polygonize the output
-    min_weight=[val] - weight applied to fetched coastal data
-
-    < coastline:want_gmrt=False:want_nhd=True:want_lakes=False:want_buildings=False:invert=False:polygonize=True >
-```
-
-```waffles -R region_n48x60_w125x10.shp -E .11111111s -M coastline:want_nhd=True:polygonize=True -O wa_coastline -P epsg:4326```
-
-generates wa_coastline.shp and wa_coastline.tif for masking, etc.
-
 ## Fetch common datasets
 
 ### Bathymetry
