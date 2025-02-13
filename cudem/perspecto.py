@@ -176,9 +176,9 @@ def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
                     colors.append([int(float(x)) for x in ll[1].split('/')])
 
     if split_cpt is not None:
-        trs = np.array(trs)
-        len_b = len(trs[trs<split_cpt])
-        len_t = len(trs[trs>split_cpt])
+        _trs = np.array(trs)
+        len_b = len(_trs[_trs<split_cpt])
+        len_t = len(_trs[_trs>split_cpt])
         
         elevs_b = np.linspace(gmin, split_cpt, len_b)
         elevs_t = np.linspace(split_cpt, gmax, len_t)[1:]
@@ -187,15 +187,13 @@ def process_cpt(cpt, gmin, gmax, gdal=False, split_cpt=None):
         elevs = np.linspace(gmin, gmax, len(trs))
         
     with open('tmp.cpt', 'w') as cpt:
-        for i,j in enumerate(elevs):
+        for i, j in enumerate(elevs):
             if j != None and i + 1 != len(elevs):
                 #print(j)
                 elev = scale_el_(j, gmin, gmax, trs[i], trs)
                 #elev = j
                 #print(elev)
                 elev1 = scale_el_(elevs[i + 1], gmin, gmax, trs[i + 1], trs)
-                #elev1 = elevs[i+1]
-                #print(elev1)
                 if elev is not None and elev1 is not None:
                     if not gdal:
                         cpt.write(
