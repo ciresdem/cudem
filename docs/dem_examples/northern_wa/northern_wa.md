@@ -52,7 +52,7 @@ Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ## Fetch common datasets
 
-Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module.
+Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module. Using the tiled vector file generated above, `tiles_1_9.shp`, we will fetch data for each of the tiles. The data won't be duplicated, so a file fetched for one tile will be skipped if it's present in other tile.
 
 ### Bathymetry
 #### HydroNOS
@@ -84,8 +84,17 @@ fetches -R tiles_1_9.shp csb -H3
 ### Topography / Near-shore Bathymetry
 
 #### Digital Coast Lidar
+
+There is a lot of data on the Digital Coast Access Viewer, we don't necessarily need it all. Running the following command will fetch all the available lidar in the AOI and unless you have a lot of disk space, it may fill up and fail at some point.
+
 ```bash
 fetches -R tiles_1_9.shp digital_coast:datatype=lidar -H3
+```
+
+Otherwise, we can determine which surveys we want specifically and fetch them using the 'where' option in the digital_coast fetches module.
+
+```bash
+fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=" -H3
 ```
 
 #### USGS Lidar
