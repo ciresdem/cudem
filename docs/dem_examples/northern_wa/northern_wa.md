@@ -103,6 +103,14 @@ We can also gather lidar surveys by date, if we want to just use lidar since 201
 fetches -R tiles_1_9.shp digital_coast:datatype=lidar:where="YEAR>2017" -H3
 ```
 
+See `fetches --modules digital_coast` to see all the possible query fields.
+
+For this example, we'll fetch specific lidar surveys, with the following command:
+
+```bash
+fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=" -H3
+```
+
 #### USGS Lidar
 
 #### USGS DEMs
