@@ -85,13 +85,13 @@ fetches -R tiles_1_9.shp csb -H3
 
 #### Digital Coast Lidar
 
-There is a lot of data on the Digital Coast Access Viewer, we don't necessarily need it all. Running the following command will fetch all the available lidar in the AOI and unless you have a lot of disk space, it may fill up and fail at some point.
+There is a lot of data on the Digital Coast Access Viewer, we don't necessarily need it all. Running the following command will fetch all the available lidar in the AOI and unless you have a lot of disk space, it may fill up and fail at some point. You can search and discover the survey ID for desired lidar surveys using the [DAV](https://coast.noaa.gov/dataviewer/#/lidar/search/-13929884.03469052,5827559.036461838,-13604568.042308811,6204240.711851186)
 
 ```bash
 fetches -R tiles_1_9.shp digital_coast:datatype=lidar -H3
 ```
 
-Otherwise, we can determine which surveys we want specifically and fetch them using the 'where' option in the digital_coast fetches module.
+Otherwise, we can determine which surveys we want specifically and fetch them using the ':where="ID=<survey-ID>"' option in the digital_coast fetches module. We can either run a command for each survey ID we want, or string multiple together with 'OR': ':where="ID=<ID1> OR ID=<ID2> ..."'
 
 ```bash
 fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=" -H3
