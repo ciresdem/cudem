@@ -50,9 +50,11 @@ Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ![](wa_coast.png)
 
-## Fetch common datasets
+## Fetch common datasets and create datalists
 
 Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module. Using the tiled vector file generated above, `tiles_1_9.shp`, we will fetch data for each of the tiles. The data won't be duplicated, so a file fetched for one tile will be skipped if it's present in other tile.
+
+Fetched data can then be either processed to XYZ or used as-is in a datalist. Data originating in raster format will be used as-is, while some other datasets will be processed to XYZ and common datums for use in the datalists.
 
 ### Bathymetry
 #### HydroNOS
@@ -64,6 +66,11 @@ fetches -R tiles_1_9.shp hydronos -H3
 #### Nautical Charts
 ```bash
 fetches -R tiles_1_9.shp charts -H3
+```
+
+Process the fetched data to XYZ and NAD83/NAVD88
+```bash
+dlim -R tiles_1_9.shp --archive -P epsg:4269+5703 charts
 ```
 
 #### Multibeam
@@ -108,7 +115,7 @@ See `fetches --modules digital_coast` to see all the possible query fields.
 For this example, we'll fetch specific lidar surveys, with the following command:
 
 ```bash
-fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=10116 OR ID=9072 OR ID=9512 OR ID=6259 OR ID=4989 OR ID=6263 OR ID=5008 OR ID=2492 OR ID=2508 OR ID=2603 OR ID=8607 OR ID=2584 OR ID=2482" -H3
+fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=10116 OR ID=9072 OR ID=9512 OR ID=4989 OR ID=6263 OR ID=5008 OR ID=2492 OR ID=2508 OR ID=2603 OR ID=8607 OR ID=2584 OR ID=2482" -H3
 ```
 
 #### USGS Lidar

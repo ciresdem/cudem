@@ -424,6 +424,7 @@ class Fetch:
                 else:
                     dst_fn_size = os.stat(dst_fn).st_size
                     resume_byte_pos = dst_fn_size
+                    #utils.echo_msg_bold('{} {}'.format(dst_fn_size, resume_byte_pos))
                     self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
 
             with requests.get(self.url, stream=True, params=params, headers=self.headers,
@@ -441,19 +442,23 @@ class Fetch:
                 else:
                     content_length = int(req_h.get('content-length', 0))
 
-                req_s = content_length                
+                req_s = content_length
+                # if req_s != 0:
+                #     utils.echo_msg(req_h)
                 ## raise FileExistsError here if the file exists and the header Range value
                 ## is the same as the requested content-length, unless overwrite is True or
                 ## check_size is False.
                 if not overwrite and check_size:
                     if os.path.exists(dst_fn):
-                        if req_s == os.path.getsize(dst_fn):
+                        #utils.echo_msg(req_s)
+                        #utils.echo_msg(os.path.getsize(dst_fn))
+                        if req_s == os.path.getsize(dst_fn) or req_s == 0:
                             raise FileExistsError('{} exists, '.format(dst_fn))
 
                 ## server returned bad content-length
                 elif req_s == -1 or req_s == 0 or req_s == 49:
                     req_s = 0
-
+                    
                 if req.status_code == 416:
                     overwrite = True
                     raise FileExistsError(
