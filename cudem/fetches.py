@@ -4961,7 +4961,7 @@ def search_proj_cdn(region, epsg = None, crs_name = None, name = None, verbose =
                     _results[-1][key] = feat.GetField(key)
 
         cdn_ds = None
-        #utils.remove_glob(cdn_index)
+        utils.remove_glob(cdn_index)
         return(_results)
     else:
         return([])

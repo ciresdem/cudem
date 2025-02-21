@@ -721,6 +721,8 @@ class ElevationDataset:
         self.initialize()
 
     def _set_params(self, **kwargs):
+        metadata = copy.deepcopy(self.metadata)
+        #metadata['name'] = self.fn
         _params = {
             'parent': self,
             'weight': self.weight,
@@ -736,7 +738,7 @@ class ElevationDataset:
             'pnt_fltrs': self.pnt_fltrs,
             'cache_dir': self.cache_dir,
             'verbose': self.verbose,
-            'metadata': copy.deepcopy(self.metadata)
+            'metadata': metadata
         }
         for kw in kwargs.keys():
             _params[kw] = kwargs[kw]
@@ -1396,7 +1398,7 @@ class ElevationDataset:
                     geoid_in=self.transform['src_geoid'],
                     geoid_out=self.transform['dst_geoid'],
                     cache_dir=self.cache_dir,
-                    verbose=True
+                    verbose=False
                 ).run(outfile=self.transform['trans_fn'])
 
         ## set the pyproj.Transformer for both horz+vert and vert only
@@ -1529,17 +1531,22 @@ class ElevationDataset:
         def xdl2dir(xdl):
             this_dir = []
             while True:
-                if xdl.parent is None:
-                    out_dir = xdl.metadata['name']
-                    if xdl.remote:
-                        out_dir = out_dir.split(':')[0]
-
-                    this_dir.append(out_dir)
+                if xdl is None:
                     break
+                #utils.echo_msg_bold(xdl.metadata['name'])
+                out_dir = xdl.metadata['name']
+                #if xdl.parent is None:
+                    # out_dir = xdl.metadata['name']
+                    # if xdl.remote:
+                    #     out_dir = out_dir.split(':')[0]
+
+                    # this_dir.append(out_dir)
+                    # break
                 
-                out_dir = xdl.parent.metadata['name']
-                if xdl.parent.remote:
-                    out_dir = utils.fn_bansename2(out_dir)
+                #out_dir = xdl.parent.metadata['name']
+                if xdl.remote:
+                    #out_dir = utils.fn_basename2(out_dir)
+                    out_dir = out_dir.split(':')[0]
                     
                 this_dir.append(out_dir)
                 xdl = xdl.parent
@@ -1547,6 +1554,7 @@ class ElevationDataset:
             this_dir.reverse()
             return(this_dir)
 
+        srs_all = []
         aa_name = self.metadata['name'].split(':')[0]
         if self.region is None:
             a_name = '{}_{}'.format(aa_name, utils.this_year())
@@ -1563,13 +1571,18 @@ class ElevationDataset:
             with open('{}.datalist'.format(a_name), 'w') as dlf:
                 for this_entry in self.parse():
                     pbar.update()
+                    srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
+                    #utils.echo_msg(this_entry)
+                    #utils.echo_msg(this_entry.parent)
+                    #utils.echo_msg(this_entry.parent.parent)
                     if this_entry.parent is None:
                         this_key = this_entry.metadata['name'].split(':')[0]
                         this_dir = []
                     else:
                         this_key = this_entry.parent.metadata['name'].split(':')[0]
                         this_dir = xdl2dir(this_entry.parent)
-                        
+
+                    #utils.echo_msg(this_dir)
                     if self.region is None:
                         a_dir = '{}_{}'.format(this_key, utils.this_year())
                     else:
@@ -1586,7 +1599,8 @@ class ElevationDataset:
                                 metadata = this_entry.parent.format_metadata() if this_entry.parent is not None else this_entry.format_metadata()
                             )
                         )
-                        
+
+                    #utils.echo_msg(this_dir)
                     this_dir = os.path.join(os.getcwd(), *this_dir)
                     if not os.path.exists(this_dir):
                         os.makedirs(this_dir)
@@ -1626,7 +1640,7 @@ class ElevationDataset:
                         
                         if not os.path.exists(os.path.dirname(this_xyz_path)):
                             os.makedirs(os.path.dirname(this_xyz_path))
-                                                        
+
                         sub_dirname = os.path.dirname(sub_xyz_path)
                         if sub_dirname != '.' and sub_dirname != '':
                             sub_sub_dlf_path = os.path.join(this_dir, sub_dirname, '{}.datalist'.format(sub_dirname))
@@ -1661,14 +1675,27 @@ class ElevationDataset:
                                                   dst_port=xp, encode=False, precision=self.dump_precision)
                                 
         ## generate datalist inf/json
+        srs_set = set(srs_all)
+        if len(srs_set) == 1:
+            arch_srs = srs_set.pop()
+        else:
+            arch_srs = None
+            # while True:
+            #     try:
+            #         srs_all.count(srs_set.pop())
+                    
         this_archive = DatasetFactory(
             mod=self.archive_datalist,
             data_format=-1,
             parent=None,
             weight=1,
-            uncertainty=0
+            uncertainty=0,
+            src_srs=arch_srs,
+            dst_srs=None,
+            cache_dir=self.cache_dir,
         )._acquire_module().initialize()
-        this_archive.inf()
+        #this_archive_inf = this_archive.inf()
+        return(this_archive.inf())
 
     def yield_block_array(self): #*depreciated*
         """yield the xyz data as arrays, for use in `array_yield` or `yield_array`
@@ -3546,6 +3573,7 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse(self, resample=True):
+        self.metadata['name'] = 'bag' # bagfile parses into gdalfile, set this for proper recording of this
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         oo = []
 
@@ -3633,7 +3661,7 @@ class BAGFile(ElevationDataset):
                     data_format=200,
                     band_no=1,
                     uncertainty_mask=2,
-                    uncertainty_mask_to_meter=0.01
+                    uncertainty_mask_to_meter=0.01,
                 )
             )._acquire_module()
             self.data_entries.append(sub_ds)
@@ -5157,7 +5185,7 @@ class Datalist(ElevationDataset):
             driver = ogr.GetDriverByName('GeoJSON')
             dl_ds = driver.Open('{}.json'.format(self.fn))
             if dl_ds is None:
-                utils.echo_warning_msg('could not open {}.json'.format(self.fn))
+                #utils.echo_warning_msg('could not open {}.json'.format(self.fn))
                 status = -1
         else:
             status = -1
@@ -5243,9 +5271,9 @@ class Datalist(ElevationDataset):
         else:
             ## failed to find/open the datalist-vector geojson, so run `parse` instead and
             ## generate one for future use...
-            utils.echo_warning_msg(
-                'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
-            )
+            # utils.echo_warning_msg(
+            #     'could not load datalist-vector json {}.json, falling back to parse, generate a json file for the datalist using `dlim -i`'.format(self.fn)
+            # )
             for ds in self.parse_no_json():
                 yield(ds)
                                         
@@ -5497,6 +5525,7 @@ class Fetcher(ElevationDataset):
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
         #self.outdir = outdir if outdir is not None else self.fetch_module._outdir if self.fetch_module._outdir is not None else self.cache_dir
         self.outdir = self.fetch_module._outdir
+        self.cache_dir = self.outdir
         
         ## set the metadata from the fetches module
         #self.metadata['name'] = self.fn # set the metadata name from the input fetches module
@@ -5558,10 +5587,13 @@ class Fetcher(ElevationDataset):
                                 this_ds.metadata['name'] = mod_name
                             else:
                                 this_ds.metadata['name'] = self.fn.split(':')[0]
-                                
+
                             this_ds.remote = True
                             this_ds.initialize()
+
+                            #utils.echo_msg(this_ds.metadata)
                             for ds in this_ds.parse():
+                                #utils.echo_msg(this_ds.metadata)
                                 yield(ds)
                         else:
                             utils.echo_warning_msg(
@@ -6272,13 +6304,18 @@ class HydroNOSFetcher(Fetcher):
                 verbose=self.verbose
             )
             for bag_fn in bag_fns:
+                #metadata = copy.deepcopy(self.metadata)
+                #metadata['name'] = 'bag'
+                #utils.echo_msg(self.metadata)
                 if 'ellipsoid' not in bag_fn.lower():
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
+                    self.fetches_params['src_srs'] = None
                     self.fetches_params['title'] = 'NOAA NOS BAG Surveys'
                     self.fetches_params['data_type'] = 'Gridded Bathymetry'
                     self.fetches_params['resolution'] = '<1m - ~10m'
                     self.fetches_params['explode'] = self.explode
+                    #self.fetches_params['metadata'] = metadata
                     yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class CSBFetcher(Fetcher):
@@ -7140,6 +7177,7 @@ See `datalists_usage` for full cli options.
     want_list = False
     want_glob = False
     want_archive = False
+    these_archives = []
     want_verbose = True
     want_region = False
     want_separate = False
@@ -7349,7 +7387,10 @@ See `datalists_usage` for full cli options.
                             this_region.warp(dst_srs, include_z=False)
                     print(this_region.format('gmt'))
                 elif want_archive:
-                    this_datalist.archive_xyz() # archive the datalist as xyz
+                    #these_archives.append(this_datalist.archive_xyz()) # archive the datalist as xyz
+                    this_archive = this_datalist.archive_xyz() # archive the datalist as xyz
+                    if this_archive.numpts == 0:
+                        utils.remove_glob('{}*'.format(this_archive.name))
                 else:
                     try:
                         if want_separate: # process and dump each dataset independently
@@ -7366,4 +7407,11 @@ See `datalists_usage` for full cli options.
                     except Exception as e:
                       utils.echo_error_msg(e)
                       print(traceback.format_exc())
+                      
+    # if want_archive:
+    #     combine_archive_datalists = 'test_archive'
+    #     with open('{}.datalist'.format(combine_archive_datalists), 'w') as dlf:
+    #         for this_archive in these_archives:
+    #             dlf.write('{} -1 1 0\n'.format(os.path.abspath(this_archive.name)))
+        
 ### End

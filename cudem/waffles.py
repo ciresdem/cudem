@@ -166,6 +166,7 @@ class Waffle:
         self.stack_ds = None # the stacked raster as a dlim dataset object
         self.co = co # the gdal creation options
         self.flatten_nodata_values = flatten_nodata_values # flatten any remaining nodata values
+        self.output_files = {}
         
     def __str__(self):
         return('<Waffles: {}>'.format(self.name))
@@ -363,7 +364,7 @@ class Waffle:
         if self.data is None:
             return(self)
 
-        output_files = {}
+        #self.output_files = {}
         ## todo: move to init
         if os.path.exists(self.fn):
             if not self.clobber:
@@ -541,7 +542,7 @@ class Waffle:
                     unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                     dst_dir=os.path.dirname(self.fn))
-                    output_files['uncertainty'] = iu.fn
+                    self.output_files['uncertainty'] = iu.fn
                 unc_fn = iu.fn
             
             ## post-process the DEM(s)
@@ -556,7 +557,7 @@ class Waffle:
                                    proximity_limit=self.proximity_limit, percentile_limit=self.percentile_limit, dst_srs=self.dst_srs,
                                    dst_fmt=self.fmt, stack_fn=self.stack, mask_fn=mask_fn, unc_fn=unc_fn, filter_=self.fltr,
                                    flatten_nodata_values=self.flatten_nodata_values, want_nc=self.keep_auxiliary, want_h5=self.keep_auxiliary)
-                output_files['DEM'] = self.fn
+                self.output_files['DEM'] = self.fn
                 
             ## post-process the mask, etc.
             if self.want_mask or self.want_sm:
@@ -569,21 +570,21 @@ class Waffle:
                                          node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
                                          dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
                                          dst_dir=os.path.dirname(self.fn))
-                        output_files['mask'] = mask_dem.fn
+                        self.output_files['mask'] = mask_dem.fn
 
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
                                 sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
 
                             sm_files = glob.glob('{}.*'.format(sm_layer))
-                            output_files['spatial-metadata'] = []
+                            self.output_files['spatial-metadata'] = []
                             for sm_file in sm_files:
                                 out_sm = '{}_sm.{}'.format(self.name, sm_file[-3:])
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
 
                                 os.rename(sm_file, out_sm)
-                                output_files['spatial-metadata'].append(out_sm)
+                                self.output_files['spatial-metadata'].append(out_sm)
                 else:
                     utils.echo_warning_msg('mask DEM is invalid...')        
                     
@@ -594,11 +595,11 @@ class Waffle:
                     aux_dem.process(ndv=None, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
                                     node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, dst_dir=os.path.dirname(self.fn),
                                     set_metadata=False)
-                    output_files['stack'] = aux_dem.fn
+                    self.output_files['stack'] = aux_dem.fn
 
 
             if self.keep_auxiliary:
-                output_files['aux netcdf'] = '{}.nc'.format(self.name)
+                self.output_files['aux netcdf'] = '{}.nc'.format(self.name)
             ## reset the self.stack to new post-processed fn and ds
             # if self.want_stack and self.keep_auxiliary:
             #     self.stack = os.path.join(os.path.dirname(self.fn), os.path.basename(self.stack))
@@ -608,7 +609,7 @@ class Waffle:
             #                                   verbose=self.verbose).initialize()
 
         if self.verbose:
-            utils.echo_msg('output files: {}'.format(output_files))
+            utils.echo_msg('output files: {}'.format(self.output_files))
             
         return(self)
 

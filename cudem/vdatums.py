@@ -456,10 +456,12 @@ class VerticalTransform:
                 _trans_in_array, _trans_in_infos = gdalfun.gdal_get_array(_trans_in.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_in))
                 #_trans_in_array += cg
+                #utils.remove_glob(_trans_in.fn)
                 if _trans_in_array is None:
                     _trans_in = None
-                else:
-                    utils.remove_glob('{}*'.format(_trans_in.fn))
+                #else:
+                for ofk in _trans_in.output_files.keys():
+                    utils.remove_glob('{}*'.format(_trans_in.output_files[ofk]))
             else:
                 _trans_in = None
             
@@ -486,10 +488,13 @@ class VerticalTransform:
                 ## extract the array from the gridded tidal datum grid
                 _trans_out_array, _trans_out_infos = gdalfun.gdal_get_array(_trans_out.fn)
                 utils.remove_glob('vdatum:datatype={}.inf'.format(vdatum_tidal_out))
+                #utils.remove_glob(_trans_out.fn)
                 if _trans_out_array is None:
                     _trans_out = None
-                else:
-                    utils.remove_glob('{}*'.format(_trans_out.fn))
+                #else:
+                for ofk in _trans_out.output_files.keys():
+                    utils.remove_glob('{}*'.format(_trans_out.output_files[ofk]))
+                    #utils.remove_glob('{}*'.format(_trans_out.fn))
             else:
                 _trans_out = None
         
@@ -566,13 +571,14 @@ class VerticalTransform:
                             _tmp_array, _tmp_infos = gdalfun.gdal_get_array(
                                 '_{}'.format(os.path.basename(_trans_grid))
                             )
-                            utils.echo_msg(_trans_grid)
+                            #utils.echo_msg(_trans_grid)
+                            #utils.remove_glob(_trans_grid)
                             utils.remove_glob('_{}'.format(os.path.basename(_trans_grid)))
                             if invert:
                                 _tmp_array = _tmp_array * -1
 
                             return(_tmp_array, src_code)
-
+                        
         ## if we make it here, this failed, most likely due to not retrieving the
         ## proj cdn data. It will continue to loop forever, as the output epsg
         ## is the same as the input :(
@@ -633,11 +639,11 @@ class VerticalTransform:
         else:
             tmp_trans_geoid = np.zeros((self.ycount, self.xcount))
 
-        utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
+        #utils.echo_msg('{} {}'.format(epsg_in, epsg_out))
         while epsg_in != epsg_out and epsg_in is not None and epsg_out is not None:
-            utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
+            #utils.echo_msg('{} --> {}'.format(epsg_in, epsg_out))
             ref_in, ref_out = self._frames(epsg_in, epsg_out)
-            utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
+            #utils.echo_msg('{} --> {}'.format(ref_in, ref_out))
             if ref_in == 'tidal':
                 if ref_out == 'tidal':
                     tmp_trans, v = self._tidal_transform(_tidal_frames[epsg_in]['name'], _tidal_frames[epsg_out]['name'])
