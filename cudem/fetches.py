@@ -5887,6 +5887,7 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+  -B, --buffer\t\tBuffer the input region by a percentage.
   -H, --threads\t\tSet the number of threads (1)
   -A, --attempts\tSet the number of fetching attempts (5)
   -l, --list\t\tReturn a list of fetch URLs in the given region.
@@ -5984,9 +5985,9 @@ See `fetches_cli_usage` for full cli options.
         ## optionally buffer region
         if region_buffer is not None:
             this_region.buffer(pct=region_buffer)
-            if want_verbose:
-                utils.echo_msg('buffering region by {} percent, buffered region is {}'.format(region_buffer, this_region))
-                #this_region.buffer(x_bv=region_buffer, y_bv=region_buffer)
+            # if want_verbose:
+            #     utils.echo_msg('buffering region by {} percent, buffered region is {}'.format(region_buffer, this_region))
+            #     #this_region.buffer(x_bv=region_buffer, y_bv=region_buffer)
         
         if stop_threads:
             return
