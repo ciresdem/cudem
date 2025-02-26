@@ -1047,6 +1047,7 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
         i_region_s = i_region.split(':')
         tmp_region = Region().from_string(i_region_s[0])
         args = utils.args2dict(i_region_s[1:], {})
+        #print(args)
         if tmp_region.valid_p(check_xy=True):
             if 'pct_buffer' in args.keys():
                 tmp_region.buffer(pct=utils.float_or(args['pct_buffer']))
@@ -1059,7 +1060,13 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
             for i in tmp_region:
                 if i.valid_p():
                     if len(i_region_s) > 1:
-                        this_region = Region().from_string('/'.join([i.format('str'), i_region_s[1]]))
+                        region_extender = ''
+                        for opts in i_region_s[1:]:
+                            if '=' not in opts:
+                                region_extender = opts
+                                
+                        #this_region = Region().from_string('/'.join([i.format('str'), i_region_s[1]]))
+                        this_region = Region().from_string('/'.join([i.format('str'), region_extender]))
                         if 'pct_buffer' in args.keys():
                             this_region.buffer(pct=utils.float_or(args['pct_buffer']))
                             
