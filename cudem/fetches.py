@@ -676,14 +676,14 @@ def fetch_queue(q, c = True):
                 fetch_args[3].callback(fetch_results)
         else:
             try:
-                Fetch(
+                status = Fetch(
                     url=fetch_args[0],
                     callback=fetch_args[3].callback,
                     verbose=fetch_args[3].verbose,
                     headers=fetch_args[3].headers,
                     verify=False if fetch_args[2] == 'srtm' or fetch_args[2] == 'mar_grav' else True
                 ).fetch_file(fetch_args[1], check_size=c)
-                fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], 0]
+                fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], status]
                 fetch_args[5].append(fetch_results)
 
                 ## call the fetches callback function, does nothing
@@ -707,7 +707,7 @@ def fetch_queue(q, c = True):
                 else:
                     utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
                     fetch_args[3].status = -1
-                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], e]
+                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], -1]
                     fetch_args[5].append(fetch_results)
 
                     ## call the fetches callback function, does nothing
@@ -715,7 +715,7 @@ def fetch_queue(q, c = True):
                     ## argument, which is the fetch_results just populated
                     if callable(fetch_args[3].callback):
                         fetch_args[3].callback(fetch_results)
-                        
+
         q.task_done()
         
 class fetch_results(threading.Thread):
@@ -756,29 +756,38 @@ class fetch_results(threading.Thread):
             )
             t.daemon = True
             t.start()
-            
+
         # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries, results]
-        if self.entry is not None:
-            self.fetch_q.put(
-                [self.entry[0],
-                 os.path.join(self.mod._outdir, self.entry[1]),
-                 self.entry[2],
-                 self.mod,
-                 self.attempts,
-                 self.results]
-            )
-        else:
-            for row in self.mod.results:
+        attempts = self.attempts
+        while True:
+            if self.entry is not None:
                 self.fetch_q.put(
-                    [row[0],
-                     os.path.join(self.mod._outdir, row[1]),
-                     row[2],
+                    [self.entry[0],
+                     os.path.join(self.mod._outdir, self.entry[1]),
+                     self.entry[2],
                      self.mod,
                      self.attempts,
                      self.results]
                 )
+            else:
+                for row in self.mod.results:
+                    self.fetch_q.put(
+                        [row[0],
+                         os.path.join(self.mod._outdir, row[1]),
+                         row[2],
+                         self.mod,
+                         self.attempts,
+                         self.results]
+                    )
+
+            self.fetch_q.join()
+            status = [x[3]==0 for x in self.results]
+            if (all(status) and len(status) == len(self.mod.results)) or attempts < 0:
+                break
+            else:
+                attemps-=1
+                utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
             
-        self.fetch_q.join()
 
 ## Fetch Modules
 class FetchModule:
