@@ -5984,7 +5984,9 @@ See `fetches_cli_usage` for full cli options.
         ## optionally buffer region
         if region_buffer is not None:
             this_region.buffer(pct=region_buffer)
-            #this_region.buffer(x_bv=region_buffer, y_bv=region_buffer)
+            if want_verbose:
+                utils.echo_msg('buffering region by {} percent, buffered region is {}'.format(region_buffer, this_region))
+                #this_region.buffer(x_bv=region_buffer, y_bv=region_buffer)
         
         if stop_threads:
             return
