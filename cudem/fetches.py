@@ -699,7 +699,7 @@ def fetch_queue(q, c = True):
                 #utils.echo_msg(e)
                 if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                     utils.echo_warning_msg(
-                        'fetch of {} failed...putting back in the queue {}'.format(fetch_args[0], e)
+                        'fetch of {} failed...putting back in the queue: {}'.format(fetch_args[0], e)
                     )
                     fetch_args[4] -= 1
                     utils.remove_glob(fetch_args[1])
@@ -707,7 +707,7 @@ def fetch_queue(q, c = True):
                 else:
                     utils.echo_error_msg('fetch of {} failed...'.format(fetch_args[0]))
                     fetch_args[3].status = -1
-                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], -1]
+                    fetch_results = [fetch_args[0], fetch_args[1], fetch_args[2], e]
                     fetch_args[5].append(fetch_results)
 
                     ## call the fetches callback function, does nothing
