@@ -1083,7 +1083,7 @@ def parse_cli_region(region_list, verbose = True, pct_buffer = None):
             
     return(these_regions)
 
-def generate_tile_set(in_region = None, inc = .25, pct_buffer = None):
+def generate_tile_set(in_region = None, inc = .25):
     """Generate a tile-set based on `in_region` and `inc`.
 
     returns a list of regions

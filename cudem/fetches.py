@@ -5970,7 +5970,7 @@ See `fetches_cli_usage` for full cli options.
         utils.echo_error_msg('you must select at least one fetch module')
         sys.exit(-1)
 
-    these_regions = regions.parse_cli_region(i_regions, want_verbose, pct_buffer=region_buffer)
+    these_regions = regions.parse_cli_region(i_regions, want_verbose)
     if not these_regions:
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
         
