@@ -782,7 +782,12 @@ class fetch_results(threading.Thread):
 
             self.fetch_q.join()
             status = [x[3]==0 for x in self.results]
-            if (all(status) and len(status) == len(self.mod.results)) or attempts < 0:
+            if self.entry is not None:
+                all_ok = len(status) == 1
+            else:
+                all_ok = len(status) == len(self.mod.results)
+                
+            if (all(status) and all_ok) or attempts < 0:
                 break
             else:
                 attemps-=1
