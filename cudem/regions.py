@@ -1025,7 +1025,7 @@ def ogr_wkts(src_ds):
         
     return(these_regions)
 
-def parse_cli_region(region_list, verbose = True):
+def parse_cli_region(region_list, verbose = True, pct_buffer = None):
     """parse a region list into region(s).
 
     for use in clis
@@ -1044,23 +1044,26 @@ def parse_cli_region(region_list, verbose = True):
             these_regions.append(None)
             continue
         
-        tmp_region = Region().from_string(i_region)
         i_region_s = i_region.split(':')
+        tmp_region = Region().from_string(i_region_s[0])
+        args = utils.args2dict(i_region_s[1:], {})
         if tmp_region.valid_p(check_xy=True):
+            if 'pct_buffer' in args.keys():
+                tmp_region.buffer(pct=utils.float_or(args['pct_buffer']))
+                
             these_regions.append(tmp_region)
         elif str(i_region_s[0]) == 'tile_set':
-            args = utils.args2dict(i_region_s[1:], {})
             these_regions = generate_tile_set(**args)
         else:
             tmp_region = ogr_wkts(i_region_s[0])
             for i in tmp_region:
                 if i.valid_p():
                     if len(i_region_s) > 1:
-                        these_regions.append(
-                            Region().from_string(
-                                '/'.join([i.format('str'), i_region_s[1]])
-                            )
-                        )
+                        this_region = Region().from_string('/'.join([i.format('str'), i_region_s[1]]))
+                        if 'pct_buffer' in args.keys():
+                            this_region.buffer(pct=utils.float_or(args['pct_buffer']))
+                            
+                        these_regions.append(this_region)
                     else:
                         these_regions.append(i)
 
@@ -1080,7 +1083,7 @@ def parse_cli_region(region_list, verbose = True):
             
     return(these_regions)
 
-def generate_tile_set(in_region = None, inc = .25):
+def generate_tile_set(in_region = None, inc = .25, pct_buffer = None):
     """Generate a tile-set based on `in_region` and `inc`.
 
     returns a list of regions
@@ -1102,6 +1105,9 @@ def generate_tile_set(in_region = None, inc = .25):
     while this_xmax <= tmp_region.xmax:
         while this_ymax <= tmp_region.ymax: 
             this_region = Region(xmin=this_xmin, xmax=this_xmax, ymin=this_ymin, ymax=this_ymax)
+            if pct_buffer is not None:
+                this_region.buffer(pct=utils.float_or(pct_buffer))
+                
             tile_regions.append(this_region)
             this_ymin = this_ymax
             this_ymax += inc
@@ -1159,6 +1165,7 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
   -J, --s_srs\t\tSet the SOURCE projection.
   -P, --t_srs\t\tSet the TARGET projection.
   -T, --tile_set\tGenerate a TILESET from the input region. (set incrememnt here)

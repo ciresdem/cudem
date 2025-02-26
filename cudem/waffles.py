@@ -5472,6 +5472,7 @@ Options:
 \t\t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax]].
 \t\t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
   -E, --increment\t\tGridding INCREMENT and RESAMPLE-INCREMENT in native units.
 \t\t\t\tWhere INCREMENT is x-inc[/y-inc][:sample-x-inc/sample-y-inc]
   -M, --module\t\t\tDesired Waffles MODULE and options. (see available Modules below)

@@ -7120,6 +7120,7 @@ Options:
 \t\t\tOR an OGR-compatible vector file with regional polygons. 
 \t\t\tWhere the REGION is /path/to/vector[:zmin/zmax[/wmin/wmax/umin/umax]].
 \t\t\tIf a vector file is supplied, will use each region found therein.
+\t\t\tOptionally, append `:pct_buffer=<value>` to buffer the region(s) by a percentage.
   -E, --increment\tBlock data to INCREMENT in native units.
 \t\t\tWhere INCREMENT is x-inc[/y-inc]
   -X, --extend\t\tNumber of cells with which to EXTEND the output DEM REGION and a 
