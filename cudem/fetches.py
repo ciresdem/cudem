@@ -2255,7 +2255,7 @@ class Multibeam(FetchModule):
             return([])
         else:
             fetch_region = self.region.copy()
-            fetch_region.buffer(pct=25)
+            #fetch_region.buffer(pct=25)
 
         _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': fetch_region.format('bbox')}, timeout=20)
         if _req is not None and _req.status_code == 200:
@@ -5919,6 +5919,7 @@ See `fetches_cli_usage` for full cli options.
     check_size = True
     num_threads = 1
     fetch_attempts = 5
+    region_buffer = None
     
     ## parse command line arguments.
     i = 1
@@ -5929,6 +5930,11 @@ See `fetches_cli_usage` for full cli options.
             i = i + 1
         elif arg[:2] == '-R':
             i_regions.append(str(arg[2:]))
+        elif arg == '--buffer' or arg == '-B':
+            region_buffer = utils.float_or(argv[i + 1])
+            i = i + 1
+        elif arg[:2] == '-B':
+            region_buffer = utils.float_or(arg[2:])
         elif arg == '-threads' or arg == '--threads' or arg == '-H':
             num_threads = utils.int_or(argv[i + 1], 1)
             i = i + 1
@@ -5974,6 +5980,12 @@ See `fetches_cli_usage` for full cli options.
         these_regions = [regions.Region().from_string('-R-180/180/-90/90')]
         
     for rn, this_region in enumerate(these_regions):
+
+        ## optionally buffer region
+        if region_buffer is not None:
+            this_region.buffer(pct=region_buffer)
+            #this_region.buffer(x_bv=region_buffer, y_bv=region_buffer)
+        
         if stop_threads:
             return
         

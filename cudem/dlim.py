@@ -1544,10 +1544,11 @@ class ElevationDataset:
                     # break
                 
                 #out_dir = xdl.parent.metadata['name']
-                if xdl.remote:
-                    #out_dir = utils.fn_basename2(out_dir)
-                    out_dir = out_dir.split(':')[0]
-                    
+                #if xdl.remote:
+                #out_dir = utils.fn_basename2(out_dir)
+                out_dir = out_dir.split(':')[0]
+
+                #utils.echo_msg(xdl.remote)
                 this_dir.append(out_dir)
                 xdl = xdl.parent
                 
@@ -1555,12 +1556,16 @@ class ElevationDataset:
             return(this_dir)
 
         srs_all = []
-        aa_name = self.metadata['name'].split(':')[0]
-        if self.region is None:
-            a_name = '{}_{}'.format(aa_name, utils.this_year())
-        else:
-            a_name = '{}_{}_{}'.format(
-                aa_name, self.region.format('fn'), utils.this_year())
+        if 'dirname' in kwargs.keys():
+            a_name = kwargs['dirname']
+            
+        if a_name == None:
+            aa_name = self.metadata['name'].split(':')[0]
+            if self.region is None:
+                a_name = '{}_{}'.format(aa_name, utils.this_year())
+            else:
+                a_name = '{}_{}_{}'.format(
+                    aa_name, self.region.format('fn'), utils.this_year())
 
         self.archive_datalist = '{}.datalist'.format(a_name)
         archive_keys = []
@@ -1568,12 +1573,14 @@ class ElevationDataset:
                 desc='archiving datasets to {}'.format(self.archive_datalist),
                 leave=self.verbose
         ) as pbar:
-            with open('{}.datalist'.format(a_name), 'w') as dlf:
+            with open(self.archive_datalist, 'a') as dlf:
                 for this_entry in self.parse():
                     pbar.update()
                     srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
-                    #utils.echo_msg(this_entry)
-                    #utils.echo_msg(this_entry.parent)
+                    # utils.echo_msg(this_entry)
+                    # utils.echo_msg(this_entry.remote)
+                    # utils.echo_msg(this_entry.parent)
+                    # utils.echo_msg(this_entry.parent.remote)
                     #utils.echo_msg(this_entry.parent.parent)
                     if this_entry.parent is None:
                         this_key = this_entry.metadata['name'].split(':')[0]
@@ -1582,6 +1589,10 @@ class ElevationDataset:
                         this_key = this_entry.parent.metadata['name'].split(':')[0]
                         this_dir = xdl2dir(this_entry.parent)
 
+                    if 'dirname' in kwargs.keys():
+                        if kwargs['dirname'] is not None:
+                            this_dir[0] = kwargs['dirname']
+                        
                     #utils.echo_msg(this_dir)
                     if self.region is None:
                         a_dir = '{}_{}'.format(this_key, utils.this_year())
@@ -7129,10 +7140,11 @@ Options:
 \t\t\tWhere FILTER is fltr_name[:opts] 
 \t\t\tThe -F switch may be set multiple times to perform multiple filters.
 \t\t\tAvailable FILTERS: {point_filter_modules}
+  -V, --archive\t\tArchive the DATALIST to the given REGION[/INCREMENTs].
+\t\t\tSpecify the name of the archive, if not specified an auto-generated name will be used.
 
   --mask\t\tMASK the datalist to the given REGION/INCREMENTs
   --spatial-metadata\tGenerate SPATIAL METADATA of the datalist to the given REGION/INCREMENTs
-  --archive\t\tARCHIVE the datalist to the given REGION[/INCREMENTs]
   --glob\t\tGLOB the datasets in the current directory to stdout
   --info\t\tGenerate and return an INFO dictionary of the dataset
   --weights\t\tOutput WEIGHT values along with xyz
@@ -7177,6 +7189,7 @@ See `datalists_usage` for full cli options.
     want_list = False
     want_glob = False
     want_archive = False
+    archive_dirname = None
     these_archives = []
     want_verbose = True
     want_region = False
@@ -7239,6 +7252,16 @@ See `datalists_usage` for full cli options.
         elif arg[:2] == '-F':
             pnt_fltrs.append(argv[2:])
 
+        elif arg == '--archive' or arg == '-V':
+            want_archive = True
+            dataexts = [xs for y in [x['fmts'] for x in list(DatasetFactory._modules.values())] for xs in y]
+            if not argv[i + 1].startswith('-'):# and argv[i+1].split(':')[0] not in dataexts and argv[i+1].split('.')[-1] not in dataexts:
+                archive_dirname = utils.str_or(argv[i + 1])
+                i = i + 1
+        elif arg[:2] == '-V':
+            want_archive = True
+            archive_dirname = utils.str_or(argv[2:])
+            
         elif arg == '--cache-dir' or arg == '-D' or arg == '-cache-dir':
             cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
             i = i + 1
@@ -7248,8 +7271,8 @@ See `datalists_usage` for full cli options.
             want_mask = True
         elif arg == '--invert_region' or arg == '-v':
             invert_region = True
-        elif arg == '--archive' or arg == '-a':
-            want_archive = True
+        # elif arg == '--archive' or arg == '-a':
+        #     want_archive = True
         elif arg == '--weights' or arg == '-w':
             want_weights = True
         elif arg == '--uncertainties' or arg == '-u':
@@ -7388,7 +7411,7 @@ See `datalists_usage` for full cli options.
                     print(this_region.format('gmt'))
                 elif want_archive:
                     #these_archives.append(this_datalist.archive_xyz()) # archive the datalist as xyz
-                    this_archive = this_datalist.archive_xyz() # archive the datalist as xyz
+                    this_archive = this_datalist.archive_xyz(dirname=archive_dirname) # archive the datalist as xyz
                     if this_archive.numpts == 0:
                         utils.remove_glob('{}*'.format(this_archive.name))
                 else:

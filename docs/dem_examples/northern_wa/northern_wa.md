@@ -78,9 +78,17 @@ dlim -R tiles_1_9.shp --archive -P epsg:4269+5703 charts
 fetches -R tiles_1_9.shp multibeam -H3
 ```
 
+```bash
+dlim -R ../software/tiles_1_9.shp multibeam -u -w -P epsg:4269 --archive multibeam
+```
+
 #### EHydro
 ```bash
 fetches -R tiles_1_9.shp ehydro -H3
+```
+
+```bash
+dlim -R ../software/tiles_1_9.shp ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
 ```
 
 #### Crowd-Sourced Bathymetry
