@@ -71,6 +71,8 @@ dlim -R ../software/tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 hydronos --arc
 This will generate a datalist and associated auxilary files:
 hydronos.datalist  hydronos.datalist.inf  hydronos.datalist.json  hydronos.datalist.prj
 
+![](wa_hydronos.png)
+
 #### Nautical Charts
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 charts -H3
