@@ -83,6 +83,8 @@ Process the fetched data to XYZ and NAD83/NAVD88
 dlim -R tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 charts --archive charts
 ```
 
+![](wa_charts.png)
+
 #### Multibeam
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 multibeam -H3
