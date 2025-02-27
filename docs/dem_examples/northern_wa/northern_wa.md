@@ -112,6 +112,11 @@ Process the fetched data to XYZ and NAD83/NAVD88, include the extraction of the 
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
 ```
 
+This will generate a datalist and associated auxilary files:
+```
+ehydro.datalist  ehydro.datalist.inf  ehydro.datalist.json
+```
+
 ![](wa_ehydro.png)
 
 #### Crowd-Sourced Bathymetry
