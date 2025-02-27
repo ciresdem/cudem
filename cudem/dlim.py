@@ -7255,11 +7255,11 @@ See `datalists_usage` for full cli options.
         elif arg == '--archive' or arg == '-V':
             want_archive = True
             dataexts = [xs for y in [x['fmts'] for x in list(DatasetFactory._modules.values())] for xs in y]
-            utils.echo_msg_bold(i+1 < len(argv))
-            utils.echo_msg_bold('{} {}'.format(len(argv), i+1))
+            #utils.echo_msg_bold(i+1 < len(argv))
+            #utils.echo_msg_bold('{} {}'.format(len(argv), i+1))
             if i+1 < len(argv) and not argv[i + 1].startswith('-'):# and argv[i+1].split(':')[0] not in dataexts and argv[i+1].split('.')[-1] not in dataexts:
                 archive_dirname = utils.str_or(argv[i + 1])
-                utils.echo_msg_bold(archive_dirname)
+                #utils.echo_msg_bold(archive_dirname)
                 i = i + 1
         elif arg[:2] == '-V':
             want_archive = True
