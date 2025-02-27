@@ -70,7 +70,7 @@ dlim -R ../software/tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 hydronos --arc
 
 This will generate a datalist and associated auxilary files:
 ```
-hydronos.datalist  hydronos.datalist.inf  hydronos.datalist.json  hydronos.datalist.prj
+hydronos.datalist  hydronos.datalist.inf  hydronos.datalist.json
 ```
 
 ![](wa_hydronos.png)
@@ -87,7 +87,7 @@ dlim -R tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 charts --archive charts
 
 This will generate a datalist and associated auxilary files:
 ```
-charts.datalist  charts.datalist.inf  charts.datalist.json  charts.datalist.prj
+charts.datalist  charts.datalist.inf  charts.datalist.json
 ```
 
 ![](wa_charts.png)
@@ -111,6 +111,8 @@ Process the fetched data to XYZ and NAD83/NAVD88, include the extraction of the 
 ```bash
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
 ```
+
+![](wa_ehydro.png)
 
 #### Crowd-Sourced Bathymetry
 ```bash
