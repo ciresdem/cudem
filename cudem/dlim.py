@@ -1577,11 +1577,6 @@ class ElevationDataset:
                 for this_entry in self.parse():
                     pbar.update()
                     srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
-                    # utils.echo_msg(this_entry)
-                    # utils.echo_msg(this_entry.remote)
-                    # utils.echo_msg(this_entry.parent)
-                    # utils.echo_msg(this_entry.parent.remote)
-                    #utils.echo_msg(this_entry.parent.parent)
                     if this_entry.parent is None:
                         this_key = this_entry.metadata['name'].split(':')[0]
                         this_dir = []
@@ -1611,7 +1606,6 @@ class ElevationDataset:
                             )
                         )
 
-                    #utils.echo_msg(this_dir)
                     this_dir = os.path.join(os.getcwd(), *this_dir)
                     if not os.path.exists(this_dir):
                         os.makedirs(this_dir)

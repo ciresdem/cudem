@@ -68,6 +68,9 @@ Process the fetched data to XYZ and NAD83/NAVD88
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 hydronos --archive hydronos
 ```
 
+This will generate a datalist and associated auxilary files:
+hydronos.datalist  hydronos.datalist.inf  hydronos.datalist.json  hydronos.datalist.prj
+
 #### Nautical Charts
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 charts -H3
@@ -93,6 +96,7 @@ dlim -R ../software/tiles_1_9.shp:pct_buffer=25 multibeam -u -w -P epsg:4269 --a
 fetches -R tiles_1_9.shp ehydro -H3
 ```
 
+Process the fetched data to XYZ and NAD83/NAVD88, include the extraction of the contours.
 ```bash
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
 ```
