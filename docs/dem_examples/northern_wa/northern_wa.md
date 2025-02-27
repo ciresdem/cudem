@@ -60,12 +60,12 @@ Fetched data can then be either processed to XYZ or used as-is in a datalist. Da
 #### HydroNOS
 
 ```bash
-fetches -R tiles_1_9.shp hydronos -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 hydronos -H3
 ```
 
 #### Nautical Charts
 ```bash
-fetches -R tiles_1_9.shp charts -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 charts -H3
 ```
 
 Process the fetched data to XYZ and NAD83/NAVD88
@@ -75,11 +75,11 @@ dlim -R tiles_1_9.shp --archive -P epsg:4269+5703 charts
 
 #### Multibeam
 ```bash
-fetches -R tiles_1_9.shp multibeam -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 multibeam -H3
 ```
 
 ```bash
-dlim -R ../software/tiles_1_9.shp multibeam -u -w -P epsg:4269 --archive multibeam
+dlim -R ../software/tiles_1_9.shp:pct_buffer=25 multibeam -u -w -P epsg:4269 --archive multibeam
 ```
 
 #### EHydro
@@ -88,12 +88,12 @@ fetches -R tiles_1_9.shp ehydro -H3
 ```
 
 ```bash
-dlim -R ../software/tiles_1_9.shp ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
+dlim -R ../software/tiles_1_9.shp:pct_buffer=25 ehydro,-203:want_contours=True -P epsg:4269+5703 --archive ehydro
 ```
 
 #### Crowd-Sourced Bathymetry
 ```bash
-fetches -R tiles_1_9.shp csb -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 csb -H3
 ```
 
 ### Topography / Near-shore Bathymetry
@@ -123,23 +123,23 @@ See `fetches --modules digital_coast` to see all the possible query fields.
 For this example, we'll fetch specific lidar surveys, with the following command:
 
 ```bash
-fetches -R tiles_1_9.shp digital_coast:where="ID=9703 OR ID=10116 OR ID=9072 OR ID=9512 OR ID=4989 OR ID=6263 OR ID=5008 OR ID=2492 OR ID=2508 OR ID=2603 OR ID=8607 OR ID=2584 OR ID=2482" -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 digital_coast:where="ID=9703 OR ID=10116 OR ID=9072 OR ID=9512 OR ID=4989 OR ID=6263 OR ID=5008 OR ID=2492 OR ID=2508 OR ID=2603 OR ID=8607 OR ID=2584 OR ID=2482" -H3
 ```
 
 #### USGS Lidar
 
 #### USGS DEMs
 ```bash
-fetches -R tiles_1_9.shp ned1
+fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
 
 ```bash
-fetches -R tiles_1_9.shp CoNED
+fetches -R tiles_1_9.shp:pct_buffer=25 CoNED
 ```
 
 #### CUDEMs
 ```bash
-fetches -R tiles_1_9.shp CUDEM -H3
+fetches -R tiles_1_9.shp:pct_buffer=25 CUDEM -H3
 ```
 
 ## Make a datalist
