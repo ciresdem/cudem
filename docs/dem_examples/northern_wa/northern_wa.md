@@ -69,7 +69,9 @@ dlim -R ../software/tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 hydronos --arc
 ```
 
 This will generate a datalist and associated auxilary files:
+```
 hydronos.datalist  hydronos.datalist.inf  hydronos.datalist.json  hydronos.datalist.prj
+```
 
 ![](wa_hydronos.png)
 
@@ -81,6 +83,11 @@ fetches -R tiles_1_9.shp:pct_buffer=25 charts -H3
 Process the fetched data to XYZ and NAD83/NAVD88
 ```bash
 dlim -R tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 charts --archive charts
+```
+
+This will generate a datalist and associated auxilary files:
+```
+charts.datalist  charts.datalist.inf  charts.datalist.json  charts.datalist.prj
 ```
 
 ![](wa_charts.png)
