@@ -173,6 +173,21 @@ fetches -R tiles_1_9.shp:pct_buffer=25 digital_coast:where="ID=9703 OR ID=10116 
 fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
 
+We will leave these files as they are, GeoTiff rasters and generate a datalist of the results. Since these data come in UTM Zone 10 North, we will assign that srs to the datalist for proper transformation and location when processing.
+
+```bash
+cd tnm
+dlim -g > ned1.datalist
+dlim -i ned1.datalist -J epsg:26910
+```
+
+This will generate a datalist and associated auxilary files:
+```
+ned1.datalist  ned1.datalist.inf  ned1.datalist.json
+```
+
+![](wa_ned1.png)
+
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 CoNED
 ```
