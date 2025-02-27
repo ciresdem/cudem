@@ -124,6 +124,18 @@ ehydro.datalist  ehydro.datalist.inf  ehydro.datalist.json
 fetches -R tiles_1_9.shp:pct_buffer=25 csb -H3
 ```
 
+Process the fetched data to XYZ and NAD83/NAVD88.
+```bash
+dlim -R ../software/tiles_1_9.shp:pct_buffer=25 csb -P epsg:4269+5703 --archive csb
+```
+
+This will generate a datalist and associated auxilary files:
+```
+csb.datalist  csb.datalist.inf  csb.datalist.json
+```
+
+![](wa_csb.png)
+
 ### Topography / Near-shore Bathymetry
 
 #### Digital Coast Lidar
