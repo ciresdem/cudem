@@ -173,11 +173,11 @@ fetches -R tiles_1_9.shp:pct_buffer=25 digital_coast:where="ID=9703 OR ID=10116 
 fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
 
-We will leave these files as they are, GeoTiff rasters and generate a datalist of the results. Since these data come in UTM Zone 10 North, we will assign that srs to the datalist for proper transformation and location when processing.
+We will leave these files as they are, GeoTiff rasters and generate a datalist of the results. Since these data come in UTM Zone 10 North, we will assign that srs to the datalist for proper transformation and location when processing. We'll add the format-specific option of 'remove_flat=True' into the datalist to remove the hydro-flattened areas of the raster.
 
 ```bash
 cd tnm
-dlim -g > ned1.datalist
+dlim -g | awk '{print $1,$2":remove_flat=True",$3,$4}' > ned1.datalist
 dlim -i ned1.datalist -J epsg:26910
 ```
 
