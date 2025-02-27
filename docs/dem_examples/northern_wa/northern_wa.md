@@ -52,9 +52,9 @@ Outputs: [wa_coast.shp](wa_coast.geojson)
 
 ## Fetch common datasets and create datalists
 
-Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module. Using the tiled vector file generated above, `tiles_1_9.shp`, we will fetch data for each of the tiles. The data won't be duplicated, so a file fetched for one tile will be skipped if it's present in other tile.
+Use the [fetches](/docs/fetches.md) command to download common datasets. Use the `-H` switch to fetch data in multiple threads. The fetched data will be located in the current working directory in a directory named after the fetch module. Using the tiled vector file generated above, `tiles_1_9.shp`, we will fetch data for each of the tiles, adding a 25% buffer to each tile. The data won't be duplicated, so a file fetched for one tile will be skipped if it's present in other tile.
 
-Fetched data can then be either processed to XYZ or used as-is in a datalist. Data originating in raster format will be used as-is, while some other datasets will be processed to XYZ and common datums for use in the datalists.
+Fetched data can then be either processed to XYZ or used as-is in a datalist. Data originating in raster or las/z format will be used as-is, while some other datasets will be processed to XYZ and common datums for use in the datalists.
 
 ### Bathymetry
 #### HydroNOS
@@ -63,6 +63,7 @@ Fetched data can then be either processed to XYZ or used as-is in a datalist. Da
 fetches -R tiles_1_9.shp:pct_buffer=25 hydronos -H3
 ```
 
+Process the fetched data to XYZ and NAD83/NAVD88
 ```bash
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 hydronos --archive hydronos
 ```
@@ -74,7 +75,7 @@ fetches -R tiles_1_9.shp:pct_buffer=25 charts -H3
 
 Process the fetched data to XYZ and NAD83/NAVD88
 ```bash
-dlim -R tiles_1_9.shp --archive -P epsg:4269+5703 charts
+dlim -R tiles_1_9.shp:pct_buffer=25 -P epsg:4269+5703 charts --archive charts
 ```
 
 #### Multibeam
@@ -82,6 +83,7 @@ dlim -R tiles_1_9.shp --archive -P epsg:4269+5703 charts
 fetches -R tiles_1_9.shp:pct_buffer=25 multibeam -H3
 ```
 
+Process the fetched data to XYZ and NAD83, leaving the vertical datum as 'Instantaneous Mean Sea Level', include the -w and -u switches to include weights and uncertainty, respectively.
 ```bash
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 multibeam -u -w -P epsg:4269 --archive multibeam
 ```
