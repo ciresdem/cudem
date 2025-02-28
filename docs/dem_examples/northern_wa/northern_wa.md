@@ -111,6 +111,13 @@ find ./multibeam/ -type f | grep datalist | grep -v json | grep -v inf | awk '{p
 dlim -i multibeam.datalist
 ```
 
+Either of these will generate a datalist and associated auxilary files:
+```
+multibeam.datalist  multibeam.datalist.inf  multibeam.datalist.json
+```
+
+![](wa_multibeam.png)
+
 #### EHydro
 ```bash
 fetches -R tiles_1_9.shp ehydro -H3
