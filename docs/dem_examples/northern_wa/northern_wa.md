@@ -102,6 +102,15 @@ Process the fetched data to XYZ and NAD83, leaving the vertical datum as 'Instan
 dlim -R ../software/tiles_1_9.shp:pct_buffer=25 multibeam -u -w -P epsg:4269 --archive multibeam
 ```
 
+We can also keep the multibeam data as-is to save space and process them directly from a datalist:
+
+```bash
+cd multibeam
+for i in */; do cd $i; dlim -g > $(basename $i).datalist; dlim -i $(basename $i).datalist; cd ..; done
+find ./multibeam/ -type f | grep datalist | grep -v json | grep -v inf | awk '{print $1, -1, 1, 0}' > multibeam.datalist
+dlim -i multibeam.datalist
+```
+
 #### EHydro
 ```bash
 fetches -R tiles_1_9.shp ehydro -H3
