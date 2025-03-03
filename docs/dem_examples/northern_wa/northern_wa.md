@@ -202,6 +202,9 @@ digital_coast.datalist  digital_coast.datalist.inf  digital_coast.datalist.json
 #### USGS Lidar
 
 #### USGS DEMs
+
+##### National Elevation Dataset 1 meter DEMs
+
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
@@ -223,6 +226,8 @@ ned1.datalist  ned1.datalist.inf  ned1.datalist.json
 ```
 
 ![](wa_ned1.png)
+
+##### Coastal National Elevation Dataset (CoNED)
 
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 CoNED
