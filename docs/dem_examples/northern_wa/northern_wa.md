@@ -263,6 +263,25 @@ ls ../data/*.datalist | awk '{print $1,-1,1,0}' > northern_wa.datalist
 dlim -i northern_wa.datalist -P epsg:4269
 ```
 
+This will generate a datalist and associated auxilary files:
+```
+northern_wa.datalist  northern_wa.datalist.inf  northern.datalist.json
+```
+
+The contents of this datalist should point to the previously made datalists, we can comment out the CUDEM and CoNED datalists for now:
+```
+../data/charts.datalist -1 1 0
+../data/csb.datalist -1 1 0
+../data/digital_coast.datalist -1 1 0
+../data/ehydro.datalist -1 1 0
+../data/hydronos.datalist -1 1 0
+../data/multibeam.datalist -1 1 0
+../data/ned1.datalist -1 1 0
+../data/waDNR.datalist -1 1 0
+#../data/CoNED.datalist -1 1 0
+#../data/CUDEM.datalist -1 1 0
+```
+
 ## Generate a test tile
 
 pick a tile and generate an on-the-fly DEM to see what it looks like
