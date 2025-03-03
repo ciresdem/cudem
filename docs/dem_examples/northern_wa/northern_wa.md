@@ -182,9 +182,26 @@ For this example, we'll fetch specific lidar surveys, with the following command
 fetches -R tiles_1_9.shp:pct_buffer=25 digital_coast:where="ID=9703 OR ID=10116 OR ID=9072 OR ID=9512 OR ID=4989 OR ID=6263 OR ID=5008 OR ID=2492 OR ID=2508 OR ID=2603 OR ID=8607 OR ID=2584 OR ID=2482" -H3
 ```
 
+We will leave these files as they are, laz formatted lidar, and generate a datalist of the results.
+
+```bash
+cd digital_coast
+for i in */; do cd $i; dlim -g > $(basename $i).datalist; dlim -i $(basename $i).datalist; cd ..; done
+cd ..
+find ./digital_coast/ -type f | grep datalist | grep -v json | grep -v inf | awk '{print $1, -1, 1, 0}' > digital_coast.datalist
+dlim -i digital_coast.datalist
+```
+
+This will generate a datalist and associated auxilary files:
+```
+digital_coast.datalist  digital_coast.datalist.inf  digital_coast.datalist.json
+```
+
+![](wa_digital_coast.png)
+
 #### USGS Lidar
 
-     #### USGS DEMs
+#### USGS DEMs
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
@@ -194,6 +211,9 @@ We will leave these files as they are, GeoTiff rasters and generate a datalist o
 ```bash
 cd tnm
 dlim -g | awk '{print $1,$2":remove_flat=True",$3,$4}' > ned1.datalist
+dlim -i ned1.datalist -J epsg:26910
+cd ..
+ls tnm/*.datalist | awk '{print $1,-1,1,0}' > ned1.datalist
 dlim -i ned1.datalist -J epsg:26910
 ```
 
@@ -212,6 +232,23 @@ fetches -R tiles_1_9.shp:pct_buffer=25 CoNED
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 CUDEM -H3
 ```
+
+We will leave these files as they are, GeoTiff rasters and generate a datalist of the results. We may or may not use these data in the final gridding, but they can useful as a basis to compare to for data collection and processing.
+
+```bash
+cd CUDEM
+for i in */; do cd $i; dlim -g > $(basename $i).datalist; dlim -i $(basename $i).datalist; cd ..; done
+cd ..
+find ./CUDEM/ -type f | grep datalist | grep -v json | grep -v inf | awk '{print $1, -1, 1, 0}' > CUDEM.datalist
+dlim -i CUDEM.datalist
+```
+
+This will generate a datalist and associated auxilary files:
+```
+CUDEM.datalist  CUDEM.datalist.inf  CUDEM.datalist.json
+```
+
+![](wa_cudem.png)
 
 ## Make a datalist
 
