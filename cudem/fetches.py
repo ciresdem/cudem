@@ -1848,20 +1848,24 @@ class MarGrav(FetchModule):
     ftp://topex.ucsd.edu/pub/global_grav_1min/
     https://topex.ucsd.edu/marine_grav/explore_grav.html
     https://topex.ucsd.edu/marine_grav/white_paper.pdf
-    
+    https://topex.ucsd.edu/pub/global_grav_1min/geotiff/
+
     < mar_grav:upper_limit=None:lower_limit=None:raster=False:mag=1 >
     """
     
-    def __init__(self, mag = 1, upper_limit = None,
+    def __init__(self, where = '', mag = 1, upper_limit = None,
                  lower_limit = None, raster = False,
                  **kwargs):
         super().__init__(name='mar_grav', **kwargs)
         self.mag = mag if mag == 1 else 0.1
         self.raster = raster # if True, grid the data and return as a raster in dlim
+        self.where = [where] if len(where) > 0 else []
         
         ## The mar_grav URl
         self._mar_grav_url = 'https://topex.ucsd.edu/cgi-bin/get_data.cgi'
-
+        self._mar_grav_geotiff_url = 'https://topex.ucsd.edu/pub/global_grav_1min/geotiff/'
+        self._mar_grav_27_1_url = 'https://topex.ucsd.edu/pub/global_topo_1min/topo_27.1.img'
+        
         ## set up the region, restrict by z-region if desired
         self.grav_region = self.region.copy()
         self.grav_region._wgs_extremes(just_below=True)
@@ -1884,6 +1888,90 @@ class MarGrav(FetchModule):
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
         }
+
+        ## MARGRAV is in FRED, so set that up here.
+        #self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
+        #self.update_if_not_in_FRED()
+        
+    def update_if_not_in_FRED(self):
+        """update the fetches module in FRED if it's not already in there."""
+        
+        self.FRED._open_ds()
+        self.FRED._attribute_filter(["DataSource = '{}'".format(self.name)])
+        if len(self.FRED.layer) == 0:
+            self.FRED._close_ds()
+            self.update()
+            
+        self.FRED._close_ds()
+
+    def update(self):
+        """Crawl the COP30 database and update/generate the NASADEM reference vector."""
+
+        self.FRED._open_ds(1)
+        surveys = []
+        page = Fetch(self._mar_grav_geotiff_url, verbose=True).fetch_html()
+        rows = page.xpath('//a[contains(@href, ".tiff")]/@href')
+        with tqdm(
+                desc='scanning for MARine GRAVity datasets',
+                leave=self.verbose
+        ) as pbar:            
+            for i, row in enumerate(rows):
+                pbar.update()
+                sid = row.split('.')[0]
+                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
+                if self.FRED.layer is None or len(self.FRED.layer) == 0:
+                    spat = row.split('.')[0].split('/')[-1].split('grav')[-1]
+                    if 'E' in spat:
+                        y = int(spat.split('E')[-1])
+                        if 'N' in spat:
+                            x = int(spat.split('E')[0].split('N')[-1])
+                        elif 'S' in spat:
+                            x = int(spat.split('E')[0].split('S')[-1]) * -1
+                        
+                    elif 'W' in spat:
+                        y = int(spat.split('W')[-1]) * -1 
+                        if 'N' in spat:
+                            x = int(spat.split('W')[0].split('N')[-1])
+                        elif 'S' in spat:
+                            x = int(spat.split('W')[0].split('S')[-1]) * -1
+                        
+                    this_region = regions.Region().from_list(
+                        [x, x + 60, y - 40, y]
+                    )
+                    utils.echo_msg('{} {} {} {}'.format(x, y, spat, this_region))
+                    geom = this_region.export_as_geom()
+                    if geom is not None:
+                        surveys.append(
+                            {
+                                'Name': row.split('.')[0],
+                                'ID': sid,
+                                'Agency': 'SDSU',
+                                'Date': utils.this_date(),
+                                'MetadataLink': self._mar_grav_geotiff_url,
+                                'MetadataDate': utils.this_date(),
+                                'DataLink': self._mar_grav_geotiff_url + row,
+                                'DataType': '3',
+                                'DataSource': 'mar_grav',
+                                'HorizontalDatum': 'epsg:4326',
+                                'VerticalDatum': 'msl',
+                                'Info': '',
+                                'geom': geom
+                            }
+                        )
+
+        self.FRED._add_surveys(surveys)
+        self.FRED._close_ds()
+
+    def _run(self):
+        '''Run the NASADEM DEM fetching module'''
+
+        for surv in FRED._filter_FRED(self):
+            for i in surv['DataLink'].split(','):
+                self.results.append(
+                    [i, i.split('/')[-1].split('?')[0], surv['DataType']]
+                )
+                
+        return(self)
         
     def run(self):
         '''Run the mar_grav fetching module.'''
@@ -3406,8 +3494,8 @@ class DAV(FetchModule):
     < digital_coast:where=None:datatype=None >
     """
     
-    def __init__(self, where = '1=1', index = False, datatype = None, layer = 0, **kwargs):
-        super().__init__(name='digital_coast', **kwargs)
+    def __init__(self, where = '1=1', index = False, datatype = None, layer = 0, name='digital_coast', **kwargs):
+        super().__init__(name=name, **kwargs)
         self.where = where
         self.index = index
         self.datatype = datatype
@@ -3583,7 +3671,7 @@ class SLR(DAV):
     """
     
     def __init__(self, **kwargs):
-        super().__init__(where='ID=6230', **kwargs)
+        super().__init__(name='SLR', where='ID=6230', **kwargs)
 
 ## Digital Coast - Data Access Viewer CoNED shortcut
 class CoNED(DAV):
@@ -3593,7 +3681,7 @@ class CoNED(DAV):
     """
     
     def __init__(self, **kwargs):
-        super().__init__(where="NAME LIKE '%CoNED%'", **kwargs)
+        super().__init__(name='CoNED', where="NAME LIKE '%CoNED%'", **kwargs)
 
 ## Digital Coast - Data Access Viewer - CUDEM shortcut
 class CUDEM(DAV):
@@ -3603,7 +3691,7 @@ class CUDEM(DAV):
     """
     
     def __init__(self, **kwargs):
-        super().__init__(where="NAME LIKE '%CUDEM%'", **kwargs)
+        super().__init__(name='CUDEM', where="NAME LIKE '%CUDEM%'", **kwargs)
     
 ## NCEI THREDDS Catalog
 class NCEIThreddsCatalog(FetchModule):

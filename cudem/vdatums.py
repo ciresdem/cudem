@@ -516,6 +516,18 @@ class VerticalTransform:
         """create a cdn transofrmation grid"""
 
         epsg = 5703 if epsg == 6360 else epsg
+        # if epsg == 6360:
+        #     #+vto_meter=0.3048006096012192
+        #     #epsg = 5703
+
+        #     _tmp_array = np.zeros( (self.ycount, self.xcount) )
+        #     _tmp_array[:] = 0.3048006096012192
+        #     if invert:
+        #         _tmp_array = _tmp_array * -1
+
+        #     utils.echo_msg(_tmp_array)
+        #     return(_tmp_array, 5703)
+            
         geoid = 'g2018' if geoid is None else geoid
         ## fetch the cdn transformation grids
         if epsg is not None:

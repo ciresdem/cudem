@@ -799,6 +799,7 @@ class ElevationDataset:
                     
         if self.valid_p():
             self.infos = self.inf(check_hash=True if self.data_format == -1 else False)
+            #utils.echo_msg(self.infos)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -1227,8 +1228,8 @@ class ElevationDataset:
             self.infos.src_srs = self.src_srs
 
         else:
-            if self.src_srs is None:
-                self.src_srs = self.infos.src_srs
+            #if self.src_srs is None:
+            self.src_srs = self.infos.src_srs
 
             if self.transform['transformer'] is not None and self.transform['trans_region'] is None:
                 self.transform['trans_region'] = regions.Region().from_list(self.infos.minmax)
@@ -1402,14 +1403,21 @@ class ElevationDataset:
                 ).run(outfile=self.transform['trans_fn'])
 
         ## set the pyproj.Transformer for both horz+vert and vert only
+        if utils.str_or(self.transform['src_vert_epsg']) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
+            #out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+            uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
+        else:
+            uc = ''
+            
         if self.transform['trans_fn'] is not None and os.path.exists(self.transform['trans_fn']):
-            self.transform['pipeline'] = '+proj=pipeline +step {} +inv +step +proj=vgridshift +grids={} +inv +step {}'.format(
+            self.transform['pipeline'] = '+proj=pipeline{} +step {} +inv +step +proj=vgridshift +grids={} +inv +step {}'.format(
+                uc,
                 self.transform['src_horz_crs'].to_proj4(),
                 os.path.abspath(self.transform['trans_fn']),
                 self.transform['dst_horz_crs'].to_proj4()
             )
             self.transform['vert_transformer'] = pyproj.Transformer.from_pipeline(
-                '+proj=pipeline +step +proj=vgridshift +grids={} +inv'.format(os.path.abspath(self.transform['trans_fn']))
+                '+proj=pipeline{} +step +proj=vgridshift +grids={} +inv'.format(uc, os.path.abspath(self.transform['trans_fn']))
                 )
         else:
             utils.echo_error_msg(
@@ -1467,7 +1475,6 @@ class ElevationDataset:
             else:
                 self.data_region = regions.Region().from_list(self.infos.minmax)
                 self.data_region.src_srs = self.infos.src_srs
-
                     
     def parse(self):
         """parse the datasets from the dataset.
@@ -5069,6 +5076,8 @@ class Datalist(ElevationDataset):
         entry_region - the region of the datalist entry
         """
 
+        #utils.echo_msg(entry)
+        #utils.echo_msg(entry.params['kwargs'])
         entry_path = os.path.abspath(entry.fn) if not entry.remote else entry.fn
         entry_fields = [entry_path,
                         entry.data_format,
@@ -5117,7 +5126,7 @@ class Datalist(ElevationDataset):
                     for key in entry.mask.keys():
                         entry.params['mod_args'][key] = entry.mask[key]
                         #entry.params['mod_args'] = {'mask': entry.mask}
-                    
+
                 ## entry has an srs and dst_srs is set, so lets transform the region to suit
                 if entry.src_srs is not None:
                     out_srs.append(entry.src_srs)
@@ -5244,6 +5253,7 @@ class Datalist(ElevationDataset):
                                 self.__dict__[kpam] = kval
                                 del data_set_args[kpam]
                     except:
+                        ds_args = None
                         data_set_args = {}
 
                     ## update existing metadata
@@ -5252,22 +5262,24 @@ class Datalist(ElevationDataset):
                         md[key] = feat.GetField(key)
 
                     ## generate the dataset object to yield
-                    data_mod = '"{}" {} {} {}'.format(
+                    data_mod = '"{}" {}{} {} {}'.format(
                         feat.GetField('path'),
                         feat.GetField('format'),
+                        ':{}'.format(ds_args) if ds_args is not None else '',
                         feat.GetField('weight'),
                         feat.GetField('uncertainty')
                     )
                     data_set = DatasetFactory(
-                        **self._set_params(mod=data_mod, metadata=md, **data_set_args)
+                        **self._set_params(mod=data_mod, metadata=md)#, **data_set_args)
                     )._acquire_module()
                     if data_set is not None and data_set.valid_p(
                             fmts=DatasetFactory._modules[data_set.data_format]['fmts']
                     ):
                         data_set.initialize()
+                        #utils.echo_msg(data_set.params)
                         ## fill self.data_entries with each dataset for use outside the yield.
                         for ds in data_set.parse(): 
-                            self.data_entries.append(ds) 
+                            self.data_entries.append(ds)
                             yield(ds)
 
             dl_ds = dl_layer = None
@@ -5381,7 +5393,7 @@ class ZIPlist(ElevationDataset):
         self.infos.file_hash = self.infos.generate_hash()
         for entry in self.parse():            
             entry_minmax = entry.infos.minmax
-            
+
             ## entry has an srs and dst_srs is set, so lets transform the region to suit
             if entry.src_srs is not None:
                 out_srs.append(entry.src_srs)
@@ -6889,7 +6901,7 @@ class DatasetFactory(factory.CUDEMFactory):
         #this_entry = shlex.split(shlex.quote(self.kwargs['fn'].rstrip()))#.replace("'", "\'")))
         #this_entry = [p for p in re.split("( |\\\".*?\\\"|'.*?')", self.kwargs['fn']) if p.strip()]
         #this_entry = [t.strip('"') for t in re.findall(r'[^\s"]+|"[^"]*"', self.kwargs['fn'].rstrip())]
-        this_entry = re.findall("(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
+        this_entry = re.findall(r"(?:\".*?\"|\S)+", self.kwargs['fn'].rstrip())
         try:
             entry = [utils.str_or(x) if n == 0 \
                      else utils.str_or(x) if n < 2 \
@@ -6907,7 +6919,7 @@ class DatasetFactory(factory.CUDEMFactory):
         ## parse the format for dataset specific opts.
         #utils.echo_msg(entry)
         if len(entry) < 2:
-            if self.kwargs['data_format'] is not None:
+            if 'data_format' in self.kwargs.keys() and self.kwargs['data_format'] is not None:
                 entry.append(self.kwargs['data_format'])
             else:
                 for key in self._modules.keys():

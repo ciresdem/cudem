@@ -391,7 +391,7 @@ class Hillshade(Perspecto):
             azimuth=315,
             altitude=45,
             modulate=125,
-            alpha=True,
+            alpha=False,
             mode='multiply',
             gamma=.5,
             **kwargs,

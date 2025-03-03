@@ -28,6 +28,7 @@
 import os
 import sys
 
+import warnings
 import pyproj
 from osgeo import ogr
 
@@ -74,7 +75,7 @@ class Region:
         self.wmax = utils.float_or(wmax)
         self.umin = utils.float_or(umin)
         self.umax = utils.float_or(umax)
-        self.src_srs = utils.str_or(src_srs, 'epsg:4326')
+        self.src_srs = src_srs
         self.wkt = wkt
 
     def __repr__(self):
@@ -640,30 +641,52 @@ class Region:
         if utils.str_or(self.src_srs) is None:
             utils.echo_warning_msg('region has no valid associated srs: {}'.format(self.src_srs))
             return(self)
-            
-        if self.src_srs.upper().startswith('EPSG'):
-            src_srs = self.src_srs.split('+')[0]
-        else:
-            src_srs = self.src_srs
 
-        if dst_crs.upper().startswith('EPSG'):
-            dst_crs = dst_crs.split('+')[0]
-            
-        in_horz_epsg = srsfun.epsg_from_input(src_srs)[0]
-        in_crs = pyproj.CRS.from_user_input(in_horz_epsg)
-        out_horz_epsg = srsfun.epsg_from_input(dst_crs)[0]        
-        out_crs = pyproj.CRS.from_user_input(out_horz_epsg)
-        transformer = pyproj.Transformer.from_crs(in_crs, out_crs, always_xy=True)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            transform = srsfun.parse_srs(src_srs = self.src_srs, dst_srs = dst_crs)
 
-        if transformer is None or not self.valid_p():
-            utils.echo_error_msg('could not perform transformation')
+            if transform['src_horz_crs'] is not None and transform['dst_horz_crs'] is not None:        
+                ## horizontal Transformation
+                transform['horz_pipeline'] = '+proj=pipeline +step {} +inv +step {}'.format(
+                    transform['src_horz_crs'].to_proj4(), transform['dst_horz_crs'].to_proj4()
+                )
+                #transform['trans_region'] = region.copy()
+                #transform['trans_region'].src_srs = transform['dst_horz_crs'].to_proj4()
+                #transform['trans_region'].warp(transform['src_horz_crs'].to_proj4())
+                transformer = pyproj.Transformer.from_pipeline(transform['horz_pipeline'])
+
+                self.src_srs = dst_crs
+                self.wkt = None
             
-            return(self)
+                return(self.transform(transformer, include_z=include_z))
+            else:
+                return(self)
         
-        self.src_srs = dst_crs
-        self.wkt = None
+        #transform = srsfun.set_transform(src_srs = self.src_srs, dst_srs = dst_crs, region = self, infos = None)
         
-        return(self.transform(transformer, include_z=include_z))
+        # if self.src_srs.upper().startswith('EPSG'):
+        #     src_srs = self.src_srs.split('+')[0]
+        # else:
+        #     src_srs = self.src_srs
+
+        # if dst_crs.upper().startswith('EPSG'):
+        #     dst_crs = dst_crs.split('+')[0]
+
+        # try:
+        #     in_horz_epsg = srsfun.epsg_from_input(src_srs)[0]
+        #     in_crs = pyproj.CRS.from_user_input(in_horz_epsg)
+        #     out_horz_epsg = srsfun.epsg_from_input(dst_crs)[0]        
+        #     out_crs = pyproj.CRS.from_user_input(out_horz_epsg)
+        #     transformer = pyproj.Transformer.from_crs(in_crs, out_crs, always_xy=True)
+        # except:
+        #     transformer = None
+        
+        # if transformer is None or not self.valid_p():
+        #     utils.echo_error_msg('could not perform transformation')
+            
+        #     return(self)
+        
         
     def transform(self, transformer = None, include_z = True):
         if transformer is None or not self.valid_p():

@@ -184,7 +184,7 @@ fetches -R tiles_1_9.shp:pct_buffer=25 digital_coast:where="ID=9703 OR ID=10116 
 
 #### USGS Lidar
 
-#### USGS DEMs
+     #### USGS DEMs
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 ned1
 ```
