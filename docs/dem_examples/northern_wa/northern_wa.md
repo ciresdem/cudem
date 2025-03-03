@@ -268,7 +268,7 @@ This will generate a datalist and associated auxilary files:
 northern_wa.datalist  northern_wa.datalist.inf  northern.datalist.json
 ```
 
-The contents of this datalist should point to the previously made datalists, we can comment out the CUDEM and CoNED datalists for now:
+The contents of this datalist should point to the previously made datalists, we can comment out the CUDEM and CoNED datalists for now, and can adjust the weights and uncertainties at a later point:
 ```
 ../data/charts.datalist -1 1 0
 ../data/csb.datalist -1 1 0
@@ -282,9 +282,7 @@ The contents of this datalist should point to the previously made datalists, we 
 #../data/CUDEM.datalist -1 1 0
 ```
 
-## Generate a test tile
+## Generate `stack` from the datalist 
 
-pick a tile and generate an on-the-fly DEM to see what it looks like
-
-either, use the region dimensions of the desired tile or select and export the tile to a new vector using a GIS.
+waffles -R tiles_1_9.shp -E .11111111s -O wa_test -w -m -P epsg:4269+5703 -M stacks -X0:5 norhtern_wa.datalist -c
 
