@@ -302,3 +302,4 @@ waffles \
 norhtern_wa.datalist
 ```
 
+![](wa_stack.png)
