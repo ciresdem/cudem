@@ -233,6 +233,8 @@ ned1.datalist  ned1.datalist.inf  ned1.datalist.json
 fetches -R tiles_1_9.shp:pct_buffer=25 CoNED
 ```
 
+![](wa_coned.png)
+
 #### CUDEMs
 ```bash
 fetches -R tiles_1_9.shp:pct_buffer=25 CUDEM -H3
