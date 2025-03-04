@@ -257,6 +257,8 @@ CUDEM.datalist  CUDEM.datalist.inf  CUDEM.datalist.json
 
 ![](wa_cudem.png)
 
+#### WaDNR (Washington State Department of Natural Resources) lidar data
+
 ## Make a main datalist
 
 Combine all the previously made datalists, located in ${base}/data to a main datalist in ${base}/software and generate auxilary files, specifying a target horizontal datum of NAD83.
