@@ -285,6 +285,16 @@ The contents of this datalist should point to the previously made datalists, we 
 ## Generate `stack` from the datalist 
 
 ```bash
-waffles -R tiles_1_9.shp -E .11111111s -O wa_test -w -m -P epsg:4269+5703 -M stacks -X0:5 norhtern_wa.datalist -c
+waffles \
+-M stacks \
+-R tiles_1_9.shp \
+-E .11111111s \
+-O wa_test \
+-P epsg:4269+5703 \
+-X 0:5 \
+-w \
+-m \
+-c \
+norhtern_wa.datalist
 ```
 
