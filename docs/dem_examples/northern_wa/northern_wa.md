@@ -286,7 +286,7 @@ The contents of this datalist should point to the previously made datalists, we 
 #../data/CUDEM.datalist -1 1 0
 ```
 
-## Generate `stack` from the datalist 
+## Generate a DEM using the `stacks` module from the datalist 
 
 ```bash
 waffles \
