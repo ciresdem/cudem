@@ -264,7 +264,7 @@ CUDEM.datalist  CUDEM.datalist.inf  CUDEM.datalist.json
 Combine all the previously made datalists, located in ${base}/data to a main datalist in ${base}/software and generate auxilary files, specifying a target horizontal datum of NAD83.
 ```bash
 ls ../data/*.datalist | awk '{print $1,-1,1,0}' > northern_wa.datalist
-dlim -i northern_wa.datalist -P epsg:4269
+dlim -w -i northern_wa.datalist -P epsg:4269
 ```
 
 This will generate a datalist and associated auxilary files:
