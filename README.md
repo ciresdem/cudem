@@ -185,9 +185,9 @@ framework. See Hare et al. (2011), Amante and Eakins (2016), and Amante
 
 For additional questions, please contact:
 
-[Matthew.Love@noaa.gov](mailto:Matthew.Love@noaa.gov)
+[Matthew.Love@colorado.edu](mailto:matthew.love@colorado.edu)
 
-[Christopher.Amante@noaa.gov](mailto:Christopher.Amante@noaa.gov)
+[Christopher.Amante@colorado.edu](mailto:christopher.amante@colorado.edu)
 
 ## License
 
