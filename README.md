@@ -162,9 +162,10 @@ between adjacent DEM tiles.
 # Usage Examples
 
 - [Generate a CRM of Point Mugu in California](/docs/example_crm_malibu.md)
-- [Generate a set of Tile CRMs of Northern California](/docs/example_crm_norcal.md)
+- [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
 - [Filter Multibeam data](/docs/example_grits.md)
 - [Estimate DEM uncertainty](/docs/uncertainty.md)
+- [Generate a set of Tilded CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
 
 ## DEM Workshop, Victoria, B.C., Canada
 
