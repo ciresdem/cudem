@@ -1376,7 +1376,7 @@ class GMTSurface(Waffle):
             'gmt gmtset IO_COL_SEPARATOR = SPACE',
             verbose = False
         )        
-                
+
         dem_surf_cmd = ('')
         if self.blockmean:
             dem_surf_cmd = (
@@ -1387,7 +1387,7 @@ class GMTSurface(Waffle):
             )
 
         dem_surf_cmd += (
-            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
+            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} -Qr {}{}{}{}{}'.format(
                 self.p_region.format('gmt'), self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
