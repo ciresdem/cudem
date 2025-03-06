@@ -6212,8 +6212,20 @@ class MarGravFetcher(Fetcher):
         if self.bathy_only:
             self.upper_limit = 0
         
-    def set_ds(self, result):            
-        if self.rasterize:
+    def set_ds(self, result):
+        if result[-1] == 'mar_grav_img':
+            nc_fn = utils.make_temp_fn(
+                '{}.nc'.format(utils.fn_basename2(result[1])),
+                temp_dir=self.fetch_module._outdir)
+            img2nc_cmd = 'gmt img2grd {} {} -G{} -D -T1 -I1m -E'.format(
+                os.path.join(self.fetch_module._outdir, result[1]), self.region.format('gmt'), nc_fn
+            )
+
+            out, status = utils.run_cmd(img2nc_cmd, verbose=True)
+            self.fetches_params['mod'] = nc_fn
+            self.fetches_params['data_format'] = 200                
+            
+        elif self.rasterize:
             from cudem import waffles
             mg_region = self.region.copy()
             mg_region.zmax = self.upper_limit

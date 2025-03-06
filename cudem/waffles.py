@@ -2231,7 +2231,7 @@ class WafflesCoastline(Waffle):
                             #gdal.Warp(cst_warp_ds, cst_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
                             cst_ds_arr = cst_ds.GetRasterBand(1).ReadAsArray()
                             #self.coast_array[cst_ds_arr == 1] = 1 #if not self.invert_lakes else 1 # update for weights
-                            self.coast_array += (cst_ds_arr * 2)
+                            self.coast_array += cst_ds_arr
                             cst_ds = cst_ds_ = None
                         else:
                             utils.echo_error_msg('could not open {}'.format(out))
@@ -2271,8 +2271,8 @@ class WafflesCoastline(Waffle):
                 )
                 cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
                 cop_ds_arr[cop_ds_arr != 0] = 1
-                #self.coast_array += (cop_ds_arr * self.min_weight)
-                self.coast_array += (cop_ds_arr * .5)#self.min_weight)
+                self.coast_array += (cop_ds_arr * self.min_weight)
+                #self.coast_array += (cop_ds_arr * .5)#self.min_weight)
                 cop_ds = cop_ds_arr = None
             
     def _load_nhd(self):
@@ -2332,7 +2332,7 @@ class WafflesCoastline(Waffle):
                 if tnm_ds is not None:
                     tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                     tnm_ds_arr[tnm_ds_arr < 1] = 0
-                    self.coast_array -= (tnm_ds_arr * 1.25)#self.min_weight)
+                    self.coast_array -= (tnm_ds_arr * self.min_weight)
                     #self.coast_array[tnm_ds_arr < 1] = 0
                     tnm_ds = tnm_ds_arr = None
 

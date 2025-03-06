@@ -1889,90 +1889,6 @@ class MarGrav(FetchModule):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
         }
 
-        ## MARGRAV is in FRED, so set that up here.
-        #self.FRED = FRED.FRED(name=self.name, verbose=self.verbose)
-        #self.update_if_not_in_FRED()
-        
-    def update_if_not_in_FRED(self):
-        """update the fetches module in FRED if it's not already in there."""
-        
-        self.FRED._open_ds()
-        self.FRED._attribute_filter(["DataSource = '{}'".format(self.name)])
-        if len(self.FRED.layer) == 0:
-            self.FRED._close_ds()
-            self.update()
-            
-        self.FRED._close_ds()
-
-    def update(self):
-        """Crawl the COP30 database and update/generate the NASADEM reference vector."""
-
-        self.FRED._open_ds(1)
-        surveys = []
-        page = Fetch(self._mar_grav_geotiff_url, verbose=True).fetch_html()
-        rows = page.xpath('//a[contains(@href, ".tiff")]/@href')
-        with tqdm(
-                desc='scanning for MARine GRAVity datasets',
-                leave=self.verbose
-        ) as pbar:            
-            for i, row in enumerate(rows):
-                pbar.update()
-                sid = row.split('.')[0]
-                self.FRED._attribute_filter(["ID = '{}'".format(sid)])
-                if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    spat = row.split('.')[0].split('/')[-1].split('grav')[-1]
-                    if 'E' in spat:
-                        y = int(spat.split('E')[-1])
-                        if 'N' in spat:
-                            x = int(spat.split('E')[0].split('N')[-1])
-                        elif 'S' in spat:
-                            x = int(spat.split('E')[0].split('S')[-1]) * -1
-                        
-                    elif 'W' in spat:
-                        y = int(spat.split('W')[-1]) * -1 
-                        if 'N' in spat:
-                            x = int(spat.split('W')[0].split('N')[-1])
-                        elif 'S' in spat:
-                            x = int(spat.split('W')[0].split('S')[-1]) * -1
-                        
-                    this_region = regions.Region().from_list(
-                        [x, x + 60, y - 40, y]
-                    )
-                    utils.echo_msg('{} {} {} {}'.format(x, y, spat, this_region))
-                    geom = this_region.export_as_geom()
-                    if geom is not None:
-                        surveys.append(
-                            {
-                                'Name': row.split('.')[0],
-                                'ID': sid,
-                                'Agency': 'SDSU',
-                                'Date': utils.this_date(),
-                                'MetadataLink': self._mar_grav_geotiff_url,
-                                'MetadataDate': utils.this_date(),
-                                'DataLink': self._mar_grav_geotiff_url + row,
-                                'DataType': '3',
-                                'DataSource': 'mar_grav',
-                                'HorizontalDatum': 'epsg:4326',
-                                'VerticalDatum': 'msl',
-                                'Info': '',
-                                'geom': geom
-                            }
-                        )
-
-        self.FRED._add_surveys(surveys)
-        self.FRED._close_ds()
-
-    def _run(self):
-        '''Run the NASADEM DEM fetching module'''
-
-        for surv in FRED._filter_FRED(self):
-            for i in surv['DataLink'].split(','):
-                self.results.append(
-                    [i, i.split('/')[-1].split('?')[0], surv['DataType']]
-                )
-                
-        return(self)
-        
     def run(self):
         '''Run the mar_grav fetching module.'''
         
@@ -1993,6 +1909,9 @@ class MarGrav(FetchModule):
         if _req is not None:
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
             self.results.append([_req.url, outf, 'mar_grav'])
+
+        else:
+            self.results.append([self._mar_grav_27_1_url, 'topo_27.1.img', 'mar_grav_img'])
             
 ## SRTM Plus
 class SRTMPlus(FetchModule):
