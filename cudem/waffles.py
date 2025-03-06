@@ -2026,6 +2026,7 @@ class WafflesCoastline(Waffle):
     -----------
     Parameters:
     
+    want_osm_coast=[True/False] - use OSM to fill background
     want_gmrt=[True/False] - use GMRT to fill background (will use Copernicus otherwise)
     want_copernicus=[True/False] - use COPERNICUS to fill background
     want_nhd=[True/False] - use high-resolution NHD to fill US coastal zones
@@ -2045,9 +2046,10 @@ class WafflesCoastline(Waffle):
     
     def __init__(
             self,
+            want_osm_coast=True,
             want_nhd=True,
             want_nhd_plus=False,
-            want_copernicus=True,
+            want_copernicus=False,
             want_gmrt=False,
             want_lakes=False,
             invert_lakes=False,
@@ -2082,6 +2084,7 @@ class WafflesCoastline(Waffle):
         """
 
         super().__init__(**kwargs)
+        self.want_osm_coast = want_osm_coast
         self.want_nhd = want_nhd
         self.want_nhd_plus = want_nhd_plus
         self.want_gmrt = want_gmrt
@@ -2131,6 +2134,9 @@ class WafflesCoastline(Waffle):
         self._load_coast_mask()
 
         self.want_nhd = True if self.want_nhd_plus else self.want_nhd
+
+        if self.want_osm_coast:
+            self._load_osm_coast()
         
         if self.want_gmrt:
             self._load_gmrt()
@@ -2193,8 +2199,43 @@ class WafflesCoastline(Waffle):
         self.coast_array = np.zeros( (ycount, xcount) )
 
     def _load_osm_coast(self):
-        pass
-        
+
+        this_cst = self.fetch_data('osm:q=coastline')
+        if this_cst is not None:
+            with tqdm(
+                    total=len(this_cst.results),
+                    desc='processing osm coastline',
+                    leave=True
+            ) as pbar:
+                for n, cst_result in enumerate(this_cst.results):                
+                    if cst_result[-1] == 0:
+                        pbar.update()
+                        cst_osm = cst_result[1]
+                        out = fetches.polygonize_osm_coastline(
+                            cst_osm, utils.make_temp_fn(
+                                utils.fn_basename2(cst_osm) + '_coast.shp',
+                                temp_dir=self.cache_dir
+                            ),
+                            region=self.wgs_region,
+                            include_landmask=False,
+                            landmask_is_watermask=True,
+                            line_buffer=0.0000001
+                        )
+
+                        cst_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
+                        cst_warp_ds = gdalfun.gdal_mem_ds(self.ds_config, name='osm_coast', src_srs=self.wgs_srs, co=self.co)
+                        cst_ds_ = ogr.Open(out)
+                        if cst_ds_ is not None:
+                            cst_layer = cst_ds_.GetLayer()
+                            gdal.RasterizeLayer(cst_ds, [1], cst_layer, burn_values=[1])
+                            #gdal.Warp(cst_warp_ds, cst_ds, dstSRS=self.cst_srs, resampleAlg=self.sample)
+                            cst_ds_arr = cst_ds.GetRasterBand(1).ReadAsArray()
+                            #self.coast_array[cst_ds_arr == 1] = 1 #if not self.invert_lakes else 1 # update for weights
+                            self.coast_array += (cst_ds_arr * 2)
+                            cst_ds = cst_ds_ = None
+                        else:
+                            utils.echo_error_msg('could not open {}'.format(out))
+                        
     def _load_gmrt(self):
         """GMRT - Global low-res.
 
@@ -2230,7 +2271,8 @@ class WafflesCoastline(Waffle):
                 )
                 cop_ds_arr = cop_ds.GetRasterBand(1).ReadAsArray()
                 cop_ds_arr[cop_ds_arr != 0] = 1
-                self.coast_array += (cop_ds_arr * self.min_weight)
+                #self.coast_array += (cop_ds_arr * self.min_weight)
+                self.coast_array += (cop_ds_arr * .5)#self.min_weight)
                 cop_ds = cop_ds_arr = None
             
     def _load_nhd(self):
@@ -2290,7 +2332,7 @@ class WafflesCoastline(Waffle):
                 if tnm_ds is not None:
                     tnm_ds_arr = tnm_ds.GetRasterBand(1).ReadAsArray()
                     tnm_ds_arr[tnm_ds_arr < 1] = 0
-                    self.coast_array -= (tnm_ds_arr * self.min_weight)
+                    self.coast_array -= (tnm_ds_arr * 1.25)#self.min_weight)
                     #self.coast_array[tnm_ds_arr < 1] = 0
                     tnm_ds = tnm_ds_arr = None
 
