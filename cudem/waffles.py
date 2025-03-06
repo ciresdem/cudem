@@ -2192,6 +2192,9 @@ class WafflesCoastline(Waffle):
                                                 self.ndv, 'GTiff', None, None)        
         self.coast_array = np.zeros( (ycount, xcount) )
 
+    def _load_osm_coast(self):
+        pass
+        
     def _load_gmrt(self):
         """GMRT - Global low-res.
 

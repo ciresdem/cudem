@@ -299,7 +299,7 @@ waffles \
 -w \
 -m \
 -c \
-norhtern_wa.datalist
+northern_wa.datalist
 ```
 
 ![](wa_stack.png)
