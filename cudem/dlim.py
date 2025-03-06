@@ -1036,7 +1036,7 @@ class ElevationDataset:
                     ## this is very slow! find another way.
                     src_ds = ogr.Open(this_entry.mask['mask'])
                     layer = src_ds.GetLayer()
-                    utils.echo_msg(len(layer))
+                    #utils.echo_msg(len(layer))
 
                     geomcol = gdalfun.ogr_union_geom(layer)
                     if not geomcol.IsValid():
@@ -5248,10 +5248,18 @@ class Datalist(ElevationDataset):
                     try:
                         ds_args = feat.GetField('mod_args')
                         data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                        for kpam, kval in data_set_args.items():
+                        for kpam in list(data_set_args.keys()):
                             if kpam in self.__dict__:
+                                kval = data_set_args[kpam]
                                 self.__dict__[kpam] = kval
                                 del data_set_args[kpam]
+
+                        ds_args = utils.dict2args(data_set_args)
+                        # for kpam, kval in data_set_args.items():
+                        #     if kpam in self.__dict__:
+                        #         utils.echo_msg(kpam)
+                        #         self.__dict__[kpam] = kval
+                        #         #del data_set_args[kpam]
                     except:
                         ds_args = None
                         data_set_args = {}
@@ -5269,6 +5277,7 @@ class Datalist(ElevationDataset):
                         feat.GetField('weight'),
                         feat.GetField('uncertainty')
                     )
+
                     data_set = DatasetFactory(
                         **self._set_params(mod=data_mod, metadata=md)#, **data_set_args)
                     )._acquire_module()
