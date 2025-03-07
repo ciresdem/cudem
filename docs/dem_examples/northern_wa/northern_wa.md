@@ -57,6 +57,20 @@ Use the [fetches](/docs/fetches.md) command to download common datasets. Use the
 Fetched data can then be either processed to XYZ or used as-is in a datalist. Data originating in raster or las/z format will be used as-is, while some other datasets will be processed to XYZ and common datums for use in the datalists.
 
 ### Bathymetry
+#### Marine Gravity (mar_grav)
+```bash
+fetches -R tiles_1_9.shp:pct_buffer=25 mar_grav
+```
+
+```bash
+$ dlim -R region_n48x60_w125x10.shp mar_grav,-106:upper_limit=0 --archive mar_grav
+```
+
+This will generate a datalist and associated auxilary files:
+```
+mar_grav.datalist  mar_grav.datalist.inf  mar_grav.datalist.json
+```
+
 #### HydroNOS
 
 ```bash

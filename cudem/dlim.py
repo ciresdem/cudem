@@ -2996,6 +2996,7 @@ class GDALFile(ElevationDataset):
                  band_no = 1,
                  remove_flat = False,
                  node = None,
+                 resample_and_warp = True,
                  **kwargs):
         super().__init__(**kwargs)
         self.weight_mask = weight_mask # associated raster file/band holding weight data
@@ -3014,6 +3015,7 @@ class GDALFile(ElevationDataset):
         self.x_band = x_band # band holding x values
         self.y_band = y_band # band holding y values
         self.node = node # input is 'pixel' or 'grid' registered (force)
+        self.resample_and_warp = resample_and_warp
 
         if self.fn.startswith('http') or self.fn.startswith('/vsicurl/') or self.fn.startswith('BAG'):
             self.check_path = False
@@ -3120,7 +3122,7 @@ class GDALFile(ElevationDataset):
         if self.node is None:
             self.node = gdalfun.gdal_get_node(self.fn, 'pixel')
             
-        self.resample_and_warp = True        
+        #self.resample_and_warp = True        
         if (self.x_inc is None and self.y_inc is None) or self.region is None:
             self.resample_and_warp = False
         else:
@@ -3144,6 +3146,7 @@ class GDALFile(ElevationDataset):
         if self.node == 'grid':
             self.resample_and_warp = False
 
+        #self.resample_and_warp = False
         ndv = utils.float_or(gdalfun.gdal_get_ndv(self.fn), -9999)
         if self.region is not None:
             self.warp_region = self.region.copy()
@@ -3467,8 +3470,8 @@ class GDALFile(ElevationDataset):
                 y_precision = 12#len(str(gt[3]).split('.')[-1])
                 while True:
                     geo_x_origin, geo_y_origin = utils._pixel2geo(
-                        srcwin[0], y, gt, node=self.node, x_precision=x_precision, y_precision=y_precision
-                    )
+                        srcwin[0], y, gt, node='pixel', x_precision=x_precision, y_precision=y_precision
+                    ) # 'self.node to 'pixel', this breaks if set to 'grid' even if 'grid-node'
                     geo_x_end, geo_y_end = utils._pixel2geo(
                         srcwin[0] + srcwin[2], y, gt, node='grid', x_precision=x_precision, y_precision=y_precision
                     )
@@ -6211,19 +6214,24 @@ class MarGravFetcher(Fetcher):
         self.lower_limit = utils.float_or(lower_limit)
         if self.bathy_only:
             self.upper_limit = 0
-        
+
+        self.region.zmax=self.upper_limit
+        self.region.zmin=self.lower_limit
+            
     def set_ds(self, result):
         if result[-1] == 'mar_grav_img':
             nc_fn = utils.make_temp_fn(
                 '{}.nc'.format(utils.fn_basename2(result[1])),
                 temp_dir=self.fetch_module._outdir)
-            img2nc_cmd = 'gmt img2grd {} {} -G{} -D -T1 -I1m -E'.format(
+            img2grd_cmd = 'gmt img2grd {} {} -G{} -D -T1 -I1m -E'.format(
                 os.path.join(self.fetch_module._outdir, result[1]), self.region.format('gmt'), nc_fn
             )
-
-            out, status = utils.run_cmd(img2nc_cmd, verbose=True)
+            out, status = utils.run_cmd(img2grd_cmd, verbose=True)
+            out, status = utils.run_cmd('gmt grdedit {} -T'.format(nc_fn))
             self.fetches_params['mod'] = nc_fn
-            self.fetches_params['data_format'] = 200                
+            self.fetches_params['data_format'] = 200
+            self.fetches_params['resample_and_warp'] = False
+            self.fetches_params['node'] = 'grid'
             
         elif self.rasterize:
             from cudem import waffles
