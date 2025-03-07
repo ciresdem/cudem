@@ -63,7 +63,7 @@ fetches -R tiles_1_9.shp:pct_buffer=25 mar_grav
 ```
 
 ```bash
-$ dlim -R region_n48x60_w125x10.shp mar_grav,-106:upper_limit=0 --archive mar_grav
+dlim -R region_n48x60_w125x10.shp mar_grav,-106:upper_limit=0 --archive mar_grav
 ```
 
 This will generate a datalist and associated auxilary files:
