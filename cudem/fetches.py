@@ -790,7 +790,7 @@ class fetch_results(threading.Thread):
             if (all(status) and all_ok) or attempts < 0:
                 break
             else:
-                attemps-=1
+                attempts-=1
                 utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
             
 

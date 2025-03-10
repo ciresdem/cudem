@@ -296,6 +296,7 @@ The contents of this datalist should point to the previously made datalists, we 
 ../data/multibeam.datalist -1 1 0
 ../data/ned1.datalist -1 1 0
 ../data/waDNR.datalist -1 1 0
+../data/mar_grav.datalist -1 1 0
 #../data/CoNED.datalist -1 1 0
 #../data/CUDEM.datalist -1 1 0
 ```
