@@ -4946,7 +4946,11 @@ def search_proj_cdn(region, epsg = None, crs_name = None, name = None, verbose =
         cdn_driver = ogr.GetDriverByName('GeoJSON')
         cdn_ds = cdn_driver.Open(cdn_index, 0)
         cdn_layer = cdn_ds.GetLayer()
-        _boundsGeom = region.export_as_geom()
+        if region is not None:
+            _boundsGeom = region.export_as_geom()
+        else:
+            _boundsGeom = None
+            
         _results = []
 
         if crs_name is not None:
@@ -5115,7 +5119,12 @@ class VDATUM(FetchModule):
                 v_infs = utils.p_unzip('{}.zip'.format(vd), ['inf'])
                 utils.echo_msg(v_infs)
                 #v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360 if vd =='TIDAL' else -180)
-                v_dict = proc_vdatum_inf(v_infs[0], name=vd if vd != 'TIDAL' else None)#, loff=-360)
+                for inf in v_infs:
+                    try:
+                        v_dict = proc_vdatum_inf(inf, name=vd if vd != 'TIDAL' else None)#, loff=-360)
+                        break
+                    except:
+                        pass
 
                 for key in v_dict.keys():
                     v_dict[key]['vdatum'] = vd
@@ -5195,7 +5204,9 @@ class VDATUM(FetchModule):
                         os.replace(v_gtx, '{}.gtx'.format(surv['ID']))
                     #utils.remove_glob(dst_zip)
             else:
+                #print(surv)
                 self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
+                print(self.results)
 
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
@@ -5215,8 +5226,8 @@ class VDATUM(FetchModule):
 
             if self.datatype is not None:
                 cdn_layer.SetAttributeFilter(
-                    "type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%')".format(
-                        self.datatype.upper(), self.datatype.upper()
+                    "type != 'HORIZONTAL_OFFSET' AND (target_crs_name LIKE '%{}%' OR source_crs_name LIKE '%{}%' OR name LIKE '%{}%')".format(
+                        self.datatype.upper(), self.datatype.upper(), self.datatype
                     )
                 )
             elif self.epsg is not None:
@@ -5244,7 +5255,8 @@ class VDATUM(FetchModule):
                         _results[-1][key] = feat.GetField(key)
                         
             for _result in _results:
-                self.results.append([_result['url'], _result['name'], _result['source_id']])
+                #print(_result)
+                self.results.append([_result['url'], _result['name'], _result['source_crs_code']])
                 
             cdn_ds = None
             utils.remove_glob(cdn_index)
