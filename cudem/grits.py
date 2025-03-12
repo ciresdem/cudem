@@ -968,7 +968,7 @@ class Outliers(Grits):
                
                 for srcwin in utils.yield_srcwin(
                         (src_ds.RasterYSize, src_ds.RasterXSize), n_chunk=chunk,
-                        step=step, verbose=self.verbose, start_at_edge=False,
+                        step=step, verbose=self.verbose, start_at_edge=True,
                         msg='scanning for outliers ({}:{})'.format(perc, k),
                 ):
                     band_data = self.ds_band.ReadAsArray(*srcwin)

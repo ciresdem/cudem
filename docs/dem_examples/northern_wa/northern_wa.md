@@ -132,6 +132,13 @@ multibeam.datalist  multibeam.datalist.inf  multibeam.datalist.json
 
 ![](wa_multibeam.png)
 
+
+- comment out from TN380
+0439_20200715_114028_TGT.all.mb58.fbt
+0435_20200715_094026_TGT.all.mb58.fbt
+0438_20200715_111026_TGT.all.mb58.fbt
+0434_20200715_091018_TGT.all.mb58.fbt
+
 #### EHydro
 ```bash
 fetches -R tiles_1_9.shp ehydro -H3

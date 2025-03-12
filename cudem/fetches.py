@@ -4913,7 +4913,7 @@ def proc_vdatum_inf(vdatum_inf, name = 'vdatum'):
         
     return(_inf_areas_fmt)
 
-def search_proj_cdn(region, epsg = None, crs_name = None, name = None, verbose = True, cache_dir = './'):
+def search_proj_cdn(region = None, epsg = None, crs_name = None, name = None, verbose = True, cache_dir = './'):
     """Search PROJ CDN for transformation grids:
     the PROJ CDN holds transformation grids from around the
     world, including global transformations such as EGM
@@ -5205,8 +5205,8 @@ class VDATUM(FetchModule):
                     #utils.remove_glob(dst_zip)
             else:
                 #print(surv)
-                self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name']])
-                print(self.results)
+                self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name'].lower()])
+                #print(self.results)
 
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
