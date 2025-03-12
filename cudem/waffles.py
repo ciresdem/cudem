@@ -1387,9 +1387,10 @@ class GMTSurface(Waffle):
             )
 
         dem_surf_cmd += (
-            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} -Qr {}{}{}{}{}'.format(
+            'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}{}'.format(
                 self.p_region.format('gmt'), self.xinc, self.yinc,
                 self.name, self.ndv, self.tension, self.relaxation,
+                ' -Qr' if self.gc['GMT'] >= '6.5.0' else '',
                 ' -D{}'.format(self.breakline) if self.breakline is not None else '',
                 ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
                 ' -C{}'.format(self.convergence) if self.convergence is not None else '',
@@ -1398,35 +1399,13 @@ class GMTSurface(Waffle):
             )
         )
 
-        utils.echo_msg_bold(dem_surf_cmd)
-        try:
-            out, status = utils.run_cmd(
-                dem_surf_cmd,
-                verbose=self.verbose,
-                data_fun=lambda p: self.dump_xyz(
-                    dst_port=p, encode=True
-                )
+        out, status = utils.run_cmd(
+            dem_surf_cmd,
+            verbose=self.verbose,
+            data_fun=lambda p: self.dump_xyz(
+                dst_port=p, encode=True
             )
-        except:
-            dem_surf_cmd = ('')
-            dem_surf_cmd += (
-                'gmt surface -V {} -rp -I{:.16f}/{:.16f}+e -G{}.tif=gd+n{}:GTiff -T{} -Z{} {}{}{}{}{}'.format(
-                    self.p_region.format('gmt'), self.xinc, self.yinc,
-                    self.name, self.ndv, self.tension, self.relaxation,
-                    ' -D{}'.format(self.breakline) if self.breakline is not None else '',
-                    ' -M{}'.format(self.max_radius) if self.max_radius is not None else '',
-                    ' -C{}'.format(self.convergence) if self.convergence is not None else '',
-                    ' -A{}'.format(self.aspect) if self.aspect is not None else '',
-                    ' -fg' if self.geographic else '',
-                )
-            )
-            out, status = utils.run_cmd(
-                dem_surf_cmd,
-                verbose=self.verbose,
-                data_fun=lambda p: self.dump_xyz(
-                    dst_port=p, encode=True
-                )
-            )
+        )
             
         return(self)
 
