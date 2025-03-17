@@ -1796,6 +1796,9 @@ class ElevationDataset:
             if status != 0:
                 utils.remove_glob('{}*'.format(out_file))
                 
+        if not os.path.exists(os.path.dirname(out_file)):
+            os.makedirs(os.path.dirname(out_file))
+            
         if os.path.exists(mask_fn):
             status = driver.Delete(mask_fn)
             if status != 0:
@@ -4768,7 +4771,7 @@ class MBSParser(ElevationDataset):
 
                 this_year = int(utils.this_year()) if self.min_year is None else self.min_year
                 w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                w *= self.weight
+                w *= self.weight if self.weight is not None else 1
 
                 xs.append(x)
                 ys.append(y)

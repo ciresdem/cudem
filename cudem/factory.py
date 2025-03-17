@@ -226,12 +226,13 @@ class CUDEMModule:
     Template for a compatible factory module setup, together with CUDEMFactory.
     """
     
-    def __init__(self, params = {}, **kwargs):
+    def __init__(self, modules = {}, params = {}, **kwargs):
         self.params = params
         for kpam, kval in kwargs.items():
             self.__setattr__(kpam, kval)
 
         self.kwargs = kwargs
+        self.modules = modules
         self.run()
 
     def initialize(self):
@@ -242,8 +243,13 @@ class CUDEMModule:
         self.run()
 
     def run(self):
-        raise NotImplementedError('the module {} could not be parsed by the sub factory'.format(self.params['mod']))
+        raise NotImplementedError(
+            'the module {} could not be parsed by the sub factory, available modules are: {}'.format(
+                self.params['mod'], _cudem_module_short_desc(self.modules)
+            )
+        )
 
+# params - A parameters object. Should hold all factory global arguments
 class CUDEMFactory:
     """cudem module factory.
 
@@ -264,19 +270,18 @@ class CUDEMFactory:
         
         Parameters:
           mod - A string of a module name and optional module arguments in the format: 'mod_name:mod_arg0=mod_val0:mod_arg1=mod_val1'
-          params - A parameters object. Should hold all factory global arguments
+          kwargs - module arguments can be passed as key-word arguments here instead of in the mod string if wanted;
+                   however argumets from the mod string will over-ride arguments from the key-word arguments.
         """
         
         self.mod = mod
         self.mod_name = '_factory'
-        self.mod_args = {}
+        self.mod_args = {'modules': self._modules}
         self.kwargs = kwargs
-        
+
         if self.mod is not None:
             self._parse_mod(self.mod)
 
-        #elif self.kwargs['fn'] is not None:
-        #    self._parse_mod(self.kwargs['fn'])
         self.add_module(self._factory_module)
 
     def __str__(self):
@@ -294,6 +299,7 @@ class CUDEMFactory:
         
         opts = mod.split(':')
         if opts[0] in self._modules.keys():
+            self.mod_args = {}
             if len(opts) > 1:
                 self.mod_args = args2dict(list(opts[1:]), {})
             self.mod_name = opts[0]
@@ -301,7 +307,7 @@ class CUDEMFactory:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
             )
-
+            
         return(self.mod_name, self.mod_args)
 
     def add_module(self, type_def: dict = {}):
