@@ -1819,7 +1819,9 @@ class ElevationDataset:
             sys.exit(-1)
 
         dst_ds.SetGeoTransform(dst_gt)
-        dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+        if self.dst_srs is not None:
+            dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+            
         stacked_bands = {
             'z': dst_ds.GetRasterBand(1),
             'count': dst_ds.GetRasterBand(2),
@@ -1849,7 +1851,8 @@ class ElevationDataset:
         driver = gdal.GetDriverByName('MEM')
         m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
         m_ds.SetGeoTransform(dst_gt)
-        m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+        if self.dst_srs is not None:
+            m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
         
         ## initialize data mask        
         ## parse each entry and process it
@@ -3568,7 +3571,7 @@ class BAGFile(ElevationDataset):
             self.infos.src_srs = self.init_srs()
         else:
             self.infos.src_srs = self.src_srs
-            
+
         with gdalfun.gdal_datasource(self.fn) as src_ds:
             if src_ds is not None:
                 ds_infos = gdalfun.gdal_infos(src_ds)
@@ -3577,13 +3580,12 @@ class BAGFile(ElevationDataset):
                     x_count=ds_infos['nx'],
                     y_count=ds_infos['ny']
                 )
-
-                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax() # bag band 1 is elevation
+                zr = src_ds.GetRasterBand(1).ComputeRasterMinMax() # bag band 1 is elevation                
+                this_region.zmin, this_region.zmax = zr[0], zr[1] 
+                self.infos.minmax = this_region.export_as_list(include_z=True)
+                self.infos.wkt = this_region.export_as_wkt()
+                self.infos.numpts = ds_infos['nb']
                 
-        this_region.zmin, this_region.zmax = zr[0], zr[1]
-        self.infos.minmax = this_region.export_as_list(include_z=True)
-        self.infos.wkt = this_region.export_as_wkt()
-        self.infos.numpts = ds_infos['nb']
         return(self.infos)
 
     def parse(self, resample=True):
@@ -4517,12 +4519,14 @@ class MBSParser(ElevationDataset):
                  mb_exclude = 'A',
                  want_mbgrid = False,
                  want_binned = False,
+                 min_year = None,
                  **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
         self.mb_exclude = mb_exclude
         self.want_mbgrid = want_mbgrid
         self.want_binned = want_binned
+        self.min_year = min_year
              
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -4567,6 +4571,13 @@ class MBSParser(ElevationDataset):
                         for j in range(0, dims[0]):
                             cm_array[this_row][j] = utils.int_or(til[j+1])
                         this_row += 1
+
+                    # if til[0] == 'Time:':
+                    #     self.infos.date = til[3]
+
+                    # if til[0].strip() == 'Number of Good Beams':
+                    #     self.infos.perc = til[1].split()[-1].split('%')[0]
+                        
 
         mbs_region = regions.Region().from_list(self.infos.minmax)
         if len(dims) > 0:
@@ -4640,6 +4651,26 @@ class MBSParser(ElevationDataset):
 
         utils.remove_glob('{}*'.format(out_mb))
 
+    def mb_inf_data_date(self, src_inf):
+        """extract the date from the mbsystem inf file."""
+
+        with open(src_inf, errors='ignore') as iob:
+            for il in iob:
+                til = il.split()
+                if len(til) > 1:
+                    if til[0] == 'Time:':
+                        return(til[3])
+
+    def mb_inf_perc_good(self, src_inf):
+        """extract the data format from the mbsystem inf file."""
+
+        with open(src_inf, errors='ignore') as iob:
+            for il in iob:
+                til = il.split(':')
+                if len(til) > 1:
+                    if til[0].strip() == 'Number of Good Beams':
+                        return(til[1].split()[-1].split('%')[0])
+        
     def yield_mbgrid_ds(self):
         """process the data through mbgrid and use GDALFile to further process the gridded data"""
         
@@ -4697,6 +4728,10 @@ class MBSParser(ElevationDataset):
         else:
             mb_region = None
 
+        src_inf = '{}.inf'.format(self.fn)
+        mb_date = self.mb_inf_data_date(src_inf)
+        mb_perc = self.mb_inf_perc_good(src_inf)
+            
         for line in utils.yield_cmd(
                 'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
                     self.mb_exclude, ' {}'.format(
@@ -4721,6 +4756,7 @@ class MBSParser(ElevationDataset):
             speed = this_line[12]
 
             if int(beamflag) == 0:# and abs(this_line[4]) < .15:
+                ## uncertainty
                 u_depth = ((2+(0.02*(z*-1)))*0.51)
                 #u_depth = 0
                 #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
@@ -4728,17 +4764,22 @@ class MBSParser(ElevationDataset):
                 #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                 #u_cd = 0
                 u = math.sqrt(u_depth**2 + u_cd**2)
+                ## weight
+
+                this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                w *= self.weight
+
                 xs.append(x)
                 ys.append(y)
                 zs.append(z)
-                ws.append(1)
+                ws.append(w)
                 us.append(u)
 
         if len(xs) > 0:
             mb_points = np.column_stack((xs, ys, zs, ws, us))
             xs = ys = zs = ws = us = None
             mb_points = np.rec.fromrecords(mb_points, names='x, y, z, w, u')
-
             if self.want_binned:
                 point_filter = PointFilterFactory(
                     mod='bin_z:percentile=25:y_res=3:z_res=20', points=mb_points
@@ -5251,11 +5292,11 @@ class Datalist(ElevationDataset):
                     try:
                         ds_args = feat.GetField('mod_args')
                         data_set_args = utils.args2dict(list(ds_args.split(':')), {})
-                        for kpam in list(data_set_args.keys()):
-                            if kpam in self.__dict__:
-                                kval = data_set_args[kpam]
-                                self.__dict__[kpam] = kval
-                                del data_set_args[kpam]
+                        # for kpam in list(data_set_args.keys()):
+                        #     if kpam in self.__dict__:
+                        #         kval = data_set_args[kpam]
+                        #         self.__dict__[kpam] = kval
+                        #         del data_set_args[kpam]
 
                         ds_args = utils.dict2args(data_set_args)
                         # for kpam, kval in data_set_args.items():
@@ -5280,7 +5321,6 @@ class Datalist(ElevationDataset):
                         feat.GetField('weight'),
                         feat.GetField('uncertainty')
                     )
-
                     data_set = DatasetFactory(
                         **self._set_params(mod=data_mod, metadata=md)#, **data_set_args)
                     )._acquire_module()

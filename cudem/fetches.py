@@ -304,7 +304,7 @@ class Fetch:
         self.headers = headers
         self.verify = verify
 
-    def fetch_req(self, params = None, tries = 5, timeout = None, read_timeout = None):
+    def fetch_req(self, params = None, json = None, tries = 5, timeout = None, read_timeout = None):
         """fetch src_url and return the requests object"""
         
         if tries <= 0:
@@ -316,6 +316,7 @@ class Fetch:
                 self.url,
                 stream=True,
                 params=params,
+                json=json,
                 timeout=(timeout,read_timeout),
                 headers=self.headers,
                 verify=self.verify
@@ -325,6 +326,7 @@ class Fetch:
             utils.echo_warning_msg(e)
             req = self.fetch_req(
                 params=params,
+                json=json,
                 tries=tries - 1,
                 timeout=timeout * 2 if timeout is not None else None,
                 read_timeout=read_timeout * 2 if read_timeout is not None else None
@@ -335,6 +337,7 @@ class Fetch:
                 time.sleep(2)
                 req = self.fetch_req(
                     params=params,
+                    json=json,
                     tries=tries - 1,
                     timeout=timeout + 1 if timeout is not None else None,
                     read_timeout=read_timeout + 10 if read_timeout is not None else None
@@ -347,6 +350,7 @@ class Fetch:
                     del self.headers['Range']                    
                     req = self.fetch_req(
                         params=params,
+                        json=json,
                         tries=tries - 1,
                         timeout=timeout + 1,
                         read_timeout=read_timeout + 10
@@ -2248,7 +2252,7 @@ class Multibeam(FetchModule):
                         return('{}'.format(til[4]))
 
     def mb_inf_data_date(self, src_inf):
-        """extract the data format from the mbsystem inf file."""
+        """extract the date from the mbsystem inf file."""
 
         with open(src_inf, errors='ignore') as iob:
             for il in iob:
@@ -4238,62 +4242,66 @@ class CHS(FetchModule):
     Fetch bathymetric soundings from the CHS
     
     https://open.canada.ca
+    
+    datatypes: 10 or 100
 
-    ** broken
-
-    < chs >
+    < chs:datatype=10 >
     """
     
-    def __init__(self, **kwargs):
+    def __init__(self, datatype='100', **kwargs):
         super().__init__(name='chs', **kwargs)
 
         ## The various CHS URLs
         self._chs_api_url = "https://geoportal.gc.ca/arcgis/rest/services/FGP/CHS_NONNA_100/MapServer/0/query?"
         self._chs_url_geoserver = 'https://data.chs-shc.ca/geoserver/wcs?'
         self._chs_url = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?' # new
+        self.datatypes = ['10', '100']
+        self.datatype = str(datatype) if str(datatype) in self.datatypes else '100'
         
     def run(self):
         """Run the CHS fetching module"""
-        
+
         if self.region is None: return([])
-        _data = {'request': 'DescribeCoverage', 'version': '2.0.1', 'CoverageID': 'nonna__NONNA 10 Coverage',
-                 'service': 'WCS'}
+        _data = {
+            'request': 'DescribeCoverage',
+            'version': '2.0.1',
+            'CoverageID': 'nonna__NONNA {} Coverage'.format(self.datatype),
+            'service': 'WCS'
+        }
         _req = Fetch(self._chs_url).fetch_req(params=_data)
-        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
-        print(lxml.etree.tostring(_results))
-        
+        _results = lxml.etree.fromstring(_req.text.encode('utf-8'))        
         g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=namespaces)[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
-
         g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
         lc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
         uc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}upperCorner').text.split()]
-
         ds_region = regions.Region().from_list(
             [lc[1], uc[1], lc[0], uc[0]]
         )
         resx = (uc[1] - lc[1]) / hl[0]
         resy = (uc[0] - lc[0]) / hl[1]
-
+        #'crs': 'EPSG:4326',
+        #'bbox': self.region.format('bbox'),
+        #'resx': resx,
+        #'resy': resy,
+                
         if regions.regions_intersect_ogr_p(self.region, ds_region):
             _wcs_data = {
                 'request': 'GetCoverage',
                 'version': '2.0.1',
-                'CoverageID': 'nonna__NONNA 10 Coverage',
+                'CoverageID': 'nonna__NONNA {} Coverage'.format(self.datatype),
                 'service': 'WCS',
-                'crs': '4326',
-                'bbox': self.region.format('bbox'),
-                'resx': resx,
-                'resy': resy
+                'subset': ['Long({},{})'.format(self.region.xmin, self.region.xmax),
+                           'Lat({},{})'.format(self.region.ymin, self.region.ymax)],
+                'subsettingcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326',
+                'outputcrs': 'http://www.opengis.net/def/crs/EPSG/0/4326'
             }
-
-            utils.echo_msg(_wcs_data)
+            #chs_wcs = 'https://nonna-geoserver.data.chs-shc.ca/geoserver/wcs?SERVICE=WCS&REQUEST=GetCoverage&VERSION=2.0.1&CoverageId=nonna__NONNA+100+Coverage&subset=Long({},{})&subset=Lat({},{})&SUBSETTINGCRS=http://www.opengis.net/def/crs/EPSG/0/4326&OUTPUTCRS=http://www.opengis.net/def/crs/EPSG/0/4326'.format(self.region.xmin, self.region.xmax, self.region.ymin, self.region.ymax)
+            #utils.echo_msg(_wcs_data)
             _wcs_req = Fetch(self._chs_url).fetch_req(params=_wcs_data)
-            #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&format=BAG&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
-            #chs_wcs = '{}service=WCS&request=GetCoverage&version=2.0.1&CoverageID=nonna__NONNA+10+Coverage&bbox={}&crs=EPSG:4326'\
-            #                 .format(self._chs_url, self.region.format('bbox'), resx, resy)
-            outf = 'chs_{}.tif'.format(self.region.format('fn'))
+            outf = 'chs_nonna{}_{}.tif'.format(self.datatype, self.region.format('fn'))
             self.results.append([_wcs_req.url, outf, 'chs'])
+            #self.results.append([chs_wcs, outf, 'chs'])
             
         return(self)
 

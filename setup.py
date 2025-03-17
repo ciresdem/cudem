@@ -83,6 +83,7 @@ setuptools.setup(
             'grits = cudem.grits:grits_cli',
             'vrbag = cudem.vrbag:vrbag_cli',
             'cudem = cudem.cudem_cli:cudem_cli',
+            #'vdatumfun = cudem.vdatumfun:vdatumfun_cli',
         ],
     },
     scripts = [
