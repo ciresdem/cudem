@@ -59,7 +59,7 @@ pip install git+https://github.com/ciresdem/cudem.git#egg=cudem
 - Setup a conda environment and install the dependencies:
 
 ```
-conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf
+conda create -n cudem -c conda-forge gdal gmt pygmt numpy scipy pandas pyproj utm requests lxml matplotlib laspy h5py boto3 tqdm mercantile git netCDF4 h5netcdf libgdal-hdf5 libgdal-netcdf pyhdf
 conda activate cudem
 (cudem) pip install laspy[laszip]
 (cudem) pip install --no-deps git+https://github.com/ciresdem/cudem.git
@@ -165,7 +165,7 @@ between adjacent DEM tiles.
 - [Generate a set of Tiled CRMs of Northern California](/docs/example_crm_norcal.md)
 - [Filter Multibeam data](/docs/example_grits.md)
 - [Estimate DEM uncertainty](/docs/uncertainty.md)
-- [Generate a set of Tilded CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
+- [Generate a set of Tiled CUDEMs of North-West Washington State](/docs/dem_examples/northern_wa/northern_wa.md)
 
 ## DEM Workshop, Victoria, B.C., Canada
 

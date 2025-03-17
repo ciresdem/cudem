@@ -795,7 +795,7 @@ class fetch_results(threading.Thread):
                 break
             else:
                 attempts-=1
-                utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
+                #utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
             
 
 ## Fetch Modules
@@ -4237,12 +4237,13 @@ class EMODNet(FetchModule):
 
 ## CHS - Canada Hydro
 class CHS(FetchModule):
-    """High-Resolution Digital Elevation Model data for Canada
+    """Canadian Hydrographic Service Non-Navigational (NONNA) Bathymetric Data
 
     Fetch bathymetric soundings from the CHS
     
     https://open.canada.ca
-    
+    https://open.canada.ca/data/en/dataset/d3881c4c-650d-4070-bf9b-1e00aabf0a1d
+
     datatypes: 10 or 100
 
     < chs:datatype=10 >
