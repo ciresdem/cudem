@@ -2296,13 +2296,13 @@ class R2R(FetchModule):
                                         row_region = self.check_inf_region(row)
                                         if row_region is not None and regions.regions_intersect_ogr_p(self.region, row_region):
                                             self.results.append(
-                                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
+                                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(os.path.basename(row))), 'multibeam']
                                             )
                         else:
                             for row in rows:
                                 if '.tar.gz' not in row:
                                     self.results.append(
-                                        ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
+                                        ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(os.path.basename(row))), 'multibeam']
                                     )               
         
 class Multibeam(FetchModule):
