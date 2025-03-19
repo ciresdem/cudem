@@ -2224,7 +2224,7 @@ class R2R(FetchModule):
         mbs_region = regions.Region().from_list(minmax)
         return(mbs_region)
         
-    def check_inf(self, mb_url, keep_inf=False):
+    def check_inf_region(self, mb_url, keep_inf=False):
         src_mb = mb_url
         inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
         inf_region = None
@@ -2293,7 +2293,7 @@ class R2R(FetchModule):
                                     c_pbar.update()
                                     if '.tar.gz' not in row:
                                         #print('{}.fbt'.format(utils.fn_basename2(row)))
-                                        row_region = self.check_inf(row)
+                                        row_region = self.check_inf_region(row)
                                         if row_region is not None and regions.regions_intersect_ogr_p(self.region, row_region):
                                             self.results.append(
                                                 ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
