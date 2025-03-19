@@ -4663,6 +4663,7 @@ class MBSParser(ElevationDataset):
                 if len(til) > 1:
                     if til[0] == 'Time:':
                         return(til[3])
+        return(None)
 
     def mb_inf_perc_good(self, src_inf):
         """extract the data format from the mbsystem inf file."""
@@ -4673,6 +4674,7 @@ class MBSParser(ElevationDataset):
                 if len(til) > 1:
                     if til[0].strip() == 'Number of Good Beams':
                         return(til[1].split()[-1].split('%')[0])
+        return(None)
         
     def yield_mbgrid_ds(self):
         """process the data through mbgrid and use GDALFile to further process the gridded data"""
