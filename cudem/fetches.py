@@ -2198,12 +2198,51 @@ class MBDB(FetchModule):
                 print(feature)
 
 class R2R(FetchModule):
-    def __init__(self, **kwargs):
+    def __init__(self, check_inf=False, **kwargs):
         super().__init__(name='R2R', **kwargs)
-
+        self.check_inf = check_inf
         self.r2r_api_url = 'https://service.rvdata.us/api/fileset/keyword/bathy?'
         self.r2r_api_manifest_url = 'https://service.rvdata.us/api/file_manifest/?'
+
+    def inf_parse(self, inf_text):
+        this_row = 0
+        minmax = []
+        for il in inf_text:
+            til = il.split()
+            if len(til) > 1:
+                if til[0] == 'Minimum':
+                    if til[1] == 'Longitude:':
+                        minmax[0] = utils.float_or(til[2])
+                        minmax[1] = utils.float_or(til[5])
+                    elif til[1] == 'Latitude:':
+                        minmax[2] = utils.float_or(til[2])
+                        minmax[3] = utils.float_or(til[5])
+                    elif til[1] == 'Depth:':
+                        minmax[4] = utils.float_or(til[5]) * -1
+                        minmax[5] = utils.float_or(til[2]) * -1
+
+        mbs_region = regions.Region().from_list(minmax)
+        return(mbs_region)
         
+    def check_inf(self, mb_url, keep_inf=False):
+        src_mb = mb_url
+        inf_url = '{}.inf'.format(utils.fn_basename2(src_mb))
+        inf_region = None
+        #try:
+        _req = Fetch(inf_url, callback=self.callback, verbose=True).fetch_req()
+        #except:
+        #    utils.echo_warning_msg('failed to fetch inf file: {}'.format(inf_url))
+        #    status = -1
+            
+        #if status == 0:
+        # if not keep_inf:
+        #     utils.remove_glob(src_inf)
+        if _req is not None:
+            src_inf = _req.text
+            inf_region = self.inf_parse(src_inf)
+            
+        return(inf_region)
+    
     def run(self):
 
         _data = {
@@ -2212,21 +2251,59 @@ class R2R(FetchModule):
         _req = Fetch(self.r2r_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
-            for feature in features['data']:
-                feature_set_url = feature['download_url']
-                if feature_set_url is not None:
-                    feature_set_id = feature['fileset_id']
-                    cruise_id = feature['cruise_id']
-
-                    page = Fetch(feature_set_url, verbose=True).fetch_html()
-                    rows = page.xpath('//a[contains(@href, ".gz")]/@href')
-                    for row in rows:
-                        if '.tar.gz' not in row:
-                            #print('{}.fbt'.format(utils.fn_basename2(row)))
-                            self.results.append(
-                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
-                            )
-
+            #utils.echo_msg('found {} cruises'.format(len(features['data'])))
+            with tqdm(
+                    total=len(features['data']),
+                    desc='parsing cruise datasets..',
+                    leave=self.verbose
+            ) as pbar:
+                for feature in features['data']:
+                    pbar.update()
+                    feature_set_url = feature['download_url']
+                    if feature_set_url is not None:
+                        feature_set_id = feature['fileset_id']
+                        cruise_id = feature['cruise_id']
+                        #pbar.set_description('parsing cruise datasets...{}'.format(cruise_id))
+                        #pbar.refresh()
+                        # file_list_url = 'https://www.rvdata.us/search/cruise/{}/file-list/{}'.format(cruise_id, feature_set_id)
+                        # page = Fetch(file_list_url, verbose=True).fetch_req()
+                        # print(page.text)
+                        page = Fetch(feature_set_url, verbose=True).fetch_req()
+                        req_h = page.headers
+                        #$print(req_h)
+                        if req_h['content-type'].split(';')[0] != 'text/html':
+                            break
+                        # if 'content_length' in req_h:
+                        #     status = req_h['content_length']
+                        # else:
+                        #status = page.status_code
+                        #status = feature['format_id']
+                            
+                        #pbar.set_description('parsing cruise datasets...{}...{}'.format(cruise_id, status))
+                        #pbar.refresh()
+                        page = Fetch(feature_set_url, verbose=True).fetch_html()
+                        rows = page.xpath('//a[contains(@href, ".gz")]/@href')
+                        if self.check_inf:
+                            with tqdm(
+                                    total=len(rows),
+                                    desc='parsing cruise files...',
+                                    leave=False
+                            ) as c_pbar:
+                                for row in rows:
+                                    c_pbar.update()
+                                    if '.tar.gz' not in row:
+                                        #print('{}.fbt'.format(utils.fn_basename2(row)))
+                                        row_region = self.check_inf(row)
+                                        if row_region is not None and regions.regions_intersect_ogr_p(self.region, row_region):
+                                            self.results.append(
+                                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
+                                            )
+                        else:
+                            for row in rows:
+                                if '.tar.gz' not in row:
+                                    self.results.append(
+                                        ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
+                                    )               
         
 class Multibeam(FetchModule):
     """NOAA MULTIBEAM bathymetric data.
