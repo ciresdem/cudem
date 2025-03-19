@@ -2197,6 +2197,37 @@ class MBDB(FetchModule):
             for feature in features['features']:
                 print(feature)
 
+class R2R(FetchModule):
+    def __init__(self, **kwargs):
+        super().__init__(name='R2R', **kwargs)
+
+        self.r2r_api_url = 'https://service.rvdata.us/api/fileset/keyword/bathy?'
+        self.r2r_api_manifest_url = 'https://service.rvdata.us/api/file_manifest/?'
+        
+    def run(self):
+
+        _data = {
+            'spatial_bounds': self.region.export_as_wkt(),
+        }
+        _req = Fetch(self.r2r_api_url, verbose=self.verbose).fetch_req(params=_data)
+        if _req is not None:
+            features = _req.json()
+            for feature in features['data']:
+                feature_set_url = feature['download_url']
+                if feature_set_url is not None:
+                    feature_set_id = feature['fileset_id']
+                    cruise_id = feature['cruise_id']
+
+                    page = Fetch(feature_set_url, verbose=True).fetch_html()
+                    rows = page.xpath('//a[contains(@href, ".gz")]/@href')
+                    for row in rows:
+                        if '.tar.gz' not in row:
+                            #print('{}.fbt'.format(utils.fn_basename2(row)))
+                            self.results.append(
+                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, os.path.basename(row)), 'multibeam']
+                            )
+
+        
 class Multibeam(FetchModule):
     """NOAA MULTIBEAM bathymetric data.
 
@@ -5869,6 +5900,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'CoNED': {'call': CoNED},
         'CUDEM': {'call': CUDEM},
         'multibeam': {'call': Multibeam}, # MBDB isn't working!
+        'r2r': {'call': R2R},
         'MBDB': {'call': MBDB},# isn't working!
         'gebco': {'call': GEBCO},
         'mgds': {'call': MGDS},

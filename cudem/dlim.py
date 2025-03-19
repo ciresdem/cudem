@@ -4837,7 +4837,6 @@ class MBSParser(ElevationDataset):
                 
     def yield_ds(self):        
         mb_fn = os.path.join(self.fn)
-        utils.echo_msg(self.data_region)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
 
@@ -6825,6 +6824,10 @@ class DatasetFactory(factory.CUDEMFactory):
         -201: {'name': 'multibeam',
                'fmts': ['multibeam'],
                'description': 'The multibeam fetches module',
+               'call': MBSFetcher},
+        -201: {'name': 'r2r',
+               'fmts': ['r2r'],
+               'description': 'The r2r fetches module',
                'call': MBSFetcher},
         -202: {'name': 'hydronos',
                'fmts': ['hydronos'],
