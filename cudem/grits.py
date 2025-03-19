@@ -91,6 +91,9 @@ class Grits:
         self.ds_band = src_ds.GetRasterBand(self.band)
         self.gt = self.ds_config['geoT']
 
+        if self.ds_band.GetNoDataValue() is None:
+            self.ds_band.SetNoDataValue(self.ds_config['ndv'])
+        
         ## setup the uncertainty data if wanted
         if self.weight_mask is not None:
             self.weight_is_band = False
@@ -122,7 +125,7 @@ class Grits:
             src_infos = gdalfun.gdal_infos(src_ds)
             driver = gdal.GetDriverByName(src_infos['fmt'])
             copy_ds = driver.CreateCopy(self.dst_dem, src_ds, 1)
-
+            
         return(copy_ds)
     
     def split_by_z(self):
@@ -398,7 +401,8 @@ class Outliers(Grits):
                  outlier_k = None, return_mask = False, elevation_weight = 1, curvature_weight = 1,
                  slope_weight = 1, tpi_weight = 1, unc_weight = 1, rough_weight = 1, tri_weight = 1,
                  multipass = 1, accumulate = False, interpolation = 'nearest', aggressive = True,
-                 units_are_degrees = True, size_is_step = True, mode = 'scaled', **kwargs):
+                 units_are_degrees = True, size_is_step = True, mode = 'scaled', fill_removed_data=False,
+                 **kwargs):
         
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile)
@@ -424,6 +428,7 @@ class Outliers(Grits):
         self.units_are_degrees = units_are_degrees
         self.size_is_step = size_is_step
         self.mode = mode
+        self.fill_removed_data = fill_removed_data
 
         ## setup the uncertainty data if wanted
         if self.uncertainty_mask is not None:
@@ -595,7 +600,7 @@ class Outliers(Grits):
         self.mask_count_band.WriteArray(mask_count)
         mask_mask = mask_count = None
                 
-    def generate_mem_ds(self, band_data = None, srcwin = None):
+    def generate_mem_ds(self, band_data = None, srcwin = None, return_array = False):
         tmp_band_data = band_data
         if np.all(np.isnan(tmp_band_data)):
             return(None)
@@ -618,20 +623,23 @@ class Outliers(Grits):
 
                     point_values = xi = yi = None
                 point_indices = None
-        
-        ## generate a mem datasource to feed into gdal.DEMProcessing
-        dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]), self.gt[1], 0., self.gt[3] + (srcwin[1] * self.gt[5]), 0., self.gt[5])
-        srcwin_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, self.ds_config['proj'],
-                                                self.ds_band.DataType, self.ds_config['ndv'], 'GTiff', {}, 1)
-        srcwin_ds = gdalfun.gdal_mem_ds(srcwin_config, name='MEM', bands=1, src_srs=None)
-        srcwin_band = srcwin_ds.GetRasterBand(1)
-        srcwin_band.SetNoDataValue(self.ds_config['ndv'])
-        tmp_band_data[np.isnan(tmp_band_data)] = self.ds_config['ndv']
-        srcwin_band.WriteArray(tmp_band_data)
-        srcwin_ds.FlushCache()
-        tmp_band_data = None
-        
-        return(srcwin_ds)
+
+        if return_array:
+            return(tmp_band_data)
+        else:                
+            ## generate a mem datasource to feed into gdal.DEMProcessing
+            dst_gt = (self.gt[0] + (srcwin[0] * self.gt[1]), self.gt[1], 0., self.gt[3] + (srcwin[1] * self.gt[5]), 0., self.gt[5])
+            srcwin_config = gdalfun.gdal_set_infos(srcwin[2], srcwin[3], srcwin[2]*srcwin[3], dst_gt, self.ds_config['proj'],
+                                                    self.ds_band.DataType, self.ds_config['ndv'], 'GTiff', {}, 1)
+            srcwin_ds = gdalfun.gdal_mem_ds(srcwin_config, name='MEM', bands=1, src_srs=None)
+            srcwin_band = srcwin_ds.GetRasterBand(1)
+            srcwin_band.SetNoDataValue(self.ds_config['ndv'])
+            tmp_band_data[np.isnan(tmp_band_data)] = self.ds_config['ndv']
+            srcwin_band.WriteArray(tmp_band_data)
+            srcwin_ds.FlushCache()
+            tmp_band_data = None
+
+            return(srcwin_ds)
                 
     def gdal_dem(self, input_ds = None, var = None):
         """use gdal to generate various LSPs"""
@@ -894,7 +902,8 @@ class Outliers(Grits):
         
         perc,self.k,perc1 = self.get_pk(self.mask_mask_ds, var='elevation')
         if perc is None or np.isnan(perc):
-            perc = 75
+            #perc = 75
+            perc = self.percentile
 
         if perc1 is None or np.isnan(perc1) or perc1 > 100 or perc1 < 0:
             perc1 = 65
@@ -913,15 +922,24 @@ class Outliers(Grits):
         count_upper_limit, count_lower_limit = self.get_outliers(mask_count_data, perc, k=self.k, verbose=False)
         mask_upper_limit, mask_lower_limit = self.get_outliers(mask_mask_data, perc, k=self.k, verbose=False)            
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
+
+        if self.fill_removed_data:
+            src_data[outlier_mask] = np.nan
+            src_data[src_data == self.ds_config['ndv']] = np.nan
             
-        src_data[outlier_mask] = self.ds_config['ndv']
+            interp_data = self.generate_mem_ds(band_data = src_data, srcwin = (0,0,src_data.shape[1],src_data.shape[0]), return_array=True)
+            src_data[outlier_mask] = interp_data[outlier_mask]
+            src_data[np.isnan(src_data)] = self.ds_config['ndv']
+        else:
+            src_data[outlier_mask] = self.ds_config['ndv']
+            
         self.ds_band.WriteArray(src_data)
         self.ds_band.FlushCache()
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ <{}:{}>{}:{}.'.format(
                 np.count_nonzero(outlier_mask), perc, self.k, mask_upper_limit, count_upper_limit
             ))
-        
+        self.ds_band.SetNoDataValue(self.ds_config['ndv'])
         src_data = mask_mask_data = mask_count_data = None
 
         return(np.count_nonzero(outlier_mask))
