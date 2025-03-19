@@ -924,6 +924,7 @@ class Outliers(Grits):
         outlier_mask = ((mask_mask_data > mask_upper_limit) & (mask_count_data > count_upper_limit))
 
         if self.fill_removed_data:
+            utils.echo_msg('filling filtered data from stack')
             src_data[outlier_mask] = np.nan
             src_data[src_data == self.ds_config['ndv']] = np.nan
             

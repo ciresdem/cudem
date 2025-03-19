@@ -2272,7 +2272,7 @@ class R2R(FetchModule):
                         req_h = page.headers
                         #$print(req_h)
                         if req_h['content-type'].split(';')[0] != 'text/html':
-                            break
+                            continue
                         # if 'content_length' in req_h:
                         #     status = req_h['content_length']
                         # else:
