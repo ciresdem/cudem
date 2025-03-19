@@ -139,6 +139,9 @@ multibeam.datalist  multibeam.datalist.inf  multibeam.datalist.json
 0438_20200715_111026_TGT.all.mb58.fbt
 0434_20200715_091018_TGT.all.mb58.fbt
 
+- comment out from HLY16TB
+0009_20160608_052926_HEALY.all.mb58.fbt
+
 #### EHydro
 ```bash
 fetches -R tiles_1_9.shp ehydro -H3

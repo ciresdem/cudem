@@ -276,9 +276,8 @@ class CUDEMFactory:
         
         self.mod = mod
         self.mod_name = '_factory'
-        self.mod_args = {'modules': self._modules}
+        self.mod_args = {}
         self.kwargs = kwargs
-
         if self.mod is not None:
             self._parse_mod(self.mod)
 
@@ -307,6 +306,7 @@ class CUDEMFactory:
             utils.echo_error_msg(
                 'invalid module name `{}`'.format(opts[0])
             )
+            self.mod_args = {'modules': self._modules}
             
         return(self.mod_name, self.mod_args)
 

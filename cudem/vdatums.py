@@ -276,18 +276,30 @@ _cdn_reference_frames = {
 }
 
 _geoids = {
-    'g2018': {'name': 'geoid 2018',
-              'uncertainty': .0127},
-    'g2012b': {'name': 'geoid 2012b',
-               'uncertainty': .017},
-    'g2012a': {'name': 'geoid 2012a',
-               'uncertainty': .017},
-    'g1999': {'name': 'geoid 1999',
-              'uncertainty': .046},
-    'geoid09': {'name': 'geoid 2009',
-                'uncertainty': .05},
-    'geoid03': {'name': 'geoid 2003',
-                'uncertainty': .046},
+    'g2018': {
+        'name': 'geoid 2018',
+        'uncertainty': .0127
+    },
+    'g2012b': {
+        'name': 'geoid 2012b',
+        'uncertainty': .017
+    },
+    'g2012a': {
+        'name': 'geoid 2012a',
+        'uncertainty': .017
+    },
+    'g1999': {
+        'name': 'geoid 1999',
+        'uncertainty': .046
+    },
+    'geoid09': {
+        'name': 'geoid 2009',
+        'uncertainty': .05
+    },
+    'geoid03': {
+        'name': 'geoid 2003',
+        'uncertainty': .046
+    },
 }
             
 def get_vdatum_by_name(datum_name):

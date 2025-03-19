@@ -4769,9 +4769,12 @@ class MBSParser(ElevationDataset):
                 u = math.sqrt(u_depth**2 + u_cd**2)
                 ## weight
 
-                this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                w *= self.weight if self.weight is not None else 1
+                if mb_perc is not None and mb_date is not None:
+                    this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                    w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                    w *= self.weight if self.weight is not None else 1
+                else:
+                    w = 1
 
                 xs.append(x)
                 ys.append(y)
