@@ -1459,22 +1459,23 @@ class ElevationDataset:
                 ))
                 return
 
-            ## dataset region
-            if self.region is not None and self.region.valid_p():
+        ## dataset region
+        ## mrl: moved out of if block 
+        if self.region is not None and self.region.valid_p():
+            self.data_region = self.region.copy() \
+                if self.transform['trans_region'] is None \
+                   else self.transform['trans_region'].copy()
+            inf_region = regions.Region().from_list(self.infos.minmax)
+            self.data_region = regions.regions_reduce(self.data_region, inf_region)
+            self.data_region.src_srs = self.infos.src_srs
+
+            if not self.data_region.valid_p():
                 self.data_region = self.region.copy() \
                     if self.transform['trans_region'] is None \
                        else self.transform['trans_region'].copy()
-                inf_region = regions.Region().from_list(self.infos.minmax)
-                self.data_region = regions.regions_reduce(self.data_region, inf_region)
-                self.data_region.src_srs = self.infos.src_srs
-
-                if not self.data_region.valid_p():
-                    self.data_region = self.region.copy() \
-                        if self.transform['trans_region'] is None \
-                           else self.transform['trans_region'].copy()
-            else:
-                self.data_region = regions.Region().from_list(self.infos.minmax)
-                self.data_region.src_srs = self.infos.src_srs
+        else:
+            self.data_region = regions.Region().from_list(self.infos.minmax)
+            self.data_region.src_srs = self.infos.src_srs
                     
     def parse(self):
         """parse the datasets from the dataset.
@@ -4530,7 +4531,7 @@ class MBSParser(ElevationDataset):
         self.want_mbgrid = want_mbgrid
         self.want_binned = want_binned
         self.min_year = min_year
-             
+
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
         this_row = 0
@@ -4640,7 +4641,7 @@ class MBSParser(ElevationDataset):
             self.mb_exclude, ' {}'.format(
                 mb_region.format('gmt') if mb_region is not None else ''
             ), mb_fn, out_mb
-        ), verbose=False)
+        ), verbose=True)
 
         if status == 0:
             data_set = DatasetFactory(
@@ -4706,7 +4707,7 @@ class MBSParser(ElevationDataset):
             )
             mbs_ds = DatasetFactory(
                 **self._set_params(mod='{}.tif'.format(ofn), data_format=200)
-            )
+            )._acquire_module()
             mbs_ds.initialize()
             for gdal_ds in mbs_ds.parse():
                 for pts in gdal_ds.yield_points():
@@ -4836,6 +4837,7 @@ class MBSParser(ElevationDataset):
                 
     def yield_ds(self):        
         mb_fn = os.path.join(self.fn)
+        utils.echo_msg(self.data_region)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
 
