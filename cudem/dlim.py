@@ -4735,8 +4735,8 @@ class MBSParser(ElevationDataset):
             mb_region = None
 
         src_inf = '{}.inf'.format(self.fn)
-        mb_date = self.mb_inf_data_date(src_inf)
-        mb_perc = self.mb_inf_perc_good(src_inf)
+        #mb_date = self.mb_inf_data_date(src_inf)
+        #mb_perc = self.mb_inf_perc_good(src_inf)
             
         for line in utils.yield_cmd(
                 'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
