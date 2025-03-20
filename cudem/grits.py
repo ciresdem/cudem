@@ -928,21 +928,24 @@ class Outliers(Grits):
             src_data[outlier_mask] = np.nan
             src_data[src_data == self.ds_config['ndv']] = np.nan
 
-            for srcwin in utils.yield_srcwin(
-                    (self.ds_config['ny'], self.ds_config['nx']), n_chunk=self.n_chunk,
-                    step=self.n_step, verbose=self.verbose, start_at_edge=True,
-                    msg='filling removed outliers',
-            ):            
-                interp_data = self.generate_mem_ds(band_data=src_data, srcwin=srcwin, return_array=True)
-                srcwin_outliers = outlier_mask[srcwin[1]:srcwin[1]+srcwin[3],
-                                               srcwin[0]:srcwin[0]+srcwin[2]]
+            # for srcwin in utils.yield_srcwin(
+            #         (self.ds_config['ny'], self.ds_config['nx']), n_chunk=self.ds_config['nx']/4,
+            #         step=None, verbose=self.verbose, start_at_edge=True,
+            #         msg='filling removed outliers with {}'.format(self.interpolation),
+            # ):
+            #     interp_data = self.generate_mem_ds(band_data=src_data, srcwin=srcwin, return_array=True)
+            #     srcwin_outliers = outlier_mask[srcwin[1]:srcwin[1]+srcwin[3],
+            #                                    srcwin[0]:srcwin[0]+srcwin[2]]
 
-                src_data[srcwin[1]:srcwin[1]+srcwin[3],
-                         srcwin[0]:srcwin[0]+srcwin[2]][srcwin_outliers] = interp_data[srcwin_outliers]                
+            #     src_data[srcwin[1]:srcwin[1]+srcwin[3],
+            #              srcwin[0]:srcwin[0]+srcwin[2]][srcwin_outliers] = interp_data[srcwin_outliers]
 
-                #(0,0,src_data.shape[1],src_data.shape[0]), return_array=True)
-                
-            #src_data[outlier_mask] = interp_data[outlier_mask]
+            #     # src_data[srcwin[1]:srcwin[1]+srcwin[3],
+            #     #          srcwin[0]:srcwin[0]+srcwin[2]][srcwin_outliers] = interp_data[srcwin_outliers]                
+
+            #     #(0,0,src_data.shape[1],src_data.shape[0]), return_array=True)
+            interp_data = self.generate_mem_ds(band_data=src_data, srcwin=(0,0,self.ds_config['ny'],self.ds_config['nx']), return_array=True)
+            src_data[outlier_mask] = interp_data[outlier_mask]
             src_data[np.isnan(src_data)] = self.ds_config['ndv']
         else:
             src_data[outlier_mask] = self.ds_config['ndv']

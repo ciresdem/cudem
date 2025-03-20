@@ -924,8 +924,8 @@ def yield_srcwin(
             while True:
                 this_x_chunk = n_size[1] if x_chunk > n_size[1] else x_chunk
                 this_y_chunk = n_size[0] if y_chunk > n_size[0] else y_chunk
-                this_x_origin = x_chunk - n_chunk
-                this_y_origin = y_chunk - n_chunk
+                this_x_origin = int(x_chunk - n_chunk)
+                this_y_origin = int(y_chunk - n_chunk)
                 this_x_origin = 0 if this_x_origin < 0 else this_x_origin
                 this_y_origin = 0 if this_y_origin < 0 else this_y_origin
                 this_x_size = int(this_x_chunk - this_x_origin)
