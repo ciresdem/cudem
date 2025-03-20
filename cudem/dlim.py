@@ -4521,7 +4521,7 @@ class MBSParser(ElevationDataset):
     def __init__(self,
                  mb_fmt = None,
                  mb_exclude = 'A',
-                 want_mbgrid = False,
+                 want_mbgrid = True,
                  want_binned = False,
                  min_year = None,
                  **kwargs):

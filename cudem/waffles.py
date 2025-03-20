@@ -5779,7 +5779,8 @@ def waffles_cli(argv = sys.argv):
         elif arg == '--creation-options' or arg == '-CO' or arg == '-co':
             wg['co'].append(argv[i + 1])
             i = i + 1
-        elif arg[:3] == '-CO': wg['co'].append(arg[3:])
+        elif arg[:3] == '-CO' or arg[:3] == '-co':
+            wg['co'].append(arg[3:])
             
         elif arg == '--transform' or arg == '-f' or arg == '-transform':
             wg['srs_transform'] = True
