@@ -4576,13 +4576,6 @@ class MBSParser(ElevationDataset):
                             cm_array[this_row][j] = utils.int_or(til[j+1])
                         this_row += 1
 
-                    # if til[0] == 'Time:':
-                    #     self.infos.date = til[3]
-
-                    # if til[0].strip() == 'Number of Good Beams':
-                    #     self.infos.perc = til[1].split()[-1].split('%')[0]
-                        
-
         mbs_region = regions.Region().from_list(self.infos.minmax)
         if len(dims) > 0:
             xinc = (mbs_region.xmax - mbs_region.xmin) / dims[0]
@@ -4693,7 +4686,7 @@ class MBSParser(ElevationDataset):
         ofn = '_'.join(os.path.basename(mb_fn).split('.')[:-1])
         try:
             utils.run_cmd(
-                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C10/1 -S0 -T35'.format(
+                'mbgrid -I_mb_grid_tmp.datalist {} -E{}/{}/degrees! -O{} -A2 -F1 -C2/1 -S0 -T35 -W.1'.format(
                     self.data_region.format('gmt'), self.x_inc, self.y_inc, ofn
                 ), verbose=True
             )
@@ -4705,6 +4698,17 @@ class MBSParser(ElevationDataset):
                 '{}.mb-1'.format(ofn),
                 '{}.grd*'.format(ofn)
             )
+            
+            grits_filter = grits.GritsFactory(
+                mod='outliers:multipass=2', src_dem='{}.tif'.format(ofn))._acquire_module()
+            
+            if grits_filter is not None:
+                try:
+                    grits_filter()
+                    os.replace(grits_filter.dst_dem, '{}'.format(ofn))
+                except:
+                    pass
+
             mbs_ds = DatasetFactory(
                 **self._set_params(mod='{}.tif'.format(ofn), data_format=200)
             )._acquire_module()
@@ -4714,7 +4718,7 @@ class MBSParser(ElevationDataset):
                     yield(pts)
             
             #yield(mbs_ds)
-            utils.remove_glob('{}.tif*'.format(ofn))
+            utils.remove_glob('{}*.tif*'.format(ofn))
         except Exception as e:
             #pass
             raise(e)
@@ -4763,13 +4767,14 @@ class MBSParser(ElevationDataset):
 
             if int(beamflag) == 0:# and abs(this_line[4]) < .15:
                 ## uncertainty
-                u_depth = ((2+(0.02*(z*-1)))*0.51)
                 #u_depth = 0
+                u_depth = ((2+(0.02*(z*-1)))*0.51)
                 #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
                 u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
                 #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
                 #u_cd = 0
-                u = math.sqrt(u_depth**2 + u_cd**2)
+                u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
+                u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
                 ## weight
 
                 # if mb_perc is not None and mb_date is not None:
@@ -4777,7 +4782,8 @@ class MBSParser(ElevationDataset):
                 #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
                 #     w *= self.weight if self.weight is not None else 1
                 # else:
-                w = 1
+                w = (1/u)
+                w *= self.weight if self.weight is not None else 1
 
                 xs.append(x)
                 ys.append(y)
