@@ -6532,6 +6532,30 @@ class EMODNetFetcher(Fetcher):
             self.fetches_params['data_format'] = 200
             
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
+        
+class GEDTM30Fetcher(Fetcher):
+    """GEDTM30 Data Fetcher
+    """
+    
+    __doc__ = '''{}
+    Fetches Module: <gedtm30> - {}'''.format(__doc__, fetches.GEDTM30.__doc__)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def parse(self):
+        for result in self.fetch_module.results:
+            for this_ds in self.set_ds(result):
+                if this_ds is not None:
+                    this_ds.remote = True
+                    this_ds.initialize()
+                    for ds in this_ds.parse():
+                        yield(ds)
+                                        
+    def set_ds(self, result):
+        self.fetches_params['mod'] = '/vsicurl/{}'.format(result[0])
+        self.fetches_params['data_format'] = 200            
+        yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class eHydroFetcher(Fetcher):
     """USACE eHydro soundings
@@ -6991,6 +7015,10 @@ class DatasetFactory(factory.CUDEMFactory):
                'fmts': ['wa_dnr'],
                'description': 'The Washington DNR lidar portal',
                'call': DNRFetcher},
+        -220: {'name': 'gedtm30',
+               'fmts': ['gedtm30'],
+               'description': 'Global DTM',
+               'call': GEDTM30Fetcher},
         -300: {'name': 'emodnet',
                'fmts': ['emodnet'],
                'description': 'The emodnet fetches module',

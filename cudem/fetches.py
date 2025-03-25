@@ -43,6 +43,7 @@ import lxml.html as lh
 from tqdm import tqdm
 import mercantile
 import csv
+from io import StringIO
 import warnings
 import numpy as np
 
@@ -1989,7 +1990,39 @@ class SynBath(FetchModule):
 
         self.results.append([self._synbath_url, 'SYNBATH_V2_0.nc', 'synbath'])
         return(self)
-            
+
+class GEDTM30(FetchModule):
+    """Global 1-Arc-Second Digital Terrain Model
+    """
+
+    def __init__(self, products='Ensemble Digital Terrain Model', **kwargs):
+        super().__init__(name='gedtm30', **kwargs)
+        if products is not None:
+            self.products = products.split('/')
+        else:
+            self.products = ['Ensemble Digital Terrain Model']
+        
+        self._gedtm30_url_list = 'https://raw.githubusercontent.com/openlandmap/GEDTM30/refs/heads/main/metadata/cog_list.csv'
+        
+    def run(self):
+
+        ## fetch COG list
+        cog_req = Fetch(self._gedtm30_url_list, verbose=self.verbose).fetch_req()
+        cog_url_list = None
+        if cog_req is not None:
+            cog_url_list = cog_req.text
+
+        if cog_url_list is not None:
+            csvfile = StringIO(cog_url_list)
+            reader = csv.reader(csvfile)
+            header = next(reader)
+            #[print(row[0], row[-1]) for row in reader]
+            urls = [[row[0], row[-1]] for row in reader if row[0] in self.products]
+
+            for url in urls:
+                self.results.append([url[1], os.path.basename(url[1]), 'gedtm30 - {}'.format(url[0])])
+
+    
 ## Charts - ENC/RNC
 ## the arcgis rest server doesn't filter by bbox for some reason, always returns all data
 class Charts(FetchModule):
@@ -6010,6 +6043,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'r2r': {'call': R2R},
         'MBDB': {'call': MBDB},# isn't working!
         'gebco': {'call': GEBCO},
+        'gedtm30': {'call': GEDTM30},
         'mgds': {'call': MGDS},
         'trackline': {'call': Trackline},
         'ehydro': {'call': eHydro},
@@ -6021,7 +6055,7 @@ class FetchesFactory(factory.CUDEMFactory):
         'ned': {'call': NED},
         'ned1': {'call': NED1},
         'emodnet': {'call': EMODNet},
-        'chs': {'call': CHS}, # chs isn't working! awaiting IT assistance from CA
+        'chs': {'call': CHS},
         'hrdem': {'call': HRDEM},
         'arcticdem': {'call': ArcticDEM},
         'bluetopo': {'call': BlueTopo},
