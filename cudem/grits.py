@@ -348,7 +348,7 @@ class GMTgrdfilter(Grits):
         
         return(self.dst_dem, 0)
 
-class Outliers(Grits):
+class LSPOutliers(Grits):
     """Discover and remove outliers from the input DEM.
 
     Uses various LSPs as well as elevation and uncertainty to discover possible outliers and remove 
@@ -1174,7 +1174,10 @@ class GritsFactory(factory.CUDEMFactory):
                       'call': GMTgrdfilter},
         'outliers': {'name': 'outliers',
                      'description': 'Remove outliers from the DEM',
-                     'call': Outliers},
+                     'call': LSPOutliers},
+        'lsp': {'name': 'lsp-outliers',
+                'description': 'Remove outliers from the DEM',
+                'call': LSPOutliers},
         'flats': {'name': 'flats',
                   'description': 'Remove flat areas from the DEM',
                   'call': Flats},

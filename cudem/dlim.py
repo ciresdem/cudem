@@ -455,7 +455,6 @@ class PMM(PointFilter):
         super().__init__(**kwargs)
 
     def run(self):
-        #pass
         # from sklearn.experimental import enable_iterative_imputer
         # from sklearn.impute import IterativeImputer
         # from sklearn.preprocessing import StandardScaler
@@ -2276,7 +2275,6 @@ class ElevationDataset:
                     ## apply any dlim filters to the points
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
-                            utils.echo_msg(f)
                             point_filter = PointFilterFactory(
                                 mod=f, points=points
                             )._acquire_module()
@@ -3578,12 +3576,17 @@ class BAGFile(ElevationDataset):
                  explode = False,
                  force_vr = False,
                  vr_resampled_grid = True,
+                 vr_interpolate = False,
                  vr_strategy = 'MIN',
                  **kwargs):
         super().__init__(**kwargs)
         self.explode = explode
         self.force_vr = force_vr
         self.vr_resampled_grid = vr_resampled_grid
+        self.vr_interpolate = vr_interpolate
+        if self.vr_interpolate:
+            self.vr_resampled_grid = False
+            
         self.vr_strategy = vr_strategy
         if self.src_srs is None:
             self.src_srs = self.init_srs()
@@ -3669,8 +3672,12 @@ class BAGFile(ElevationDataset):
                         for gdal_ds in sub_ds.parse():
                             yield(gdal_ds)
 
-            elif self.vr_resampled_grid:
-                oo.append("MODE=RESAMPLED_GRID")
+            elif self.vr_resampled_grid or self.vr_interpolate:
+                if self.vr_resampled_grid:
+                    oo.append("MODE=RESAMPLED_GRID")
+                elif self.vr_interpolate:
+                    oo.append("MODE=INTERPOLATED")
+                    
                 oo.append("RES_STRATEGY={}".format(self.vr_strategy))
                 sub_ds = DatasetFactory(
                     **self._set_params(
