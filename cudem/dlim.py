@@ -71,7 +71,6 @@
 ### TODO:
 ## mask to stacks for supercede
 ## fetch results class
-## speed up xyz parsing, esp in yield_array
 ## temp files
 ### Code:
 
@@ -271,9 +270,10 @@ def init_data(data_list,
 
 ## TODO: move pointfilter/binz/etc to own file
 class PointFilter:
-    def __init__(self, points = None, params = {}, **kwargs):
+    def __init__(self, points = None, params = {}, verbose = True, **kwargs):
         self.points = points
         self.params = params
+        self.verbose = verbose
         self.kwargs = kwargs
 
     def __call__(self):
@@ -450,11 +450,16 @@ class BinZ(PointFilter):
             
         return(points_1)
 
-class PMM(PointFilter):
-    def __init__(self, **kwargs):
+## Adapted from https://medium.com/@anthony.klemm/dealing-with-outliers-in-crowdsourced-bathymetry-data-using-predictive-mean-matching-pmm-bc490c158c7e
+class PMMOutliers(PointFilter):
+    def __init__(self, percentile = 98, max_percentile = 99.9, multipass = 1, want_iqr = False, **kwargs):
         super().__init__(**kwargs)
+        self.percentile = utils.float_or(percentile, 98)
+        self.max_percentile = utils.float_or(max_percentile, 99)
+        self.multipass = utils.int_or(multipass, 1)
+        self.want_iqr = want_iqr
 
-    def run(self):
+    def pmm(self, points, percentile = 98, want_iqr=False, return_outliers=False):
         # from sklearn.experimental import enable_iterative_imputer
         # from sklearn.impute import IterativeImputer
         # from sklearn.preprocessing import StandardScaler
@@ -467,19 +472,42 @@ class PMM(PointFilter):
 
         from scipy.ndimage import uniform_filter1d
         #smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
-        smoothed_depth = uniform_filter1d(self.points['z'], size=50)
-        
-        residuals = np.abs(self.points['z'] - smoothed_depth)
         #residuals = np.abs(data_imputed[:, 2], - smoothed_depth)
-        outlier_threshold = np.percentile(residuals, 98)
+        smoothed_depth = uniform_filter1d(points['z'], size=50)
+        residuals = np.abs(points['z'] - smoothed_depth)
+        if want_iqr:
+            perc_max = np.nanpercentile(residuals, percentile)            
+            iqr_p = (perc_max - (100-percentile)) * 1.5
+            outlier_threshold = perc_max + iqr_p
+        else:
+            outlier_threshold = np.percentile(residuals, percentile)
+
         outliers = residuals > outlier_threshold
 
-        return(self.points[~outliers])
+        if self.verbose:
+            utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
+        
+        if self.return_outliers:
+            return(points[outliers])
+        else:
+            return(points[~outliers])
+        
+    def run(self):
+
+        #if self.want_iqr:
+        #    percs_it = np.linspace(self.max_percentile, self.percentile, self.multipass)
+        #else:
+        percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
+            
+        for mpass in range(0, self.multipass):
+            self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr)
+            
+        return(self.points)
     
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
         'bin_z': {'name': 'bin_z', 'call': BinZ},
-        'pmm': {'name': 'pmm', 'call': PMM},
+        'pmm': {'name': 'pmm', 'call': PMMOutliers},
     }
     
     def __init__(self, **kwargs):
