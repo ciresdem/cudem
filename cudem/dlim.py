@@ -452,12 +452,13 @@ class BinZ(PointFilter):
 
 ## Adapted from https://medium.com/@anthony.klemm/dealing-with-outliers-in-crowdsourced-bathymetry-data-using-predictive-mean-matching-pmm-bc490c158c7e
 class PMMOutliers(PointFilter):
-    def __init__(self, percentile = 98, max_percentile = 99.9, multipass = 1, want_iqr = False, **kwargs):
+    def __init__(self, percentile = 98, max_percentile = 99.9, multipass = 1, want_iqr = False, return_outliers = False, **kwargs):
         super().__init__(**kwargs)
         self.percentile = utils.float_or(percentile, 98)
         self.max_percentile = utils.float_or(max_percentile, 99)
         self.multipass = utils.int_or(multipass, 1)
         self.want_iqr = want_iqr
+        self.return_outliers = return_outliers
 
     def pmm(self, points, percentile = 98, want_iqr=False, return_outliers=False):
         # from sklearn.experimental import enable_iterative_imputer
@@ -487,7 +488,7 @@ class PMMOutliers(PointFilter):
         if self.verbose:
             utils.echo_msg_bold('removed {} outliers @ {}'.format(np.count_nonzero(outliers), percentile))
         
-        if self.return_outliers:
+        if return_outliers:
             return(points[outliers])
         else:
             return(points[~outliers])
@@ -500,7 +501,7 @@ class PMMOutliers(PointFilter):
         percs_it = np.linspace(self.percentile, self.max_percentile, self.multipass)
             
         for mpass in range(0, self.multipass):
-            self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr)
+            self.points = self.pmm(self.points, percentile=percs_it[mpass], want_iqr=self.want_iqr, return_outliers=self.return_outliers)
             
         return(self.points)
     
@@ -619,7 +620,7 @@ class INF:
                 inf_fn = '{}.inf'.format(self.name)
         try:
             with open(inf_fn, 'w') as outfile:
-                json.dump(self.__dict__, outfile)
+               json.dump(self.__dict__, outfile)
         except:
             pass
         
