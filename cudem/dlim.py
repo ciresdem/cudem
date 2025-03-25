@@ -298,7 +298,7 @@ class PointFilter:
 
 ## Adapted from CShelph
 class BinZ(PointFilter):
-    def __init__(self, y_res=1, z_res=.5, percentile=50, z_min=None, z_max=None, **kwargs):
+    def __init__(self, y_res = 1, z_res = .5, percentile = 50, z_min = None, z_max = None, **kwargs):
         super().__init__(**kwargs)
         self.y_res = utils.float_or(y_res, 1)
         self.z_res = utils.float_or(z_res, .5)
@@ -450,9 +450,37 @@ class BinZ(PointFilter):
             
         return(points_1)
 
+class PMM(PointFilter):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def run(self):
+        #pass
+        # from sklearn.experimental import enable_iterative_imputer
+        # from sklearn.impute import IterativeImputer
+        # from sklearn.preprocessing import StandardScaler
+        
+        # scaler = StandardScaler(with_mean=False)
+        # #data_scaled = scaler.fit_transform(data[[‘lat’, ‘lon’, ‘depth’]])
+        # data_scaled = scaler.fit_transform(np.array([self.points['x'], self.points['y'], self.points['z']]))
+        # imputer = IterativeImputer(random_state=36, sample_posterior=True)
+        # data_imputed = imputer.fit_transform(data_scaled)
+
+        from scipy.ndimage import uniform_filter1d
+        #smoothed_depth = uniform_filter1d(data_imputed[:, 2], size=50)
+        smoothed_depth = uniform_filter1d(self.points['z'], size=50)
+        
+        residuals = np.abs(self.points['z'] - smoothed_depth)
+        #residuals = np.abs(data_imputed[:, 2], - smoothed_depth)
+        outlier_threshold = np.percentile(residuals, 98)
+        outliers = residuals > outlier_threshold
+
+        return(self.points[~outliers])
+    
 class PointFilterFactory(factory.CUDEMFactory):
     _modules = {
         'bin_z': {'name': 'bin_z', 'call': BinZ},
+        'pmm': {'name': 'pmm', 'call': PMM},
     }
     
     def __init__(self, **kwargs):
@@ -2640,6 +2668,11 @@ class ElevationDataset:
             self, this_cst, return_geom = True, landmask_is_watermask = False,
             line_buffer = 0.0000001, include_landmask = False, verbose = True
     ):
+        if self.region is not None:
+            this_region = self.region.copy()
+        else:
+            this_region = regions.Region().from_list(self.infos.minmax)
+            
         cst_geoms = []
         if this_cst is not None:
             with tqdm(
@@ -2656,19 +2689,20 @@ class ElevationDataset:
                                 utils.fn_basename2(cst_osm) + '_coast.shp',
                                 temp_dir=self.cache_dir
                             ),
-                            region=self.region, include_landmask=include_landmask,
+                            region=this_region, include_landmask=include_landmask,
                             landmask_is_watermask=landmask_is_watermask,
                             line_buffer=line_buffer
                         )
+
+                        if out is not None:
+                            cst_ds = ogr.Open(out, 0)
+                            cst_layer = cst_ds.GetLayer()
+                            cst_geom = gdalfun.ogr_union_geom(cst_layer, verbose=False)
+                            cst_geoms.append(cst_geom)
+                            cst_ds = None
+                            utils.remove_glob(cst_osm)
                         
-                        cst_ds = ogr.Open(out, 0)
-                        cst_layer = cst_ds.GetLayer()
-                        cst_geom = gdalfun.ogr_union_geom(cst_layer, verbose=False)
-                        cst_geoms.append(cst_geom)
-                        cst_ds = None
-                        utils.remove_glob(cst_osm)
-                        
-            if retrun_geom:
+            if return_geom:
                 utils.remove_glob('{}.*'.format(utils.fn_basename2(out)))
                         
         if return_geom:            
@@ -3942,6 +3976,7 @@ class IceSat2File(ElevationDataset):
                  columns = {},
                  classify_bathymetry = True,
                  classify_buildings = True,
+                 classify_inland_water = True,
                  reject_failed_qa = True,
                  classify_water = True,
                  **kwargs):
@@ -3958,6 +3993,7 @@ class IceSat2File(ElevationDataset):
         self.want_bathymetry = classify_bathymetry
         self.want_buildings = classify_buildings
         self.want_watermask = classify_water
+        self.want_inland_water = classify_inland_water
         self.reject_failed_qa = reject_failed_qa
         
     def init_atl_h5(self):
@@ -3966,6 +4002,7 @@ class IceSat2File(ElevationDataset):
         self.atl03_f = None
         self.atl08_f = None
         self.atl24_f = None
+        self.atl13_f = None
 
         if self.atl03_fn is not None and os.path.exists(self.atl03_fn):
             self.atl03_f = h5.File(self.atl03_fn, 'r')            
@@ -3991,6 +4028,12 @@ class IceSat2File(ElevationDataset):
             if 'short_name' not in self.atl24_f.attrs.keys():
                 utils.echo_warning_msg('this file does not appear to be an ATL file')
                 self.atl24_f.close()
+                
+        if self.atl13_fn is not None and os.path.exists(self.atl13_fn):
+            self.atl13_f = h5.File(self.atl13_fn, 'r')
+            if 'short_name' not in self.atl13_f.attrs.keys():
+                utils.echo_warning_msg('this file does not appear to be an ATL file')
+                self.atl13_f.close()                
 
     def close_atl_h5(self):
         """close all open atl files"""
@@ -4004,6 +4047,9 @@ class IceSat2File(ElevationDataset):
 
         if self.atl24_f is not None:
             self.atl24_f.close()
+
+        if self.atl13_f is not None:
+            self.atl13_f.close()
             
     def yield_ds(self):
         """yield the points from the dataset.
@@ -4015,9 +4061,12 @@ class IceSat2File(ElevationDataset):
         self.atl03_fn = self.fn
         self.atl08_fn = None
         self.atl24_fn = None
+        self.atl13_fn = None
         if len(self.classes) > 0:
-            atl08_result = self.fetch_atl08()
+            atl08_result = self.fetch_atlxx(short_name='ATL08')
             self.atl08_fn = atl08_result
+            atl13_result = self.fetch_atlxx(short_name='ATL13')
+            self.atl13_fn = atl13_result
 
         try:
             self.init_atl_h5()
@@ -4092,38 +4141,62 @@ class IceSat2File(ElevationDataset):
 
         self.close_atl_h5()
 
-    def fetch_atl08(self):
-        """fetch the associated ATL08 file"""
+    # def fetch_atl08(self):
+    #     """fetch the associated ATL08 file"""
         
-        atl08_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
-        this_atl08 = fetches.IceSat2(
-            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08',
-            filename_filter=atl08_filter
-        )
-        this_atl08.run()
-        if len(this_atl08.results) == 0:
-            utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl08_filter))
-            return(None)
-        else:
-            if this_atl08.fetch(this_atl08.results[0], check_size=True) == 0:
-                return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
+    #     atl08_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+    #     this_atl08 = fetches.IceSat2(
+    #         src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL08',
+    #         filename_filter=atl08_filter
+    #     )
+    #     this_atl08.run()
+    #     if len(this_atl08.results) == 0:
+    #         utils.echo_warning_msg('could not locate associated atl08 file for {}'.format(atl08_filter))
+    #         return(None)
+    #     else:
+    #         if this_atl08.fetch(this_atl08.results[0], check_size=True) == 0:
+    #             return(os.path.join(this_atl08._outdir, this_atl08.results[0][1]))
 
-    def fetch_atl24(self):
-        """fetch the associated ATL24 file"""
+    # def fetch_atl24(self):
+    #     """fetch the associated ATL24 file"""
         
-        atl24_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
-        this_atl24 = fetches.IceSat2(
-            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL24',
-            filename_filter=atl24_filter
+    #     atl24_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+    #     this_atl24 = fetches.IceSat2(
+    #         src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name='ATL24',
+    #         filename_filter=atl24_filter
+    #     )
+    #     this_atl24.run()
+    #     if len(this_atl24.results) == 0:
+    #         utils.echo_warning_msg('could not locate associated atl24 file for {}'.format(atl24_filter))
+    #         return(None)
+    #     else:
+    #         if this_atl24.fetch(this_atl24.results[0], check_size=True) == 0:
+    #             return(os.path.join(this_atl24._outdir, this_atl24.results[0][1]))            
+
+    def fetch_atlxx(self, short_name='ATL08'):
+        """fetch an associated ATLxx file"""
+
+        #utils.echo_msg(self.atl03_fn)
+        atlxx_filter = utils.fn_basename2(self.atl03_fn).split('ATL03_')[1]
+        this_atlxx = fetches.IceSat2(
+            src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name=short_name,
+            filename_filter=atlxx_filter
         )
-        this_atl24.run()
-        if len(this_atl24.results) == 0:
-            utils.echo_warning_msg('could not locate associated atl24 file for {}'.format(atl24_filter))
-            return(None)
+        this_atlxx.run()
+        if len(this_atlxx.results) == 0:
+            atlxx_filter = '_'.join(utils.fn_basename2(self.atl03_fn).split('ATL03_')[1].split('_')[:-1])
+            this_atlxx = fetches.IceSat2(
+                src_region=None, verbose=self.verbose, outdir=self.cache_dir, short_name=short_name,
+                filename_filter=atlxx_filter
+            )
+            this_atlxx.run()
+            if len(this_atlxx.results) == 0:
+                utils.echo_warning_msg('could not locate associated {} file for {}'.format(short_name, atlxx_filter))
+                return(None)
         else:
-            if this_atl24.fetch(this_atl24.results[0], check_size=True) == 0:
-                return(os.path.join(this_atl24._outdir, this_atl24.results[0][1]))            
-    
+            if this_atlxx.fetch(this_atlxx.results[0], check_size=True) == 0:
+                return(os.path.join(this_atlxx._outdir, this_atlxx.results[0][1]))            
+            
     def read_atl_data(self, laser_num, orientation = None):
         """Read data from an ATL03 file
 
@@ -4264,6 +4337,10 @@ class IceSat2File(ElevationDataset):
             latitude[atl24_classed_pc_indx[class_40_mask]] = atl24_latitude[class_40_mask]
             photon_h[atl24_classed_pc_indx[class_40_mask]] = atl24_ellipse_h[class_40_mask]
             photon_h_geoid[atl24_classed_pc_indx[class_40_mask]] = atl24_ortho_h[class_40_mask]
+
+        if self.atl13_f is not None:
+            atl13_refid = self.atl13_f['/' + laser + '/segment_id_beg'][...,]
+            ph_h_classed[atl13_refid] = 44
             
         ## set the photon height, either 'mean_tide' or 'geoid', else ellipsoid
         if self.water_surface == 'mean_tide':

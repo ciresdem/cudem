@@ -132,7 +132,7 @@ class Region:
                       umin=self.umin, umax=self.umax,
                       src_srs=self.src_srs, wkt=self.wkt))
 
-    def _wgs_extremes(self, just_below=False):
+    def _wgs_extremes(self, just_below = False):
         """adjust the region to make sure it is within WGS extremes..."""
         
         if self.xmin <= -180:
@@ -1274,7 +1274,7 @@ def regions_cli(argv = sys.argv):
         elif arg[0] == '-':
             print(regions_usage)
             sys.exit(0)
-        else: dls.append(arg)
+            
         i = i + 1
 
     ## parse the input region(s) to a list

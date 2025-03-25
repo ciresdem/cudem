@@ -2201,8 +2201,9 @@ class R2R(FetchModule):
     def __init__(self, check_inf=False, **kwargs):
         super().__init__(name='R2R', **kwargs)
         self.check_inf = check_inf
-        self.r2r_api_url = 'https://service.rvdata.us/api/fileset/keyword/bathy?'
+        self.r2r_api_url = 'https://service.rvdata.us/api/fileset/keyword/multibeam?'
         self.r2r_api_manifest_url = 'https://service.rvdata.us/api/file_manifest/?'
+        self.r2r_api_product_url = 'https://service.rvdata.us/api/product/?'
 
     def inf_parse(self, inf_text):
         this_row = 0
@@ -2263,47 +2264,64 @@ class R2R(FetchModule):
                     if feature_set_url is not None:
                         feature_set_id = feature['fileset_id']
                         cruise_id = feature['cruise_id']
-                        #pbar.set_description('parsing cruise datasets...{}'.format(cruise_id))
-                        #pbar.refresh()
-                        # file_list_url = 'https://www.rvdata.us/search/cruise/{}/file-list/{}'.format(cruise_id, feature_set_id)
-                        # page = Fetch(file_list_url, verbose=True).fetch_req()
-                        # print(page.text)
-                        page = Fetch(feature_set_url, verbose=True).fetch_req()
-                        req_h = page.headers
-                        #$print(req_h)
-                        if req_h['content-type'].split(';')[0] != 'text/html':
-                            continue
-                        # if 'content_length' in req_h:
-                        #     status = req_h['content_length']
-                        # else:
-                        #status = page.status_code
-                        #status = feature['format_id']
+
+                        product_url = '{}cruise_id={}'.format(self.r2r_api_product_url, cruise_id)
+                        #print(product_url)
+                        page = Fetch(product_url, verbose=True).fetch_req()
+                        page_json = page.json()
+                        if page_json is not None:
+                            page_data = page_json['data']
+                            if page_data is not None:
+                                for data in page_data:
+                                    #print(data['datatype_name'])
+                                    if data['datatype_name'] == 'Bathymetry':
+                                        #utils.echo_msg(data['actual_url'])
+                                        self.results.append(
+                                            [data['actual_url'], os.path.basename(data['actual_url']), 'multibeam']
+                                        )
+                                        
+                        
+                        # #pbar.set_description('parsing cruise datasets...{}'.format(cruise_id))
+                        # #pbar.refresh()
+                        # # file_list_url = 'https://www.rvdata.us/search/cruise/{}/file-list/{}'.format(cruise_id, feature_set_id)
+                        # # page = Fetch(file_list_url, verbose=True).fetch_req()
+                        # # print(page.text)
+                        # page = Fetch(feature_set_url, verbose=True).fetch_req()
+                        # req_h = page.headers
+                        # #$print(req_h)
+                        # if req_h['content-type'].split(';')[0] != 'text/html':
+                        #     continue
+                        # # if 'content_length' in req_h:
+                        # #     status = req_h['content_length']
+                        # # else:
+                        # #status = page.status_code
+                        # #status = feature['format_id']
                             
-                        #pbar.set_description('parsing cruise datasets...{}...{}'.format(cruise_id, status))
-                        #pbar.refresh()
-                        page = Fetch(feature_set_url, verbose=True).fetch_html()
-                        rows = page.xpath('//a[contains(@href, ".gz")]/@href')
-                        if self.check_inf:
-                            with tqdm(
-                                    total=len(rows),
-                                    desc='parsing cruise files...',
-                                    leave=False
-                            ) as c_pbar:
-                                for row in rows:
-                                    c_pbar.update()
-                                    if '.tar.gz' not in row:
-                                        #print('{}.fbt'.format(utils.fn_basename2(row)))
-                                        row_region = self.check_inf_region(row)
-                                        if row_region is not None and regions.regions_intersect_ogr_p(self.region, row_region):
-                                            self.results.append(
-                                                ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(utils.fn_basename2(row))), 'multibeam']
-                                            )
-                        else:
-                            for row in rows:
-                                if '.tar.gz' not in row:
-                                    self.results.append(
-                                        ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(utils.fn_basename2(row))), 'multibeam']
-                                    )               
+                        # #pbar.set_description('parsing cruise datasets...{}...{}'.format(cruise_id, status))
+                        # #pbar.refresh()
+                        # page = Fetch(feature_set_url, verbose=True).fetch_html()
+                        # rows = page.xpath('//a[contains(@href, ".gz")]/@href')
+                        # if self.check_inf:
+                        #     with tqdm(
+                        #             total=len(rows),
+                        #             desc='parsing cruise files...',
+                        #             leave=False
+                        #     ) as c_pbar:
+                        #         for row in rows:
+                        #             c_pbar.update()
+                        #             if '.tar.gz' not in row:
+                        #                 #print('{}.fbt'.format(utils.fn_basename2(row)))
+                        #                 row_region = self.check_inf_region(row)
+                        #                 if row_region is not None and regions.regions_intersect_ogr_p(self.region, row_region):
+                        #                     self.results.append(
+                        #                         ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(utils.fn_basename2(row))), 'multibeam']
+                        #                     )
+                        # else:
+                        #     for row in rows:
+                        #         if '.tar.gz' not in row:
+                        #             self.results.append(
+                        #                 ['{}.fbt'.format(utils.fn_basename2(row)), os.path.join(cruise_id, '{}.fbt'.format(utils.fn_basename2(row))), 'multibeam']
+                        #             )               
         
 class Multibeam(FetchModule):
     """NOAA MULTIBEAM bathymetric data.
@@ -4832,6 +4850,18 @@ class OpenStreetMap(FetchModule):
             (._;>;);
             out meta;
             '''.format('(if: length() > {})'.format(min_length) if min_length is not None else '')
+
+        if self.q == 'rivers':
+            #self.h = '[maxsize:2000000000]'
+            self.h = '[timeout:3600]'
+            self.q = '''
+            //(way["natural"="water"]{};
+            //relation["type"="lines"];
+            nwr["water"="river"];
+            //);
+            (._;>;);
+            out meta;
+            '''.format('(if: length() > {})'.format(min_length) if min_length is not None else '')            
             
         ## various OSM URLs
         self._osm_api = 'https://lz4.overpass-api.de/api/interpreter'
