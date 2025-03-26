@@ -50,7 +50,7 @@
 ## if src_srs is not set, but dst_srs is, dlim will attempt to obtain the source srs from the data file itself
 ## or its respective inf file; otherwise, it will be assumed the source data file is in the same srs as dst_srs
 ##
-## A dataset module should have at least an `__init__` and a `yield_ds` method. `yield_ds` should yield a numpy rec array with at least
+## A dataset module should have at least an `__init__` and a `yield_points` method. `yield_points` should yield a numpy rec array with at least
 ## 'x', 'y' and 'z' fields, and optionally 'w' and 'u' fields. Other methods that can be re-written include `parse` which yields
 ## dlim dataset module(s).
 ##
@@ -277,7 +277,9 @@ class PointFilter:
         self.kwargs = kwargs
 
     def __call__(self):
-        utils.echo_msg('filtering points using {}'.format(self))
+        if self.verbose:
+            utils.echo_msg('filtering points using {}'.format(self))
+            
         return(self.run())
 
     def run(self):
@@ -635,14 +637,14 @@ class ElevationDataset:
     Specifically, each sub-dataset should minimally define the following functions:
 
     sub_ds.__init__
-    sub_ds.yield_ds
+    sub_ds.yield_points
 
     -----------
     Where:
 
     generate_inf generates a dlim compatible inf file,
     parse yields the dlim dataset module
-    yield_ds yields the data as a numpy rec-array with 'x', 'y', 'z' and optionally 'w' and 'u'
+    yield_points yields the data as a numpy rec-array with 'x', 'y', 'z' and optionally 'w' and 'u'
 
     -----------
     Parameters:
@@ -907,7 +909,7 @@ class ElevationDataset:
         this_region = regions.Region()
         point_count = 0
 
-        for points in self.yield_points():
+        for points in self.transform_and_yield_points():
             if point_count == 0:
                 this_region.from_list(
                     [
@@ -948,14 +950,14 @@ class ElevationDataset:
             
         return(self.infos)
 
-    def yield_ds(self):
+    def yield_points(self):
         """yield the numpy xyz rec array points from the dataset.
 
         reset in dataset if needed.
         """
 
         for ds in self.parse():
-            for points in ds.yield_ds():
+            for points in ds.yield_points():
                 yield(points)
         
     def yield_xyz_from_entries(self):
@@ -2256,7 +2258,7 @@ class ElevationDataset:
             
         return(ogr_ds)
 
-    def yield_points(self):
+    def transform_and_yield_points(self):
         """points are an array of `points['x']`, `points['y']`, `points['z']`, <`points['w']`, `points['u']`>`
 
         points will be transformed here, based on `self.transformer`, which is set in `set_transform`
@@ -2266,7 +2268,7 @@ class ElevationDataset:
             
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
-            for points in self.yield_ds():
+            for points in self.yield_points():
 
                 if self.transform['transformer'] is not None or self.transform['vert_transformer'] is not None:
                     #transformer = self.transform['transformer'] if self.transform['transformer'] is not None else self.transform['vert_transformer']
@@ -2305,7 +2307,7 @@ class ElevationDataset:
                     if self.pnt_fltrs is not None:
                         for f in self.pnt_fltrs:
                             point_filter = PointFilterFactory(
-                                mod=f, points=points
+                                mod=f, points=points, verbose=False
                             )._acquire_module()
                             if point_filter is not None:
                                 points = point_filter()
@@ -2322,7 +2324,7 @@ class ElevationDataset:
         """
         
         dataset = pd.DataFrame({}, columns=['x', 'y', 'z', 'weight', 'uncertainty'])
-        for points in self.yield_points():
+        for points in self.transform_and_yield_points():
             try:
                 points_w = points['w']
             except:
@@ -2368,7 +2370,7 @@ class ElevationDataset:
         """
         
         count = 0
-        for points in self.yield_points():
+        for points in self.transform_and_yield_points():
             try:
                 points_w = points['w']
             except:
@@ -2414,7 +2416,7 @@ class ElevationDataset:
         
         out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None, 'x': None, 'y': None }
         count = 0
-        for points in self.yield_points():
+        for points in self.transform_and_yield_points():
             xcount, ycount, dst_gt = self.region.geo_transform(
                 x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
             )
@@ -2785,7 +2787,7 @@ class XYZFile(ElevationDataset):
         self.use_numpy = use_numpy # use numpy.loadtxt to load the xyz points
         self.iter_rows = iter_rows # max rows to process at a time
 
-    def yield_ds(self):
+    def yield_points(self):
         if self.delim is not None:
             xyzfun._known_delims.insert(0, self.delim)
                 
@@ -3011,7 +3013,7 @@ class LASFile(ElevationDataset):
         self.infos.src_srs = self.src_srs if self.src_srs is not None else self.get_epsg()            
         return(self.infos)
 
-    def yield_ds(self):
+    def yield_points(self):
         with lp.open(self.fn) as lasf:
             try:
                 for points in lasf.chunk_iterator(2_000_000):
@@ -3166,7 +3168,7 @@ class GDALFile(ElevationDataset):
             
         return(srcwin)
         
-    def yield_ds(self):
+    def yield_points(self):
         """initialize the raster dataset
 
         if x/y incs are set, will warp raster to that resolution.
@@ -3769,7 +3771,7 @@ class CUDEMFile(ElevationDataset):
         super().__init__(**kwargs)
 
 
-    def yield_ds(self):
+    def yield_points(self):
 
         ## extract z, unc and weight grids
         ## process through gdalfile
@@ -3875,7 +3877,7 @@ class SWOT_PIXC(SWOTFile):
         #                          262144, 524288, 134217728, 536870912,
         #                          1073741824, 2147483648]
 
-    def yield_ds(self):
+    def yield_points(self):
         src_h5 = self._init_h5File(short_name='L2_HR_PIXC')
         src_h5_vec = None
         
@@ -3983,7 +3985,7 @@ class IceSat2File(ElevationDataset):
     water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in yield_points {'/h5/atl/path', column_name}
+    columns: {} # the additional columns to export in transform_and_yield_points {'/h5/atl/path', column_name}
     classify_bathymetry: True # extract bathymetry with CShelph
     classify_buildings: True # classify buildings using BING BFP
     classify_water: True # classify water using OSM
@@ -4087,7 +4089,7 @@ class IceSat2File(ElevationDataset):
         if self.atl13_f is not None:
             self.atl13_f.close()
             
-    def yield_ds(self):
+    def yield_points(self):
         """yield the points from the dataset.
 
         In this case, it will yield a pandas dataframe
@@ -4168,7 +4170,7 @@ class IceSat2File(ElevationDataset):
             if dataset is None or len(dataset) == 0:
                 continue
 
-            ## rename the x,y,z columns for `yield_points`
+            ## rename the x,y,z columns for `transform_and_yield_points`
             dataset.rename(
                 columns={'longitude': 'x', 'latitude': 'y', 'photon_height': 'z'},
                 inplace=True
@@ -4827,7 +4829,7 @@ class MBSParser(ElevationDataset):
             )._acquire_module()
             mbs_ds.initialize()
             for gdal_ds in mbs_ds.parse():
-                for pts in gdal_ds.yield_points():
+                for pts in gdal_ds.transform_and_yield_points():
                     yield(pts)
             
             #yield(mbs_ds)
@@ -4954,7 +4956,7 @@ class MBSParser(ElevationDataset):
         if mb_points is not None:
             yield(mb_points)
                 
-    def yield_ds(self):        
+    def yield_points(self):        
         mb_fn = os.path.join(self.fn)
         if self.region is None or self.data_region is None:
             self.want_mbgrid = False
@@ -5015,7 +5017,7 @@ class OGRFile(ElevationDataset):
                 return((l, test_field))
         return(None, None)
     
-    def yield_ds(self):
+    def yield_points(self):
         ds_ogr = ogr.Open(self.fn)
         count = 0
         #utils.echo_msg(self.ogr_layer)
@@ -5094,7 +5096,7 @@ class Points(ElevationDataset):
         self.metadata['name'] = 'points'
         self.data_format = -4
 
-    def yield_ds(self):
+    def yield_points(self):
         points = self.fn
         if isinstance(points, np.ndarray):
             points = np.rec.fromrecords(points, names='x, y, z')
@@ -5349,7 +5351,7 @@ class Datalist(ElevationDataset):
         self.region = _region
         return(self.infos)
         
-    def parse(self):
+    def parse_json(self):
         """parse the datalist using the datalist-vector geojson.
 
         Quickly find data in a given region using the datalist-vector. The datalist-vector
@@ -5473,7 +5475,7 @@ class Datalist(ElevationDataset):
             for ds in self.parse_no_json():
                 yield(ds)
                                         
-    def parse_no_json(self):
+    def parse(self):
         """parse the datalist file.
 
         -------
@@ -5487,7 +5489,11 @@ class Datalist(ElevationDataset):
                 count = sum(1 for _ in f)
 
             with open(self.fn, 'r') as op:
-                with tqdm(desc='parsing datalist {}...'.format(self.fn), leave=self.verbose) as pbar:
+                with tqdm(
+                        total=count,
+                        desc='parsing datalist {}...'.format(self.fn),
+                        leave=self.verbose
+                ) as pbar:
                     for l, this_line in enumerate(op):
                         pbar.update()
                         ## parse the datalist entry line
@@ -5516,26 +5522,27 @@ class Datalist(ElevationDataset):
                                         inf_region.umin = data_set.uncertainty
                                         inf_region.umax = data_set.uncertainty
 
-                                        if regions.regions_intersect_p(
+                                        if not regions.regions_intersect_p(
                                                 inf_region,
                                                 self.region if data_set.transform['transformer'] is None else data_set.transform['trans_region']
                                         ):
-                                            ## fill self.data_entries with each dataset for use outside the yield.
-                                            for ds in data_set.parse(): 
-                                                self.data_entries.append(ds) 
-                                                yield(ds)
+                                            continue
+                                            # ## fill self.data_entries with each dataset for use outside the yield.
+                                            # for ds in data_set.parse(): 
+                                            #     self.data_entries.append(ds) 
+                                            #     yield(ds)
 
-                                    else:
-                                        ## fill self.data_entries with each dataset for use outside the yield.
-                                        for ds in data_set.parse(): 
-                                            self.data_entries.append(ds) 
-                                            yield(ds)
+                                #     else:
+                                #         ## fill self.data_entries with each dataset for use outside the yield.
+                                #         for ds in data_set.parse(): 
+                                #             self.data_entries.append(ds) 
+                                #             yield(ds)
 
-                                else:
-                                    ## fill self.data_entries with each dataset for use outside the yield.
-                                    for ds in data_set.parse(): 
-                                        self.data_entries.append(ds)
-                                        yield(ds)
+                                # else:
+                                ## fill self.data_entries with each dataset for use outside the yield.
+                                for ds in data_set.parse(): 
+                                    self.data_entries.append(ds)
+                                    yield(ds)
 
         ## self.fn is not a file-name, so check if self.data_entries not empty
         ## and return the dataset objects found there.
@@ -5685,13 +5692,13 @@ class Fetcher(ElevationDataset):
     various fetches modules supported.
 
     If a fetch module needs special processing define a sub-class
-    of Fetcher and redefine the set_ds(self, result) function which yields a
+    of Fetcher and redefine the yield_ds(self, result) function which yields a
     list of dlim dataset objects, where result is an item from the fetch result list.
     Otherwise, this Fetcher class can be used as default if the fetched data comes
     in a normal sort of way.
 
     Generally, though not always, if the fetched data is a raster then
-    there is no need to redefine set_ds, though if the raster has insufficient
+    there is no need to redefine yield_ds, though if the raster has insufficient
     information, such as with Copernicus, whose nodata value is not
     specified in the geotiff files, it may be best to create a simple
     sub-class for it.
@@ -5769,7 +5776,7 @@ class Fetcher(ElevationDataset):
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
                 if status == 0:
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1])
-                    for this_ds in self.set_ds(result):
+                    for this_ds in self.yield_ds(result):
                         if this_ds is not None:
                             f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
                             if f_name == '.':
@@ -5805,7 +5812,7 @@ class Fetcher(ElevationDataset):
         if not self.keep_fetched_data:
             utils.remove_glob('{}*'.format(self.fn))
             
-    def set_ds(self, result):
+    def yield_ds(self, result):
         ## try to get the SRS info from the result if it's a gdal file
         ## fix this.
         try:
@@ -5837,7 +5844,7 @@ class NEDFetcher(Fetcher):
         super().__init__(**kwargs)
         self.coast_buffer = utils.float_or(coast_buffer, 0.00001)
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         ## coastline generation
         # from cudem import waffles
         # coast_mask_fn = utils.make_temp_fn('ned_coast')
@@ -5886,7 +5893,7 @@ class DNRFetcher(Fetcher):
 
         self.data_format = -2
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         src_dnr_dems = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['tif'],
@@ -5925,13 +5932,13 @@ class DAVFetcher_CoNED(Fetcher):
                 if status != 0:
                     break
                 
-            for this_ds in self.set_ds(result):
+            for this_ds in self.yield_ds(result):
                 if this_ds is not None:
                     #this_ds.metadata['name'] = utils.fn_basename2(this_ds.fn)
                     this_ds.initialize()
                     yield(this_ds)
             
-    def set_ds(self, result):
+    def yield_ds(self, result):
         ## try to get the SRS info from the result
         try:
             vdatum = self.fetch_module.vdatum
@@ -5973,7 +5980,7 @@ class DAVFetcher_SLR(Fetcher):
     def __init__(self, keep_fetched_data = True, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         ## this doesn't work in all cases, update to find and remove flattened areas
         #gdalfun.gdal_set_ndv(os.path.join(self.fetch_module._outdir, result[1]), ndv=-99.0000, convert_array=True)
         self.fetches_params['remove_flat'] = True
@@ -6065,7 +6072,7 @@ class SWOTFetcher(Fetcher):
     #         if this_pixc_vec.fetch(this_pixc_vec.results[0], check_size=self.check_size) == 0:
     #             return(os.path.join(this_pixc_vec._outdir, this_pixc_vec.results[0][1]))
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         #swot_fn = os.path.join(self.fetch_module._outdir, result[1])
         if 'L2_HR_PIXC_' in result[-1]:
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
@@ -6088,7 +6095,7 @@ class IceSat2Fetcher(Fetcher):
     water_surface: 'geoid' # this is the vertical datum, can be 'geoid', 'ellipsoid' or 'mean_tide'
     classes: None # return only data with the specified classes, e.g. '2/3/4'
     confidence_levels: None # return only data with the specified confidence levels, e.g. '2/3/4'
-    columns: {} # the additional columns to export in yield_points
+    columns: {} # the additional columns to export in transform_and_yield_points
     classify_bathymetry: True # extract bathymetry with CShelph
     classify_buildings: True # classify buildings with BING BFP
     classify_water: True # classify water using OSM
@@ -6133,7 +6140,7 @@ class IceSat2Fetcher(Fetcher):
         self.fetches_params['classify_water'] = classify_water
         self.fetches_params['reject_failed_qa'] = reject_failed_qa        
     
-    def set_ds(self, result):
+    def yield_ds(self, result):
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
         if self.fetches_params['classify_buildings']:
             self.fetches_params['classify_buildings'] = self.process_buildings(self.fetch_buildings())
@@ -6175,7 +6182,7 @@ class GMRTFetcher(Fetcher):
         super().__init__(**kwargs)
         self.swath_only = swath_only
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         swath_mask=None
         gmrt_fn = os.path.join(self.fetch_module._outdir, result[1])
         with gdalfun.gdal_datasource(gmrt_fn, update = 1) as src_ds:
@@ -6226,7 +6233,7 @@ class GEBCOFetcher(Fetcher):
             for tid_key in exclude_tid.split('/'):
                 self.exclude_tid.append(utils.int_or(tid_key))
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         wanted_gebco_fns = []
         gebco_fns = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
@@ -6324,7 +6331,7 @@ class CopernicusFetcher(Fetcher):
         self.check_size=False
         self.datatype=datatype
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         if self.datatype is None or result[-1] == self.datatype:
             src_cop_dems = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
@@ -6349,7 +6356,7 @@ class FABDEMFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         src_fab_dems = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['tif'],
@@ -6386,7 +6393,7 @@ class MarGravFetcher(Fetcher):
         self.region.zmax=self.upper_limit
         self.region.zmin=self.lower_limit
             
-    def set_ds(self, result):
+    def yield_ds(self, result):
         if result[-1] == 'mar_grav_img':
             nc_fn = utils.make_temp_fn(
                 '{}.nc'.format(utils.fn_basename2(result[1])),
@@ -6450,7 +6457,7 @@ class ChartsFetcher(Fetcher):
         super().__init__(**kwargs)
         #self.metadata['name'] = 'charts'
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         src_000s = utils.p_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             exts=['000'],
@@ -6477,7 +6484,7 @@ class MBSFetcher(Fetcher):
         self.fetches_params['want_binned'] = want_binned
         self.fetches_params['want_mbgrid'] = want_mbgrid
 
-    def set_ds(self, result):            
+    def yield_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
                 
@@ -6492,7 +6499,7 @@ class HydroNOSFetcher(Fetcher):
         super().__init__(**kwargs)
         self.explode=explode
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         if result[2] == 'xyz':
             nos_fns = utils.p_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
@@ -6541,7 +6548,7 @@ class CSBFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class EMODNetFetcher(Fetcher):
@@ -6554,7 +6561,7 @@ class EMODNetFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         if result[2] == 'csv':
             self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,'
         elif result[2] == 'nc':
@@ -6574,14 +6581,14 @@ class GEDTM30Fetcher(Fetcher):
 
     def parse(self):
         for result in self.fetch_module.results:
-            for this_ds in self.set_ds(result):
+            for this_ds in self.yield_ds(result):
                 if this_ds is not None:
                     this_ds.remote = True
                     this_ds.initialize()
                     for ds in this_ds.parse():
                         yield(ds)
                                         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         self.fetches_params['mod'] = '/vsicurl/{}'.format(result[0])
         self.fetches_params['data_format'] = 200            
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
@@ -6597,7 +6604,7 @@ class eHydroFetcher(Fetcher):
         super().__init__(**kwargs)
         self.want_contours = want_contours
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         try:
             src_gdb = utils.gdb_unzip(
                 os.path.join(self.fetch_module._outdir, result[1]),
@@ -6630,7 +6637,7 @@ class eHydroFetcher(Fetcher):
                 self.fetches_params['data_format'] = '302:ogr_layer=ElevationContour_ALL:elev_field=contourElevation:z_scale=-0.3048006096012192'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())            
 
-    def set_ds_XYZ(self, result):
+    def yield_ds_XYZ(self, result):
         src_gdb = utils.gdb_unzip(
             os.path.join(self.fetch_module._outdir, result[1]),
             outdir=self.fetch_module._outdir,
@@ -6674,7 +6681,7 @@ class BlueTopoFetcher(Fetcher):
         self.want_interpolation = want_interpolation
         self.unc_weights = unc_weights
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         sid = None
         if not self.want_interpolation:
             sid = gdalfun.gdal_extract_band(
@@ -6708,7 +6715,7 @@ class NGSFetcher(Fetcher):
             utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
             self.datum = 'geoidHt'
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
@@ -6740,7 +6747,7 @@ class TidesFetcher(Fetcher):
         self.t_datum = t_datum
         self.units = units
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
@@ -6791,7 +6798,7 @@ class WaterServicesFetcher(Fetcher):
         self.units = units
         self.site_code = site_code
         
-    def set_ds(self, result):
+    def yield_ds(self, result):
         with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
@@ -6825,7 +6832,7 @@ class VDatumFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         src_tif = os.path.join(
             self.fetch_module._outdir, '{}.tif'.format(
                 utils.fn_basename2(os.path.basename(result[1]))
@@ -6855,7 +6862,7 @@ class HydroLakesFetcher(Fetcher):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def set_ds(self, result):
+    def yield_ds(self, result):
         pass
     
 class DatasetFactory(factory.CUDEMFactory):
