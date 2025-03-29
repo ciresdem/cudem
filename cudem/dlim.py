@@ -124,6 +124,205 @@ gdal.DontUseExceptions()
 ogr.DontUseExceptions()
 gdal.SetConfigOption('CPL_LOG', 'NUL' if gc['platform'] == 'win32' else '/dev/null') 
 
+## dataset masking functions
+def num_strings_to_range(*args):
+    """parse args to a number range.
+
+    e.g. if args == ['1934', '1920-1980', '2001'] will return '1920-2001'
+    """
+    
+    dates = []
+    for arg in args:
+        if utils.str_or(arg) is not None:
+            dd = re.findall(r'[-+]?\d*\.?\d+', str(arg))
+            for d in dd:
+                dates.append(abs(float(d)))
+            
+    if len(dates) > 0:
+        if min(dates) != max(dates):
+            return('-'.join([str(min(dates)), str(max(dates))]))
+        else:
+            return(str(min(dates)))
+    else:
+        return(None)
+
+def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask'):
+    """merge data mask raster bands based on the top-level datalist name"""
+    
+    src_infos = gdalfun.gdal_infos(src_ds)
+    ## create new mem gdal ds to hold new raster
+    gdt = gdal.GDT_Int32
+    driver = gdal.GetDriverByName('MEM')
+    m_ds = driver.Create(utils.make_temp_fn('tmp'), src_infos['nx'], src_infos['ny'], 0, gdt)
+    m_ds.SetGeoTransform(src_infos['geoT'])
+    m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
+    
+    for b in range(1, src_ds.RasterCount+1):
+        this_band = src_ds.GetRasterBand(b)
+        this_band_md = this_band.GetMetadata()
+        this_band_name = this_band.GetDescription()
+        if this_band_name == skip_band:
+            continue
+        
+        if len(this_band_name.split('/')) > 1:
+            this_band_name = this_band_name.split('/')[1]
+            
+        b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
+        m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
+        if not this_band_name in m_bands.keys():
+            m_ds.AddBand()
+            m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+            m_band.SetNoDataValue(0)
+            m_band.SetDescription(this_band_name)                
+        else:
+            m_band = m_ds.GetRasterBand(m_bands[this_band_name])
+
+        band_md = m_band.GetMetadata()
+        for k in this_band_md.keys():
+            if k not in band_md.keys() or band_md[k] is None:
+                band_md[k] = this_band_md[k]
+
+            if k == 'name':
+                band_md[k] = this_band_name                
+            elif k == 'date' or k == 'weight' or k == 'uncertainty':
+                band_md[k] = num_strings_to_range(band_md[k], this_band_md[k])
+            elif band_md[k] != this_band_md[k]:
+                band_md[k] = ','.join([band_md[k], this_band_md[k]])
+                
+        try:
+            m_band.SetMetadata(band_md)
+        except:
+            try:
+                for key in band_md.keys():
+                    if band_md[key] is None:
+                        del band_md[key]
+                        
+                m_band.SetMetadata(band_md)
+            except Exception as e:
+                utils.echo_error_msg(
+                    'could not set band metadata: {}; {}'.format(
+                        band_md, e
+                    )
+                )
+
+        this_band_array = this_band.ReadAsArray()
+        m_band_array = m_band.ReadAsArray()
+        out_array = np.add(m_band_array, this_band_array)
+        out_array[out_array > 1] = 1
+        m_band.WriteArray(out_array)
+        m_ds.FlushCache()
+        
+    return(m_ds)
+        
+def polygonize_mask_multibands(
+        src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True
+):
+    """polygonze a multi-band mask raster. 
+
+    -----------
+    Parameters:
+    src_ds (GDALDataset): the source multi-band raster as a gdal dataset object
+    dst_srs (str): the output srs
+    ogr_format (str): the output OGR format
+    verbose (bool): be verbose
+
+    -----------
+    Returns:
+    tuple: (dst_layer, ogr_format)
+    """
+
+    src_ds = merge_mask_bands_by_name(src_ds, verbose = verbose)    
+    dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
+    dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
+    utils.remove_glob('{}.*'.format(dst_layer))
+    gdalfun.osr_prj_file('{}.prj'.format(dst_layer), gdalfun.gdal_infos(src_ds)['proj'])
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_vector)
+    if ds is not None: 
+        layer = ds.CreateLayer(
+            '{}'.format(dst_layer), None, ogr.wkbMultiPolygon
+        )
+        [layer.SetFeature(feature) for feature in layer]
+    else:
+        layer = None
+
+    layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    defn = None
+
+    for b in range(1, src_ds.RasterCount+1):
+        this_band = src_ds.GetRasterBand(b)
+        this_band_md = this_band.GetMetadata()
+        this_band_name = this_band.GetDescription()
+        #if len(this_band_name.split('/')) > 1:
+        #    this_band_name = this_band_name.split('/')[-2]
+            
+        b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
+        field_names = [field.name for field in layer.schema]
+        this_band_md = {k.title():v for k,v in this_band_md.items()}            
+        for k in this_band_md.keys():
+            if k[:9] not in field_names:
+                layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+
+        if 'Title' not in this_band_md.keys():
+            if 'Title' not in field_names:
+                layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+
+        if b_infos['zr'][1] == 1:
+            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
+                '{}_poly'.format(this_band_name)
+            )
+            if tmp_ds is not None:
+                tmp_layer = tmp_ds.CreateLayer(
+                    '{}_poly'.format(this_band_name), None, ogr.wkbMultiPolygon
+                )
+                tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                tmp_name = str(this_band_name)                                    
+                for k in this_band_md.keys():
+                    tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+
+                if 'Title' not in this_band_md.keys():
+                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+                    
+                if verbose:
+                    utils.echo_msg('polygonizing {} mask...'.format(this_band_name))
+                            
+                status = gdal.Polygonize(
+                    this_band,
+                    None,
+                    tmp_layer,
+                    tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
+                    [],
+                    #callback = gdal.TermProgress if verbose else None
+                    callback = None
+                )
+
+                if len(tmp_layer) > 0:
+                    if defn is None:
+                        defn = tmp_layer.GetLayerDefn()
+
+                    out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
+                    with tqdm(
+                            desc='creating feature {}...'.format(this_band_name),
+                            total=len(this_band_md.keys())
+                    ) as pbar: 
+                        for k in this_band_md.keys():
+                            pbar.update()
+                            out_feat.SetField(k[:9], this_band_md[k])
+
+                        if 'Title' not in this_band_md.keys():
+                            out_feat.SetField('Title', tmp_name)
+                            
+                        out_feat.SetField('DN', b)                           
+                        layer.CreateFeature(out_feat)
+
+            if verbose:
+                utils.echo_msg('polygonized {}'.format(this_band_name))
+                
+            tmp_ds = tmp_layer = None
+            
+    ds = src_ds = None
+    return(dst_layer, ogr_format)
+    
 ## Datalist convenience functions
 ## data_list is a list of dlim supported datasets
 def make_datalist(data_list, want_weight, want_uncertainty, region,
@@ -1869,7 +2068,10 @@ class ElevationDataset:
             ycount,
             7,
             gdt,
-            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'] if fmt != 'MEM' else []
+            options=['COMPRESS=LZW',
+                     'PREDICTOR=2',
+                     'TILED=YES',
+                     'BIGTIFF=YES'] if fmt != 'MEM' else []
         )
 
         if dst_ds is None:
@@ -1911,57 +2113,82 @@ class ElevationDataset:
         ## gt is the geotransform of the incoming arrays
         ## mask grid
         driver = gdal.GetDriverByName('MEM')
-        m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
+        m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 1, gdt)
         m_ds.SetGeoTransform(dst_gt)
         if self.dst_srs is not None:
             m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        ## set first band to hold the data mask for all the data
+        m_band_all = m_ds.GetRasterBand(1)
+        m_band_all.SetNoDataValue(0)
+        m_band_all.SetDescription('Full Data Mask')
         
         ## initialize data mask        
         ## parse each entry and process it
         ## todo: mask here instead of in each dataset module
         for this_entry in self.parse():
             ## MASK
-            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
+            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
             if not this_entry.metadata['name'] in m_bands.keys():
                 m_ds.AddBand()
                 m_band = m_ds.GetRasterBand(m_ds.RasterCount)
                 m_band.SetNoDataValue(0)
-                m_band.SetDescription(this_entry.metadata['name'])
-                band_md = m_band.GetMetadata()
-                for k in this_entry.metadata.keys():
-                    band_md[k] = this_entry.metadata[k]
-
-                band_md['weight'] = this_entry.weight
-                band_md['uncertainty'] = this_entry.uncertainty
-                try:
-                    m_band.SetMetadata(band_md)
-                except:
-                    try:
-                        for key in band_md.keys():
-                            if band_md[key] is None:
-                                del band_md[key]
-                                
-                        m_band.SetMetadata(band_md)
-                    except Exception as e:
-                        utils.echo_error_msg(
-                            'could not set band metadata: {}; {}'.format(
-                                band_md, e
-                            )
-                        )
+                m_band.SetDescription(this_entry.metadata['name'])                
             else:
                 m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
 
+            band_md = m_band.GetMetadata()
+            for k in this_entry.metadata.keys():
+                if k not in band_md.keys() or band_md[k] is None:
+                    band_md[k] = this_entry.metadata[k]
+                # elif this_entry.metadata[k] is not None:
+                #     if k == 'date':
+                #         band_date = band_md['date']
+                #         entry_date = this_entry.metadata['date']
+                #         if band_date is not None and entry_date is not None:
+                #             utils.echo_msg('{} {}'.format(band_date, entry_date))
+                #             band_dates = [float(x) for x in re.findall(r'\d+\.\d+', band_date)]
+                #             entry_dates = [float(x) for x in re.findall(r'\d+\.\d+', entry_date)]
+                #             merged_dates = band_dates + entry_dates
+                #             utils.echo_msg(merged_dates)
+                #             if min(merged_dates) != max(merged_dates):
+                #                 band_md['date'] = '-'.join([str(min(merged_dates)), str(max(merged_dates))])
+                        
+                #     elif band_md[k] != this_entry.metadata[k]:
+                #         band_md[k] = '/'.join([band_md[k], this_entry.metadata[k]])
+                else:
+                    band_md[k] = None
+
+            band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
+            band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+            try:
+                m_band.SetMetadata(band_md)
+            except:
+                try:
+                    for key in band_md.keys():
+                        if band_md[key] is None:
+                            del band_md[key]
+
+                    m_band.SetMetadata(band_md)
+                except Exception as e:
+                    utils.echo_error_msg(
+                        'could not set band metadata: {}; {}'.format(
+                            band_md, e
+                        )
+                    )
+                
             ## yield entry arrays for stacks
             #for arrs, srcwin, gt in this_entry.yield_array():
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
                 m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                 m_array[arrs['count'] != 0] = 1
+                m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])
                 m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                m_ds.FlushCache()
                 if mask_only:
                     continue
                 
-                m_ds.FlushCache()
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stacked_bands.keys():
                     stacked_data[key] = stacked_bands[key].ReadAsArray(
@@ -2113,7 +2340,7 @@ class ElevationDataset:
                     mm_ds.FlushCache()
                     
             msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, mm_ds, 0)
-            mm_ds = None
+            m_ds = mm_ds = None
         else:
             if self.verbose:
                 utils.echo_msg('no bands found for {}'.format(mask_fn))
@@ -2169,9 +2396,9 @@ class ElevationDataset:
                 
         ## create a vector of the masks (spatial-metadata)
         if self.want_sm:
-            gdalfun.ogr_polygonize_multibands(msk_ds)
+            polygonize_mask_multibands(msk_ds)
 
-        m_ds = msk_ds = dst_ds = None
+        msk_ds = dst_ds = None
 
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
@@ -5504,7 +5731,11 @@ class Datalist(ElevationDataset):
                             ## generate the dataset object to yield
                             data_set = DatasetFactory(
                                **self._set_params(
-                                   mod=this_line, metadata=md, src_srs=self.src_srs, parent=self, fn=None
+                                   mod=this_line,
+                                   metadata=md,
+                                   src_srs=self.src_srs,
+                                   parent=self,
+                                   fn=None
                                )
                             )._acquire_module()
                             if data_set is not None and data_set.valid_p(
@@ -5527,19 +5758,9 @@ class Datalist(ElevationDataset):
                                                 self.region if data_set.transform['transformer'] is None else data_set.transform['trans_region']
                                         ):
                                             continue
-                                            # ## fill self.data_entries with each dataset for use outside the yield.
-                                            # for ds in data_set.parse(): 
-                                            #     self.data_entries.append(ds) 
-                                            #     yield(ds)
-
-                                #     else:
-                                #         ## fill self.data_entries with each dataset for use outside the yield.
-                                #         for ds in data_set.parse(): 
-                                #             self.data_entries.append(ds) 
-                                #             yield(ds)
-
-                                # else:
-                                ## fill self.data_entries with each dataset for use outside the yield.
+                                        
+                                ## fill self.data_entries with each dataset for use outside the yield and
+                                ## yield the dataset object.
                                 for ds in data_set.parse(): 
                                     self.data_entries.append(ds)
                                     yield(ds)
@@ -7093,9 +7314,10 @@ class DatasetFactory(factory.CUDEMFactory):
     ## redefine the factory default _parse_mod function for datasets
     ## the mod in this case is a datalist entry and the format key
     ## becomes the module
+    ## TODO: use csv module to parse
     def _parse_mod(self, mod=None):
         """parse the datalist entry line"""
-
+        
         self.kwargs['fn'] = mod
         if self.kwargs['fn'] is None:
             return(self)
@@ -7153,7 +7375,6 @@ class DatasetFactory(factory.CUDEMFactory):
         ## data format - entry[1]
         ## guess format based on fn if not specified otherwise
         ## parse the format for dataset specific opts.
-        #utils.echo_msg(entry)
         if len(entry) < 2:
             if 'data_format' in self.kwargs.keys() and self.kwargs['data_format'] is not None:
                 entry.append(self.kwargs['data_format'])
@@ -7173,7 +7394,8 @@ class DatasetFactory(factory.CUDEMFactory):
             if len(entry) < 2:
                 utils.echo_error_msg('could not parse entry {}'.format(self.kwargs['fn']))
                 return(self)
-        #else:
+            
+        ## parse the entry format options
         opts = str(entry[1]).split(':')
         if len(opts) > 1:
             self.mod_args = utils.args2dict(list(opts[1:]), {})
@@ -7187,6 +7409,7 @@ class DatasetFactory(factory.CUDEMFactory):
             utils.echo_error_msg('could not parse datalist entry {}'.format(entry))
             return(self)
 
+        ## entry is a COG to be read with gdal, append vsicurl to the fn
         if entry[0].startswith('http') and int(entry[1]) == 200:
             entry[0] = '/vsicurl/{}'.format(entry[0])
         
@@ -7220,7 +7443,9 @@ class DatasetFactory(factory.CUDEMFactory):
 
         if 'weight' not in self.kwargs:
             self.kwargs['weight'] = 1
-            
+
+        ## multiply the weight by the weight in the parent
+        ## if it exists, otherwise weight is weight
         if self.kwargs['parent'] is not None:
             if self.kwargs['weight'] is not None:
                 self.kwargs['weight'] *= entry[2]
@@ -7252,60 +7477,41 @@ class DatasetFactory(factory.CUDEMFactory):
         for key in self._metadata_keys:
             if key not in self.kwargs['metadata'].keys():
                 self.kwargs['metadata'][key] = None
+                
+        ## inherit metadata from parent, if available
+        if self.kwargs['parent'] is not None:
+            for key in self._metadata_keys:
+                if key in self.kwargs['parent'].metadata:
+                    if self.kwargs['metadata'][key] is None or key == 'name':
+                        self.kwargs['metadata'][key] = self.kwargs['parent'].metadata[key]
 
-        ## title - entry[4]
-        if len(entry) < 5:
-            entry.append(self.kwargs['metadata']['title'])
-        else:
-            self.kwargs['metadata']['title'] = entry[4]
+        ## set or append metadata from entry
+        for i, key in enumerate(self._metadata_keys):
+            if key == 'name':
+                if self.kwargs['metadata'][key] is None:
+                    self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+                else:
+                    self.kwargs['metadata'][key] = '/'.join([self.kwargs['metadata'][key], utils.fn_basename2(os.path.basename(self.kwargs['fn']))])
 
-        if self.kwargs['metadata']['name'] is None:
-            self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+            else:
+                if len(entry) < i+4:
+                    entry.append(self.kwargs['metadata'][key])
 
-        ## source - entry[5]
-        if len(entry) < 6:
-            entry.append(self.kwargs['metadata']['source'])
-        else:
-            self.kwargs['metadata']['source'] = entry[5]
+                self.set_metadata_entry(entry[i+3], key, ', ')
 
-        ## date - entry[6]
-        if len(entry) < 7:
-            entry.append(self.kwargs['metadata']['date'])
-        else:
-            self.kwargs['metadata']['date'] = entry[6]
-
-        ## data type - entry[7]
-        if len(entry) < 8:
-            entry.append(self.kwargs['metadata']['data_type'])
-        else:
-            self.kwargs['metadata']['data_type'] = entry[7]
-
-        ## resolution - entry[8]
-        if len(entry) < 9:
-            entry.append(self.kwargs['metadata']['resolution'])
-        else:
-            self.kwargs['metadata']['resolution'] = entry[8]
-
-        ## hdatum - entry[9]
-        if len(entry) < 10:
-            entry.append(self.kwargs['metadata']['hdatum'])
-        else:
-            self.kwargs['metadata']['hdatum'] = entry[9]
-
-        ## vdatum - entry[10]
-        if len(entry) < 11:
-            entry.append(self.kwargs['metadata']['vdatum'])
-        else:
-            self.kwargs['metadata']['vdatum'] = entry[10]
-
-        ## url - entry[11]
-        if len(entry) < 12:
-            entry.append(self.kwargs['metadata']['url'])
-        else:
-            self.kwargs['metadata']['url'] = entry[11]
-
+                if key == 'date':
+                    self.kwargs['metadata'][key] = num_strings_to_range(self.kwargs['metadata'][key], entry[i+3])
+                
         return(self.mod_name, self.mod_args)
 
+    def set_metadata_entry(self, entry, metadata_field, join_string = '/'):
+        if entry != '-' and str(entry).lower() != 'none':
+            if self.kwargs['metadata'][metadata_field] is not None:
+                if self.kwargs['metadata'][metadata_field].lower() != entry.lower():
+                    self.kwargs['metadata'][metadata_field] = join_string.join([self.kwargs['metadata'][metadata_field], entry])
+            else:
+                self.kwargs['metadata'][metadata_field] = entry
+    
     def set_default_weight(self):
         return(1)
 

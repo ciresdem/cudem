@@ -575,7 +575,7 @@ class Waffle:
 
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                sm_layer, sm_fmt = gdalfun.ogr_polygonize_multibands(msk_ds)
+                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds)
 
                             sm_files = glob.glob('{}.*'.format(sm_layer))
                             self.output_files['spatial-metadata'] = []
@@ -5805,7 +5805,7 @@ def waffles_cli(argv = sys.argv):
             except:
                 pass
 
-        elif arg == '--mask' or arg == '-m': wg['want_mask'] = True
+        elif arg == '--want-mask' or arg == '--mask' or arg == '-m': wg['want_mask'] = True
         elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
         #elif arg == '-t' or arg == '--threads': want_threads = True

@@ -2394,6 +2394,7 @@ class Multibeam(FetchModule):
         self._mb_search_url = "https://gis.ngdc.noaa.gov/mapviewer-support/multibeam/files.groovy?"
         self._mb_autogrid = "https://www.ngdc.noaa.gov/maps/autogrid/"
         self._mb_html = "https://www.ngdc.noaa.gov/"
+        self._mb_json = "https://data.ngdc.noaa.gov/platforms/ocean/mgg/mb-archive.json"
         self._urls = [self._mb_data_url, self._mb_metadata_url, self._mb_autogrid]        
 
         ## for dlim, data_format of 301 is multibeam data parsed with MBSystem.
