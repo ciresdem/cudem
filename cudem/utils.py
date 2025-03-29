@@ -162,7 +162,7 @@ def make_temp_fn(fn, temp_dir = cudem_cache()):
                     
     return(os.path.join(
         temp_dir,
-        '_{}_{}{}'.format(
+        '{}_{}{}'.format(
             fn_bn, datetime.datetime.now().strftime('%Y%m%H%M%S%f'),
             '.{}'.format(fn_et) if fn_et is not None else '')
     ))

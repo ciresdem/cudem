@@ -215,7 +215,7 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
     return(m_ds)
         
 def polygonize_mask_multibands(
-        src_ds, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True
+        src_ds, output = None, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True
 ):
     """polygonze a multi-band mask raster. 
 
@@ -232,7 +232,8 @@ def polygonize_mask_multibands(
     """
 
     src_ds = merge_mask_bands_by_name(src_ds, verbose = verbose)    
-    dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
+    #dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
+    dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()) if output is None else output)
     dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
     utils.remove_glob('{}.*'.format(dst_layer))
     gdalfun.osr_prj_file('{}.prj'.format(dst_layer), gdalfun.gdal_infos(src_ds)['proj'])
@@ -1200,7 +1201,8 @@ class ElevationDataset:
             else:
                 self.y_inc = utils.str2inc(self.y_inc)
 
-            out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
+                #out_name = utils.make_temp_fn('dlim_stacks', temp_dir=self.cache_dir)
+            out_name = utils.make_temp_fn(utils.append_fn('dlim_stacks', self.region, self.x_inc), temp_dir=self.cache_dir)
             self.xyz_yield = self.stacks_yield_xyz(out_name=out_name, fmt='GTiff')#, mode=self.stack_mode)
             
     def mask_and_yield_array(self):
@@ -2030,9 +2032,10 @@ class ElevationDataset:
         ## initialize the output rasters
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
-                utils.append_fn('_dlim_stacks', self.region, self.x_inc)
+                utils.append_fn('dlim_stacks', self.region, self.x_inc)
             ))
 
+        #out_name = utils.make_temp_fn(out_name)
         out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         xcount, ycount, dst_gt = self.region.geo_transform(
@@ -2113,7 +2116,8 @@ class ElevationDataset:
         ## gt is the geotransform of the incoming arrays
         ## mask grid
         driver = gdal.GetDriverByName('MEM')
-        m_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 1, gdt)
+        m_ds = driver.Create(mask_fn, xcount, ycount, 1, gdt)
+        m_ds.SetDescription(out_name)
         m_ds.SetGeoTransform(dst_gt)
         if self.dst_srs is not None:
             m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
@@ -2318,8 +2322,9 @@ class ElevationDataset:
             #m_ds.FlushCache()
             ## create a new mem ds to hold valid bands
             driver = gdal.GetDriverByName('MEM')
-            mm_ds = driver.Create(utils.make_temp_fn(out_name), xcount, ycount, 0, gdt)
+            mm_ds = driver.Create(mask_fn, xcount, ycount, 0, gdt)
             mm_ds.SetGeoTransform(dst_gt)
+            mm_ds.SetDescription(out_name)
 
             ## masks will crash if too many and not enough mem...
             for band_num in range(1, m_ds.RasterCount+1):
@@ -2395,9 +2400,12 @@ class ElevationDataset:
                 stacked_bands[key].SetNoDataValue(ndv)
                 
         ## create a vector of the masks (spatial-metadata)
-        if self.want_sm:
-            polygonize_mask_multibands(msk_ds)
+        if self.want_mask:
+            os.replace(mask_fn, os.path.basename(mask_fn))            
 
+        if self.want_sm:
+            polygonize_mask_multibands(msk_ds, output=os.path.basename(out_name))
+            
         msk_ds = dst_ds = None
 
         ## apply any grits filters to the stack
@@ -7718,7 +7726,7 @@ See `datalists_usage` for full cli options.
             i = i + 1
         elif arg[:2] == '-D': cache_dir = utils.str_or(argv[i + 1], utils.cudem_cache)
             
-        elif arg == '--mask' or arg == '-m':
+        elif arg == '--mask' or arg == '-m' or arg == '--want-mask':
             want_mask = True
         elif arg == '--invert_region' or arg == '-v':
             invert_region = True
