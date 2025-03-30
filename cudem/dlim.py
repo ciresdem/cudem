@@ -1828,19 +1828,8 @@ class ElevationDataset:
                         )
                     )                    
 
-                with open(os.path.join(datalist_dirname, '{}.datalist'.format(this_key)), 'a') as sub_dlf:                        
-                    if len(this_entry.fn.split('.')) > 1:
-                        sub_xyz_path = '.'.join(
-                            [utils.fn_basename(
-                                utils.slugify(
-                                    os.path.basename(this_entry.fn)
-                                ),
-                                this_entry.fn.split('.')[-1]),
-                             'xyz']
-                        )
-                    else:
-                        sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
-
+                with open(os.path.join(datalist_dirname, '{}.datalist'.format(this_key)), 'a') as sub_dlf:
+                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
                     this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
                     if os.path.exists(this_xyz_path):
                         utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
@@ -6103,9 +6092,9 @@ class Fetcher(ElevationDataset):
                     self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1])
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
-                            f_name = os.path.relpath(this_ds.fn, self.fetch_module._outdir)
+                            f_name = os.path.relpath(this_ds.fn.split(':')[0], self.fetch_module._outdir)
                             if f_name == '.':
-                                f_name = this_ds.fn
+                                f_name = this_ds.fn.split(':')[0]
 
                             mod_name = os.path.dirname(utils.fn_basename2(f_name))
                             if mod_name == '':
@@ -6841,6 +6830,7 @@ class HydroNOSFetcher(Fetcher):
                 verbose=self.verbose
             )
             for bag_fn in bag_fns:
+                # bag_fn = os.path.join(self.fetch_module._outdir, result[1])
                 if 'ellipsoid' not in bag_fn.lower():
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
@@ -7578,9 +7568,9 @@ class DatasetFactory(factory.CUDEMFactory):
         for i, key in enumerate(self._metadata_keys):
             if key == 'name':
                 if self.kwargs['metadata'][key] is None:
-                    self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+                    self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(self.kwargs['fn'].split(':')[0]))
                 else:
-                    self.set_metadata_entry(utils.fn_basename2(os.path.basename(self.kwargs['fn'])), key, '/')
+                    self.set_metadata_entry(utils.fn_basename2(os.path.basename(self.kwargs['fn'].split(':')[0])), key, '/')
                     #self.kwargs['metadata'][key] = '/'.join([self.kwargs['metadata'][key], utils.fn_basename2(os.path.basename(self.kwargs['fn']))])
 
             else:
