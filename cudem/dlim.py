@@ -7806,21 +7806,21 @@ See `datalists_usage` for full cli options.
                     # #this_archive_inf = this_archive.inf()
                         
                 else:
-                    #try:
-                    if want_separate: # process and dump each dataset independently
-                        for this_entry in this_datalist.parse():
-                            this_entry.dump_xyz()
-                    else: # process and dump the datalist as a whole
-                        this_datalist.dump_xyz()
-                    # except KeyboardInterrupt:
-                    #   utils.echo_error_msg('Killed by user')
-                    #   break
-                    # except BrokenPipeError:
-                    #   utils.echo_error_msg('Pipe Broken')
-                    #   break
-                    # except Exception as e:
-                    #   utils.echo_error_msg(e)
-                    #   print(traceback.format_exc())
+                    try:
+                        if want_separate: # process and dump each dataset independently
+                            for this_entry in this_datalist.parse():
+                                this_entry.dump_xyz()
+                        else: # process and dump the datalist as a whole
+                            this_datalist.dump_xyz()
+                    except KeyboardInterrupt:
+                      utils.echo_error_msg('Killed by user')
+                      break
+                    except BrokenPipeError:
+                      utils.echo_error_msg('Pipe Broken')
+                      break
+                    except Exception as e:
+                      utils.echo_error_msg(e)
+                      print(traceback.format_exc())
                       
     # if want_archive:
     #     combine_archive_datalists = 'test_archive'
