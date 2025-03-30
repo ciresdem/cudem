@@ -798,8 +798,8 @@ class fetch_results(threading.Thread):
                 attempts-=1
                 #utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
             
-
 ## Fetch Modules
+## TODO: update self.results to a dict with more infos...
 class FetchModule:
     """The FetchModule super class to hold all the fetch modules.
 
@@ -1881,13 +1881,14 @@ class MarGrav(FetchModule):
         ## the x values from 360 to 180
         self.data_format = '168:x_offset=REM:skip=1'
         self.src_srs = 'epsg:4326+3855'
-        self.title = 'Marine Gravity'
-        self.source = 'USCD'
-        self.date = None
-        self.data_type = 'points'
+        
+        self.title = 'Marine Gravity Model'
+        self.source = 'Scripps Institude of Oceanography'
+        self.date = '2014'
+        self.data_type = 'Bathymetric Raster'
         self.resolution = '60 arc-seconds'
-        self.hdatum = 'wgs84'
-        self.vdatum = 'msl'
+        self.hdatum = 'WGS84'
+        self.vdatum = 'MSL'
         self.url = self._mar_grav_url
         
         self.headers = {
@@ -1940,6 +1941,15 @@ class SRTMPlus(FetchModule):
         self.data_format = '168:skip=1'
         self.src_srs = 'epsg:4326+3855'
 
+        self.title = 'SRTM+'
+        self.source = 'Scripps Institude of Oceanography'
+        self.date = '2014'
+        self.data_type = 'Topographic/Bathymetric Raster'
+        self.resolution = '60 arc-seconds'
+        self.hdatum = 'WGS84'
+        self.vdatum = 'MSL'
+        self.url = self._mar_grav_url
+        
     def run(self):
         '''Run the SRTM fetching module.'''
         
@@ -2096,13 +2106,13 @@ class NauticalCharts(FetchModule):
         ## for dlim, ENC data comes as .000 files, parse with OGR
         #self.data_format = 302
         self.src_srs='epsg:4326+5866'
-        self.title = 'Nautical Charts'
-        self.source = 'NOAA'
-        self.date = None
-        self.data_type = 'points'
-        self.resolution = None
-        self.hdatum = 'wgs84'
-        self.vdatum = 'mllw'
+        self.title = 'NOAA OCS electronic navigational chart (ENC) extracted soundings'
+        self.source = 'NOAA/NOS'
+        self.date = '1966 - 2024'
+        self.data_type = 'Digitized Bathymetric Charts'
+        self.resolution = '<10m to several kilometers'
+        self.hdatum = 'WGS84'
+        self.vdatum = 'MLLW'
         self.url = self._charts_url
 
         ## Charts is in FRED, set that up here.
@@ -2401,6 +2411,15 @@ class Multibeam(FetchModule):
         self.data_format = 301
         self.src_srs = 'epsg:4326+3855'
 
+        self.title = 'NOAA NCEI Multibeam bathymetric surveys'
+        self.source = 'NOAA/NCEI'
+        self.date = '1966 - 2022'
+        self.data_type = 'Bathymetric Soundings'
+        self.resolution = '~1m to ~30m'
+        self.hdatum = 'WGS84'
+        self.vdatum = 'LMSL'
+        self.url = 'https://www.ngdc.noaa.gov/mgg/bathymetry/multibeam.html'
+        
     def mb_inf_data_format(self, src_inf):
         """extract the data format from the mbsystem inf file."""
 
@@ -2478,7 +2497,8 @@ class Multibeam(FetchModule):
                 
                     if self.max_year is not None and int(date[:4]) > self.max_year:
                         continue
-                    
+
+                self.date = date                    
                 if survey in these_surveys.keys():
                     if version in these_surveys[survey].keys():
                         these_surveys[survey][version].append(
@@ -2617,8 +2637,8 @@ class HydroNOS(FetchModule):
         self.date = '1933 - 2024'
         self.data_type = 'varies'
         self.resolution = '<1m to several km'
-        self.hdatum = None
-        self.vdatum = None
+        self.hdatum = 'WGS84'
+        self.vdatum = 'MLLW'
         self.url = 'https://gis_ngdc.noaa.gov/'
         
     def run(self):
@@ -2655,7 +2675,7 @@ class HydroNOS(FetchModule):
                     else:
                         ID = feature['attributes']['SURVEY_ID']
                         link = feature['attributes']['DOWNLOAD_URL']
-
+                        year = utils.int_or(feature['attributes']['SURVEY_YEAR'])
                         if link is None:
                             continue
 
@@ -2671,6 +2691,8 @@ class HydroNOS(FetchModule):
                         data_link = '{}{}/{}/'.format(self._nos_data_url, nos_dir, ID)
                         
                         if self.datatype is None or 'bag' in self.datatype.lower():
+                            self.title = 'NOAA BAG Surveys'
+                            self.date = year
                             if feature['attributes']['BAGS_EXIST'] == 'TRUE' or feature['attributes']['BAGS_EXIST'] == 'Y':
                                 page = Fetch(data_link + 'BAG').fetch_html()
                                 bags = page.xpath('//a[contains(@href, ".bag")]/@href')
@@ -2678,6 +2700,8 @@ class HydroNOS(FetchModule):
                                 [self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join('bag', bag), 'bag']) for bag in bags]
 
                         if self.datatype is None or 'xyz' in self.datatype.lower():
+                            self.title = 'NOAA NOS Hydrographic Surveys'
+                            self.date = year
                             page = Fetch(data_link).fetch_html()
                             if page is not None:
                                 geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
@@ -2707,6 +2731,15 @@ class CSB(FetchModule):
         self.data_format = '168:skip=1:xpos=2:ypos=3:zpos=4:z_scale=-1:delimiter=,'
         self.src_srs = 'epsg:4326+5866'
 
+        self.title = 'Crowd Sourced Bathymetry'
+        self.source = 'NOAA/NCEI'
+        self.date = '2024'
+        self.data_type = 'Bathymetric Soundings'
+        self.resolution = '<10m to several kilometers'
+        self.hdatum = 'WGS84'
+        self.vdatum = 'MSL'
+        self.url = self._csb_data_url
+        
         ## aws stuff
         #self._bt_bucket = 'noaa-dcdb-bathymetry-pds'
         #self.s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
@@ -2747,6 +2780,7 @@ class CSB(FetchModule):
                         if link is None:
                             continue
 
+                        self.date = feature['attributes']['YEAR']
                         self.results.append([link, _csv_fn, 'csb'])
                         ## AWS
                         # r = self.s3.list_objects(Bucket = self._bt_bucket, Prefix='csb/csv/{}/{}/{}'.format(_year, _dir_a, _dir_b))

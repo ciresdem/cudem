@@ -304,7 +304,8 @@ def polygonize_mask_multibands(
                     out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
                     with tqdm(
                             desc='creating feature {}...'.format(this_band_name),
-                            total=len(this_band_md.keys())
+                            total=len(this_band_md.keys()),
+                            leave=verbose
                     ) as pbar: 
                         for k in this_band_md.keys():
                             pbar.update()
@@ -2404,7 +2405,9 @@ class ElevationDataset:
             os.replace(mask_fn, os.path.basename(mask_fn))            
 
         if self.want_sm:
-            polygonize_mask_multibands(msk_ds, output=os.path.basename(out_name))
+            polygonize_mask_multibands(
+                msk_ds, output=os.path.basename(out_name), verbose=False
+            )
             
         msk_ds = dst_ds = None
 
@@ -5957,33 +5960,39 @@ class Fetcher(ElevationDataset):
         self.keep_fetched_data = keep_fetched_data # retain fetched data after processing
         #self.outdir = outdir if outdir is not None else self.fetch_module._outdir if self.fetch_module._outdir is not None else self.cache_dir
         self.outdir = self.fetch_module._outdir
-        self.cache_dir = self.outdir
-        
-        ## set the metadata from the fetches module
-        #self.metadata['name'] = self.fn # set the metadata name from the input fetches module
-        #self.metadata['title'] = self.fetch_module.title
-        #self.metadata['source'] = self.fetch_module.title
-        
-        ## breaks when things not set...
-        ## set the metadata from the fetches module
-        # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
-        self.metadata = {'name':self.fn, 'title':self.fetch_module.title, 'source':self.fetch_module.source,
-                         'date':self.fetch_module.date, 'data_type':self.data_format, 'resolution':self.fetch_module.resolution,
-                         'hdatum':self.fetch_module.hdatum, 'vdatum':self.fetch_module.vdatum, 'url':self.fetch_module.url}
-        
+        self.cache_dir = self.outdir                
         try:
             self.fetch_module.run()
         except:
             self.fetch_module.results = []
+
+        ## breaks when things not set...
+        # src_horz, src_vert = gdalfun.epsg_from_input(self.fetch_module.src_srs)
+
+        ## set the metadata from the fetches module
+        md = copy.deepcopy(self.metadata)
+        md['name'] = self.metadata['name']
+        md['title'] = self.fetch_module.title
+        md['source'] = self.fetch_module.source
+        md['date'] = self.fetch_module.date
+        md['data_type'] = self.data_format
+        md['resolution'] = self.fetch_module.resolution
+        md['hdatum'] = self.fetch_module.hdatum
+        md['vdatum'] = self.fetch_module.vdatum
+        md['url'] = self.fetch_module.url
 
         self.fetches_params = self._set_params(
             data_format=self.fetch_module.data_format,
             src_srs=self.fetch_module.src_srs,
             cache_dir=self.fetch_module._outdir,
             remote=True,
-            metadata=copy.deepcopy(self.metadata)
-        )            
-                
+            metadata=md,
+            parent=self,
+        )
+
+    def _reset_params(self):
+        self.fetches_params = self._set_params(**self.fetches_params)
+        
     def generate_inf(self):
         """generate a infos dictionary from the Fetches dataset"""
 
@@ -6015,17 +6024,13 @@ class Fetcher(ElevationDataset):
                             if mod_name == '':
                                 mod_name = self.fetch_module.name
 
-                            if self.want_single_metadata_name:
-                                this_ds.metadata['name'] = mod_name
-                            else:
-                                this_ds.metadata['name'] = self.fn.split(':')[0]
-
+                            #if self.want_single_metadata_name:
+                            #    this_ds.metadata['name'] = mod_name
+                            #else:
+                            this_ds.metadata['name'] = '/'.join(['/'.join(this_ds.metadata['name'].split('/')[:-1]), f_name])
                             this_ds.remote = True
                             this_ds.initialize()
-
-                            #utils.echo_msg(this_ds.metadata)
                             for ds in this_ds.parse():
-                                #utils.echo_msg(this_ds.metadata)
                                 yield(ds)
                         else:
                             utils.echo_warning_msg(
@@ -6684,7 +6689,6 @@ class ChartsFetcher(Fetcher):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        #self.metadata['name'] = 'charts'
         
     def yield_ds(self, result):
         src_000s = utils.p_unzip(
@@ -6740,9 +6744,6 @@ class HydroNOSFetcher(Fetcher):
                 self.fetches_params['mod'] = nos_fn
                 self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:z_scale=-1:delimiter=,'
                 self.fetches_params['src_srs'] = 'epsg:4326+5866'
-                self.fetches_params['title'] = 'NOAA NOS Hydrographic Soundings'
-                self.fetches_params['data_type'] = 'Hydrographic Soundings'
-                self.fetches_params['resolution'] = '<10m - several kilometers'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
         elif result[2] == 'bag':
@@ -6753,18 +6754,10 @@ class HydroNOSFetcher(Fetcher):
                 verbose=self.verbose
             )
             for bag_fn in bag_fns:
-                #metadata = copy.deepcopy(self.metadata)
-                #metadata['name'] = 'bag'
-                #utils.echo_msg(self.metadata)
                 if 'ellipsoid' not in bag_fn.lower():
                     self.fetches_params['mod'] = bag_fn
                     self.fetches_params['data_format'] = 201
                     self.fetches_params['src_srs'] = None
-                    self.fetches_params['title'] = 'NOAA NOS BAG Surveys'
-                    self.fetches_params['data_type'] = 'Gridded Bathymetry'
-                    self.fetches_params['resolution'] = '<1m - ~10m'
-                    self.fetches_params['explode'] = self.explode
-                    #self.fetches_params['metadata'] = metadata
                     yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
 class CSBFetcher(Fetcher):
@@ -7334,32 +7327,34 @@ class DatasetFactory(factory.CUDEMFactory):
         ## guess the format and finish there...
         ## the format number becomes the mod_name
         ## check for specified data format as well
-        if os.path.exists(self.kwargs['fn']):
-            if 'data_format' not in self.kwargs.keys() or self.kwargs['data_format'] is None:
-                self.mod_name = self.guess_data_format(self.kwargs['fn'])
-                self.mod_args = {}
-                self.kwargs['data_format'] = self.mod_name
-            else:
-                opts = str(self.kwargs['data_format']).split(':')
-                if len(opts) > 1:
-                    self.mod_name = int(opts[0])
-                    self.mod_args = utils.args2dict(list(opts[1:]), {})
-                else:
-                    self.mod_name = int(self.kwargs['data_format'])
-                    self.mod_args = {}
+        # if os.path.exists(self.kwargs['fn']):
+        #     if 'data_format' not in self.kwargs.keys() or self.kwargs['data_format'] is None:
+        #         self.mod_name = self.guess_data_format(self.kwargs['fn'])
+        #         self.mod_args = {}
+        #         self.kwargs['data_format'] = self.mod_name
+        #     else:
+        #         opts = str(self.kwargs['data_format']).split(':')
+        #         if len(opts) > 1:
+        #             self.mod_name = int(opts[0])
+        #             self.mod_args = utils.args2dict(list(opts[1:]), {})
+        #         else:
+        #             self.mod_name = int(self.kwargs['data_format'])
+        #             self.mod_args = {}
                     
-                self.kwargs['data_format'] = self.mod_name
+        #         self.kwargs['data_format'] = self.mod_name
 
-            # inherit metadata from parent if available
-            # something something!
-            self.kwargs['metadata'] = {}
-            self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
+        #     # inherit metadata from parent if available
+        #     # something something!
+        #     if 'metadata' not in self.kwargs.keys():
+        #         self.kwargs['metadata'] = {}
+                
+        #     self.kwargs['metadata']['name'] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
             
-            for key in self._metadata_keys:
-                if key not in self.kwargs['metadata'].keys():
-                    self.kwargs['metadata'][key] = None
+        #     for key in self._metadata_keys:
+        #         if key not in self.kwargs['metadata'].keys():
+        #             self.kwargs['metadata'][key] = None
                     
-            return(self.mod_name, self.mod_args)
+        #     return(self.mod_name, self.mod_args)
 
         ## if fn is not a path, parse it as a datalist entry
 		## breaks on path with space, e.g. /meda/user/My\ Passport/etc
@@ -7433,7 +7428,6 @@ class DatasetFactory(factory.CUDEMFactory):
 
         if self.kwargs['parent'] is None:
             self.kwargs['fn'] = entry[0]
-            self.kwargs['parent'] = None
         else:
             if self.mod_name >= -2:
                 self.kwargs['fn'] = os.path.join(
@@ -7485,7 +7479,7 @@ class DatasetFactory(factory.CUDEMFactory):
         for key in self._metadata_keys:
             if key not in self.kwargs['metadata'].keys():
                 self.kwargs['metadata'][key] = None
-                
+
         ## inherit metadata from parent, if available
         if self.kwargs['parent'] is not None:
             for key in self._metadata_keys:
@@ -7499,7 +7493,8 @@ class DatasetFactory(factory.CUDEMFactory):
                 if self.kwargs['metadata'][key] is None:
                     self.kwargs['metadata'][key] = utils.fn_basename2(os.path.basename(self.kwargs['fn']))
                 else:
-                    self.kwargs['metadata'][key] = '/'.join([self.kwargs['metadata'][key], utils.fn_basename2(os.path.basename(self.kwargs['fn']))])
+                    self.set_metadata_entry(utils.fn_basename2(os.path.basename(self.kwargs['fn'])), key, '/')
+                    #self.kwargs['metadata'][key] = '/'.join([self.kwargs['metadata'][key], utils.fn_basename2(os.path.basename(self.kwargs['fn']))])
 
             else:
                 if len(entry) < i+4:
@@ -7515,10 +7510,10 @@ class DatasetFactory(factory.CUDEMFactory):
     def set_metadata_entry(self, entry, metadata_field, join_string = '/'):
         if entry != '-' and str(entry).lower() != 'none':
             if self.kwargs['metadata'][metadata_field] is not None:
-                if self.kwargs['metadata'][metadata_field].lower() != entry.lower():
-                    self.kwargs['metadata'][metadata_field] = join_string.join([self.kwargs['metadata'][metadata_field], entry])
+                if str(self.kwargs['metadata'][metadata_field]).lower() != str(entry).lower():
+                    self.kwargs['metadata'][metadata_field] = join_string.join([str(self.kwargs['metadata'][metadata_field]), str(entry)])
             else:
-                self.kwargs['metadata'][metadata_field] = entry
+                self.kwargs['metadata'][metadata_field] = str(entry)
     
     def set_default_weight(self):
         return(1)
@@ -7894,21 +7889,21 @@ See `datalists_usage` for full cli options.
                     # #this_archive_inf = this_archive.inf()
                         
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e)
+                    #   print(traceback.format_exc())
                       
     # if want_archive:
     #     combine_archive_datalists = 'test_archive'
