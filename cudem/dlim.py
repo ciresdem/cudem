@@ -1785,8 +1785,95 @@ class ElevationDataset:
                 self.data_lists[e.metadata['name']] = {'data': [e], 'parent': e}
                 
         return(self)
-    
+
     def archive_xyz(self, **kwargs):
+        """Archive data from the dataset to XYZ in the given dataset region.
+        
+        will convert all data to XYZ within the given region and will arrange
+        the data as a datalist based on inputs.
+
+        Data comes from `self.xyz_yield` set in `self.set_yield`. So will process data through
+        `_stacks` before archival if region, x_inc and y_inc are set.
+        """
+        
+        srs_all = []
+        if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
+            a_name = kwargs['dirname']
+        else:
+            aa_name = self.metadata['name'].split('/')[0]
+            if self.region is None:
+                a_name = '{}_{}'.format(aa_name, utils.this_year())
+            else:
+                a_name = '{}_{}_{}'.format(
+                    aa_name, self.region.format('fn'), utils.this_year())
+
+        self.archive_datalist = '{}.datalist'.format(a_name)
+        archive_keys = []
+        with open(self.archive_datalist, 'a') as dlf:
+            for this_entry in self.parse():
+                srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
+                datalist_dirname = os.path.join(a_name, os.path.dirname(this_entry.metadata['name']))
+                this_key = datalist_dirname.split('/')[-1]
+                if not os.path.exists(datalist_dirname):
+                    os.makedirs(datalist_dirname)
+
+                if not this_key in archive_keys:
+                    archive_keys.append(this_key)                    
+                    dlf.write(
+                        '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+                            name=os.path.join(datalist_dirname, this_key),
+                            weight = utils.float_or(this_entry.weight, 1),
+                            uncertainty = utils.float_or(this_entry.uncertainty, 0),
+                            metadata = this_entry.format_metadata()
+                        )
+                    )                    
+
+                with open(os.path.join(datalist_dirname, '{}.datalist'.format(this_key)), 'a') as sub_dlf:                        
+                    if len(this_entry.fn.split('.')) > 1:
+                        sub_xyz_path = '.'.join(
+                            [utils.fn_basename(
+                                utils.slugify(
+                                    os.path.basename(this_entry.fn)
+                                ),
+                                this_entry.fn.split('.')[-1]),
+                             'xyz']
+                        )
+                    else:
+                        sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])
+
+                    this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
+                    if os.path.exists(this_xyz_path):
+                        utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
+                        continue
+
+                    sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
+                    with open(this_xyz_path, 'w') as xp:
+                        for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                            this_xyz.dump(include_w=True if self.weight is not None else False,
+                                          include_u=True if self.uncertainty is not None else False,
+                                          dst_port=xp, encode=False, precision=self.dump_precision)
+
+        ## generate datalist inf/json
+        srs_set = set(srs_all)
+        if len(srs_set) == 1:
+            arch_srs = srs_set.pop()
+        else:
+            arch_srs = None
+
+        utils.remove_glob('{}.*'.format(self.archive_datalist))
+        this_archive = DatasetFactory(
+            mod=self.archive_datalist,
+            data_format=-1,
+            parent=None,
+            weight=1,
+            uncertainty=0,
+            src_srs=arch_srs,
+            dst_srs=None,
+            cache_dir=self.cache_dir,
+        )._acquire_module().initialize()
+        return(this_archive.inf())
+    
+    def archive_xyz_old(self, **kwargs):
         """Archive data from the dataset to XYZ in the given dataset region.
         
         will convert all data to XYZ within the given region and will arrange
@@ -1864,7 +1951,7 @@ class ElevationDataset:
                         
                     this_dir.append(a_dir)
                     if not this_key in archive_keys:
-                        archive_keys.append(this_key)                    
+                        archive_keys.append(this_key)
                         dlf.write(
                             '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
                                 name=os.path.join(*(this_dir + [this_dir[-1]])),
