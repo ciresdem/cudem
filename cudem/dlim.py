@@ -1797,50 +1797,76 @@ class ElevationDataset:
         """
         
         srs_all = []
+        a_name = None
         if 'dirname' in kwargs.keys() and kwargs['dirname'] is not None:
             a_name = kwargs['dirname']
+        #else:
+        aa_name = self.metadata['name'].split('/')[0]
+        if self.region is None:
+            aa_name = '{}_{}'.format(aa_name, utils.this_year())
         else:
-            aa_name = self.metadata['name'].split('/')[0]
-            if self.region is None:
-                a_name = '{}_{}'.format(aa_name, utils.this_year())
-            else:
-                a_name = '{}_{}_{}'.format(
-                    aa_name, self.region.format('fn'), utils.this_year())
+            aa_name = '{}_{}_{}'.format(
+                aa_name, self.region.format('fn'), utils.this_year())
 
-        self.archive_datalist = '{}.datalist'.format(a_name)
+        if a_name is None:
+            a_name = aa_name
+            self.archive_datalist = '{}.datalist'.format(a_name)
+        else:
+            self.archive_datalist = '{}.datalist'.format(a_name)
+            a_name = os.path.join(a_name, aa_name)
+
+        utils.echo_msg(self.archive_datalist)
+        if not os.path.exists(os.path.dirname(self.archive_datalist)):
+            try:
+                os.makedirs(os.path.dirname(self.archive_datalist))
+            except:
+                pass
+
         archive_keys = []
-        with open(self.archive_datalist, 'a') as dlf:
-            for this_entry in self.parse():
-                srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
-                datalist_dirname = os.path.join(a_name, os.path.dirname(this_entry.metadata['name']))
-                this_key = datalist_dirname.split('/')[-1]
-                if not os.path.exists(datalist_dirname):
-                    os.makedirs(datalist_dirname)
+        for this_entry in self.parse():
+            srs_all.append(this_entry.dst_srs if this_entry.dst_srs is not None else this_entry.src_srs)
+            datalist_dirname = os.path.join(a_name, os.path.dirname(this_entry.metadata['name']))
+            this_key = datalist_dirname.split('/')[-1]
+            if not os.path.exists(datalist_dirname):
+                os.makedirs(datalist_dirname)
 
-                if not this_key in archive_keys:
-                    archive_keys.append(this_key)                    
-                    dlf.write(
-                        '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
-                            name=os.path.join(datalist_dirname, this_key),
-                            weight = utils.float_or(this_entry.weight, 1),
-                            uncertainty = utils.float_or(this_entry.uncertainty, 0),
-                            metadata = this_entry.format_metadata()
-                        )
-                    )                    
+            sub_datalist = os.path.join(datalist_dirname, '{}.datalist'.format(this_key))
+            with open(sub_datalist, 'a') as sub_dlf:
+                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
+                this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
+                if os.path.exists(this_xyz_path):
+                    utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
+                    continue
 
-                with open(os.path.join(datalist_dirname, '{}.datalist'.format(this_key)), 'a') as sub_dlf:
-                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
-                    this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
-                    if os.path.exists(this_xyz_path):
-                        utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
-                        continue
+                with open(this_xyz_path, 'w') as xp:
+                    for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
+                        this_xyz.dump(include_w=True if self.weight is not None else False,
+                                      include_u=True if self.uncertainty is not None else False,
+                                      dst_port=xp, encode=False, precision=self.dump_precision)
 
+                if os.stat(this_xyz_path).st_size > 0:
                     sub_dlf.write('{} 168 1 0\n'.format(sub_xyz_path))
-                    with open(this_xyz_path, 'w') as xp:
-                        for this_xyz in this_entry.xyz_yield: # data will be processed independently of each other
-                            this_xyz.dump(include_w=True if self.weight is not None else False,
-                                          include_u=True if self.uncertainty is not None else False,
-                                          dst_port=xp, encode=False, precision=self.dump_precision)
+                else:
+                    utils.remove_glob('{}*'.format(this_xyz_path))
+
+            if os.stat(sub_datalist).st_size == 0:
+                utils.remove_glob(sub_datalist)
+            else:
+                with open(self.archive_datalist, 'a') as dlf:
+                    if not this_key in archive_keys:
+                        archive_keys.append(this_key)                    
+                        dlf.write(
+                            '{name}.datalist -1 {weight} {uncertainty} {metadata}\n'.format(
+                                name=os.path.join(datalist_dirname, this_key),
+                                weight = utils.float_or(this_entry.weight, 1),
+                                uncertainty = utils.float_or(this_entry.uncertainty, 0),
+                                metadata = this_entry.format_metadata()
+                            )
+                        )
+
+            if not os.listdir(datalist_dirname):
+                os.rmdir(datalist_dirname)
+                    
 
         ## generate datalist inf/json
         srs_set = set(srs_all)
