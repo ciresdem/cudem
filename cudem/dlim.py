@@ -3975,10 +3975,8 @@ class BAGFile(ElevationDataset):
         return(self.infos)
 
     def parse(self, resample=True):
-        self.metadata['name'] = 'bag' # bagfile parses into gdalfile, set this for proper recording of this
         mt = gdal.Info(self.fn, format='json')['metadata']['']
         oo = []
-
         if self.data_region is not None and self.data_region.valid_p():
             oo.append('MINX={}'.format(self.data_region.xmin))
             oo.append('MAXX={}'.format(self.data_region.xmax))
