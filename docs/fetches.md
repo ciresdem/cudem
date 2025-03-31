@@ -71,11 +71,13 @@ Print the version information
 | hydrolakes | HydroLakes vector and derived elevations | https://www.hydrosheds.org/products/hydrolakes |
 | icesat2 | IceSat2 granules from NASA (requires NASA credentials) | https://cmr.earthdata.nasa.gov |
 | mar_grav | Marine Gravity Satellite Altimetry Topography from Scripps. | https://topex.ucsd.edu/WWW_html/mar_grav.html |
+| synbath | Synthetic Bathymetry DEM from Scripps. | https://topex.ucsd.edu/pub/synbath/ |
 | mgds | Marine Geoscience Data System | https://www.marine-geo.org |
 | multibeam | NOAA Multibeam bathymetric data | https://data.ngdc.noaa.gov/platforms/ |
 | mur_sst | Sea Surface Tempuratures from NASA | https://cmr.earthdata.nasa.gov |
 | nasadem | NASA Digital Elevation Model | https://www.earthdata.nasa.gov/esds/competitive-programs/measures/nasadem |
 | ncei_thredds | NCEI DEM THREDDS Catalog | https://www.ngdc.noaa.gov/thredds/demCatalog.xml |
+| gedtm30 | Global DTM 30-m | https://github.com/openlandmap/GEDTM30 |
 | ngs | NGS monuments | http://geodesy.noaa.gov/ |
 | nos | NOS Hydrographic DataBase (NOSHDB) | https://www.ngdc.noaa.gov/mgg/bathymetry/hydro.html |
 | osm | Open Street Map | https://wiki.openstreetmap.org/ |

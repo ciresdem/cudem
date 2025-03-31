@@ -2013,6 +2013,7 @@ class GEDTM30(FetchModule):
             self.products = ['Ensemble Digital Terrain Model']
         
         self._gedtm30_url_list = 'https://raw.githubusercontent.com/openlandmap/GEDTM30/refs/heads/main/metadata/cog_list.csv'
+        self._gedtm30_url = 'https://github.com/openlandmap/GEDTM30'
         
     def run(self):
 
