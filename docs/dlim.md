@@ -200,6 +200,10 @@ d = dlim.DatasetFactory(mod='my_hydronos.xyz', src_region=r)._acquire_module().i
 # dump the xyz data from the dataset to stdout
 d.dump_xyz()
 
+# dump the xyz data to a file
+with open('test_dump.xyz', 'w') as dump_file:
+     d.dump_xyz(dump_file)
+
 # make and initialize a datalist object from multiple datasets with the given region at 1 arc-second output blocks
 # this fetches NED data from the USGS using the `ned` fetches module as a dataset
 # set the output projection to WGS84 (epsg:4326)
