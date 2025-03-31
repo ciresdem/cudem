@@ -153,6 +153,10 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 | nasadem | -105 | The NASADEM fetches module |
 | mar_grav | -106 | The mar_grav fetches module |
 | srtm_plus | -107 | The srtm_plus fetches module |
+| synbath | -108 | The synbath fetches module |
+| gedtm30 | -109 | The Global DTM fetches module |
+| swot | -110 | The SWOT fetches module |
+| icesat2 | -111 | The IceSat2 fetches module |
 | charts | -200 | The charts fetches module |
 | multibeam | -201 | The multibeam fetches module | 
 | hydronos | -202 | The hydronos fetches module |
@@ -167,10 +171,10 @@ recursive data-structures which point to datasets (datalist, zip, fetches, etc) 
 | CoNED | -211 | The CoNED fetches module |
 | SLR | -212 | The SLR fetches module |
 | waterservies | -213 | The waterservices fetches module |
-| icesat2 | -214 | The IceSat2 fetches module |
-| ned | -215 | The NED fetches module |
-| swot | -216 | The SWOT fetches module |
-| csb | -217 | the CSB fetches module |
+| ned | -214 | The NED fetches module |
+| csb | -215 | the CSB fetches module |
+| wa_dnr | -216 | The Washington State DNR fetches module |
+| r2r | -217 | Rolling deck to repository fetches module |
 | emodnet | -300 | The emodnet fetches module |
 | chs | -301 | The chs fetches module |
 | hrdem | -302 | The hrdem fetches module | 
