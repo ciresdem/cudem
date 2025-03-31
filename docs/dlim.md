@@ -225,3 +225,9 @@ dlim -R-119.25/-119/34/34.25 hydronos -w -u > my_hydronos.xyz
 ```bash
 dlim -R-123.458/-123.448/38.705/38.711 -E1s -J epsg:26910 -P epsg:4326 *.laz > my_lidar_1as.xyz
 ```
+
+### Generate a data-mask (raster) and spatial-metadata (vector) of a datalist:
+
+```bash
+dlim -Rmy_region.shp -E1s --mask --spatial-metadata my_data.datalist -P epsg:4269 > /dev/null
+```
