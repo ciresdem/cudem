@@ -4182,6 +4182,7 @@ class TheNationalMap(FetchModule):
                             utils.echo_error_msg('error, {}'.format(e))
 
                     if len(_dataset_results) > 0:
+                        utils.echo_msg(_dataset_results)
                         for item in _dataset_results['items']:
                             p_dir = '_'.join(item['title'].split(' '))
                             if _data['prodFormats'] is None:
@@ -5574,7 +5575,10 @@ class EarthData(FetchModule):
 
         ## Set up the earthdata credentials, and add it to our headers
         credentials = get_credentials(None)
-        self.headers = {'Authorization': 'Basic {0}'.format(credentials)}
+        self.headers = {
+            'Authorization': 'Basic {0}'.format(credentials),
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+        }
 
     def add_wildcards_to_str(self, in_str):
         if not in_str.startswith('*'):
@@ -5612,7 +5616,6 @@ class EarthData(FetchModule):
             _egi_data = {
                 'email': 'no',
                 'short_name': self.short_name,
-                'bounding_box': self.region.format('bbox'),
                 'bbox': self.region.format('bbox'),
                 'page_size': 10,
                 'page_num': 1,

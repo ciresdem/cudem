@@ -1,6 +1,6 @@
 ### setup.py
 ##
-## Copyright (c) 2020 - 2024 Regents of the University of Colorado
+## Copyright (c) 2020 - 2025 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -29,7 +29,7 @@ with open('README.md', 'r', encoding='utf-8') as fh:
 
 setuptools.setup(
     name = 'cudem',
-    version = '2.4.1',
+    version = '2.4.2',
     description = 'Modules and scripts for utilizing geographic data Digital Elevation Models',
     long_description = long_description,
     long_description_content_type = 'text/markdown',

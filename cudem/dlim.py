@@ -146,9 +146,10 @@ def num_strings_to_range(*args):
     else:
         return(None)
 
-def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask'):
+def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask', mask_level = 0):
     """merge data mask raster bands based on the top-level datalist name"""
-    
+
+    mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
     ## create new mem gdal ds to hold new raster
     gdt = gdal.GDT_Int32
@@ -156,18 +157,23 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
     m_ds = driver.Create(utils.make_temp_fn('tmp'), src_infos['nx'], src_infos['ny'], 0, gdt)
     m_ds.SetGeoTransform(src_infos['geoT'])
     m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
-    
+
     for b in range(1, src_ds.RasterCount+1):
         this_band = src_ds.GetRasterBand(b)
         this_band_md = this_band.GetMetadata()
         this_band_name = this_band.GetDescription()
         if this_band_name == skip_band:
             continue
-        
+
+        # if mask_level > 0:
+        #     if mask_level > len(this_band_name.split('/')):
+        #         mask_level = len(this_band_name.split('/')) - 2
+                    
+        #     this_band_name = '/'.join(this_band_name.split('/')[:-mask_level])
+
         if len(this_band_name.split('/')) > 1:
             this_band_name = this_band_name.split('/')[1]
             
-        b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
         m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
         if not this_band_name in m_bands.keys():
             m_ds.AddBand()
@@ -215,7 +221,12 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
     return(m_ds)
         
 def polygonize_mask_multibands(
-        src_ds, output = None, dst_srs = 'epsg:4326', ogr_format = 'ESRI Shapefile', verbose = True
+        src_ds,
+        output = None,
+        dst_srs = 'epsg:4326',
+        ogr_format = 'ESRI Shapefile',
+        mask_level = 0,
+        verbose = True
 ):
     """polygonze a multi-band mask raster. 
 
@@ -231,7 +242,8 @@ def polygonize_mask_multibands(
     tuple: (dst_layer, ogr_format)
     """
 
-    src_ds = merge_mask_bands_by_name(src_ds, verbose = verbose)    
+    mask_level = utils.int_or(mask_level, 0)
+    src_ds = merge_mask_bands_by_name(src_ds, mask_level=mask_level, verbose=verbose)    
     #dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()))
     dst_layer = '{}_sm'.format(utils.fn_basename2(src_ds.GetDescription()) if output is None else output)
     dst_vector = dst_layer + '.{}'.format(gdalfun.ogr_fext(ogr_format))
@@ -1916,7 +1928,14 @@ class ElevationDataset:
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
     ## todo: 'bm' multi-band of each dataset
-    def _stacks(self, out_name = None, ndv = -9999, fmt = 'GTiff', mask_only = False):
+    def _stacks(
+            self,
+            out_name = None,
+            ndv = -9999,
+            fmt = 'GTiff',
+            mask_only = False,
+            mask_level = 0
+    ):
         """stack and mask incoming arrays (from `array_yield`) together
 
         -----------
@@ -1925,6 +1944,7 @@ class ElevationDataset:
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
         mask_only (bool): only generate a mask, don't stack...
+        mask_level (int): the granularity of the mask, 0 is every file
 
         --------
         Returns:
@@ -1938,25 +1958,23 @@ class ElevationDataset:
           uncertainty
           src uncertainty
         """
-
+        
         utils.set_cache(self.cache_dir)
+        mask_level = utils.int_or(mask_level, 0)
         if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
             mode = 'mean'
         else:
             mode = self.stack_mode
 
         if self.verbose:
-            utils.echo_msg('stacking using {} mode'.format(mode))
-            
+            utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
+        
         ## initialize the output rasters
         if out_name is None:
             out_name = os.path.join(self.cache_dir, '{}'.format(
                 utils.append_fn('dlim_stacks', self.region, self.x_inc)
             ))
 
-        #out_name = utils.make_temp_fn(out_name)
-        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
@@ -1968,34 +1986,36 @@ class ElevationDataset:
             )
             sys.exit(-1)
 
-        gdt = gdal.GDT_Float32
-        c_gdt = gdal.GDT_Int32
+        ## stack grid
+        ## initialize stack grid
+        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
         driver = gdal.GetDriverByName(fmt)
         if os.path.exists(out_file):
             status = driver.Delete(out_file)
             if status != 0:
                 utils.remove_glob('{}*'.format(out_file))
-                
+
         if not os.path.exists(os.path.dirname(out_file)):
             os.makedirs(os.path.dirname(out_file))
-            
-        if os.path.exists(mask_fn):
-            status = driver.Delete(mask_fn)
-            if status != 0:
-                utils.remove_glob('{}*'.format(mask_fn))
-
+                
+        gdt = gdal.GDT_Float32
+        c_gdt = gdal.GDT_Int32
+        stack_opts = ['COMPRESS=LZW',
+                     'PREDICTOR=2',
+                     'TILED=YES']
+        if fmt == 'GTiff':
+            stack_opts.append('BIGTIFF=YES')
+        elif fmt == 'MEM':
+            stack_opts = []
+        
         dst_ds = driver.Create(
             out_file,
             xcount,
             ycount,
             7,
             gdt,
-            options=['COMPRESS=LZW',
-                     'PREDICTOR=2',
-                     'TILED=YES',
-                     'BIGTIFF=YES'] if fmt != 'MEM' else []
+            options=stack_opts
         )
-
         if dst_ds is None:
             utils.echo_error_msg(
                 'failed to create stack grid {} {} {} {} {}...'.format(
@@ -2007,36 +2027,42 @@ class ElevationDataset:
         dst_ds.SetGeoTransform(dst_gt)
         if self.dst_srs is not None:
             dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        ## the stack keys are the output bands in the stack grid
+        stack_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
             
-        stacked_bands = {
-            'z': dst_ds.GetRasterBand(1),
-            'count': dst_ds.GetRasterBand(2),
-            'weights': dst_ds.GetRasterBand(3),
-            'uncertainty': dst_ds.GetRasterBand(4),
-            'src_uncertainty': dst_ds.GetRasterBand(5),
-            'x': dst_ds.GetRasterBand(6),
-            'y': dst_ds.GetRasterBand(7)
-        }
-        stacked_data = {
-            'z': None,
-            'count': None,
-            'weights': None,
-            'uncertainty': None,
-            'src_uncertainty': None,
-            'x': None,
-            'y': None
-        }        
-        for key in stacked_bands.keys():
+        ## stacked_data holds tempory data from incoming entries
+        stacked_data = {x: None for x in stack_keys}
+            
+        ## gather the stack bands
+        stacked_bands = {x: dst_ds.GetRasterBand(i+1) for i, x in enumerate(stack_keys)}
+        for key in stack_keys:
             stacked_bands[key].SetNoDataValue(np.nan)
             stacked_bands[key].SetDescription(key)
 
-        ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
-        ## srcwin is the srcwin of the waffle relative to the incoming arrays
-        ## gt is the geotransform of the incoming arrays
         ## mask grid
+        ## initialize data mask
+        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        #mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        #mask_vrt_fn = '{}_msk.vrt'.format(out_name)
+        if os.path.exists(mask_fn):
+            status = driver.Delete(mask_fn)
+            if status != 0:
+                utils.remove_glob('{}*'.format(mask_fn))                
+            
+        if not os.path.exists(os.path.dirname(mask_fn)):
+            os.makedirs(os.path.dirname(mask_fn))
+            
+        m_gdt = gdal.GDT_Byte
+        msk_opts = ['COMPRESS=LZW']
+        if fmt == 'GTiff':
+            msk_opts.append('BIGTIFF=YES')
+        elif fmt == 'MEM':
+            msk_opts = []
+            
         driver = gdal.GetDriverByName('MEM')
-        m_ds = driver.Create(mask_fn, xcount, ycount, 1, gdt)
-        m_ds.SetDescription(out_name)
+        m_ds = driver.Create('', xcount, ycount, 1, m_gdt)
+        m_ds.SetDescription('_msk'.format(out_name))
         m_ds.SetGeoTransform(dst_gt)
         if self.dst_srs is not None:
             m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
@@ -2046,74 +2072,82 @@ class ElevationDataset:
         m_band_all.SetNoDataValue(0)
         m_band_all.SetDescription('Full Data Mask')
         
-        ## initialize data mask        
         ## parse each entry and process it
-        ## todo: mask here instead of in each dataset module
         for this_entry in self.parse():
-            ## MASK
+            ## gather the current mask bands and determine the entry name
             m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-            if not this_entry.metadata['name'] in m_bands.keys():
-                m_ds.AddBand()
-                m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-                m_band.SetNoDataValue(0)
-                m_band.SetDescription(this_entry.metadata['name'])                
-            else:
-                m_band = m_ds.GetRasterBand(m_bands[this_entry.metadata['name']])
+            entry_name = this_entry.metadata['name']
+            if mask_level > 0:
+                if mask_level > len(entry_name.split('/')):
+                    mask_level = len(entry_name.split('/')) - 2
 
-            band_md = m_band.GetMetadata()
-            for k in this_entry.metadata.keys():
-                if k not in band_md.keys() or band_md[k] is None:
-                    band_md[k] = this_entry.metadata[k]
-                # elif this_entry.metadata[k] is not None:
-                #     if k == 'date':
-                #         band_date = band_md['date']
-                #         entry_date = this_entry.metadata['date']
-                #         if band_date is not None and entry_date is not None:
-                #             utils.echo_msg('{} {}'.format(band_date, entry_date))
-                #             band_dates = [float(x) for x in re.findall(r'\d+\.\d+', band_date)]
-                #             entry_dates = [float(x) for x in re.findall(r'\d+\.\d+', entry_date)]
-                #             merged_dates = band_dates + entry_dates
-                #             utils.echo_msg(merged_dates)
-                #             if min(merged_dates) != max(merged_dates):
-                #                 band_md['date'] = '-'.join([str(min(merged_dates)), str(max(merged_dates))])
-                        
-                #     elif band_md[k] != this_entry.metadata[k]:
-                #         band_md[k] = '/'.join([band_md[k], this_entry.metadata[k]])
-                else:
-                    band_md[k] = None
-
-            band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
-            band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
-            try:
-                m_band.SetMetadata(band_md)
-            except:
-                try:
-                    for key in band_md.keys():
-                        if band_md[key] is None:
-                            del band_md[key]
-
-                    m_band.SetMetadata(band_md)
-                except Exception as e:
-                    utils.echo_error_msg(
-                        'could not set band metadata: {}; {}'.format(
-                            band_md, e
-                        )
-                    )
-                
+                entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+            
             ## yield entry arrays for stacks
-            #for arrs, srcwin, gt in this_entry.yield_array():
+            ##
+            ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
+            ##
+            ## srcwin is the srcwin of the waffle, represented by the gt, relative to the incoming arrays
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
-                m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                if np.all(arrs['count'] == 0):
+                    continue
+
+                #m_band = add_mask_band(m_ds, this_entry, mask_level)
+                if mask_level < 0:
+                    m_band = None
+                else:
+                    ## add the entry as a band in the mask if it doesn't already exist
+                    if not entry_name in m_bands.keys():
+                        m_ds.AddBand()
+                        m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+                        m_band.SetNoDataValue(0)
+                        m_band.SetDescription(entry_name)
+
+                        band_md = m_band.GetMetadata()
+                        for k in this_entry.metadata.keys():
+                            if k not in band_md.keys() or band_md[k] is None:
+                                band_md[k] = this_entry.metadata[k]
+                            else:
+                                band_md[k] = None
+
+                        band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
+                        band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+                        try:
+                            m_band.SetMetadata(band_md)
+                        except:
+                            try:
+                                for key in band_md.keys():
+                                    if band_md[key] is None:
+                                        del band_md[key]
+
+                                m_band.SetMetadata(band_md)
+                            except Exception as e:
+                                utils.echo_error_msg(
+                                    'could not set band metadata: {}; {}'.format(
+                                        band_md, e
+                                    )
+                                )
+                    else:
+                        m_band = m_ds.GetRasterBand(m_bands[entry_name])
+                
+                if m_band is not None:
+                    m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                else:
+                    m_array = np.array(arrs['count'])
+                    #m_array[arrs['count'] != 0] = 1
+                    #m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+
                 m_array[arrs['count'] != 0] = 1
-                m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])
-                m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])                    
                 m_ds.FlushCache()
+                m_array = None
                 if mask_only:
                     continue
                 
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
-                for key in stacked_bands.keys():
+                for key in stack_keys:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(
                         srcwin[0], srcwin[1], srcwin[2], srcwin[3]
                     )
@@ -2129,16 +2163,12 @@ class ElevationDataset:
                 arrs['uncertainty'][np.isnan(arrs['z'])] = 0
                 
                 if mode != 'min' and mode != 'max':
-                    #arrs['weight'][np.isnan(arrs['z'])] = 0
-                    #arrs['uncertainty'][np.isnan(arrs['z'])] = 0
                     arrs['x'][np.isnan(arrs['x'])] = 0
                     arrs['y'][np.isnan(arrs['y'])] = 0
                     arrs['z'][np.isnan(arrs['z'])] = 0
                     for arr_key in arrs:
                         if arrs[arr_key] is not None:
                             arrs[arr_key][np.isnan(arrs[arr_key])] = 0
-                #else:
-
 
                 ## add the count to the accumulated rasters
                 stacked_data['count'] += arrs['count']
@@ -2152,14 +2182,8 @@ class ElevationDataset:
                     stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
                     stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
-                    #stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
                     ## uncertainty is src_uncertainty, as only one point goes into a cell
-                    #stacked_data['uncertainty'][:] = stacked_data['src_uncertainty'][:]
                     stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
-
-                    # ## reset all data where weights are zero to nan
-                    # for key in stacked_bands.keys():
-                    #     stacked_data[key][np.isnan(stacked_data['weights'])] = np.nan
 
                 elif mode == 'min' or mode == 'max':
                     ## set nodata values in stacked_data to whatever the value is in arrs
@@ -2179,9 +2203,6 @@ class ElevationDataset:
                         
                     stacked_data['x'][mask] = arrs['x'][mask]
                     stacked_data['y'][mask] = arrs['y'][mask]
-                    #stacked_data['src_uncertainty'][mask]  += arrs['uncertainty'][mask]
-                    #stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
-                    #stacked_data['weights'][mask] = arrs['weight'][mask]
 
                     ## accumulate uncertainty and weight
                     stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
@@ -2193,13 +2214,6 @@ class ElevationDataset:
                     ## accumulate variance * weight
                     stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
                     stacked_data['z'][mask] = arrs['z'][mask]
-                    
-                # elif mode == 'median':
-                #     ## accumulate incoming median(z), etc.
-                #     stacked_data['z'] += np.median([arrs['z']])
-                #     stacked_data['x'] += np.median(arrs['x'])
-                #     stacked_data['y'] += np.median(arrs['y'])
-                #     stacked_data['src_uncertainty'] += np.median(arrs['uncertainty'])
                     
                 elif mode == 'mean':
                     ## accumulate incoming z*weight and uu*weight
@@ -2217,76 +2231,67 @@ class ElevationDataset:
                     stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
 
                 ## write out results to accumulated rasters
-                #stacked_data['count'][stacked_data['count'] == 0] = ndv
                 stacked_data['count'][stacked_data['count'] == 0] = np.nan
 
-                for key in stacked_bands.keys():
-                    #stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    #stacked_data[key][stacked_data['count'] == ndv] = ndv
-                    
+                for key in stack_keys:
                     stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
-                    #if mode != 'mean':
-                    #    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], srcwin[1])
-
+                                    
         ## Finalize weighted mean rasters and close datasets
+        ##
         ## incoming arrays have all been processed, if weighted mean the
         ## "z" is the sum of z*weight, "weights" is the sum of weights
         ## "uncertainty" is the sum of variance*weight
+        ##
+        ## mask data will be checked for bands with nodata and those
+        ## will be omitted from the final mask raster
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
+            
+        msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
+        # ## output the mask raster to disk
+        # ## this is a bit convoluted, we're writing the mem mask to disk, then
+        # ## creating a VRT with the `good_bands` and re-writing that to a final
+        # ## mask raster...This is all to remove bands that have no data...other methods
+        # ## are either too slow or take up too much memory...
+        # if m_ds.RasterCount > 0:
+        #     good_bands = []
+        #     with tqdm(
+        #             total=m_ds.RasterCount,
+        #             desc='checking mask bands',
+        #             leave=self.verbose
+        #     ) as pbar:
+        #         for band_num in range(1, m_ds.RasterCount+1):
+        #             pbar.update()
+        #             band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
+        #             if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
+        #                 good_bands.append(band_num)
 
-        if m_ds.RasterCount > 0:
-            #m_ds.FlushCache()
-            ## create a new mem ds to hold valid bands
-            driver = gdal.GetDriverByName('MEM')
-            mm_ds = driver.Create(mask_fn, xcount, ycount, 0, gdt)
-            mm_ds.SetGeoTransform(dst_gt)
-            mm_ds.SetDescription(out_name)
+        #     band_count = len(good_bands)
+        #     msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts)
+        #     vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
+        #     vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands)
+        #     for i, b in enumerate(good_bands):                
+        #         v_band = vrt_ds.GetRasterBand(i+1)
+        #         m_band = m_ds.GetRasterBand(b)
+        #         v_band.SetDescription(m_band.GetDescription())
+        #         v_band.SetMetadata(m_band.GetMetadata())
+                
+        #     msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts)
+        #     vrt_ds = None
+        # else:
+        #     if self.verbose:
+        #         utils.echo_msg('no bands found for {}'.format(mask_fn))
 
-            ## masks will crash if too many and not enough mem...
-            for band_num in range(1, m_ds.RasterCount+1):
-                band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
-                if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
-                    m_band = m_ds.GetRasterBand(band_num)
-                    m_band_md = m_band.GetMetadata()
-                    mm_ds.AddBand()
-                    mm_band = mm_ds.GetRasterBand(mm_ds.RasterCount)
-                    mm_band.SetNoDataValue(0)
-                    mm_band.SetDescription(m_band.GetDescription())
-                    
-                    mm_band.SetMetadata(m_band_md)
-
-                    m_array = m_band.ReadAsArray()
-                    mm_band.WriteArray(m_array)
-                    
-                    mm_ds.FlushCache()
-                    
-            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, mm_ds, 0)
-            m_ds = mm_ds = None
-        else:
-            if self.verbose:
-                utils.echo_msg('no bands found for {}'.format(mask_fn))
-
+        # utils.remove_glob(mask_tmp_fn)
+        m_ds = None
         if not mask_only:
-            # ## by moving window
-            # n_chunk = int(xcount)
-            # n_step = n_chunk
-            # for srcwin in utils.yield_srcwin(
-            #         (dst_ds.RasterYSize, dst_ds.RasterXSize), n_chunk=n_chunk, step=n_step, verbose=True
-            # ):
-            #     y = srcwin[1]
-            #     for key in stacked_bands.keys():
-            #         stacked_data[key] = stacked_bands[key].ReadAsArray(*srcwin)
-            #         stacked_data[key][stacked_data[key] == ndv] = np.nan
-
             ## by scan-line
             srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
             for y in range(
                     srcwin[1], srcwin[1] + srcwin[3], 1
             ):
-                for key in stacked_bands.keys():
+                for key in stack_keys:
                     stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
                     stacked_data[key][stacked_data[key] == ndv] = np.nan
 
@@ -2301,34 +2306,31 @@ class ElevationDataset:
                     
                     ## apply the source uncertainty with the sub-cell variance uncertainty
                     ## caclulate the standard error (sqrt( uncertainty / count))
-                    #stacked_data['src_uncertainty'] = np.sqrt((stacked_data['src_uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
                     stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
-                    #stacked_data['uncertainty'] = np.sqrt(stacked_data['uncertainty'] / stacked_data['count'])
 
                 ## write out final rasters
-                for key in stacked_bands.keys():
+                for key in stack_keys:
                     stacked_data[key][np.isnan(stacked_data[key])] = ndv
                     stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
                 
             ## set the final output nodatavalue
-            for key in stacked_bands.keys():
+            for key in stack_keys:
                 stacked_bands[key].DeleteNoDataValue()
                 
-            for key in stacked_bands.keys():
+            for key in stack_keys:
                 stacked_bands[key].SetNoDataValue(ndv)
                 
         ## create a vector of the masks (spatial-metadata)
-        if self.want_mask:
-            os.replace(mask_fn, os.path.basename(mask_fn))            
-
         if self.want_sm:
             polygonize_mask_multibands(
-                msk_ds, output=os.path.basename(out_name), verbose=False
+                msk_ds, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
             )
             
         msk_ds = dst_ds = None
-
+        if self.want_mask:
+            os.replace(mask_fn, os.path.basename(mask_fn))
+        
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
             utils.echo_msg('filtering stacks module with {}'.format(f))
@@ -2338,9 +2340,12 @@ class ElevationDataset:
             if grits_filter is not None:
                 grits_filter()
                 os.replace(grits_filter.dst_dem, out_file)
-            
-        return(out_file)        
-    
+
+        if self.verbose:
+            utils.echo_msg('generated stack: {} and mask: {} rasters'.format(os.path.basename(out_file), os.path.basename(mask_fn)))
+                           
+        return(out_file)
+
     def stacks_yield_xyz(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
         """yield the result of `_stacks` as an xyz object"""
 
@@ -2379,6 +2384,488 @@ class ElevationDataset:
                         
                     yield(out_xyz)
         sds = None
+    
+    ## test stack using h5py instead of gdal
+    def _stacks_h5(
+            self,
+            out_name = None,
+            ndv = -9999,
+            fmt = 'GTiff',
+            mask_only = False,
+            mask_level = 0
+    ):
+        """stack and mask incoming arrays (from `array_yield`) together
+
+        -----------
+        Parameters:
+        out_name (str): the output stacked raster basename
+        ndv (float): the desired no data value
+        fmt (str): the output GDAL file format
+        mask_only (bool): only generate a mask, don't stack...
+        mask_level (int): the granularity of the mask, 0 is every file
+
+        --------
+        Returns:
+        output-file-name{_msk} of a multi-band raster with a band for each dataset.
+        output-file-name of a multi-band raster with the following bands:
+          x
+          y
+          z
+          weights
+          count
+          uncertainty
+          src uncertainty
+        """
+
+        utils.set_cache(self.cache_dir)
+        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
+            mode = 'mean'
+        else:
+            mode = self.stack_mode
+
+        if self.verbose:
+            utils.echo_msg('stacking using {} mode'.format(mode))
+
+        mask_level = utils.int_or(mask_level, 0)
+        ## initialize the output rasters
+        if out_name is None:
+            out_name = os.path.join(self.cache_dir, '{}'.format(
+                utils.append_fn('dlim_stacks', self.region, self.x_inc)
+            ))
+
+        ## .csg is h5 Cudem Stack Grid
+        out_file = '{}.csg'.format(out_name)
+        stack_fn = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))        
+        if os.path.exists(out_file):
+            utils.remove_glob('{}.*'.format(out_file))
+            
+        if not os.path.exists(os.path.dirname(out_file)):
+            os.makedirs(os.path.dirname(out_file))
+            
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
+        if xcount <= 0 or ycount <=0:
+            utils.echo_error_msg(
+                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                    xcount, ycount, self.x_inc, self.y_inc, self.region
+                )
+            )
+            sys.exit(-1)
+
+        lon_start = dst_gt[0] + (dst_gt[1] / 2)
+        lat_start = dst_gt[3] + (dst_gt[5] / 2)
+        lon_end = dst_gt[0] + (dst_gt[1] * xcount)
+        lat_end = dst_gt[3] + (dst_gt[5] * ycount)
+        lon_inc = dst_gt[1]
+        lat_inc = dst_gt[5]
+        #4000
+        stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)#, rdcc_nslots=1e7)
+        #stack_ds = h5.File(out_file, 'w', chunk_cache_mem_size=1e10)
+        
+        # ************  Grid Mapping  ********
+        crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
+        crs_dset.attrs['GeoTransform'] = ' '.join([str(x) for x in dst_gt])
+        if self.dst_srs is not None:
+            crs_dset.attrs['crs_wkt'] = self.dst_srs
+        
+        # ************  LATITUDE  ************
+        lat_array = np.arange(lat_start, lat_end, lat_inc)
+        lat_dset = stack_ds.create_dataset ('lat', data=lat_array)
+        lat_dset.make_scale('latitude')
+        lat_dset.attrs["long_name"] = "latitude"
+        lat_dset.attrs["units"] = "degrees_north"
+        lat_dset.attrs["standard_name"] = "latitude"
+        lat_dset.attrs["actual_range"] = [lat_end, lat_start]
+        #lat_dset.attrs[''] = ''
+
+        # ************  LONGITUDE  ***********
+        lon_array = np.arange(lon_start, lon_end, lon_inc)
+        lon_dset = stack_ds.create_dataset ('lon', data=lon_array)
+        lon_dset.make_scale('longitude')
+        lon_dset.attrs["long_name"] = "longitude"
+        lon_dset.attrs["units"] = "degrees_east" 
+        lon_dset.attrs["standard_name"]= "longitude"
+        lon_dset.attrs["actual_range"] = [lon_start, lon_end]
+
+        # ************  STACK  ***************
+        stack_grp = stack_ds.create_group('stack')
+        stacked_data = {
+            'z': None,
+            'count': None,
+            'weights': None,
+            'uncertainty': None,
+            'src_uncertainty': None,
+            'x': None,
+            'y': None
+        }
+
+        for key in stacked_data.keys():
+            stack_dset = stack_grp.create_dataset(
+                key, data=np.full((ycount, xcount), np.nan),
+                compression='lzf', maxshape=(ycount, xcount),
+                chunks=(1, xcount), rdcc_nbytes=1024*xcount*4,
+                dtype=np.float32
+            )
+            stack_dset.dims[0].attach_scale(lat_dset)
+            stack_dset.dims[1].attach_scale(lon_dset)
+            stack_dset.attrs['grid_mapping'] = "crs"
+        
+        # ************  MASK  ****************   
+        mask_grp = stack_ds.create_group('mask')
+        
+        ## set first dataset to hold the data mask for all the data
+        mask_all_dset = mask_grp.create_dataset(
+            'full_data_mask', data=np.zeros((ycount,xcount)),
+            compression='lzf', maxshape=(ycount, xcount),
+            chunks=(1, xcount), rdcc_nbytes=1024*xcount,
+            dtype=np.uint8
+        )
+        mask_all_dset.dims[0].attach_scale(lat_dset)
+        mask_all_dset.dims[1].attach_scale(lon_dset)
+        mask_all_dset.attrs['grid_mapping'] = "crs"
+        
+        ## parse each entry and process it
+        ## todo: mask here instead of in each dataset module
+        for this_entry in self.parse():
+            ## MASK
+            if mask_level < 0:
+                mask_dset = None
+            else:
+                entry_name = this_entry.metadata['name']
+                if mask_level > 0:
+                    if mask_level > len(entry_name.split('/')):
+                        mask_level = len(entry_name.split('/')) - 2
+
+                    entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+
+                if not entry_name in mask_grp.keys():
+                    mask_dset = mask_grp.create_dataset(
+                        entry_name, data=np.zeros((ycount,xcount)),
+                        compression='lzf', maxshape=(ycount, xcount),
+                        chunks=(1, xcount), rdcc_nbytes=1024*xcount,
+                        dtype=np.uint8
+                    )
+                    
+                    mask_dset.dims[0].attach_scale(lat_dset)
+                    mask_dset.dims[1].attach_scale(lon_dset)
+                    mask_dset.attrs['grid_mapping'] = "crs"
+                else:
+                    mask_dset = mask_grp[key]
+                    
+                for k in this_entry.metadata.keys():
+                    if k not in mask_dset.attrs.keys() or mask_dst.attrs[k] is None:
+                        try:
+                            mask_dset.attrs[k] = str(this_entry.metadata[k])
+                        except:
+                            utils.echo_warning_msg(k)
+                            utils.echo_warning_msg(this_entry.metadata[k])
+                            mask_dset.attrs[k] = None
+                    else:
+                        mask_dset.attrs[k] = None
+
+                mask_dset.attrs['weight'] = this_entry.weight if this_entry.weight is not None else 1
+                mask_dset.attrs['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+                
+            ## yield entry arrays for stacks
+            ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
+            ## srcwin is the srcwin of the waffle relative to the incoming arrays
+            ## gt is the geotransform of the incoming arrays
+            for arrs, srcwin, gt in this_entry.array_yield:
+                #utils.echo_msg(srcwin)
+                ## update the mask
+                mask_all_dset[srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
+                if mask_dset is not None:
+                    mask_dset[srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][arrs['count'] != 0] = 1
+
+                if mask_only:
+                    continue
+                
+                ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
+                for key in stack_grp.keys():
+                    stacked_data[key] = stack_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]]
+                    if mode != 'min' and mode != 'max':
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
+
+                    if key == 'count':
+                        stacked_data[key][np.isnan(stacked_data[key])] = 0
+                    
+                ## set incoming np.nans to zero and mask to non-nan count
+                arrs['count'][np.isnan(arrs['count'])] = 0
+                arrs['weight'][np.isnan(arrs['z'])] = 0
+                arrs['uncertainty'][np.isnan(arrs['z'])] = 0
+                
+                if mode != 'min' and mode != 'max':
+                    arrs['x'][np.isnan(arrs['x'])] = 0
+                    arrs['y'][np.isnan(arrs['y'])] = 0
+                    arrs['z'][np.isnan(arrs['z'])] = 0
+                    for arr_key in arrs:
+                        if arrs[arr_key] is not None:
+                            arrs[arr_key][np.isnan(arrs[arr_key])] = 0
+
+                ## add the count to the accumulated rasters
+                stacked_data['count'] += arrs['count']
+
+                ## supercede based on weights, else do weighted mean
+                ## todo: do (weighted) mean on cells with same weight
+                if mode == 'supercede':
+                    ## higher weight supercedes lower weight (first come first served atm)
+                    stacked_data['z'][arrs['weight'] > stacked_data['weights']] = arrs['z'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['x'][arrs['weight'] > stacked_data['weights']] = arrs['x'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['y'][arrs['weight'] > stacked_data['weights']] = arrs['y'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['src_uncertainty'][arrs['weight'] > stacked_data['weights']] = arrs['uncertainty'][arrs['weight'] > stacked_data['weights']]
+                    stacked_data['weights'][arrs['weight'] > stacked_data['weights']] = arrs['weight'][arrs['weight'] > stacked_data['weights']]
+                    ## uncertainty is src_uncertainty, as only one point goes into a cell
+                    stacked_data['uncertainty'][:] = np.array(stacked_data['src_uncertainty'])
+
+                elif mode == 'min' or mode == 'max':
+                    ## set nodata values in stacked_data to whatever the value is in arrs
+                    mask = np.isnan(stacked_data['z'])
+                    stacked_data['x'][mask] = arrs['x'][mask]
+                    stacked_data['y'][mask] = arrs['y'][mask]
+                    stacked_data['src_uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['uncertainty'][mask] = arrs['uncertainty'][mask]
+                    stacked_data['weights'][mask] = arrs['weight'][mask]
+                    stacked_data['z'][mask] = arrs['z'][mask]
+
+                    ## mask the min or max and apply it to stacked_data 
+                    if mode == 'min':
+                        mask = arrs['z'] <= stacked_data['z']
+                    else:
+                        mask = arrs['z'] >= stacked_data['z']
+                        
+                    stacked_data['x'][mask] = arrs['x'][mask]
+                    stacked_data['y'][mask] = arrs['y'][mask]
+
+                    ## accumulate uncertainty and weight
+                    stacked_data['src_uncertainty'][mask] += (arrs['uncertainty'][mask] * arrs['weight'][mask])
+
+                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                    stacked_data['weights'][mask] += arrs['weight'][mask]
+                    stacked_data['weights'][mask][stacked_data['weights'][mask] == 0] = np.nan
+                    
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'][mask] += arrs['weight'][mask] * np.power((arrs['z'][mask] - (stacked_data['z'][mask] / stacked_data['weights'][mask])), 2)
+                    stacked_data['z'][mask] = arrs['z'][mask]
+                    
+                elif mode == 'mean':
+                    ## accumulate incoming z*weight and uu*weight
+                    stacked_data['z'] += (arrs['z'] * arrs['weight'])
+                    stacked_data['x'] += (arrs['x'] * arrs['weight'])
+                    stacked_data['y'] += (arrs['y'] * arrs['weight'])
+                    stacked_data['src_uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(arrs['uncertainty'], 2))
+                    
+                    ## accumulate incoming weights (weight*weight?) and set results to np.nan for calcs
+                    stacked_data['weights'] += arrs['weight']
+                    stacked_data['weights'][stacked_data['weights'] == 0] = np.nan
+                    
+                    ## accumulate variance * weight
+                    stacked_data['uncertainty'] += arrs['weight'] * np.power((arrs['z'] - (stacked_data['z'] / stacked_data['weights'])), 2)
+
+                ## write out results to accumulated rasters
+                stacked_data['count'][stacked_data['count'] == 0] = np.nan
+                for key in stack_grp.keys():
+                    stacked_data[key][np.isnan(stacked_data['count'])] = np.nan
+                    stack_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
+                                    
+        ## Finalize weighted mean rasters and close datasets
+        ## incoming arrays have all been processed, if weighted mean the
+        ## "z" is the sum of z*weight, "weights" is the sum of weights
+        ## "uncertainty" is the sum of variance*weight
+        if self.verbose:
+            utils.echo_msg('finalizing stacked raster bands...')
+
+        for key in mask_grp.keys():
+            key_dset = mask_grp[key]
+            if np.all(key_dset == 0):
+                del key_dset
+                
+        if not mask_only:
+            ## by scan-line
+            # srcwin = (0, 0, xcount, ycount)
+            # for y in range(
+            #         srcwin[1], srcwin[1] + srcwin[3], 1
+            # ):
+            #     utils.echo_msg(y)
+            for key in stack_grp.keys():
+                stacked_data[key] = stack_grp[key][...]
+                stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+            #utils.echo_msg(stacked_data['count'])
+            if mode == 'mean' or mode == 'min' or mode == 'max':
+                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                if mode == 'mean':
+                    ## average the accumulated arrays for finalization
+                    ## x, y, z and u are weighted sums, so divide by weights
+                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+
+                ## apply the source uncertainty with the sub-cell variance uncertainty
+                ## caclulate the standard error (sqrt( uncertainty / count))
+                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+
+            ## write out final rasters
+            for key in stack_grp.keys():
+                stacked_data[key][np.isnan(stacked_data[key])] = np.nan#ndv
+                stack_grp[key][:] = stacked_data[key]
+                #[y:y+1, srcwin[0]:srcwin[0]+srcwin[2]] = stacked_data[key]
+                
+            ## set the final output nodatavalue
+
+        ## create the stack geotiff
+        num_bands = len(stack_grp)
+        driver = gdal.GetDriverByName(fmt)
+        stack_dataset = driver.Create(
+            stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
+            options=['COMPRESS=LZW',
+                     'PREDICTOR=2',
+                     'TILED=YES',
+                     'BIGTIFF=YES']
+        )
+        stack_dataset.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        with tqdm(
+                total=len(stack_grp.keys()),
+                desc='converting CSG stack to GeoTIFF',
+                leave=self.verbose
+        ) as pbar:
+            for i, key in enumerate(reversed(stack_grp.keys())):
+                pbar.update()
+                stack_grp[key][np.isnan(stack_grp[key])] = ndv
+                stack_band = stack_dataset.GetRasterBand(i + 1)
+                stack_band.WriteArray(stack_grp[key][...])
+                stack_band.SetDescription(key)
+                stack_band.SetNoDataValue(ndv)
+                stack_band.FlushCache()
+
+        stack_dataset = None
+                
+        ## create the mask geotiff
+        num_bands, mask_keys = self.h5_get_datasets_from_grp(mask_grp)
+        driver = gdal.GetDriverByName(fmt)
+        mask_dataset = driver.Create(
+            mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
+            options=['COMPRESS=LZW', 'BIGTIFF=YES'] if fmt == 'GTiff' else ['COMPRESS=LZW']
+        )
+        mask_dataset.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+            
+        with tqdm(
+                total=len(mask_keys),
+                desc='converting CSG mask to GeoTiff',
+                leave=self.verbose
+        ) as pbar:
+            ii = 0
+            for i, key in enumerate(mask_keys):
+                pbar.update()
+                srcwin = (0, 0, xcount, ycount)
+                for y in range(
+                        srcwin[1], srcwin[1] + srcwin[3], 1
+                ):
+                    mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][np.isnan(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])] = 0
+                    #if np.all(mask_grp[key][mask_grp[key] == 0]):
+                    #    continue
+
+                    #ii += 1
+                    mask_band = mask_dataset.GetRasterBand(i+1)
+                    mask_band.WriteArray(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])
+                    md = {}
+                    for attrs_key in mask_grp[key].attrs.keys():
+                        md[attrs_key] = mask_grp[key].attrs[attrs_key]
+
+                    if 'name' in md.keys():
+                        mask_band.SetDescription(md['name'])
+                    else:
+                        mask_band.SetDescription(mask_grp[key].name)
+
+                    mask_band.SetNoDataValue(0)
+                    mask_band.SetMetadata(md)
+                    mask_band.FlushCache()
+
+        stack_ds.close()
+
+        ## create a vector of the masks (spatial-metadata)
+        if self.want_sm:
+            polygonize_mask_multibands(
+                mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
+            )
+
+        mask_dataset = None
+        
+        ## apply any grits filters to the stack
+        for f in self.stack_fltrs:
+            utils.echo_msg('filtering stacks module with {}'.format(f))
+            grits_filter = grits.GritsFactory(
+                mod=f, src_dem=stack_fn, uncertainty_mask=4, weight_mask=3, count_mask=2
+            )._acquire_module()
+            if grits_filter is not None:
+                grits_filter()
+                os.replace(grits_filter.dst_dem, out_file)
+            
+        if self.want_mask:
+            os.replace(mask_fn, os.path.basename(mask_fn))
+
+        return(stack_fn)
+
+    def h5_get_datasets_from_grp(self, grp, count = 0, out_keys = []):
+        if isinstance(grp, h5.Dataset):
+            count += 1
+            out_keys.append(grp.name)
+            
+        elif isinstance(grp, h5.Group):
+            for key in grp.keys():
+                if isinstance(grp[key], h5.Dataset):
+                    count += 1
+                    out_keys.append(grp[key].name)
+                elif isinstance(grp[key], h5.Group):
+                    for sub_key in grp[key].keys():
+                        count, out_keys = self.h5_get_datasets_from_grp(
+                            grp[key][sub_key], count, out_keys
+                        )
+
+        return(count, out_keys)
+    
+    def stacks_yield_xyz_h5(self, out_name = None, ndv = -9999, fmt = 'GTiff'):#, mode = 'mean'):
+        """yield the result of `_stacks` as an xyz object"""
+
+        stacked_fn = self._stacks(out_name=out_name, ndv=ndv, fmt=fmt)#, mode=mode)
+        sds = h5.File(stacked_fn, 'r')
+        sds_gt = [float(x) for x in sds['crs'].attrs['GeoTransform'].split()]
+        sds_stack = sds['stack']
+        stack_shape = sds['stack']['z'].shape
+        srcwin = (0, 0, stack_shape[1], stack_shape[0])
+        for y in range(srcwin[1], srcwin[1] + srcwin[3], 1):
+            sz = sds_stack['z'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            ## skip row if all values are ndv
+            if np.all(sz == ndv):
+                continue
+
+            sw = sds_stack['weights'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            su = sds_stack['uncertainty'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+
+            sx = sds_stack['x'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            sy = sds_stack['y'][y:y+1, srcwin[0]:srcwin[0]+srcwin[2]]
+            for x in range(0, stack_shape[1]):
+                z = sz[0, x]
+                if z != ndv:
+                    if self.stack_node: # yield avg x/y data instead of center
+                        out_xyz = xyzfun.XYZPoint(
+                            x = sx[0, x], y = sy[0, x], z = z, w = sw[0, x], u = su[0, x]
+                        )
+                    else: # yield center of pixel as x/y
+                        geo_x, geo_y = utils._pixel2geo(x, y, sds_gt)
+                        out_xyz = xyzfun.XYZPoint(
+                            x=geo_x, y=geo_y, z=z, w=sw[0, x], u=su[0, x]
+                        )
+                        
+                    yield(out_xyz)
+        sds.close()
     
     def vectorize_xyz(self):
         """Make a point vector OGR DataSet Object from src_xyz
@@ -2683,8 +3170,9 @@ class ElevationDataset:
             
             out_arrays['uncertainty'] = np.zeros((this_srcwin[3], this_srcwin[2]))
             #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
-            out_arrays['uncertainty'][unq[:,0], unq[:,1]] = np.sqrt(uu**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)
+            out_arrays['uncertainty'][unq[:,0], unq[:,1]] = np.sqrt(uu**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)                
 
+            # ## testing pre filters...
             # ## apply any filters to the array
             # for f in self.stack_fltrs:
             #     ## write out array to a temp grid
@@ -2739,6 +3227,19 @@ class ElevationDataset:
 
             #     utils.remove_glob(tmp_file)
 
+            # ## for h5
+            # for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
+            #     scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
+            #     scanline_arrays = {}
+            #     for key in out_arrays.keys():
+            #         if out_arrays[key] is not None:
+            #             scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
+            #         else:
+            #             scanline_arrays[key] = out_arrays[key]
+                        
+            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
+
+            ## for gdal
             yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
@@ -2773,7 +3274,7 @@ class ElevationDataset:
         return(20)
         # return(sst)
             
-    def fetch_buildings(self, verbose):
+    def fetch_buildings(self, verbose = True):
         """fetch building footprints from BING"""
         
         if self.region is not None:
@@ -2953,7 +3454,6 @@ class XYZFile(ElevationDataset):
             
         self.scoff = True if self.x_scale != 1 or self.y_scale != 1 or self.z_scale != 1 \
            or self.x_offset != 0 or self.y_offset != 0 else False
-
         self.field_names  = [x for x in ['x' if self.xpos is not None else None, 'y' if self.ypos is not None else None,
                                          'z' if self.zpos is not None else None, 'w' if self.wpos is not None else None,
                                          'u' if self.upos is not None else None]
@@ -3740,7 +4240,8 @@ class GDALFile(ElevationDataset):
             yield(points)
             
         src_uncertainty = src_weight = trans_uncertainty = self.src_ds = None
-        
+
+## todo: update to h5py
 class BAGFile(ElevationDataset):
     """providing a BAG raster dataset parser.
 
@@ -3921,8 +4422,9 @@ class CUDEMFile(ElevationDataset):
     the cudem netcdf contains uninterpolated elevation data, uncertainty weight and data mask...
     """
     
-    def __init__(self, **kwargs):
+    def __init__(self, stack=False, **kwargs):
         super().__init__(**kwargs)
+        self.stack = stack
 
 
     def yield_points(self):
@@ -4087,6 +4589,7 @@ class SWOT_PIXC(SWOTFile):
             #yield(tmp_points)
             yield(points)
 
+## todo: update to h5
 class SWOT_HR_Raster(ElevationDataset):
     """NASA SWOT HR_Raster data file.
 
@@ -4259,6 +4762,8 @@ class IceSat2File(ElevationDataset):
             self.atl08_fn = atl08_result
             atl13_result = self.fetch_atlxx(short_name='ATL13')
             self.atl13_fn = atl13_result
+            atl24_result = self.fetch_atlxx(short_name='ATL24')
+            self.atl24_fn = atl24_result
 
         try:
             self.init_atl_h5()
@@ -4311,8 +4816,8 @@ class IceSat2File(ElevationDataset):
             if self.want_watermask and this_wm is not None:
                 dataset = self.classify_water(dataset, this_wm)
 
-            if self.want_bathymetry:
-                dataset = self.classify_bathymetry(dataset)
+            # if self.want_bathymetry:
+            #     dataset = self.classify_bathymetry(dataset)
                 
             if dataset is None or len(dataset) == 0:
                 continue
@@ -4793,6 +5298,8 @@ class MBSParser(ElevationDataset):
                  want_mbgrid = False,
                  want_binned = False,
                  min_year = None,
+                 auto_weight = True,
+                 auto_uncertainty = True,
                  **kwargs):
         super().__init__(**kwargs)
         self.mb_fmt = mb_fmt
@@ -4800,6 +5307,8 @@ class MBSParser(ElevationDataset):
         self.want_mbgrid = want_mbgrid
         self.want_binned = want_binned
         self.min_year = min_year
+        self.auto_weight = auto_weight
+        self.auto_uncertainty = auto_uncertainty
 
     def inf_parse(self):
         self.infos.minmax = [0,0,0,0,0,0]
@@ -5023,42 +5532,43 @@ class MBSParser(ElevationDataset):
             x = this_line[0]
             y = this_line[1]
             z = this_line[2]
-            crosstrack_distance = this_line[3]
-            crosstrack_slope = this_line[4]
-            flat_bottom_grazing_angle = this_line[5]
-            seafloor_grazing_angle = this_line[6]
-            beamflag = this_line[7]
-            pitch = this_line[8]
-            draft = this_line[9]
-            roll = this_line[10]
-            heave = this_line[11]
-            speed = this_line[12]
+            xs.append(x)
+            ys.append(y)
+            zs.append(z)
+            if self.auto_weight or self.auto_uncertainty:
+                crosstrack_distance = this_line[3]
+                crosstrack_slope = this_line[4]
+                flat_bottom_grazing_angle = this_line[5]
+                seafloor_grazing_angle = this_line[6]
+                beamflag = this_line[7]
+                pitch = this_line[8]
+                draft = this_line[9]
+                roll = this_line[10]
+                heave = this_line[11]
+                speed = this_line[12]
+                if int(beamflag) == 0:# and abs(this_line[4]) < .15:
+                    ## uncertainty
+                    #u_depth = 0
+                    u_depth = ((2+(0.02*(z*-1)))*0.51)
+                    #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
+                    u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
+                    #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
+                    #u_cd = 0
+                    u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
+                    u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
+                    us.append(u)
+                    if self.auto_weight:
+                        ## weight
 
-            if int(beamflag) == 0:# and abs(this_line[4]) < .15:
-                ## uncertainty
-                #u_depth = 0
-                u_depth = ((2+(0.02*(z*-1)))*0.51)
-                #u_depth = math.sqrt(1 + ((.023 * (z * -1))**2))
-                u_cd = math.sqrt(1 + ((.023 * abs(crosstrack_distance))**2))
-                #u_cd = ((2+(0.02*abs(crosstrack_distance)))*0.51) ## find better alg.
-                #u_cd = 0
-                u_s = math.sqrt(1 + ((.023 * abs(speed))**2))
-                u = math.sqrt(u_depth**2 + u_cd**2 + u_s**2)
-                ## weight
+                        # if mb_perc is not None and mb_date is not None:
+                        #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
+                        #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
+                        #     w *= self.weight if self.weight is not None else 1
+                        # else:
+                        w = (1/u)
+                        w *= self.weight if self.weight is not None else 1
 
-                # if mb_perc is not None and mb_date is not None:
-                #     this_year = int(utils.this_year()) if self.min_year is None else self.min_year
-                #     w = float(mb_perc) * ((int(mb_date)-2000)/(this_year-2000))/100.            
-                #     w *= self.weight if self.weight is not None else 1
-                # else:
-                w = (1/u)
-                w *= self.weight if self.weight is not None else 1
-
-                xs.append(x)
-                ys.append(y)
-                zs.append(z)
-                ws.append(w)
-                us.append(u)
+                        ws.append(w)
 
         if len(xs) > 0:
             mb_points = np.column_stack((xs, ys, zs, ws, us))
@@ -5073,6 +5583,8 @@ class MBSParser(ElevationDataset):
                     
             if mb_points is not None:
                 yield(mb_points)
+                
+            mb_points = None
 
     def yield_mblist2_ds(self):
         """use mblist to process the multibeam data"""
@@ -6293,7 +6805,7 @@ class IceSat2Fetcher(Fetcher):
     def yield_ds(self, result):
         icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
         if self.fetches_params['classify_buildings']:
-            self.fetches_params['classify_buildings'] = self.process_buildings(self.fetch_buildings())
+            self.fetches_params['classify_buildings'] = self.process_buildings(self.fetch_buildings(verbose=True))
 
         if self.fetches_params['classify_water']:
             self.fetches_params['classify_water'] = self.process_coastline(
@@ -7070,8 +7582,8 @@ class DatasetFactory(factory.CUDEMFactory):
               'description': 'An HDF5 IceSat2 ATL03 datafile',
               'call': IceSat2File},
         304: {'name': 'cudem',
-              'fmts': ['nc'],
-              'description': 'A netCDF CUDEM file',
+              'fmts': ['csg', 'nc', 'h5'],
+              'description': 'A netCDF/h5 CUDEM file',
               'call': CUDEMFile},
         ## fetches modules
         -100: {'name': 'https',
@@ -7806,21 +8318,21 @@ See `datalists_usage` for full cli options.
                     # #this_archive_inf = this_archive.inf()
                         
                 else:
-                    try:
-                        if want_separate: # process and dump each dataset independently
-                            for this_entry in this_datalist.parse():
-                                this_entry.dump_xyz()
-                        else: # process and dump the datalist as a whole
-                            this_datalist.dump_xyz()
-                    except KeyboardInterrupt:
-                      utils.echo_error_msg('Killed by user')
-                      break
-                    except BrokenPipeError:
-                      utils.echo_error_msg('Pipe Broken')
-                      break
-                    except Exception as e:
-                      utils.echo_error_msg(e)
-                      print(traceback.format_exc())
+                    #try:
+                    if want_separate: # process and dump each dataset independently
+                        for this_entry in this_datalist.parse():
+                            this_entry.dump_xyz()
+                    else: # process and dump the datalist as a whole
+                        this_datalist.dump_xyz()
+                    # except KeyboardInterrupt:
+                    #   utils.echo_error_msg('Killed by user')
+                    #   break
+                    # except BrokenPipeError:
+                    #   utils.echo_error_msg('Pipe Broken')
+                    #   break
+                    # except Exception as e:
+                    #   utils.echo_error_msg(e)
+                    #   print(traceback.format_exc())
                       
     # if want_archive:
     #     combine_archive_datalists = 'test_archive'

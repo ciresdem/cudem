@@ -467,12 +467,12 @@ class LSPOutliers(Grits):
         if self.verbose:
             utils.echo_msg('outlier percentiles: {} {} < {} {}'.format(self.percentile, self.k, self.max_percentile, self.max_k))
             utils.echo_msg('[Q1 - k(iqr), Q3 + k(iqr)]; Q1:{q1} Q3:{q3} k:{k}'.format(q1=100-self.percentile, q3=self.percentile, k=self.k))
-            
+
     def init_chunks(self, src_ds = None):
         src_arr, src_den = self.gdal_density(src_ds)
         self._chunks(src_arr)
         src_arr = src_den = None
-
+    
     def _chunks(self, src_arr):
         n_den = self._density(src_arr)
         cell_size = self.ds_config['geoT'][1]

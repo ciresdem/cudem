@@ -1,6 +1,6 @@
 ### gdalfun.py - OSGEO functions
 ##
-## Copyright (c) 2010 - 2024 Regents of the University of Colorado
+## Copyright (c) 2010 - 2025 Regents of the University of Colorado
 ##
 ## gdalfun.py is part of CUDEM
 ##
@@ -781,6 +781,7 @@ def gdal_fext(src_drv_name):
         elif src_drv_name == 'HFA': fext = 'img'
         elif src_drv_name == 'GMT': fext = 'grd'
         elif src_drv_name.lower() == 'netcdf': fext = 'nc'
+        elif src_drv_name.lower() == 'vrt': fext = 'vrt'
         else: fext = 'gdal'
         
         return(fext)

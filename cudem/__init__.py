@@ -1,4 +1,4 @@
-## Copyright (c) 2012 - 2023 Regents of the University of Colorado
+## Copyright (c) 2012 - 2025 Regents of the University of Colorado
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy 
 ## of this software and associated documentation files (the "Software"), to deal 
@@ -17,7 +17,7 @@
 ##
 ### Code:
 
-__version__ = "2.4.1"
+__version__ = "2.4.2"
 __author__ = "Matthew Love"
 __credits__ = "CIRES"
 
