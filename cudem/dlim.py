@@ -2249,41 +2249,6 @@ class ElevationDataset:
             utils.echo_msg('finalizing stacked raster bands...')
             
         msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
-        # ## output the mask raster to disk
-        # ## this is a bit convoluted, we're writing the mem mask to disk, then
-        # ## creating a VRT with the `good_bands` and re-writing that to a final
-        # ## mask raster...This is all to remove bands that have no data...other methods
-        # ## are either too slow or take up too much memory...
-        # if m_ds.RasterCount > 0:
-        #     good_bands = []
-        #     with tqdm(
-        #             total=m_ds.RasterCount,
-        #             desc='checking mask bands',
-        #             leave=self.verbose
-        #     ) as pbar:
-        #         for band_num in range(1, m_ds.RasterCount+1):
-        #             pbar.update()
-        #             band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
-        #             if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
-        #                 good_bands.append(band_num)
-
-        #     band_count = len(good_bands)
-        #     msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts)
-        #     vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
-        #     vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands)
-        #     for i, b in enumerate(good_bands):                
-        #         v_band = vrt_ds.GetRasterBand(i+1)
-        #         m_band = m_ds.GetRasterBand(b)
-        #         v_band.SetDescription(m_band.GetDescription())
-        #         v_band.SetMetadata(m_band.GetMetadata())
-                
-        #     msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts)
-        #     vrt_ds = None
-        # else:
-        #     if self.verbose:
-        #         utils.echo_msg('no bands found for {}'.format(mask_fn))
-
-        # utils.remove_glob(mask_tmp_fn)
         m_ds = None
         if not mask_only:
             ## by scan-line
