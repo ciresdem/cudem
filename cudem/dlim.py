@@ -2293,8 +2293,8 @@ class ElevationDataset:
             )
             
         msk_ds = dst_ds = None
-        if self.want_mask:
-            os.replace(mask_fn, os.path.basename(mask_fn))
+        # if self.want_mask:
+        #     os.replace(mask_fn, os.path.basename(mask_fn))
         
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
