@@ -1958,6 +1958,54 @@ class ElevationDataset:
           uncertainty
           src uncertainty
         """
+
+        # def add_mask_band(mask_level, m_ds, this_entry):
+        #     if mask_level < 0:
+        #         m_band = None
+        #     else:
+        #         m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
+        #         entry_name = this_entry.metadata['name']
+        #         if mask_level > 0:
+        #             if mask_level > len(entry_name.split('/')):
+        #                 mask_level = len(entry_name.split('/')) - 2
+
+        #             entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+
+        #         if not entry_name in m_bands.keys():
+        #             m_ds.AddBand()
+        #             m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+        #             m_band.SetNoDataValue(0)
+        #             m_band.SetDescription(entry_name)
+
+        #         band_md = m_band.GetMetadata()
+        #         for k in this_entry.metadata.keys():
+        #             if k not in band_md.keys() or band_md[k] is None:
+        #                 band_md[k] = this_entry.metadata[k]
+        #             else:
+        #                 band_md[k] = None
+
+        #         band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
+        #         band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+        #         try:
+        #             m_band.SetMetadata(band_md)
+        #         except:
+        #             try:
+        #                 for key in band_md.keys():
+        #                     if band_md[key] is None:
+        #                         del band_md[key]
+
+        #                 m_band.SetMetadata(band_md)
+        #             except Exception as e:
+        #                 utils.echo_error_msg(
+        #                     'could not set band metadata: {}; {}'.format(
+        #                         band_md, e
+        #                     )
+        #                 )
+
+        #         else:
+        #             m_band = m_ds.GetRasterBand(m_bands[entry_name])
+                        
+        #     return(m_band)
         
         utils.set_cache(self.cache_dir)
         mask_level = utils.int_or(mask_level, 0)
@@ -2043,8 +2091,8 @@ class ElevationDataset:
         ## mask grid
         ## initialize data mask
         mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        #mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        #mask_vrt_fn = '{}_msk.vrt'.format(out_name)
+        mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        mask_vrt_fn = '{}_msk.vrt'.format(out_name)
         if os.path.exists(mask_fn):
             status = driver.Delete(mask_fn)
             if status != 0:
@@ -2074,15 +2122,51 @@ class ElevationDataset:
         
         ## parse each entry and process it
         for this_entry in self.parse():
-            ## gather the current mask bands and determine the entry name
-            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-            entry_name = this_entry.metadata['name']
-            if mask_level > 0:
-                if mask_level > len(entry_name.split('/')):
-                    mask_level = len(entry_name.split('/')) - 2
+            ## MASK
+            if mask_level < 0:
+                m_band = None
+            else:
+                m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
+                entry_name = this_entry.metadata['name']
+                if mask_level > 0:
+                    if mask_level > len(entry_name.split('/')):
+                        mask_level = len(entry_name.split('/')) - 2
 
-                entry_name = '/'.join(entry_name.split('/')[:-mask_level])
-            
+                    entry_name = '/'.join(entry_name.split('/')[:-mask_level])
+
+                if not entry_name in m_bands.keys():
+                    m_ds.AddBand()
+                    m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+                    m_band.SetNoDataValue(0)
+                    m_band.SetDescription(entry_name)
+                else:
+                    m_band = m_ds.GetRasterBand(m_bands[entry_name])
+
+                band_md = m_band.GetMetadata()
+                for k in this_entry.metadata.keys():
+                    if k not in band_md.keys() or band_md[k] is None:
+                        band_md[k] = this_entry.metadata[k]
+                    else:
+                        band_md[k] = None
+
+                band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
+                band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
+                try:
+                    m_band.SetMetadata(band_md)
+                except:
+                    try:
+                        for key in band_md.keys():
+                            if band_md[key] is None:
+                                del band_md[key]
+
+                        m_band.SetMetadata(band_md)
+                    except Exception as e:
+                        utils.echo_error_msg(
+                            'could not set band metadata: {}; {}'.format(
+                                band_md, e
+                            )
+                        )
+                
             ## yield entry arrays for stacks
             ##
             ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
@@ -2090,57 +2174,20 @@ class ElevationDataset:
             ## srcwin is the srcwin of the waffle, represented by the gt, relative to the incoming arrays
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
-                if np.all(arrs['count'] == 0):
-                    continue
+                # if np.all(arrs['count'] == 0):
+                #     continue
 
-                #m_band = add_mask_band(m_ds, this_entry, mask_level)
-                if mask_level < 0:
-                    m_band = None
-                else:
-                    ## add the entry as a band in the mask if it doesn't already exist
-                    if not entry_name in m_bands.keys():
-                        m_ds.AddBand()
-                        m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-                        m_band.SetNoDataValue(0)
-                        m_band.SetDescription(entry_name)
-
-                        band_md = m_band.GetMetadata()
-                        for k in this_entry.metadata.keys():
-                            if k not in band_md.keys() or band_md[k] is None:
-                                band_md[k] = this_entry.metadata[k]
-                            else:
-                                band_md[k] = None
-
-                        band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
-                        band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
-                        try:
-                            m_band.SetMetadata(band_md)
-                        except:
-                            try:
-                                for key in band_md.keys():
-                                    if band_md[key] is None:
-                                        del band_md[key]
-
-                                m_band.SetMetadata(band_md)
-                            except Exception as e:
-                                utils.echo_error_msg(
-                                    'could not set band metadata: {}; {}'.format(
-                                        band_md, e
-                                    )
-                                )
-                    else:
-                        m_band = m_ds.GetRasterBand(m_bands[entry_name])
-                
+                # m_band = add_mask_band(mask_level, m_ds, this_entry)
                 if m_band is not None:
                     m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    m_array[arrs['count'] != 0] = 1
+                    m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])
                     m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                 else:
                     m_array = np.array(arrs['count'])
-                    #m_array[arrs['count'] != 0] = 1
-                    #m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
-
-                m_array[arrs['count'] != 0] = 1
-                m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])                    
+                    m_array[arrs['count'] != 0] = 1
+                    m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+                    
                 m_ds.FlushCache()
                 m_array = None
                 if mask_only:
@@ -2248,7 +2295,43 @@ class ElevationDataset:
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
             
-        msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
+        #msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
+        ## output the mask raster to disk
+        ## this is a bit convoluted, we're writing the mem mask to disk, then
+        ## creating a VRT with the `good_bands` and re-writing that to a final
+        ## mask raster...This is all to remove bands that have no data...other methods
+        ## are either too slow or take up too much memory...
+        if m_ds.RasterCount > 0:
+            good_bands = []
+            with tqdm(
+                    total=m_ds.RasterCount,
+                    desc='checking mask bands',
+                    leave=self.verbose
+            ) as pbar:
+                for band_num in range(1, m_ds.RasterCount+1):
+                    pbar.update()
+                    band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
+                    if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
+                        good_bands.append(band_num)
+
+            band_count = len(good_bands)
+            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts)
+            msk_ds = None
+            vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
+            vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands)
+            for i, b in enumerate(good_bands):                
+                v_band = vrt_ds.GetRasterBand(i+1)
+                m_band = m_ds.GetRasterBand(b)
+                v_band.SetDescription(m_band.GetDescription())
+                v_band.SetMetadata(m_band.GetMetadata())
+                
+            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts)
+            vrt_ds = None
+        else:
+            if self.verbose:
+                utils.echo_msg('no bands found for {}'.format(mask_fn))
+
+        utils.remove_glob(mask_tmp_fn, mask_vrt_fn)
         m_ds = None
         if not mask_only:
             ## by scan-line
@@ -3192,20 +3275,20 @@ class ElevationDataset:
 
             #     utils.remove_glob(tmp_file)
 
-            # ## for h5
-            # for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
-            #     scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
-            #     scanline_arrays = {}
-            #     for key in out_arrays.keys():
-            #         if out_arrays[key] is not None:
-            #             scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
-            #         else:
-            #             scanline_arrays[key] = out_arrays[key]
+            ## for h5
+            for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
+                scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
+                scanline_arrays = {}
+                for key in out_arrays.keys():
+                    if out_arrays[key] is not None:
+                        scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
+                    else:
+                        scanline_arrays[key] = out_arrays[key]
                         
-            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
+                yield(scanline_arrays, scanline_srcwin, dst_gt)
 
             ## for gdal
-            yield(out_arrays, this_srcwin, dst_gt)
+            #yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
             utils.echo_msg_bold(
