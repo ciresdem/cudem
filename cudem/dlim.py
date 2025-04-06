@@ -1959,170 +1959,7 @@ class ElevationDataset:
           src uncertainty
         """
 
-        # def add_mask_band(mask_level, m_ds, this_entry):
-        #     if mask_level < 0:
-        #         m_band = None
-        #     else:
-        #         m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(2, m_ds.RasterCount + 1)}
-        #         entry_name = this_entry.metadata['name']
-        #         if mask_level > 0:
-        #             if mask_level > len(entry_name.split('/')):
-        #                 mask_level = len(entry_name.split('/')) - 2
-
-        #             entry_name = '/'.join(entry_name.split('/')[:-mask_level])
-
-        #         if not entry_name in m_bands.keys():
-        #             m_ds.AddBand()
-        #             m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-        #             m_band.SetNoDataValue(0)
-        #             m_band.SetDescription(entry_name)
-
-        #         band_md = m_band.GetMetadata()
-        #         for k in this_entry.metadata.keys():
-        #             if k not in band_md.keys() or band_md[k] is None:
-        #                 band_md[k] = this_entry.metadata[k]
-        #             else:
-        #                 band_md[k] = None
-
-        #         band_md['weight'] = this_entry.weight if this_entry.weight is not None else 1
-        #         band_md['uncertainty'] = this_entry.uncertainty if this_entry.uncertainty is not None else 0
-        #         try:
-        #             m_band.SetMetadata(band_md)
-        #         except:
-        #             try:
-        #                 for key in band_md.keys():
-        #                     if band_md[key] is None:
-        #                         del band_md[key]
-
-        #                 m_band.SetMetadata(band_md)
-        #             except Exception as e:
-        #                 utils.echo_error_msg(
-        #                     'could not set band metadata: {}; {}'.format(
-        #                         band_md, e
-        #                     )
-        #                 )
-
-        #         else:
-        #             m_band = m_ds.GetRasterBand(m_bands[entry_name])
-                        
-        #     return(m_band)
-        
-        utils.set_cache(self.cache_dir)
-        mask_level = utils.int_or(mask_level, 0)
-        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
-            mode = 'mean'
-        else:
-            mode = self.stack_mode
-
-        if self.verbose:
-            utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
-        
-        ## initialize the output rasters
-        if out_name is None:
-            out_name = os.path.join(self.cache_dir, '{}'.format(
-                utils.append_fn('dlim_stacks', self.region, self.x_inc)
-            ))
-
-        xcount, ycount, dst_gt = self.region.geo_transform(
-            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
-        )
-        if xcount <= 0 or ycount <=0:
-            utils.echo_error_msg(
-                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
-                    xcount, ycount, self.x_inc, self.y_inc, self.region
-                )
-            )
-            sys.exit(-1)
-
-        ## stack grid
-        ## initialize stack grid
-        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        driver = gdal.GetDriverByName(fmt)
-        if os.path.exists(out_file):
-            status = driver.Delete(out_file)
-            if status != 0:
-                utils.remove_glob('{}*'.format(out_file))
-
-        if not os.path.exists(os.path.dirname(out_file)):
-            os.makedirs(os.path.dirname(out_file))
-                
-        gdt = gdal.GDT_Float32
-        c_gdt = gdal.GDT_Int32
-        stack_opts = ['COMPRESS=LZW',
-                     'PREDICTOR=2',
-                     'TILED=YES']
-        if fmt == 'GTiff':
-            stack_opts.append('BIGTIFF=YES')
-        elif fmt == 'MEM':
-            stack_opts = []
-        
-        dst_ds = driver.Create(
-            out_file,
-            xcount,
-            ycount,
-            7,
-            gdt,
-            options=stack_opts
-        )
-        if dst_ds is None:
-            utils.echo_error_msg(
-                'failed to create stack grid {} {} {} {} {}...'.format(
-                    out_file, xcount, ycount, gdt, fmt
-                )
-            )
-            sys.exit(-1)
-
-        dst_ds.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
-
-        ## the stack keys are the output bands in the stack grid
-        stack_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
-            
-        ## stacked_data holds tempory data from incoming entries
-        stacked_data = {x: None for x in stack_keys}
-            
-        ## gather the stack bands
-        stacked_bands = {x: dst_ds.GetRasterBand(i+1) for i, x in enumerate(stack_keys)}
-        for key in stack_keys:
-            stacked_bands[key].SetNoDataValue(np.nan)
-            stacked_bands[key].SetDescription(key)
-
-        ## mask grid
-        ## initialize data mask
-        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        mask_vrt_fn = '{}_msk.vrt'.format(out_name)
-        if os.path.exists(mask_fn):
-            status = driver.Delete(mask_fn)
-            if status != 0:
-                utils.remove_glob('{}*'.format(mask_fn))                
-            
-        if not os.path.exists(os.path.dirname(mask_fn)):
-            os.makedirs(os.path.dirname(mask_fn))
-            
-        m_gdt = gdal.GDT_Byte
-        msk_opts = ['COMPRESS=LZW']
-        if fmt == 'GTiff':
-            msk_opts.append('BIGTIFF=YES')
-        elif fmt == 'MEM':
-            msk_opts = []
-            
-        driver = gdal.GetDriverByName('MEM')
-        m_ds = driver.Create('', xcount, ycount, 1, m_gdt)
-        m_ds.SetDescription('_msk'.format(out_name))
-        m_ds.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
-
-        ## set first band to hold the data mask for all the data
-        m_band_all = m_ds.GetRasterBand(1)
-        m_band_all.SetNoDataValue(0)
-        m_band_all.SetDescription('Full Data Mask')
-        
-        ## parse each entry and process it
-        for this_entry in self.parse():
-            ## MASK
+        def add_mask_band(m_ds, this_entry, mask_level = 0):
             if mask_level < 0:
                 m_band = None
             else:
@@ -2166,7 +2003,170 @@ class ElevationDataset:
                                 band_md, e
                             )
                         )
+                        
+                m_band.FlushCache()
+                        
+            return(m_band)
+
+        ## this is a bit convoluted, we're writing the mem mask to disk, then
+        ## creating a VRT with the `good_bands` and re-writing that to a final
+        ## mask raster...This is all to remove bands that have no data...other methods
+        ## are either too slow or take up too much memory...
+        ## this is only used if we add a mask band for every parsed entry
+        def remove_empty_mask_bands(m_ds):
+            if m_ds.RasterCount > 0:
+                good_bands = []
+                with tqdm(
+                        total=m_ds.RasterCount,
+                        desc='checking mask bands',
+                        leave=self.verbose
+                ) as pbar:
+                    for band_num in range(1, m_ds.RasterCount+1):
+                        pbar.update()
+                        band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
+                        if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
+                            good_bands.append(band_num)
+
+                pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
+                pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
+                band_count = len(good_bands)
+                msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
+                msk_ds = None
+                pbar = tqdm(desc='building mask vrt', total=100, leave=self.verbose)
+                pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
+                vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
+                vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands, callback=pbar_update)
+                for i, b in enumerate(good_bands):                
+                    v_band = vrt_ds.GetRasterBand(i+1)
+                    m_band = m_ds.GetRasterBand(b)
+                    v_band.SetDescription(m_band.GetDescription())
+                    v_band.SetMetadata(m_band.GetMetadata())
+
+                pbar = tqdm(desc='writing vrt to disk', total=100, leave=self.verbose)
+                pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
+                msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts, callback=pbar_update)
+                vrt_ds = None
+                utils.remove_glob(mask_tmp_fn, mask_vrt_fn)
+            else:
+                msk_ds = m_ds
+                if self.verbose:
+                    utils.echo_msg('no bands found for {}'.format(mask_fn))
+
+            return(msk_ds)
+        
+        utils.set_cache(self.cache_dir)
+        mask_level = utils.int_or(mask_level, 0)
+        if self.stack_mode not in ['mean', 'min', 'max', 'supercede']:
+            mode = 'mean'
+        else:
+            mode = self.stack_mode
+
+        if self.verbose:
+            utils.echo_msg('stacking using {} mode with mask level of {}'.format(mode, mask_level))
+        
+        ## initialize the output rasters
+        if out_name is None:
+            out_name = os.path.join(self.cache_dir, '{}'.format(
+                utils.append_fn('dlim_stacks', self.region, self.x_inc)
+            ))
+
+        xcount, ycount, dst_gt = self.region.geo_transform(
+            x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
+        )
+        if xcount <= 0 or ycount <=0:
+            utils.echo_error_msg(
+                'could not create grid of {}x{} cells with {}/{} increments on region: {}'.format(
+                    xcount, ycount, self.x_inc, self.y_inc, self.region
+                )
+            )
+            sys.exit(-1)
+
+        ## initialize stack grid
+        out_file = '{}.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        driver = gdal.GetDriverByName(fmt)
+        if os.path.exists(out_file):
+            status = driver.Delete(out_file)
+            if status != 0:
+                utils.remove_glob('{}*'.format(out_file))
+
+        if not os.path.exists(os.path.dirname(out_file)):
+            os.makedirs(os.path.dirname(out_file))
                 
+        gdt = gdal.GDT_Float32
+        c_gdt = gdal.GDT_Int32
+        stack_opts = ['COMPRESS=LZW',
+                     'PREDICTOR=2',
+                     'TILED=YES']
+        if fmt == 'GTiff':
+            stack_opts.append('BIGTIFF=YES')
+        elif fmt == 'MEM':
+            stack_opts = []
+        
+        dst_ds = driver.Create(
+            out_file,
+            xcount,
+            ycount,
+            7,
+            gdt,
+            options=stack_opts
+        )
+        if dst_ds is None:
+            utils.echo_error_msg(
+                'failed to create stack grid {} {} {} {} {}...'.format(
+                    out_file, xcount, ycount, gdt, fmt
+                )
+            )
+            sys.exit(-1)
+
+        dst_ds.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            dst_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        ## the stack keys are the output bands in the stack grid
+        ## stacked_data holds tempory data from incoming entries
+        ## stacked_bands holds the gdal_ds band for each of the stakc keys
+        stack_keys = ['z', 'count', 'weights', 'uncertainty', 'src_uncertainty', 'x', 'y']
+        stacked_data = {x: None for x in stack_keys}            
+        stacked_bands = {x: dst_ds.GetRasterBand(i+1) for i, x in enumerate(stack_keys)}
+        for key in stack_keys:
+            stacked_bands[key].SetNoDataValue(np.nan)
+            stacked_bands[key].SetDescription(key)
+
+        ## initialize data mask grid
+        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+        mask_vrt_fn = '{}_msk.vrt'.format(out_name)
+        if os.path.exists(mask_fn):
+            status = driver.Delete(mask_fn)
+            if status != 0:
+                utils.remove_glob('{}*'.format(mask_fn))                
+            
+        if not os.path.exists(os.path.dirname(mask_fn)):
+            os.makedirs(os.path.dirname(mask_fn))
+            
+        m_gdt = gdal.GDT_Byte
+        msk_opts = ['COMPRESS=LZW']
+        if fmt == 'GTiff':
+            msk_opts.append('BIGTIFF=YES')
+        elif fmt == 'MEM':
+            msk_opts = []
+            
+        driver = gdal.GetDriverByName('MEM')
+        m_ds = driver.Create('', xcount, ycount, 1, m_gdt)
+        m_ds.SetDescription('_msk'.format(out_name))
+        m_ds.SetGeoTransform(dst_gt)
+        if self.dst_srs is not None:
+            m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+        ## set first band to hold the data mask for all the data
+        m_band_all = m_ds.GetRasterBand(1)
+        m_band_all.SetNoDataValue(0)
+        m_band_all.SetDescription('Full Data Mask')
+        
+        ## parse each entry and process it
+        for this_entry in self.parse():
+            ## only check to add a new band per entry
+            ##m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)                
             ## yield entry arrays for stacks
             ##
             ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
@@ -2174,10 +2174,11 @@ class ElevationDataset:
             ## srcwin is the srcwin of the waffle, represented by the gt, relative to the incoming arrays
             for arrs, srcwin, gt in this_entry.array_yield:
                 ## update the mask
-                # if np.all(arrs['count'] == 0):
-                #     continue
+                if np.all(arrs['count'] == 0):
+                    continue
 
-                # m_band = add_mask_band(mask_level, m_ds, this_entry)
+                ## check to add a new band if the arrs has data
+                m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)
                 if m_band is not None:
                     m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     m_array[arrs['count'] != 0] = 1
@@ -2289,49 +2290,18 @@ class ElevationDataset:
         ## incoming arrays have all been processed, if weighted mean the
         ## "z" is the sum of z*weight, "weights" is the sum of weights
         ## "uncertainty" is the sum of variance*weight
-        ##
-        ## mask data will be checked for bands with nodata and those
-        ## will be omitted from the final mask raster
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
             
-        #msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts)
         ## output the mask raster to disk
-        ## this is a bit convoluted, we're writing the mem mask to disk, then
-        ## creating a VRT with the `good_bands` and re-writing that to a final
-        ## mask raster...This is all to remove bands that have no data...other methods
-        ## are either too slow or take up too much memory...
-        if m_ds.RasterCount > 0:
-            good_bands = []
-            with tqdm(
-                    total=m_ds.RasterCount,
-                    desc='checking mask bands',
-                    leave=self.verbose
-            ) as pbar:
-                for band_num in range(1, m_ds.RasterCount+1):
-                    pbar.update()
-                    band_infos = gdalfun.gdal_infos(m_ds, scan=True, band=band_num)
-                    if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
-                        good_bands.append(band_num)
-
-            band_count = len(good_bands)
-            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts)
-            msk_ds = None
-            vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
-            vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands)
-            for i, b in enumerate(good_bands):                
-                v_band = vrt_ds.GetRasterBand(i+1)
-                m_band = m_ds.GetRasterBand(b)
-                v_band.SetDescription(m_band.GetDescription())
-                v_band.SetMetadata(m_band.GetMetadata())
-                
-            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts)
-            vrt_ds = None
-        else:
-            if self.verbose:
-                utils.echo_msg('no bands found for {}'.format(mask_fn))
-
-        utils.remove_glob(mask_tmp_fn, mask_vrt_fn)
+        pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
+        pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
+        msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
+        
+        ## if we added a band per entry, we have to go through and remove empty bands
+        ## mask data will be checked for bands with nodata and those
+        ## will be omitted from the final mask raster
+        ##msk_ds = remove_empty_mask_bands(m_ds)
         m_ds = None
         if not mask_only:
             ## by scan-line
