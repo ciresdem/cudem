@@ -1897,6 +1897,7 @@ class ElevationDataset:
             dst_srs=None,
             cache_dir=self.cache_dir,
         )._acquire_module().initialize()
+        
         return(this_archive.inf())
             
     def yield_block_array(self): #*depreciated*
@@ -1910,7 +1911,6 @@ class ElevationDataset:
         xcount, ycount, dst_gt = self.region.geo_transform(
             x_inc=self.x_inc, y_inc=self.y_inc, node='grid'
         )
-
         for this_xyz in self.yield_xyz():
             xpos, ypos = utils._geo2pixel(
                 this_xyz.x, this_xyz.y, dst_gt, 'pixel'
@@ -2027,15 +2027,14 @@ class ElevationDataset:
                         if not np.isnan(band_infos['zr'][0]) and not np.isnan(band_infos['zr'][1]):
                             good_bands.append(band_num)
 
-                pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
+                pbar = tqdm(desc='writing mask to vrt', total=100, leave=self.verbose)
                 pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
                 band_count = len(good_bands)
                 msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_tmp_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
+                pbar.close()
                 msk_ds = None
-                pbar = tqdm(desc='building mask vrt', total=100, leave=self.verbose)
-                pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
                 vrt_options_specific_bands = gdal.BuildVRTOptions(bandList=good_bands)
-                vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands, callback=pbar_update)
+                vrt_ds = gdal.BuildVRT(mask_vrt_fn, mask_tmp_fn, options=vrt_options_specific_bands)
                 for i, b in enumerate(good_bands):                
                     v_band = vrt_ds.GetRasterBand(i+1)
                     m_band = m_ds.GetRasterBand(b)
@@ -2045,6 +2044,7 @@ class ElevationDataset:
                 pbar = tqdm(desc='writing vrt to disk', total=100, leave=self.verbose)
                 pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
                 msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, vrt_ds, 0, options=msk_opts, callback=pbar_update)
+                pbar.close()
                 vrt_ds = None
                 utils.remove_glob(mask_tmp_fn, mask_vrt_fn)
             else:
@@ -2166,7 +2166,7 @@ class ElevationDataset:
         ## parse each entry and process it
         for this_entry in self.parse():
             ## only check to add a new band per entry
-            ##m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)                
+            #m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)                
             ## yield entry arrays for stacks
             ##
             ## incoming arrays arrs['z'], arrs['weight'] arrs['uncertainty'], and arrs['count']
@@ -2297,11 +2297,12 @@ class ElevationDataset:
         pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
         pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
         msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
+        pbar.close()
         
         ## if we added a band per entry, we have to go through and remove empty bands
         ## mask data will be checked for bands with nodata and those
         ## will be omitted from the final mask raster
-        ##msk_ds = remove_empty_mask_bands(m_ds)
+        #msk_ds = remove_empty_mask_bands(m_ds)
         m_ds = None
         if not mask_only:
             ## by scan-line
@@ -3245,20 +3246,20 @@ class ElevationDataset:
 
             #     utils.remove_glob(tmp_file)
 
-            ## for h5
-            for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
-                scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
-                scanline_arrays = {}
-                for key in out_arrays.keys():
-                    if out_arrays[key] is not None:
-                        scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
-                    else:
-                        scanline_arrays[key] = out_arrays[key]
+            # ## for h5
+            # for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
+            #     scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
+            #     scanline_arrays = {}
+            #     for key in out_arrays.keys():
+            #         if out_arrays[key] is not None:
+            #             scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
+            #         else:
+            #             scanline_arrays[key] = out_arrays[key]
                         
-                yield(scanline_arrays, scanline_srcwin, dst_gt)
+            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
 
             ## for gdal
-            #yield(out_arrays, this_srcwin, dst_gt)
+            yield(out_arrays, this_srcwin, dst_gt)
 
         if self.verbose:
             utils.echo_msg_bold(
