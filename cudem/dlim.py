@@ -3246,18 +3246,18 @@ class ElevationDataset:
 
             #     utils.remove_glob(tmp_file)
 
-            # ## for h5
-            # for y in range(this_srcwin[1], this_srcwin[3] + this_srcwin[1], 1):
-            #     scanline_srcwin = (this_srcwin[0], y, this_srcwin[2], 1)
+            ## by scan-line for h5
+            # for y in range(0, this_srcwin[3], 1):
             #     scanline_arrays = {}
+            #     scanline_srcwin = (this_srcwin[0], this_srcwin[1]+y, this_srcwin[2], 1)
             #     for key in out_arrays.keys():
-            #         if out_arrays[key] is not None:
-            #             scanline_arrays[key] = out_arrays[key][y-scanline_srcwin[1]:(y-scanline_srcwin[1])+1, 0:scanline_srcwin[2]]
+            #         if out_arrays[key] is not None:                        
+            #             scanline_arrays[key] = out_arrays[key][y:y+1, 0:this_srcwin[2]]
             #         else:
             #             scanline_arrays[key] = out_arrays[key]
-                        
-            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
 
+            #     yield(scanline_arrays, scanline_srcwin, dst_gt)
+                        
             ## for gdal
             yield(out_arrays, this_srcwin, dst_gt)
 
