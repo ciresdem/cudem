@@ -1927,7 +1927,6 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    ## todo: 'bm' multi-band of each dataset
     def _stacks(
             self,
             out_name = None,
@@ -2479,9 +2478,7 @@ class ElevationDataset:
         lat_end = dst_gt[3] + (dst_gt[5] * ycount)
         lon_inc = dst_gt[1]
         lat_inc = dst_gt[5]
-        #4000
         stack_ds = h5.File(out_file, 'w', rdcc_nbytes=(1024**2)*12000)#, rdcc_nslots=1e7)
-        #stack_ds = h5.File(out_file, 'w', chunk_cache_mem_size=1e10)
         
         # ************  Grid Mapping  ********
         crs_dset = stack_ds.create_dataset('crs', dtype=h5.string_dtype())
@@ -2524,7 +2521,7 @@ class ElevationDataset:
             stack_dset = stack_grp.create_dataset(
                 key, data=np.full((ycount, xcount), np.nan),
                 compression='lzf', maxshape=(ycount, xcount),
-                chunks=(1, xcount), rdcc_nbytes=1024*xcount*4,
+                chunks=(100, xcount), rdcc_nbytes=1024*xcount*4,
                 dtype=np.float32
             )
             stack_dset.dims[0].attach_scale(lat_dset)
@@ -2538,7 +2535,7 @@ class ElevationDataset:
         mask_all_dset = mask_grp.create_dataset(
             'full_data_mask', data=np.zeros((ycount,xcount)),
             compression='lzf', maxshape=(ycount, xcount),
-            chunks=(1, xcount), rdcc_nbytes=1024*xcount,
+            chunks=(100, xcount), rdcc_nbytes=1024*xcount,
             dtype=np.uint8
         )
         mask_all_dset.dims[0].attach_scale(lat_dset)
@@ -3191,61 +3188,6 @@ class ElevationDataset:
             #out_arrays['uncertainty'][:] = self.uncertainty if self.uncertainty is not None else 0
             out_arrays['uncertainty'][unq[:,0], unq[:,1]] = np.sqrt(uu**2 + (self.uncertainty if self.uncertainty is not None else 0)**2)                
 
-            # ## testing pre filters...
-            # ## apply any filters to the array
-            # for f in self.stack_fltrs:
-            #     ## write out array to a temp grid
-
-            #     out_name = os.path.join(self.cache_dir, '{}'.format(
-            #         utils.append_fn('_tmp_dlim_stacks', self.region, self.x_inc)
-            #     ))
-            #     tmp_file = '{}.tif'.format(out_name)
-            #     gdt = gdal.GDT_Float32
-            #     driver = gdal.GetDriverByName('GTiff')
-            #     if os.path.exists(tmp_file):
-            #         status = driver.Delete(tmp_file)
-            #         if status != 0:
-            #             utils.remove_glob('{}*'.format(tmp_file))
-                
-            #     dst_ds = driver.Create(tmp_file, this_srcwin[2], this_srcwin[3], 3, gdt,
-            #                            options=['COMPRESS=LZW', 'PREDICTOR=2', 'TILED=YES', 'BIGTIFF=YES'])
-            #     dst_ds.SetGeoTransform(dst_gt)
-            #     z_band = dst_ds.GetRasterBand(1)
-            #     w_band = dst_ds.GetRasterBand(2)
-            #     u_band = dst_ds.GetRasterBand(3)
-            #     z_band.SetNoDataValue(-9999)
-            #     w_band.SetNoDataValue(-9999)
-            #     u_band.SetNoDataValue(-9999)
-                                                                
-            #     z_band.WriteArray(out_arrays['z'])
-            #     w_band.WriteArray(out_arrays['weight'])
-            #     u_band.WriteArray(out_arrays['uncertainty'])
-                                                                
-            #     dst_ds = None
-                
-            #     ## filter the temp grid
-            #     grits_filter = grits.GritsFactory(mod=f, src_dem=tmp_file, uncertainty_mask=3, weight_mask=2)._acquire_module()
-            #     if grits_filter is not None:
-            #         grits_filter()
-            #         os.replace(grits_filter.dst_dem, tmp_file)
-                    
-            #     ## extract filtered array from filtered grid
-            #     with gdalfun.gdal_datasource(tmp_file) as tmp_ds:
-            #         out_arrays['z'] = tmp_ds.GetRasterBand(1).ReadAsArray()
-            #         out_arrays['weight'] = tmp_ds.GetRasterBand(2).ReadAsArray()
-            #         out_arrays['uncertainty'] = tmp_ds.GetRasterBand(3).ReadAsArray()
-
-            #         out_arrays['z'][out_arrays['z'] == -9999] = np.nan
-            #         for key in out_arrays.keys():
-            #             if key !='mask':
-            #                 out_arrays[key][np.isnan(out_arrays['z'])] = np.nan
-
-            #         # for key in out_arrays.keys():
-            #         #     if key !='mask':
-            #         #         out_arrays[key] = out_arrays[key][~np.isnan(out_arrays[key])]
-
-            #     utils.remove_glob(tmp_file)
-
             ## by scan-line for h5
             # for y in range(0, this_srcwin[3], 1):
             #     scanline_arrays = {}
@@ -3812,7 +3754,7 @@ class GDALFile(ElevationDataset):
 
         return(self.infos)
         
-    def get_srcwin(self, gt, x_size, y_size, node='grid'):
+    def get_srcwin(self, gt, x_size, y_size, node = 'grid'):
         if self.region is not None:
             if self.invert_region:
                 srcwin = (
@@ -7167,6 +7109,10 @@ class MBSFetcher(Fetcher):
     def yield_ds(self, result):            
         mb_infos = self.fetch_module.parse_entry_inf(result, keep_inf=True)
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
+
+class HydroNOSParser(ElevationDataset):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
                 
 class HydroNOSFetcher(Fetcher):
     """NOAA HydroNOS Data Fetcher
@@ -8064,7 +8010,7 @@ Examples:
   % {cmd} -R my_region.shp my_data.xyz -w -s_srs epsg:4326 -t_srs epsg:3565 > my_data_3565.xyz
 """.format(cmd=os.path.basename(sys.argv[0]), 
            dl_version=cudem.__version__,
-           dl_formats=utils._cudem_module_name_short_desc(DatasetFactory._modules),
+           dl_formats=factory._cudem_module_name_short_desc(DatasetFactory._modules),
            grits_modules=factory._cudem_module_short_desc(grits.GritsFactory._modules),
            point_filter_modules=factory._cudem_module_short_desc(PointFilterFactory._modules))
 

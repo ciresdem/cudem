@@ -24,8 +24,23 @@ __credits__ = "CIRES"
 ## Windows support
 
 import os
+import sys
 from osgeo import gdal
 from cudem import utils
+from cudem import regions
+from cudem import xyzfun
+from cudem import gdalfun
+from cudem import factory
+from cudem import vdatums
+from cudem import fetches
+from cudem import grits
+from cudem import vrbag
+from cudem import waffles
+from cudem import dlim
+from cudem import htdpfun
+from cudem import perspecto
+from cudem import srsfun
+
 gc = utils.config_check() # cudem config file holding foriegn programs and versions
 if gc['platform'] == 'linux':
     #gdal.SetConfigOption('CPL_LOG', '/dev/null') # supress gdal warnings in linux
@@ -33,6 +48,18 @@ if gc['platform'] == 'linux':
 else:
     os.system("") # ansi in windows
     gdal.SetConfigOption('CPL_LOG', 'NUL') # supress gdal warnings in windows
+
+__all__ = ['utils', 'regions', 'xyzfun', 'gdalfun', 'factory', 'vdatums',
+           'fetches', 'grits', 'vrbag', 'waffles', 'dlim', 'htdpfun',
+           'perspecto', 'srsfun']
+    
+## user module
+sys.path.append(os.path.expanduser('~'))
+try:
+    import cudemrc
+    __all__.append('cudemrc')
+except:
+    pass
 
 #from archook import locate_arcgis, get_arcpy
 

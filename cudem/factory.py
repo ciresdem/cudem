@@ -216,7 +216,11 @@ def echo_modules(module_dict: dict, key: any, md: bool = False):
                     )
                 )
             else:
-                sys.stderr.write('Invalid Module Key: {}\nValid Modules: {}\n'.format(key, _cudem_module_name_short_desc(module_dict)))
+                sys.stderr.write(
+                    'Invalid Module Key: {}\nValid Modules: {}\n'.format(
+                        key, _cudem_module_name_short_desc(module_dict)
+                    )
+                )
 
     sys.stderr.flush()
 
@@ -312,10 +316,10 @@ class CUDEMFactory:
 
     def add_module(self, type_def: dict = {}):
         """Add a module to the factory `_modules` dict"""
-        
+
         for key in type_def.keys():
             self._modules[key] = type_def[key]
-    
+
     def _acquire_module(self):
         """Acquire the module from the factory.
 

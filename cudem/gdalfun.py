@@ -1101,17 +1101,9 @@ def gdal_cut(src_gdal, src_region, dst_gdal, node='pixel', verbose=True, co=["CO
             if mem_ds is not None:
                 for band in range(1, in_bands+1):
                     this_band = mem_ds.GetRasterBand(band)
-                    #this_band_md = this_band.GetMetadata()
-                    
                     that_band = src_ds.GetRasterBand(band)
-                    #that_band_md = that_band.GetMetadata()
-                    
                     this_band.SetDescription(that_band.GetDescription())
                     this_band.SetMetadata(that_band.GetMetadata())
-                    
-                    # for key in that_band_md.keys():
-                    #     this_band_md[key] = that_band_md[key]
-
                     this_band.WriteArray(src_ds.GetRasterBand(band).ReadAsArray(*srcwin))
                     mem_ds.FlushCache()
 

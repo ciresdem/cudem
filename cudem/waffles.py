@@ -536,7 +536,7 @@ class Waffle:
                 iu.initialize()
                 iu.run()
 
-                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=False, want_scan=True, co=self.co).initialize()
+                unc_dem = WaffleDEM(iu.fn, cache_dir=self.cache_dir, verbose=self.verbose, want_scan=True, co=self.co).initialize()
                 if unc_dem.valid_p():
                     #utils.echo_msg('processing uncertainty grid')
                     unc_dem.process(ndv=self.ndv, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
@@ -4951,10 +4951,14 @@ class WaffleDEM:
             clip_args = factory.args2dict(cp[1:], clip_args)
 
             if clip_args['src_ply'] == 'coastline':
-                self.coast = WaffleFactory(mod='coastline:polygonize=False', data=self.data_, src_region=self.p_region,
-                                           xinc=self.xsample if self.xsample is not None else self.xinc, yinc=self.ysample if self.ysample is not None else self.yinc,
-                                           name='tmp_coast', node=self.node, want_weight=self.want_weight, want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs,
-                                           srs_transform=self.srs_transform, clobber=True, verbose=self.verbose)._acquire_module()
+                self.coast = WaffleFactory(
+                    mod='coastline:polygonize=False', data=self.data_, src_region=self.p_region,
+                    xinc=self.xsample if self.xsample is not None else self.xinc,
+                    yinc=self.ysample if self.ysample is not None else self.yinc,
+                    name='tmp_coast', node=self.node, want_weight=self.want_weight,
+                    want_uncertainty=self.want_uncertainty, dst_srs=self.dst_srs,
+                    srs_transform=self.srs_transform, clobber=True, verbose=self.verbose
+                )._acquire_module()
                 self.coast.initialize()
                 self.coast.generate()
                 gdalfun.gdal_mask(fn, self.coast.fn, '__tmp_clip__.tif', msk_value=1, verbose=self.verbose)
@@ -4978,7 +4982,9 @@ class WaffleDEM:
                 
     def cut(self, region = None, node = 'grid'):
         if region is not None:
-            _tmp_cut, cut_status = gdalfun.gdal_cut(self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node, co=self.co)
+            _tmp_cut, cut_status = gdalfun.gdal_cut(
+                self.fn, region, utils.make_temp_fn('__tmp_cut__.tif', temp_dir=self.cache_dir), node=node, co=self.co
+            )
             if cut_status == 0:
                 os.replace(_tmp_cut, self.fn)
                 self.initialize()
@@ -5104,7 +5110,6 @@ class WaffleDEM:
                 utils.echo_msg('moved output DEM from {} to {}.'.format(os.path.basename(self.fn), os.path.abspath(out_fn)))
                 
             self.fn = _out_fn
-
             
         if out_dir is not None:
             _out_fn = os.path.join(out_dir, os.path.basename(self.fn))
