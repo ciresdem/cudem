@@ -272,7 +272,7 @@ class Waffle:
             want_weight=self.want_weight,
             want_uncertainty=self.want_uncertainty,
             want_verbose=self.verbose,
-            want_mask=self.want_mask,
+            #want_mask=self.want_mask,
             pnt_fltrs=point_fltr,
             stack_fltrs=stack_fltr,
             invert_region=False,
@@ -531,7 +531,7 @@ class Waffle:
                 )._acquire_module()
                 iu.name = '{}_u'.format(self.params['kwargs']['name'])
                 iu.want_uncertainty = False
-                iu.want_mask = False
+                #iu.want_mask = False
                 iu.stack = self.stack
                 iu.initialize()
                 iu.run()
@@ -561,18 +561,15 @@ class Waffle:
                 self.output_files['DEM'] = self.fn
                 
             ## post-process the mask, etc.
-            if self.want_mask or self.want_sm:
+            if self.want_sm:
                 if mask_fn is not None:
                     mask_dem = WaffleDEM(mask_fn, cache_dir=self.cache_dir, verbose=False, want_scan=True, co=self.co).initialize()
                     if mask_dem.valid_p():
-                        #if self.want_mask:
-                        #utils.echo_msg('processing mask')
-                        mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
-                                         node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
-                                         dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
-                                         dst_dir=os.path.dirname(self.fn))
-                        self.output_files['mask'] = mask_dem.fn
-
+                        # mask_dem.process(ndv=0, xsample=self.xsample, ysample=self.ysample, region=self.d_region, clip_str=self.clip,
+                        #                  node=self.node, dst_srs=self.dst_srs, dst_fmt=self.fmt, set_metadata=False,
+                        #                  dst_fn='{}_msk.{}'.format(os.path.basename(self.name), gdalfun.gdal_fext(self.fmt)),
+                        #                  dst_dir=os.path.dirname(self.fn))
+                        # self.output_files['mask'] = mask_dem.fn
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
                                 sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds)
@@ -584,6 +581,8 @@ class Waffle:
                                 if os.path.exists(out_sm):
                                     utils.remove_glob(out_sm)
 
+                                ## clip spatial metadta to region
+                                sm_file = gdalfun.ogr_clip(sm_file, dst_region=self.d_region)
                                 os.rename(sm_file, out_sm)
                                 self.output_files['spatial-metadata'].append(out_sm)
                 else:
@@ -5580,7 +5579,7 @@ Options:
   -m, --want-mask\t\tMask the processed datalist.
   -a, --archive\t\t\tARCHIVE the datalist to the given region.
   -k, --keep-cache\t\tKEEP the cache data intact after run
-  -x, --keep-auxiliary\t\tKEEP the auxiliary rastesr intact after run (mask, uncertainty, weights, count).
+  -x, --keep-auxiliary\t\tKEEP the auxiliary rasters intact after run (mask, uncertainty, weights, count).
   -s, --spatial-metadata\tGenerate SPATIAL-METADATA.
   -t, --flatten-nodata-values\tFlatten any remaining nodata values.
   -c, --continue\t\tDon't clobber existing files.
@@ -5797,8 +5796,6 @@ def waffles_cli(argv = sys.argv):
             
         elif arg == '-u' or arg == '--want-uncertainty':
             wg['want_uncertainty'] = True
-            #wg['want_mask'] = True
-            #wg['keep_auxiliary'] = True
             
         elif arg == '-p' or arg == '--prefix':
             want_prefix = True
@@ -5810,7 +5807,10 @@ def waffles_cli(argv = sys.argv):
             except:
                 pass
 
-        elif arg == '--want-mask' or arg == '--mask' or arg == '-m': wg['want_mask'] = True
+        elif arg == '--want-mask' or arg == '--mask' or arg == '-m':
+            utils.echo_warning_msg('want-mask is depreciated, use --keep-auxiliary instead')
+            #wg['want_mask'] = True
+            
         elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
         #elif arg == '-t' or arg == '--threads': want_threads = True
