@@ -146,11 +146,122 @@ def num_strings_to_range(*args):
     else:
         return(None)
 
+def scan_mask_bands(src_ds, skip_band = 'Full Data Mask', mask_level = 0, verbose = True):
+
+    mask_level = utils.int_or(mask_level, 0)
+    src_infos = gdalfun.gdal_infos(src_ds)
+    band_infos = {}    
+    with tqdm(
+            desc='scanning mask bands.',
+            total=src_ds.RasterCount,
+            leave=verbose
+    ) as pbar:         
+        for b in range(1, src_ds.RasterCount+1):
+            this_band = src_ds.GetRasterBand(b)
+            this_band_md = this_band.GetMetadata()
+            this_band_name = this_band.GetDescription()
+            if this_band_name == skip_band:
+                continue
+
+            if len(this_band_name.split('/')) > 1:
+                this_band_name = this_band_name.split('/')[1]
+                
+            if not this_band_name in band_infos.keys():
+                band_infos[this_band_name] = {'bands': [b], 'metadata': this_band_md}
+            else:
+                band_infos[this_band_name]['bands'].append(b)
+                #band_infos[this_band_name]['metadata'] = this_band_md
+                
+            band_md = band_infos[this_band_name]['metadata']
+            for k in this_band_md.keys():
+                if k not in band_md.keys() or band_md[k] is None:
+                    band_md[k] = this_band_md[k]
+
+                if k == 'name':
+                    band_md[k] = this_band_name                
+                elif k == 'date' or k == 'weight' or k == 'uncertainty':
+                    band_md[k] = num_strings_to_range(band_md[k], this_band_md[k])
+                elif band_md[k] not in this_band_md[k].split('/') and band_md[k] != this_band_md[k]:
+                    band_md[k] = ','.join([band_md[k], this_band_md[k]])
+                    
+            band_infos[this_band_name]['metadata'] = band_md
+            pbar.update()
+            
+    return(band_infos)
+
+def ogr_mask_footprints(
+        src_ds, ogr_format='ESRI Shapefile', dst_srs = 'epsg:4326', mask_level = 0, verbose = True
+):
+    
+    src_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
+    ## initialize output vector
+    dst_ogr_fn = '_{}_sm.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdalfun.ogr_fext(ogr_format))
+    driver = ogr.GetDriverByName(ogr_format)
+    ds = driver.CreateDataSource(dst_ogr_fn)
+    if ds is not None: 
+        layer = ds.CreateLayer('footprint', None, ogr.wkbMultiPolygon)
+    else:
+        layer = None
+
+    layer.CreateField(ogr.FieldDefn('location', ogr.OFTString))
+    field_names = [field.name for field in layer.schema]
+    for key in src_infos.keys():
+        for md in src_infos[key]['metadata'].keys():
+            if md[:9] not in field_names:
+                layer.CreateField(ogr.FieldDefn(md, ogr.OFTString))
+                
+    [layer.SetFeature(feature) for feature in layer]
+    ds = layer = None
+
+    ## generate a footprint of each group of bands from src_infos
+    with tqdm(
+            desc='generating mask footprints',
+            total=len(src_infos.keys()),
+            leave=verbose
+    ) as pbar:
+        for key in src_infos.keys():
+            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {}'.format(
+                src_ds.GetDescription(),
+                dst_ogr_fn, dst_srs,
+                ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']])
+            )
+            utils.run_cmd(footprint_cmd, verbose=False)
+            pbar.update()
+
+    ## set the metadata to the vector fields
+    ds = ogr.Open(dst_ogr_fn, 1)
+    layer = ds.GetLayer()
+    layerdef = layer.GetLayerDefn()            
+    layer.StartTransaction()
+    with tqdm(
+            desc='setting mask metadata',
+            total=len(src_infos.keys()),
+            leave=verbose
+    ) as pbar:
+        for i, key in enumerate(src_infos.keys()):
+            feat = layer.GetFeature(i)
+            for md in src_infos[key]['metadata'].keys():
+                feat.SetField(md, src_infos[key]['metadata'][md])
+                
+            pbar.update()
+            layer.SetFeature(feat)
+            
+    layer.CommitTransaction()    
+    layer = ds = None
+
+    # ds = gdal.OpenEx(dst_ogr_fn, gdal.OF_VECTOR | gdal.OF_UPDATE)
+    # ds.ExecuteSQL("ALTER TABLE {} DROP COLUMN {}".format(utils.fn_basename2(dst_ogr_fn), 'location'))
+    # ds = gdal.Open(dst_ogr_fn, 1)
+    # layer = ds.GetLayer()
+    # layer.DeleteField(0)
+    # ds = None
+    
 def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask', mask_level = 0):
     """merge data mask raster bands based on the top-level datalist name"""
 
     mask_level = utils.int_or(mask_level, 0)
     src_infos = gdalfun.gdal_infos(src_ds)
+    utils.echo_msg(src_infos)
     ## create new mem gdal ds to hold new raster
     gdt = gdal.GDT_Int32
     driver = gdal.GetDriverByName('MEM')
@@ -158,65 +269,71 @@ def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask
     m_ds.SetGeoTransform(src_infos['geoT'])
     m_ds.SetProjection(gdalfun.osr_wkt(src_infos['proj']))
 
-    for b in range(1, src_ds.RasterCount+1):
-        this_band = src_ds.GetRasterBand(b)
-        this_band_md = this_band.GetMetadata()
-        this_band_name = this_band.GetDescription()
-        if this_band_name == skip_band:
-            continue
+    with tqdm(
+            desc='merging mask bands.',
+            total=src_ds.RasterCount,
+            leave=verbose
+    ) as pbar:         
+        for b in range(1, src_ds.RasterCount+1):
+            pbar.update()
+            this_band = src_ds.GetRasterBand(b)
+            this_band_md = this_band.GetMetadata()
+            this_band_name = this_band.GetDescription()
+            if this_band_name == skip_band:
+                continue
 
-        # if mask_level > 0:
-        #     if mask_level > len(this_band_name.split('/')):
-        #         mask_level = len(this_band_name.split('/')) - 2
-                    
-        #     this_band_name = '/'.join(this_band_name.split('/')[:-mask_level])
+            # if mask_level > 0:
+            #     if mask_level > len(this_band_name.split('/')):
+            #         mask_level = len(this_band_name.split('/')) - 2
 
-        if len(this_band_name.split('/')) > 1:
-            this_band_name = this_band_name.split('/')[1]
-            
-        m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
-        if not this_band_name in m_bands.keys():
-            m_ds.AddBand()
-            m_band = m_ds.GetRasterBand(m_ds.RasterCount)
-            m_band.SetNoDataValue(0)
-            m_band.SetDescription(this_band_name)                
-        else:
-            m_band = m_ds.GetRasterBand(m_bands[this_band_name])
+            #     this_band_name = '/'.join(this_band_name.split('/')[:-mask_level])
 
-        band_md = m_band.GetMetadata()
-        for k in this_band_md.keys():
-            if k not in band_md.keys() or band_md[k] is None:
-                band_md[k] = this_band_md[k]
+            if len(this_band_name.split('/')) > 1:
+                this_band_name = this_band_name.split('/')[1]
 
-            if k == 'name':
-                band_md[k] = this_band_name                
-            elif k == 'date' or k == 'weight' or k == 'uncertainty':
-                band_md[k] = num_strings_to_range(band_md[k], this_band_md[k])
-            elif band_md[k] != this_band_md[k]:
-                band_md[k] = ','.join([band_md[k], this_band_md[k]])
-                
-        try:
-            m_band.SetMetadata(band_md)
-        except:
+            m_bands = {m_ds.GetRasterBand(i).GetDescription(): i for i in range(1, m_ds.RasterCount + 1)}
+            if not this_band_name in m_bands.keys():
+                m_ds.AddBand()
+                m_band = m_ds.GetRasterBand(m_ds.RasterCount)
+                m_band.SetNoDataValue(0)
+                m_band.SetDescription(this_band_name)                
+            else:
+                m_band = m_ds.GetRasterBand(m_bands[this_band_name])
+
+            band_md = m_band.GetMetadata()
+            for k in this_band_md.keys():
+                if k not in band_md.keys() or band_md[k] is None:
+                    band_md[k] = this_band_md[k]
+
+                if k == 'name':
+                    band_md[k] = this_band_name                
+                elif k == 'date' or k == 'weight' or k == 'uncertainty':
+                    band_md[k] = num_strings_to_range(band_md[k], this_band_md[k])
+                elif band_md[k] != this_band_md[k]:
+                    band_md[k] = ','.join([band_md[k], this_band_md[k]])
+
             try:
-                for key in band_md.keys():
-                    if band_md[key] is None:
-                        del band_md[key]
-                        
                 m_band.SetMetadata(band_md)
-            except Exception as e:
-                utils.echo_error_msg(
-                    'could not set band metadata: {}; {}'.format(
-                        band_md, e
-                    )
-                )
+            except:
+                try:
+                    for key in band_md.keys():
+                        if band_md[key] is None:
+                            del band_md[key]
 
-        this_band_array = this_band.ReadAsArray()
-        m_band_array = m_band.ReadAsArray()
-        out_array = np.add(m_band_array, this_band_array)
-        out_array[out_array > 1] = 1
-        m_band.WriteArray(out_array)
-        m_ds.FlushCache()
+                    m_band.SetMetadata(band_md)
+                except Exception as e:
+                    utils.echo_error_msg(
+                        'could not set band metadata: {}; {}'.format(
+                            band_md, e
+                        )
+                    )
+
+            this_band_array = this_band.ReadAsArray()
+            m_band_array = m_band.ReadAsArray()
+            out_array = np.add(m_band_array, this_band_array)
+            out_array[out_array > 1] = 1
+            m_band.WriteArray(out_array)
+            m_ds.FlushCache()
         
     return(m_ds)
         
@@ -260,80 +377,89 @@ def polygonize_mask_multibands(
         layer = None
 
     layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+    layer.StartTransaction()
     defn = None
 
-    for b in range(1, src_ds.RasterCount+1):
-        this_band = src_ds.GetRasterBand(b)
-        this_band_md = this_band.GetMetadata()
-        this_band_name = this_band.GetDescription()
-        #if len(this_band_name.split('/')) > 1:
-        #    this_band_name = this_band_name.split('/')[-2]
-            
-        b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
-        field_names = [field.name for field in layer.schema]
-        this_band_md = {k.title():v for k,v in this_band_md.items()}            
-        for k in this_band_md.keys():
-            if k[:9] not in field_names:
-                layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+    with tqdm(
+            desc='polygonizing mask bands.',
+            total=src_ds.RasterCount,
+            leave=verbose
+    ) as pbar:             
+        for b in range(1, src_ds.RasterCount+1):
+            pbar.update()
+            this_band = src_ds.GetRasterBand(b)
+            this_band_md = this_band.GetMetadata()
+            this_band_name = this_band.GetDescription()
+            #if len(this_band_name.split('/')) > 1:
+            #    this_band_name = this_band_name.split('/')[-2]
 
-        if 'Title' not in this_band_md.keys():
-            if 'Title' not in field_names:
-                layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+            b_infos = gdalfun.gdal_infos(src_ds, scan=True, band=b)
+            field_names = [field.name for field in layer.schema]
+            this_band_md = {k.title():v for k,v in this_band_md.items()}            
+            for k in this_band_md.keys():
+                if k[:9] not in field_names:
+                    layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
 
-        if b_infos['zr'][1] == 1:
-            tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
-                '{}_poly'.format(this_band_name)
-            )
-            if tmp_ds is not None:
-                tmp_layer = tmp_ds.CreateLayer(
-                    '{}_poly'.format(this_band_name), None, ogr.wkbMultiPolygon
+            if 'Title' not in this_band_md.keys():
+                if 'Title' not in field_names:
+                    layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+
+            if b_infos['zr'][1] == 1:
+                tmp_ds = ogr.GetDriverByName('Memory').CreateDataSource(
+                    '{}_poly'.format(this_band_name)
                 )
-                tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
-                tmp_name = str(this_band_name)                                    
-                for k in this_band_md.keys():
-                    tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
+                if tmp_ds is not None:
+                    tmp_layer = tmp_ds.CreateLayer(
+                        '{}_poly'.format(this_band_name), None, ogr.wkbMultiPolygon
+                    )
+                    tmp_layer.CreateField(ogr.FieldDefn('DN', ogr.OFTInteger))
+                    tmp_name = str(this_band_name)                                    
+                    for k in this_band_md.keys():
+                        tmp_layer.CreateField(ogr.FieldDefn(k[:9], ogr.OFTString))
 
-                if 'Title' not in this_band_md.keys():
-                    tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
-                    
+                    if 'Title' not in this_band_md.keys():
+                        tmp_layer.CreateField(ogr.FieldDefn('Title', ogr.OFTString))
+
+                    # if verbose:
+                    #     utils.echo_msg('polygonizing {} mask...'.format(this_band_name))
+
+                    status = gdal.Polygonize(
+                        this_band,
+                        None,
+                        tmp_layer,
+                        tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
+                        [],
+                        callback = gdal.TermProgress if verbose else None
+                        #callback = None
+                    )
+
+                    if len(tmp_layer) > 0:
+                        if defn is None:
+                            defn = tmp_layer.GetLayerDefn()
+
+                        out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
+                        with tqdm(
+                                desc='creating feature {}...'.format(this_band_name),
+                                total=len(this_band_md.keys()),
+                                leave=verbose
+                        ) as pbar: 
+                            for k in this_band_md.keys():
+                                pbar.update()
+                                out_feat.SetField(k[:9], this_band_md[k])
+
+                            if 'Title' not in this_band_md.keys():
+                                out_feat.SetField('Title', tmp_name)
+
+                            out_feat.SetField('DN', b)                           
+                            layer.CreateFeature(out_feat)
+                            #layer.SetFeature(out_feat)
+
                 if verbose:
-                    utils.echo_msg('polygonizing {} mask...'.format(this_band_name))
-                            
-                status = gdal.Polygonize(
-                    this_band,
-                    None,
-                    tmp_layer,
-                    tmp_layer.GetLayerDefn().GetFieldIndex('DN'),
-                    [],
-                    #callback = gdal.TermProgress if verbose else None
-                    callback = None
-                )
+                    utils.echo_msg('polygonized {}'.format(this_band_name))
 
-                if len(tmp_layer) > 0:
-                    if defn is None:
-                        defn = tmp_layer.GetLayerDefn()
-
-                    out_feat = gdalfun.ogr_mask_union(tmp_layer, 'DN', defn)
-                    with tqdm(
-                            desc='creating feature {}...'.format(this_band_name),
-                            total=len(this_band_md.keys()),
-                            leave=verbose
-                    ) as pbar: 
-                        for k in this_band_md.keys():
-                            pbar.update()
-                            out_feat.SetField(k[:9], this_band_md[k])
-
-                        if 'Title' not in this_band_md.keys():
-                            out_feat.SetField('Title', tmp_name)
-                            
-                        out_feat.SetField('DN', b)                           
-                        layer.CreateFeature(out_feat)
-
-            if verbose:
-                utils.echo_msg('polygonized {}'.format(this_band_name))
+                tmp_ds = tmp_layer = None
                 
-            tmp_ds = tmp_layer = None
-            
+    layer.CommitTransaction()            
     ds = src_ds = None
     return(dst_layer, ogr_format)
     
@@ -945,6 +1071,9 @@ class ElevationDataset:
         self.pnt_fltrs = pnt_fltrs # pass the points through filters
         self.want_mask = want_mask # mask the data
         self.want_sm = want_sm # generate spatial metadata vector
+        if self.want_sm:
+            self.want_mask = True
+            
         self.sample_alg = sample_alg # the gdal resample algorithm
         self.metadata = copy.deepcopy(metadata) # dataset metadata
         self.parent = parent # dataset parent obj
@@ -1844,7 +1973,10 @@ class ElevationDataset:
 
             sub_datalist = os.path.join(datalist_dirname, '{}.datalist'.format(this_key))
             with open(sub_datalist, 'a') as sub_dlf:
-                sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
+                if utils.fn_basename2(os.path.basename(this_entry.fn)) == '':
+                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.metadata['name'])), 'xyz'])
+                else:
+                    sub_xyz_path = '.'.join([utils.fn_basename2(os.path.basename(this_entry.fn)), 'xyz'])                        
                 this_xyz_path = os.path.join(datalist_dirname, sub_xyz_path)
                 if os.path.exists(this_xyz_path):
                     utils.echo_warning_msg('{} already exists, skipping...'.format(this_xyz_path))
@@ -1932,7 +2064,7 @@ class ElevationDataset:
             out_name = None,
             ndv = -9999,
             fmt = 'GTiff',
-            mask_only = False,
+            #mask_only = False,
             mask_level = 0
     ):
         """stack and mask incoming arrays (from `array_yield`) together
@@ -1942,7 +2074,6 @@ class ElevationDataset:
         out_name (str): the output stacked raster basename
         ndv (float): the desired no data value
         fmt (str): the output GDAL file format
-        mask_only (bool): only generate a mask, don't stack...
         mask_level (int): the granularity of the mask, 0 is every file
 
         --------
@@ -2132,35 +2263,36 @@ class ElevationDataset:
             stacked_bands[key].SetDescription(key)
 
         ## initialize data mask grid
-        mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
-        mask_vrt_fn = '{}_msk.vrt'.format(out_name)
-        if os.path.exists(mask_fn):
-            status = driver.Delete(mask_fn)
-            if status != 0:
-                utils.remove_glob('{}*'.format(mask_fn))                
-            
-        if not os.path.exists(os.path.dirname(mask_fn)):
-            os.makedirs(os.path.dirname(mask_fn))
-            
-        m_gdt = gdal.GDT_Byte
-        msk_opts = ['COMPRESS=LZW']
-        if fmt == 'GTiff':
-            msk_opts.append('BIGTIFF=YES')
-        elif fmt == 'MEM':
-            msk_opts = []
-            
-        driver = gdal.GetDriverByName('MEM')
-        m_ds = driver.Create('', xcount, ycount, 1, m_gdt)
-        m_ds.SetDescription('_msk'.format(out_name))
-        m_ds.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+        if self.want_mask:
+            mask_fn = '{}_msk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+            mask_tmp_fn = '{}_tmpmsk.{}'.format(out_name, gdalfun.gdal_fext(fmt))
+            mask_vrt_fn = '{}_msk.vrt'.format(out_name)
+            if os.path.exists(mask_fn):
+                status = driver.Delete(mask_fn)
+                if status != 0:
+                    utils.remove_glob('{}*'.format(mask_fn))                
 
-        ## set first band to hold the data mask for all the data
-        m_band_all = m_ds.GetRasterBand(1)
-        m_band_all.SetNoDataValue(0)
-        m_band_all.SetDescription('Full Data Mask')
+            if not os.path.exists(os.path.dirname(mask_fn)):
+                os.makedirs(os.path.dirname(mask_fn))
+
+            m_gdt = gdal.GDT_Byte
+            msk_opts = ['COMPRESS=LZW']
+            if fmt == 'GTiff':
+                msk_opts.append('BIGTIFF=YES')
+            elif fmt == 'MEM':
+                msk_opts = []
+
+            driver = gdal.GetDriverByName('MEM')
+            m_ds = driver.Create('', xcount, ycount, 1, m_gdt)
+            m_ds.SetDescription('_msk'.format(out_name))
+            m_ds.SetGeoTransform(dst_gt)
+            if self.dst_srs is not None:
+                m_ds.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+
+            ## set first band to hold the data mask for all the data
+            m_band_all = m_ds.GetRasterBand(1)
+            m_band_all.SetNoDataValue(0)
+            m_band_all.SetDescription('Full Data Mask')
         
         ## parse each entry and process it
         for this_entry in self.parse():
@@ -2176,22 +2308,23 @@ class ElevationDataset:
                 if np.all(arrs['count'] == 0):
                     continue
 
-                ## check to add a new band if the arrs has data
-                m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)
-                if m_band is not None:
-                    m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
-                    m_array[arrs['count'] != 0] = 1
-                    m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])
-                    m_band.WriteArray(m_array, srcwin[0], srcwin[1])
-                else:
-                    m_array = np.array(arrs['count'])
-                    m_array[arrs['count'] != 0] = 1
-                    m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
-                    
-                m_ds.FlushCache()
-                m_array = None
-                if mask_only:
-                    continue
+                if self.want_mask:
+                    ## check to add a new band if the arrs has data
+                    m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)
+                    if m_band is not None:
+                        m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                        m_array[arrs['count'] != 0] = 1
+                        m_band_all.WriteArray(m_array, srcwin[0], srcwin[1])
+                        m_band.WriteArray(m_array, srcwin[0], srcwin[1])
+                    else:
+                        m_array = np.array(arrs['count'])
+                        m_array[arrs['count'] != 0] = 1
+                        m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+
+                    m_ds.FlushCache()
+                    m_array = None
+                    # if mask_only:
+                    #     continue
                 
                 ## Read the saved accumulated rasters at the incoming srcwin and set ndv to zero
                 for key in stack_keys:
@@ -2291,63 +2424,68 @@ class ElevationDataset:
         ## "uncertainty" is the sum of variance*weight
         if self.verbose:
             utils.echo_msg('finalizing stacked raster bands...')
+
+        if self.want_mask:
+            ## output the mask raster to disk
+            pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
+            pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
+            msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
+            pbar.close()
+
+            ## if we added a band per entry, we have to go through and remove empty bands
+            ## mask data will be checked for bands with nodata and those
+            ## will be omitted from the final mask raster
+            #msk_ds = remove_empty_mask_bands(m_ds)
+            m_ds = None
             
-        ## output the mask raster to disk
-        pbar = tqdm(desc='writing mask to disk', total=100, leave=self.verbose)
-        pbar_update = lambda a,b,c: pbar.update((a*100)-pbar.n)        
-        msk_ds = gdal.GetDriverByName(fmt).CreateCopy(mask_fn, m_ds, 0, options=msk_opts, callback=pbar_update)
-        pbar.close()
-        
-        ## if we added a band per entry, we have to go through and remove empty bands
-        ## mask data will be checked for bands with nodata and those
-        ## will be omitted from the final mask raster
-        #msk_ds = remove_empty_mask_bands(m_ds)
-        m_ds = None
-        if not mask_only:
-            ## by scan-line
-            srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
-            for y in range(
-                    srcwin[1], srcwin[1] + srcwin[3], 1
-            ):
-                for key in stack_keys:
-                    stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
-                    stacked_data[key][stacked_data[key] == ndv] = np.nan
-
-                if mode == 'mean' or mode == 'min' or mode == 'max':
-                    stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
-                    if mode == 'mean':
-                        ## average the accumulated arrays for finalization
-                        ## x, y, z and u are weighted sums, so divide by weights
-                        stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
-                        stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
-                        stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
-                    
-                    ## apply the source uncertainty with the sub-cell variance uncertainty
-                    ## caclulate the standard error (sqrt( uncertainty / count))
-                    stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
-                    stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
-
-                ## write out final rasters
-                for key in stack_keys:
-                    stacked_data[key][np.isnan(stacked_data[key])] = ndv
-                    stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
-                
-            ## set the final output nodatavalue
+        #if not mask_only:
+        ## by scan-line
+        srcwin = (0, 0, dst_ds.RasterXSize, dst_ds.RasterYSize)
+        for y in range(
+                srcwin[1], srcwin[1] + srcwin[3], 1
+        ):
             for key in stack_keys:
-                stacked_bands[key].DeleteNoDataValue()
-                
+                stacked_data[key] = stacked_bands[key].ReadAsArray(srcwin[0], y, srcwin[2], 1)
+                stacked_data[key][stacked_data[key] == ndv] = np.nan
+
+            if mode == 'mean' or mode == 'min' or mode == 'max':
+                stacked_data['weights'] = stacked_data['weights'] / stacked_data['count']
+                if mode == 'mean':
+                    ## average the accumulated arrays for finalization
+                    ## x, y, z and u are weighted sums, so divide by weights
+                    stacked_data['x'] = (stacked_data['x'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['y'] = (stacked_data['y'] / stacked_data['weights']) / stacked_data['count']
+                    stacked_data['z'] = (stacked_data['z'] / stacked_data['weights']) / stacked_data['count']
+
+                ## apply the source uncertainty with the sub-cell variance uncertainty
+                ## caclulate the standard error (sqrt( uncertainty / count))
+                stacked_data['uncertainty'] = np.sqrt((stacked_data['uncertainty'] / stacked_data['weights']) / stacked_data['count'])
+                stacked_data['uncertainty'] = np.sqrt(np.power(stacked_data['src_uncertainty'], 2) + np.power(stacked_data['uncertainty'], 2))
+
+            ## write out final rasters
             for key in stack_keys:
-                stacked_bands[key].SetNoDataValue(ndv)
+                stacked_data[key][np.isnan(stacked_data[key])] = ndv
+                stacked_bands[key].WriteArray(stacked_data[key], srcwin[0], y)
+
+        ## set the final output nodatavalue
+        for key in stack_keys:
+            stacked_bands[key].DeleteNoDataValue()
+
+        for key in stack_keys:
+            stacked_bands[key].SetNoDataValue(ndv)
                 
         ## create a vector of the masks (spatial-metadata)
-        if self.want_sm:
-            polygonize_mask_multibands(
+        if self.want_mask and self.want_sm:
+            # polygonize_mask_multibands(
+            #     msk_ds, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
+            # )
+            ogr_mask_footprints(                
                 msk_ds, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
             )
             
         msk_ds = dst_ds = None
-        # if self.want_mask:
-        #     os.replace(mask_fn, os.path.basename(mask_fn))
+        if self.want_mask:
+            os.replace(mask_fn, os.path.basename(mask_fn))
         
         ## apply any grits filters to the stack
         for f in self.stack_fltrs:
@@ -2808,10 +2946,13 @@ class ElevationDataset:
 
         ## create a vector of the masks (spatial-metadata)
         if self.want_sm:
-            polygonize_mask_multibands(
+            # polygonize_mask_multibands(
+            #     mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
+            # )
+            ogr_mask_footprints(                
                 mask_dataset, output=os.path.basename(out_name), verbose=False, mask_level=mask_level
             )
-
+                        
         mask_dataset = None
         
         ## apply any grits filters to the stack

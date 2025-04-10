@@ -272,7 +272,7 @@ class Waffle:
             want_weight=self.want_weight,
             want_uncertainty=self.want_uncertainty,
             want_verbose=self.verbose,
-            #want_mask=self.want_mask,
+            want_mask=self.want_mask,
             pnt_fltrs=point_fltr,
             stack_fltrs=stack_fltr,
             invert_region=False,
@@ -496,6 +496,9 @@ class Waffle:
                                               y_inc=self.yinc, src_region=self.p_region, weight=1,
                                               verbose=self.verbose).initialize()
 
+                if self.want_mask:
+                    mask_fn = '{}.{}'.format(mask_name, gdalfun.gdal_fext(self.fmt))
+                
                 if self.count_limit is not None:
                     with gdalfun.gdal_datasource(self.stack, update=True) as stack_ds:
                         stack_infos = gdalfun.gdal_infos(stack_ds)
@@ -508,7 +511,7 @@ class Waffle:
                             this_arr = this_band.ReadAsArray()
                             this_arr[count_mask] = stack_infos['ndv']
                             this_band.WriteArray(this_arr)
-                
+                            
                 # if self.keep_auxiliary:
                 #     self.aux_dems.append(self.stack)
 
@@ -531,7 +534,7 @@ class Waffle:
                 )._acquire_module()
                 iu.name = '{}_u'.format(self.params['kwargs']['name'])
                 iu.want_uncertainty = False
-                #iu.want_mask = False
+                iu.want_mask = False
                 iu.stack = self.stack
                 iu.initialize()
                 iu.run()
@@ -572,7 +575,8 @@ class Waffle:
                         # self.output_files['mask'] = mask_dem.fn
                         if self.want_sm:
                             with gdalfun.gdal_datasource(mask_dem.fn) as msk_ds:
-                                sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds)
+                                #sm_layer, sm_fmt = dlim.polygonize_mask_multibands(msk_ds, verbose=True)
+                                sm_layer, sm_fmt = dlim.ogr_mask_footprints(msk_ds, verbose=True)
 
                             sm_files = glob.glob('{}.*'.format(sm_layer))
                             self.output_files['spatial-metadata'] = []
@@ -586,7 +590,7 @@ class Waffle:
                                 os.rename(sm_file, out_sm)
                                 self.output_files['spatial-metadata'].append(out_sm)
                 else:
-                    utils.echo_warning_msg('mask DEM is invalid...')        
+                    utils.echo_warning_msg('mask DEM is invalid...')
                     
             ## post-process any auxiliary rasters
             for aux_dem in self.aux_dems:
@@ -5808,14 +5812,17 @@ def waffles_cli(argv = sys.argv):
                 pass
 
         elif arg == '--want-mask' or arg == '--mask' or arg == '-m':
-            utils.echo_warning_msg('want-mask is depreciated, use --keep-auxiliary instead')
-            #wg['want_mask'] = True
+            #utils.echo_warning_msg('want-mask is depreciated, use --keep-auxiliary instead')
+            wg['want_mask'] = True
             
         elif arg == '-k' or arg == '--keep-cache': keep_cache = True
         elif arg == '-x' or arg == '--keep-auxiliary': wg['keep_auxiliary'] = True
         #elif arg == '-t' or arg == '--threads': want_threads = True
         elif arg == '-a' or arg == '--archive': wg['archive'] = True
-        elif arg == '-s' or arg == '--spatial-metadata': wg['want_sm'] = True
+        elif arg == '-s' or arg == '--spatial-metadata':
+            wg['want_mask'] = True
+            wg['want_sm'] = True
+            
         elif arg == '-c' or arg == '--continue': wg['clobber'] = False
         elif arg == '-r' or arg == '--grid-node': wg['node'] = 'grid'
         elif arg == '-t' or arg == '--flatten-ndata-values': wg['flatten_nodata_values'] = True
