@@ -5640,10 +5640,13 @@ class MBSParser(ElevationDataset):
             mb_region = None
 
         src_inf = '{}.inf'.format(self.fn)
-        #mb_date = self.mb_inf_data_date(src_inf)
-        #mb_perc = self.mb_inf_perc_good(src_inf)
-        mb_format = self.mb_inf_format(src_inf)
-        if mb_fn.split('.')[-1] == 'fbt':
+        try:
+            #mb_date = self.mb_inf_data_date(src_inf)
+            #mb_perc = self.mb_inf_perc_good(src_inf)
+            mb_format = self.mb_inf_format(src_inf)
+            if mb_fn.split('.')[-1] == 'fbt':
+                mb_format = None
+        except:
             mb_format = None
             
         for line in utils.yield_cmd(
