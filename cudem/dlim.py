@@ -195,7 +195,7 @@ def ogr_mask_footprints(
     
     src_infos = scan_mask_bands(src_ds, mask_level=mask_level, verbose=verbose)
     ## initialize output vector
-    dst_ogr_fn = '_{}_sm.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdalfun.ogr_fext(ogr_format))
+    dst_ogr_fn = '{}_sm.{}'.format(utils.fn_basename2(src_ds.GetDescription()), gdalfun.ogr_fext(ogr_format))
     driver = ogr.GetDriverByName(ogr_format)
     ds = driver.CreateDataSource(dst_ogr_fn)
     if ds is not None: 
@@ -203,58 +203,67 @@ def ogr_mask_footprints(
     else:
         layer = None
 
-    layer.CreateField(ogr.FieldDefn('location', ogr.OFTString))
+    #layer.CreateField(ogr.FieldDefn('location', ogr.OFTString))
     field_names = [field.name for field in layer.schema]
     for key in src_infos.keys():
         for md in src_infos[key]['metadata'].keys():
-            if md[:9] not in field_names:
+            if md[:10] not in field_names and md not in field_names:
                 layer.CreateField(ogr.FieldDefn(md, ogr.OFTString))
+                field_names = [field.name for field in layer.schema]
                 
+    #field_names = [field.name for field in layer.schema]
     [layer.SetFeature(feature) for feature in layer]
     ds = layer = None
-
+    
     ## generate a footprint of each group of bands from src_infos
     with tqdm(
             desc='generating mask footprints',
             total=len(src_infos.keys()),
             leave=verbose
     ) as pbar:
-        for key in src_infos.keys():
-            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {}'.format(
+        for i, key in enumerate(src_infos.keys()):
+            footprint_cmd = 'gdal_footprint {} {} -t_srs {} -combine_bands union -max_points unlimited {} -no_location'.format(
                 src_ds.GetDescription(),
                 dst_ogr_fn, dst_srs,
                 ' '.join(['-b {}'.format(x) for x in  src_infos[key]['bands']])
             )
             utils.run_cmd(footprint_cmd, verbose=False)
+
+            ## update db using ogrinfo
+            key_val = ', '.join(["'{}' = '{}'".format(x[:10], src_infos[key]['metadata'][x]) for x in src_infos[key]['metadata'].keys()])            
+            sql = "UPDATE {name} SET {key_val} WHERE rowid = {f}".format(
+                name=utils.fn_basename2(dst_ogr_fn),
+                key_val=key_val,
+                value=src_infos[key]['metadata'][md],
+                f=i
+            )
+            utils.run_cmd('ogrinfo {} -dialect SQLite -sql "{}"'.format(dst_ogr_fn, sql), verbose = False)
+                
             pbar.update()
 
     ## set the metadata to the vector fields
-    ds = ogr.Open(dst_ogr_fn, 1)
-    layer = ds.GetLayer()
-    layerdef = layer.GetLayerDefn()            
-    layer.StartTransaction()
-    with tqdm(
-            desc='setting mask metadata',
-            total=len(src_infos.keys()),
-            leave=verbose
-    ) as pbar:
-        for i, key in enumerate(src_infos.keys()):
-            feat = layer.GetFeature(i)
-            for md in src_infos[key]['metadata'].keys():
-                feat.SetField(md, src_infos[key]['metadata'][md])
-                
-            pbar.update()
-            layer.SetFeature(feat)
-            
-    layer.CommitTransaction()    
-    layer = ds = None
-
-    # ds = gdal.OpenEx(dst_ogr_fn, gdal.OF_VECTOR | gdal.OF_UPDATE)
-    # ds.ExecuteSQL("ALTER TABLE {} DROP COLUMN {}".format(utils.fn_basename2(dst_ogr_fn), 'location'))
-    # ds = gdal.Open(dst_ogr_fn, 1)
+    # ds = ogr.Open(dst_ogr_fn, 1)
+    # ds.StartTransaction
     # layer = ds.GetLayer()
-    # layer.DeleteField(0)
-    # ds = None
+    # layerdef = layer.GetLayerDefn()    
+    # #layer.StartTransaction()
+    # with tqdm(
+    #         desc='setting mask metadata',
+    #         total=len(src_infos.keys()),
+    #         leave=verbose
+    # ) as pbar:
+    #     for i, key in enumerate(src_infos.keys()):
+    #         feat = layer.GetFeature(i)
+    #         for md in src_infos[key]['metadata'].keys():
+    #             feat.SetField(md, src_infos[key]['metadata'][md])
+
+    #         pbar.update()
+    #         layer.SetFeature(feat)
+    #         feat = None
+            
+    # #layer.CommitTransaction()
+    # ds.CommitTransaction()
+    # layer = ds = None
     
 def merge_mask_bands_by_name(src_ds, verbose = True, skip_band = 'Full Data Mask', mask_level = 0):
     """merge data mask raster bands based on the top-level datalist name"""
@@ -5528,6 +5537,18 @@ class MBSParser(ElevationDataset):
 
         utils.remove_glob('{}*'.format(out_mb))
 
+    def mb_inf_format(self, src_inf):
+        """extract the format from the mbsystem inf file."""
+
+        with open(src_inf, errors='ignore') as iob:
+            for il in iob:
+                til = il.split()
+                if len(til) > 1:
+                    #utils.echo_msg(til[0].strip())
+                    if til[0].strip() == 'MBIO':
+                        return(til[4])
+        return(None)
+        
     def mb_inf_data_date(self, src_inf):
         """extract the date from the mbsystem inf file."""
 
@@ -5621,12 +5642,15 @@ class MBSParser(ElevationDataset):
         src_inf = '{}.inf'.format(self.fn)
         #mb_date = self.mb_inf_data_date(src_inf)
         #mb_perc = self.mb_inf_perc_good(src_inf)
+        mb_format = self.mb_inf_format(src_inf)
+        if mb_fn.split('.')[-1] == 'fbt':
+            mb_format = None
             
         for line in utils.yield_cmd(
-                'mblist -M{}{} -OXYZDAGgFPpRrS -I{}'.format(
+                'mblist -M{}{} -OXYZDAGgFPpRrS -I{}{}'.format(
                     self.mb_exclude, ' {}'.format(
                         mb_region.format('gmt') if mb_region is not None else ''
-                    ), mb_fn
+                    ), mb_fn, ' -F{}'.format(mb_format) if mb_format is not None else ''
                 ),
                 verbose=False,
         ):
