@@ -86,7 +86,7 @@ namespaces = {
     'gmi': 'http://www.isotc211.org/2005/gmi', 
     'gco': 'http://www.isotc211.org/2005/gco',
     'gml': 'http://www.isotc211.org/2005/gml',
-}
+    }
 thredds_namespaces = {
     'th': 'http://www.unidata.ucar.edu/namespaces/thredds/InvCatalog/v1.0',
 }
@@ -202,19 +202,42 @@ class iso_xml:
         return(Fetch(self.url).fetch_xml(timeout=timeout, read_timeout=read_timeout))
 
     def title(self):
-        t = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString', namespaces = self.namespaces)
+        t = self.xml_doc.find(
+            './/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:title/gco:CharacterString',
+            namespaces=self.namespaces
+        )
         return(t.text if t is not None else 'Unknown')
         
     def bounds(self, geom = True):
-        wl = self.xml_doc.find('.//gmd:westBoundLongitude/gco:Decimal', namespaces=self.namespaces)
-        el = self.xml_doc.find('.//gmd:eastBoundLongitude/gco:Decimal', namespaces=self.namespaces)
-        sl = self.xml_doc.find('.//gmd:southBoundLatitude/gco:Decimal', namespaces=self.namespaces)
-        nl = self.xml_doc.find('.//gmd:northBoundLatitude/gco:Decimal', namespaces=self.namespaces)
+        wl = self.xml_doc.find(
+            './/gmd:westBoundLongitude/gco:Decimal',
+            namespaces=self.namespaces
+        )
+        el = self.xml_doc.find(
+            './/gmd:eastBoundLongitude/gco:Decimal',
+            namespaces=self.namespaces
+        )
+        sl = self.xml_doc.find(
+            './/gmd:southBoundLatitude/gco:Decimal',
+            namespaces=self.namespaces
+        )
+        nl = self.xml_doc.find(
+            './/gmd:northBoundLatitude/gco:Decimal',
+            namespaces=self.namespaces
+        )
         if wl is not None and el is not None and sl is not None and nl is not None:
             region = [float(wl.text), float(el.text), float(sl.text), float(nl.text)]
-            if geom: return(regions.Region().from_list([float(wl.text), float(el.text), float(sl.text), float(nl.text)]).export_as_geom())
-            else: return(region)
-        else: return(None)
+            if geom:
+                return(
+                    regions.Region().from_list(
+                        [float(wl.text), float(el.text),
+                         float(sl.text), float(nl.text)]
+                    ).export_as_geom()
+                )
+            else:
+                return(region)            
+        else:
+            return(None)
 
     def polygon(self, geom = True):
         opoly = []
@@ -234,26 +257,41 @@ class iso_xml:
     def date(self):
         dt = self.xml_doc.find('.//gmd:date/gco:Date', namespaces=self.namespaces)
         if dt is None:
-            dt = self.xml_doc.find('.//gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date', namespaces = self.namespaces)
+            dt = self.xml_doc.find(
+                './/gmd:MD_DataIdentification/gmd:citation/gmd:CI_Citation/gmd:date/gmd:CI_Date/gmd:date/gco:Date',
+                namespaces=self.namespaces
+            )
             
         return(dt.text[:4] if dt is not None else '0000')
 
     def xml_date(self):
-        mddate = self.xml_doc.find('.//gmd:dateStamp/gco:DateTime', namespaces=self.namespaces)
+        mddate = self.xml_doc.find(
+            './/gmd:dateStamp/gco:DateTime',
+            namespaces=self.namespaces
+        )
         
         return(utils.this_date() if mddate is None else mddate.text)
         
     def reference_system(self):
-        ref_s = self.xml_doc.findall('.//gmd:MD_ReferenceSystem', namespaces=self.namespaces)
+        ref_s = self.xml_doc.findall(
+            './/gmd:MD_ReferenceSystem',
+            namespaces=self.namespaces
+        )
         if ref_s is None or len(ref_s) == 0:
             return(None, None)
         
-        h_epsg = ref_s[0].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
+        h_epsg = ref_s[0].find(
+            './/gmd:code/gco:CharacterString',
+            namespaces=self.namespaces
+        )
         if h_epsg is not None:
             h_epsg = h_epsg.text.split(':')[-1]
         
         if len(ref_s) > 1:
-            v_epsg = ref_s[1].find('.//gmd:code/gco:CharacterString', namespaces=self.namespaces)
+            v_epsg = ref_s[1].find(
+                './/gmd:code/gco:CharacterString',
+                namespaces=self.namespaces
+            )
             if v_epsg is not None:
                 v_epsg = v_epsg.text.split(':')[-1]
                 
@@ -264,7 +302,10 @@ class iso_xml:
 
     def abstract(self):
         try:
-            abstract = self.xml_doc.find('.//gmd:abstract/gco:CharacterString', namespaces=self.namespaces)
+            abstract = self.xml_doc.find(
+                './/gmd:abstract/gco:CharacterString',
+                namespaces=self.namespaces
+            )
             abstract = '' if abstract is None else abstract.text
         except:
             abstract = ''
@@ -272,7 +313,10 @@ class iso_xml:
         return(abstract)
 
     def linkages(self):
-        linkage = self.xml_doc.find('.//{*}linkage/{*}URL', namespaces=self.namespaces)
+        linkage = self.xml_doc.find(
+            './/{*}linkage/{*}URL',
+            namespaces=self.namespaces
+        )
         if linkage is not None:
             linkage = linkage.text
         
@@ -280,8 +324,14 @@ class iso_xml:
     
     def data_links(self):
         dd = {}        
-        dfs = self.xml_doc.findall('.//gmd:MD_Format/gmd:name/gco:CharacterString', namespaces=self.namespaces)
-        dus = self.xml_doc.findall('.//gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL', namespaces=self.namespaces)
+        dfs = self.xml_doc.findall(
+            './/gmd:MD_Format/gmd:name/gco:CharacterString',
+            namespaces=self.namespaces
+        )
+        dus = self.xml_doc.findall(
+            './/gmd:onLine/gmd:CI_OnlineResource/gmd:linkage/gmd:URL',
+            namespaces=self.namespaces
+        )
 
         if dfs is not None:
             for i,j in enumerate(dfs):
@@ -296,8 +346,12 @@ class Fetch:
     """Fetch class to fetch ftp/http data files"""
     
     def __init__(
-            self, url = None, callback = fetches_callback, verbose = None,
-            headers = r_headers, verify = True
+            self,
+            url = None,
+            callback = fetches_callback,
+            verbose = None,
+            headers = r_headers,
+            verify = True
     ):
         self.url = url
         self.callback = callback
@@ -305,7 +359,10 @@ class Fetch:
         self.headers = headers
         self.verify = verify
 
-    def fetch_req(self, params = None, json = None, tries = 5, timeout = None, read_timeout = None):
+    def fetch_req(
+            self, params = None, json = None, tries = 5,
+            timeout = None, read_timeout = None
+    ):
         """fetch src_url and return the requests object"""
         
         if tries <= 0:
@@ -432,8 +489,10 @@ class Fetch:
                     #utils.echo_msg_bold('{} {}'.format(dst_fn_size, resume_byte_pos))
                     self.headers['Range'] = 'bytes={}-'.format(resume_byte_pos)
 
-            with requests.get(self.url, stream=True, params=params, headers=self.headers,
-                              timeout=(timeout,read_timeout), verify=self.verify) as req:
+            with requests.get(
+                    self.url, stream=True, params=params, headers=self.headers,
+                    timeout=(timeout,read_timeout), verify=self.verify
+            ) as req:
 
                 ## requested range is not satisfiable, most likely the requested
                 ## range is the complete size of the file, we'll skip here and assume
@@ -467,7 +526,9 @@ class Fetch:
                 if req.status_code == 416:
                     overwrite = True
                     raise FileExistsError(
-                        '{} exists, and requested Range is invalid, {}'.format(dst_fn, self.headers['Range'])
+                        '{} exists, and requested Range is invalid, {}'.format(
+                            dst_fn, self.headers['Range']
+                        )
                     )
                     
                 ## redirect response. pass
@@ -499,7 +560,9 @@ class Fetch:
                     total_size = int(req.headers.get('content-length', 0))                    
                     with open(dst_fn, 'ab' if req.status_code == 206 else 'wb') as local_file:
                         with tqdm(
-                                desc='fetching: {}'.format(utils._init_msg(self.url, len('fetching: '), 40)),
+                                desc='fetching: {}'.format(
+                                    utils._init_msg(self.url, len('fetching: '), 40)
+                                ),
                                 total=req_s,
                                 unit='iB',
                                 unit_scale=True,
@@ -560,7 +623,9 @@ class Fetch:
                             
                         time.sleep(10)
                         status = Fetch(
-                            url=self.url, headers=self.headers, verbose=self.verbose
+                            url=self.url,
+                            headers=self.headers,
+                            verbose=self.verbose
                         ).fetch_file(
                             dst_fn,
                             params=params,
@@ -798,7 +863,6 @@ class fetch_results(threading.Thread):
                 break
             else:
                 attempts-=1
-                #utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
                 
 ## Fetch Modules
 class FetchModule:
@@ -827,7 +891,9 @@ class FetchModule:
         ## some servers don't like us, or any 'bot' at all, so let's pretend we're
         ## just a Mozilla user on Linux. 
         #self.headers = { 'User-Agent': 'Fetches v%s' %(fetches.__version__) }
-        self.headers = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0' }
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:45.0) Gecko/20100101 Firefox/45.0'
+        }
 
         if self.outdir is None:
             self._outdir = os.path.join(os.getcwd(), self.name)
@@ -899,7 +965,9 @@ class FetchModule:
 ## GMRT
 def gmrt_fetch_point(latitude = None, longitude = None):
     gmrt_point_url = "https://www.gmrt.org:443/services/PointServer?"
-    headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'}    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+    }
     data = {'longitude':longitude, 'latitude':latitude}
     req = Fetch(gmrt_point_url).fetch_req(params=data, tries=10, timeout=2)
     if req is not None:
@@ -938,7 +1006,14 @@ class GMRT(FetchModule):
     < gmrt:res=max:fmt=geotiff:layer=topo >
     """
     
-    def __init__(self, res = 'default', fmt = 'geotiff', layer = 'topo', want_swath = False, **kwargs):
+    def __init__(
+            self,
+            res = 'default',
+            fmt = 'geotiff',
+            layer = 'topo',
+            want_swath = False,
+            **kwargs
+    ):
         super().__init__(name='gmrt', **kwargs) 
         self.res = res # GMRT resolution
         self.fmt = fmt # GMRT format
@@ -1104,12 +1179,15 @@ class waDNR(FetchModule):
                     
                 layer_type = layer['type']
                 layer_region = regions.Region(src_srs='epsg:3857').from_list(
-                    [layer['extent']['xmin'], layer['extent']['xmax'], layer['extent']['ymin'], layer['extent']['ymax']]
+                    [layer['extent']['xmin'], layer['extent']['xmax'],
+                     layer['extent']['ymin'], layer['extent']['ymax']]
                 ).warp('epsg:4326')
 
                 if len(layer_sublayers) > 0:
                     if regions.regions_intersect_ogr_p(layer_region, self.region):
-                        layers_in_region.append([layer_name, min([int(x['name'][:-1])-1 for x in layer_sublayers])])
+                        layers_in_region.append(
+                            [layer_name, min([int(x['name'][:-1])-1 for x in layer_sublayers])]
+                        )
                         
         if len(self.ids) > 0:
             layers_in_region = [x for x in layers_in_region if x[1] in self.ids]
@@ -1142,7 +1220,9 @@ class waDNR(FetchModule):
             )
 
             if data_req is not None and data_req.status_code == 200:
-                self.add_entry_to_results(data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr')
+                self.add_entry_to_results(
+                    data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr'
+                )
                 
             data = {}
                 
@@ -1645,6 +1725,7 @@ class FABDEM(FetchModule):
                     zipfile_url = '/'.join([self._fabdem_data_url, zipfile_name])
                     if zipfile_url not in [x[0] for x in self.results]:
                         self.add_entry_to_results(zipfile_url, zipfile_name, 'raster')
+                        
             v_ds = None
                         
         utils.remove_glob(v_json)
@@ -1688,7 +1769,10 @@ class FABDEM_FRED(FetchModule):
         self.FRED._open_ds()
         v_json = os.path.basename(self._fabdem_footprints_url)
         try:
-            status = Fetch(self._fabdem_footprints_url, verbose=self.verbose).fetch_file(v_json)
+            status = Fetch(
+                self._fabdem_footprints_url,
+                verbose=self.verbose
+            ).fetch_file(v_json)
         except:
             status = -1
             
@@ -1741,7 +1825,9 @@ class FABDEM_FRED(FetchModule):
                     if geom.Intersects(self.region.export_as_geom()):
                         zipfile_name = feature.GetField('zipfile_name')
                         self.add_entry_to_results(
-                            '/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster'
+                            '/'.join([self._fabdem_data_url, zipfile_name]),
+                            zipfile_name,
+                            'raster'
                         )
                         
             utils.remove_glob(v_zip)
@@ -2086,7 +2172,9 @@ class Charts(FetchModule):
             'f':'pjson',
             'returnGeometry':'True',
         }
-        _req = Fetch(self._charts_query_url, verbose=self.verbose).fetch_req(params=_data)
+        _req = Fetch(
+            self._charts_query_url, verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
             _req_json = _req.json()
             print(len(_req_json['charts']))
@@ -2153,7 +2241,10 @@ class NauticalCharts(FetchModule):
         for dt in self._dt_xml.keys():
             surveys = []
             this_xml = iso_xml(self._dt_xml[dt], timeout=1000, read_timeout=2000)
-            charts = this_xml.xml_doc.findall('.//{*}has', namespaces = this_xml.namespaces)
+            charts = this_xml.xml_doc.findall(
+                './/{*}has',
+                namespaces=this_xml.namespaces
+            )
             with tqdm(
                     total=len(charts),
                     desc='scanning for CHARTS ({}) datasets'.format(dt),
@@ -2336,7 +2427,9 @@ class R2R(FetchModule):
                                     if data['datatype_name'] == 'Bathymetry':
                                         #utils.echo_msg(data['actual_url'])
                                         self.add_entry_to_results(
-                                            data['actual_url'], os.path.basename(data['actual_url']), 'multibeam'
+                                            data['actual_url'],
+                                            os.path.basename(data['actual_url']),
+                                            'multibeam'
                                         )
                                         
                         
@@ -2393,7 +2486,8 @@ class Multibeam(FetchModule):
 
     https://data.ngdc.noaa.gov/platforms/
 
-    <exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, using a '/' as a seperator.
+    <exclude_>survey_id and <exclude_>ship_id can be lists of surveys or ships, repsectively, 
+    using a '/' as a seperator.
 
     < multibeam:processed=True:min_year=None:max_year=None:survey_id=None:ship_id=None:exclude_survey_id=None:exclude_ship_id=None >
     """
@@ -2477,7 +2571,12 @@ class Multibeam(FetchModule):
             fetch_region = self.region.copy()
             #fetch_region.buffer(pct=25)
 
-        _req = Fetch(self._mb_search_url).fetch_req(params={'geometry': fetch_region.format('bbox')}, timeout=20)
+        _req = Fetch(
+            self._mb_search_url
+        ).fetch_req(
+            params={'geometry': fetch_region.format('bbox')},
+            timeout=20
+        )
         if _req is not None and _req.status_code == 200:
             survey_list = _req.text.split('\n')[:-1]
             for r in survey_list:
@@ -2575,7 +2674,9 @@ class Multibeam(FetchModule):
         survey = entry[0].split('/')[7]
         src_inf = os.path.join(self._outdir, '{}.inf'.format(entry[1]))
         try:
-            status = Fetch('{}.inf'.format(inf_url), callback=self.callback, verbose=True).fetch_file(src_inf)
+            status = Fetch(
+                '{}.inf'.format(inf_url), callback=self.callback, verbose=True
+            ).fetch_file(src_inf)
         except:
             utils.echo_warning_msg('failed to fetch inf file: {}.inf'.format(inf_url))
             status = -1
@@ -2672,8 +2773,10 @@ class HydroNOS(FetchModule):
             'f':'pjson',
             'returnGeometry':'False'
         }
-        _req = Fetch(self._nos_query_url, verbose=self.verbose).fetch_req(params=_data)
-
+        _req = Fetch(
+            self._nos_query_url,
+            verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
             if 'features' in features.keys():
@@ -2867,7 +2970,8 @@ class DEMMosaic(FetchModule):
     MaxPS ( type: esriFieldTypeDouble, alias: MaxPS )
     LowPS ( type: esriFieldTypeDouble, alias: LowPS )
     HighPS ( type: esriFieldTypeDouble, alias: HighPS )
-    Category ( type: esriFieldTypeInteger, alias: Category , Coded Values: [0: Unknown] , [1: Primary] , [2: Overview] , ...6 more... )
+    Category ( type: esriFieldTypeInteger, alias: Category , 
+      Coded Values: [0: Unknown] , [1: Primary] , [2: Overview] , ...6 more... )
     Tag ( type: esriFieldTypeString, alias: Tag, length: 100 )
     GroupName ( type: esriFieldTypeString, alias: GroupName, length: 100 )
     ProductName ( type: esriFieldTypeString, alias: ProductName, length: 100 )
@@ -2920,10 +3024,11 @@ class DEMMosaic(FetchModule):
             'geometryType':'esriGeometryEnvelope',
             'spatialRel':'esriSpatialRelIntersects'
         }
-        _req = Fetch(self._dem_mosaic_query_url, verbose=self.verbose).fetch_req(params=_data)
-
+        _req = Fetch(
+            self._dem_mosaic_query_url,
+            verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
-            #utils.echo_msg(_req.url)
             features = _req.json()
             for feature in features['features']:
                 if self.index:
@@ -2995,7 +3100,9 @@ class Trackline(FetchModule):
             'f':'pjson',
             'returnGeometry':'False'
         }
-        _req = Fetch(self._trackline_query_url, verbose=self.verbose).fetch_req(params=_data)
+        _req = Fetch(
+            self._trackline_query_url, verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
             features = _req.json()
             ids = []
@@ -3163,7 +3270,9 @@ class BlueTopo(FetchModule):
         s3 = boto3.client('s3', aws_access_key_id='', aws_secret_access_key='')
         s3._request_signer.sign = (lambda *args, **kwargs: None)
         r = s3.list_objects(Bucket = self._bt_bucket, Prefix='BlueTopo/_BlueTopo_Tile_Scheme')
-        self._bluetopo_index_url = 'https://{}.s3.amazonaws.com/{}'.format(self._bt_bucket, r['Contents'][0]['Key'])
+        self._bluetopo_index_url = 'https://{}.s3.amazonaws.com/{}'.format(
+            self._bt_bucket, r['Contents'][0]['Key']
+        )
         self._bluetopo_index = self._bluetopo_index_url.split('/')[-1]
         
     def run(self):
@@ -3275,7 +3384,9 @@ class NGS(FetchModule):
     def __init__(self, datum = 'geoidHt', **kwargs):
         super().__init__(name='ngs', **kwargs)
         if datum not in ['orthoHt', 'geoidHt', 'z', 'ellipHeight']:
-            utils.echo_warning_msg('could not parse {}, falling back to geoidHt'.format(datum))
+            utils.echo_warning_msg(
+                'could not parse {}, falling back to geoidHt'.format(datum)
+            )
             self.datum = 'geoidHt'
         else:
             self.datum = datum
@@ -3376,10 +3487,15 @@ class Tides(FetchModule):
             'outSR':4326,
             'f':'pjson',
         }
-        _req = Fetch(self._stations_api_url, verbose=self.verbose).fetch_req(params=_data)
+        _req = Fetch(
+            self._stations_api_url,
+            verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
             self.add_entry_to_results(
-                _req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides'
+                _req.url,
+                'tides_results_{}.json'.format(self.region.format('fn')),
+                'tides'
             )
             
         return(self)
@@ -3414,7 +3530,9 @@ class WaterServices(FetchModule):
         _req = Fetch(self._water_services_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
             self.add_entry_to_results(
-                _req.url, 'water_services_results_{}.json'.format(self.region.format('fn')), 'waterservices'
+                _req.url,
+                'water_services_results_{}.json'.format(self.region.format('fn')),
+                'waterservices'
             )
 
             ## print out the water-station information
@@ -3522,7 +3640,9 @@ class BUOYS(FetchModule):
                             
             for station_id in current_stations:
                 self.add_entry_to_results(
-                    self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys'
+                    self._buoy_station_realtime + station_id + '.txt',
+                    'buoy_results_{}.txt'.format(station_id),
+                    'buoys'
                 )
 
         return(self)
@@ -3620,7 +3740,10 @@ class DAV(FetchModule):
     < digital_coast:where=None:datatype=None >
     """
     
-    def __init__(self, where = '1=1', index = False, datatype = None, layer = 0, name='digital_coast', **kwargs):
+    def __init__(
+            self, where = '1=1', index = False, datatype = None, layer = 0,
+            name = 'digital_coast', **kwargs
+    ):
         super().__init__(name=name, **kwargs)
         self.where = where
         self.index = index
@@ -3868,7 +3991,10 @@ class NCEIThreddsCatalog(FetchModule):
         
     def _parse_catalog(self, catalog_url):
         ntCatalog = iso_xml(catalog_url)
-        ntCatRefs = ntCatalog.xml_doc.findall('.//th:catalogRef', namespaces = ntCatalog.namespaces)
+        ntCatRefs = ntCatalog.xml_doc.findall(
+            './/th:catalogRef',
+            namespaces=ntCatalog.namespaces
+        )
         for ntCatRef in ntCatRefs:
             ntCatHref =ntCatRef.attrib['{http://www.w3.org/1999/xlink}href']
             if ntCatHref[0] == "/":
@@ -3880,8 +4006,14 @@ class NCEIThreddsCatalog(FetchModule):
             
     def _parse_dataset(self, catalog_url):
         ntCatXml = iso_xml(catalog_url)
-        this_ds = ntCatXml.xml_doc.findall('.//th:dataset', namespaces = ntCatXml.namespaces)
-        this_ds_services = ntCatXml.xml_doc.findall('.//th:service', namespaces = ntCatXml.namespaces)
+        this_ds = ntCatXml.xml_doc.findall(
+            './/th:dataset',
+            namespaces=ntCatXml.namespaces
+        )
+        this_ds_services = ntCatXml.xml_doc.findall(
+            './/th:service',
+            namespaces=ntCatXml.namespaces
+        )
         surveys = []
         with tqdm(
                 total=len(this_ds),
@@ -3898,7 +4030,10 @@ class NCEIThreddsCatalog(FetchModule):
                 pbar.update(1)
                 self.FRED._attribute_filter(["ID = '{}'".format(this_id)])
                 if self.FRED.layer is None or len(self.FRED.layer) == 0:
-                    subCatRefs = node.findall('.//th:catalogRef', namespaces=ntCatXml.namespaces)
+                    subCatRefs = node.findall(
+                        './/th:catalogRef',
+                        namespaces=ntCatXml.namespaces
+                    )
                     if len(subCatRefs) > 0:
                         self._parse_catalog(catalog_url)
                         break
@@ -3913,9 +4048,14 @@ class NCEIThreddsCatalog(FetchModule):
                     http_url = False
                     for service in this_ds_services:
                         service_name = service.attrib['name']
-                        if service_name == 'iso': iso_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
-                        if service_name == 'wcs': wcs_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
-                        if service_name == 'http': http_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                        if service_name == 'iso':
+                            iso_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                            
+                        if service_name == 'wcs':
+                            wcs_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
+                            
+                        if service_name == 'http':
+                            http_url = '{}{}{}'.format(self._ngdc_url, service.attrib['base'], ds_path)
 
                     this_xml = iso_xml(iso_url)
                     title = this_xml.title()
@@ -3966,11 +4106,20 @@ class NCEIThreddsCatalog(FetchModule):
         """Search for data in the reference vector file"""
         
         for surv in FRED._filter_FRED(self):
-            wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=geotiff_float"\
-                .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
+            _wcs_data = {
+                'request': 'GetCoverage',
+                'version': '1.0.0',
+                'service': 'WCS',
+                'coverage': surv['Etcetra'],
+                'bbox': self.region.format('bbox'),
+                'format': 'geotiff_float'
+            }
+            wcs_url = '{}?{}'.format(surv['IndexLink'], _wcs_data)
             if self.want_wcs:
                 self.add_entry_to_results(
-                    wcs_url, surv['DataLink'].split(',')[0].split('/')[-1].replace('.nc', '.tif'), surv['DataType']
+                    wcs_url,
+                    surv['DataLink'].split(',')[0].split('/')[-1].replace('.nc', '.tif'),
+                    surv['DataType']
                 )
             else:
                 for d in surv['DataLink'].split(','):
@@ -4168,7 +4317,11 @@ class TheNationalMap(FetchModule):
                 pbar.update(1)
                 while True:
                     _dataset_results = []
-                    _data = {'bbox': self.region.format('bbox'), 'max': 100, 'offset': offset}
+                    _data = {
+                        'bbox': self.region.format('bbox'),
+                        'max': 100,
+                        'offset': offset
+                    }
                     if q is not None: _data['q'] = str(q)
                     if f is None:
                         _data['prodFormats'] = surv['Etcetra']
@@ -4184,7 +4337,9 @@ class TheNationalMap(FetchModule):
                             _dataset_results = _req.json()
                             total = _dataset_results['total']
                         except ValueError:
-                            utils.echo_error_msg('tnm server error resulting in {}, try again'.format(e))
+                            utils.echo_error_msg(
+                                'tnm server error resulting in {}, try again'.format(e)
+                            )
                         except Exception as e:
                             utils.echo_error_msg('error, {}'.format(e))
 
@@ -4209,7 +4364,9 @@ class TheNationalMap(FetchModule):
                                         if f_url is None:
                                             f_url = item['downloadURL']
 
-                                        self.add_entry_to_results(f_url, f_url.split('/')[-1], surv['DataType'])
+                                        self.add_entry_to_results(
+                                            f_url, f_url.split('/')[-1], surv['DataType']
+                                        )
                             else:
                                 for fmt in fmts:
                                     if fmt in item['urls'].keys():
@@ -4219,7 +4376,9 @@ class TheNationalMap(FetchModule):
                                 if f_url is None:
                                     f_url = item['downloadURL']
 
-                                self.add_entry_to_results(f_url, f_url.split('/')[-1], surv['DataType'])
+                                self.add_entry_to_results(
+                                    f_url, f_url.split('/')[-1], surv['DataType']
+                                )
 
                     offset += 100
                     if offset >= total:
@@ -4239,7 +4398,9 @@ class TheNationalMap(FetchModule):
         for dsTag in self._elev_ds:
             offset = 0
             utils.echo_msg('processing TNM dataset {}...'.format(dsTag))
-            _req = Fetch(self._tnm_product_url).fetch_req(params={'max': 1, 'datasets': dsTag})
+            _req = Fetch(
+                self._tnm_product_url
+            ).fetch_req(params={'max': 1, 'datasets': dsTag})
             try:
                 _dsTag_results = _req.json()
             except ValueError:
@@ -4265,13 +4426,18 @@ class TheNationalMap(FetchModule):
                 
                 for i, item in enumerate(_dsTag_results['items']):
                     if self.verbose:
-                        _prog.update_perc((i+offset,total), msg = 'gathering {} products from {}...'.format(total, dsTag))
+                        _prog.update_perc(
+                            (i+offset,total), msg='gathering {} products from {}...'.format(total, dsTag)
+                        )
                     try:
                         self.FRED.layer.SetAttributeFilter("ID = '{}'".format(item['sourceId']))
                     except: pass
                     if self.FRED.layer is None or len(self.FRED.layer) == 0:
                         bbox = item['boundingBox']
-                        geom = regions.Region().from_list([bbox['minX'], bbox['maxX'], bbox['minY'], bbox['maxY']]).export_as_geom()
+                        geom = regions.Region().from_list(
+                            [bbox['minX'], bbox['maxX'],
+                             bbox['minY'], bbox['maxY']]
+                        ).export_as_geom()
 
                         if item['format'] == 'IMG' or item['format'] == 'GeoTIFF':
                             tnm_ds = 'raster'
@@ -4306,7 +4472,9 @@ class TheNationalMap(FetchModule):
             for d in surv['DataLink'].split(','):
                 if d != '':
                     self.add_entry_to_results(
-                        d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']
+                        d,
+                        os.path.join(self._outdir, d.split('/')[-1]),
+                        surv['DataType']
                     )
 
 ## The National Map - NED (1 & 1/3) shortcut
@@ -4340,7 +4508,7 @@ class EMODNet(FetchModule):
     https://portal.emodnet-bathymetry.eu/
     https://erddap.emodnet.eu
 
-    erddap formats (default is csv):
+    erddap formats (default is nc):
     https://erddap.emodnet.eu/erddap/griddap/documentation.html#fileType
 
     Data
@@ -4416,7 +4584,10 @@ class EMODNet(FetchModule):
             }
             _req = Fetch(self._emodnet_grid_url).fetch_req(params=_data)
             _results = lxml.etree.fromstring(_req.text.encode('utf-8'))
-            g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=namespaces)[0]
+            g_env = _results.findall(
+                './/{http://www.opengis.net/gml/3.2}GridEnvelope',
+                namespaces=namespaces
+            )[0]
             hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
             g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
             lc = [float(x) for x in  g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
@@ -4427,8 +4598,19 @@ class EMODNet(FetchModule):
             resx = (uc[1] - lc[1]) / hl[0]
             resy = (uc[0] - lc[0]) / hl[1]
             if regions.regions_intersect_ogr_p(self.region, ds_region):
-                emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
-                                          .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
+                _wcs_data = {
+                    'service': 'WCS',
+                    'request': 'GetCoverage',
+                    'version': '1.0.0',
+                    'Identifier': 'emodnet:mean',
+                    'coverage': 'emodnet:mean',
+                    'format': 'GeoTIFF',
+                    'bbox': self.region.format('bbox'),
+                    'resx': resx,
+                    'resy': resy,
+                    'crs': 'EPSG:4326',
+                }
+                emodnet_wcs = '{}{}'.format(self._emodnet_grid_url, urlencode(_wcs_data))
                 outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
                 self.add_entry_to_results(emodnet_wcs, outf, 'emodnet')
             
@@ -4470,7 +4652,10 @@ class CHS(FetchModule):
         }
         _req = Fetch(self._chs_url).fetch_req(params=_data)
         _results = lxml.etree.fromstring(_req.text.encode('utf-8'))        
-        g_env = _results.findall('.//{http://www.opengis.net/gml/3.2}GridEnvelope', namespaces=namespaces)[0]
+        g_env = _results.findall(
+            './/{http://www.opengis.net/gml/3.2}GridEnvelope',
+            namespaces=namespaces
+        )[0]
         hl = [float(x) for x in g_env.find('{http://www.opengis.net/gml/3.2}high').text.split()]
         g_bbox = _results.findall('.//{http://www.opengis.net/gml/3.2}Envelope')[0]
         lc = [float(x) for x in g_bbox.find('{http://www.opengis.net/gml/3.2}lowerCorner').text.split()]
@@ -4517,8 +4702,15 @@ class HRDEM(FetchModule):
         """Run the HRDEM fetches module"""
         
         v_zip = os.path.join(self._outdir, 'Datasets_Footprints.zip') # use the remote footprints to discover data.
-        status = Fetch(self._hrdem_footprints_url, verbose=self.verbose).fetch_ftp_file(v_zip)
-        v_shps = utils.p_unzip(v_zip, ['shp', 'shx', 'dbf', 'prj'], verbose=self.verbose)
+        status = Fetch(
+            self._hrdem_footprints_url,
+            verbose=self.verbose
+        ).fetch_ftp_file(v_zip)
+        v_shps = utils.p_unzip(
+            v_zip,
+            ['shp', 'shx', 'dbf', 'prj'],
+            verbose=self.verbose
+        )
         v_shp = None
         for v in v_shps:
             if v.split('.')[-1] == 'shp':
@@ -4602,7 +4794,10 @@ class ArcticDEM(FetchModule):
         self.FRED._open_ds()        
         v_zip = os.path.basename(self._arctic_dem_index_url)
         try:
-            status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+            status = Fetch(
+                self._arctic_dem_index_url,
+                verbose=self.verbose
+            ).fetch_file(v_zip)
         except:
             status = -1
             
@@ -4614,10 +4809,14 @@ class ArcticDEM(FetchModule):
                 v_shp = v
                 break
 
-        utils.run_cmd('ogr2ogr arctic_tmp.shp {} -t_srs epsg:4326'.format(v_shp), verbose=self.verbose)
+        utils.run_cmd(
+            'ogr2ogr arctic_tmp.shp {} -t_srs epsg:4326'.format(v_shp),
+            verbose=self.verbose
+        )
         utils.remove_glob(v_zip, *v_shps)
         v_shp = 'arctic_tmp.shp'
-        v_shps = ['arctic_tmp.shp','arctic_tmp.dbf','arctic_tmp.shx','arctic_tmp.prj']
+        v_shps = ['arctic_tmp.shp', 'arctic_tmp.dbf',
+                  'arctic_tmp.shx', 'arctic_tmp.prj']
         shp_regions = regions.gdal_ogr_regions(v_shp)
         shp_region = regions.Region()
         for this_region in shp_regions:
@@ -4653,7 +4852,10 @@ class ArcticDEM(FetchModule):
         #for surv in FRED._filter_FRED(self):
         v_zip = os.path.join(self._outdir, os.path.basename(self._arctic_dem_index_url))
         try:
-            status = Fetch(self._arctic_dem_index_url, verbose=self.verbose).fetch_file(v_zip)
+            status = Fetch(
+                self._arctic_dem_index_url,
+                verbose=self.verbose
+            ).fetch_file(v_zip)
         except:
             status = -1
             
@@ -4722,7 +4924,11 @@ def polygonize_osm_coastline(
         output_layer = output_ds.GetLayer()
     else:
         output_ds = driver.CreateDataSource(dst_ogr)
-        output_layer = output_ds.CreateLayer("split_polygons", line_layer.GetSpatialRef(), ogr.wkbMultiPolygon)
+        output_layer = output_ds.CreateLayer(
+            'split_polygons',
+            line_layer.GetSpatialRef(),
+            ogr.wkbMultiPolygon
+        )
         output_layer.CreateField(ogr.FieldDefn('watermask', ogr.OFTInteger))
         
     has_feature = False    
@@ -4834,7 +5040,8 @@ def polygonize_osm_coastline(
         center_pnt = region.center()
         if center_pnt is not None:
             center_z = utils.int_or(
-                gmrt_fetch_point(latitude=center_pnt[1], longitude=center_pnt[0])
+                gmrt_fetch_point(latitude=center_pnt[1],
+                                 longitude=center_pnt[0])
             )
             out_feature = ogr.Feature(output_layer.GetLayerDefn())
             out_feature.SetGeometry(region_geom)
@@ -4967,25 +5174,24 @@ class OpenStreetMap(FetchModule):
                 n_chunk = None
 
             these_regions = self.region.chunk(incs[0], n_chunk=n_chunk)
-            utils.echo_msg('chunking OSM request into {} regions'.format(len(these_regions)))
-            
+            utils.echo_msg('chunking OSM request into {} regions'.format(len(these_regions)))            
             for this_region in these_regions:
                 c_bbox = this_region.format('osm_bbox')
                 out_fn = 'osm_{}'.format(this_region.format('fn_full'))
                 osm_q_bbox  = '''
-                {1}{2}[bbox:{0}];'''.format(c_bbox, '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '', self.h)
-
+                {1}{2}[bbox:{0}];'''.format(
+                    c_bbox,
+                    '[out:{}]'.format(self.fmt) if self.fmt != 'osm' else '',
+                    self.h
+                )
                 osm_q = '''
                 (node;
                 <;
                 >;
                 );
                 out meta;
-                '''
-                
+                '''                
                 osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
-
-                #utils.echo_msg('using query: {}'.format(osm_q_))
                 osm_data = urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
                 self.add_entry_to_results(osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm')
@@ -5061,7 +5267,9 @@ class BingBFP(FetchModule):
 
             #utils.remove_glob(bing_csv)
             #self.results = [[line[0], '{}_{}_{}'.format(line[2], line[1], os.path.basename(line[0])), 'bing'] for line in bd]
-            [self.add_entry_to_results(line[0], '{}_{}_{}'.format(line[2], line[1], os.path.basename(line[0])), 'bing') for line in bd]
+            [self.add_entry_to_results(
+                line[0], '{}_{}_{}'.format(line[2], line[1], os.path.basename(line[0])), 'bing'
+            ) for line in bd]
         else:
             utils.echo_error_msg('could not fetch BING dataset-links.csv')
         
@@ -5120,7 +5328,10 @@ def proc_vdatum_inf(vdatum_inf, name = 'vdatum'):
         
     return(_inf_areas_fmt)
 
-def search_proj_cdn(region = None, epsg = None, crs_name = None, name = None, verbose = True, cache_dir = './'):
+def search_proj_cdn(
+        region = None, epsg = None, crs_name = None, name = None,
+        verbose = True, cache_dir = './'
+):
     """Search PROJ CDN for transformation grids:
     the PROJ CDN holds transformation grids from around the
     world, including global transformations such as EGM
@@ -5401,7 +5612,11 @@ class VDATUM(FetchModule):
             if self.gtx:
                 dst_zip = '{}.zip'.format(surv['ID'])
                 try:
-                    status = Fetch(surv['DataLink'], callback=self.callback, verbose=self.verbose).fetch_file(dst_zip)
+                    status = Fetch(
+                        surv['DataLink'],
+                        callback=self.callback,
+                        verbose=self.verbose
+                    ).fetch_file(dst_zip)
                 except:
                     status = -1
                     
@@ -5410,7 +5625,9 @@ class VDATUM(FetchModule):
                     for v_gtx in v_gtxs:
                         os.replace(v_gtx, '{}.gtx'.format(surv['ID']))
             else:
-                self.add_entry_to_results(surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name'].lower())
+                self.add_entry_to_results(
+                    surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name'].lower()
+                )
 
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
@@ -5459,7 +5676,9 @@ class VDATUM(FetchModule):
                         _results[-1][key] = feat.GetField(key)
                         
             for _result in _results:
-                self.add_entry_to_results(_result['url'], _result['name'], _result['source_crs_code'])
+                self.add_entry_to_results(
+                    _result['url'], _result['name'], _result['source_crs_code']
+                )
                 
             cdn_ds = None
             utils.remove_glob(cdn_index)
@@ -5615,7 +5834,6 @@ class EarthData(FetchModule):
             while True:
                 _req = Fetch(self._egi_url).fetch_req(params=_egi_data, timeout=None, read_timeout=None)
                 if _req is not None and _req.status_code == 200:
-                    #utils.echo_msg(_req.headers)
                     if 'Content-Disposition' in _req.headers.keys():
                         zip_attach = _req.headers['Content-Disposition'].split('=')[-1].strip('/"')
                         zip_url = '{}{}'.format(self._egi_zip_url, zip_attach)
@@ -5623,10 +5841,11 @@ class EarthData(FetchModule):
                         ## NSIDC sometimes returns a url for a single processed h5 granule. This file apparently doesn't
                         ## exist and would result ins a failed fetch, so we skip non zip-files here to bypass that.
                         if zip_url.endswith('.zip'):
-                            self.add_entry_to_results(zip_url, zip_attach, '{}_processed_zip'.format(self.short_name))
+                            self.add_entry_to_results(
+                                zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)
+                            )
                             
                         _egi_data['page_num'] += 1
-                        #break
                 else:
                     break    
         else:
@@ -5649,7 +5868,9 @@ class EarthData(FetchModule):
                         for link in links:
                             if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
                                 if not any([link['href'].split('/')[-1] in res for res in self.results]):
-                                    self.add_entry_to_results(link['href'], link['href'].split('/')[-1], self.short_name)
+                                    self.add_entry_to_results(
+                                        link['href'], link['href'].split('/')[-1], self.short_name
+                                    )
 
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
 ##
@@ -5830,7 +6051,10 @@ class USIEI(FetchModule):
             'f':'pjson',
             'returnGeometry':'True' if self.want_geometry else 'False',
         }
-        _req = Fetch(self._usiei_query_url, verbose=self.verbose).fetch_req(params=_data)
+        _req = Fetch(
+            self._usiei_query_url,
+            verbose=self.verbose
+        ).fetch_req(params=_data)
         if _req is not None:
             if self.want_geometry:
                 print(_req.text)
@@ -5865,7 +6089,9 @@ class WSF(FetchModule):
         self.update_if_not_in_FRED()
 
         ## set user agent
-        self.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0' }
+        self.headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+        }
         
     def update_if_not_in_FRED(self):
         self.FRED._open_ds()
@@ -5999,7 +6225,7 @@ class ShallowBathyEverywhere(FetchModule):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.sbe_dem_url - 'https://shallowbathymetryeverywhere.com/data/dem/'
+        self.sbe_dem_url = 'https://shallowbathymetryeverywhere.com/data/dem/'
 
 class CPTCity(FetchModule):
     """CPT City
@@ -6034,8 +6260,10 @@ class CPTCity(FetchModule):
             ff = [b for a, b in zip(mask, zip_cpts) if a]
         else:
             ff = zip_cpts
-
-        [self.add_entry_to_results(self.cpt_pub_url + f, f.split('/')[-1], 'cpt') for f in ff]
+            
+        [self.add_entry_to_results(
+            self.cpt_pub_url + f, f.split('/')[-1], 'cpt'
+        ) for f in ff]
         
 class HttpDataset(FetchModule):
     """fetch an http file"""
@@ -6044,11 +6272,16 @@ class HttpDataset(FetchModule):
         super().__init__(**kwargs)
 
     def run(self):
-        self.add_entry_to_results(self.params['mod'], os.path.basename(self.params['mod']), 'https')
+        self.add_entry_to_results(
+            self.params['mod'],
+            os.path.basename(self.params['mod']),
+            'https'
+        )
         
 ## Fetches Module Parser
 class FetchesFactory(factory.CUDEMFactory):
-    """Acquire a fetches module. Add a new fetches module here to expose it in the CLI or API via FetchesFactory.
+    """Acquire a fetches module. Add a new fetches module here to expose it in the 
+    CLI or API via FetchesFactory.
     
     Use the Factory in python by calling: FetchesFactory()"""
     
@@ -6193,7 +6426,10 @@ See `fetches_cli_usage` for full cli options.
                   )
             sys.exit(1)
         elif arg == '--modules' or arg == '-m':
-            utils.echo_modules(FetchesFactory._modules, None if i+1 >= len(argv) else sys.argv[i+1])
+            utils.echo_modules(
+                FetchesFactory._modules,
+                None if i+1 >= len(argv) else sys.argv[i+1]
+            )
             sys.exit(0)
         elif arg[0] == '-':
             sys.stderr.write(fetches_usage)
@@ -6216,7 +6452,13 @@ See `fetches_cli_usage` for full cli options.
         if stop_threads:
             return
         
-        x_fs = [FetchesFactory(mod=mod, src_region=this_region, verbose=want_verbose)._acquire_module() for mod in mods]
+        x_fs = [
+            FetchesFactory(
+                mod=mod,
+                src_region=this_region,
+                verbose=want_verbose
+            )._acquire_module() for mod in mods
+        ]
         for x_f in x_fs:
             if x_f is None:
                 continue
@@ -6231,7 +6473,9 @@ See `fetches_cli_usage` for full cli options.
             try:
                 x_f.run()
             except (KeyboardInterrupt, SystemExit):
-                utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                utils.echo_error_msg(
+                    'user breakage...please wait while fetches exits.'
+                )
                 sys.exit(-1)
                 
             if want_verbose:
@@ -6248,13 +6492,18 @@ See `fetches_cli_usage` for full cli options.
             else:
                 try:
                     fr = fetch_results(
-                        x_f, n_threads=num_threads, check_size=check_size, attempts=fetch_attempts
+                        x_f,
+                        n_threads=num_threads,
+                        check_size=check_size,
+                        attempts=fetch_attempts
                     )
                     fr.daemon = True                
                     fr.start()
                     fr.join()         
                 except (KeyboardInterrupt, SystemExit):
-                    utils.echo_error_msg('user breakage...please wait while fetches exits.')
+                    utils.echo_error_msg(
+                        'user breakage...please wait while fetches exits.'
+                    )
                     x_f.status = -1
                     stop_threads = True
                     while not fr.fetch_q.empty():
