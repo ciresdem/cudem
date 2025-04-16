@@ -6570,7 +6570,7 @@ class Fetcher(ElevationDataset):
             for result in self.fetch_module.results:
                 status = self.fetch_module.fetch(result, check_size=self.check_size)
                 if status == 0:
-                    self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1])
+                    self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn'])
                     for this_ds in self.yield_ds(result):
                         if this_ds is not None:
                             f_name = os.path.relpath(this_ds.fn.split(':')[0], self.fetch_module._outdir)
@@ -6608,7 +6608,7 @@ class Fetcher(ElevationDataset):
         ## fix this.
         try:
             vdatum = self.fetch_module.vdatum
-            src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+            src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result['dst_fn']))
             horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
             if vert_epsg is None:
                 vert_epsg = vdatum
@@ -6660,7 +6660,7 @@ class NEDFetcher(Fetcher):
         else:
             ned_mask = self.mask
         
-        src_dem = os.path.join(self.fetch_module._outdir, result[1])
+        src_dem = os.path.join(self.fetch_module._outdir, result['dst_fn'])
         #ned_metadata = copy.deepcopy(self.metadata)
         #ned_metadata['name'] = src_dem
         #self.fetches_params['metadata'] = ned_metadata
@@ -6686,7 +6686,7 @@ class DNRFetcher(Fetcher):
         
     def yield_ds(self, result):
         src_dnr_dems = utils.p_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
             exts=['tif'],
             outdir=self.fetch_module._outdir,
             verbose=self.verbose
@@ -6734,9 +6734,9 @@ class DAVFetcher_CoNED(Fetcher):
         try:
             vdatum = self.fetch_module.vdatum
             if not self.cog:
-                src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result[1]))
+                src_srs = gdalfun.gdal_get_srs(os.path.join(self.fetch_module._outdir, result['dst_fn']))
             else:
-                src_srs = gdalfun.gdal_get_srs(result[0])
+                src_srs = gdalfun.gdal_get_srs(result['url'])
                 
             horz_epsg, vert_epsg = gdalfun.epsg_from_input(src_srs)
             if vert_epsg is None:
@@ -6750,9 +6750,9 @@ class DAVFetcher_CoNED(Fetcher):
         except:
             pass
 
-        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result[1]) \
+        self.fetches_params['mod'] = os.path.join(self.fetch_module._outdir, result['dst_fn']) \
             if not self.cog \
-               else result[0]
+               else result['url']
         self.fetches_params['check_path'] = False if self.cog else True
         self.fetches_params['src_srs'] = self.fetch_module.src_srs
         self.fetches_params['data_format'] = 200
@@ -6833,7 +6833,6 @@ class SWOTFetcher(Fetcher):
     __doc__ = '''{}    
     Fetches Module: <swot> - {}'''.format(__doc__, fetches.SWOT.__doc__)
     
-
     def __init__(self,
                  data_set = 'wse',
                  apply_geoid = True,
@@ -6865,16 +6864,16 @@ class SWOTFetcher(Fetcher):
         
     def yield_ds(self, result):
         #swot_fn = os.path.join(self.fetch_module._outdir, result[1])
-        if 'L2_HR_PIXC_' in result[-1]:
+        if 'L2_HR_PIXC_' in result['data_type']:
             #pixc_vec_result = self.fetch_pixc_vec(swot_fn)
             #swot_pixc_vec_fn = pixc_vec_result
             self.fetches_params['data_format'] = 202
             yield(DatasetFactory(**self.fetches_params).acquire_module())
-        elif 'L2_HR_Raster' in result[-1]:
+        elif 'L2_HR_Raster' in result['data_type']:
             self.fetch_module['data_format'] = 203
             yield(DatasetFactory(**self.fetches_params).acquire_module())
         else:
-            utils.echo_warning_msg('{} is not a currently supported dlim dataset'.format(result[-1]))
+            utils.echo_warning_msg('{} is not a currently supported dlim dataset'.format(result['data_type']))
 
 class IceSat2Fetcher(Fetcher):
     """IceSat2 data from NASA
@@ -6932,7 +6931,7 @@ class IceSat2Fetcher(Fetcher):
         self.fetches_params['reject_failed_qa'] = reject_failed_qa        
     
     def yield_ds(self, result):
-        icesat2_fn= os.path.join(self.fetch_module._outdir, result[1])
+        icesat2_fn= os.path.join(self.fetch_module._outdir, result['dst_fn'])
         if self.fetches_params['classify_buildings']:
             self.fetches_params['classify_buildings'] = self.process_buildings(self.fetch_buildings(verbose=True))
 
@@ -6941,7 +6940,7 @@ class IceSat2Fetcher(Fetcher):
                 self.fetch_coastline(chunks=False, verbose=False), return_geom=True, verbose=False
             )
             
-        if 'processed_zip' in result[-1]:
+        if 'processed_zip' in result['data_type']:
             icesat2_h5s = utils.p_unzip(
                 icesat2_fn,
                 exts=['h5'],
@@ -6975,7 +6974,7 @@ class GMRTFetcher(Fetcher):
 
     def yield_ds(self, result):
         swath_mask=None
-        gmrt_fn = os.path.join(self.fetch_module._outdir, result[1])
+        gmrt_fn = os.path.join(self.fetch_module._outdir, result['dst_fn'])
         with gdalfun.gdal_datasource(gmrt_fn, update = 1) as src_ds:
             md = src_ds.GetMetadata()
             md['AREA_OR_POINT'] = 'Point'
@@ -7027,7 +7026,7 @@ class GEBCOFetcher(Fetcher):
     def yield_ds(self, result):
         wanted_gebco_fns = []
         gebco_fns = utils.p_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
             exts=['tif'],
             outdir=self.fetch_module._outdir,
             verbose=self.verbose
@@ -7123,9 +7122,9 @@ class CopernicusFetcher(Fetcher):
         self.datatype=datatype
         
     def yield_ds(self, result):
-        if self.datatype is None or result[-1] == self.datatype:
+        if self.datatype is None or result['data_type'] == self.datatype:
             src_cop_dems = utils.p_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 exts=['tif'],
                 outdir=self.fetch_module._outdir,
                 verbose=self.verbose
@@ -7149,7 +7148,7 @@ class FABDEMFetcher(Fetcher):
 
     def yield_ds(self, result):
         src_fab_dems = utils.p_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
             exts=['tif'],
             outdir=self.fetch_module._outdir,
             verbose=self.verbose
@@ -7185,12 +7184,12 @@ class MarGravFetcher(Fetcher):
         self.region.zmin=self.lower_limit
             
     def yield_ds(self, result):
-        if result[-1] == 'mar_grav_img':
+        if result['data_type'] == 'mar_grav_img':
             nc_fn = utils.make_temp_fn(
-                '{}.nc'.format(utils.fn_basename2(result[1])),
+                '{}.nc'.format(utils.fn_basename2(result['dst_fn'])),
                 temp_dir=self.fetch_module._outdir)
             img2grd_cmd = 'gmt img2grd {} {} -G{} -D -T1 -I1m -E'.format(
-                os.path.join(self.fetch_module._outdir, result[1]), self.region.format('gmt'), nc_fn
+                os.path.join(self.fetch_module._outdir, result['dst_fn']), self.region.format('gmt'), nc_fn
             )
             out, status = utils.run_cmd(img2grd_cmd, verbose=True)
             out, status = utils.run_cmd('gmt grdedit {} -T'.format(nc_fn))
@@ -7208,7 +7207,7 @@ class MarGravFetcher(Fetcher):
             _raster = waffles.WaffleFactory(
                 mod='IDW:min_points=16',
                 data=['{},168:x_offset=REM,1'.format(
-                    os.path.join(self.fetch_module._outdir, result[1])
+                    os.path.join(self.fetch_module._outdir, result['dst_fn'])
                 )],
                 src_region=mg_region,
                 xinc=utils.str2inc('30s'),
@@ -7249,7 +7248,7 @@ class ChartsFetcher(Fetcher):
         
     def yield_ds(self, result):
         src_000s = utils.p_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
             exts=['000'],
             outdir=self.fetch_module._outdir,
             verbose=self.verbose            
@@ -7294,11 +7293,11 @@ class HydroNOSFetcher(Fetcher):
         self.explode=explode
 
     def yield_ds(self, result):
-        if result[2] == 'xyz':
+        if result['data_type'] == 'xyz':
             nos_fns = utils.p_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 exts=['xyz', 'dat'],
-                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])),
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result['dst_fn'])),
                 verbose=self.verbose
             )
             for nos_fn in nos_fns:
@@ -7307,11 +7306,11 @@ class HydroNOSFetcher(Fetcher):
                 self.fetches_params['src_srs'] = 'epsg:4326+5866'
                 yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
-        elif result[2] == 'bag':
+        elif result['data_type'] == 'bag':
             bag_fns = utils.p_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 exts=['bag'],
-                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result[1])),
+                outdir=os.path.dirname(os.path.join(self.fetch_module._outdir, result['dst_fn'])),
                 verbose=self.verbose
             )
             for bag_fn in bag_fns:
@@ -7346,9 +7345,9 @@ class EMODNetFetcher(Fetcher):
         super().__init__(**kwargs)
 
     def yield_ds(self, result):
-        if result[2] == 'csv':
+        if result['data_type'] == 'csv':
             self.fetches_params['data_format'] = '168:skip=1:xpos=2:ypos=1:zpos=3:delimiter=,'
-        elif result[2] == 'nc':
+        elif result['data_type'] == 'nc':
             self.fetches_params['data_format'] = 200
             
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
@@ -7373,7 +7372,7 @@ class GEDTM30Fetcher(Fetcher):
                         yield(ds)
                                         
     def yield_ds(self, result):
-        self.fetches_params['mod'] = '/vsicurl/{}'.format(result[0])
+        self.fetches_params['mod'] = '/vsicurl/{}'.format(result['url'])
         self.fetches_params['data_format'] = 200            
         yield(DatasetFactory(**self.fetches_params)._acquire_module())
 
@@ -7391,7 +7390,7 @@ class eHydroFetcher(Fetcher):
     def yield_ds(self, result):
         try:
             src_gdb = utils.gdb_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 outdir=self.fetch_module._outdir,
                 verbose=False
             )
@@ -7423,7 +7422,7 @@ class eHydroFetcher(Fetcher):
 
     def yield_ds_XYZ(self, result):
         src_gdb = utils.gdb_unzip(
-            os.path.join(self.fetch_module._outdir, result[1]),
+            os.path.join(self.fetch_module._outdir, result['dst_fn']),
             outdir=self.fetch_module._outdir,
             verbose=False
         )
@@ -7434,7 +7433,7 @@ class eHydroFetcher(Fetcher):
             src_epsg = gdalfun.osr_parse_srs(src_srs)
             tmp_gdb = None
             src_usaces = utils.p_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 ['XYZ', 'xyz', 'dat'],
                 outdir=self.fetch_module._outdir,
                 verbose=self.verbose
@@ -7469,7 +7468,7 @@ class BlueTopoFetcher(Fetcher):
         sid = None
         if not self.want_interpolation:
             sid = gdalfun.gdal_extract_band(
-                os.path.join(self.fetch_module._outdir, result[1]),
+                os.path.join(self.fetch_module._outdir, result['dst_fn']),
                 utils.make_temp_fn('tmp_bt_tid.tif', self.fetch_module._outdir),
                 band=3,
                 exclude=[0]
@@ -7500,7 +7499,7 @@ class NGSFetcher(Fetcher):
             self.datum = 'geoidHt'
 
     def yield_ds(self, result):
-        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
+        with open(os.path.join(self.fetch_module._outdir, result['dst_fn']), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_ngs.xyz'), 'w') as tmp_ngs:
@@ -7532,7 +7531,7 @@ class TidesFetcher(Fetcher):
         self.units = units
         
     def yield_ds(self, result):
-        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
+        with open(os.path.join(self.fetch_module._outdir, result['dst_fn']), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_tides.xyz'), 'w') as tmp_ngs:
@@ -7583,7 +7582,7 @@ class WaterServicesFetcher(Fetcher):
         self.site_code = site_code
         
     def yield_ds(self, result):
-        with open(os.path.join(self.fetch_module._outdir, result[1]), 'r') as json_file:
+        with open(os.path.join(self.fetch_module._outdir, result['dst_fn']), 'r') as json_file:
             r = json.load(json_file)
             if len(r) > 0:
                 with open(os.path.join(self.fetch_module._outdir, '_tmp_ws.xyz'), 'w') as tmp_ws:
@@ -7619,12 +7618,12 @@ class VDatumFetcher(Fetcher):
     def yield_ds(self, result):
         src_tif = os.path.join(
             self.fetch_module._outdir, '{}.tif'.format(
-                utils.fn_basename2(os.path.basename(result[1]))
+                utils.fn_basename2(os.path.basename(result['dst_fn']))
             )
         )
-        if result[1].endswith('.zip'):
+        if result['dst_fn'].endswith('.zip'):
             v_gtx = utils.p_f_unzip(
-                os.path.join(self.fetch_module._outdir, result[1]), [result[2]], outdir=self.fetch_module._outdir
+                os.path.join(self.fetch_module._outdir, result['dst_fn']), [result['data_type']], outdir=self.fetch_module._outdir
             )[0]
             utils.run_cmd(
                 'gdalwarp {} {} -t_srs epsg:4269 --config CENTER_LONG 0'.format(v_gtx, src_tif),
