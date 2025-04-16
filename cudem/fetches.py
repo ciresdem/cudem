@@ -704,7 +704,6 @@ def fetch_queue(q, c = True):
                 ## There was an exception in fetch_file, we'll put the request back into
                 ## the queue to attempt to try again, fetch_args[4] is the number of times
                 ## we will try to do this, once exhausted, we will give up.
-                #utils.echo_msg(e)
                 if fetch_args[4] > 0:# and (utils.int_or(str(e), 0) < 400 or utils.int_or(str(e), 0) >= 500):
                     utils.echo_warning_msg(
                         'fetch of {} failed...putting back in the queue: {}'.format(fetch_args[0], e)
@@ -750,8 +749,8 @@ class fetch_results(threading.Thread):
         self.n_threads = n_threads
         self.attempts = attempts
         self.entry = entry
-        ## results holds the same list as mod.results,
-        ## with the addition of the fetching status.
+        ## results holds the info from mod.results as a list,
+        ## with the addition of the fetching status at the end.
         self.results = []
         if len(self.mod.results) == 0:
             self.mod.run()
@@ -801,83 +800,7 @@ class fetch_results(threading.Thread):
                 attempts-=1
                 #utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))
                 
-# class fetch_results(threading.Thread):
-#     """fetch results gathered from a fetch module.
-
-#     results is a list of URLs with data type
-
-#     when a fetch module is run with {module}.run() it will fill {module}.results with a list of urls, e.g.
-#     {module}.results = [[http://data/url.xyz.gz, /home/user/data/url.xyz.gz, data-type], ...]
-#     where each result in is [data_url, data_fn, data_type]
-
-#     run this on an initialized fetches module:
-#     >>> fetch_result(fetches_module, n_threads=3).run()
-#     and this will fill a queue for data fetching, using 'n_threads' threads.
-
-#     entry should be a single results entry to fetch a single entry from the fetch module.
-#     """
-    
-#     def __init__(self, mod, check_size = True, n_threads = 3, attempts = 5, entry = None):
-#         threading.Thread.__init__(self)
-#         self.fetch_q = queue.Queue()
-#         self.mod = mod
-#         self.check_size = check_size
-#         self.n_threads = n_threads
-#         self.attempts = attempts
-#         self.entry = entry
-#         ## results holds the same list as mod.results,
-#         ## with the addition of the fetching status.
-#         self.results = []
-#         if len(self.mod.results) == 0:
-#             self.mod.run()
-            
-#     def run(self):
-#         for _ in range(self.n_threads):
-#             t = threading.Thread(
-#                 target=fetch_queue,
-#                 args=(self.fetch_q, self.check_size)
-#             )
-#             t.daemon = True
-#             t.start()
-
-#         # fetch_q data is [fetch_results, fetch_path, fetch_dt, fetch_module, retries, results]
-#         attempts = self.attempts
-#         while True:
-#             if self.entry is not None:
-#                 self.fetch_q.put(
-#                     [self.entry[0],
-#                      os.path.join(self.mod._outdir, self.entry[1]),
-#                      self.entry[2],
-#                      self.mod,
-#                      self.attempts,
-#                      self.results]
-#                 )
-#             else:
-#                 for row in self.mod.results:
-#                     self.fetch_q.put(
-#                         [row[0],
-#                          os.path.join(self.mod._outdir, row[1]),
-#                          row[2],
-#                          self.mod,
-#                          self.attempts,
-#                          self.results]
-#                     )
-
-#             self.fetch_q.join()
-#             status = [x[3]==0 for x in self.results]
-#             if self.entry is not None:
-#                 all_ok = len(status) == 1
-#             else:
-#                 all_ok = len(status) == len(self.mod.results)
-                
-#             if (all(status) and all_ok) or attempts < 0:
-#                 break
-#             else:
-#                 attempts-=1
-#                 #utils.echo_msg('results: {}, lens: {} {}'.format(status, len(status), len(self.mod.results)))            
-                
 ## Fetch Modules
-## TODO: update self.results to a dict with more infos...
 class FetchModule:
     """The FetchModule super class to hold all the fetch modules.
 
@@ -1079,7 +1002,6 @@ class GMRT(FetchModule):
                 self.region.format('fn_full'),
                 'tif' if self.fmt == 'geotiff' else 'grd'
             )
-            #self.results.append([req.url, outf, 'gmrt'])
             self.add_entry_to_results(req.url, outf, 'gmrt')
         else:
             ## we got multiple URLs, so lets loop through those
@@ -1105,16 +1027,14 @@ class GMRT(FetchModule):
                     url_region.format('fn'),
                     'tif' if self.fmt == 'geotiff' else 'grd'
                 )
-                #self.results.append([url, outf, 'gmrt'])
                 self.add_entry_to_results(url, outf, 'gmrt')
 
                 ## if want_swath is True, we will download the swath polygons so that we can
                 ## clip the data to that in dlim or elsewhere.
                 if self.want_swath:
-                    # self.results.append(
-                    #     [self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt']
-                    # )
-                    self.add_entry_to_results(self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt')
+                    self.add_entry_to_results(
+                        self._gmrt_swath_poly_url, 'gmrt_swath_polygons.zip', 'gmrt'
+                    )
                 
         return(self)
 
@@ -1223,7 +1143,6 @@ class waDNR(FetchModule):
 
             if data_req is not None and data_req.status_code == 200:
                 self.add_entry_to_results(data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr')
-                #self.results.append([data_req.url, '{}_{}.zip'.format(l[0], l[1]), 'wa_dnr'])
                 
             data = {}
                 
@@ -1320,25 +1239,16 @@ class GEBCO(FetchModule):
 
         outf = 'gebco.zip'
         if self.want_ice:
-            # self.results.append(
-            #     [self._gebco_urls['gebco_ice'][self.want_ice], 'gebco_ice.zip', 'gebco']
-            # )
             self.add_entry_to_results(
                 self._gebco_urls['gebco_ice'][self.want_ice], 'gebco_ice.zip', 'gebco'
             )
             
         if self.want_sub_ice:
-            # self.results.append(
-            #     [self._gebco_urls['gebco_sub_ice'][self.want_sub_ice], 'gebco_sub_ice.zip', 'gebco']
-            # )
             self.add_entry_to_results(
                 self._gebco_urls['gebco_sub_ice'][self.want_sub_ice], 'gebco_sub_ice.zip', 'gebco'
             )
             
         if self.want_tid:
-            # self.results.append(
-            #     [self._gebco_urls['gebco_tid'][self.want_tid], 'gebco_tid.zip', 'gebco']
-            # )
             self.add_entry_to_results(
                 self._gebco_urls['gebco_tid'][self.want_tid], 'gebco_tid.zip', 'gebco'
             )
@@ -1511,9 +1421,6 @@ class ETOPO(FetchModule):
             for surv in _results:
                 pbar.update()
                 for i in surv['DataLink'].split(','):
-                    # self.results.append(
-                    #     [i, i.split('/')[-1].split('?')[0], surv['DataType']]
-                    # )
                     self.add_entry_to_results(
                         i, i.split('/')[-1].split('?')[0], surv['DataType']
                     )
@@ -1677,9 +1584,6 @@ class CopernicusDEM(FetchModule):
             for surv in _results:
                 pbar.update()
                 for i in surv['DataLink'].split(','):
-                    # self.results.append(
-                    #     [i, i.split('/')[-1].split('?')[0], surv['DataType']]
-                    # )
                     self.add_entry_to_results(
                         i, i.split('/')[-1].split('?')[0], surv['DataType']
                     )
@@ -1740,7 +1644,6 @@ class FABDEM(FetchModule):
                     zipfile_name = feature.GetField('zipfile_name')
                     zipfile_url = '/'.join([self._fabdem_data_url, zipfile_name])
                     if zipfile_url not in [x[0] for x in self.results]:
-                        #self.results.append([zipfile_url, zipfile_name, 'raster'])
                         self.add_entry_to_results(zipfile_url, zipfile_name, 'raster')
             v_ds = None
                         
@@ -1837,9 +1740,6 @@ class FABDEM_FRED(FetchModule):
                     geom = feature.GetGeometryRef()
                     if geom.Intersects(self.region.export_as_geom()):
                         zipfile_name = feature.GetField('zipfile_name')
-                        # self.results.append(
-                        #     ['/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster']
-                        # )
                         self.add_entry_to_results(
                             '/'.join([self._fabdem_data_url, zipfile_name]), zipfile_name, 'raster'
                         )
@@ -1952,9 +1852,6 @@ class NASADEM(FetchModule):
 
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                # self.results.append(
-                #     [i, i.split('/')[-1].split('?')[0], surv['DataType']]
-                # )
                 self.add_entry_to_results(
                     i, i.split('/')[-1].split('?')[0], surv['DataType']
                 )
@@ -2035,11 +1932,8 @@ class MarGrav(FetchModule):
         ## if it 404s then we just download the entire raster.
         if _req is not None:
             outf = 'mar_grav_{}.xyz'.format(self.region.format('fn_full'))
-            #self.results.append([_req.url, outf, 'mar_grav'])
             self.add_entry_to_results(_req.url, outf, 'mar_grav')
-
         else:
-            #self.results.append([self._mar_grav_27_1_url, 'topo_27.1.img', 'mar_grav_img'])
             self.add_entry_to_results(self._mar_grav_27_1_url, 'topo_27.1.img', 'mar_grav_img')
             
 ## SRTM Plus
@@ -2088,7 +1982,6 @@ class SRTMPlus(FetchModule):
         _req = Fetch(self._srtm_url, verify=False).fetch_req(params=self.data)
         if _req is not None:
             outf = 'srtm_{}.xyz'.format(self.region.format('fn'))
-            #self.results.append([_req.url, outf, 'srtm'])
             self.add_entry_to_results(_req.url, outf, 'srtm')
 
 ## GEBCO
@@ -2122,7 +2015,6 @@ class SynBath(FetchModule):
     def run(self):
         """Run the SynBath fetching module"""
 
-        #self.results.append([self._synbath_url, 'SYNBATH_V2_0.nc', 'synbath'])
         self.add_entry_to_results(self._synbath_url, 'SYNBATH_V2_0.nc', 'synbath')
 
 class GEDTM30(FetchModule):
@@ -2155,7 +2047,6 @@ class GEDTM30(FetchModule):
             urls = [[row[0], row[-1]] for row in reader if row[0] in self.products]
 
             for url in urls:
-                #self.results.append([url[1], os.path.basename(url[1]), 'gedtm30 - {}'.format(url[0])])
                 self.add_entry_to_results(url[1], os.path.basename(url[1]), 'gedtm30 - {}'.format(url[0]))
     
 ## Charts - ENC/RNC
@@ -2324,9 +2215,6 @@ class NauticalCharts(FetchModule):
             for surv in _results:
                 pbar.update(1)
                 for i in surv['DataLink'].split(','):
-                    # self.results.append(
-                    #     [i, i.split('/')[-1], surv['DataType']]
-                    # )
                     self.add_entry_to_results(
                         i, i.split('/')[-1], surv['DataType']
                     )
@@ -2447,9 +2335,6 @@ class R2R(FetchModule):
                                     #print(data['datatype_name'])
                                     if data['datatype_name'] == 'Bathymetry':
                                         #utils.echo_msg(data['actual_url'])
-                                        # self.results.append(
-                                        #     [data['actual_url'], os.path.basename(data['actual_url']), 'multibeam']
-                                        # )
                                         self.add_entry_to_results(
                                             data['actual_url'], os.path.basename(data['actual_url']), 'multibeam'
                                         )
@@ -2648,16 +2533,13 @@ class Multibeam(FetchModule):
             if self.processed_p:
                 if '2' in these_surveys[key].keys():
                     for v2 in these_surveys[key]['2']:
-                        #self.results.append(v2)
                         self.add_entry_to_results(*v2)
                 else:
                     for v1 in these_surveys[key]['1']:
-                        #self.results.append(v1)
                         self.add_entry_to_results(*v1)
             else:
                 for keys in these_surveys[key].keys():
                     for survs in these_surveys[key][keys]:
-                        #self.results.append(survs)
                         self.add_entry_to_results(*survs)
                             
         if self.make_datalist:
@@ -2830,8 +2712,6 @@ class HydroNOS(FetchModule):
                             if feature['attributes']['BAGS_EXIST'] == 'TRUE' or feature['attributes']['BAGS_EXIST'] == 'Y':
                                 page = Fetch(data_link + 'BAG').fetch_html()
                                 bags = page.xpath('//a[contains(@href, ".bag")]/@href')
-                                #[self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join(self._outdir, 'bag', bag), 'bag']) for bag in bags]
-                                #[self.results.append(['{0}BAG/{1}'.format(data_link, bag), os.path.join('bag', bag), 'bag']) for bag in bags]
                                 [self.add_entry_to_results('{0}BAG/{1}'.format(data_link, bag), os.path.join('bag', bag), 'bag') for bag in bags]
 
                         if self.datatype is None or 'xyz' in self.datatype.lower():
@@ -2842,9 +2722,6 @@ class HydroNOS(FetchModule):
                                 geodas = page.xpath('//a[contains(@href, "GEODAS")]/@href')
                                 if geodas:
                                     xyz_link = data_link + 'GEODAS/{0}.xyz.gz'.format(ID)
-                                    # self.results.append(
-                                    #     [xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz']
-                                    # )
                                     self.add_entry_to_results(
                                         xyz_link, os.path.join('geodas', xyz_link.split('/')[-1]), 'xyz'
                                     )
@@ -2919,7 +2796,6 @@ class CSB(FetchModule):
                             continue
 
                         self.date = feature['attributes']['YEAR']
-                        #self.results.append([link, _csv_fn, 'csb'])
                         self.add_entry_to_results(link, _csv_fn, 'csb')
                         ## AWS
                         # r = self.s3.list_objects(Bucket = self._bt_bucket, Prefix='csb/csv/{}/{}/{}'.format(_year, _dir_a, _dir_b))
@@ -3129,8 +3005,6 @@ class Trackline(FetchModule):
 
             print('http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids)))
             #xyz_link = 'http://www.ngdc.noaa.gov/trackline/request/?surveyIds={}'.format(','.join(ids))
-            #self.results.append([xyz_link, os.path.join(self._outdir, xyz_link.split('/')[-1]), 'trackline'])
-            #self.results.append([xyz_link, os.path.join(self._outdir, 'tmp_trackline.xyz'), 'trackline'])
 
 ## eHydro (USACE)
 class eHydro(FetchModule):
@@ -3245,7 +3119,6 @@ class eHydro(FetchModule):
                         if sid is not None:
                             print(line)                            
                     else:
-                        #self.results.append([fetch_fn, fetch_fn.split('/')[-1], 'ehydro'])
                         self.add_entry_to_results(fetch_fn, fetch_fn.split('/')[-1], 'ehydro')
                 
         return(self)
@@ -3321,7 +3194,6 @@ class BlueTopo(FetchModule):
                     for key in r['Contents']:
                         if key['Key'].split('.')[-1] == 'tiff':
                             data_link = 'https://noaa-ocs-nationalbathymetry-pds.s3.amazonaws.com/{}'.format(key['Key'])
-                            #self.results.append([data_link, data_link.split('/')[-1], 'raster'])
                             self.add_entry_to_results(data_link, data_link.split('/')[-1], 'raster')
             v_ds = None
 
@@ -3382,7 +3254,6 @@ class MGDS(FetchModule):
             for req_result in req_results:
                 name = req_result.attrib['name']
                 link = req_result.attrib['download']
-                #self.results.append([link, name, 'mgds'])
                 self.add_entry_to_results(link, name, 'mgds')
                 
         return(self)
@@ -3429,9 +3300,6 @@ class NGS(FetchModule):
         }
         _req = Fetch(self._ngs_search_url).fetch_req(params=_data)
         if _req is not None:
-            # self.results.append(
-            #     [_req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs']
-            # )
             self.add_entry_to_results(
                 _req.url, 'ngs_results_{}.json'.format(self.region.format('fn')), 'ngs'
             )
@@ -3510,9 +3378,6 @@ class Tides(FetchModule):
         }
         _req = Fetch(self._stations_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            # self.results.append(
-            #     [_req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides']
-            # )
             self.add_entry_to_results(
                 _req.url, 'tides_results_{}.json'.format(self.region.format('fn')), 'tides'
             )
@@ -3548,9 +3413,6 @@ class WaterServices(FetchModule):
         }
         _req = Fetch(self._water_services_api_url, verbose=self.verbose).fetch_req(params=_data)
         if _req is not None:
-            # self.results.append(
-            #     [_req.url, 'water_services_results_{}.json'.format(self.region.format('fn')), 'waterservices']
-            # )
             self.add_entry_to_results(
                 _req.url, 'water_services_results_{}.json'.format(self.region.format('fn')), 'waterservices'
             )
@@ -3655,14 +3517,10 @@ class BUOYS(FetchModule):
                     station_url = s.xpath('a')[0].get('href')
                     if 'station=' in station_url:
                         station_id = station_url.split('=')[-1]
-                        #self.results.append([self._ndbc_url + station_url, 'buoy_results_{}.html'.format(station_id), 'buoys'])
                         if station_id not in current_stations:
                             current_stations.append(station_id)
                             
             for station_id in current_stations:
-                # self.results.append(
-                #     [self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys']
-                # )
                 self.add_entry_to_results(
                     self._buoy_station_realtime + station_id + '.txt', 'buoy_results_{}.txt'.format(station_id), 'buoys'
                 )
@@ -3910,12 +3768,6 @@ class DAV(FetchModule):
                                                     dst_horz, dst_vert = gdalfun.epsg_from_input(this_wkt)
                                                     this_epsg = '{}+{}'.format(dst_horz, dst_vert)
 
-                                            # self.results.append(
-                                            #     [tile_url,
-                                            #      os.path.join('{}/{}'.format(feature['attributes']['ID'], tile_url.split('/')[-1])),
-                                            #      this_epsg,
-                                            #      feature['attributes']['DataType']]
-                                            # )
                                             self.add_entry_to_results(
                                                 tile_url,
                                                 os.path.join('{}/{}'.format(feature['attributes']['ID'], tile_url.split('/')[-1])),
@@ -3926,13 +3778,6 @@ class DAV(FetchModule):
                                     index_ds = index_layer = None
                                     utils.remove_glob(index_zipfile, *index_shps)
                             elif link['serviceID'] == 166 and self.datatype == 'sm': # spatial_metadata
-                                # self.results.append(
-                                #     [link['link'],
-                                #      os.path.join('{}/{}'.format(feature['attributes']['ID'], link['link'].split('/')[-1])),
-                                #      None,
-                                #      link['label']
-                                #     ]
-                                # )
                                 self.add_entry_to_results(
                                     link['link'],
                                     os.path.join('{}/{}'.format(feature['attributes']['ID'], link['link'].split('/')[-1])),
@@ -3940,7 +3785,6 @@ class DAV(FetchModule):
                                     this_epsg=None
                                 )
 
-                #break
         #self.results = [x for x in np.unique(self.results, axis=0)]
         return(self)
 
@@ -4125,18 +3969,12 @@ class NCEIThreddsCatalog(FetchModule):
             wcs_url = "{}?request=GetCoverage&version=1.0.0&service=WCS&coverage={}&bbox={}&format=geotiff_float"\
                 .format(surv['IndexLink'], surv['Etcetra'], self.region.format('bbox'))
             if self.want_wcs:
-                # self.results.append(
-                #     [wcs_url, surv['DataLink'].split(',')[0].split('/')[-1].replace('.nc', '.tif'), surv['DataType']]
-                # )
                 self.add_entry_to_results(
                     wcs_url, surv['DataLink'].split(',')[0].split('/')[-1].replace('.nc', '.tif'), surv['DataType']
                 )
             else:
                 for d in surv['DataLink'].split(','):
                     if d != '':
-                        # self.results.append(
-                        #     [d, d.split('/')[-1], surv['DataType']]
-                        # )
                         self.add_entry_to_results(
                             d, d.split('/')[-1], surv['DataType']
                         )
@@ -4371,9 +4209,6 @@ class TheNationalMap(FetchModule):
                                         if f_url is None:
                                             f_url = item['downloadURL']
 
-                                        #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                                        #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                                        #self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
                                         self.add_entry_to_results(f_url, f_url.split('/')[-1], surv['DataType'])
                             else:
                                 for fmt in fmts:
@@ -4384,9 +4219,6 @@ class TheNationalMap(FetchModule):
                                 if f_url is None:
                                     f_url = item['downloadURL']
 
-                                #self.results.append([f_url, os.path.join(self._outdir, os.path.join(*f_url.split('/')[:-1][3:]), f_url.split('/')[-1]), surv['DataType']])
-                                #self.results.append([f_url, os.path.join(self._outdir, surv['ID'].replace('-', '_'), f_url.split('/')[-1]), surv['DataType']])
-                                #self.results.append([f_url, f_url.split('/')[-1], surv['DataType']])
                                 self.add_entry_to_results(f_url, f_url.split('/')[-1], surv['DataType'])
 
                     offset += 100
@@ -4473,9 +4305,6 @@ class TheNationalMap(FetchModule):
         for surv in FRED._filter_FRED(self):
             for d in surv['DataLink'].split(','):
                 if d != '':
-                    # self.results.append(
-                    #     [d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']]
-                    # )
                     self.add_entry_to_results(
                         d, os.path.join(self._outdir, d.split('/')[-1]), surv['DataType']
                     )
@@ -4576,7 +4405,6 @@ class EMODNet(FetchModule):
             )
             erddap_url = self._emodnet_grid_url_erddap + suff
             outf = 'emodnet_{}.{}'.format(self.region.format('fn'), self.erddap_format)
-            #self.results.append([erddap_url, outf, self.erddap_format])
             self.add_entry_to_results(erddap_url, outf, self.erddap_format)
             
         else:
@@ -4602,7 +4430,6 @@ class EMODNet(FetchModule):
                 emodnet_wcs = '{}service=WCS&request=GetCoverage&version=1.0.0&Identifier=emodnet:mean&coverage=emodnet:mean&format=GeoTIFF&bbox={}&resx={}&resy={}&crs=EPSG:4326'\
                                           .format(self._emodnet_grid_url, self.region.format('bbox'), resx, resy)
                 outf = 'emodnet_{}.tif'.format(self.region.format('fn'))
-                #self.results.append([emodnet_wcs, outf, 'emodnet'])
                 self.add_entry_to_results(emodnet_wcs, outf, 'emodnet')
             
         return(self)
@@ -4664,7 +4491,6 @@ class CHS(FetchModule):
             }
             _wcs_req = Fetch(self._chs_url).fetch_req(params=_wcs_data)
             outf = 'chs_nonna{}_{}.tif'.format(self.datatype, self.region.format('fn'))
-            #self.results.append([_wcs_req.url, outf, 'chs'])
             self.add_entry_to_results(_wcs_req.url, outf, 'chs')
             
         return(self)
@@ -4712,7 +4538,6 @@ class HRDEM(FetchModule):
                 geom = feature.GetGeometryRef()
                 if geom.Intersects(self.region.export_as_geom()):
                     data_link = feature.GetField('Ftp_dtm')
-                    #self.results.append([data_link, data_link.split('/')[-1], 'raster'])
                     self.add_entry_to_results(data_link, data_link.split('/')[-1], 'raster')
                     
             v_ds = None
@@ -4858,7 +4683,6 @@ class ArcticDEM(FetchModule):
             for f in range(0, fcount):
                 feature = layer[f]
                 data_link = feature.GetField('fileurl')
-                #self.results.append([data_link, data_link.split('/')[-1], 'raster'])
                 self.add_entry_to_results(data_link, data_link.split('/')[-1], 'raster')
 
             v_ds = None
@@ -5119,14 +4943,8 @@ class OpenStreetMap(FetchModule):
         if self.region is None:
             return([])
 
-        #if self.planet:
-        #    self.results.append([self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.bz2'), 'bz2'])
-        
         ## fetch whole planet
         if self.planet:
-            # self.results.append(
-            #     [self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.pbf'), 'pbf']
-            # )
             self.add_entry_to_results(
                 self._osm_planet, os.path.join(self._outdir, 'planet-latest.osm.pbf'), 'pbf'
             )
@@ -5170,7 +4988,6 @@ class OpenStreetMap(FetchModule):
                 #utils.echo_msg('using query: {}'.format(osm_q_))
                 osm_data = urlencode({'data': osm_q_})
                 osm_data_url = self._osm_api + '?' + osm_data
-                #self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
                 self.add_entry_to_results(osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm')
         else:
             c_bbox = self.region.format('osm_bbox')
@@ -5189,7 +5006,6 @@ class OpenStreetMap(FetchModule):
             osm_q_ = osm_q_bbox + (osm_q if self.q is None else self.q)
             osm_data = urlencode({'data': osm_q_})
             osm_data_url = self._osm_api + '?' + osm_data            
-            #self.results.append([osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm'])
             self.add_entry_to_results(osm_data_url, '{}.{}'.format(out_fn, self.fmt), 'osm')
 
 ## BING Building Footprints
@@ -5593,12 +5409,8 @@ class VDATUM(FetchModule):
                     v_gtxs = utils.p_f_unzip(dst_zip, [surv['Name']])
                     for v_gtx in v_gtxs:
                         os.replace(v_gtx, '{}.gtx'.format(surv['ID']))
-                    #utils.remove_glob(dst_zip)
             else:
-                #print(surv)
-                #self.results.append([surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name'].lower()])
                 self.add_entry_to_results(surv['DataLink'], '{}.zip'.format(surv['ID']), surv['Name'].lower())
-                #print(self.results)
 
         ## Search PROJ CDN for all other transformation grids:
         ## the PROJ CDN holds transformation grids from around the
@@ -5647,8 +5459,6 @@ class VDATUM(FetchModule):
                         _results[-1][key] = feat.GetField(key)
                         
             for _result in _results:
-                #print(_result)
-                #self.results.append([_result['url'], _result['name'], _result['source_crs_code']])
                 self.add_entry_to_results(_result['url'], _result['name'], _result['source_crs_code'])
                 
             cdn_ds = None
@@ -5813,7 +5623,6 @@ class EarthData(FetchModule):
                         ## NSIDC sometimes returns a url for a single processed h5 granule. This file apparently doesn't
                         ## exist and would result ins a failed fetch, so we skip non zip-files here to bypass that.
                         if zip_url.endswith('.zip'):
-                            #self.results.append([zip_url, zip_attach, '{}_processed_zip'.format(self.short_name)])
                             self.add_entry_to_results(zip_url, zip_attach, '{}_processed_zip'.format(self.short_name))
                             
                         _egi_data['page_num'] += 1
@@ -5840,7 +5649,6 @@ class EarthData(FetchModule):
                         for link in links:
                             if link['rel'].endswith('/data#') and 'inherited' not in link.keys():
                                 if not any([link['href'].split('/')[-1] in res for res in self.results]):
-                                    #self.results.append([link['href'], link['href'].split('/')[-1], self.short_name])
                                     self.add_entry_to_results(link['href'], link['href'].split('/')[-1], self.short_name)
 
 ## IceSat2 from EarthData shortcut - NASA (requires login credentials)
@@ -6125,9 +5933,6 @@ class WSF(FetchModule):
 
         for surv in FRED._filter_FRED(self):
             for i in surv['DataLink'].split(','):
-                # self.results.append(
-                #     [i, i.split('/')[-1].split('?')[0], surv['DataType']]
-                # )
                 self.add_entry_to_results(
                     i, i.split('/')[-1].split('?')[0], surv['DataType']
                 )
@@ -6173,17 +5978,11 @@ class HydroLakes(FetchModule):
     def run(self):
         """Run the hydrolakes URLs"""
         
-        # self.results.append(
-        #     [self._hydrolakes_poly_zip, self._hydrolakes_poly_zip.split('/')[-1], 'hydrolakes']
-        # )
         self.add_entry_to_results(
             self._hydrolakes_poly_zip, self._hydrolakes_poly_zip.split('/')[-1], 'hydrolakes'
         )
 
         if self.want_globathy:
-            # self.results.append(
-            #     [self._globathy_url, 'globathy_parameters.zip', 'globathy']
-            # )
             self.add_entry_to_results(
                 self._globathy_url, 'globathy_parameters.zip', 'globathy'
             )
@@ -6236,10 +6035,6 @@ class CPTCity(FetchModule):
         else:
             ff = zip_cpts
 
-        # for f in ff:
-        #     self.results.append(
-        #         [self.cpt_pub_url + f, f.split('/')[-1], 'cpt']
-        #     )
         [self.add_entry_to_results(self.cpt_pub_url + f, f.split('/')[-1], 'cpt') for f in ff]
         
 class HttpDataset(FetchModule):
@@ -6249,7 +6044,6 @@ class HttpDataset(FetchModule):
         super().__init__(**kwargs)
 
     def run(self):
-        #self.results.append([self.params['mod'], os.path.basename(self.params['mod']), 'https'])
         self.add_entry_to_results(self.params['mod'], os.path.basename(self.params['mod']), 'https')
         
 ## Fetches Module Parser
