@@ -1813,8 +1813,11 @@ class ElevationDataset:
                 ).run(outfile=self.transform['trans_fn'])
 
         ## set the pyproj.Transformer for both horz+vert and vert only
+        ## hack for navd88 datums in feet (6360 is us-feet, 8228 is international-feet
         if utils.str_or(self.transform['src_vert_epsg']) == '6360':# or 'us-ft' in utils.str_or(src_vert, ''):
             #out_src_srs = out_src_srs + ' +vto_meter=0.3048006096012192'
+            uc = ' +step +proj=unitconvert +z_in=us-ft +z_out=m'
+        elif utils.str_or(self.transform['src_vert_epsg']) == '8228':
             uc = ' +step +proj=unitconvert +z_in=ft +z_out=m'
         else:
             uc = ''
@@ -2557,7 +2560,8 @@ class ElevationDataset:
             ndv = -9999,
             fmt = 'GTiff',
             mask_only = False,
-            mask_level = 0
+            mask_level = 0,
+            export_as_geotiff = False,
     ):
         """stack and mask incoming arrays (from `array_yield`) together
 
@@ -2879,77 +2883,79 @@ class ElevationDataset:
             ## set the final output nodatavalue
 
         ## create the stack geotiff
-        num_bands = len(stack_grp)
-        driver = gdal.GetDriverByName(fmt)
-        stack_dataset = driver.Create(
-            stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
-            options=['COMPRESS=LZW',
-                     'PREDICTOR=2',
-                     'TILED=YES',
-                     'BIGTIFF=YES']
-        )
-        stack_dataset.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
+        if export_as_geotiff:
+            num_bands = len(stack_grp)
+            driver = gdal.GetDriverByName(fmt)
+            stack_dataset = driver.Create(
+                stack_fn, xcount, ycount, num_bands, gdal.GDT_Float32,
+                options=['COMPRESS=LZW',
+                         'PREDICTOR=2',
+                         'TILED=YES',
+                         'BIGTIFF=YES']
+            )
+            stack_dataset.SetGeoTransform(dst_gt)
+            if self.dst_srs is not None:
+                stack_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
 
-        with tqdm(
-                total=len(stack_grp.keys()),
-                desc='converting CSG stack to GeoTIFF',
-                leave=self.verbose
-        ) as pbar:
-            for i, key in enumerate(reversed(stack_grp.keys())):
-                pbar.update()
-                stack_grp[key][np.isnan(stack_grp[key])] = ndv
-                stack_band = stack_dataset.GetRasterBand(i + 1)
-                stack_band.WriteArray(stack_grp[key][...])
-                stack_band.SetDescription(key)
-                stack_band.SetNoDataValue(ndv)
-                stack_band.FlushCache()
+            with tqdm(
+                    total=len(stack_grp.keys()),
+                    desc='converting CSG stack to GeoTIFF',
+                    leave=self.verbose
+            ) as pbar:
+                for i, key in enumerate(reversed(stack_grp.keys())):
+                    pbar.update()
+                    stack_grp[key][np.isnan(stack_grp[key])] = ndv
+                    stack_band = stack_dataset.GetRasterBand(i + 1)
+                    stack_band.WriteArray(stack_grp[key][...])
+                    stack_band.SetDescription(key)
+                    stack_band.SetNoDataValue(ndv)
+                    stack_band.FlushCache()
 
-        stack_dataset = None
-                
-        ## create the mask geotiff
-        num_bands, mask_keys = self.h5_get_datasets_from_grp(mask_grp)
-        driver = gdal.GetDriverByName(fmt)
-        mask_dataset = driver.Create(
-            mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
-            options=['COMPRESS=LZW', 'BIGTIFF=YES'] if fmt == 'GTiff' else ['COMPRESS=LZW']
-        )
-        mask_dataset.SetGeoTransform(dst_gt)
-        if self.dst_srs is not None:
-            mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
-            
-        with tqdm(
-                total=len(mask_keys),
-                desc='converting CSG mask to GeoTiff',
-                leave=self.verbose
-        ) as pbar:
-            ii = 0
-            for i, key in enumerate(mask_keys):
-                pbar.update()
-                srcwin = (0, 0, xcount, ycount)
-                for y in range(
-                        srcwin[1], srcwin[1] + srcwin[3], 1
-                ):
-                    mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][np.isnan(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])] = 0
-                    #if np.all(mask_grp[key][mask_grp[key] == 0]):
-                    #    continue
+            stack_dataset = None
 
-                    #ii += 1
-                    mask_band = mask_dataset.GetRasterBand(i+1)
-                    mask_band.WriteArray(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])
-                    md = {}
-                    for attrs_key in mask_grp[key].attrs.keys():
-                        md[attrs_key] = mask_grp[key].attrs[attrs_key]
+            ## create the mask geotiff
 
-                    if 'name' in md.keys():
-                        mask_band.SetDescription(md['name'])
-                    else:
-                        mask_band.SetDescription(mask_grp[key].name)
+            num_bands, mask_keys = self.h5_get_datasets_from_grp(mask_grp)
+            driver = gdal.GetDriverByName(fmt)
+            mask_dataset = driver.Create(
+                mask_fn, xcount, ycount, num_bands, gdal.GDT_Byte,
+                options=['COMPRESS=LZW', 'BIGTIFF=YES'] if fmt == 'GTiff' else ['COMPRESS=LZW']
+            )
+            mask_dataset.SetGeoTransform(dst_gt)
+            if self.dst_srs is not None:
+                mask_dataset.SetProjection(gdalfun.osr_wkt(self.dst_srs))
 
-                    mask_band.SetNoDataValue(0)
-                    mask_band.SetMetadata(md)
-                    mask_band.FlushCache()
+            with tqdm(
+                    total=len(mask_keys),
+                    desc='converting CSG mask to GeoTiff',
+                    leave=self.verbose
+            ) as pbar:
+                ii = 0
+                for i, key in enumerate(mask_keys):
+                    pbar.update()
+                    srcwin = (0, 0, xcount, ycount)
+                    for y in range(
+                            srcwin[1], srcwin[1] + srcwin[3], 1
+                    ):
+                        mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]][np.isnan(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])] = 0
+                        #if np.all(mask_grp[key][mask_grp[key] == 0]):
+                        #    continue
+
+                        #ii += 1
+                        mask_band = mask_dataset.GetRasterBand(i+1)
+                        mask_band.WriteArray(mask_grp[key][srcwin[1]:srcwin[1]+srcwin[3], srcwin[0]:srcwin[0]+srcwin[2]])
+                        md = {}
+                        for attrs_key in mask_grp[key].attrs.keys():
+                            md[attrs_key] = mask_grp[key].attrs[attrs_key]
+
+                        if 'name' in md.keys():
+                            mask_band.SetDescription(md['name'])
+                        else:
+                            mask_band.SetDescription(mask_grp[key].name)
+
+                        mask_band.SetNoDataValue(0)
+                        mask_band.SetMetadata(md)
+                        mask_band.FlushCache()
 
         stack_ds.close()
 
@@ -3223,7 +3229,15 @@ class ElevationDataset:
         will be caluculated by `np.sqrt(u**2 + self.uncertainty**2)`
         """
         
-        out_arrays = {'z':None, 'count':None, 'weight':None, 'uncertainty': None, 'mask':None, 'x': None, 'y': None }
+        out_arrays = {
+            'z':None,
+            'count':None,
+            'weight':None,
+            'uncertainty': None,
+            'mask':None,
+            'x': None,
+            'y': None
+        }
         count = 0
         for points in self.transform_and_yield_points():
             xcount, ycount, dst_gt = self.region.geo_transform(
@@ -3777,6 +3791,7 @@ class LASFile(ElevationDataset):
             self.infos.minmax = this_region.export_as_list(include_z=True)
             self.infos.wkt = this_region.export_as_wkt()
 
+        utils.echo_msg(self.get_epsg())
         self.infos.src_srs = self.src_srs if self.src_srs is not None else self.get_epsg()            
         return(self.infos)
 

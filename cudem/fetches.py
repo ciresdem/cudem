@@ -2208,7 +2208,6 @@ class NauticalCharts(FetchModule):
         self._dt_xml = {'ENC':self._enc_data_catalog, 'RNC':self._rnc_data_catalog}
         
         ## for dlim, ENC data comes as .000 files, parse with OGR
-        #self.data_format = 302
         self.src_srs='epsg:4326+5866'
         self.title = 'NOAA OCS electronic navigational chart (ENC) extracted soundings'
         self.source = 'NOAA/NOS'
@@ -2569,7 +2568,6 @@ class Multibeam(FetchModule):
             return([])
         else:
             fetch_region = self.region.copy()
-            #fetch_region.buffer(pct=25)
 
         _req = Fetch(
             self._mb_search_url

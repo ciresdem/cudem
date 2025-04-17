@@ -265,6 +265,8 @@ _cdn_reference_frames = {
            'uncertainty': .05},
     6360: {'name': 'NAVD88 height (usFt)',
            'uncertainty': .05},
+    8228: {'name': 'NAVD88 height (Ft)',
+           'uncertainty': .05},
     6644: {'name': 'GUVD04 height',
            'uncertainty': 0},
     6641: {'name': 'PRVD02 height',
@@ -527,7 +529,7 @@ class VerticalTransform:
     def _cdn_transform(self, epsg=None, name=None, geoid='g2018', invert=False):
         """create a cdn transofrmation grid"""
 
-        epsg = 5703 if epsg == 6360 else epsg
+        epsg = 5703 if (epsg == 6360 or epsg == 8228) else epsg
         # if epsg == 6360:
         #     #+vto_meter=0.3048006096012192
         #     #epsg = 5703
