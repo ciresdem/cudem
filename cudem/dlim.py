@@ -2071,7 +2071,7 @@ class ElevationDataset:
 
     ## todo: properly mask supercede mode...
     ## todo: 'separate mode': multi-band z?
-    def _stacks_gdal(
+    def _stacks(
             self,
             out_name = None,
             ndv = -9999,
@@ -2552,7 +2552,7 @@ class ElevationDataset:
         sds = None
     
     ## test stack using h5py instead of gdal
-    def _stacks(
+    def _stacks_h5(
             self,
             out_name = None,
             ndv = -9999,
