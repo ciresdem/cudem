@@ -2322,17 +2322,17 @@ class ElevationDataset:
 
                 if self.want_mask:
                     ## check to add a new band if the arrs has data
-                    m_band_all_array = m_band_all.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
+                    m_all_array = m_band_all.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                     m_band = add_mask_band(m_ds, this_entry, mask_level=mask_level)
                     if m_band is not None:
                         m_array = m_band.ReadAsArray(srcwin[0], srcwin[1], srcwin[2], srcwin[3])
                         m_array[arrs['count'] != 0] = 1
                         m_band.WriteArray(m_array, srcwin[0], srcwin[1])
                         
-                    m_band_all_array[arrs['count'] != 0] = 1
-                    m_band_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
+                    m_all_array[arrs['count'] != 0] = 1
+                    m_all.WriteArray(arrs['count'], srcwin[0], srcwin[1])
                     m_ds.FlushCache()
-                    m_array = None
+                    m_array = m_all_array = None
                     # if mask_only:
                     #     continue
                 
